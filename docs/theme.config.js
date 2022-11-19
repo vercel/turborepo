@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useConfig, useTheme } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
@@ -38,6 +39,28 @@ const theme = {
       titleTemplate: `%s – ${section}`,
     };
   },
+  gitTimestamp({ timestamp }) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const [dateString, setDateString] = useState(timestamp.toISOString());
+
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useEffect(() => {
+      try {
+        setDateString(
+          timestamp.toLocaleDateString(navigator.language, {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })
+        );
+      } catch (e) {
+        // Ignore errors here; they get the ISO string.
+        // At least one person out there has manually misconfigured navigator.language.
+      }
+    }, [timestamp]);
+
+    return <>Last updated on {dateString}</>;
+  },
   unstable_flexsearch: true,
   unstable_staticImage: true,
   toc: {
@@ -61,7 +84,7 @@ const theme = {
     let ogUrl;
 
     if (asPath === "/") {
-      ogUrl = `${SITE_ROOT}/og-image.png`;
+      ogUrl = `${SITE_ROOT}/api/og`;
     } else if (frontMatter?.ogImage) {
       ogUrl = `${SITE_ROOT}${frontMatter.ogImage}`;
     } else {
@@ -74,7 +97,7 @@ const theme = {
         ? `&title=${encodeURIComponent(frontMatter.title)}`
         : "";
 
-      ogUrl = `https://turbo-site-og.vercel.app/api/og?type=${type}${title}`;
+      ogUrl = `${SITE_ROOT}/api/og?type=${type}${title}`;
     }
 
     return (
@@ -129,6 +152,9 @@ const theme = {
     text: "Edit this page on GitHub",
   },
   navbar: Navigation,
+  search: {
+    placeholder: "Search documentation…",
+  },
   footer: {
     component: Footer,
   },

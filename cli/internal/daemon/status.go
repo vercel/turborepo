@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/vercel/turbo/cli/internal/config"
+
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
@@ -21,7 +23,8 @@ func addStatusCmd(root *cobra.Command, helper *cmdutil.Helper) {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			base, err := helper.GetCmdBase(cmd.Flags())
+			flags := config.FlagSet{FlagSet: cmd.Flags()}
+			base, err := helper.GetCmdBase(flags)
 			if err != nil {
 				return err
 			}

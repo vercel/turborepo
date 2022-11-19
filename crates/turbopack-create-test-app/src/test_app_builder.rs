@@ -54,6 +54,13 @@ impl Default for TestAppBuilder {
     }
 }
 
+fn write_file<P: AsRef<Path>>(name: &str, path: P, content: &[u8]) -> Result<()> {
+    File::create(path)
+        .with_context(|| format!("creating {name}"))?
+        .write_all(content)
+        .with_context(|| format!("writing {name}"))
+}
+
 impl TestAppBuilder {
     pub fn build(&self) -> Result<TestApp> {
         let target = if let Some(target) = self.target.clone() {
@@ -73,6 +80,7 @@ impl TestAppBuilder {
         let mut queue = VecDeque::new();
         queue.push_back(src.join("triangle.jsx"));
         remaining_modules -= 1;
+        let mut is_root = true;
 
         while let Some(file) = queue.pop_front() {
             let leaf = remaining_modules == 0
@@ -148,6 +156,15 @@ export default React.memo(Triangle);
                     })
                     .collect::<Vec<_>>()
                 {
+                    let (extra_imports, extra) = if is_root {
+                        is_root = false;
+                        (
+                            "import Detector from \"./detector.jsx\";\n",
+                            "\n        <Detector />",
+                        )
+                    } else {
+                        ("", "")
+                    };
                     File::create(&file)
                         .with_context(|| format!("creating file with children {}", file.display()))?
                         .write_all(
@@ -156,7 +173,7 @@ export default React.memo(Triangle);
 {a}
 {b}
 {c}
-
+{extra_imports}
 function Container({{ style }}) {{
     return <>
         <g transform="translate(0 -2.16)   scale(0.5 0.5)">
@@ -167,7 +184,7 @@ function Container({{ style }}) {{
         </g>
         <g transform="translate(2.5 2.16)  scale(0.5 0.5)">
             {c_}
-        </g>
+        </g>{extra}
     </>;
 }}
 
@@ -190,9 +207,6 @@ import { createRoot } from "react-dom/client";
 import Triangle from "./triangle.jsx";
 
 function App() {
-    React.useEffect(() => {
-        globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding("Hydration done");
-    })
     return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ }}>
         <Triangle style={{ fill: "white" }}/>
     </svg>
@@ -203,10 +217,7 @@ let root = document.createElement("main");
 document.body.appendChild(root);
 createRoot(root).render(<App />);
 "#;
-        File::create(src.join("index.jsx"))
-            .context("creating bootstrap file")?
-            .write_all(bootstrap.as_bytes())
-            .context("writing bootstrap file")?;
+        write_file("bootrap file", src.join("index.jsx"), bootstrap.as_bytes())?;
 
         let pages = src.join("pages");
         create_dir_all(&pages)?;
@@ -216,27 +227,22 @@ createRoot(root).render(<App />);
 import Triangle from "../triangle.jsx";
 
 export default function Page() {
-    React.useEffect(() => {
-        globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding("Hydration done");
-    })
     return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ backgroundColor: "black" }}>
         <Triangle style={{ fill: "white" }}/>
     </svg>
 }
 "#;
-        File::create(pages.join("page.jsx"))
-            .context("creating bootstrap page")?
-            .write_all(bootstrap_page.as_bytes())
-            .context("writing bootstrap page")?;
+        write_file(
+            "bootrap page",
+            pages.join("page.jsx"),
+            bootstrap_page.as_bytes(),
+        )?;
 
         // The page is e. g. used by Next.js
         let bootstrap_static_page = r#"import React from "react";
 import Triangle from "../triangle.jsx";
 
 export default function Page() {
-    React.useEffect(() => {
-        globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding("Hydration done");
-    })
     return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ backgroundColor: "black" }}>
         <Triangle style={{ fill: "white" }}/>
     </svg>
@@ -248,10 +254,87 @@ export function getStaticProps() {
     };
 }
 "#;
-        File::create(pages.join("static.jsx"))
-            .context("creating bootstrap static page")?
-            .write_all(bootstrap_static_page.as_bytes())
-            .context("writing bootstrap static page")?;
+        write_file(
+            "bootrap static page",
+            pages.join("static.jsx"),
+            bootstrap_static_page.as_bytes(),
+        )?;
+
+        let app_dir = src.join("app");
+        create_dir_all(app_dir.join("app"))?;
+        create_dir_all(app_dir.join("client"))?;
+
+        // The page is e. g. used by Next.js
+        let bootstrap_app_page = r#"import React from "react";
+import Triangle from "../../triangle.jsx";
+
+export default function Page() {
+    return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ backgroundColor: "black" }}>
+        <Triangle style={{ fill: "white" }}/>
+    </svg>
+}
+"#;
+        File::create(app_dir.join("app/page.jsx"))
+            .context("creating bootstrap app page")?
+            .write_all(bootstrap_app_page.as_bytes())
+            .context("writing bootstrap app page")?;
+
+        // The component is used to measure hydration and commit time for app/page.jsx
+        let detector_component = r#""use client";
+
+import React from "react";
+
+export default function Detector({ message }) {
+    React.useEffect(() => {
+        globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding("Hydration done");
+    });
+    React.useEffect(() => {
+        message && globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding(message);
+    }, [message]);
+    return null;
+}
+"#;
+        File::create(src.join("detector.jsx"))
+            .context("creating detector component")?
+            .write_all(detector_component.as_bytes())
+            .context("writing detector component")?;
+
+        // The page is e. g. used by Next.js
+        let bootstrap_app_client_page = r#""use client";
+import React from "react";
+import Triangle from "../../triangle.jsx";
+
+export default function Page() {
+    return <svg height="100%" viewBox="-5 -4.33 10 8.66" style={{ backgroundColor: "black" }}>
+        <Triangle style={{ fill: "white" }}/>
+    </svg>
+}
+"#;
+        File::create(app_dir.join("client/page.jsx"))
+            .context("creating bootstrap app client page")?
+            .write_all(bootstrap_app_client_page.as_bytes())
+            .context("writing bootstrap app client page")?;
+
+        // This root layout is e. g. used by Next.js
+        let bootstrap_layout = r#"export default function RootLayout({ children }) {
+    return (
+        <html lang="en">
+            <head>
+                <meta charSet="UTF-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                <title>Turbopack Test App</title>
+            </head>
+            <body>
+                {children}
+            </body>
+        </html>
+    );
+}
+        "#;
+        File::create(app_dir.join("layout.jsx"))
+            .context("creating bootstrap html in root")?
+            .write_all(bootstrap_layout.as_bytes())
+            .context("writing bootstrap html in root")?;
 
         // This HTML is used e. g. by Vite
         let bootstrap_html = r#"<!DOCTYPE html>
@@ -266,10 +349,11 @@ export function getStaticProps() {
     </body>
 </html>
 "#;
-        File::create(path.join("index.html"))
-            .context("creating bootstrap html in root")?
-            .write_all(bootstrap_html.as_bytes())
-            .context("writing bootstrap html in root")?;
+        write_file(
+            "bootstrap html",
+            path.join("index.html"),
+            bootstrap_html.as_bytes(),
+        )?;
 
         // This HTML is used e. g. by webpack
         let bootstrap_html2 = r#"<!DOCTYPE html>
@@ -288,10 +372,27 @@ export function getStaticProps() {
         let public = path.join("public");
         create_dir_all(&public).context("creating public dir")?;
 
-        File::create(public.join("index.html"))
-            .context("creating bootstrap html in public")?
-            .write_all(bootstrap_html2.as_bytes())
-            .context("writing bootstrap html in public")?;
+        write_file(
+            "bootstrap html",
+            public.join("index.html"),
+            bootstrap_html2.as_bytes(),
+        )?;
+
+        write_file(
+            "vite node.js server",
+            path.join("vite-server.mjs"),
+            include_bytes!("templates/vite-server.mjs"),
+        )?;
+        write_file(
+            "vite server entry",
+            path.join("src/vite-entry-server.jsx"),
+            include_bytes!("templates/vite-entry-server.jsx"),
+        )?;
+        write_file(
+            "vite client entry",
+            path.join("src/vite-entry-client.jsx"),
+            include_bytes!("templates/vite-entry-client.jsx"),
+        )?;
 
         if let Some(package_json) = &self.package_json {
             // These dependencies are needed

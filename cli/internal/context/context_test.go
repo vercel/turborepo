@@ -1,8 +1,14 @@
 package context
 
 import (
+	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
+
+	testifyAssert "github.com/stretchr/testify/assert"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 func Test_isWorkspaceReference(t *testing.T) {
@@ -120,4 +126,37 @@ func Test_isWorkspaceReference(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuildPackageGraph_DuplicateNames(t *testing.T) {
+	path := getTestDir(t, "repo-with-dupe-workspaces")
+	pkgJSON := &fs.PackageJSON{
+		Name:           "repo-with-dupe-workspaces",
+		PackageManager: "npm@8.1.2",
+	}
+
+	_, actualErr := BuildPackageGraph(path, pkgJSON)
+
+	// Not asserting the full error message, because it includes a path with slashes and backslashes
+	// getting the regex incantation to check that is not worth it.
+	// We have to use regex because the actual error may be different depending on which workspace was
+	// added first and which one was second, causing the error.
+	testifyAssert.Regexp(t, regexp.MustCompile("^Failed to add workspace \"same-name\".+$"), actualErr)
+}
+
+// This is duplicated from fs.turbo_json_test.go.
+// I wasn't able to pull it into a helper file/package because
+// it requires the `fs` package and it would cause cyclical dependencies
+// when used in turbo_json_test.go and would require more changes to fix that.
+func getTestDir(t *testing.T, testName string) turbopath.AbsoluteSystemPath {
+	defaultCwd, err := os.Getwd()
+	if err != nil {
+		t.Errorf("failed to get cwd: %v", err)
+	}
+	cwd, err := fs.CheckedToAbsoluteSystemPath(defaultCwd)
+	if err != nil {
+		t.Fatalf("cwd is not an absolute directory %v: %v", defaultCwd, err)
+	}
+
+	return cwd.UntypedJoin("testdata", testName)
 }

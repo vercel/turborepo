@@ -32,16 +32,15 @@
 #![feature(error_generic_member_access)]
 #![feature(provide_any)]
 #![feature(new_uninit)]
-#![feature(arbitrary_enum_discriminant)]
 
 pub mod backend;
 mod collectibles;
 mod completion;
 pub mod debug;
 mod display;
+pub mod event;
 mod id;
 mod id_factory;
-mod infinite_vec;
 mod join_iter_ext;
 mod magic_any;
 mod manager;

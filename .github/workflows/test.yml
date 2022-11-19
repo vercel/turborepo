@@ -1,0 +1,942 @@
+name: Test
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  determine_jobs:
+    name: Determine jobs to run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Find PR Comment
+        id: comment
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/find-comment@v2
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: "github-actions[bot]"
+          body-includes: "<!-- CI COMMENT -->"
+
+      - name: Create or update PR comment
+        if: github.event_name == 'pull_request' && steps.comment.outputs.comment-id != ''
+        uses: peter-evans/create-or-update-comment@v2
+        continue-on-error: true
+        with:
+          comment-id: ${{ steps.comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ## :hourglass_flowing_sand: CI is running again... :hourglass_flowing_sand:
+
+            [Wait for it...](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }})
+
+            <!-- CI COMMENT -->
+
+          edit-mode: replace
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: CI related changes
+        id: ci
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            .github/actions/**
+            .github/workflows/test.yml
+
+      - name: Rust related changes
+        id: rust
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            pnpm-lock.yaml
+            package.json
+            crates/**
+            shim/**
+            xtask/**
+            Cargo.*
+            .cargo/**
+            rust-toolchain
+            !**.md
+            !**.mdx
+
+      - name: Rust Benchmark related changes
+        id: rust_bench
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            crates/next-dev/benches/**
+            !*.md
+
+      - name: Go related changes
+        ## Warning: When we add Integration tests to this workflow
+        # we need to add shim/ directory to this as well
+        id: go
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            cli/**
+
+      - name: Examples related changes
+        id: examples
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            examples/**
+            cli/**/*.go
+            cli/go.mod
+            cli/go.sum
+            scripts/run-example.sh
+            !**.md
+            !**.mdx
+
+      - name: Node.js related changes
+        id: node
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            pnpm-lock.yaml
+            package.json
+            .eslint*
+            .prettier*
+            tsconfig*
+            crates/**/js/**
+            .github/**
+            docs/**
+            packages/**
+            docs/**
+            *.md
+            *.mdx
+
+    outputs:
+      rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
+      rust_bench: ${{ steps.ci.outputs.diff != '' || steps.rust_bench.outputs.diff != '' }}
+      go: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' }}
+      examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
+      node: ${{ steps.ci.outputs.diff != '' || steps.node.outputs.diff != '' }}
+      push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
+      tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
+      main_push: ${{ github.event_name == 'push' && github.ref == 'refs/head/main' }}
+      tag_push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace') }}
+
+  go_lint:
+    name: Go linting
+    runs-on: ubuntu-latest
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.go == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Protos
+        run: cd cli && make compile-protos
+
+      - name: golangci Linting
+        uses: golangci/golangci-lint-action@v3
+        with:
+          # More config options documented here: https://github.com/golangci/golangci-lint-action
+          version: latest
+          working-directory: cli
+          args: --new-from-rev=${{ github.event.pull_request.base.sha || 'HEAD~1' }}
+
+  go_unit:
+    name: Go Unit Tests
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.go == 'true'
+    timeout-minutes: 15
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - run: pnpm -- turbo run test --filter=cli --color
+
+  go_examples:
+    name: Go Cli Examples
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.examples == 'true'
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        manager: [yarn, npm]
+        example: [basic, design-system, kitchen-sink, non-monorepo]
+        include:
+          - os: ubuntu-latest
+            manager: pnpm
+            example: with-pnpm
+          - os: macos-latest
+            manager: pnpm
+            example: with-pnpm
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      # Used by scripts/check-examples.sh
+      - name: Install Sponge
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get install -y moreutils
+          else
+            brew install moreutils
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Pnpm
+        uses: pnpm/action-setup@v2.2.4
+        with:
+          version: 7.2.1
+
+      - name: Make sure pnpm always has a cache
+        shell: bash
+        run: |
+          mkdir -p `pnpm store path`
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: 16
+          cache: ${{ matrix.manager }}
+          cache-dependency-path: package.json
+
+      - name: Check \"${{ matrix.example }}\" example with \"${{ matrix.manager }}\"
+        shell: bash
+        env:
+          FORCE_COLOR: true
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          TURBO_REMOTE_ONLY: true
+        run: pnpm -- turbo run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
+
+  rust_prepare:
+    name: Check rust crates
+    runs-on: ubuntu-latest-16-core-oss
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.rust == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --workspace --all-targets
+
+  rust_lint:
+    needs: [determine_jobs, rust_prepare]
+    if: needs.determine_jobs.outputs.rust == 'true'
+    name: Rust linting
+    runs-on: ubuntu-latest-16-core-oss
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo clippy
+        run: rustup component add clippy
+
+      - name: Install cargo rustfmt
+        run: rustup component add rustfmt
+
+      - name: Run cargo fmt check
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --check
+
+      - name: Run cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --workspace --all-targets
+
+      - name: Count clippy warnings
+        run: |
+          count="0"
+          clippy_output="$(cargo clippy --workspace --all-targets 2>&1)"
+
+          # Clippy will be invoked and report on each crate individually. We need to sum manually.
+          for warnings in $(echo "$clippy_output" | sed -n 's/.*generated \([0-9]*\) warnings\?$/\1/p'); do
+            count=$((count + warnings))
+          done
+
+          echo $count > clippy-warnings
+          echo $count clippy warnings
+
+          echo $clippy_output > clippy-warnings-raw
+
+      - name: Cache clippy warnings
+        id: expected-clippy-warnings
+        uses: actions/cache@v3
+        with:
+          path: |
+            expected-clippy-warnings
+            expected-clippy-warnings-raw
+          key: expected-clippy-warnings-${{ github.sha }}
+          restore-keys: |
+            expected-clippy-warnings
+
+      - name: Update expected Clippy warnings on main
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mv clippy-warnings expected-clippy-warnings
+          mv clippy-warnings-raw expected-clippy-warnings-raw
+
+      - name: Check the number of Clippy warnings is ever decreasing
+        if: github.ref != 'refs/heads/main'
+        run: |
+          if [[ -f "expected-clippy-warnings" ]]; then
+            clippy_warnings=$(cat clippy-warnings)
+            expected_clippy_warnings=$(cat expected-clippy-warnings)
+            if [[ "$clippy_warnings" -gt "$expected_clippy_warnings" ]]; then
+              echo "Clippy reported $clippy_warnings warnings, which is higher than the upstream number of $expected_clippy_warnings warnings."
+              echo "Please make sure you've run \`cargo clippy\` on the Rust files you've modified."
+
+              if [[ -f "expected-clippy-warnings-raw" ]]; then
+                clippy_warnings_raw=$(cat clippy-warnings-raw)
+                diff clippy-warnings-raw clippy-warnings
+              fi
+              exit 1
+            fi
+          fi
+
+      - name: Check licenses
+        uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check licenses
+
+      - name: Run cargo check release
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --workspace --all-targets --release
+
+  rust_test:
+    needs: [determine_jobs, rust_prepare]
+    if: needs.determine_jobs.outputs.rust == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest-16-core-oss
+            nextest: linux
+          - name: macos
+            runner: macos-latest
+            nextest: mac
+          - name: windows
+            runner: windows-latest
+            nextest: windows-tar
+    runs-on: ${{ matrix.os.runner }}
+    name: Rust testing on ${{ matrix.os.name }}
+    steps:
+      - name: Set git to use LF line endings
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+        if: matrix.os.name == 'windows'
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Start Redis
+        uses: supercharge/redis-github-action@1.4.0
+        with:
+          redis-version: 6
+        if: matrix.os.name == 'ubuntu'
+
+      - name: Set Redis URL
+        run: echo "BULL_REDIS_CONNECTION=redis://127.0.0.1:6379" >> $GITHUB_ENV
+        if: matrix.os.name == 'ubuntu'
+
+      - name: Prepare toolchain on Windows
+        run: |
+          pnpx node-gyp install
+          choco install protoc -y
+          echo 'node-linker = "hoisted"' > crates/turbopack/tests/node-file-trace/.npmrc
+        if: matrix.os.name == 'windows'
+
+      - name: Install tests dependencies
+        working-directory: crates/turbopack/tests/node-file-trace
+        run: pnpm install -r --side-effects-cache false
+
+      - name: Install tests dependencies in examples/basic
+        working-directory: examples/basic
+        run: npm install
+
+      - name: Install nextest
+        id: nextest-install
+        continue-on-error: true
+        run: curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        shell: bash
+
+      - name: Install nextest (second try)
+        if: steps.nextest-install.outcome == 'failure'
+        run: curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+        shell: bash
+
+      - name: Run nextest
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 120
+        with:
+          command: nextest
+          args: run --workspace --release --no-fail-fast
+
+  rust_test_bench:
+    needs: [determine_jobs, rust_prepare]
+    if: needs.determine_jobs.outputs.rust == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest-16-core-oss
+            nextest: linux
+          - name: macos
+            runner: macos-latest
+            nextest: mac
+          # Temporarily disable windows bench due to consistent timeouts
+          # - name: windows
+          #   runner: windows-2019
+          #   nextest: windows-tar
+    runs-on: ${{ matrix.os.runner }}
+    name: Rust testing benchmarks on ${{ matrix.os.name }}
+
+    steps:
+      - name: Set git to use LF
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+        if: matrix.os.name == 'windows'
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: 16
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo test on benchmarks
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 120
+        env:
+          TURBOPACK_BENCH_COUNTS: "100"
+          TURBOPACK_BENCH_PROGRESS: "1"
+        with:
+          command: test
+          args: --benches --release
+
+      - name: Run cargo test on benchmarks for other bundlers
+        uses: actions-rs/cargo@v1
+        if: needs.determine_jobs.outputs.rust_bench == 'true'
+        timeout-minutes: 120
+        env:
+          TURBOPACK_BENCH_COUNTS: "100"
+          TURBOPACK_BENCH_PROGRESS: "1"
+          TURBOPACK_BENCH_BUNDLERS: "others"
+        with:
+          command: test
+          args: --benches --release
+
+  rust_build_release:
+    needs: [determine_jobs, rust_prepare]
+    if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu-latest-16-core-oss
+            target: x86_64-unknown-linux-musl
+          - name: macos-latest
+            target: x86_64-apple-darwin
+          - name: macos-latest
+            target: aarch64-apple-darwin
+          - name: ubuntu-latest-16-core-oss
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os.name }}
+    name: Rust building release for ${{ matrix.os.target }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install target
+        uses: actions-rs/toolchain@v1
+        with:
+          target: ${{ matrix.os.target }}
+
+      - name: Install musl tools
+        run: |
+          wget https://github.com/napi-rs/napi-rs/releases/download/linux-musl-cross%4011.2.1/x86_64-linux-musl-native.tgz -O musl.tgz
+          tar -xvzf musl.tgz
+          sudo mv x86_64-linux-musl-native /usr/x86_64-linux-musl
+          sudo ln -sf /usr/x86_64-linux-musl/bin/x86_64-linux-musl-cc /usr/bin/musl-gcc
+          sudo ln -sf /usr/x86_64-linux-musl/bin/x86_64-linux-musl-g++ /usr/bin/musl-g++
+        if: matrix.os.target == 'x86_64-unknown-linux-musl'
+
+      - name: Install Cargo xwin toolchain
+        run: |
+          cargo install cargo-xwin
+          rustup component add llvm-tools-preview
+        if: matrix.os.target == 'x86_64-pc-windows-msvc'
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.os.target }}
+
+      - name: Build node-file-trace
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release -p node-file-trace --target ${{ matrix.os.target }}
+        if: matrix.os.target != 'x86_64-pc-windows-msvc'
+
+      - name: Build node-file-trace
+        uses: actions-rs/cargo@v1
+        with:
+          command: xwin
+          args: build --release -p node-file-trace -p next-dev --target ${{ matrix.os.target }}
+        if: matrix.os.target == 'x86_64-pc-windows-msvc'
+
+      - name: Build next-dev
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release -p next-dev --target ${{ matrix.os.target }}
+        if: matrix.os.target != 'x86_64-pc-windows-msvc'
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: release-${{ matrix.os.target }}
+          path: |
+            target/${{ matrix.os.target }}/release/node-file-trace
+            target/${{ matrix.os.target }}/release/node-file-trace.exe
+            target/${{ matrix.os.target }}/release/next-dev
+            target/${{ matrix.os.target }}/release/next-dev.exe
+
+  rust_bench_pr:
+    needs: [determine_jobs, rust_prepare]
+    if: needs.determine_jobs.outputs.rust == 'true' && github.event_name == 'pull_request'
+    name: Benchmark and compare Turbopack performance
+    runs-on: ubuntu-latest-16-core-oss
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Fetch the base branch
+        run: git -c protocol.version=2 fetch --no-tags --progress --no-recurse-submodules --depth=1 origin +${{ github.base_ref }}:base
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Benchmark and compare with base branch
+        uses: sokra/criterion-compare-action@main
+        timeout-minutes: 180
+        with:
+          branchName: base
+          cwd: crates/next-dev
+
+  rust_bench:
+    needs: [determine_jobs, rust_prepare]
+    if: (needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true') || needs.determine_jobs.outputs.rust_bench == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        bench:
+          # One of Turbopack with 1000 modules is benchmarked in every run
+          # to create a baseline result for normalization (should the runners performance vary between jobs)
+
+          # This runs all the non next-dev benchmarks
+          - name: generic
+            cache_key: all
+            TURBOPACK_BENCH_COUNTS: 1000
+
+          # This measures Turbopack with small app
+          - name: turbopack
+            cache_key: next-dev
+            args: -p next-dev
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+
+          # This measures Turbopack with normal apps
+          - name: turbopack-large
+            cache_key: next-dev
+            args: -p next-dev
+            TURBOPACK_BENCH_COUNTS: 1000,2000,3000
+
+          # This measures Turbopack with larger apps
+          - name: turbopack-xlarge
+            cache_key: next-dev
+            args: -p next-dev
+            TURBOPACK_BENCH_COUNTS: 1000,5000
+
+    runs-on: ubuntu-latest-8-core-oss
+    name: Benchmark next-dev on ${{ matrix.bench.name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: benchmark-${{ matrix.bench.cache_key }}
+
+      - name: Clear benchmarks
+        run: rm -rf target/criterion
+
+      - name: Compile cargo benches
+        uses: actions-rs/cargo@v1
+        env:
+          TURBOPACK_BENCH_COUNTS: ${{ matrix.bench.TURBOPACK_BENCH_COUNTS }}
+        with:
+          command: bench
+          args: --no-run ${{ matrix.bench.args }}
+
+      - name: Run cargo bench
+        uses: actions-rs/cargo@v1
+        timeout-minutes: 180
+        env:
+          TURBOPACK_BENCH_COUNTS: ${{ matrix.bench.TURBOPACK_BENCH_COUNTS }}
+          TURBOPACK_BENCH_PROGRESS: 1
+        with:
+          command: bench
+          args: ${{ matrix.bench.args }}
+
+      - name: Install critcmp
+        if: always()
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: critcmp
+
+      - name: Compare results
+        if: always()
+        run: critcmp --group "([^/]+/)[^/]+(?:/)(.+)" base
+
+      - name: Export results
+        if: always()
+        run: critcmp --export base > raw.json
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: bench_${{ matrix.bench.name }}
+          path: raw.json
+
+      # This avoids putting this data into the rust-cache
+      - name: Clear benchmarks
+        run: rm -rf target/criterion
+
+  rust_bench_commit:
+    needs: [determine_jobs, rust_bench]
+    if: always() && needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true' && needs.rust_bench.result != 'skipped'
+    name: Store benchmark result
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get current date
+        id: date
+        run: |
+          echo "::set-output name=year::$(date +'%Y')"
+          echo "::set-output name=month::$(date +'%m')"
+          echo "::set-output name=date::$(date +'%s')"
+          echo "::set-output name=pretty::$(date +'%Y-%m-%d %H:%M')"
+
+      - name: Checkout benchmark-data
+        uses: actions/checkout@v3
+        with:
+          ref: benchmark-data
+
+      - name: Download benchmark data
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Copy benchmark results
+        run: |
+          find artifacts -size 0 -delete
+          mkdir -p data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-8-core/${{ steps.date.outputs.date }}-${{ github.sha }}/
+          mv artifacts/bench_* data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-8-core/${{ steps.date.outputs.date }}-${{ github.sha }}/
+
+      - name: Git pull
+        run: git pull --depth=1 --no-tags origin benchmark-data
+
+      - name: Push data to branch
+        if: needs.determine_jobs.outputs.main_push == 'true'
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})
+
+  node_lint:
+    name: Node.js linting
+    runs-on: ubuntu-latest
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.node == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - uses: ./.github/actions/setup-node
+
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Format check
+        run: pnpm -- turbo run check:fmt
+
+  final:
+    name: Ok
+    needs:
+      - determine_jobs
+      - go_lint
+      - go_unit
+      - go_examples
+      - rust_prepare
+      - rust_lint
+      - rust_test
+      - rust_test_bench
+      - rust_build_release
+      - node_lint
+      - rust_bench_commit
+      # rust_bench_pr is not included
+      # since we don't want block the result on that
+    if: always()
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check cancellation
+        id: cancelled
+        if: needs.rust_prepare.result == 'cancelled' || needs.rust_lint.result == 'cancelled' || needs.rust_test.result == 'cancelled' || needs.rust_test_bench.result == 'cancelled' || needs.rust_build_release.result == 'cancelled' || needs.node_lint.result == 'cancelled' || needs.rust_bench_commit.result == 'cancelled'
+        run: echo "cancelled=true" >> $GITHUB_OUTPUT
+
+      - name: Start summary
+        run: |
+          echo "The following steps have failed in CI" > comment.md
+          echo >> comment.md
+
+      - name: Determine Jobs failed
+        if: always() && needs.determine_jobs.result != 'success' && needs.determine_jobs.result != 'skipped'
+        run: |
+          echo "- Determining jobs" >> failures.md
+          exit 1
+
+      - name: Go Linting failed
+        if: always() && needs.go_lint.result != 'success' && needs.go_lint.result != 'skipped'
+        run: |
+          echo "- Go lints" >> failures.md
+          exit 1
+
+      - name: Go Unit Tests failed
+        if: always() && needs.go_unit.result != 'success' && needs.go_unit.result != 'skipped'
+        run: |
+          echo "- Go Unit Tests" >> failures.md
+          exit 1
+
+      - name: Go Examples failed
+        if: always() && needs.go_examples.result != 'success' && needs.go_examples.result != 'skipped'
+        run: |
+          echo "- Go Examples" >> failures.md
+          exit 1
+
+      - name: Rust Check failed
+        if: always() && needs.rust_prepare.result != 'success' && needs.rust_prepare.result != 'skipped'
+        run: |
+          echo "- Rust checks" >> failures.md
+          exit 1
+
+      - name: Rust Linting failed
+        if: always() && needs.rust_lint.result != 'success' && needs.rust_lint.result != 'skipped'
+        run: |
+          echo "- Rust lints" >> failures.md
+          exit 1
+
+      - name: Rust Testing failed
+        if: always() && needs.rust_test.result != 'success' && needs.rust_test.result != 'skipped'
+        run: |
+          echo "- Rust tests" >> failures.md
+          exit 1
+
+      - name: Rust Benchmark Testing failed
+        if: always() && needs.rust_test_bench.result != 'success' && needs.rust_test_bench.result != 'skipped'
+        run: |
+          echo "- Rust benchmark tests" >> failures.md
+          exit 1
+
+      - name: Rust Release Build failed
+        if: always() && needs.rust_build_release.result != 'success' && needs.rust_build_release.result != 'skipped'
+        run: |
+          echo "- Rust release build" >> failures.md
+          exit 1
+
+      - name: Rust benchmarks
+        if: always() && needs.rust_bench_commit.result != 'success' && needs.rust_bench_commit.result != 'skipped'
+        run: |
+          echo "- Rust benchmarks" >> failures.md
+          exit 1
+
+      - name: Node.js Linting failed
+        if: always() && needs.node_lint.result != 'success' && needs.node_lint.result != 'skipped'
+        run: |
+          echo "- Node.js lints" >> failures.md
+          exit 1
+
+      - name: Add failure prose text
+        if: failure()
+        run: |
+          echo "## :warning: CI failed :warning:" > comment.md
+          echo >> comment.md
+          echo "The following steps have failed in CI:" >> comment.md
+          echo >> comment.md
+          cat failures.md >> comment.md
+          echo >> comment.md
+          echo "See [workflow summary](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}) for details">> comment.md
+          echo >> comment.md
+          echo "<!-- CI COMMENT -->" >> comment.md
+
+      - name: Add success prose text
+        if: success()
+        run: |
+          echo "## :green_circle: CI successful :green_circle:" > comment.md
+          echo >> comment.md
+          echo "Thanks" >> comment.md
+          echo >> comment.md
+          echo "<!-- CI COMMENT -->" >> comment.md
+
+      - name: Find PR Comment
+        id: comment
+        if: always() && github.event_name == 'pull_request' && steps.cancelled.outputs.cancelled != 'true'
+        uses: peter-evans/find-comment@v2
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: "github-actions[bot]"
+          body-includes: "<!-- CI COMMENT -->"
+
+      - name: Create or update PR comment
+        if: always() && github.event_name == 'pull_request' && steps.cancelled.outputs.cancelled != 'true'
+        uses: peter-evans/create-or-update-comment@v2
+        continue-on-error: true
+        with:
+          comment-id: ${{ steps.comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-file: "comment.md"
+          edit-mode: replace
+
+      - name: It's not fine
+        if: failure() && steps.cancelled.outputs.cancelled != 'true'
+        run: exit 1
+
+      - name: It's fine
+        if: success() && steps.cancelled.outputs.cancelled != 'true'
+        run: echo Ok

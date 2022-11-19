@@ -58,10 +58,15 @@ async fn copy_dir(from: PathBuf, to: PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
+enum PreparedDir {
+    TempDir(tempfile::TempDir),
+    Path(PathBuf),
+}
+
 pub struct PreparedApp<'a> {
     bundler: &'a dyn Bundler,
     server: Option<(Child, String)>,
-    test_dir: tempfile::TempDir,
+    test_dir: PreparedDir,
     counter: usize,
 }
 
@@ -75,7 +80,19 @@ impl<'a> PreparedApp<'a> {
         Ok(Self {
             bundler,
             server: None,
-            test_dir,
+            test_dir: PreparedDir::TempDir(test_dir),
+            counter: 0,
+        })
+    }
+
+    pub async fn new_without_copy(
+        bundler: &'a dyn Bundler,
+        template_dir: PathBuf,
+    ) -> Result<PreparedApp<'a>> {
+        Ok(Self {
+            bundler,
+            server: None,
+            test_dir: PreparedDir::Path(template_dir),
             counter: 0,
         })
     }
@@ -88,20 +105,34 @@ impl<'a> PreparedApp<'a> {
     pub fn start_server(&mut self) -> Result<()> {
         assert!(self.server.is_none(), "Server already started");
 
-        self.server = Some(self.bundler.start_server(self.test_dir.path())?);
+        self.server = Some(self.bundler.start_server(self.path())?);
 
         Ok(())
     }
 
     pub async fn with_page(self, browser: &Browser) -> Result<PageGuard<'a>> {
         let server = self.server.as_ref().context("Server must be started")?;
-        let page = browser.new_page("about:blank").await?;
+        let page = browser
+            .new_page("about:blank")
+            .await
+            .context("Unable to open about:blank")?;
         // Bindings survive page reloads. Set them up as early as possible.
-        add_binding(&page).await?;
+        add_binding(&page)
+            .await
+            .context("Failed to add bindings to the browser tab")?;
 
-        let mut errors = page.event_listener::<EventExceptionThrown>().await?;
-        let binding_events = page.event_listener::<EventBindingCalled>().await?;
-        let mut network_response_events = page.event_listener::<EventResponseReceived>().await?;
+        let mut errors = page
+            .event_listener::<EventExceptionThrown>()
+            .await
+            .context("Unable to listen to exception events")?;
+        let binding_events = page
+            .event_listener::<EventBindingCalled>()
+            .await
+            .context("Unable to listen to binding events")?;
+        let mut network_response_events = page
+            .event_listener::<EventResponseReceived>()
+            .await
+            .context("Unable to listen to response received events")?;
 
         let destination = Url::parse(&server.1)?.join(self.bundler.get_path())?;
         // We can't use page.goto() here since this will wait for the naviation to be
@@ -111,7 +142,8 @@ impl<'a> PreparedApp<'a> {
         // So instead we navigate via JavaScript and wait only for the HTML response to
         // be completed.
         page.evaluate_expression(format!("window.location='{destination}'"))
-            .await?;
+            .await
+            .context("Unable to evaluate javascript to naviagate to target page")?;
 
         // Wait for HTML response completed
         loop {
@@ -140,7 +172,10 @@ impl<'a> PreparedApp<'a> {
     }
 
     pub fn path(&self) -> &Path {
-        self.test_dir.path()
+        match self.test_dir {
+            PreparedDir::TempDir(ref dir) => dir.path(),
+            PreparedDir::Path(ref path) => path,
+        }
     }
 }
 

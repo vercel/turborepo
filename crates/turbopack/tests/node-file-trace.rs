@@ -1,10 +1,6 @@
 #![feature(min_specialization)]
 
 mod helpers;
-use helpers::print_changeset;
-
-/// Explicit extern crate to use allocator.
-extern crate turbo_malloc;
 #[cfg(feature = "bench_against_node_nft")]
 use std::time::Instant;
 use std::{
@@ -20,6 +16,7 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use difference::Changeset;
+use helpers::print_changeset;
 use lazy_static::lazy_static;
 use regex::Regex;
 use rstest::*;
@@ -41,6 +38,9 @@ use turbopack_core::{
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     source_asset::SourceAssetVc,
 };
+
+#[global_allocator]
+static ALLOC: turbo_malloc::TurboMalloc = turbo_malloc::TurboMalloc;
 
 #[template]
 #[rstest]
@@ -356,7 +356,7 @@ fn node_file_trace<B: Backend + 'static>(
         tests_output_root.push("tests_output");
         let package_root = package_root.to_string_lossy().to_string();
         let input = format!("node-file-trace/{input_path}");
-        let directory_path = tests_output_root.join(&format!("{mode}_{input}"));
+        let directory_path = tests_output_root.join(format!("{mode}_{input}"));
         let directory = directory_path.to_string_lossy().to_string();
 
         remove_dir_all(&directory)

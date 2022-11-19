@@ -3,6 +3,7 @@
 #![feature(box_syntax)]
 
 mod macros;
+pub mod retry;
 
 use std::{
     borrow::Cow,
@@ -13,10 +14,12 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use event_listener::{Event, EventListener};
 use turbo_tasks::{
-    backend::CellContent, registry, test_helpers::with_turbo_tasks_for_testing, RawVc, TaskId,
-    TraitTypeId, TurboTasksApi, TurboTasksCallApi,
+    backend::CellContent,
+    event::{Event, EventListener},
+    registry,
+    test_helpers::with_turbo_tasks_for_testing,
+    RawVc, TaskId, TraitTypeId, TurboTasksApi, TurboTasksCallApi,
 };
 
 enum Task {
@@ -44,7 +47,9 @@ impl TurboTasksCallApi for VcStorage {
         let i = {
             let mut tasks = self.tasks.lock().unwrap();
             let i = tasks.len();
-            tasks.push(Task::Spawned(Event::new()));
+            tasks.push(Task::Spawned(Event::new(move || {
+                format!("Task({i})::event")
+            })));
             i
         };
         handle.spawn(with_turbo_tasks_for_testing(

@@ -17,14 +17,24 @@ use anyhow::{anyhow, Result};
 use clap::{CommandFactory, Parser, Subcommand};
 use serde::Serialize;
 
-use crate::{ffi::nativeRunWithArgs, package_manager::PackageManager};
+use crate::{
+    ffi::{nativeRunWithArgs, nativeRunWithTurboState, GoString},
+    package_manager::PackageManager,
+};
 
 static TURBO_JSON: &str = "turbo.json";
 
 #[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
-#[clap(author, about = "The build system that makes ship happen", long_about = None, ignore_errors = true, disable_help_flag = true, disable_help_subcommand = true, disable_version_flag = true)]
+#[clap(author, about = "The build system that makes ship happen", long_about = None)]
+#[clap(
+    ignore_errors = true,
+    disable_help_flag = true,
+    disable_help_subcommand = true,
+    disable_colored_help = true
+)]
+#[clap(disable_version_flag = true)]
 struct Args {
-    #[clap(long, short, global = true)]
+    #[clap(long, short)]
     help: bool,
     #[clap(long, global = true)]
     version: bool,
@@ -36,7 +46,7 @@ struct Args {
     color: bool,
     /// Specify a file to save a cpu profile
     #[clap(long, global = true, value_parser)]
-    cpuprofile: Option<String>,
+    cpu_profile: Option<String>,
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
     cwd: Option<String>,
@@ -65,6 +75,8 @@ struct Args {
     /// verbosity
     #[clap(short, long, global = true, value_parser)]
     verbosity: Option<u8>,
+    #[clap(long = "__test-run", global = true, hide = true)]
+    test_run: bool,
     #[clap(subcommand)]
     command: Option<Command>,
     tasks: Vec<String>,
@@ -76,25 +88,58 @@ struct Args {
 #[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
 enum Command {
     /// Get the path to the Turbo binary
-    Bin,
+    Bin {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
+    },
     /// Generate the autocompletion script for the specified shell
-    Completion,
+    Completion {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
+    },
     /// Runs the Turborepo background daemon
-    Daemon,
+    Daemon {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
+    },
     /// Help about any command
-    Help,
+    Help {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
+    },
     /// Link your local directory to a Vercel organization and enable remote
     /// caching.
-    Link,
+    Link {
+        /// help for link
+        #[clap(long, short)]
+        help: bool,
+        /// Do not create or modify .gitignore (default false)
+        #[clap(long)]
+        no_gitignore: bool,
+    },
     /// Login to your Vercel account
     Login {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
         #[clap(long = "sso-team")]
         sso_team: Option<String>,
     },
     /// Logout to your Vercel account
-    Logout,
+    Logout {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
+    },
     /// Prepare a subset of your monorepo.
     Prune {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
         #[clap(long)]
         scope: Option<String>,
         #[clap(long)]
@@ -103,10 +148,19 @@ enum Command {
         output_dir: String,
     },
     /// Run tasks across projects in your monorepo
-    Run { tasks: Vec<String> },
+    Run {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
+        tasks: Vec<String>,
+    },
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
-    Unlink,
+    Unlink {
+        /// Help flag
+        #[clap(long, short)]
+        help: bool,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -124,36 +178,166 @@ enum RepoMode {
 /// The entire state of the execution, including args, repo state, etc.
 #[derive(Debug, Serialize)]
 struct TurboState {
-    repo_state: RepoState,
-    cli_args: Args,
+    parsed_args: Args,
+    raw_args: Vec<String>,
 }
 
-/// Runs the Go code linked in current binary.
+impl TryInto<GoString> for TurboState {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> std::result::Result<GoString, Self::Error> {
+        let json = serde_json::to_string(&self)?;
+        let cstring = CString::new(json)?;
+        let n = cstring.as_bytes().len() as isize;
+
+        Ok(GoString {
+            p: cstring.into_raw(),
+            n,
+        })
+    }
+}
+
+/// If a command has a help flag passed, print help and return true.
+/// Otherwise, return false.
 ///
 /// # Arguments
 ///
-/// * `clap_args`: Parsed arguments from clap
-/// * `args`: Raw un-parsed arguments
+/// * `command`: The parsed command.
 ///
-/// returns: Result<i32, Error>
-fn run_current_turbo(clap_args: Args, args: Vec<String>) -> Result<i32> {
-    if let Some(Command::Bin) = clap_args.command {
-        commands::bin::run()?;
-        return Ok(0);
+/// returns: Result<bool, Error>
+fn try_run_help(command: &Command) -> Result<bool> {
+    let (help, command_name) = match command {
+        Command::Bin { help, .. } => (help, "bin"),
+        Command::Completion { help, .. } => (help, "completion"),
+        Command::Daemon { help, .. } => (help, "daemon"),
+        Command::Help { help, .. } => (help, "help"),
+        Command::Link { help, .. } => (help, "link"),
+        Command::Login { help, .. } => (help, "login"),
+        Command::Logout { help, .. } => (help, "logout"),
+        Command::Prune { help, .. } => (help, "prune"),
+        Command::Run { help, .. } => (help, "run"),
+        Command::Unlink { help, .. } => (help, "unlink"),
+    };
+
+    if *help {
+        Args::command()
+            .find_subcommand_mut(command_name)
+            .unwrap_or_else(|| panic!("Could not find subcommand: {command_name}"))
+            .print_long_help()?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+impl TurboState {
+    /// Runs the Go code linked in current binary.
+    ///
+    /// # Arguments
+    ///
+    /// * `args`: Arguments for turbo
+    ///
+    /// returns: Result<i32, Error>
+    fn run_current_turbo(self) -> Result<i32> {
+        match self.parsed_args.command {
+            Some(Command::Bin { .. }) => {
+                commands::bin::run()?;
+                Ok(0)
+            }
+            Some(Command::Link { .. })
+            | Some(Command::Login { .. })
+            | Some(Command::Logout { .. })
+            | Some(Command::Unlink { .. }) => {
+                let serialized_state = self.try_into()?;
+                let exit_code = unsafe { nativeRunWithTurboState(serialized_state) };
+                Ok(exit_code.try_into()?)
+            }
+            _ => {
+                let mut args = self
+                    .raw_args
+                    .iter()
+                    .map(|s| {
+                        let c_string = CString::new(s.as_str())?;
+                        Ok(c_string.into_raw())
+                    })
+                    .collect::<Result<Vec<*mut c_char>>>()?;
+                // With vectors there is a possibility of over-allocating, whether
+                // from the allocator itself or the Vec implementation.
+                // Therefore we shrink the vector to just the length we need.
+                args.shrink_to_fit();
+                let argc: c_int = args.len() as c_int;
+                let argv = args.as_mut_ptr();
+                let exit_code = unsafe { nativeRunWithArgs(argc, argv) };
+                Ok(exit_code.try_into()?)
+            }
+        }
     }
 
-    let mut args = args
-        .into_iter()
-        .map(|s| {
-            let c_string = CString::new(s)?;
-            Ok(c_string.into_raw())
-        })
-        .collect::<Result<Vec<*mut c_char>>>()?;
-    args.shrink_to_fit();
-    let argc: c_int = args.len() as c_int;
-    let argv = args.as_mut_ptr();
-    let exit_code = unsafe { nativeRunWithArgs(argc, argv) };
-    Ok(exit_code.try_into().unwrap())
+    /// Attempts to run correct turbo by finding nearest package.json,
+    /// then finding local turbo installation. If the current binary is the
+    /// local turbo installation, then we run current turbo. Otherwise we
+    /// kick over to the local turbo installation.
+    ///
+    /// # Arguments
+    ///
+    /// * `turbo_state`: state for current execution
+    ///
+    /// returns: Result<i32, Error>
+    fn run_correct_turbo(mut self, current_dir: PathBuf) -> Result<i32> {
+        // Run help for subcommand if `--help` or `-h` is passed.
+        if let Some(command) = &self.parsed_args.command {
+            if try_run_help(command)? {
+                return Ok(0);
+            }
+        }
+
+        // We run this *before* the local turbo code because login/logout/link/unlink
+        // should work regardless of whether or not we're in a monorepo.
+        if matches!(
+            self.parsed_args.command,
+            Some(Command::Login { .. })
+                | Some(Command::Link { .. })
+                | Some(Command::Logout { .. })
+                | Some(Command::Unlink { .. })
+        ) {
+            let exit_code = unsafe { nativeRunWithTurboState(self.try_into()?) };
+            return Ok(exit_code.try_into()?);
+        }
+
+        let repo_state = RepoState::infer(&current_dir)?;
+        let local_turbo_path = repo_state.root.join("node_modules").join(".bin").join({
+            #[cfg(windows)]
+            {
+                "turbo.cmd"
+            }
+            #[cfg(not(windows))]
+            {
+                "turbo"
+            }
+        });
+
+        if matches!(repo_state.mode, RepoMode::SinglePackage) && self.parsed_args.is_run_command() {
+            self.raw_args.push("--single-package".to_string());
+        }
+
+        let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
+        // If the local turbo path doesn't exist or if we are local turbo, then we go
+        // ahead and run the Go code linked in the current binary.
+        if current_turbo_is_local_turbo || !local_turbo_path.try_exists()? {
+            return self.run_current_turbo();
+        }
+
+        // Otherwise, we spawn a process that executes the local turbo
+        // that we've found in node_modules/.bin/turbo.
+        let mut command = process::Command::new(local_turbo_path)
+            .args(&self.raw_args)
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("Failed to execute turbo.");
+
+        Ok(command.wait()?.code().unwrap_or(2))
+    }
 }
 
 impl RepoState {
@@ -235,64 +419,23 @@ impl RepoState {
     }
 }
 
-/// Checks if either we have an explicit run command, i.e. `turbo run build`
-/// or an implicit run, i.e. `turbo build`, where the command after `turbo` is
-/// not one of the reserved commands like `link`, `login`, `bin`, etc.
-///
-/// # Arguments
-///
-/// * `clap_args`:
-///
-/// returns: bool
-fn is_run_command(clap_args: &Args) -> bool {
-    let is_explicit_run = matches!(clap_args.command, Some(Command::Run { .. }));
-    let is_implicit_run = clap_args.command.is_none() && !clap_args.tasks.is_empty();
+impl Args {
+    /// Checks if either we have an explicit run command, i.e. `turbo run build`
+    /// or an implicit run, i.e. `turbo build`, where the command after `turbo`
+    /// is not one of the reserved commands like `link`, `login`, `bin`,
+    /// etc.
+    ///
+    /// # Arguments
+    ///
+    /// * `clap_args`:
+    ///
+    /// returns: bool
+    fn is_run_command(&self) -> bool {
+        let is_explicit_run = matches!(self.command, Some(Command::Run { .. }));
+        let is_implicit_run = self.command.is_none() && !self.tasks.is_empty();
 
-    is_explicit_run || is_implicit_run
-}
-
-/// Attempts to run correct turbo by finding nearest package.json,
-/// then finding local turbo installation. If the current binary is the local
-/// turbo installation, then we run current turbo. Otherwise we kick over to
-/// the local turbo installation.
-///
-/// # Arguments
-///
-/// * `turbo_state`: state for current execution
-///
-/// returns: Result<i32, Error>
-fn run_correct_turbo(turbo_state: TurboState) -> Result<i32> {
-    let local_turbo_path = turbo_state
-        .repo_state
-        .root
-        .join("node_modules")
-        .join(".bin")
-        .join("turbo");
-
-    let mut args: Vec<_> = env::args().skip(1).collect();
-    if matches!(turbo_state.repo_state.mode, RepoMode::SinglePackage)
-        && is_run_command(&turbo_state.cli_args)
-    {
-        args.push("--single-package".to_string());
+        is_explicit_run || is_implicit_run
     }
-
-    let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
-    // If the local turbo path doesn't exist or if we are local turbo, then we go
-    // ahead and run the Go code linked in the current binary.
-    if !local_turbo_path.try_exists()? || current_turbo_is_local_turbo {
-        return run_current_turbo(turbo_state.cli_args, args);
-    }
-
-    // Otherwise, we spawn a process that executes the local turbo
-    // that we've found in node_modules/.bin/turbo.
-    let mut command = process::Command::new(local_turbo_path)
-        .args(&args)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("Failed to execute turbo.");
-
-    Ok(command.wait()?.code().unwrap_or(2))
 }
 
 fn get_version() -> &'static str {
@@ -328,13 +471,12 @@ fn main() -> Result<()> {
         process::exit(1);
     }
 
-    let repo_state = RepoState::infer(&current_dir)?;
     let turbo_state = TurboState {
-        repo_state,
-        cli_args: clap_args,
+        parsed_args: clap_args,
+        raw_args: env::args().skip(1).collect(),
     };
 
-    let exit_code = match run_correct_turbo(turbo_state) {
+    let exit_code = match turbo_state.run_correct_turbo(current_dir) {
         Ok(exit_code) => exit_code,
         Err(e) => {
             eprintln!("failed {:?}", e);
@@ -394,9 +536,10 @@ mod test {
     #[test]
     fn test_parse_run() {
         assert_eq!(
-            Args::try_parse_from(&["turbo", "run", "build"]).unwrap(),
+            Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
             Args {
                 command: Some(Command::Run {
+                    help: false,
                     tasks: vec!["build".to_string()]
                 }),
                 ..Args::default()
@@ -404,9 +547,10 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(&["turbo", "run", "build", "lint", "test"]).unwrap(),
+            Args::try_parse_from(["turbo", "run", "build", "lint", "test"]).unwrap(),
             Args {
                 command: Some(Command::Run {
+                    help: false,
                     tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()]
                 }),
                 ..Args::default()
@@ -414,7 +558,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(&["turbo", "build"]).unwrap(),
+            Args::try_parse_from(["turbo", "build"]).unwrap(),
             Args {
                 tasks: vec!["build".to_string()],
                 ..Args::default()
@@ -422,7 +566,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(&["turbo", "build", "lint", "test"]).unwrap(),
+            Args::try_parse_from(["turbo", "build", "lint", "test"]).unwrap(),
             Args {
                 tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()],
                 ..Args::default()
@@ -433,9 +577,9 @@ mod test {
     #[test]
     fn test_parse_bin() {
         assert_eq!(
-            Args::try_parse_from(&["turbo", "bin"]).unwrap(),
+            Args::try_parse_from(["turbo", "bin"]).unwrap(),
             Args {
-                command: Some(Command::Bin),
+                command: Some(Command::Bin { help: false }),
                 ..Args::default()
             }
         );
@@ -445,7 +589,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
-                command: Some(Command::Bin),
+                command: Some(Command::Bin { help: false }),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
             },
@@ -456,9 +600,12 @@ mod test {
     #[test]
     fn test_parse_login() {
         assert_eq!(
-            Args::try_parse_from(&["turbo", "login"]).unwrap(),
+            Args::try_parse_from(["turbo", "login"]).unwrap(),
             Args {
-                command: Some(Command::Login { sso_team: None }),
+                command: Some(Command::Login {
+                    help: false,
+                    sso_team: None
+                }),
                 ..Args::default()
             }
         );
@@ -468,7 +615,10 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
-                command: Some(Command::Login { sso_team: None }),
+                command: Some(Command::Login {
+                    help: false,
+                    sso_team: None,
+                }),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
             },
@@ -481,6 +631,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
                 command: Some(Command::Login {
+                    help: false,
                     sso_team: Some("my-team".to_string()),
                 }),
                 cwd: Some("../examples/basic".to_string()),
@@ -493,9 +644,9 @@ mod test {
     #[test]
     fn test_parse_logout() {
         assert_eq!(
-            Args::try_parse_from(&["turbo", "logout"]).unwrap(),
+            Args::try_parse_from(["turbo", "logout"]).unwrap(),
             Args {
-                command: Some(Command::Logout),
+                command: Some(Command::Logout { help: false }),
                 ..Args::default()
             }
         );
@@ -505,7 +656,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
-                command: Some(Command::Logout),
+                command: Some(Command::Logout { help: false }),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
             },
@@ -516,9 +667,9 @@ mod test {
     #[test]
     fn test_parse_unlink() {
         assert_eq!(
-            Args::try_parse_from(&["turbo", "unlink"]).unwrap(),
+            Args::try_parse_from(["turbo", "unlink"]).unwrap(),
             Args {
-                command: Some(Command::Unlink),
+                command: Some(Command::Unlink { help: false }),
                 ..Args::default()
             }
         );
@@ -528,7 +679,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
-                command: Some(Command::Unlink),
+                command: Some(Command::Unlink { help: false }),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
             },
@@ -539,13 +690,14 @@ mod test {
     #[test]
     fn test_parse_prune() {
         let default_prune = Command::Prune {
+            help: false,
             scope: None,
             docker: false,
             output_dir: "out".to_string(),
         };
 
         assert_eq!(
-            Args::try_parse_from(&["turbo", "prune"]).unwrap(),
+            Args::try_parse_from(["turbo", "prune"]).unwrap(),
             Args {
                 command: Some(default_prune.clone()),
                 ..Args::default()
@@ -557,7 +709,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
-                command: Some(default_prune.clone()),
+                command: Some(default_prune),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
             },
@@ -565,9 +717,10 @@ mod test {
         .test();
 
         assert_eq!(
-            Args::try_parse_from(&["turbo", "prune", "--scope", "bar"]).unwrap(),
+            Args::try_parse_from(["turbo", "prune", "--scope", "bar"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
+                    help: false,
                     scope: Some("bar".to_string()),
                     docker: false,
                     output_dir: "out".to_string(),
@@ -577,9 +730,10 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(&["turbo", "prune", "--docker"]).unwrap(),
+            Args::try_parse_from(["turbo", "prune", "--docker"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
+                    help: false,
                     scope: None,
                     docker: true,
                     output_dir: "out".to_string(),
@@ -589,9 +743,10 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(&["turbo", "prune", "--out-dir", "dist"]).unwrap(),
+            Args::try_parse_from(["turbo", "prune", "--out-dir", "dist"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
+                    help: false,
                     scope: None,
                     docker: false,
                     output_dir: "dist".to_string(),
@@ -606,6 +761,7 @@ mod test {
             global_args: vec![],
             expected_output: Args {
                 command: Some(Command::Prune {
+                    help: false,
                     scope: None,
                     docker: true,
                     output_dir: "dist".to_string(),
@@ -621,6 +777,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
                 command: Some(Command::Prune {
+                    help: false,
                     scope: None,
                     docker: true,
                     output_dir: "dist".to_string(),
@@ -641,6 +798,7 @@ mod test {
             global_args: vec![],
             expected_output: Args {
                 command: Some(Command::Prune {
+                    help: false,
                     scope: Some("foo".to_string()),
                     docker: true,
                     output_dir: "dist".to_string(),

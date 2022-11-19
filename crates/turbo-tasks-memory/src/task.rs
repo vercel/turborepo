@@ -13,11 +13,11 @@ use std::{
 };
 
 use anyhow::Result;
-use event_listener::{Event, EventListener};
 use parking_lot::{RwLock, RwLockWriteGuard};
 use tokio::task_local;
 use turbo_tasks::{
     backend::{CellMappings, PersistentTaskType},
+    event::{Event, EventListener},
     get_invalidator, registry, FunctionId, Invalidator, RawVc, TaskId, TaskInput, TraitTypeId,
     TurboTasksBackendApi,
 };
@@ -148,7 +148,6 @@ impl Debug for Task {
 }
 
 /// The state of a [Task]
-#[derive(Default)]
 struct TaskState {
     scopes: TaskScopes,
 
@@ -173,6 +172,42 @@ struct TaskState {
     last_duration: Duration,
 }
 
+impl TaskState {
+    fn new(id: TaskId) -> Self {
+        Self {
+            scopes: Default::default(),
+            state_type: Default::default(),
+            children: Default::default(),
+            collectibles: Default::default(),
+            output: Default::default(),
+            created_cells: Default::default(),
+            event: Event::new(move || format!("TaskState({id})::event")),
+            executions: Default::default(),
+            total_duration: Default::default(),
+            last_duration: Default::default(),
+            #[cfg(feature = "track_wait_dependencies")]
+            last_waiting_task: Default::default(),
+        }
+    }
+
+    fn new_scheduled_in_scope(id: TaskId, scope: TaskScopeId) -> Self {
+        Self {
+            scopes: TaskScopes::Inner(CountHashSet::from([scope]), 0),
+            state_type: Scheduled,
+            children: Default::default(),
+            collectibles: Default::default(),
+            output: Default::default(),
+            created_cells: Default::default(),
+            event: Event::new(move || format!("TaskState({id})::event")),
+            executions: Default::default(),
+            total_duration: Default::default(),
+            last_duration: Default::default(),
+            #[cfg(feature = "track_wait_dependencies")]
+            last_waiting_task: Default::default(),
+        }
+    }
+}
+
 /// Keeps track of emitted and unemitted collectibles. Defaults to None to avoid
 /// allocating memory for two empty hashsets when no collectibles are emitted.
 #[derive(Default)]
@@ -194,8 +229,12 @@ impl MaybeCollectibles {
     }
 
     /// Returns a reference to the collectibles (if any).
-    fn as_ref(&self) -> Option<&Box<Collectibles>> {
-        self.inner.as_ref()
+    fn as_ref(&self) -> Option<&Collectibles> {
+        if let Some(inner) = &self.inner {
+            Some(&**inner)
+        } else {
+            None
+        }
     }
 
     /// Emits a collectible.
@@ -270,7 +309,7 @@ impl Task {
             id,
             inputs,
             ty: TaskType::Native(native_fn, bound_fn),
-            state: Default::default(),
+            state: RwLock::new(TaskState::new(id)),
             execution_data: Default::default(),
         }
     }
@@ -284,7 +323,7 @@ impl Task {
             id,
             inputs,
             ty: TaskType::ResolveNative(native_fn),
-            state: Default::default(),
+            state: RwLock::new(TaskState::new(id)),
             execution_data: Default::default(),
         }
     }
@@ -299,7 +338,7 @@ impl Task {
             id,
             inputs,
             ty: TaskType::ResolveTrait(trait_type, trait_fn_name),
-            state: Default::default(),
+            state: RwLock::new(TaskState::new(id)),
             execution_data: Default::default(),
         }
     }
@@ -313,11 +352,7 @@ impl Task {
             id,
             inputs: Vec::new(),
             ty: TaskType::Root(Box::new(functor)),
-            state: RwLock::new(TaskState {
-                state_type: Scheduled,
-                scopes: TaskScopes::Inner(CountHashSet::from([scope]), 0),
-                ..Default::default()
-            }),
+            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope)),
             execution_data: Default::default(),
         }
     }
@@ -331,11 +366,7 @@ impl Task {
             id,
             inputs: Vec::new(),
             ty: TaskType::Once(Mutex::new(Some(Box::pin(functor)))),
-            state: RwLock::new(TaskState {
-                state_type: Scheduled,
-                scopes: TaskScopes::Inner(CountHashSet::from([scope]), 0),
-                ..Default::default()
-            }),
+            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope)),
             execution_data: Default::default(),
         }
     }
@@ -616,7 +647,7 @@ impl Task {
                 let mut active = false;
                 for scope in state.scopes.iter() {
                     backend.with_scope(scope, |scope| {
-                        scope.increment_unfinished_tasks();
+                        scope.increment_unfinished_tasks(backend);
                         log_scope_update!("add unfinished task: {} -> {}", *scope.id, *self.id);
                         let mut scope = scope.state.lock();
                         if scope.is_active() {
@@ -670,8 +701,11 @@ impl Task {
                     return;
                 }
 
-                if let Some(ScopeChildChangeEffect { notify, active }) =
-                    backend.with_scope(id, |scope| scope.state.lock().add_child(root))
+                if let Some(ScopeChildChangeEffect {
+                    notify,
+                    active,
+                    parent,
+                }) = backend.with_scope(id, |scope| scope.state.lock().add_child(root))
                 {
                     drop(state);
                     if !notify.is_empty() {
@@ -679,6 +713,11 @@ impl Task {
                     }
                     if active {
                         backend.increase_scope_active(root, turbo_tasks);
+                    }
+                    if parent {
+                        backend.with_scope(root, |child| {
+                            child.add_parent(id, backend);
+                        })
                     }
                 }
             }
@@ -754,7 +793,7 @@ impl Task {
         backend.with_scope(id, |scope| {
             scope.increment_tasks();
             if !matches!(state.state_type, TaskStateType::Done) {
-                scope.increment_unfinished_tasks();
+                scope.increment_unfinished_tasks(backend);
                 log_scope_update!("add unfinished task (added): {} -> {}", *scope.id, *self.id);
                 if state.state_type == TaskStateType::Dirty {
                     let mut scope = scope.state.lock();
@@ -844,8 +883,11 @@ impl Task {
         match state.scopes {
             TaskScopes::Root(root) => {
                 if root != id {
-                    if let Some(ScopeChildChangeEffect { notify, active }) =
-                        backend.with_scope(id, |scope| scope.state.lock().remove_child(root))
+                    if let Some(ScopeChildChangeEffect {
+                        notify,
+                        active,
+                        parent,
+                    }) = backend.with_scope(id, |scope| scope.state.lock().remove_child(root))
                     {
                         drop(state);
                         if !notify.is_empty() {
@@ -853,6 +895,11 @@ impl Task {
                         }
                         if active {
                             backend.decrease_scope_active(root, turbo_tasks);
+                        }
+                        if parent {
+                            backend.with_scope(root, |child| {
+                                child.remove_parent(id, backend);
+                            })
                         }
                     }
                 }
@@ -949,28 +996,42 @@ impl Task {
             );
             let mut active_counter = 0isize;
             let mut tasks = HashSet::new();
-            for (scope, count) in scopes.iter() {
-                backend.with_scope(*scope, |scope| {
+            let mut scopes_to_add_as_parent = Vec::new();
+            let mut scopes_to_remove_as_parent = Vec::new();
+            for (scope_id, count) in scopes.iter() {
+                backend.with_scope(*scope_id, |scope| {
                     // add the new root scope as child of old scopes
                     let mut state = scope.state.lock();
                     match count.cmp(&0) {
                         Ordering::Greater => {
-                            if let Some(ScopeChildChangeEffect { notify, active }) =
-                                state.add_child_count(root_scope, *count as usize)
+                            if let Some(ScopeChildChangeEffect {
+                                notify,
+                                active,
+                                parent,
+                            }) = state.add_child_count(root_scope, *count as usize)
                             {
                                 tasks.extend(notify);
                                 if active {
                                     active_counter += 1;
                                 }
+                                if parent {
+                                    scopes_to_add_as_parent.push(*scope_id);
+                                }
                             }
                         }
                         Ordering::Less => {
-                            if let Some(ScopeChildChangeEffect { notify, active }) =
-                                state.remove_child_count(root_scope, (-*count) as usize)
+                            if let Some(ScopeChildChangeEffect {
+                                notify,
+                                active,
+                                parent,
+                            }) = state.remove_child_count(root_scope, (-*count) as usize)
                             {
                                 tasks.extend(notify);
                                 if active {
                                     active_counter -= 1;
+                                }
+                                if parent {
+                                    scopes_to_remove_as_parent.push(*scope_id);
                                 }
                             }
                         }
@@ -981,6 +1042,14 @@ impl Task {
             if !tasks.is_empty() {
                 turbo_tasks.schedule_notify_tasks_set(&tasks);
             }
+            backend.with_scope(root_scope, |root_scope| {
+                for parent in scopes_to_add_as_parent {
+                    root_scope.add_parent(parent, backend);
+                }
+                for parent in scopes_to_remove_as_parent {
+                    root_scope.remove_parent(parent, backend);
+                }
+            });
 
             // We collected how often the new root scope is considered as active by the old
             // scopes and increase the active counter by that.
@@ -1262,6 +1331,9 @@ impl Task {
                     #[cfg(feature = "report_expensive")]
                     {
                         use std::time::Instant;
+
+                        use turbo_tasks::util::FormatDuration;
+
                         let start = Instant::now();
                         child.add_to_scope_internal(scope, false, backend, turbo_tasks);
                         let elapsed = start.elapsed();
@@ -1290,6 +1362,9 @@ impl Task {
             #[cfg(feature = "report_expensive")]
             let result = {
                 use std::time::Instant;
+
+                use turbo_tasks::util::FormatDuration;
+
                 let start = Instant::now();
                 let result = self.make_root_scoped_internal(state, backend, turbo_tasks);
                 let elapsed = start.elapsed();
@@ -1332,7 +1407,7 @@ impl Task {
             }
             if let TaskScopes::Root(root) = state.scopes {
                 if let Some(listener) = backend.with_scope(root, |scope| {
-                    if let Some(listener) = scope.has_unfinished_tasks(root, backend) {
+                    if let Some(listener) = scope.has_unfinished_tasks() {
                         return Some(listener);
                     }
                     None
@@ -1375,7 +1450,7 @@ impl Task {
         }
         if let TaskScopes::Root(scope_id) = state.scopes {
             backend.with_scope(scope_id, |scope| {
-                if let Some(l) = scope.has_unfinished_tasks(scope_id, backend) {
+                if let Some(l) = scope.has_unfinished_tasks() {
                     return Ok(Err(l));
                 }
                 let set = scope.read_collectibles(scope_id, trait_id, reader, backend);

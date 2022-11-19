@@ -11,11 +11,8 @@ import { Tabs, Tab } from "../../../../components/Tabs";
 `turbo` works with [Yarn](https://classic.yarnpkg.com/lang/en/), [npm](https://www.npmjs.com/), and [pnpm](https://pnpm.io/) on the following operating systems:
 
 - macOS darwin 64-bit (Intel), ARM 64-bit (Apple Silicon)
-- Linux 32-bit, 64-bit, ARM, ARM 64-bit, MIPS 64-bit Little Endian, PowerPC 64-bit Little Endian, IBM Z 64-bit Big Endian
-- Windows 32-bit, 64-bit, ARM 64-bit
-- FreeBSD 64-bit, ARM 64-bit
-- NetBSD AMD64
-- Android ARM 64-bit
+- Linux 64-bit, ARM 64-bit
+- Windows 64-bit, ARM 64-bit
 
 ## Configure workspaces
 
@@ -25,7 +22,6 @@ You can configure workspaces any way you want, but a common folder structure exa
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
-<div/>
 Specify your `workspaces` in your monorepo's root `package.json` file:
 
 ```json filename="package.json"
@@ -36,7 +32,6 @@ Specify your `workspaces` in your monorepo's root `package.json` file:
 
   </Tab>
   <Tab>
-<div/>
 Specify your `workspaces` in your monorepo's root `package.json` file:
 
 ```json filename="package.json"
@@ -47,7 +42,6 @@ Specify your `workspaces` in your monorepo's root `package.json` file:
 
   </Tab>
   <Tab>
-<div/>
 Specify your `packages` in `pnpm-workspace.yaml`.
 ```yaml filename="pnpm-workspace.yaml"
 packages:
@@ -70,9 +64,21 @@ After configuring your workspaces, re-run your package manager's `install` comma
 Add [`turbo`](https://www.npmjs.com/package/turbo) as a development dependency at the root of your monorepo.
 
 <Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
-  <Tab>```bash npm install turbo -D ```</Tab>
-  <Tab>```bash yarn add turbo -DW ```</Tab>
-  <Tab>```bash pnpm add turbo -Dw ```</Tab>
+  <Tab>
+```bash
+npm install turbo -D
+```
+  </Tab>
+  <Tab>
+```bash
+yarn add turbo -DW
+```
+  </Tab>
+  <Tab>
+```bash
+pnpm add turbo -Dw
+```
+  </Tab>
 </Tabs>
 
 The `turbo` package is a shell script that will install the proper `turbo-<os>-<arch>` package for your operating system and architecture.
@@ -189,9 +195,21 @@ Add or update `scripts` in your monorepo's root `package.json` file and have the
 ## Build your monorepo
 
 <Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
-  <Tab>```sh npm run build ```</Tab>
-  <Tab>```sh yarn build ```</Tab>
-  <Tab>```sh pnpm build ```</Tab>
+  <Tab>
+```sh
+npm run build
+```
+  </Tab>
+  <Tab>
+```sh
+yarn build
+```
+  </Tab>
+  <Tab>
+```sh
+pnpm build
+```
+  </Tab>
 </Tabs>
 
 Depending on your monorepo setup, some artifacts might already be caching properly. In the next sections, we'll show how `turbo` works, how `scope` works, and then how to get caching working after that.

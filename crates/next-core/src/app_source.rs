@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt::Write};
+use std::{
+    collections::{BTreeMap, HashMap},
+    io::Write,
+};
 
 use anyhow::{anyhow, Context, Result};
 use turbo_tasks::{
@@ -7,8 +10,8 @@ use turbo_tasks::{
 };
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{
-    DirectoryContent, DirectoryEntry, File, FileContent, FileContentVc, FileSystemEntryType,
-    FileSystemPathVc,
+    rope::RopeBuilder, DirectoryContent, DirectoryEntry, File, FileContent, FileContentVc,
+    FileSystemEntryType, FileSystemPathVc,
 };
 use turbopack::{
     ecmascript::EcmascriptInputTransform,
@@ -25,6 +28,7 @@ use turbopack_dev_server::{
     html::DevHtmlAssetVc,
     source::{
         combined::{CombinedContentSource, CombinedContentSourceVc},
+        specificity::SpecificityVc,
         ContentSourceData, ContentSourceVc, NoContentSourceVc,
     },
 };
@@ -257,6 +261,8 @@ pub async fn create_app_source(
         context_ssr,
         context,
         project_root,
+        SpecificityVc::exact(),
+        0,
         app_dir,
         server_root,
         EcmascriptChunkPlaceablesVc::cell(server_runtime_entries),
@@ -273,6 +279,8 @@ async fn create_app_source_for_directory(
     context_ssr: AssetContextVc,
     context: AssetContextVc,
     project_root: FileSystemPathVc,
+    specificity: SpecificityVc,
+    position: u32,
     input_dir: FileSystemPathVc,
     server_root: FileSystemPathVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
@@ -284,20 +292,18 @@ async fn create_app_source_for_directory(
     let mut layouts = layouts;
     let mut sources = Vec::new();
     let mut page = None;
-    let mut layout = None;
+    let mut files = HashMap::new();
     if let DirectoryContent::Entries(entries) = &*input_dir.read_dir().await? {
         for (name, entry) in entries.iter() {
-            if let DirectoryEntry::File(file) = entry {
+            if let &DirectoryEntry::File(file) = entry {
                 if let Some((name, _)) = name.rsplit_once('.') {
                     match name {
                         "page" => {
                             page = Some(file);
                         }
-                        "layout" => {
-                            layout = Some(file);
+                        "layout" | "error" | "loading" | "template" | "not-found" | "head" => {
+                            files.insert(name.to_string(), file);
                         }
-                        "error" => { /* TODO */ }
-                        "loading" => { /* TODO */ }
                         _ => {
                             // Any other file is ignored
                         }
@@ -306,8 +312,7 @@ async fn create_app_source_for_directory(
             }
         }
 
-        let layout_js = input_dir.join("layout.js");
-        let layout_tsx = input_dir.join("layout.tsx");
+        let layout = files.get("layout");
 
         // TODO: Use let Some(page_file) = page in expression below when
         // https://rust-lang.github.io/rfcs/2497-if-let-chains.html lands
@@ -320,23 +325,23 @@ async fn create_app_source_for_directory(
             // stable does.
             let is_tsx = *page_file.extension().await? == "tsx";
 
-            if is_tsx {
-                layout.replace(&layout_tsx);
+            let layout = if is_tsx {
+                input_dir.join("layout.tsx")
             } else {
-                layout.replace(&layout_js);
-            }
+                input_dir.join("layout.js")
+            };
+            files.insert("layout".to_string(), layout);
             let content = if is_tsx {
                 include_str!("assets/layout.tsx")
             } else {
                 include_str!("assets/layout.js")
             };
 
-            let layout = layout.context("required")?;
             layout.write(FileContentVc::from(File::from(content)));
 
             AppSourceIssue {
                 severity: IssueSeverity::Warning.into(),
-                path: *page_file,
+                path: page_file,
                 message: StringVc::cell(format!(
                     "Your page {} did not have a root layout, we created {} for you.",
                     page_file.await?.path,
@@ -349,16 +354,11 @@ async fn create_app_source_for_directory(
         }
 
         let mut list = layouts.await?.clone_value();
-        list.push(
-            LayoutSegment {
-                file: layout.copied(),
-                target,
-            }
-            .cell(),
-        );
+        list.push(LayoutSegment { files, target }.cell());
         layouts = LayoutSegmentsVc::cell(list);
-        if let Some(page_path) = page.copied() {
+        if let Some(page_path) = page {
             sources.push(create_node_rendered_source(
+                specificity,
                 server_root,
                 regular_expression_for_path(server_root, target, false),
                 AppRenderer {
@@ -380,18 +380,27 @@ async fn create_app_source_for_directory(
         for (name, entry) in entries.iter() {
             if let DirectoryEntry::Directory(dir) = entry {
                 let intermediate_output_path = intermediate_output_path.join(name);
-                let new_target = if name.starts_with('(') && name.ends_with(')') {
+                let specificity = if name.starts_with("[[") || name.starts_with("[...") {
+                    specificity.with_catch_all(position)
+                } else if name.starts_with('[') {
+                    specificity.with_dynamic_segment(position)
+                } else {
+                    specificity
+                };
+                let (new_target, position) = if name.starts_with('(') && name.ends_with(')') {
                     // This doesn't affect the url
-                    target
+                    (target, position)
                 } else {
                     // This adds to the url
-                    target.join(name)
+                    (target.join(name), position + 1)
                 };
                 sources.push(
                     create_app_source_for_directory(
                         context_ssr,
                         context,
                         project_root,
+                        specificity,
+                        position,
                         *dir,
                         server_root,
                         runtime_entries,
@@ -425,7 +434,7 @@ impl NodeEntry for AppRenderer {
     #[turbo_tasks::function]
     async fn entry(&self, data: Value<ContentSourceData>) -> Result<NodeRenderingEntryVc> {
         let is_rsc = if let Some(headers) = data.into_value().headers {
-            headers.contains_key("__rsc__")
+            headers.contains_key("rsc")
         } else {
             false
         };
@@ -438,14 +447,14 @@ impl NodeEntry for AppRenderer {
             .copied()
             .chain(std::iter::once(
                 LayoutSegment {
-                    file: Some(page),
+                    files: HashMap::from([("page".to_string(), page)]),
                     target: self.target,
                 }
                 .cell(),
             ))
             .try_join()
             .await?;
-        let segments: Vec<(String, Option<(String, String, String)>)> = layout_and_page
+        let segments: Vec<_> = layout_and_page
             .into_iter()
             .fold(
                 (self.server_root, Vec::new()),
@@ -455,7 +464,8 @@ impl NodeEntry for AppRenderer {
                             let target = &*segment.target.await?;
                             let segment_path =
                                 last_path.await?.get_path_to(target).unwrap_or_default();
-                            if let Some(file) = segment.file {
+                            let mut imports = BTreeMap::new();
+                            for (key, file) in segment.files.iter() {
                                 let file_str = file.to_string().await?;
                                 let identifier = magic_identifier::encode(&format!(
                                     "imported namespace {}",
@@ -466,25 +476,21 @@ impl NodeEntry for AppRenderer {
                                     file_str
                                 ));
                                 if let Some(p) = path_value.get_relative_path_to(&*file.await?) {
-                                    Ok((
-                                        stringify_str(segment_path),
-                                        Some((p, identifier, chunks_identifier)),
-                                    ))
+                                    imports.insert(
+                                        key.to_string(),
+                                        (p, identifier, chunks_identifier),
+                                    );
                                 } else {
-                                    Err(anyhow!(
+                                    return Err(anyhow!(
                                         "Unable to generate import as there
                                 is no relative path to the layout module {} from context
                                 path {}",
                                         file_str,
                                         path.to_string().await?
-                                    ))
+                                    ));
                                 }
-                            } else {
-                                Ok::<(String, Option<(String, String, String)>), _>((
-                                    stringify_str(segment_path),
-                                    None,
-                                ))
                             }
+                            Ok((stringify_str(segment_path), imports))
                         });
                         futures
                     })
@@ -494,15 +500,17 @@ impl NodeEntry for AppRenderer {
             .into_iter()
             .try_join()
             .await?;
-        let mut result =
-            "import IPC, { Ipc } from \"@vercel/turbopack-next/internal/ipc\";\n".to_string();
-        for (_, import) in segments.iter() {
-            if let Some((p, identifier, chunks_identifier)) = import {
+        let mut result = RopeBuilder::from(
+            "import IPC, { Ipc } from \"@vercel/turbopack-next/internal/ipc\";\n",
+        );
+
+        for (_, imports) in segments.iter() {
+            for (p, identifier, chunks_identifier) in imports.values() {
+                result += r#"("TURBOPACK { transition: next-layout-entry; chunking-type: parallel }");
+"#;
                 writeln!(
                     result,
-                    r#"("TURBOPACK {{ transition: next-layout-entry; chunking-type: parallel }}");
-import {}, {{ chunks as {} }} from {};
-"#,
+                    "import {}, {{ chunks as {} }} from {};\n",
                     identifier,
                     chunks_identifier,
                     stringify_str(p)
@@ -518,27 +526,30 @@ import BOOTSTRAP from {};
                 stringify_str(&page)
             )?;
         }
-        result.push_str("const LAYOUT_INFO = [");
-        for (segment_str_lit, import) in segments.iter() {
-            if let Some((_, identifier, chunks_identifier)) = import {
+
+        result += "const LAYOUT_INFO = [";
+        for (segment_str_lit, imports) in segments.iter() {
+            writeln!(result, "  {{\n    segment: {segment_str_lit},")?;
+            for (key, (_, identifier, chunks_identifier)) in imports {
                 writeln!(
                     result,
-                    "  {{ segment: {segment_str_lit}, module: {identifier}, chunks: \
-                     {chunks_identifier} }},",
-                )?
-            } else {
-                writeln!(result, "  {{ segment: {segment_str_lit} }},",)?
+                    "    {key}: {{ module: {identifier}, chunks: {chunks_identifier} }},",
+                    key = stringify_str(key),
+                )?;
             }
+            result += "  },";
         }
-        result.push_str("];\n\n");
+        result += "];\n\n";
+
         let base_code = next_js_file("entry/app-renderer.tsx");
-        let mut file = File::from(result);
         if let FileContent::Content(base_file) = &*base_code.await? {
-            file.push_content(base_file.content());
+            result += base_file.content()
         }
-        let asset = VirtualAssetVc::new(path.join("entry"), FileContent::Content(file).into());
+
+        let file = File::from(result.build());
+        let asset = VirtualAssetVc::new(path.join("entry"), file.into());
         let (context, intermediate_output_path) = if is_rsc {
-            (self.context, self.intermediate_output_path.join("__rsc__"))
+            (self.context, self.intermediate_output_path.join("rsc"))
         } else {
             (self.context_ssr, self.intermediate_output_path)
         };

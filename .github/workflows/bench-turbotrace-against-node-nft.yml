@@ -2,16 +2,25 @@ name: Bench Turbo trace against @vercel/nft
 
 on:
   push:
-    branches: [main, staging]
+    # Runs on every commit on main
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.*"
+      - ".cargo/**"
+      - ".github/**"
+      - "rust-toolchain"
+  pull_request:
+    # Runs on PRs from bench/ prefixed branches
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_PROFILE_RELEASE_LTO: false
   RUST_BACKTRACE: 1
 
 jobs:
   bench_vs_node_nft:
-    # for edited events it should only run on base changes
+    if: github.event_name == 'push' || startsWith(github.head_ref, 'bench/')
     runs-on: ubuntu-latest
     name: bench
 
@@ -30,6 +39,10 @@ jobs:
         run: |
           echo 'node-linker = "hoisted"' > .npmrc
           pnpm install -r --side-effects-cache false
+
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Install nextest
         run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin

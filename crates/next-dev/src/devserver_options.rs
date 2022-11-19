@@ -24,9 +24,12 @@ pub struct DevServerOptions {
     pub root: Option<PathBuf>,
 
     /// The port number on which to start the application
+    /// Note: setting env PORT allows to configure port without explicit cli
+    /// args. However, this is temporary measure to conform with existing
+    /// next.js devserver and can be removed in the future.
     #[cfg_attr(
         feature = "cli",
-        clap(short, long, value_parser, default_value_t = 3000)
+        clap(short, long, value_parser, default_value_t = 3000, env = "PORT")
     )]
     #[cfg_attr(feature = "serializable", serde(default = "default_port"))]
     pub port: u16,
@@ -66,20 +69,32 @@ pub struct DevServerOptions {
     pub log_detail: bool,
 
     // Inherited options from next-dev, need revisit later.
-    // This is not supported by CLI yet.
+    #[cfg_attr(feature = "cli", clap(long))]
     #[cfg_attr(feature = "serializable", serde(default))]
+    /// If port is not explicitly specified, use different port if it's already
+    /// in use.
     pub allow_retry: bool,
+    #[cfg_attr(feature = "cli", clap(long))]
     #[cfg_attr(feature = "serializable", serde(default))]
+    /// Internal for next.js, no specific usage yet.
     pub dev: bool,
+    #[cfg_attr(feature = "cli", clap(long))]
     #[cfg_attr(feature = "serializable", serde(default))]
+    /// Internal for next.js, no specific usage yet.
     pub is_next_dev_command: bool,
+    #[cfg_attr(feature = "cli", clap(long))]
     #[cfg_attr(feature = "serializable", serde(default))]
+    /// Specify server component external packages explicitly. This is an
+    /// experimental flag.
     pub server_components_external_packages: Vec<String>,
 }
 
 #[cfg(feature = "serializable")]
 fn default_port() -> u16 {
-    3000
+    std::env::var("PORT")
+        .ok()
+        .and_then(|port| port.parse().ok())
+        .unwrap_or(3000)
 }
 
 #[cfg(feature = "serializable")]
