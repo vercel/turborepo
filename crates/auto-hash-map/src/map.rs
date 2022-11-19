@@ -69,9 +69,7 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
     fn convert_to_map(&mut self) -> &mut HashMap<K, V, H> {
         if let AutoMap::List(list) = self {
             let mut map = HashMap::with_capacity_and_hasher(MAX_LIST_SIZE * 2, Default::default());
-            for (k, v) in list.drain(..) {
-                map.insert(k, v);
-            }
+            map.extend(list.drain(..));
             *self = AutoMap::Map(Box::new(map));
         }
         if let AutoMap::Map(map) = self {
@@ -84,9 +82,7 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
     fn convert_to_list(&mut self) -> &mut Vec<(K, V)> {
         if let AutoMap::Map(map) = self {
             let mut list = Vec::with_capacity(MAX_LIST_SIZE);
-            for (k, v) in map.drain() {
-                list.push((k, v));
-            }
+            list.extend(map.drain());
             *self = AutoMap::List(list);
         }
         if let AutoMap::List(list) = self {
@@ -96,6 +92,7 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
         }
     }
 
+    /// see [HashMap::insert](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.insert)
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         match self {
             AutoMap::List(list) => {
@@ -104,7 +101,7 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
                         return Some(std::mem::replace(v, value));
                     }
                 }
-                if list.len() == MAX_LIST_SIZE {
+                if list.len() >= MAX_LIST_SIZE {
                     let map = self.convert_to_map();
                     map.insert(key, value);
                 } else {
@@ -116,6 +113,7 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
         }
     }
 
+    /// see [HashMap::remove](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.remove)
     pub fn remove(&mut self, key: &K) -> Option<V> {
         match self {
             AutoMap::List(list) => {
@@ -136,6 +134,7 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
         }
     }
 
+    /// see [HashMap::extend](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.extend)
     pub fn extend(&mut self, iter: impl IntoIterator<Item = (K, V)>) {
         let iter = iter.into_iter();
         match self {
@@ -160,6 +159,7 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
         }
     }
 
+    /// see [HashMap::entry](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.entry)
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
         if self.len() >= MAX_LIST_SIZE {
             self.convert_to_map();
@@ -184,6 +184,7 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
 }
 
 impl<K: Eq + Hash, V, H: BuildHasher> AutoMap<K, V, H> {
+    /// see [HashMap::get](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.get)
     pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
@@ -198,6 +199,7 @@ impl<K: Eq + Hash, V, H: BuildHasher> AutoMap<K, V, H> {
         }
     }
 
+    /// see [HashMap::get_mut](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.get_mut)
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
         match self {
             AutoMap::List(list) => {
@@ -208,6 +210,7 @@ impl<K: Eq + Hash, V, H: BuildHasher> AutoMap<K, V, H> {
         }
     }
 
+    /// see [HashMap::contains_key](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.contains_key)
     pub fn contains_key(&self, key: &K) -> bool {
         match self {
             AutoMap::List(list) => list.iter().any(|(k, _)| *k == *key),
@@ -217,6 +220,7 @@ impl<K: Eq + Hash, V, H: BuildHasher> AutoMap<K, V, H> {
 }
 
 impl<K, V, H> AutoMap<K, V, H> {
+    /// see [HashMap::iter](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.iter)
     pub fn iter(&self) -> Iter<'_, K, V> {
         match self {
             AutoMap::List(list) => Iter::List(list.iter()),
@@ -224,6 +228,7 @@ impl<K, V, H> AutoMap<K, V, H> {
         }
     }
 
+    /// see [HashMap::into_iter](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.into_iter)
     pub fn into_iter(self) -> IntoIter<K, V> {
         match self {
             AutoMap::List(list) => IntoIter::List(list.into_iter()),
@@ -231,6 +236,7 @@ impl<K, V, H> AutoMap<K, V, H> {
         }
     }
 
+    /// see [HashMap::is_empty](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.is_empty)
     pub fn is_empty(&self) -> bool {
         match self {
             AutoMap::List(list) => list.is_empty(),
@@ -238,6 +244,7 @@ impl<K, V, H> AutoMap<K, V, H> {
         }
     }
 
+    /// see [HashMap::len](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.len)
     pub fn len(&self) -> usize {
         match self {
             AutoMap::List(list) => list.len(),
@@ -245,6 +252,7 @@ impl<K, V, H> AutoMap<K, V, H> {
         }
     }
 
+    /// see [HashMap::values_mut](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.values_mut)
     pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
         match self {
             AutoMap::List(list) => ValuesMut::List(list.iter_mut()),
@@ -252,6 +260,7 @@ impl<K, V, H> AutoMap<K, V, H> {
         }
     }
 
+    /// see [HashMap::values](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.values)
     pub fn values(&self) -> Values<'_, K, V> {
         match self {
             AutoMap::List(list) => Values::List(list.iter()),
@@ -348,6 +357,7 @@ pub enum Entry<'a, K, V> {
 }
 
 impl<'a, K, V> Entry<'a, K, V> {
+    /// see [HashMap::Entry::or_insert](https://doc.rust-lang.org/std/collections/hash_map/enum.Entry.html#method.or_insert)
     pub fn or_insert_with(self, default: impl FnOnce() -> V) -> &'a mut V {
         match self {
             Entry::Occupied(entry) => entry.into_mut(),
@@ -357,6 +367,7 @@ impl<'a, K, V> Entry<'a, K, V> {
 }
 
 impl<'a, K, V: Default> Entry<'a, K, V> {
+    /// see [HashMap::Entry::or_default](https://doc.rust-lang.org/std/collections/hash_map/enum.Entry.html#method.or_default)
     pub fn or_default(self) -> &'a mut V {
         match self {
             Entry::Occupied(entry) => entry.into_mut(),
@@ -374,6 +385,7 @@ pub enum OccupiedEntry<'a, K, V> {
 }
 
 impl<'a, K, V> OccupiedEntry<'a, K, V> {
+    /// see [HashMap::OccupiedEntry::get_mut](https://doc.rust-lang.org/std/collections/hash_map/enum.OccupiedEntry.html#method.get_mut)
     pub fn get_mut(&mut self) -> &mut V {
         match self {
             OccupiedEntry::List { list, index } => &mut list[*index].1,
@@ -381,6 +393,7 @@ impl<'a, K, V> OccupiedEntry<'a, K, V> {
         }
     }
 
+    /// see [HashMap::OccupiedEntry::into_mut](https://doc.rust-lang.org/std/collections/hash_map/enum.OccupiedEntry.html#method.into_mut)
     pub fn into_mut(self) -> &'a mut V {
         match self {
             OccupiedEntry::List { list, index } => &mut list[index].1,
@@ -388,6 +401,7 @@ impl<'a, K, V> OccupiedEntry<'a, K, V> {
         }
     }
 
+    /// see [HashMap::OccupiedEntry::remove](https://doc.rust-lang.org/std/collections/hash_map/enum.OccupiedEntry.html#method.remove)
     pub fn remove(self) -> V {
         match self {
             OccupiedEntry::List { list, index } => list.swap_remove(index).1,
@@ -402,6 +416,7 @@ pub enum VacantEntry<'a, K, V> {
 }
 
 impl<'a, K, V> VacantEntry<'a, K, V> {
+    /// see [HashMap::VacantEntry::insert](https://doc.rust-lang.org/std/collections/hash_map/enum.VacantEntry.html#method.insert)
     pub fn insert(self, value: V) -> &'a mut V {
         match self {
             VacantEntry::List { list, key } => {

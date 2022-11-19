@@ -29,12 +29,14 @@ impl<K: Debug, H> Debug for AutoSet<K, H> {
 }
 
 impl<K> AutoSet<K, BuildHasherDefault<DefaultHasher>> {
+    /// see [HashSet::new](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.new)
     pub fn new() -> Self {
         Self {
             map: AutoMap::new(),
         }
     }
 
+    /// see [HashSet::with_capacity](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.with_capacity)
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             map: AutoMap::with_capacity(capacity),
@@ -43,12 +45,14 @@ impl<K> AutoSet<K, BuildHasherDefault<DefaultHasher>> {
 }
 
 impl<K, H: BuildHasher> AutoSet<K, H> {
+    /// see [HashSet::with_hasher](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.with_hasher)
     pub fn with_hasher() -> Self {
         Self {
             map: AutoMap::with_hasher(),
         }
     }
 
+    /// see [HashSet::with_capacity_and_hasher](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.with_capacity_and_hasher)
     pub fn with_capacity_and_hasher(capacity: usize, hasher: H) -> Self {
         Self {
             map: AutoMap::with_capacity_and_hasher(capacity, hasher),
@@ -57,36 +61,44 @@ impl<K, H: BuildHasher> AutoSet<K, H> {
 }
 
 impl<K: Hash + Eq, H: BuildHasher + Default> AutoSet<K, H> {
+    /// see [HashSet::insert](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.insert)
     pub fn insert(&mut self, key: K) -> bool {
         self.map.insert(key, ()).is_none()
     }
 
+    /// see [HashSet::remove](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.remove)
     pub fn remove(&mut self, key: &K) -> bool {
         self.map.remove(key).is_some()
     }
 
+    /// see [HashSet::extend](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.extend)
     pub fn extend(&mut self, iter: impl IntoIterator<Item = K>) {
         self.map.extend(iter.into_iter().map(|item| (item, ())))
     }
 
+    /// see [HashSet::contains](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.contains)
     pub fn contains(&self, key: &K) -> bool {
         self.map.contains_key(key)
     }
 }
 
 impl<K, H> AutoSet<K, H> {
+    /// see [HashSet::len](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.len)
     pub fn len(&self) -> usize {
         self.map.len()
     }
 
+    /// see [HashSet::is_empty](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.is_empty)
     pub fn is_empty(&self) -> bool {
         self.map.is_empty()
     }
 
+    /// see [HashSet::iter](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.iter)
     pub fn iter(&self) -> Iter<'_, K> {
         Iter(self.map.iter())
     }
 
+    /// see [HashSet::into_iter](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.into_iter)
     pub fn into_iter(self) -> IntoIter<K> {
         IntoIter(self.map.into_iter())
     }
