@@ -3,6 +3,7 @@ package prune
 import (
 	"bufio"
 	"fmt"
+	"strings"
 
 	"github.com/vercel/turbo/cli/internal/config"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -21,13 +23,13 @@ import (
 )
 
 type opts struct {
-	scope     string
+	scope     []string
 	docker    bool
 	outputDir string
 }
 
 func addPruneFlags(opts *opts, flags *pflag.FlagSet) {
-	flags.StringVar(&opts.scope, "scope", "", "Specify package to act as entry point for pruned monorepo (required).")
+	flags.StringArrayVar(&opts.scope, "scope", nil, "Specify package(s) to act as entry points for pruned monorepo (required).")
 	flags.BoolVar(&opts.docker, "docker", false, "Output pruned workspace into 'full' and 'json' directories optimized for Docker layer caching.")
 	flags.StringVar(&opts.outputDir, "out-dir", "out", "Set the root directory for files output by this command")
 	// No-op the cwd flag while the root level command is not yet cobra
@@ -53,7 +55,7 @@ func GetCmd(helper *cmdutil.Helper) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if opts.scope == "" {
+			if len(opts.scope) == 0 {
 				err := errors.New("at least one target must be specified")
 				base.LogError(err.Error())
 				return err
@@ -93,23 +95,27 @@ func (p *prune) prune(opts *opts) error {
 	if err != nil {
 		return errors.Wrap(err, "could not construct graph")
 	}
-	p.base.Logger.Trace("scope", "value", opts.scope)
-	target, scopeIsValid := ctx.WorkspaceInfos[opts.scope]
-	if !scopeIsValid {
-		return errors.Errorf("invalid scope: package %v not found", opts.scope)
-	}
 	outDir := p.base.RepoRoot.UntypedJoin(opts.outputDir)
 	fullDir := outDir
 	if opts.docker {
 		fullDir = fullDir.UntypedJoin("full")
 	}
 
-	p.base.Logger.Trace("target", "value", target.Name)
-	p.base.Logger.Trace("directory", "value", target.Dir)
-	p.base.Logger.Trace("external deps", "value", target.UnresolvedExternalDeps)
-	p.base.Logger.Trace("internal deps", "value", target.InternalDeps)
+	p.base.Logger.Trace("scope", "value", strings.Join(opts.scope, ", "))
 	p.base.Logger.Trace("docker", "value", opts.docker)
 	p.base.Logger.Trace("out dir", "value", outDir.ToString())
+
+	for _, scope := range opts.scope {
+		p.base.Logger.Trace("scope", "value", scope)
+		target, scopeIsValid := ctx.WorkspaceInfos[scope]
+		if !scopeIsValid {
+			return errors.Errorf("invalid scope: package %v not found", scope)
+		}
+		p.base.Logger.Trace("target", "value", target.Name)
+		p.base.Logger.Trace("directory", "value", target.Dir)
+		p.base.Logger.Trace("external deps", "value", target.UnresolvedExternalDeps)
+		p.base.Logger.Trace("internal deps", "value", target.InternalDeps)
+	}
 
 	canPrune, err := ctx.PackageManager.CanPrune(p.base.RepoRoot)
 	if err != nil {
@@ -122,7 +128,7 @@ func (p *prune) prune(opts *opts) error {
 		return errors.New("Cannot prune without parsed lockfile")
 	}
 
-	p.base.UI.Output(fmt.Sprintf("Generating pruned monorepo for %v in %v", ui.Bold(opts.scope), ui.Bold(outDir.ToString())))
+	p.base.UI.Output(fmt.Sprintf("Generating pruned monorepo for %v in %v", ui.Bold(strings.Join(opts.scope, ", ")), ui.Bold(outDir.ToString())))
 
 	packageJSONPath := outDir.UntypedJoin("package.json")
 	if err := packageJSONPath.EnsureDir(); err != nil {
@@ -143,16 +149,22 @@ func (p *prune) prune(opts *opts) error {
 		}
 	}
 	workspaces := []turbopath.AnchoredSystemPath{}
-	targets := []string{opts.scope}
-	internalDeps, err := ctx.WorkspaceGraph.Ancestors(opts.scope)
-	if err != nil {
-		return errors.Wrap(err, "could find traverse the dependency graph to find topological dependencies")
+	targetSet := make(util.Set)
+	for _, pkg := range opts.scope {
+		internalDeps, err := ctx.WorkspaceGraph.Ancestors(pkg)
+		if err != nil {
+			return errors.Wrap(err, "could not find traverse the dependency graph to find topological dependencies")
+		}
+		for _, internalDep := range internalDeps {
+			targetSet.Add(internalDep)
+		}
 	}
 
 	// Use for loop so we can coerce to string
 	// .List() returns a list of interface{} types, but
 	// we know they are strings.
-	for _, dep := range internalDeps.List() {
+	targets := opts.scope
+	for _, dep := range targetSet.List() {
 		targets = append(targets, dep.(string))
 	}
 
