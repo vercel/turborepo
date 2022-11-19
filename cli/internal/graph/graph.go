@@ -12,17 +12,24 @@ import (
 )
 
 // WorkspaceInfos holds information about each workspace in the monorepo.
-type WorkspaceInfos map[interface{}]*fs.PackageJSON
+type WorkspaceInfos map[string]*fs.PackageJSON
 
 // CompleteGraph represents the common state inferred from the filesystem and pipeline.
 // It is not intended to include information specific to a particular run.
 type CompleteGraph struct {
-	// Topo
-	TopologicalGraph dag.AcyclicGraph
-	Pipeline         fs.Pipeline
-	PackageInfos     WorkspaceInfos
-	GlobalHash       string
-	RootNode         string
+	// WorkspaceGraph expresses the dependencies between packages
+	WorkspaceGraph dag.AcyclicGraph
+
+	// Pipeline is config from turbo.json
+	Pipeline fs.Pipeline
+
+	// WorkspaceInfos stores the package.json contents by package name
+	WorkspaceInfos WorkspaceInfos
+
+	// GlobalHash is the hash of all global dependencies
+	GlobalHash string
+
+	RootNode string
 }
 
 // GetPackageTaskVisitor wraps a `visitor` function that is used for walking the TaskGraph
@@ -32,7 +39,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 	return func(taskID string) error {
 		packageName, taskName := util.GetPackageTaskFromId(taskID)
 
-		pkg, ok := g.PackageInfos[packageName]
+		pkg, ok := g.WorkspaceInfos[packageName]
 		if !ok {
 			return fmt.Errorf("cannot find package %v for task %v", packageName, taskID)
 		}
