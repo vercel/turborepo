@@ -232,9 +232,9 @@ jobs:
     # ...
 ```
 
-## Caching with github actions/cache action
+## Caching with github actions/cache
 
-The following steps exemplify how you could use [actions/cache](https://github.com/actions/cache) to cache your monorepo builds on github.
+The following steps exemplify how you could use [actions/cache](https://github.com/actions/cache) to cache your monorepo artefacts on github.
 
 1. Supply the desired cache output location with the `--cache-dir` flag to your `turbo build` command
   - Example `package.json` with `.turbo` as desired output directory:
@@ -249,12 +249,17 @@ The following steps exemplify how you could use [actions/cache](https://github.c
     }
   }
   ```
-2. In your github ci file, make sure the `path` attribute within the `actions/cache` action has the same value
-  - State the desired cache key for your future runs to check against
-    - In the example below, we used the `${{ runner.os }}-turbo-` prefix to hit against. This allows us to hit the cache even though the current `${{ github.sha }}` env value is different in the current ci run.
+2. Configure your github pipeline with a step which utilizes the `actions/cache@v3` action before the build steps of your ci file.
+  - Ensure sure the `path` attribute set within the `actions/cache` action matches the output location above.
+    - In the example below, `path` was set to `.turbo`.
+  - State the cache key for the current run under the `key` attribute.
+    - In the example below, we used a combination of the runner os and github sha as the cache key.
+  - State the desired cache prefix pattern under the `restore-keys` attribute. Make sure this pattern will remain valid for future ci runs.
+    - In the example below, we used the `${{ runner.os }}-turbo-` as the cache key prefix pattern to search against. This allows us to hit the cache on any subsequent ci runs despite `github.sha` changing.
 
   - Example `ci` yaml with `.turbo` as chosen cache folder
     ```yaml highlight="13-19"
+      # ...
     jobs:
       build:
         runs-on: ubuntu-latest
@@ -281,4 +286,5 @@ The following steps exemplify how you could use [actions/cache](https://github.c
 
           - name: Build
             run: npm run build
+        # ...
       ```
