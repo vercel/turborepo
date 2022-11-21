@@ -113,7 +113,7 @@ func RealRun(
 		base.UI.Error(err.Error())
 	}
 
-	if err := runState.Close(base.UI, rs.Opts.runOpts.profile); err != nil {
+	if err := runState.Close(base.UI); err != nil {
 		return errors.Wrap(err, "error with profiler")
 	}
 	if exitCode != 0 {

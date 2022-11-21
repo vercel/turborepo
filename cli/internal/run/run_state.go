@@ -62,6 +62,8 @@ type RunState struct {
 	Attempted int
 
 	startedAt time.Time
+
+	profileFilename string
 }
 
 // NewRunState creates a RunState instance for tracking events during the
@@ -70,12 +72,14 @@ func NewRunState(startedAt time.Time, tracingProfile string) *RunState {
 	if tracingProfile != "" {
 		chrometracing.EnableTracing()
 	}
+
 	return &RunState{
-		Success:   0,
-		Failure:   0,
-		Cached:    0,
-		Attempted: 0,
-		state:     make(map[string]*BuildTargetState),
+		Success:         0,
+		Failure:         0,
+		Cached:          0,
+		Attempted:       0,
+		state:           make(map[string]*BuildTargetState),
+		profileFilename: tracingProfile,
 
 		startedAt: startedAt,
 	}
@@ -88,7 +92,9 @@ func (r *RunState) Run(label string) func(outcome RunResultStatus, err error) {
 		Label:  label,
 		Status: TargetBuilding,
 	}, label, true)
+
 	tracer := chrometracing.Event(label)
+
 	return func(outcome RunResultStatus, err error) {
 		defer tracer.Done()
 		now := time.Now()
@@ -136,8 +142,8 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 
 // Close finishes a trace of a turbo run. The tracing file will be written if applicable,
 // and run stats are written to the terminal
-func (r *RunState) Close(terminal cli.Ui, filename string) error {
-	if err := writeChrometracing(filename, terminal); err != nil {
+func (r *RunState) Close(terminal cli.Ui) error {
+	if err := writeChrometracing(r.profileFilename, terminal); err != nil {
 		terminal.Error(fmt.Sprintf("Error writing tracing data: %v", err))
 	}
 

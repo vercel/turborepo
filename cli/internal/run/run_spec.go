@@ -58,7 +58,8 @@ type runOpts struct {
 	concurrency int
 	// Whether to execute in parallel (defaults to false)
 	parallel bool
-	// Whether to emit a perf profile
+
+	// The filename to write a perf profile.
 	profile string
 	// If true, continue task executions even if a task fails.
 	continueOnError bool
