@@ -43,11 +43,15 @@ fn write_file<P: AsRef<Path>>(name: &str, path: P, content: &[u8]) -> Result<()>
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EffectMode {
     /// As a direct `useEffect` hook in the component's body.
-    Hook,
+    /// Boolean indicates whether to inject into all modules (true) or only the
+    /// entry module (false).
+    Hook(bool),
     /// Rendering an <Effect /> client-side component that has the `useEffect`
     /// hook instead. Good for testing React Server Components, as they can't
     /// use `useEffect` hooks directly.
-    Component,
+    /// Boolean indicates whether to inject into all modules (true) or only the
+    /// entry module (false).
+    Component(bool),
 }
 
 #[derive(Debug)]
@@ -58,7 +62,7 @@ pub struct TestAppBuilder {
     pub dynamic_import_count: usize,
     pub flatness: usize,
     pub package_json: Option<PackageJsonConfig>,
-    pub effect_mode: EffectMode,
+    pub effect_mode: Option<EffectMode>,
 }
 
 impl Default for TestAppBuilder {
@@ -70,7 +74,7 @@ impl Default for TestAppBuilder {
             dynamic_import_count: 0,
             flatness: 5,
             package_json: Some(Default::default()),
-            effect_mode: EffectMode::Hook,
+            effect_mode: None,
         }
     }
 }
@@ -78,25 +82,31 @@ impl Default for TestAppBuilder {
 const SETUP_IMPORTS: &str = indoc! {r#"
 import React from "react";
 "#};
-const SETUP_EFFECT_PROPS: &str = indoc! {r#"
-let EFFECT_PROPS = {};
-"#};
-const SETUP_EVAL: &str = indoc! {r#"
-/* @turbopack-bench:eval-start */ 
+const SETUP_MODULE_SCOPE: &str = indoc! {r#"
+
+let EFFECTS = [];
+/* @turbopack-bench:eval-start */
 /* @turbopack-bench:eval-end */
 "#};
+const SETUP_ROOT_MODULE_SCOPE: &str = indoc! {r#"
+
+let EFFECTS = ["Hydration done"];
+/* @turbopack-bench:eval-start */
+/* @turbopack-bench:eval-end */
+"#};
+// Conditional useEffect is usually not good, but as `EFFECTS` is a
+// compile-time constant, that's fine and more efficient than unconditionally
+// calling useEffect in every module. This way we only pay the useEffect
+// overhead when actually needed.
 const USE_EFFECT: &str = indoc! {r#"
-React.useEffect(() => {
-    if (EFFECT_PROPS.hydration) {
-        globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding("Hydration done");
-    }
-    if (EFFECT_PROPS.message) {
-        globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding(EFFECT_PROPS.message);
-    }
-}, [EFFECT_PROPS]);
+for (const effect of EFFECTS) {
+    React.useEffect(() => {
+        globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding(effect);
+    }, []);
+}
 "#};
 const EFFECT_ELEMENT: &str = indoc! {r#"
-<Effect {...EFFECT_PROPS} />
+<Effect effects={EFFECTS} />
 "#};
 
 impl TestAppBuilder {
@@ -120,31 +130,38 @@ impl TestAppBuilder {
         remaining_modules -= 1;
         let mut is_root = true;
 
-        let (additional_body, additional_elements) = match self.effect_mode {
-            EffectMode::Component => ("", EFFECT_ELEMENT),
-            EffectMode::Hook => (USE_EFFECT, ""),
-        };
-
         while let Some((file, depth)) = queue.pop_front() {
             modules.push((file.clone(), depth));
 
-            let setup_imports = match self.effect_mode {
-                EffectMode::Hook => SETUP_IMPORTS.to_string(),
-                EffectMode::Component => {
+            let (additional_body, additional_elements) = match self.effect_mode {
+                Some(EffectMode::Hook(all)) if all || is_root => (USE_EFFECT, ""),
+                Some(EffectMode::Component(all)) if all || is_root => ("", EFFECT_ELEMENT),
+                _ => ("", ""),
+            };
+            let additional_imports = match self.effect_mode {
+                Some(EffectMode::Component(all)) if all || is_root => {
                     let relative_effect = if src == file.parent().unwrap() {
                         "./effect.jsx".to_string()
                     } else {
                         pathdiff::diff_paths(&src.join("effect.jsx"), file.parent().unwrap())
                             .unwrap()
-                            .display()
-                            .to_string()
+                            .to_str()
+                            .unwrap()
+                            .replace('\\', "/")
                     };
                     formatdoc! {r#"
-                        {SETUP_IMPORTS}
                         import Effect from "{relative_effect}";
+
                     "#}
                 }
+                _ => "".to_string(),
             };
+            let additional_module_scope = match self.effect_mode {
+                Some(_) if is_root => SETUP_ROOT_MODULE_SCOPE,
+                Some(_) => SETUP_MODULE_SCOPE,
+                None => "",
+            };
+            is_root = false;
 
             let leaf = remaining_modules == 0
                 || (!queue.is_empty()
@@ -154,10 +171,8 @@ impl TestAppBuilder {
                     &format!("leaf file {}", file.display()),
                     &file,
                     formatdoc! {r#"
-                        {setup_imports}
-
-                        {SETUP_EFFECT_PROPS}
-                        {SETUP_EVAL}
+                        {additional_imports}{SETUP_IMPORTS}
+                        {additional_module_scope}
 
                         function Triangle({{ style }}) {{
                             {additional_body}
@@ -226,23 +241,14 @@ impl TestAppBuilder {
                     })
                     .collect::<Vec<_>>()
                 {
-                    let setup_hydration = if is_root {
-                        is_root = false;
-                        "\nEFFECT_PROPS.hydration = true;"
-                    } else {
-                        ""
-                    };
                     write_file(
                         &format!("file with children {}", file.display()),
                         &file,
                         formatdoc! {r#"
-                            {setup_imports}
+                            {additional_imports}{SETUP_IMPORTS}
                             {a}
                             {b}
-                            {c}
-
-                            {SETUP_EFFECT_PROPS}{setup_hydration}
-                            {SETUP_EVAL}
+                            {c}{additional_module_scope}
 
                             function Container({{ style }}) {{
                                 {additional_body}
@@ -356,15 +362,19 @@ impl TestAppBuilder {
             bootstrap_app_page.as_bytes(),
         )?;
 
-        if matches!(self.effect_mode, EffectMode::Component) {
+        if matches!(self.effect_mode, Some(EffectMode::Component(_))) {
             // The component is used to measure hydration and commit time for app/page.jsx
             let effect_component = formatdoc! {r#"
                 "use client";
 
                 import React from "react";
 
-                export default function Effect(EFFECT_PROPS) {{
-                    {USE_EFFECT}
+                export default function Effect({{ effects }}) {{
+                    React.useEffect(() => {{
+                        for (const effect of effects) {{
+                            globalThis.__turbopackBenchBinding && globalThis.__turbopackBenchBinding(effect);
+                        }}
+                    }}, [effects]);
                     return null;
                 }}
             "#};

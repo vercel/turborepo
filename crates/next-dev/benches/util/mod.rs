@@ -51,7 +51,7 @@ where
     retry_async(args, f, 3, Duration::from_secs(5)).await
 }
 
-pub fn build_test(module_count: usize, bundler: &dyn Bundler) -> TestApp {
+pub fn build_test(module_count: usize, bundler: &dyn Bundler, hmr: bool) -> TestApp {
     let test_app = TestAppBuilder {
         module_count,
         directories_count: module_count / 20,
@@ -59,8 +59,8 @@ pub fn build_test(module_count: usize, bundler: &dyn Bundler) -> TestApp {
             react_version: bundler.react_version().to_string(),
         }),
         effect_mode: match bundler.render_type() {
-            RenderType::ServerSideRenderedWithEvents => EffectMode::Component,
-            _ => EffectMode::Hook,
+            RenderType::ServerSideRenderedWithEvents => Some(EffectMode::Component(hmr)),
+            _ => Some(EffectMode::Hook(hmr)),
         },
         ..Default::default()
     }

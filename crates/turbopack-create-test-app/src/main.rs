@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
-use turbopack_create_test_app::test_app_builder::{EffectMode, TestAppBuilder};
+use turbopack_create_test_app::test_app_builder::TestAppBuilder;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -48,7 +48,7 @@ fn main() -> Result<()> {
             } else {
                 None
             },
-            effect_mode: EffectMode::Hook
+            effect_mode: None
         }
         .build()?
         .path()

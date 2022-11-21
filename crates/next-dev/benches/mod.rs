@@ -1,4 +1,7 @@
+#![feature(map_try_insert)]
+
 use std::{
+    collections::HashMap,
     fs::{self},
     panic::AssertUnwindSafe,
     path::Path,
@@ -17,6 +20,7 @@ use criterion::{
     BenchmarkGroup, BenchmarkId, Criterion,
 };
 use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use tokio::{
     runtime::Runtime,
     time::{sleep, timeout},
@@ -81,7 +85,7 @@ fn bench_startup_internal(mut g: BenchmarkGroup<WallTime>, hydration: bool) {
             }
         };
         for module_count in get_module_counts() {
-            let test_app = Lazy::new(|| build_test(module_count, bundler.as_ref()));
+            let test_app = Lazy::new(|| build_test(module_count, bundler.as_ref(), false));
             let input = (bundler.as_ref(), &test_app);
             resume_on_error(AssertUnwindSafe(|| {
                 g.bench_with_input(
@@ -161,7 +165,7 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
             continue;
         }
         for module_count in get_module_counts() {
-            let test_app = Lazy::new(|| build_test(module_count, bundler.as_ref()));
+            let test_app = Lazy::new(|| build_test(module_count, bundler.as_ref(), true));
             let input = (bundler.as_ref(), &test_app);
             let module_picker =
                 Lazy::new(|| Arc::new(ModulePicker::new(test_app.modules().to_vec())));
@@ -173,6 +177,7 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                     |b, &(bundler, test_app)| {
                         let test_app = &**test_app;
                         let modules = test_app.modules();
+                        let original_contents = &Mutex::new(HashMap::new());
                         let module_picker = &*module_picker;
                         let browser = &*browser;
 
@@ -212,6 +217,7 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                         location,
                                         exponential_duration,
                                         &WallTime,
+                                        &mut *original_contents.lock(),
                                     )
                                     .await
                                     {
@@ -239,42 +245,41 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                         location,
                                         MAX_UPDATE_TIMEOUT,
                                         &WallTime,
+                                        &mut *original_contents.lock(),
                                     )
                                     .await?;
                                 }
 
                                 Ok(guard)
                             },
-                            |mut guard, iters, m, verbose| {
-                                let module_picker = Arc::clone(module_picker);
-                                async move {
-                                    let mut value = m.zero();
-                                    for iter in 0..iters {
-                                        let module = module_picker.pick();
-                                        let duration = make_change(
-                                            &module,
-                                            bundler,
-                                            &mut guard,
-                                            location,
-                                            MAX_UPDATE_TIMEOUT,
-                                            &m,
-                                        )
-                                        .await?;
-                                        value = m.add(&value, &duration);
+                            |mut guard, iters, m, verbose| async move {
+                                let mut value = m.zero();
+                                for iter in 0..iters {
+                                    let module = module_picker.pick();
+                                    let duration = make_change(
+                                        &module,
+                                        bundler,
+                                        &mut guard,
+                                        location,
+                                        MAX_UPDATE_TIMEOUT,
+                                        &m,
+                                        &mut *original_contents.lock(),
+                                    )
+                                    .await?;
+                                    value = m.add(&value, &duration);
 
-                                        let i: u64 = iter + 1;
-                                        if verbose && i != iters && i.count_ones() == 1 {
-                                            eprint!(
-                                                " [{:?} {:?}/{}]",
-                                                duration,
-                                                FormatDuration(value / (i as u32)),
-                                                i
-                                            );
-                                        }
+                                    let i: u64 = iter + 1;
+                                    if verbose && i != iters && i.count_ones() == 1 {
+                                        eprint!(
+                                            " [{:?} {:?}/{}]",
+                                            duration,
+                                            FormatDuration(value / (i as u32)),
+                                            i
+                                        );
                                     }
-
-                                    Ok((guard, value))
                                 }
+
+                                Ok((guard, value))
                             },
                             |guard| async move {
                                 let hmr_is_happening = guard
@@ -285,6 +290,11 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                 // Make sure that we are really measuring HMR and not accidentically
                                 // full refreshing the page
                                 assert!(hmr_is_happening.value().unwrap().as_bool().unwrap());
+
+                                // Reset app to the original version
+                                for (module, original) in original_contents.lock().iter() {
+                                    fs::write(module, original.as_bytes()).unwrap();
+                                }
                             },
                         );
                     },
@@ -294,13 +304,16 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
     }
 }
 
-fn insert_code(
-    path: &Path,
+fn insert_code<'a>(
+    path: &'a Path,
     bundler: &dyn Bundler,
     message: &str,
     location: CodeLocation,
+    original_contents: &mut HashMap<&'a Path, String>,
 ) -> Result<impl FnOnce() -> Result<()>> {
-    let mut contents = fs::read_to_string(path)?;
+    let original = fs::read_to_string(path)?;
+    let mut contents = original.clone();
+    let _ = original_contents.try_insert(path, original);
 
     const PRAGMA_EVAL_START: &str = "/* @turbopack-bench:eval-start */";
     const PRAGMA_EVAL_END: &str = "/* @turbopack-bench:eval-end */";
@@ -316,7 +329,7 @@ fn insert_code(
         (CodeLocation::Effect, _) => {
             contents.replace_range(
                 eval_start + PRAGMA_EVAL_START.len()..eval_end,
-                &format!("\nEFFECT_PROPS.message = \"{message}\";\n"),
+                &format!("\nEFFECTS = [\"{message}\"];\n"),
             );
         }
         (
@@ -343,13 +356,14 @@ fn insert_code(
 
 static CHANGE_TIMEOUT_MESSAGE: &str = "update was not registered by bundler";
 
-async fn make_change<'a>(
-    module: &Path,
+async fn make_change<'a, 'b>(
+    module: &'b Path,
     bundler: &dyn Bundler,
     guard: &mut PageGuard<'a>,
     location: CodeLocation,
     timeout_duration: Duration,
     measurement: &WallTime,
+    original_contents: &mut HashMap<&'b Path, String>,
 ) -> Result<Duration> {
     static CHANGE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -359,7 +373,7 @@ async fn make_change<'a>(
     );
 
     // Keep the IO out of the measurement.
-    let commit = insert_code(module, bundler, &msg, location)?;
+    let commit = insert_code(module, bundler, &msg, location, original_contents)?;
 
     let start = measurement.start();
 
@@ -428,7 +442,7 @@ fn bench_startup_cached_internal(mut g: BenchmarkGroup<WallTime>, hydration: boo
             }
         };
         for module_count in get_module_counts() {
-            let test_app = Lazy::new(|| build_test(module_count, bundler.as_ref()));
+            let test_app = Lazy::new(|| build_test(module_count, bundler.as_ref(), false));
             let input = (bundler.as_ref(), &test_app);
 
             resume_on_error(AssertUnwindSafe(|| {
