@@ -28,15 +28,15 @@ import (
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed
 type dryRunSummary struct {
-	Packages []string     `json:"packages"`
-	Tasks    []hashedTask `json:"tasks"`
+	Packages []string      `json:"packages"`
+	Tasks    []taskSummary `json:"tasks"`
 }
 
 // DryRunSummarySinglePackage is the same as DryRunSummary with some adjustments
 // to the internal struct for a single package. It's likely that we can use the
 // same struct for Single Package repos in the future.
 type singlePackageDryRunSummary struct {
-	Tasks []hashedSinglePackageTask `json:"tasks"`
+	Tasks []singlePackageTaskSummary `json:"tasks"`
 }
 
 // DryRun gets all the info needed from tasks and prints out a summary, but doesn't actually
@@ -56,7 +56,7 @@ func DryRun(
 	dryRunJSON := rs.Opts.runOpts.dryRunJSON
 	singlePackage := rs.Opts.runOpts.singlePackage
 
-	tasksRun, err := executeDryRun(
+	taskSummaries, err := executeDryRun(
 		ctx,
 		engine,
 		g,
@@ -71,7 +71,7 @@ func DryRun(
 	}
 
 	// Assign the Task Summaries to the main summary
-	summary.Tasks = tasksRun
+	summary.Tasks = taskSummaries
 
 	// Render the dry run as json
 	if dryRunJSON {
@@ -91,8 +91,8 @@ func DryRun(
 	return nil
 }
 
-func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashes *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]hashedTask, error) {
-	taskIDs := []hashedTask{}
+func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashes *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]taskSummary, error) {
+	taskIDs := []taskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
@@ -141,7 +141,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			return err
 		}
 
-		taskIDs = append(taskIDs, hashedTask{
+		taskIDs = append(taskIDs, taskSummary{
 			TaskID:          packageTask.TaskID,
 			Task:            packageTask.Task,
 			Package:         packageTask.PackageName,
@@ -180,7 +180,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 }
 
 func renderDryRunSinglePackageJSON(summary *dryRunSummary) (string, error) {
-	singlePackageTasks := make([]hashedSinglePackageTask, len(summary.Tasks))
+	singlePackageTasks := make([]singlePackageTaskSummary, len(summary.Tasks))
 
 	for i, ht := range summary.Tasks {
 		singlePackageTasks[i] = ht.toSinglePackageTask()
@@ -281,7 +281,7 @@ func commandLooksLikeTurbo(command string) bool {
 }
 
 // TODO: put this somewhere else
-type hashedTask struct {
+type taskSummary struct {
 	TaskID          string           `json:"taskId"`
 	Task            string           `json:"task"`
 	Package         string           `json:"package"`
@@ -296,7 +296,7 @@ type hashedTask struct {
 	Dependents      []string         `json:"dependents"`
 }
 
-type hashedSinglePackageTask struct {
+type singlePackageTaskSummary struct {
 	Task            string   `json:"task"`
 	Hash            string   `json:"hash"`
 	Command         string   `json:"command"`
@@ -307,7 +307,7 @@ type hashedSinglePackageTask struct {
 	Dependents      []string `json:"dependents"`
 }
 
-func (ht *hashedTask) toSinglePackageTask() hashedSinglePackageTask {
+func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
 	dependencies := make([]string, len(ht.Dependencies))
 	for i, depencency := range ht.Dependencies {
 		dependencies[i] = util.StripPackageName(depencency)
@@ -316,7 +316,7 @@ func (ht *hashedTask) toSinglePackageTask() hashedSinglePackageTask {
 	for i, dependent := range ht.Dependents {
 		dependents[i] = util.StripPackageName(dependent)
 	}
-	return hashedSinglePackageTask{
+	return singlePackageTaskSummary{
 		Task:         util.RootTaskTaskName(ht.TaskID),
 		Hash:         ht.Hash,
 		Command:      ht.Command,

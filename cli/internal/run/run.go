@@ -296,7 +296,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	summary := &dryRunSummary{
 		Packages: packagesInScope,
-		Tasks:    []hashedTask{},
+		Tasks:    []taskSummary{},
 	}
 
 	// Dry Run
