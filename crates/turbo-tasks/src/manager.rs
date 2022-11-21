@@ -1157,33 +1157,9 @@ impl From<CurrentCellRef> for RawVc {
     }
 }
 
-pub fn find_cell_by_key<
-    K: Debug + Eq + Ord + Hash + Typed + TypedForInput + Send + Sync + 'static,
->(
-    type_id: ValueTypeId,
-    key: K,
-) -> CurrentCellRef {
-    PREVIOUS_CELLS.with(|c| {
-        let current_task = current_task("cellting turbo_tasks values");
-        let mut map = c.borrow_mut();
-        let index = *map
-            .by_key
-            .entry((
-                type_id,
-                SharedValue(Some(K::get_value_type_id()), Arc::new(key)),
-            ))
-            .or_insert_with(|| with_turbo_tasks(|tt| tt.get_fresh_cell(current_task)));
-        CurrentCellRef {
-            current_task,
-            index,
-            type_id,
-        }
-    })
-}
-
 pub fn find_cell_by_type(type_id: ValueTypeId) -> CurrentCellRef {
     PREVIOUS_CELLS.with(|cell| {
-        let current_task = current_task("cellting turbo_tasks values");
+        let current_task = current_task("celling turbo_tasks values");
         let mut map = cell.borrow_mut();
         let (ref mut current_index, ref mut list) = map.by_type.entry(type_id).or_default();
         let index = if let Some(i) = list.get(*current_index) {

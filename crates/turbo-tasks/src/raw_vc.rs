@@ -18,8 +18,8 @@ use crate::{
     backend::CellContent,
     event::EventListener,
     manager::{
-        find_cell_by_key, find_cell_by_type, read_task_cell, read_task_cell_untracked,
-        read_task_output, read_task_output_untracked, CurrentCellRef, TurboTasksApi,
+        find_cell_by_type, read_task_cell, read_task_cell_untracked, read_task_output,
+        read_task_output_untracked, CurrentCellRef, TurboTasksApi,
     },
     primitives::{RawVcSet, RawVcSetVc},
     registry::get_value_type,
@@ -306,26 +306,6 @@ impl RawVc {
     /// recomputations in the graph (as once tasks doesn't reexecute)
     pub async fn cell_local(self) -> Result<RawVc> {
         self.cell_local_internal(find_cell_by_type).await
-    }
-
-    /// Like [RawVc::cell_local], but allows to specify a key for selecting the
-    /// cell.
-    pub async fn keyed_cell_local<
-        K: std::fmt::Debug
-            + std::cmp::Eq
-            + std::cmp::Ord
-            + std::hash::Hash
-            + Typed
-            + TypedForInput
-            + Send
-            + Sync
-            + 'static,
-    >(
-        self,
-        key: K,
-    ) -> Result<RawVc> {
-        self.cell_local_internal(|ty| find_cell_by_key(ty, key))
-            .await
     }
 
     pub fn get_task_id(&self) -> TaskId {
