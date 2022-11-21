@@ -306,6 +306,10 @@
 <span id="306">306</span>
 <span id="307">307</span>
 <span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::min,
     collections::{HashMap, HashSet},
@@ -323,6 +327,8 @@
     <span class="prelude-ty">Option</span>&lt;JsValue&gt;,
     Vec&lt;Vec&lt;(HashSet&lt;Id&gt;, Vec&lt;(HashSet&lt;Id&gt;, JsValue)&gt;)&gt;&gt;,
 );
+
+<span class="kw">struct </span>LinkCacheItem(bool, JsValue, (HashSet&lt;Id&gt;, HashSet&lt;Id&gt;));
 
 <span class="attr">#[derive(Default)]
 </span><span class="kw">pub struct </span>LinkCache {
@@ -372,21 +378,21 @@
         }
     }
 
-    <span class="kw">fn </span>get(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        id: <span class="kw-2">&amp;</span>Id,
-        cycle_stack: <span class="kw-2">&amp;</span>HashSet&lt;Id&gt;,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;(bool, JsValue, (HashSet&lt;Id&gt;, HashSet&lt;Id&gt;))&gt; {
+    <span class="kw">fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, id: <span class="kw-2">&amp;</span>Id, cycle_stack: <span class="kw-2">&amp;</span>HashSet&lt;Id&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;LinkCacheItem&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>((bailing, data)) = <span class="self">self</span>.data.get(id) {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(bailing) = bailing {
-                <span class="kw">return </span><span class="prelude-val">Some</span>((<span class="bool-val">true</span>, bailing.clone(), (HashSet::new(), HashSet::new())));
+                <span class="kw">return </span><span class="prelude-val">Some</span>(LinkCacheItem(
+                    <span class="bool-val">true</span>,
+                    bailing.clone(),
+                    (HashSet::new(), HashSet::new()),
+                ));
             }
             <span class="kw">for </span>list <span class="kw">in </span>data[<span class="number">0</span>..min(cycle_stack.len() + <span class="number">1</span>, data.len())].iter() {
                 <span class="kw">for </span>(key, list) <span class="kw">in </span>list.iter() {
                     <span class="kw">if </span>key.iter().all(|id| cycle_stack.contains(id)) {
                         <span class="kw">for </span>(non_circular, value) <span class="kw">in </span>list.iter() {
                             <span class="kw">if </span>non_circular.iter().all(|id| !cycle_stack.contains(id)) {
-                                <span class="kw">return </span><span class="prelude-val">Some</span>((
+                                <span class="kw">return </span><span class="prelude-val">Some</span>(LinkCacheItem(
                                     <span class="bool-val">false</span>,
                                     value.clone(),
                                     (key.clone(), non_circular.clone()),
@@ -493,7 +499,9 @@
                 } <span class="kw">else </span>{
                     total_nodes -= <span class="number">1</span>;
                     {
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>((bailing, value, refs)) = cache.get(<span class="kw-2">&amp;</span>var, <span class="kw-2">&amp;</span>cycle_stack) {
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(LinkCacheItem(bailing, value, refs)) =
+                            cache.get(<span class="kw-2">&amp;</span>var, <span class="kw-2">&amp;</span>cycle_stack)
+                        {
                             replaced_references.<span class="number">0</span>.extend(refs.<span class="number">0</span>);
                             replaced_references.<span class="number">1</span>.extend(refs.<span class="number">1</span>);
                             total_nodes += value.total_nodes();

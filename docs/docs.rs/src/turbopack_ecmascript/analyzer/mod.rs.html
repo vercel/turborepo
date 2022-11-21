@@ -2143,6 +2143,8 @@
 <span id="2143">2143</span>
 <span id="2144">2144</span>
 <span id="2145">2145</span>
+<span id="2146">2146</span>
+<span id="2147">2147</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::Ordering,
     fmt::Display,
@@ -2172,6 +2174,11 @@
 <span class="kw">pub mod </span>imports;
 <span class="kw">pub mod </span>linker;
 <span class="kw">pub mod </span>well_known;
+
+<span class="kw">type </span>PinnedAsyncUntilSettledBox&lt;<span class="lifetime">&#39;a</span>, E&gt; =
+    Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;(JsValue, bool), E&gt;&gt; + Send + <span class="lifetime">&#39;a</span>&gt;&gt;;
+
+<span class="kw">type </span>PinnedAsyncBox&lt;<span class="lifetime">&#39;a</span>, E&gt; = Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;(JsValue, bool), E&gt;&gt; + <span class="lifetime">&#39;a</span>&gt;&gt;;
 
 <span class="attr">#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 </span><span class="kw">pub enum </span>ObjectPart {
@@ -3335,7 +3342,7 @@
         <span class="kw">fn </span>visit_async_until_settled_box&lt;<span class="lifetime">&#39;a</span>, F, R, E&gt;(
             value: JsValue,
             visitor: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>F,
-        ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;(JsValue, bool), E&gt;&gt; + Send + <span class="lifetime">&#39;a</span>&gt;&gt;
+        ) -&gt; PinnedAsyncUntilSettledBox&lt;E&gt;
         <span class="kw">where
             </span>R: <span class="lifetime">&#39;a </span>+ Future&lt;Output = <span class="prelude-ty">Result</span>&lt;(JsValue, bool), E&gt;&gt; + Send,
             F: <span class="lifetime">&#39;a </span>+ FnMut(JsValue) -&gt; R + Send,
@@ -3369,10 +3376,7 @@
         </span>R: <span class="lifetime">&#39;a </span>+ Future&lt;Output = <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, bool), E&gt;&gt;,
         F: <span class="lifetime">&#39;a </span>+ FnMut(JsValue) -&gt; R,
     {
-        <span class="kw">fn </span>visit_async_box&lt;<span class="lifetime">&#39;a</span>, F, R, E&gt;(
-            value: JsValue,
-            visitor: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>F,
-        ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;(JsValue, bool), E&gt;&gt; + <span class="lifetime">&#39;a</span>&gt;&gt;
+        <span class="kw">fn </span>visit_async_box&lt;<span class="lifetime">&#39;a</span>, F, R, E&gt;(value: JsValue, visitor: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>F) -&gt; PinnedAsyncBox&lt;E&gt;
         <span class="kw">where
             </span>R: <span class="lifetime">&#39;a </span>+ Future&lt;Output = <span class="prelude-ty">Result</span>&lt;(JsValue, bool), E&gt;&gt;,
             F: <span class="lifetime">&#39;a </span>+ FnMut(JsValue) -&gt; R,

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["ReferenceType",""],["TaskType",""]],"struct":[["GroupTree",""],["ReferenceStats",""],["Stats",""],["TaskStats",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["ReferenceType",""],["TaskType",""]],"struct":[["GroupTree",""],["ReferenceStats",""],["Stats",""],["StatsReferences",""],["TaskStats",""]]};

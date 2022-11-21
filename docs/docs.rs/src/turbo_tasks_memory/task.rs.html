@@ -1600,7 +1600,6 @@
 <span id="1600">1600</span>
 <span id="1601">1601</span>
 <span id="1602">1602</span>
-<span id="1603">1603</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -1901,7 +1900,8 @@
     memory_backend::Job,
     output::Output,
     scope::{ScopeChildChangeEffect, TaskScopeId, TaskScopes},
-    stats, MemoryBackend,
+    stats::{<span class="self">self</span>, StatsReferences},
+    MemoryBackend,
 };
 
 <span class="kw">impl </span>Task {
@@ -2843,12 +2843,7 @@
         }
     }
 
-    <span class="kw">pub fn </span>get_stats_references(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-    ) -&gt; (
-        Vec&lt;(stats::ReferenceType, TaskId)&gt;,
-        Vec&lt;(stats::ReferenceType, TaskScopeId)&gt;,
-    ) {
+    <span class="kw">pub fn </span>get_stats_references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StatsReferences {
         <span class="kw">let </span><span class="kw-2">mut </span>refs = Vec::new();
         <span class="kw">let </span><span class="kw-2">mut </span>scope_refs = Vec::new();
         {
@@ -2878,7 +2873,10 @@
                 }
             }
         }
-        (refs, scope_refs)
+        StatsReferences {
+            tasks: refs,
+            scopes: scope_refs,
+        }
     }
 
     <span class="kw">fn </span>state_string(state: <span class="kw-2">&amp;</span>TaskState) -&gt; String {

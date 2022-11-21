@@ -325,6 +325,12 @@
 <span id="325">325</span>
 <span id="326">326</span>
 <span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::{<span class="self">self</span>, max},
     collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
@@ -336,9 +342,15 @@
 <span class="kw">use </span>turbo_tasks::{registry, FunctionId, TaskId, TraitTypeId};
 
 <span class="kw">use crate</span>::{
+    scope::TaskScopeId,
     task::{Task, TaskStatsInfo},
     MemoryBackend,
 };
+
+<span class="kw">pub struct </span>StatsReferences {
+    <span class="kw">pub </span>tasks: Vec&lt;(ReferenceType, TaskId)&gt;,
+    <span class="kw">pub </span>scopes: Vec&lt;(ReferenceType, TaskScopeId)&gt;,
+}
 
 <span class="attr">#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 </span><span class="kw">pub enum </span>TaskType {
@@ -465,8 +477,8 @@
         }
         stats.scopes += child_scopes;
 
-        <span class="kw">let </span>(references, <span class="kw">_</span>) = task.get_stats_references();
-        <span class="kw">let </span>set: HashSet&lt;<span class="kw">_</span>&gt; = references.into_iter().collect();
+        <span class="kw">let </span>StatsReferences { tasks, .. } = task.get_stats_references();
+        <span class="kw">let </span>set: HashSet&lt;<span class="kw">_</span>&gt; = tasks.into_iter().collect();
         <span class="kw">for </span>(ref_type, task) <span class="kw">in </span>set {
             backend.with_task(task, |task| {
                 <span class="kw">let </span>ty = task.get_stats_type();

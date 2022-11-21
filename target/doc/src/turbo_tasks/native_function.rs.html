@@ -110,6 +110,8 @@
 <span id="110">110</span>
 <span id="111">111</span>
 <span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt::Debug,
     future::Future,
@@ -127,6 +129,8 @@
 
 <span class="kw">type </span>NativeTaskFuture = Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;RawVc&gt;&gt; + Send&gt;&gt;;
 <span class="kw">type </span>NativeTaskFn = Box&lt;<span class="kw">dyn </span>Fn() -&gt; NativeTaskFuture + Send + Sync&gt;;
+<span class="kw">type </span>BoundNativeTaskFn =
+    Box&lt;<span class="kw">dyn </span>(Fn(<span class="kw-2">&amp;</span>Vec&lt;TaskInput&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;NativeTaskFn&gt;) + Send + Sync + <span class="lifetime">&#39;static</span>&gt;;
 
 <span class="doccomment">/// A native (rust) turbo-tasks function. It&#39;s used internally by
 /// `#[turbo_tasks::function]`.
@@ -137,7 +141,7 @@
     <span class="doccomment">/// The functor that creates a functor from inputs. The inner functor
     /// handles the task execution.
     </span><span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
-    </span><span class="kw">pub </span>bind_fn: Box&lt;<span class="kw">dyn </span>(Fn(<span class="kw-2">&amp;</span>Vec&lt;TaskInput&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;NativeTaskFn&gt;) + Send + Sync + <span class="lifetime">&#39;static</span>&gt;,
+    </span><span class="kw">pub </span>bind_fn: BoundNativeTaskFn,
     <span class="comment">// TODO move to Task
     </span><span class="doccomment">/// A counter that tracks total executions of that function
     </span><span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
