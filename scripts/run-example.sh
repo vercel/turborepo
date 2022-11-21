@@ -161,6 +161,8 @@ if [ -f "examples/$folder/package.json" ]; then
   echo "======================================================="
   cleanup
   setup_git
+  # save the default packageManager
+  packageManager=$(cat 'package.json' | jq '.packageManager')
   if [ "$pkgManager" == "npm" ]; then
     run_npm
   elif [ "$pkgManager" == "pnpm" ]; then
@@ -173,7 +175,8 @@ if [ -f "examples/$folder/package.json" ]; then
   fi
   hasRun=1
 
-  cat package.json | jq 'del(.packageManager)' | sponge package.json
+  # reset to the default packageManager
+  cat package.json | jq ".packageManager = ${packageManager}" | sponge package.json
   if [ "$TURBO_TAG" == "canary" ]; then
     cat package.json | jq '.devDependencies.turbo = "latest"' | sponge package.json
   fi
