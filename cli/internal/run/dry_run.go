@@ -80,12 +80,7 @@ func DryRun(
 
 	// Render the dry run as json
 	if dryRunJSON {
-		var rendered string
-		if singlePackage {
-			rendered, err = renderDryRunSinglePackageJSON(summary)
-		} else {
-			rendered, err = renderDryRunFullJSON(summary)
-		}
+		rendered, err := renderDryRunFullJSON(summary, singlePackage)
 		if err != nil {
 			return err
 		}
@@ -205,7 +200,11 @@ func renderDryRunSinglePackageJSON(summary *dryRunSummary) (string, error) {
 	return string(bytes), nil
 }
 
-func renderDryRunFullJSON(summary *dryRunSummary) (string, error) {
+func renderDryRunFullJSON(summary *dryRunSummary, singlePackage bool) (string, error) {
+	if singlePackage {
+		return renderDryRunSinglePackageJSON(summary)
+	}
+
 	bytes, err := json.MarshalIndent(summary, "", "  ")
 	if err != nil {
 		return "", errors.Wrap(err, "failed to render JSON")
