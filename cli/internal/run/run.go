@@ -294,6 +294,11 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
+	summary := &dryRunSummary{
+		Packages: packagesInScope,
+		Tasks:    []hashedTask{},
+	}
+
 	// Dry Run
 	if rs.Opts.runOpts.dryRun {
 		return DryRun(
@@ -303,8 +308,8 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			engine,
 			tracker,
 			turboCache,
-			packagesInScope,
 			r.base,
+			summary,
 		)
 	}
 

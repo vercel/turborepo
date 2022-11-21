@@ -48,18 +48,13 @@ func DryRun(
 	engine *core.Engine,
 	tracker *taskhash.Tracker,
 	turboCache cache.Cache,
-	packagesInScope []string,
 	base *cmdutil.CmdBase,
+	summary *dryRunSummary,
 ) error {
 	defer turboCache.Shutdown()
 
 	dryRunJSON := rs.Opts.runOpts.dryRunJSON
 	singlePackage := rs.Opts.runOpts.singlePackage
-
-	summary := &dryRunSummary{
-		Packages: packagesInScope,
-		Tasks:    []hashedTask{},
-	}
 
 	tasksRun, err := executeDryRun(
 		ctx,
