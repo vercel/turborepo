@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/inference"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // PackageTask represents running a particular task in a particular package
@@ -43,11 +45,29 @@ func (pt *PackageTask) RepoRelativeLogFile() string {
 // HashableOutputs returns the package-relative globs for files to be considered outputs
 // of this task
 func (pt *PackageTask) HashableOutputs() fs.TaskOutputs {
-	inclusionOutputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.Task)}
-	inclusionOutputs = append(inclusionOutputs, pt.TaskDefinition.Outputs.Inclusions...)
+	framework := inference.InferFramework(pt.Pkg)
+
+	inclusionOutputs := util.SetFromStrings(pt.TaskDefinition.Outputs.Inclusions)
+	// Automatically include task logs as outputs
+	inclusionOutputs.Add(fmt.Sprintf(".turbo/turbo-%v.log", pt.Task))
+	for _, configInclusion := range pt.TaskDefinition.Outputs.Inclusions {
+		inclusionOutputs.Add(configInclusion)
+	}
+	if framework != nil {
+		for _, frameworkInclusion := range framework.Inclusions {
+			inclusionOutputs.Add(frameworkInclusion)
+		}
+	}
+
+	exclusionOutputs := util.SetFromStrings(pt.TaskDefinition.Outputs.Exclusions)
+	if framework != nil {
+		for _, frameworkExclusion := range framework.Exclusions {
+			exclusionOutputs.Add(frameworkExclusion)
+		}
+	}
 
 	return fs.TaskOutputs{
-		Inclusions: inclusionOutputs,
-		Exclusions: pt.TaskDefinition.Outputs.Exclusions,
+		Inclusions: inclusionOutputs.UnsafeListOfStrings(),
+		Exclusions: exclusionOutputs.UnsafeListOfStrings(),
 	}
 }

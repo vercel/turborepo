@@ -6,6 +6,8 @@ import "github.com/vercel/turbo/cli/internal/fs"
 type Framework struct {
 	Slug            string
 	EnvPrefix       string
+	Inclusions      []string
+	Exclusions      []string
 	DependencyMatch matcher
 }
 
@@ -23,96 +25,120 @@ const (
 
 var _frameworks = []Framework{
 	{
-		Slug:      "blitzjs",
-		EnvPrefix: "NEXT_PUBLIC_",
+		Slug:       "blitzjs",
+		EnvPrefix:  "NEXT_PUBLIC_",
+		Exclusions: []string{},
+		Inclusions: []string{},
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"blitz"},
 		},
 	},
 	{
-		Slug:      "nextjs",
-		EnvPrefix: "NEXT_PUBLIC_",
+		Slug:       "nextjs",
+		EnvPrefix:  "NEXT_PUBLIC_",
+		Exclusions: []string{".next/cache/**"},
+		Inclusions: []string{},
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"next"},
 		},
 	},
 	{
-		Slug:      "gatsby",
-		EnvPrefix: "GATSBY_",
+		Slug:       "gatsby",
+		EnvPrefix:  "GATSBY_",
+		Exclusions: []string{},
+		Inclusions: []string{},
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"gatsby"},
 		},
 	},
 	{
-		Slug:      "astro",
-		EnvPrefix: "PUBLIC_",
+		Slug:       "astro",
+		EnvPrefix:  "PUBLIC_",
+		Exclusions: []string{},
+		Inclusions: []string{},
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"astro"},
 		},
 	},
 	{
-		Slug:      "solidstart",
-		EnvPrefix: "VITE_",
+		Slug:       "solidstart",
+		EnvPrefix:  "VITE_",
+		Exclusions: []string{},
+		Inclusions: []string{},
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"solid-js", "solid-start"},
 		},
 	},
 	{
-		Slug:      "vue",
-		EnvPrefix: "VUE_APP_",
+		Slug:       "vue",
+		EnvPrefix:  "VUE_APP_",
+		Exclusions: []string{},
+		Inclusions: []string{},
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"@vue/cli-service"},
 		},
 	},
 	{
-		Slug:      "sveltekit",
-		EnvPrefix: "VITE_",
+		Slug:       "sveltekit",
+		EnvPrefix:  "VITE_",
+		Exclusions: []string{},
+		Inclusions: []string{},
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"@sveltejs/kit"},
 		},
 	},
 	{
-		Slug:      "create-react-app",
-		EnvPrefix: "REACT_APP_",
+		Slug:       "create-react-app",
+		EnvPrefix:  "REACT_APP_",
+		Exclusions: []string{},
+		Inclusions: []string{},
 		DependencyMatch: matcher{
 			strategy:     some,
 			dependencies: []string{"react-scripts", "react-dev-utils"},
 		},
 	},
 	{
-		Slug:      "nuxtjs",
-		EnvPrefix: "NUXT_ENV_",
+		Slug:       "nuxtjs",
+		EnvPrefix:  "NUXT_ENV_",
+		Exclusions: []string{},
+		Inclusions: []string{},
 		DependencyMatch: matcher{
 			strategy:     some,
 			dependencies: []string{"nuxt", "nuxt-edge", "nuxt3", "nuxt3-edge"},
 		},
 	},
 	{
-		Slug:      "redwoodjs",
-		EnvPrefix: "REDWOOD_ENV_",
+		Slug:       "redwoodjs",
+		EnvPrefix:  "REDWOOD_ENV_",
+		Exclusions: []string{},
+		Inclusions: []string{},
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"@redwoodjs/core"},
 		},
 	},
 	{
-		Slug:      "vite",
-		EnvPrefix: "VITE_",
+		Slug:       "vite",
+		EnvPrefix:  "VITE_",
+		Exclusions: []string{},
+		Inclusions: []string{},
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"vite"},
 		},
 	},
 	{
-		Slug:      "sanity",
-		EnvPrefix: "SANITY_STUDIO_",
+		Slug:       "sanity",
+		EnvPrefix:  "SANITY_STUDIO_",
+		Exclusions: []string{},
+		Inclusions: []string{},
 		DependencyMatch: matcher{
 			strategy:     all,
 			dependencies: []string{"@sanity/cli"},
