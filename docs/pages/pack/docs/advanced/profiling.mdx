@@ -1,5 +1,5 @@
 ---
-title: Profiling 
+title: Profiling
 description: Learn how to profile Turbopack
 ---
 
@@ -50,6 +50,27 @@ Once the program exits, the profiler will open the trace file in Instruments. Re
   captionSpacing={24}
   caption="An example trace from the time profiler."
 />
+
+## Linux
+
+### Memory usage
+
+- Install `heaptrack`
+- Disable the alternative allocator via feature flag `TODO: add feature flag`
+- Run `heaptrack target/release/next-dev [...]`
+
+### Convert memory usage to flamegraph
+
+- Install the FlameGraph project: `git clone https://github.com/brendangregg/FlameGraph`
+
+```
+# For the leaked allocations (the memory that was in use when the program exited)
+heaptrack_print heaptrack.next-dev.XXX.gz -m0 -t0 -p0 -a0 -T0 -l1 -F stacks.txt --flamegraph-cost-type leaked > heap.txt
+../FlameGraph/flamegraph.pl --colors mem --countname allocations --width 2400 --reverse < stacks.txt > heap_graph.svg
+# This will take some time...
+```
+
+- Open `heap_graph.svg` in a browser
 
 ## On other platforms
 
