@@ -41,8 +41,8 @@ func RealRun(
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
 	packageManager *packagemanager.PackageManager,
-	startAt time.Time,
 	processes *process.Manager,
+	runState *RunState,
 ) error {
 	singlePackage := rs.Opts.runOpts.singlePackage
 
@@ -65,7 +65,7 @@ func RealRun(
 		_ = spinner.WaitFor(ctx, turboCache.Shutdown, base.UI, "...writing to cache...", 1500*time.Millisecond)
 	}()
 	colorCache := colorcache.New()
-	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
+
 	runCache := runcache.New(turboCache, base.RepoRoot, rs.Opts.runcacheOpts, colorCache)
 
 	ec := &execContext{
