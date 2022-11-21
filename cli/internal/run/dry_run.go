@@ -25,6 +25,20 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
+// DryRunSummary contains a summary of the packages and tasks that would run
+// if the --dry flag had not been passed
+type dryRunSummary struct {
+	Packages []string     `json:"packages"`
+	Tasks    []hashedTask `json:"tasks"`
+}
+
+// DryRunSummarySinglePackage is the same as DryRunSummary with some adjustments
+// to the internal struct for a single package. It's likely that we can use the
+// same struct for Single Package repos in the future.
+type singlePackageDryRunSummary struct {
+	Tasks []hashedSinglePackageTask `json:"tasks"`
+}
+
 // DryRun gets all the info needed from tasks and prints out a summary, but doesn't actually
 // execute the task.
 func DryRun(
@@ -42,6 +56,11 @@ func DryRun(
 	dryRunJSON := rs.Opts.runOpts.dryRunJSON
 	singlePackage := rs.Opts.runOpts.singlePackage
 
+	summary := &dryRunSummary{
+		Packages: packagesInScope,
+		Tasks:    []hashedTask{},
+	}
+
 	tasksRun, err := executeDryRun(
 		ctx,
 		engine,
@@ -56,13 +75,16 @@ func DryRun(
 		return err
 	}
 
+	// Assign the Task Summaries to the main summary
+	summary.Tasks = tasksRun
+
 	// Render the dry run as json
 	if dryRunJSON {
 		var rendered string
 		if singlePackage {
-			rendered, err = renderDryRunSinglePackageJSON(tasksRun)
+			rendered, err = renderDryRunSinglePackageJSON(summary)
 		} else {
-			rendered, err = renderDryRunFullJSON(tasksRun, packagesInScope)
+			rendered, err = renderDryRunFullJSON(summary)
 		}
 		if err != nil {
 			return err
@@ -72,7 +94,7 @@ func DryRun(
 	}
 
 	// Render the dry run as text
-	if err := displayDryTextRun(base.UI, tasksRun, packagesInScope, g.WorkspaceInfos, singlePackage); err != nil {
+	if err := displayDryTextRun(base.UI, summary, g.WorkspaceInfos, singlePackage); err != nil {
 		return err
 	}
 
@@ -167,14 +189,15 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	return taskIDs, nil
 }
 
-func renderDryRunSinglePackageJSON(tasksRun []hashedTask) (string, error) {
-	singlePackageTasks := make([]hashedSinglePackageTask, len(tasksRun))
-	for i, ht := range tasksRun {
+func renderDryRunSinglePackageJSON(summary *dryRunSummary) (string, error) {
+	singlePackageTasks := make([]hashedSinglePackageTask, len(summary.Tasks))
+
+	for i, ht := range summary.Tasks {
 		singlePackageTasks[i] = ht.toSinglePackageTask()
 	}
-	dryRun := &struct {
-		Tasks []hashedSinglePackageTask `json:"tasks"`
-	}{singlePackageTasks}
+
+	dryRun := &singlePackageDryRunSummary{singlePackageTasks}
+
 	bytes, err := json.MarshalIndent(dryRun, "", "  ")
 	if err != nil {
 		return "", errors.Wrap(err, "failed to render JSON")
@@ -182,28 +205,21 @@ func renderDryRunSinglePackageJSON(tasksRun []hashedTask) (string, error) {
 	return string(bytes), nil
 }
 
-func renderDryRunFullJSON(tasksRun []hashedTask, packagesInScope []string) (string, error) {
-	dryRun := &struct {
-		Packages []string     `json:"packages"`
-		Tasks    []hashedTask `json:"tasks"`
-	}{
-		Packages: packagesInScope,
-		Tasks:    tasksRun,
-	}
-	bytes, err := json.MarshalIndent(dryRun, "", "  ")
+func renderDryRunFullJSON(summary *dryRunSummary) (string, error) {
+	bytes, err := json.MarshalIndent(summary, "", "  ")
 	if err != nil {
 		return "", errors.Wrap(err, "failed to render JSON")
 	}
 	return string(bytes), nil
 }
 
-func displayDryTextRun(ui cli.Ui, tasksRun []hashedTask, packagesInScope []string, workspaceInfos graph.WorkspaceInfos, isSinglePackage bool) error {
+func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos graph.WorkspaceInfos, isSinglePackage bool) error {
 	if !isSinglePackage {
 		ui.Output("")
 		ui.Info(util.Sprintf("${CYAN}${BOLD}Packages in Scope${RESET}"))
 		p := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 		fmt.Fprintln(p, "Name\tPath\t")
-		for _, pkg := range packagesInScope {
+		for _, pkg := range summary.Packages {
 			fmt.Fprintf(p, "%s\t%s\t\n", pkg, workspaceInfos[pkg].Dir)
 		}
 		if err := p.Flush(); err != nil {
@@ -214,16 +230,20 @@ func displayDryTextRun(ui cli.Ui, tasksRun []hashedTask, packagesInScope []strin
 	ui.Output("")
 	ui.Info(util.Sprintf("${CYAN}${BOLD}Tasks to Run${RESET}"))
 
-	for _, task := range tasksRun {
+	for _, task := range summary.Tasks {
 		taskName := task.TaskID
+
 		if isSinglePackage {
 			taskName = util.RootTaskTaskName(taskName)
 		}
+
 		ui.Info(util.Sprintf("${BOLD}%s${RESET}", taskName))
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Task\t=\t%s\t${RESET}", task.Task))
+
 		var dependencies []string
 		var dependents []string
+
 		if !isSinglePackage {
 			fmt.Fprintln(w, util.Sprintf("  ${GREY}Package\t=\t%s\t${RESET}", task.Package))
 			dependencies = task.Dependencies
@@ -238,17 +258,21 @@ func displayDryTextRun(ui cli.Ui, tasksRun []hashedTask, packagesInScope []strin
 				dependents[i] = util.StripPackageName(dependent)
 			}
 		}
+
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Hash\t=\t%s\t${RESET}", task.Hash))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Local)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Local)))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Remote)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Remote)))
+
 		if !isSinglePackage {
 			fmt.Fprintln(w, util.Sprintf("  ${GREY}Directory\t=\t%s\t${RESET}", task.Dir))
 		}
+
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(dependencies, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(dependents, ", ")))
+
 		if err := w.Flush(); err != nil {
 			return err
 		}
