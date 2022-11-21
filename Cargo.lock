@@ -1250,18 +1250,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bad48618fdb549078c333a7a8528acb57af271d0433bdecd523eb620628364e"
 
 [[package]]
-name = "flurry"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e0afc943ef18eebf6bc3335daeb8d338202093d18444a1784ea7f57fe7680f8"
-dependencies = [
- "ahash",
- "num_cpus",
- "parking_lot",
- "seize",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3322,16 +3310,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
 
 [[package]]
-name = "seize"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5eec3de085d9ae3a45eb1de8a1b7170a3190edda58468dd57935bb24760dba13"
-dependencies = [
- "num_cpus",
- "once_cell",
-]
-
-[[package]]
 name = "semver"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5241,9 +5219,9 @@ dependencies = [
  "any_key",
  "anyhow",
  "bitflags",
+ "dashmap",
  "erased-serde",
  "event-listener",
- "flurry",
  "futures",
  "indexmap",
  "mopa",
@@ -5363,7 +5341,6 @@ dependencies = [
  "concurrent-queue",
  "criterion",
  "dashmap",
- "flurry",
  "lazy_static",
  "nohash-hasher",
  "num_cpus",
