@@ -1601,11 +1601,6 @@
 <span id="1601">1601</span>
 <span id="1602">1602</span>
 <span id="1603">1603</span>
-<span id="1604">1604</span>
-<span id="1605">1605</span>
-<span id="1606">1606</span>
-<span id="1607">1607</span>
-<span id="1608">1608</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -1616,12 +1611,11 @@
     hash::Hash,
     mem::{replace, take},
     pin::Pin,
-    sync::Mutex,
     time::Duration,
 };
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>parking_lot::{RwLock, RwLockWriteGuard};
+<span class="kw">use </span>parking_lot::{Mutex, RwLock, RwLockWriteGuard};
 <span class="kw">use </span>tokio::task_local;
 <span class="kw">use </span>turbo_tasks::{
     backend::{CellMappings, PersistentTaskType},
@@ -2033,7 +2027,7 @@
 
     <span class="attr">#[cfg(not(feature = <span class="string">&quot;report_expensive&quot;</span>))]
     </span><span class="kw">fn </span>clear_dependencies(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;</span>MemoryBackend) {
-        <span class="kw">let </span><span class="kw-2">mut </span>execution_data = <span class="self">self</span>.execution_data.lock().unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>execution_data = <span class="self">self</span>.execution_data.lock();
         <span class="kw">let </span>dependencies = take(<span class="kw-2">&amp;mut </span>execution_data.dependencies);
         drop(execution_data);
 
@@ -2048,7 +2042,7 @@
 
         <span class="kw">use </span>turbo_tasks::util::FormatDuration;
         <span class="kw">let </span>start = Instant::now();
-        <span class="kw">let </span><span class="kw-2">mut </span>execution_data = <span class="self">self</span>.execution_data.lock().unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>execution_data = <span class="self">self</span>.execution_data.lock();
         <span class="kw">let </span>dependencies = take(<span class="kw-2">&amp;mut </span>execution_data.dependencies);
         drop(execution_data);
 
@@ -2181,7 +2175,7 @@
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; bool {
         DEPENDENCIES_TO_TRACK.with(|deps| {
-            <span class="kw">let </span><span class="kw-2">mut </span>execution_data = <span class="self">self</span>.execution_data.lock().unwrap();
+            <span class="kw">let </span><span class="kw-2">mut </span>execution_data = <span class="self">self</span>.execution_data.lock();
             <span class="kw">if let </span><span class="prelude-val">Some</span>(cell_mappings) = cell_mappings {
                 execution_data.cell_mappings = cell_mappings;
             }
@@ -2723,7 +2717,7 @@
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>take_cell_mappings(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CellMappings {
-        <span class="kw">let </span><span class="kw-2">mut </span>execution_data = <span class="self">self</span>.execution_data.lock().unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>execution_data = <span class="self">self</span>.execution_data.lock();
         <span class="kw">let </span><span class="kw-2">mut </span>cell_mappings = take(<span class="kw-2">&amp;mut </span>execution_data.cell_mappings);
         <span class="kw">for </span>list <span class="kw">in </span>cell_mappings.by_type.values_mut() {
             list.<span class="number">0 </span>= <span class="number">0</span>;
@@ -2742,11 +2736,7 @@
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.ty {
             TaskType::Root(bound_fn) =&gt; bound_fn(),
             TaskType::Once(mutex) =&gt; {
-                <span class="kw">let </span>future = mutex
-                    .lock()
-                    .unwrap()
-                    .take()
-                    .expect(<span class="string">&quot;Task can only be executed once&quot;</span>);
+                <span class="kw">let </span>future = mutex.lock().take().expect(<span class="string">&quot;Task can only be executed once&quot;</span>);
                 <span class="comment">// let task = self.clone();
                 </span>Box::pin(future)
             }
@@ -2868,7 +2858,7 @@
             }
         }
         {
-            <span class="kw">let </span>execution_data = <span class="self">self</span>.execution_data.lock().unwrap();
+            <span class="kw">let </span>execution_data = <span class="self">self</span>.execution_data.lock();
             <span class="kw">for </span>dep <span class="kw">in </span>execution_data.dependencies.iter() {
                 <span class="kw">match </span>dep {
                     TaskDependency::TaskOutput(task) | TaskDependency::TaskCell(task, <span class="kw">_</span>) =&gt; {
