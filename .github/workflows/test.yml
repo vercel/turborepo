@@ -334,6 +334,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      # Setting up Go is only necessary until we move all integration tests to use the Rust shim
+      # See https://github.com/vercel/turbo/pull/2737#issuecomment-1319078631
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
       - name: Download turborepo build
         uses: actions/download-artifact@v3
         with:
