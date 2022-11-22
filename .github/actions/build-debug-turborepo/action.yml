@@ -7,11 +7,15 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@v3
-    - uses: ./.github/actions/setup-node
-    - uses: ./.github/actions/setup-go
-    - uses: actions-rs/toolchain@v1
-    - name: Rust Cache
+    - name: "Checkout"
+      uses: actions/checkout@v3
+    - name: "Setup Node"
+      uses: ./.github/actions/setup-node
+    - name: "Setup Go"
+      uses: ./.github/actions/setup-go
+    - name: "Setup Rust toolchain"
+      uses: actions-rs/toolchain@v1
+    - name: "Setup Rust Cache"
       uses: Swatinem/rust-cache@v2
       with:
         key: debug-${{ inputs.target }}
