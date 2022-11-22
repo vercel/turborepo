@@ -39,6 +39,7 @@ pub fn js_value_to_pattern(value: &JsValue) -> Pattern {
         JsValue::Concat(_, parts) => {
             Pattern::Concatenation(parts.iter().map(js_value_to_pattern).collect())
         }
+        JsValue::Path(_, v) => js_value_to_pattern(&v),
         JsValue::Add(..) => {
             // TODO do we need to handle that here
             // or is that already covered by normalization of JsValue

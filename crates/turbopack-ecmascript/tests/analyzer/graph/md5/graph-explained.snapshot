@@ -86,8 +86,7 @@ b#9 = arguments[2]
 bitRotateLeft = (...) => ???*0*
 - *0* unsupported expression
 
-bytes = (arguments[0] | ???*0*)
-- *0* new expression are not supported
+bytes = (arguments[0] | new FreeVar(Array)(msg["length"]))
 
 bytesToWords = (...) => output
 

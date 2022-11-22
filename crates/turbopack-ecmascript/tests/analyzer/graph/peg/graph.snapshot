@@ -3130,9 +3130,29 @@
     ),
     (
         "descriptions",
-        Unknown(
-            None,
-            "new expression are not supported",
+        New(
+            5,
+            FreeVar(
+                Other(
+                    Atom('Array' type=static),
+                ),
+            ),
+            [
+                Member(
+                    3,
+                    Variable(
+                        (
+                            Atom('expected' type=dynamic),
+                            #19,
+                        ),
+                    ),
+                    Constant(
+                        StrWord(
+                            Atom('length' type=static),
+                        ),
+                    ),
+                ),
+            ],
         ),
     ),
     (
@@ -4253,20 +4273,98 @@
     (
         "peg$buildSimpleError",
         Function(
-            2,
-            Unknown(
-                None,
-                "new expression are not supported",
+            7,
+            New(
+                6,
+                Variable(
+                    (
+                        Atom('peg$SyntaxError' type=dynamic),
+                        #1,
+                    ),
+                ),
+                [
+                    Variable(
+                        (
+                            Atom('message' type=inline),
+                            #83,
+                        ),
+                    ),
+                    Constant(
+                        Null,
+                    ),
+                    Constant(
+                        Null,
+                    ),
+                    Variable(
+                        (
+                            Atom('location' type=dynamic),
+                            #83,
+                        ),
+                    ),
+                ],
             ),
         ),
     ),
     (
         "peg$buildStructuredError",
         Function(
-            2,
-            Unknown(
-                None,
-                "new expression are not supported",
+            11,
+            New(
+                10,
+                Variable(
+                    (
+                        Atom('peg$SyntaxError' type=dynamic),
+                        #1,
+                    ),
+                ),
+                [
+                    MemberCall(
+                        5,
+                        Variable(
+                            (
+                                Atom('peg$SyntaxError' type=dynamic),
+                                #1,
+                            ),
+                        ),
+                        Constant(
+                            StrWord(
+                                Atom('buildMessage' type=dynamic),
+                            ),
+                        ),
+                        [
+                            Variable(
+                                (
+                                    Atom('expected' type=dynamic),
+                                    #84,
+                                ),
+                            ),
+                            Variable(
+                                (
+                                    Atom('found' type=inline),
+                                    #84,
+                                ),
+                            ),
+                        ],
+                    ),
+                    Variable(
+                        (
+                            Atom('expected' type=dynamic),
+                            #84,
+                        ),
+                    ),
+                    Variable(
+                        (
+                            Atom('found' type=inline),
+                            #84,
+                        ),
+                    ),
+                    Variable(
+                        (
+                            Atom('location' type=dynamic),
+                            #84,
+                        ),
+                    ),
+                ],
             ),
         ),
     ),

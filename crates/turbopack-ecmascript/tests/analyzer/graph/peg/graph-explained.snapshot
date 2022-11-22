@@ -252,8 +252,7 @@ description#75 = arguments[0]
 
 description#79 = arguments[0]
 
-descriptions = ???*0*
-- *0* new expression are not supported
+descriptions = new FreeVar(Array)(expected["length"])
 
 details = (
   | peg$posDetailsCache[pos]
@@ -456,11 +455,9 @@ peg$SyntaxError = (...) => FreeVar(undefined)
 
 peg$anyExpectation = (...) => {"type": "any"}
 
-peg$buildSimpleError = (...) => ???*0*
-- *0* new expression are not supported
+peg$buildSimpleError = (...) => new peg$SyntaxError(message, null, null, location)
 
-peg$buildStructuredError = (...) => ???*0*
-- *0* new expression are not supported
+peg$buildStructuredError = (...) => new peg$SyntaxError(peg$SyntaxError["buildMessage"](expected, found), expected, found, location)
 
 peg$c0 = *anonymous function 3852*
 

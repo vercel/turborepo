@@ -2475,14 +2475,34 @@
     (
         "bytes",
         Alternatives(
-            3,
+            7,
             [
                 Argument(
                     0,
                 ),
-                Unknown(
-                    None,
-                    "new expression are not supported",
+                New(
+                    5,
+                    FreeVar(
+                        Other(
+                            Atom('Array' type=static),
+                        ),
+                    ),
+                    [
+                        Member(
+                            3,
+                            Variable(
+                                (
+                                    Atom('msg' type=inline),
+                                    #2,
+                                ),
+                            ),
+                            Constant(
+                                StrWord(
+                                    Atom('length' type=static),
+                                ),
+                            ),
+                        ),
+                    ],
                 ),
             ],
         ),

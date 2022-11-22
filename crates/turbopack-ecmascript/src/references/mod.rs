@@ -678,7 +678,6 @@ pub(crate) async fn analyze_ecmascript_module(
                                 ),
                             )
                         }
-                        analysis.add_reference(DirAssetReferenceVc::new(source, pat.into()));
                         return Ok(());
                     }
                     JsValue::WellKnownFunction(WellKnownFunctionKind::ChildProcessSpawnMethod(
@@ -1400,6 +1399,9 @@ async fn value_visitor_inner(
             JsValue::FreeVar(FreeVarKind::Import) => {
                 JsValue::WellKnownFunction(WellKnownFunctionKind::Import)
             }
+            JsValue::FreeVar(FreeVarKind::Module) => {
+                JsValue::WellKnownObject(WellKnownObjectKind::CjsModule)
+            }
             JsValue::FreeVar(FreeVarKind::NodeProcess) => {
                 JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess)
             }
@@ -1411,7 +1413,7 @@ async fn value_visitor_inner(
                 module: ref name, ..
             }) => match &**name {
                 // TODO check externals
-                "path" if *environment.node_externals().await? => {
+                "path" | "path/posix" | "path/win32" if *environment.node_externals().await? => {
                     JsValue::WellKnownObject(WellKnownObjectKind::PathModule)
                 }
                 "fs/promises" if *environment.node_externals().await? => {

@@ -140,7 +140,7 @@ pub fn object_assign(args: Vec<JsValue>) -> JsValue {
 
 pub fn path_join(args: Vec<JsValue>) -> JsValue {
     if args.is_empty() {
-        return ".".into();
+        return JsValue::Path(1, box ".".into());
     }
     let mut parts = Vec::new();
     for item in args {
@@ -188,7 +188,8 @@ pub fn path_join(args: Vec<JsValue>) -> JsValue {
         results.push(part);
         last_is_str = is_str;
     }
-    JsValue::concat(results)
+    let v = box JsValue::concat(results);
+    JsValue::Path(1 + v.total_nodes(), v)
 }
 
 pub fn path_resolve(cwd: JsValue, mut args: Vec<JsValue>) -> JsValue {
@@ -398,6 +399,7 @@ pub async fn well_known_object_member(
         WellKnownObjectKind::ChildProcess | WellKnownObjectKind::ChildProcessDefault => {
             child_process_module_member(kind, prop)
         }
+        WellKnownObjectKind::CjsModule => cjs_module_member(prop),
         WellKnownObjectKind::OsModule | WellKnownObjectKind::OsModuleDefault => {
             os_module_member(kind, prop)
         }
@@ -437,6 +439,7 @@ pub fn path_module_member(kind: WellKnownObjectKind, prop: JsValue) -> JsValue {
             // cwd is added while resolving in refernces.rs
             JsValue::WellKnownFunction(WellKnownFunctionKind::PathResolve(box JsValue::from("")))
         }
+        (.., Some("win32" | "posix")) => JsValue::WellKnownObject(WellKnownObjectKind::PathModule),
         (WellKnownObjectKind::PathModule, Some("default")) => {
             JsValue::WellKnownObject(WellKnownObjectKind::PathModuleDefault)
         }
@@ -456,7 +459,8 @@ pub fn fs_module_member(kind: WellKnownObjectKind, prop: JsValue) -> JsValue {
             (
                 ..,
                 "realpath" | "realpathSync" | "stat" | "statSync" | "existsSync"
-                | "createReadStream" | "exists" | "open" | "openSync" | "readFile" | "readFileSync",
+                | "createReadStream" | "exists" | "open" | "openSync" | "readFile" | "readFileSync"
+                | "readdir" | "readdirSync",
             ) => {
                 return JsValue::WellKnownFunction(WellKnownFunctionKind::FsReadMethod(
                     word.into(),
@@ -516,6 +520,20 @@ pub fn child_process_module_member(kind: WellKnownObjectKind, prop: JsValue) -> 
                 box prop,
             ))),
             "unsupported property on Node.js child_process module",
+        ),
+    }
+}
+
+fn cjs_module_member(prop: JsValue) -> JsValue {
+    match prop.as_str() {
+        Some("exports") => JsValue::WellKnownObject(WellKnownObjectKind::CjsExports),
+        Some("require") => JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
+        _ => JsValue::Unknown(
+            Some(Arc::new(JsValue::member(
+                box JsValue::WellKnownObject(WellKnownObjectKind::CjsModule),
+                box prop,
+            ))),
+            "unsupported property on Node.js cjs module",
         ),
     }
 }

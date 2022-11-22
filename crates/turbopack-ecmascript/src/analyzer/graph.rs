@@ -293,7 +293,6 @@ impl EvalContext {
                 format!("*arrow function {}*", expr.span.lo.0).into(),
                 SyntaxContext::empty(),
             )),
-            Expr::New(..) => JsValue::Unknown(None, "new expression are not supported"),
 
             Expr::Seq(e) => {
                 if let Some(e) = e.exprs.last() {
@@ -326,6 +325,11 @@ impl EvalContext {
                 callee: Callee::Expr(box callee),
                 args,
                 ..
+            })
+            | Expr::New(NewExpr {
+                callee: box callee,
+                args: Some(args),
+                ..
             }) => {
                 // We currently do not handle spreads.
                 if args.iter().any(|arg| arg.spread.is_some()) {
@@ -350,7 +354,11 @@ impl EvalContext {
                 } else {
                     let callee = box self.eval(callee);
 
-                    JsValue::call(callee, args)
+                    if matches!(e, Expr::New(..)) {
+                        JsValue::new(callee, args)
+                    } else {
+                        JsValue::call(callee, args)
+                    }
                 }
             }
 

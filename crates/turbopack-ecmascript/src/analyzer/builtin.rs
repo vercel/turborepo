@@ -33,6 +33,14 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                     value.make_unknown("property on function");
                     true
                 }
+                JsValue::New(..) => {
+                    value.make_unknown("property on new expression");
+                    true
+                }
+                JsValue::Path(..) => {
+                    value.make_unknown("property on path");
+                    true
+                }
                 JsValue::Alternatives(_, alts) => {
                     *value = JsValue::alternatives(
                         take(alts)
@@ -97,6 +105,14 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                         }
                         JsValue::Function(..) => {
                             value.make_unknown("function property on array");
+                            true
+                        }
+                        JsValue::New(..) => {
+                            value.make_unknown("new on array");
+                            true
+                        }
+                        JsValue::Path(..) => {
+                            value.make_unknown("path property on array");
                             true
                         }
                         JsValue::Alternatives(_, alts) => {
@@ -200,6 +216,14 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                         }
                         JsValue::Function(..) => {
                             value.make_unknown("function property on object");
+                            true
+                        }
+                        JsValue::New(..) => {
+                            value.make_unknown("new expression property");
+                            true
+                        }
+                        JsValue::Path(..) => {
+                            value.make_unknown("path property on object");
                             true
                         }
                         JsValue::Alternatives(_, alts) => {
@@ -404,6 +428,10 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                     value.make_unknown("call of number or string");
                     true
                 }
+                JsValue::Path(..) => {
+                    value.make_unknown("call of path");
+                    true
+                }
                 JsValue::Function(_, box ref mut return_value) => {
                     let mut return_value = take(return_value);
                     return_value.visit_mut_conditional(
@@ -438,6 +466,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 JsValue::FreeVar(_)
                 | JsValue::Variable(_)
                 | JsValue::Call(..)
+                | JsValue::New(..)
                 | JsValue::MemberCall(..)
                 | JsValue::Member(..)
                 | JsValue::WellKnownObject(_)
