@@ -493,4 +493,10 @@ export const users: Array<TurboUser> = [
     infoLink: "https://solana.fm/",
     pinned: true,
   },
+  {
+    caption: "IdeaScale",
+    image: "/images/logos/ideascle.svg",
+    infoLink: "https://ideascale.com",
+    pinned: true,
+  },
 ];
