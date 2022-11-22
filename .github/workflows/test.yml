@@ -52,6 +52,7 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v3
+
       - name: CI related changes
         id: ci
         uses: technote-space/get-diff-action@v6
@@ -59,6 +60,7 @@ jobs:
           PATTERNS: |
             .github/actions/**
             .github/workflows/test.yml
+
       - name: Rust related changes
         id: rust
         uses: technote-space/get-diff-action@v6
@@ -74,6 +76,7 @@ jobs:
             rust-toolchain
             !**.md
             !**.mdx
+
       - name: Rust Benchmark related changes
         id: rust_bench
         uses: technote-space/get-diff-action@v6
@@ -81,13 +84,14 @@ jobs:
           PATTERNS: |
             crates/next-dev/benches/**
             !*.md
+
       - name: Go related changes
+        ## Warning: When we add Integration tests to this workflow
+        # we need to add shim/ directory to this as well
         id: go
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
-            pnpm-lock.yaml
-            package.json
             cli/**
             packages/**
             shim/**
@@ -95,6 +99,7 @@ jobs:
             .cargo/**
             !**.md
             !**.mdx
+
       - name: Turborepo Integration Test changes
         id: turborepo_integration_tests
         uses: technote-space/get-diff-action@v6
@@ -102,6 +107,7 @@ jobs:
           PATTERNS: |
             cli/integration_tests/**
             cli/Makefile
+
       - name: Examples related changes
         id: examples
         uses: technote-space/get-diff-action@v6
@@ -114,6 +120,7 @@ jobs:
             scripts/run-example.sh
             !**.md
             !**.mdx
+
       - name: Node.js related changes
         id: node
         uses: technote-space/get-diff-action@v6
@@ -166,28 +173,30 @@ jobs:
       - name: golangci Linting
         uses: golangci/golangci-lint-action@v3
         with:
-          # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
+          # More config options documented here: https://github.com/golangci/golangci-lint-action
           version: latest
-
-          # Optional: working directory, useful for monorepos
           working-directory: cli
-
-          # Optional: golangci-lint command line arguments.
-          # args: --issues-exit-code=0
           args: --new-from-rev=${{ github.event.pull_request.base.sha || 'HEAD~1' }}
 
-          # Optional: show only new issues if it's a pull request. The default value is `false`.
-          # only-new-issues: true
+  go_unit:
+    name: Go Unit Tests
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.go == 'true'
+    timeout-minutes: 15
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
-          # Optional: if set to true then the all caching functionality will be complete disabled,
-          #           takes precedence over all other caching options.
-          # skip-cache: true
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-          # Optional: if set to true then the action don't cache or restore ~/go/pkg.
-          # skip-pkg-cache: true
-
-          # Optional: if set to true then the action don't cache or restore ~/.cache/go-build.
-          # skip-build-cache: true
+      - run: pnpm -- turbo run test --filter=cli --color
 
   go_examples:
     name: Go Cli Examples
@@ -848,6 +857,7 @@ jobs:
     needs:
       - determine_jobs
       - go_lint
+      - go_unit
       - go_examples
       - rust_prepare
       - rust_lint
@@ -873,51 +883,67 @@ jobs:
         run: |
           echo "The following steps have failed in CI" > comment.md
           echo >> comment.md
+
       - name: Determine Jobs failed
         if: always() && needs.determine_jobs.result != 'success' && needs.determine_jobs.result != 'skipped'
         run: |
           echo "- Determining jobs" >> failures.md
           exit 1
+
       - name: Go Linting failed
         if: always() && needs.go_lint.result != 'success' && needs.go_lint.result != 'skipped'
         run: |
           echo "- Go lints" >> failures.md
           exit 1
+
+      - name: Go Unit Tests failed
+        if: always() && needs.go_unit.result != 'success' && needs.go_unit.result != 'skipped'
+        run: |
+          echo "- Go Unit Tests" >> failures.md
+          exit 1
+
       - name: Go Examples failed
         if: always() && needs.go_examples.result != 'success' && needs.go_examples.result != 'skipped'
         run: |
           echo "- Go Examples" >> failures.md
           exit 1
+
       - name: Rust Check failed
         if: always() && needs.rust_prepare.result != 'success' && needs.rust_prepare.result != 'skipped'
         run: |
           echo "- Rust checks" >> failures.md
           exit 1
+
       - name: Rust Linting failed
         if: always() && needs.rust_lint.result != 'success' && needs.rust_lint.result != 'skipped'
         run: |
           echo "- Rust lints" >> failures.md
           exit 1
+
       - name: Rust Testing failed
         if: always() && needs.rust_test.result != 'success' && needs.rust_test.result != 'skipped'
         run: |
           echo "- Rust tests" >> failures.md
           exit 1
+
       - name: Rust Benchmark Testing failed
         if: always() && needs.rust_test_bench.result != 'success' && needs.rust_test_bench.result != 'skipped'
         run: |
           echo "- Rust benchmark tests" >> failures.md
           exit 1
+
       - name: Rust Release Build failed
         if: always() && needs.rust_build_release.result != 'success' && needs.rust_build_release.result != 'skipped'
         run: |
           echo "- Rust release build" >> failures.md
           exit 1
+
       - name: Rust benchmarks
         if: always() && needs.rust_bench_commit.result != 'success' && needs.rust_bench_commit.result != 'skipped'
         run: |
           echo "- Rust benchmarks" >> failures.md
           exit 1
+
       - name: Node.js Linting failed
         if: always() && needs.node_lint.result != 'success' && needs.node_lint.result != 'skipped'
         run: |
