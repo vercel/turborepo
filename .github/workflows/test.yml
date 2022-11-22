@@ -320,6 +320,7 @@ jobs:
   turborepo_integration_tests:
     name: Cram integration tests
     if: needs.determine_jobs.outputs.go == 'true' || needs.determine_jobs.outputs.tests == 'true'
+    needs: build_turborepo
     runs-on: ${{ matrix.os.runner }}
     strategy:
       matrix:
@@ -332,14 +333,14 @@ jobs:
       - name: Download turborepo build
         uses: actions/download-artifact@v3
         with:
-          name: turborepo-${{ matrix.os }}
+          name: turborepo-${{ matrix.os.name }}
           path: target/
       - name: Cache Prysk
         id: cache-prysk
         uses: actions/cache@v3
         with:
           path: cli/.cram_env
-          key: ${{ runner.os.name }}-prysk
+          key: ${{ matrix.os.name }}-prysk
       - name: Run cram tests
         run: cd cli && make integration-tests
 
