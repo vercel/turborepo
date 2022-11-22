@@ -4,6 +4,9 @@ inputs:
   target:
     description: "Compilation target"
     required: true
+  github-token:
+    description: "GitHub token. You can pass secrets.GITHUB_TOKEN"
+    required: true
 runs:
   using: "composite"
   steps:
@@ -11,6 +14,8 @@ runs:
       uses: ./.github/actions/setup-node
     - name: "Setup Go"
       uses: ./.github/actions/setup-go
+      with:
+        github-token: ${{ inputs.github-token }}
     - name: "Setup Rust toolchain"
       uses: actions-rs/toolchain@v1
     - name: "Setup Rust Cache"

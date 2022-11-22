@@ -310,6 +310,7 @@ jobs:
       - name: Build Turborepo
         uses: ./.github/actions/build-debug-turborepo
         with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
           target: ${{ matrix.os.name }}
       - uses: actions/upload-artifact@v3
         with:
@@ -320,7 +321,7 @@ jobs:
 
   turborepo_integration_tests:
     name: Cram integration tests
-    if: needs.determine_jobs.outputs.go == 'true' || needs.determine_jobs.outputs.tests == 'true'
+    if: needs.determine_jobs.outputs.go == 'true' || needs.determine_jobs.outputs.turborepo_integration_tests == 'true'
     needs: build_turborepo
     runs-on: ${{ matrix.os.runner }}
     strategy:
