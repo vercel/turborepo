@@ -14,28 +14,28 @@ Our first target is an improved local development experience for Next.js to allo
   - URL imports, `new URL()`, MDX
   - Streaming of React Server Components, `getStaticPaths`, 404 page, custom error page
   - Internationalization
-- Support configuration from `next.config.js` and `jsconfig.json`.
+- Support configuration from `next.config.js` and `jsconfig.json`
 - Improve HMR experience for:
   - `getStaticProps` and `getServerSideProps`
   - Server Components
   - `_app` and `_document`
   - `next.config.js`
-- Add partial support for production builds.
-  - This doesn't include advanced optimizations like tree shaking and code splitting yet.
+- Add partial support for production builds
+  - This doesn't include advanced optimizations like tree shaking and code splitting yet
 
 ### Mid term
 
 Next, we'll aim to improve the performance of production builds.
 
-- Reach parity with the existing `next build` feature set.
-- Port popular Next.js plugins to Turbopack.
+- Reach parity with the existing `next build` feature set
+- Port popular Next.js plugins to Turbopack
 
 ### Long term
 
 Our long term vision is to bring Turbopack into the heart of Next.js.
 
-- Make Turbopack the default for `next dev` and `next build`, falling back to webpack when a webpack configuration is detected in `next.config.js`.
-- Working with users and plugin authors to reduce blockers for Turbopack adoption.
+- Make Turbopack the default for `next dev` and `next build`, falling back to webpack when a webpack configuration is detected in `next.config.js`
+- Working with users and plugin authors to reduce blockers for Turbopack adoption
 
 ## Turbopack
 
@@ -43,29 +43,29 @@ Our long term vision is to bring Turbopack into the heart of Next.js.
 
 Our short term goal is to open Turbopack to other frameworks and bring the lessons we've learned from Next.js to all Turbopack powered frameworks.
 
-- Move Next.js support into a framework plugin.
-  - Each framework should be an equal first-class citizen.
-- Move error overlay from Next.js to Turbopack.
+- Move Next.js support into a framework plugin
+  - Each framework should be an equal first-class citizen
+- Move error overlay from Next.js to Turbopack
 - Start adding support for more frameworks e. g. webpack, Svelte, Vue, Angular, etc.
-  - Work with authors to achieve the best integration experience.
-- Offer a Turbopack configuration and plugin API for advanced usage outside of Next.js.
-  - Document how users can migrate from webpack to Turbopack.
-- Integrate existing tools for typechecking and linting.
+  - Work with authors to achieve the best integration experience
+- Offer a Turbopack configuration and plugin API for advanced usage outside of Next.js
+  - Document how users can migrate from webpack to Turbopack
+- Integrate existing tools for typechecking and linting
 
 ### Mid term
 
 Our mid term goal is to make more builds incremental and to overhaul the in-browser UI and introspection capabilities to make available information more accessible.
 
-- Add support for persistent caching on disk.
-  - This is also a requirement for `next build` support.
-- Improve error overlay.
-- Offer more in-browser dev tools.
+- Add support for persistent caching on disk
+  - This is also a requirement for `next build` support
+- Improve error overlay
+- Offer more in-browser dev tools
 
 ### Long term
 
 Our long term vision are near-instant builds and a world-class developer experience.
 
-- Add support for remote caching.
+- Add support for remote caching
   - Vercel remote cache
   - Self-hosted
-- Further improve on observability and introspection.
+- Further improve on observability and introspection
