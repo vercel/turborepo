@@ -305,11 +305,12 @@ jobs:
           - name: windows
             runner: windows-latest
     steps:
+      - name: "Checkout"
+        uses: actions/checkout@v3
       - name: Build Turborepo
         uses: ./.github/actions/build-debug-turborepo
         with:
           target: ${{ matrix.os.name }}
-
       - uses: actions/upload-artifact@v3
         with:
           name: turborepo-${{ matrix.os.name }}
