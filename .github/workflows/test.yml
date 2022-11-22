@@ -291,22 +291,28 @@ jobs:
           args: --workspace --all-targets
 
   build_turborepo:
-    name: Build Turborepo
+    name: Build Turborepo for ${{ matrix.os.name }}
     needs: [determine_jobs, rust_prepare]
     if: needs.determine_jobs.outputs.go == 'true' || needs.determine_jobs.outputs.turborepo_integration_tests == 'true' || needs.determine_jobs.outputs.node == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os.runner }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
     steps:
       - name: Build Turborepo
         uses: ./.github/actions/build-debug-turborepo
         with:
-          target: ${{ matrix.os }}
+          target: ${{ matrix.os.name }}
 
       - uses: actions/upload-artifact@v3
         with:
-          name: turborepo-${{ matrix.os }}
+          name: turborepo-${{ matrix.os.name }}
           path: |
             target/debug/turbo
             target/debug/turbo.exe
@@ -314,10 +320,14 @@ jobs:
   turborepo_integration_tests:
     name: Cram integration tests
     if: needs.determine_jobs.outputs.go == 'true' || needs.determine_jobs.outputs.tests == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os.runner }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
     steps:
       - name: Download turborepo build
         uses: actions/download-artifact@v3
@@ -329,7 +339,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: cli/.cram_env
-          key: ${{ runner.os }}-prysk
+          key: ${{ runner.os.name }}-prysk
       - name: Run cram tests
         run: cd cli && make integration-tests
 
