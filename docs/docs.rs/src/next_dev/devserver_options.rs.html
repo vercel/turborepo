@@ -101,6 +101,11 @@
 <span id="101">101</span>
 <span id="102">102</span>
 <span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{net::IpAddr, path::PathBuf};
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;cli&quot;</span>)]
@@ -150,6 +155,11 @@
     </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
     #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
     </span><span class="kw">pub </span>eager_compile: bool,
+
+    <span class="doccomment">/// Display version of the binary. Noop if used in library mode.
+    </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
+    #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
+    </span><span class="kw">pub </span>display_version: bool,
 
     <span class="doccomment">/// Don&#39;t open the browser automatically when the dev server has started.
     </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
