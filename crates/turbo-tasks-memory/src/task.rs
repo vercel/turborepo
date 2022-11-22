@@ -146,7 +146,6 @@ struct TaskState {
     output: Output,
     // TODO use AutoMap here
     cells: HashMap<ValueTypeId, Vec<Cell>>,
-    event: Event,
 
     // Stats:
     executions: u32,
@@ -158,12 +157,13 @@ impl TaskState {
     fn new(id: TaskId) -> Self {
         Self {
             scopes: Default::default(),
-            state_type: Default::default(),
+            state_type: Dirty {
+                event: Event::new(move || format!("TaskState({id})::event")),
+            },
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
             cells: Default::default(),
-            event: Event::new(move || format!("TaskState({id})::event")),
             executions: Default::default(),
             total_duration: Default::default(),
             last_duration: Default::default(),
@@ -175,12 +175,13 @@ impl TaskState {
     fn new_scheduled_in_scope(id: TaskId, scope: TaskScopeId) -> Self {
         Self {
             scopes: TaskScopes::Inner(CountHashSet::from([scope]), 0),
-            state_type: Scheduled,
+            state_type: Scheduled {
+                event: Event::new(move || format!("TaskState({id})::event")),
+            },
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
             cells: Default::default(),
-            event: Event::new(move || format!("TaskState({id})::event")),
             executions: Default::default(),
             total_duration: Default::default(),
             last_duration: Default::default(),
@@ -236,7 +237,6 @@ impl MaybeCollectibles {
     }
 }
 
-#[derive(PartialEq, Eq)]
 enum TaskStateType {
     /// Ready
     ///
@@ -254,30 +254,24 @@ enum TaskStateType {
     /// Execution is invalid, but not yet scheduled
     ///
     /// on activation this will move to Scheduled
-    Dirty,
+    Dirty { event: Event },
 
     /// Execution is invalid and scheduled
     ///
     /// on start this will move to InProgress or Dirty depending on active flag
-    Scheduled,
+    Scheduled { event: Event },
 
     /// Execution is happening
     ///
     /// on finish this will move to Done
     ///
     /// on invalidation this will move to InProgressDirty
-    InProgress,
+    InProgress { event: Event },
 
     /// Invalid execution is happening
     ///
     /// on finish this will move to Dirty or Scheduled depending on active flag
-    InProgressDirty,
-}
-
-impl Default for TaskStateType {
-    fn default() -> Self {
-        Dirty
-    }
+    InProgressDirty { event: Event },
 }
 
 use TaskStateType::*;
@@ -444,14 +438,15 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool {
         let mut state = self.state.write();
-        let state_type = &state.state_type;
-        match state_type {
-            Done { .. } | InProgress | InProgressDirty => {
+        match state.state_type {
+            Done { .. } | InProgress { .. } | InProgressDirty { .. } => {
                 // should not start in this state
                 return false;
             }
-            Scheduled => {
-                state.state_type = InProgress;
+            Scheduled { ref mut event } => {
+                state.state_type = InProgress {
+                    event: event.take(),
+                };
                 state.executions += 1;
                 // TODO we need to reconsider the approach of doing scope changes in background
                 // since they affect collectibles and need to be computed eagerly to allow
@@ -504,7 +499,7 @@ impl Task {
                     })
                 }
             }
-            Dirty => {
+            Dirty { .. } => {
                 let state_type = Task::state_string(&state);
                 drop(state);
                 panic!(
@@ -523,17 +518,17 @@ impl Task {
     ) {
         let mut state = self.state.write();
         match state.state_type {
-            InProgress => match result {
+            InProgress { .. } => match result {
                 Ok(Ok(result)) => state.output.link(result, turbo_tasks),
                 Ok(Err(err)) => state.output.error(err, turbo_tasks),
                 Err(message) => state.output.panic(message, turbo_tasks),
             },
-            InProgressDirty => {
+            InProgressDirty { .. } => {
                 // We don't want to assign the output cell here
                 // as we want to avoid unnecessary updates
                 // TODO maybe this should be controlled by a heuristic
             }
-            Dirty | Scheduled | Done { .. } => {
+            Dirty { .. } | Scheduled { .. } | Done { .. } => {
                 panic!(
                     "Task execution completed in unexpected state {}",
                     Task::state_string(&state)
@@ -557,7 +552,8 @@ impl Task {
             state.total_duration += duration;
             state.last_duration = duration;
             match state.state_type {
-                InProgress => {
+                InProgress { ref mut event } => {
+                    let event = event.take();
                     state.state_type = Done {
                         dependencies: take(&mut dependencies),
                     };
@@ -566,9 +562,10 @@ impl Task {
                             scope.decrement_unfinished_tasks(backend);
                         })
                     }
-                    state.event.notify(usize::MAX);
+                    event.notify(usize::MAX);
                 }
-                InProgressDirty => {
+                InProgressDirty { ref mut event } => {
+                    let event = event.take();
                     let mut active = false;
                     for scope in state.scopes.iter() {
                         if backend.with_scope(scope, |scope| scope.state.lock().is_active()) {
@@ -577,13 +574,13 @@ impl Task {
                         }
                     }
                     if active {
-                        state.state_type = Scheduled;
+                        state.state_type = Scheduled { event };
                         schedule_task = true;
                     } else {
-                        state.state_type = Dirty;
+                        state.state_type = Dirty { event };
                     }
                 }
-                Dirty | Scheduled | Done { .. } => {
+                Dirty { .. } | Scheduled { .. } | Done { .. } => {
                     panic!(
                         "Task execution completed in unexpected state {}",
                         Task::state_string(&state)
@@ -608,11 +605,12 @@ impl Task {
             return;
         }
 
+        let id = self.id;
         let mut clear_dependencies = None;
         {
             let mut state = self.state.write();
             match state.state_type {
-                Dirty | Scheduled | InProgressDirty => {
+                Dirty { .. } | Scheduled { .. } | InProgressDirty { .. } => {
                     // already dirty
                     drop(state);
                 }
@@ -635,16 +633,22 @@ impl Task {
                         });
                     }
                     if active {
-                        state.state_type = Scheduled;
+                        state.state_type = Scheduled {
+                            event: Event::new(move || format!("TaskState({id})::event")),
+                        };
                         drop(state);
                         turbo_tasks.schedule(self.id);
                     } else {
-                        state.state_type = Dirty;
+                        state.state_type = Dirty {
+                            event: Event::new(move || format!("TaskState({id})::event")),
+                        };
                         drop(state);
                     }
                 }
-                InProgress => {
-                    state.state_type = InProgressDirty;
+                InProgress { ref mut event } => {
+                    state.state_type = InProgressDirty {
+                        event: event.take(),
+                    };
                     drop(state);
                 }
             }
@@ -657,10 +661,15 @@ impl Task {
 
     pub(crate) fn schedule_when_dirty(&self, turbo_tasks: &dyn TurboTasksBackendApi) {
         let mut state = self.state.write();
-        if state.state_type == TaskStateType::Dirty {
-            state.state_type = Scheduled;
-            drop(state);
-            turbo_tasks.schedule(self.id);
+        match state.state_type {
+            TaskStateType::Dirty { ref mut event } => {
+                state.state_type = Scheduled {
+                    event: event.take(),
+                };
+                drop(state);
+                turbo_tasks.schedule(self.id);
+            }
+            _ => drop(state),
         }
     }
 
@@ -778,10 +787,12 @@ impl Task {
             if !matches!(state.state_type, TaskStateType::Done { .. }) {
                 scope.increment_unfinished_tasks(backend);
                 log_scope_update!("add unfinished task (added): {} -> {}", *scope.id, *self.id);
-                if state.state_type == TaskStateType::Dirty {
+                if let TaskStateType::Dirty { ref mut event } = state.state_type {
                     let mut scope = scope.state.lock();
                     if scope.is_active() {
-                        state.state_type = Scheduled;
+                        state.state_type = Scheduled {
+                            event: event.take(),
+                        };
                         schedule_self = true;
                     } else {
                         scope.add_dirty_task(self.id);
@@ -822,11 +833,15 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
         backend.with_scope(id, |scope| {
-            if !matches!(state.state_type, Done { .. }) {
-                scope.decrement_unfinished_tasks(backend);
-                if state.state_type == TaskStateType::Dirty {
+            match state.state_type {
+                Done { .. } => {}
+                Dirty { .. } => {
+                    scope.decrement_unfinished_tasks(backend);
                     let mut scope = scope.state.lock();
                     scope.remove_dirty_task(self.id);
+                }
+                _ => {
+                    scope.decrement_unfinished_tasks(backend);
                 }
             }
             scope.decrement_tasks();
@@ -1266,11 +1281,11 @@ impl Task {
 
     fn state_string(state: &TaskState) -> String {
         let mut state_str = match state.state_type {
-            Scheduled => "scheduled".to_string(),
-            InProgress => "in progress".to_string(),
-            InProgressDirty => "in progress (dirty)".to_string(),
+            Scheduled { .. } => "scheduled".to_string(),
+            InProgress { .. } => "in progress".to_string(),
+            InProgressDirty { .. } => "in progress (dirty)".to_string(),
             Done { .. } => "done".to_string(),
-            Dirty => "dirty".to_string(),
+            Dirty { .. } => "dirty".to_string(),
         };
         match state.scopes {
             TaskScopes::Root(root) => {
@@ -1406,8 +1421,11 @@ impl Task {
 
                 Ok(Ok(result))
             }
-            Dirty | Scheduled | InProgress | InProgressDirty => {
-                let listener = state.event.listen();
+            Dirty { ref event }
+            | Scheduled { ref event }
+            | InProgress { ref event }
+            | InProgressDirty { ref event } => {
+                let listener = event.listen();
                 drop(state);
                 Ok(Err(listener))
             }
