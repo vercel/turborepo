@@ -2,6 +2,7 @@ import * as React from "react";
 
 import { lock, unlock } from "./body-locker";
 import allyTrap from "./maintain--tab-focus";
+import { clsx } from "../../helpers/clsx";
 
 export type OverlayProps = React.PropsWithChildren & {
   className?: string;
@@ -33,10 +34,10 @@ export function Overlay({ className, children, fixed }: OverlayProps) {
   }, [overlay]);
 
   return (
-    <div data-nextjs-dialog-overlay className={className} ref={onOverlay}>
+    <div className={clsx("dialog-overlay", className)} ref={onOverlay}>
       <div
-        data-nextjs-dialog-backdrop
-        data-nextjs-dialog-backdrop-fixed={fixed ? true : undefined}
+        className={"dialog-backdrop"}
+        data-dialog-backdrop-fixed={fixed ? true : undefined}
       />
       {children}
     </div>

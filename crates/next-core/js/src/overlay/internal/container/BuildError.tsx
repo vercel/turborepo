@@ -18,7 +18,6 @@ export function BuildError({ issue }: BuildErrorProps) {
   return (
     <Overlay fixed>
       <Dialog
-        type="error"
         aria-labelledby="nextjs__container_build_error_label"
         aria-describedby="nextjs__container_build_error_desc"
         onClose={noop}
