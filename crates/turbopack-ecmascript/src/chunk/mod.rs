@@ -512,12 +512,10 @@ async fn module_factory(content: EcmascriptChunkItemContentVc) -> Result<CodeVc>
         "c: __turbopack_cache__",
         "l: __turbopack_load__",
         "p: process",
+        "g: global",
         // HACK
         "__dirname",
     ];
-    if content.options.global {
-        args.push("g: global");
-    }
     if content.options.module {
         args.push("m: module");
     }
@@ -1125,7 +1123,6 @@ pub struct EcmascriptChunkItemContent {
 pub struct EcmascriptChunkItemOptions {
     pub module: bool,
     pub exports: bool,
-    pub global: bool,
     pub this: bool,
     pub placeholder_for_future_extensions: (),
 }

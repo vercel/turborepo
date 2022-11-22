@@ -152,15 +152,7 @@ async fn run_test(resource: &str) -> JestRunResult {
     );
 
     tokio::select! {
-        r = run_browser(server.addr) => {
-            match r {
-                Ok(r) => r,
-                Err(e) => {
-                    eprintln!("{:#?}", e);
-                    panic!("received error");
-                }
-            }
-        }
+        r = run_browser(server.addr) => r.expect("error while running browser"),
         _ = server.future => panic!("Never resolves"),
     }
 }
