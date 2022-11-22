@@ -292,8 +292,29 @@
 <span id="292">292</span>
 <span id="293">293</span>
 <span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">mod </span>writer;
+
+<span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
@@ -314,7 +335,7 @@
 <span class="kw">use </span>writer::{expand_imports, WriterWithIndent};
 
 <span class="kw">use </span><span class="self">self</span>::optimize::CssChunkOptimizerVc;
-<span class="kw">use crate</span>::{embed::CssEmbeddableVc, ImportAssetReferenceVc};
+<span class="kw">use crate</span>::{embed::CssEmbeddableVc, util::stringify_str, ImportAssetReferenceVc};
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>CssChunk {
@@ -501,15 +522,25 @@
 
         <span class="kw">let </span>path = self_vc.path();
         <span class="kw">let </span>chunk_name = path.to_string();
-        <span class="kw">let </span><span class="kw-2">mut </span>code = <span class="macro">format!</span>(<span class="string">&quot;/* chunk {} */\n&quot;</span>, chunk_name.<span class="kw">await</span><span class="question-mark">?</span>);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>writer = WriterWithIndent::new(<span class="kw-2">&amp;mut </span>code);
+        <span class="kw">let </span><span class="kw-2">mut </span>body = <span class="string">&quot;&quot;</span>.to_owned();
+        <span class="kw">let </span><span class="kw-2">mut </span>writer = WriterWithIndent::new(<span class="kw-2">&amp;mut </span>body);
+        <span class="kw">let </span><span class="kw-2">mut </span>external_imports = IndexSet::new();
         <span class="kw">for </span>entry <span class="kw">in </span>this.main_entries.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
             <span class="kw">let </span>entry_placeable = CssChunkPlaceableVc::cast_from(entry);
             <span class="kw">let </span>entry_content = entry_placeable.as_chunk_item(this.context).content();
 
-            expand_imports(<span class="kw-2">&amp;mut </span>writer, entry_content).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">for </span>external_import <span class="kw">in </span>expand_imports(<span class="kw-2">&amp;mut </span>writer, entry_content).<span class="kw">await</span><span class="question-mark">? </span>{
+                external_imports.insert(external_import.<span class="kw">await</span><span class="question-mark">?</span>.to_owned());
+            }
         }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>code = <span class="macro">format!</span>(<span class="string">&quot;/* chunk {} */\n&quot;</span>, chunk_name.<span class="kw">await</span><span class="question-mark">?</span>);
+        <span class="kw">for </span>external_import <span class="kw">in </span>external_imports {
+            <span class="macro">writeln!</span>(code, <span class="string">&quot;@import {};&quot;</span>, stringify_str(<span class="kw-2">&amp;</span>external_import))<span class="question-mark">?</span>;
+        }
+
+        code += <span class="kw-2">&amp;</span>body;
 
         <span class="prelude-val">Ok</span>(File::from(code).into())
     }
@@ -558,10 +589,17 @@
 <span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">pub struct </span>CssChunkPlaceables(Vec&lt;CssChunkPlaceableVc&gt;);
 
+<span class="attr">#[derive(Clone)]
+#[turbo_tasks::value(shared)]
+</span><span class="kw">pub enum </span>CssImport {
+    External(StringVc),
+    Internal(ImportAssetReferenceVc, CssChunkItemVc),
+}
+
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>CssChunkItemContent {
     <span class="kw">pub </span>inner_code: String,
-    <span class="kw">pub </span>imports: Vec&lt;(ImportAssetReferenceVc, CssChunkItemVc)&gt;,
+    <span class="kw">pub </span>imports: Vec&lt;CssImport&gt;,
 }
 
 <span class="attr">#[turbo_tasks::value_trait]

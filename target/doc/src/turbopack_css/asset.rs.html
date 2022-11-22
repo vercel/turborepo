@@ -254,6 +254,13 @@
 <span id="254">254</span>
 <span id="255">255</span>
 <span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::{Globals, GLOBALS},
@@ -276,7 +283,7 @@
 <span class="kw">use crate</span>::{
     chunk::{
         CssChunkItem, CssChunkItemContent, CssChunkItemContentVc, CssChunkItemVc,
-        CssChunkPlaceable, CssChunkPlaceableVc, CssChunkVc,
+        CssChunkPlaceable, CssChunkPlaceableVc, CssChunkVc, CssImport,
     },
     code_gen::CodeGenerateableVc,
     parse::{parse, ParseResult, ParseResultVc},
@@ -426,7 +433,10 @@
             <span class="kw">if let </span><span class="prelude-val">Some</span>(import) = ImportAssetReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">? </span>{
                 <span class="kw">for </span>asset <span class="kw">in </span><span class="kw-2">&amp;*</span>import.resolve_reference().primary_assets().<span class="kw">await</span><span class="question-mark">? </span>{
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = CssChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                        imports.push((import, placeable.as_chunk_item(context)));
+                        imports.push(CssImport::Internal(
+                            import,
+                            placeable.as_chunk_item(context),
+                        ));
                     }
                 }
             }
@@ -445,6 +455,10 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>visitors = Vec::new();
         <span class="kw">let </span><span class="kw-2">mut </span>root_visitors = Vec::new();
         <span class="kw">for </span>code_gen <span class="kw">in </span>code_gens {
+            <span class="kw">for </span>import <span class="kw">in </span><span class="kw-2">&amp;</span>code_gen.imports {
+                imports.push(import.clone());
+            }
+
             <span class="kw">for </span>(path, visitor) <span class="kw">in </span>code_gen.visitors.iter() {
                 <span class="kw">if </span>path.is_empty() {
                     root_visitors.push(<span class="kw-2">&amp;**</span>visitor);

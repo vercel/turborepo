@@ -107,8 +107,14 @@
 <span id="107">107</span>
 <span id="108">108</span>
 <span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
 </pre><pre class="rust"><code><span class="kw">use </span>swc_core::css::visit::{AstParentKind, VisitMut};
 <span class="kw">use </span>turbopack_core::chunk::ChunkingContextVc;
+
+<span class="kw">use </span><span class="kw">crate</span>::chunk::CssImport;
 
 <span class="doccomment">/// impl of code generation inferred from a AssetReference.
 /// This is rust only and can&#39;t be implemented by non-rust plugins.
@@ -123,6 +129,8 @@
     <span class="doccomment">/// ast nodes matching the span will be visitor by the visitor
     </span><span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
     </span><span class="kw">pub </span>visitors: Vec&lt;(Vec&lt;AstParentKind&gt;, Box&lt;<span class="kw">dyn </span>VisitorFactory&gt;)&gt;,
+    <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
+    </span><span class="kw">pub </span>imports: Vec&lt;CssImport&gt;,
 }
 
 <span class="kw">pub trait </span>VisitorFactory: Send + Sync {
@@ -187,12 +195,12 @@
             })) <span class="kw">as </span>Box&lt;<span class="kw">dyn </span><span class="macro-nonterminal">$crate::code_gen::VisitorFactory</span>&gt;,
         )
     }};
-    (visit_mut_program(<span class="macro-nonterminal">$arg</span>:ident: <span class="kw-2">&amp;mut </span>Program) <span class="macro-nonterminal">$b</span>:block) =&gt; {{
-        <span class="kw">struct </span>Visitor&lt;T: Fn(<span class="kw-2">&amp;mut </span>swc_core::css::ast::Program) + Send + Sync&gt; {
-            visit_mut_program: T,
+    (visit_mut_stylesheet(<span class="macro-nonterminal">$arg</span>:ident: <span class="kw-2">&amp;mut </span>Stylesheet) <span class="macro-nonterminal">$b</span>:block) =&gt; {{
+        <span class="kw">struct </span>Visitor&lt;T: Fn(<span class="kw-2">&amp;mut </span>swc_core::css::ast::Stylesheet) + Send + Sync&gt; {
+            visit_mut_stylesheet: T,
         }
 
-        <span class="kw">impl</span>&lt;T: Fn(<span class="kw-2">&amp;mut </span>swc_core::css::ast::Program) + Send + Sync&gt; <span class="macro-nonterminal">$crate::code_gen::VisitorFactory
+        <span class="kw">impl</span>&lt;T: Fn(<span class="kw-2">&amp;mut </span>swc_core::css::ast::Stylesheet) + Send + Sync&gt; <span class="macro-nonterminal">$crate::code_gen::VisitorFactory
             </span><span class="kw">for </span>Box&lt;Visitor&lt;T&gt;&gt;
         {
             <span class="kw">fn </span>create&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>VisitMut + Send + Sync + <span class="lifetime">&#39;a</span>&gt; {
@@ -200,18 +208,18 @@
             }
         }
 
-        <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T: Fn(<span class="kw-2">&amp;mut </span>swc_core::css::ast::Program) + Send + Sync&gt; swc_core::css::visit::VisitMut
+        <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T: Fn(<span class="kw-2">&amp;mut </span>swc_core::css::ast::Stylesheet) + Send + Sync&gt; swc_core::css::visit::VisitMut
             <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Visitor&lt;T&gt;
         {
-            <span class="kw">fn </span>visit_mut_program(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="macro-nonterminal">$arg</span>: <span class="kw-2">&amp;mut </span>swc_core::css::ast::Program) {
-                (<span class="self">self</span>.visit_mut_program)(<span class="macro-nonterminal">$arg</span>);
+            <span class="kw">fn </span>visit_mut_stylesheet(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="macro-nonterminal">$arg</span>: <span class="kw-2">&amp;mut </span>swc_core::css::ast::Stylesheet) {
+                (<span class="self">self</span>.visit_mut_stylesheet)(<span class="macro-nonterminal">$arg</span>);
             }
         }
 
         (
             Vec::new(),
             Box::new(Box::new(Visitor {
-                visit_mut_program: <span class="kw">move </span>|<span class="macro-nonterminal">$arg</span>: <span class="kw-2">&amp;mut </span>swc_core::css::ast::Program| <span class="macro-nonterminal">$b</span>,
+                visit_mut_stylesheet: <span class="kw">move </span>|<span class="macro-nonterminal">$arg</span>: <span class="kw-2">&amp;mut </span>swc_core::css::ast::Stylesheet| <span class="macro-nonterminal">$b</span>,
             })) <span class="kw">as </span>Box&lt;<span class="kw">dyn </span><span class="macro-nonterminal">$crate::code_gen::VisitorFactory</span>&gt;,
         )
     }};

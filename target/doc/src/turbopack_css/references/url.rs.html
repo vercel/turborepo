@@ -110,6 +110,10 @@
 <span id="110">110</span>
 <span id="111">111</span>
 <span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
@@ -219,7 +223,11 @@
             );
         }
 
-        <span class="prelude-val">Ok</span>(CodeGeneration { visitors }.into())
+        <span class="prelude-val">Ok</span>(CodeGeneration {
+            visitors,
+            imports: <span class="macro">vec!</span>[],
+        }
+        .into())
     }
 }
 </code></pre></div>

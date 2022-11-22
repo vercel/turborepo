@@ -1154,13 +1154,6 @@
 <span id="1154">1154</span>
 <span id="1155">1155</span>
 <span id="1156">1156</span>
-<span id="1157">1157</span>
-<span id="1158">1158</span>
-<span id="1159">1159</span>
-<span id="1160">1160</span>
-<span id="1161">1161</span>
-<span id="1162">1162</span>
-<span id="1163">1163</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -1859,20 +1852,13 @@
             ResolveResult::unresolveable().into()
         }
         Request::Uri {
-            protocol: <span class="kw">_</span>,
-            remainder: <span class="kw">_</span>,
-        } =&gt; {
-            <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
-                request_type: <span class="string">&quot;URI imports: not implemented yet&quot;</span>.to_string(),
-                request,
-                context,
-                resolve_options: options,
-                error_message: <span class="prelude-val">Some</span>(<span class="string">&quot;URI imports are not implemented yet&quot;</span>.to_string()),
-            }
-            .into();
-            issue.as_issue().emit();
-            ResolveResult::unresolveable().into()
-        }
+            protocol,
+            remainder,
+        } =&gt; ResolveResult::Special(
+            SpecialType::OriginalReferenceTypeExternal(<span class="macro">format!</span>(<span class="string">&quot;{}{}&quot;</span>, protocol, remainder)),
+            Vec::new(),
+        )
+        .into(),
         Request::Unknown { path } =&gt; {
             <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
                 request_type: <span class="macro">format!</span>(<span class="string">&quot;unknown import: `{}`&quot;</span>, path),

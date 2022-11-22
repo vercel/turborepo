@@ -214,6 +214,42 @@
 <span id="214">214</span>
 <span id="215">215</span>
 <span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
@@ -224,12 +260,20 @@
 };
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
+    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc},
     reference::{AssetReference, AssetReferenceVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
+    resolve::{
+        origin::ResolveOriginVc,
+        parse::{Request, RequestVc},
+        ResolveResultVc,
+    },
 };
 
-<span class="kw">use </span><span class="kw">crate</span>::references::{css_resolve, AstPathVc};
+<span class="kw">use crate</span>::{
+    chunk::CssImport,
+    code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
+    references::{css_resolve, AstPathVc},
+};
 
 <span class="attr">#[turbo_tasks::value(into = <span class="string">&quot;new&quot;</span>)]
 </span><span class="kw">pub struct </span>ImportAttributes {
@@ -425,6 +469,34 @@
             <span class="string">&quot;import(url) {}&quot;</span>,
             <span class="self">self</span>.request.to_string().<span class="kw">await</span><span class="question-mark">?</span>,
         )))
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>ImportAssetReference {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>code_generation(
+        self_vc: ImportAssetReferenceVc,
+        _context: ChunkingContextVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
+        <span class="kw">let </span>this = <span class="kw-2">&amp;*</span>self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>imports = <span class="macro">vec!</span>[];
+        <span class="kw">if let </span>Request::Uri {
+            protocol,
+            remainder,
+        } = <span class="kw-2">&amp;*</span>this.request.<span class="kw">await</span><span class="question-mark">?
+        </span>{
+            imports.push(CssImport::External(StringVc::cell(<span class="macro">format!</span>(
+                <span class="string">&quot;{}{}&quot;</span>,
+                protocol, remainder
+            ))))
+        }
+
+        <span class="prelude-val">Ok</span>(CodeGeneration {
+            visitors: <span class="macro">vec!</span>[],
+            imports,
+        }
+        .into())
     }
 }
 

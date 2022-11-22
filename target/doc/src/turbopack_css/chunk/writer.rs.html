@@ -98,49 +98,65 @@
 <span id="98">98</span>
 <span id="99">99</span>
 <span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::VecDeque, fmt::Write};
 
-<span class="kw">use </span>turbo_tasks::ValueToString;
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
 
+<span class="kw">use </span><span class="kw">super</span>::CssImport;
 <span class="kw">use </span><span class="kw">crate</span>::CssChunkItemContentVc;
 
 <span class="kw">pub async fn </span>expand_imports&lt;T: Write&gt;(
     writer: <span class="kw-2">&amp;mut </span>WriterWithIndent&lt;T&gt;,
     content_vc: CssChunkItemContentVc,
-) -&gt; anyhow::Result&lt;()&gt; {
+) -&gt; anyhow::Result&lt;Vec&lt;StringVc&gt;&gt; {
     <span class="kw">let </span>content = <span class="kw-2">&amp;*</span>content_vc.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>stack = <span class="macro">vec!</span>[(
         content_vc,
         content.imports.iter().cloned().collect::&lt;VecDeque&lt;<span class="kw">_</span>&gt;&gt;(),
         (<span class="number">0</span>, <span class="string">&quot;&quot;</span>.to_string()),
     )];
+    <span class="kw">let </span><span class="kw-2">mut </span>external_imports = <span class="macro">vec!</span>[];
 
     <span class="kw">while let </span><span class="prelude-val">Some</span>((content_vc, imports, (indent, close))) = stack.last_mut() {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>((import, imported_chunk_item)) = imports.pop_front() {
-            <span class="kw">let </span>(open, inner_indent, close) = import.<span class="kw">await</span><span class="question-mark">?</span>.attributes.<span class="kw">await</span><span class="question-mark">?</span>.print_block()<span class="question-mark">?</span>;
+        <span class="kw">match </span>imports.pop_front() {
+            <span class="prelude-val">Some</span>(CssImport::Internal(import, imported_chunk_item)) =&gt; {
+                <span class="kw">let </span>(open, inner_indent, close) = import.<span class="kw">await</span><span class="question-mark">?</span>.attributes.<span class="kw">await</span><span class="question-mark">?</span>.print_block()<span class="question-mark">?</span>;
 
-            <span class="kw">let </span>id = <span class="kw-2">&amp;*</span>imported_chunk_item.to_string().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>id = <span class="kw-2">&amp;*</span>imported_chunk_item.to_string().<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="macro">writeln!</span>(writer, <span class="string">&quot;/* import({}) */&quot;</span>, id)<span class="question-mark">?</span>;
-            <span class="macro">writeln!</span>(writer, <span class="string">&quot;{}&quot;</span>, open)<span class="question-mark">?</span>;
-            <span class="kw">let </span>imported_content_vc = imported_chunk_item.content();
-            <span class="kw">let </span>imported_content = <span class="kw-2">&amp;*</span>imported_content_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-            writer.push_indent(inner_indent)<span class="question-mark">?</span>;
-            stack.push((
-                imported_content_vc,
-                imported_content.imports.iter().cloned().collect(),
-                (inner_indent, close),
-            ));
-        } <span class="kw">else </span>{
-            <span class="kw">let </span>content = <span class="kw-2">&amp;*</span>(<span class="kw-2">*</span>content_vc).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="macro">writeln!</span>(writer, <span class="string">&quot;{}&quot;</span>, content.inner_code)<span class="question-mark">?</span>;
-            writer.pop_indent(<span class="kw-2">*</span>indent)<span class="question-mark">?</span>;
-            <span class="macro">writeln!</span>(writer, <span class="string">&quot;{}&quot;</span>, close)<span class="question-mark">?</span>;
-            stack.pop();
+                <span class="macro">writeln!</span>(writer, <span class="string">&quot;/* import({}) */&quot;</span>, id)<span class="question-mark">?</span>;
+                <span class="macro">writeln!</span>(writer, <span class="string">&quot;{}&quot;</span>, open)<span class="question-mark">?</span>;
+                <span class="kw">let </span>imported_content_vc = imported_chunk_item.content();
+                <span class="kw">let </span>imported_content = <span class="kw-2">&amp;*</span>imported_content_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+                writer.push_indent(inner_indent)<span class="question-mark">?</span>;
+                stack.push((
+                    imported_content_vc,
+                    imported_content.imports.iter().cloned().collect(),
+                    (inner_indent, close),
+                ));
+            }
+            <span class="prelude-val">Some</span>(CssImport::External(url_vc)) =&gt; {
+                external_imports.push(url_vc);
+            }
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="kw">let </span>content = <span class="kw-2">&amp;*</span>(<span class="kw-2">*</span>content_vc).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="macro">writeln!</span>(writer, <span class="string">&quot;{}&quot;</span>, content.inner_code)<span class="question-mark">?</span>;
+                writer.pop_indent(<span class="kw-2">*</span>indent)<span class="question-mark">?</span>;
+                <span class="macro">writeln!</span>(writer, <span class="string">&quot;{}&quot;</span>, close)<span class="question-mark">?</span>;
+                stack.pop();
+            }
         }
     }
 
-    <span class="prelude-val">Ok</span>(())
+    <span class="prelude-val">Ok</span>(external_imports)
 }
 
 <span class="kw">pub struct </span>WriterWithIndent&lt;T: Write&gt; {
