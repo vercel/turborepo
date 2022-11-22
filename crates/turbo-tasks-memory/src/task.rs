@@ -122,8 +122,7 @@ impl Debug for Task {
         let mut result = f.debug_struct("Task");
         result.field("type", &self.ty);
         if let Some(state) = self.state.try_read() {
-            result.field("scopes", &state.scopes);
-            result.field("state", &state.state_type);
+            result.field("state", &Task::state_string(&state));
         }
         result.finish()
     }
@@ -149,13 +148,6 @@ struct TaskState {
     cells: HashMap<ValueTypeId, Vec<Cell>>,
     event: Event,
 
-    /// Cells/Scopes that the task has read during execution.
-    /// The Task will keep these tasks alive as invalidations that happen there
-    /// might affect this task.
-    ///
-    /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
-    dependencies: HashSet<TaskDependency>,
-
     // Stats:
     executions: u32,
     total_duration: Duration,
@@ -172,7 +164,6 @@ impl TaskState {
             output: Default::default(),
             cells: Default::default(),
             event: Event::new(move || format!("TaskState({id})::event")),
-            dependencies: Default::default(),
             executions: Default::default(),
             total_duration: Default::default(),
             last_duration: Default::default(),
@@ -190,7 +181,6 @@ impl TaskState {
             output: Default::default(),
             cells: Default::default(),
             event: Event::new(move || format!("TaskState({id})::event")),
-            dependencies: Default::default(),
             executions: Default::default(),
             total_duration: Default::default(),
             last_duration: Default::default(),
@@ -246,13 +236,20 @@ impl MaybeCollectibles {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq)]
 enum TaskStateType {
     /// Ready
     ///
     /// on invalidation this will move to Dirty or Scheduled depending on active
     /// flag
-    Done,
+    Done {
+        /// Cells/Scopes that the task has read during execution.
+        /// The Task will keep these tasks alive as invalidations that happen
+        /// there might affect this task.
+        ///
+        /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
+        dependencies: HashSet<TaskDependency>,
+    },
 
     /// Execution is invalid, but not yet scheduled
     ///
@@ -449,7 +446,7 @@ impl Task {
         let mut state = self.state.write();
         let state_type = &state.state_type;
         match state_type {
-            Done | InProgress | InProgressDirty => {
+            Done { .. } | InProgress | InProgressDirty => {
                 // should not start in this state
                 return false;
             }
@@ -536,10 +533,10 @@ impl Task {
                 // as we want to avoid unnecessary updates
                 // TODO maybe this should be controlled by a heuristic
             }
-            Dirty | Scheduled | Done => {
+            Dirty | Scheduled | Done { .. } => {
                 panic!(
-                    "Task execution completed in unexpected state {:?}",
-                    state.state_type
+                    "Task execution completed in unexpected state {}",
+                    Task::state_string(&state)
                 )
             }
         };
@@ -553,17 +550,17 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool {
         let mut schedule_task = false;
-        let mut clear_dependencies = None;
+        let mut dependencies = DEPENDENCIES_TO_TRACK.with(|deps| deps.take());
         {
             let mut state = self.state.write();
-            DEPENDENCIES_TO_TRACK.with(|deps| {
-                state.dependencies = deps.take();
-            });
+
             state.total_duration += duration;
             state.last_duration = duration;
             match state.state_type {
                 InProgress => {
-                    state.state_type = Done;
+                    state.state_type = Done {
+                        dependencies: take(&mut dependencies),
+                    };
                     for scope in state.scopes.iter() {
                         backend.with_scope(scope, |scope| {
                             scope.decrement_unfinished_tasks(backend);
@@ -572,7 +569,6 @@ impl Task {
                     state.event.notify(usize::MAX);
                 }
                 InProgressDirty => {
-                    clear_dependencies = Some(take(&mut state.dependencies));
                     let mut active = false;
                     for scope in state.scopes.iter() {
                         if backend.with_scope(scope, |scope| scope.state.lock().is_active()) {
@@ -587,15 +583,15 @@ impl Task {
                         state.state_type = Dirty;
                     }
                 }
-                Dirty | Scheduled | Done => {
+                Dirty | Scheduled | Done { .. } => {
                     panic!(
-                        "Task execution completed in unexpected state {:?}",
-                        state.state_type
+                        "Task execution completed in unexpected state {}",
+                        Task::state_string(&state)
                     )
                 }
             };
         }
-        if let Some(dependencies) = clear_dependencies {
+        if !dependencies.is_empty() {
             self.clear_dependencies(dependencies, backend);
         }
 
@@ -612,16 +608,18 @@ impl Task {
             return;
         }
 
-        let dependencies;
+        let mut clear_dependencies = None;
         {
             let mut state = self.state.write();
-            dependencies = take(&mut state.dependencies);
             match state.state_type {
                 Dirty | Scheduled | InProgressDirty => {
                     // already dirty
                     drop(state);
                 }
-                Done => {
+                Done {
+                    ref mut dependencies,
+                } => {
+                    clear_dependencies = Some(take(dependencies));
                     // add to dirty lists and potentially schedule
                     let mut active = false;
                     for scope in state.scopes.iter() {
@@ -652,7 +650,7 @@ impl Task {
             }
         }
 
-        if !dependencies.is_empty() {
+        if let Some(dependencies) = clear_dependencies {
             self.clear_dependencies(dependencies, backend);
         }
     }
@@ -777,7 +775,7 @@ impl Task {
         let mut schedule_self = false;
         backend.with_scope(id, |scope| {
             scope.increment_tasks();
-            if !matches!(state.state_type, TaskStateType::Done) {
+            if !matches!(state.state_type, TaskStateType::Done { .. }) {
                 scope.increment_unfinished_tasks(backend);
                 log_scope_update!("add unfinished task (added): {} -> {}", *scope.id, *self.id);
                 if state.state_type == TaskStateType::Dirty {
@@ -824,7 +822,7 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
         backend.with_scope(id, |scope| {
-            if !matches!(state.state_type, Done) {
+            if !matches!(state.state_type, Done { .. }) {
                 scope.decrement_unfinished_tasks(backend);
                 if state.state_type == TaskStateType::Dirty {
                     let mut scope = scope.state.lock();
@@ -1189,7 +1187,7 @@ impl Task {
 
     pub fn is_pending(&self) -> bool {
         let state = self.state.read();
-        state.state_type != TaskStateType::Done
+        !matches!(state.state_type, TaskStateType::Done { .. })
     }
 
     pub fn reset_stats(&self) {
@@ -1235,16 +1233,22 @@ impl Task {
             for child in state.children.iter() {
                 refs.push((stats::ReferenceType::Child, *child));
             }
-            for dep in state.dependencies.iter() {
-                match dep {
-                    TaskDependency::TaskOutput(task) | TaskDependency::TaskCell(task, _) => {
-                        refs.push((stats::ReferenceType::Dependency, *task))
-                    }
-                    TaskDependency::ScopeChildren(scope)
-                    | TaskDependency::ScopeCollectibles(scope, _) => {
-                        scope_refs.push((stats::ReferenceType::Dependency, *scope))
+            match state.state_type {
+                Done { ref dependencies } => {
+                    for dep in dependencies.iter() {
+                        match dep {
+                            TaskDependency::TaskOutput(task)
+                            | TaskDependency::TaskCell(task, _) => {
+                                refs.push((stats::ReferenceType::Dependency, *task))
+                            }
+                            TaskDependency::ScopeChildren(scope)
+                            | TaskDependency::ScopeCollectibles(scope, _) => {
+                                scope_refs.push((stats::ReferenceType::Dependency, *scope))
+                            }
+                        }
                     }
                 }
+                _ => {}
             }
         }
         {
@@ -1265,7 +1269,7 @@ impl Task {
             Scheduled => "scheduled".to_string(),
             InProgress => "in progress".to_string(),
             InProgressDirty => "in progress (dirty)".to_string(),
-            Done => "done".to_string(),
+            Done { .. } => "done".to_string(),
             Dirty => "dirty".to_string(),
         };
         match state.scopes {
@@ -1396,7 +1400,7 @@ impl Task {
             }
         }
         match state.state_type {
-            Done => {
+            Done { .. } => {
                 let result = func(&mut state.output)?;
                 drop(state);
 
