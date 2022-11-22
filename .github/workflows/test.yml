@@ -326,6 +326,8 @@ jobs:
             runner: ubuntu-latest
           - name: macos
             runner: macos-latest
+          - name: windows
+            runner: windows-latest
     steps:
       - name: "Checkout"
         uses: actions/checkout@v3
@@ -340,6 +342,34 @@ jobs:
           path: |
             target/debug/turbo
             target/debug/turbo.exe
+
+  turborepo_e2e:
+    name: Run Turborepo E2E Tests on ${{ matrix.os.name }}
+    needs: [determine_jobs, build_turborepo]
+    if: needs.determine_jobs.outputs.go == 'true' || needs.determine_jobs.outputs.turborepo_integration_tests == 'true' || needs.determine_jobs.outputs.node == 'true'
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+      - name: Download Turborepo build
+        uses: actions/download-artifact@v3
+        with:
+          key: turborepo-${{ matrix.os.name }}
+          path: target/
+      - name: Run E2E Tests
+        shell: bash
+        run: pnpm -- turbo run e2e --filter=cli
 
   rust_lint:
     needs: [determine_jobs, rust_prepare]
