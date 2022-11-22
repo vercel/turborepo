@@ -357,7 +357,7 @@ jobs:
 
               if [[ -f "expected-clippy-warnings-raw" ]]; then
                 clippy_warnings_raw=$(cat clippy-warnings-raw)
-                diff clippy-warnings-raw clippy-warnings
+                diff clippy-warnings-raw expected-clippy-warnings-raw
               fi
               exit 1
             fi
