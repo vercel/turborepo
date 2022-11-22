@@ -495,7 +495,7 @@ export const users: Array<TurboUser> = [
   },
   {
     caption: "IdeaScale",
-    image: "/images/logos/ideascle.svg",
+    image: "/images/logos/ideascale.svg",
     infoLink: "https://ideascale.com",
     pinned: true,
   },
