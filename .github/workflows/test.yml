@@ -93,6 +93,20 @@ jobs:
         with:
           PATTERNS: |
             cli/**
+            packages/**
+            shim/**
+            Cargo.*
+            .cargo/**
+            !**.md
+            !**.mdx
+
+      - name: Turborepo Integration Test changes
+        id: turborepo_integration_tests
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            cli/integration_tests/**
+            cli/Makefile
 
       - name: Examples related changes
         id: examples
@@ -132,6 +146,7 @@ jobs:
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
       node: ${{ steps.ci.outputs.diff != '' || steps.node.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
+      turborepo_integration_tests: ${{ steps.ci.outputs.diff != '' || steps.turborepo_integration_tests.outputs.diff != '' }}
       tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
       main_push: ${{ github.event_name == 'push' && github.ref == 'refs/head/main' }}
       tag_push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace') }}
@@ -298,6 +313,33 @@ jobs:
           cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__feature_next_dev_server,__feature_node_file_trace,__feature_mdx_rs
           # next-swc/wasm
           cargo check -p next-binding --features __swc_core_binding_wasm,__swc_core_binding_wasm_plugin,__feature_mdx_rs --target wasm32-unknown-unknown
+
+  build_turborepo:
+    name: Build Turborepo for ${{ matrix.os.name }}
+    needs: [determine_jobs, rust_prepare]
+    if: needs.determine_jobs.outputs.go == 'true' || needs.determine_jobs.outputs.turborepo_integration_tests == 'true' || needs.determine_jobs.outputs.node == 'true'
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v3
+      - name: Build Turborepo
+        uses: ./.github/actions/build-debug-turborepo
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          target: ${{ matrix.os.name }}
+      - uses: actions/upload-artifact@v3
+        with:
+          name: turborepo-${{ matrix.os.name }}
+          path: |
+            target/debug/turbo
+            target/debug/turbo.exe
 
   rust_lint:
     needs: [determine_jobs, rust_prepare]
