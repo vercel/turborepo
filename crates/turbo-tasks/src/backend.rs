@@ -119,7 +119,7 @@ pub struct TaskExecutionSpec {
 
 // TODO technically CellContent is already indexed by the ValueTypeId, so we
 // don't need to store it here
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CellContent(pub Option<SharedReference>);
 
 impl Display for CellContent {
