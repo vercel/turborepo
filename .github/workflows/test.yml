@@ -302,8 +302,6 @@ jobs:
             runner: ubuntu-latest
           - name: macos
             runner: macos-latest
-          - name: windows
-            runner: windows-latest
     steps:
       - name: "Checkout"
         uses: actions/checkout@v3
