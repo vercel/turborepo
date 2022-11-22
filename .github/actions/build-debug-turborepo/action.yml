@@ -7,8 +7,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: "Checkout"
-      uses: actions/checkout@v3
     - name: "Setup Node"
       uses: ./.github/actions/setup-node
     - name: "Setup Go"
@@ -20,4 +18,5 @@ runs:
       with:
         key: debug-${{ inputs.target }}
     - name: Build Turborepo
+      shell: bash
       run: cargo build --bin shim
