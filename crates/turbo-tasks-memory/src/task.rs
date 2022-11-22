@@ -111,24 +111,11 @@ pub struct Task {
     ty: TaskType,
     /// The mutable state of the task
     state: RwLock<TaskState>,
-    // TODO technically we need no lock here as it's only written
-    // during execution, which doesn't happen in parallel
-    /// Mutable state that is used during task execution.
-    /// It will only be accessed from the task execution, which happens
-    /// non-concurrently.
-    execution_data: Mutex<TaskExecutionData>,
 }
 
 /// Task data that is only modified during task execution.
 #[derive(Default)]
-struct TaskExecutionData {
-    /// Cells/Scopes that the task has read during execution.
-    /// The Task will keep these tasks alive as invalidations that happen there
-    /// might affect this task.
-    ///
-    /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
-    dependencies: HashSet<TaskDependency>,
-}
+struct TaskExecutionData {}
 
 impl Debug for Task {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -162,6 +149,13 @@ struct TaskState {
     cells: HashMap<ValueTypeId, Vec<Cell>>,
     event: Event,
 
+    /// Cells/Scopes that the task has read during execution.
+    /// The Task will keep these tasks alive as invalidations that happen there
+    /// might affect this task.
+    ///
+    /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
+    dependencies: HashSet<TaskDependency>,
+
     // Stats:
     executions: u32,
     total_duration: Duration,
@@ -178,6 +172,7 @@ impl TaskState {
             output: Default::default(),
             cells: Default::default(),
             event: Event::new(move || format!("TaskState({id})::event")),
+            dependencies: Default::default(),
             executions: Default::default(),
             total_duration: Default::default(),
             last_duration: Default::default(),
@@ -195,6 +190,7 @@ impl TaskState {
             output: Default::default(),
             cells: Default::default(),
             event: Event::new(move || format!("TaskState({id})::event")),
+            dependencies: Default::default(),
             executions: Default::default(),
             total_duration: Default::default(),
             last_duration: Default::default(),
@@ -307,7 +303,6 @@ impl Task {
             inputs,
             ty: TaskType::Native(native_fn, bound_fn),
             state: RwLock::new(TaskState::new(id)),
-            execution_data: Default::default(),
         }
     }
 
@@ -321,7 +316,6 @@ impl Task {
             inputs,
             ty: TaskType::ResolveNative(native_fn),
             state: RwLock::new(TaskState::new(id)),
-            execution_data: Default::default(),
         }
     }
 
@@ -336,7 +330,6 @@ impl Task {
             inputs,
             ty: TaskType::ResolveTrait(trait_type, trait_fn_name),
             state: RwLock::new(TaskState::new(id)),
-            execution_data: Default::default(),
         }
     }
 
@@ -350,7 +343,6 @@ impl Task {
             inputs: Vec::new(),
             ty: TaskType::Root(Box::new(functor)),
             state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope)),
-            execution_data: Default::default(),
         }
     }
 
@@ -364,7 +356,6 @@ impl Task {
             inputs: Vec::new(),
             ty: TaskType::Once(Mutex::new(Some(Box::pin(functor)))),
             state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope)),
-            execution_data: Default::default(),
         }
     }
 
@@ -421,25 +412,18 @@ impl Task {
     }
 
     #[cfg(not(feature = "report_expensive"))]
-    fn clear_dependencies(&self, backend: &MemoryBackend) {
-        let mut execution_data = self.execution_data.lock();
-        let dependencies = take(&mut execution_data.dependencies);
-        drop(execution_data);
-
+    fn clear_dependencies(&self, dependencies: HashSet<TaskDependency>, backend: &MemoryBackend) {
         for dep in dependencies.into_iter() {
             Task::remove_dependency(dep, self.id, backend);
         }
     }
 
     #[cfg(feature = "report_expensive")]
-    fn clear_dependencies(&self, backend: &MemoryBackend) {
+    fn clear_dependencies(&self, dependencies: HashSet<TaskDependency>, backend: &MemoryBackend) {
         use std::time::Instant;
 
         use turbo_tasks::util::FormatDuration;
         let start = Instant::now();
-        let mut execution_data = self.execution_data.lock();
-        let dependencies = take(&mut execution_data.dependencies);
-        drop(execution_data);
 
         let count = dependencies.len();
 
@@ -568,14 +552,13 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool {
-        DEPENDENCIES_TO_TRACK.with(|deps| {
-            let mut execution_data = self.execution_data.lock();
-            execution_data.dependencies = deps.take();
-        });
         let mut schedule_task = false;
-        let mut clear_dependencies = false;
+        let mut clear_dependencies = None;
         {
             let mut state = self.state.write();
+            DEPENDENCIES_TO_TRACK.with(|deps| {
+                state.dependencies = deps.take();
+            });
             state.total_duration += duration;
             state.last_duration = duration;
             match state.state_type {
@@ -589,7 +572,7 @@ impl Task {
                     state.event.notify(usize::MAX);
                 }
                 InProgressDirty => {
-                    clear_dependencies = true;
+                    clear_dependencies = Some(take(&mut state.dependencies));
                     let mut active = false;
                     for scope in state.scopes.iter() {
                         if backend.with_scope(scope, |scope| scope.state.lock().is_active()) {
@@ -612,8 +595,8 @@ impl Task {
                 }
             };
         }
-        if clear_dependencies {
-            self.clear_dependencies(backend)
+        if let Some(dependencies) = clear_dependencies {
+            self.clear_dependencies(dependencies, backend);
         }
 
         if let TaskType::Once(_) = self.ty {
@@ -628,40 +611,49 @@ impl Task {
             // once task won't become dirty
             return;
         }
-        self.clear_dependencies(backend);
 
-        let mut state = self.state.write();
-        match state.state_type {
-            Dirty | Scheduled | InProgressDirty => {
-                // already dirty
-            }
-            Done => {
-                // add to dirty lists and potentially schedule
-                let mut active = false;
-                for scope in state.scopes.iter() {
-                    backend.with_scope(scope, |scope| {
-                        scope.increment_unfinished_tasks(backend);
-                        log_scope_update!("add unfinished task: {} -> {}", *scope.id, *self.id);
-                        let mut scope = scope.state.lock();
-                        if scope.is_active() {
-                            active = true;
-                        } else {
-                            scope.add_dirty_task(self.id);
-                        }
-                    });
-                }
-                if active {
-                    state.state_type = Scheduled;
-                    drop(state);
-                    turbo_tasks.schedule(self.id);
-                } else {
-                    state.state_type = Dirty;
+        let dependencies;
+        {
+            let mut state = self.state.write();
+            dependencies = take(&mut state.dependencies);
+            match state.state_type {
+                Dirty | Scheduled | InProgressDirty => {
+                    // already dirty
                     drop(state);
                 }
+                Done => {
+                    // add to dirty lists and potentially schedule
+                    let mut active = false;
+                    for scope in state.scopes.iter() {
+                        backend.with_scope(scope, |scope| {
+                            scope.increment_unfinished_tasks(backend);
+                            log_scope_update!("add unfinished task: {} -> {}", *scope.id, *self.id);
+                            let mut scope = scope.state.lock();
+                            if scope.is_active() {
+                                active = true;
+                            } else {
+                                scope.add_dirty_task(self.id);
+                            }
+                        });
+                    }
+                    if active {
+                        state.state_type = Scheduled;
+                        drop(state);
+                        turbo_tasks.schedule(self.id);
+                    } else {
+                        state.state_type = Dirty;
+                        drop(state);
+                    }
+                }
+                InProgress => {
+                    state.state_type = InProgressDirty;
+                    drop(state);
+                }
             }
-            InProgress => {
-                state.state_type = InProgressDirty;
-            }
+        }
+
+        if !dependencies.is_empty() {
+            self.clear_dependencies(dependencies, backend);
         }
     }
 
@@ -1243,10 +1235,7 @@ impl Task {
             for child in state.children.iter() {
                 refs.push((stats::ReferenceType::Child, *child));
             }
-        }
-        {
-            let execution_data = self.execution_data.lock();
-            for dep in execution_data.dependencies.iter() {
+            for dep in state.dependencies.iter() {
                 match dep {
                     TaskDependency::TaskOutput(task) | TaskDependency::TaskCell(task, _) => {
                         refs.push((stats::ReferenceType::Dependency, *task))
