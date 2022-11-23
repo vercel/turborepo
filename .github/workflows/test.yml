@@ -790,7 +790,7 @@ jobs:
 
   next_js_integration:
     needs: [determine_jobs, rust_prepare, rust_build_release]
-    if: needs.determine_jobs.outputs.rust == 'true' && (github.event_name == 'pull_request' || needs.determine_jobs.outputs.push == 'true')
+    if: needs.determine_jobs.outputs.rust == 'true'
     name: Next.js integration test
     runs-on: ubuntu-latest-8-core-oss
     strategy:
