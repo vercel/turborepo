@@ -383,7 +383,7 @@ func Test_CanPrune(t *testing.T) {
 		tests[i] = test{
 			name:     packageManager.Name,
 			pm:       packageManager,
-			rootPath: cwd.UntypedJoin("../../../examples/basic"),
+			rootPath: cwd.UntypedJoin("../../../examples/with-yarn"),
 			want:     wants[packageManager.Name].want,
 			wantErr:  wants[packageManager.Name].wantErr,
 		}
