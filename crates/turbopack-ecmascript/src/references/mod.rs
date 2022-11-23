@@ -51,7 +51,7 @@ use self::{
     cjs::CjsAssetReferenceVc,
     esm::{
         export::EsmExport, EsmAssetReferenceVc, EsmAsyncAssetReferenceVc, EsmExports,
-        EsmModuleItemVc,
+        EsmModuleItemVc, ImportMetaRefVc,
     },
     node::{DirAssetReferenceVc, PackageJsonReferenceVc},
     raw::SourceAssetReferenceVc,
@@ -396,6 +396,7 @@ pub(crate) async fn analyze_ecmascript_module(
 
             analysis.set_exports(exports);
 
+            #[allow(clippy::too_many_arguments)]
             fn handle_call_boxed<
                 'a,
                 FF: Future<Output = Result<JsValue>> + Send + 'a,
@@ -430,6 +431,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 ))
             }
 
+            #[allow(clippy::too_many_arguments)]
             async fn handle_call<
                 FF: Future<Output = Result<JsValue>> + Send,
                 F: Fn(JsValue) -> FF + Sync,
@@ -1062,6 +1064,9 @@ pub(crate) async fn analyze_ecmascript_module(
             let linker = |value| value_visitor(source, origin, value, environment);
             let effects = take(&mut var_graph.effects);
             let link_value = |value| link(&var_graph, value, &linker, &cache);
+            // There can be many references to import.meta, but only the first should hoist
+            // the object allocation.
+            let mut first_import_meta = true;
 
             for effect in effects.into_iter() {
                 match effect {
@@ -1157,14 +1162,13 @@ pub(crate) async fn analyze_ecmascript_module(
                             }
                         }
                     }
-                    Effect::ImportMeta { span, ast_path: _ } => {
-                        handler.span_warn_with_code(
-                            span,
-                            "import.meta is not yet supported",
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::IMPORT_META.to_string(),
-                            ),
-                        );
+                    Effect::ImportMeta { span: _, ast_path } => {
+                        analysis.add_code_gen(ImportMetaRefVc::new(
+                            source.path(),
+                            first_import_meta,
+                            AstPathVc::cell(ast_path),
+                        ));
+                        first_import_meta = false;
                     }
                 }
             }
