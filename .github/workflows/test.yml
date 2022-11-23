@@ -194,7 +194,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         manager: [yarn, npm]
-        example: [with-yarn, design-system, kitchen-sink, non-monorepo]
+        example: [with-yarn, with-npm, non-monorepo]
         include:
           - os: ubuntu-latest
             manager: pnpm
@@ -202,6 +202,18 @@ jobs:
           - os: macos-latest
             manager: pnpm
             example: basic
+          - os: ubuntu-latest
+            manager: pnpm
+            example: kitchen-sink
+          - os: macos-latest
+            manager: pnpm
+            example: kitchen-sink
+          - os: ubuntu-latest
+            manager: pnpm
+            example: with-svelte
+          - os: macos-latest
+            manager: pnpm
+            example: with-svelte
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -437,8 +449,8 @@ jobs:
         working-directory: crates/turbopack/tests/node-file-trace
         run: pnpm install -r --side-effects-cache false
 
-      - name: Install tests dependencies in examples/basic
-        working-directory: examples/basic
+      - name: Install tests dependencies in examples/with-npm
+        working-directory: examples/with-npm
         run: npm install
 
       - name: Install nextest
