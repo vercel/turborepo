@@ -194,14 +194,14 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         manager: [yarn, npm]
-        example: [basic, design-system, kitchen-sink, non-monorepo]
+        example: [with-yarn, design-system, kitchen-sink, non-monorepo]
         include:
           - os: ubuntu-latest
             manager: pnpm
-            example: with-pnpm
+            example: basic
           - os: macos-latest
             manager: pnpm
-            example: with-pnpm
+            example: basic
 
     runs-on: ${{ matrix.os }}
     steps:
