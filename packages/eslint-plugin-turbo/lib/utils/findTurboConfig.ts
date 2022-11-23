@@ -1,7 +1,7 @@
 import fs from "fs";
 import { getTurboRoot } from "turbo-utils";
 import type { Schema } from "turbo-types";
-import * as JSON5 from "json5";
+import JSON5 from "json5";
 
 function findTurboConfig({ cwd }: { cwd?: string }): Schema | null {
   const turboRoot = getTurboRoot(cwd);
