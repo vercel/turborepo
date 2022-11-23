@@ -45,6 +45,9 @@ impl CodeGenerateable for ImportMetaRef {
             *expr = Expr::Ident(id);
         })];
 
+        // There can be many references to import.meta, and they appear at nesting in
+        // the file. The first reference is responsible for injecting the
+        // module-level variable to hold the mutable "meta object".
         if self.initialize {
             let path = format!("/{}", self.path.await?.path);
             visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {
