@@ -10,7 +10,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests
 "[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm-multiple/input/mod.mjs (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
 
 const __TURBOPACK__import$2e$meta__ = {
-    url: new Url("/crates/turbopack-tests/tests/snapshot/import-meta/esm-multiple/input/mod.mjs", location.href).href
+    url: new URL("/crates/turbopack-tests/tests/snapshot/import-meta/esm-multiple/input/mod.mjs", location.href).href
 };
 "__TURBOPACK__ecmascript__hoisting__location__";
 function foo() {

@@ -7,7 +7,6 @@ use swc_core::{
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::chunk::ChunkingContextVc;
 
-use super::base::ReferencedAsset;
 use crate::{
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor, magic_identifier,
@@ -51,7 +50,7 @@ impl CodeGenerateable for ImportMetaRef {
             visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {
                 let name = Ident::new(magic_identifier::encode("import.meta").into(), DUMMY_SP);
                 let meta = quote!(
-                    "const $name = { url: new Url($url, location.href).href };" as Stmt,
+                    "const $name = { url: new URL($url, location.href).href };" as Stmt,
                     name = name,
                     url: Expr = path.clone().into(),
                 );
