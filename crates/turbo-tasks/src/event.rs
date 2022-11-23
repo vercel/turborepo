@@ -48,7 +48,10 @@ impl Event {
     pub fn listen(&self) -> EventListener {
         EventListener {
             description: self.description.clone(),
-            future: Some(timeout(Duration::from_secs(10), self.event.listen())),
+            future: Some(Box::pin(timeout(
+                Duration::from_secs(10),
+                self.event.listen(),
+            ))),
             duration: Duration::from_secs(10),
         }
     }
@@ -97,7 +100,7 @@ impl Future for EventListener {
 #[cfg(feature = "hanging_detection")]
 pub struct EventListener {
     description: Arc<dyn Fn() -> String + Sync + Send>,
-    future: Option<Timeout<event_listener::EventListener>>,
+    future: Option<Pin<Box<Timeout<event_listener::EventListener>>>>,
     duration: Duration,
 }
 
@@ -115,29 +118,28 @@ impl Future for EventListener {
     type Output = ();
 
     fn poll(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        let this = unsafe { self.get_unchecked_mut() };
-        while let Some(future) = this.future.as_mut() {
-            // SAFETY: future is never moved as it's part of the pinned `self`
-            match ready!(unsafe { Pin::new_unchecked(future) }.poll(cx)) {
+        while let Some(future) = self.future.as_mut() {
+            match ready!(future.as_mut().poll(cx)) {
                 Ok(_) => {
-                    this.future = None;
+                    self.future = None;
                     return Poll::Ready(());
                 }
                 Err(_) => {
                     use crate::util::FormatDuration;
                     eprintln!(
                         "{:?} is potentially hanging (waiting for {})",
-                        this,
-                        FormatDuration(this.duration)
+                        self,
+                        FormatDuration(self.duration)
                     );
-                    this.duration *= 2;
-                    this.future = Some(timeout(
-                        this.duration,
-                        this.future.take().unwrap().into_inner(),
-                    ));
+                    self.duration *= 2;
+                    let future = self.future.take().unwrap();
+                    self.future = Some(Box::pin(timeout(
+                        self.duration,
+                        unsafe { Pin::into_inner_unchecked(future) }.into_inner(),
+                    )));
                 }
             }
         }
