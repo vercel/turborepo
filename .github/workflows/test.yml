@@ -827,9 +827,6 @@ jobs:
           node-version: 16
           cache: pnpm
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-
       - name: Download binary
         uses: actions/download-artifact@v3
         with:
