@@ -13,7 +13,7 @@ export const NON_FATAL_ERRORS: NonFatalErrors = {
   },
   FIRST_COMMIT: {
     regex: /failed to resolve packages to run: commit HEAD\^ does not exist/,
-    message: `turbo-ignore could not complete - not enough information available to compare`,
+    message: `turbo-ignore could not complete - parent commit does not exist or is unreachable`,
   },
 };
 

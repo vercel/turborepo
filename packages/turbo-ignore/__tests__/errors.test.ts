@@ -19,9 +19,9 @@ describe("shouldWarn()", () => {
     expect(result.message).toBe(NON_FATAL_ERRORS.MISSING_LOCKFILE.message);
   });
 
-  it("it detects errors when yarn lockfile is missing", async () => {
+  it("it detects errors when pnpm lockfile is missing", async () => {
     const result = shouldWarn({
-      err: `* reading pnpm-lock.yaml: open /test/../yarn.lock: no such file or directory`,
+      err: `* reading pnpm-lock.yaml: open /test/../pnpm-lock.yaml: no such file or directory`,
     });
     expect(result.code).toBe("MISSING_LOCKFILE");
     expect(result.level).toBe("warn");
@@ -30,7 +30,7 @@ describe("shouldWarn()", () => {
 
   it("it detects errors when npm lockfile is missing", async () => {
     const result = shouldWarn({
-      err: `* reading package-lock.json: open /test/../yarn.lock: no such file or directory`,
+      err: `* reading package-lock.json: open /test/../package-lock.json: no such file or directory`,
     });
     expect(result.code).toBe("MISSING_LOCKFILE");
     expect(result.level).toBe("warn");
