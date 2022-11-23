@@ -470,7 +470,9 @@ impl<B: Backend> TurboTasks<B> {
     }
 
     pub async fn get_or_wait_update_info(&self, aggregation: Duration) -> (Duration, usize) {
-        let listener = self.event.listen();
+        let listener = self
+            .event
+            .listen_with_note(|| "wait for update info".to_string());
         if aggregation.is_zero() {
             if let Some(info) = *self.aggregated_update.lock().unwrap() {
                 return info;

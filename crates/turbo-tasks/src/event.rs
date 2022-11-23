@@ -31,6 +31,16 @@ impl Event {
             listener: self.event.listen(),
         }
     }
+
+    /// see [event_listener::Event]::listen
+    pub fn listen_with_note(
+        &self,
+        _note: impl Fn() -> String + Sync + Send + 'static,
+    ) -> EventListener {
+        EventListener {
+            listener: self.event.listen(),
+        }
+    }
 }
 
 #[cfg(feature = "hanging_detection")]
@@ -48,6 +58,23 @@ impl Event {
     pub fn listen(&self) -> EventListener {
         EventListener {
             description: self.description.clone(),
+            note: Arc::new(|| String::new()),
+            future: Some(Box::pin(timeout(
+                Duration::from_secs(10),
+                self.event.listen(),
+            ))),
+            duration: Duration::from_secs(10),
+        }
+    }
+
+    /// see [event_listener::Event]::listen
+    pub fn listen_with_note(
+        &self,
+        note: impl Fn() -> String + Sync + Send + 'static,
+    ) -> EventListener {
+        EventListener {
+            description: self.description.clone(),
+            note: Arc::new(note),
             future: Some(Box::pin(timeout(
                 Duration::from_secs(10),
                 self.event.listen(),
@@ -100,6 +127,7 @@ impl Future for EventListener {
 #[cfg(feature = "hanging_detection")]
 pub struct EventListener {
     description: Arc<dyn Fn() -> String + Sync + Send>,
+    note: Arc<dyn Fn() -> String + Sync + Send>,
     future: Option<Pin<Box<Timeout<event_listener::EventListener>>>>,
     duration: Duration,
 }
@@ -107,9 +135,13 @@ pub struct EventListener {
 #[cfg(feature = "hanging_detection")]
 impl Debug for EventListener {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("EventListener")
-            .field(&(self.description)())
-            .finish()
+        let mut t = f.debug_tuple("EventListener");
+        t.field(&(self.description)());
+        let note = (self.note)();
+        if !note.is_empty() {
+            t.field(&note);
+        }
+        t.finish()
     }
 }
 
