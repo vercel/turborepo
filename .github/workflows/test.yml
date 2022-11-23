@@ -830,7 +830,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Download benchmark data
+      - name: Download binary
         uses: actions/download-artifact@v3
         with:
           path: artifacts
