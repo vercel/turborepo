@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["PersistentTaskType",""],["TaskType","Different Task types"],["TransientTaskType",""]],"struct":[["BackendJobId",""],["CellContent",""],["CellMappings",""],["TaskExecutionSpec",""]],"trait":[["Backend",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["PersistentTaskType",""],["TaskType","Different Task types"],["TransientTaskType",""]],"struct":[["BackendJobId",""],["CellContent",""],["TaskExecutionSpec",""]],"trait":[["Backend",""]]};

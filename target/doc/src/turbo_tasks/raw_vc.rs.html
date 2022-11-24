@@ -534,10 +534,6 @@
 <span id="534">534</span>
 <span id="535">535</span>
 <span id="536">536</span>
-<span id="537">537</span>
-<span id="538">538</span>
-<span id="539">539</span>
-<span id="540">540</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Any,
     collections::HashSet,
@@ -558,15 +554,14 @@
     backend::CellContent,
     event::EventListener,
     manager::{
-        find_cell_by_key, find_cell_by_type, read_task_cell, read_task_cell_untracked,
-        read_task_output, read_task_output_untracked, CurrentCellRef, TurboTasksApi,
+        find_cell_by_type, read_task_cell, read_task_cell_untracked, read_task_output,
+        read_task_output_untracked, CurrentCellRef, TurboTasksApi,
     },
     primitives::{RawVcSet, RawVcSetVc},
-    registry::get_value_type,
+    registry::{<span class="self">self</span>, get_value_type},
     turbo_tasks,
     value_type::ValueTraitVc,
-    CollectiblesSource, ReadRef, SharedReference, TaskId, TraitTypeId, Typed, TypedForInput,
-    ValueTypeId,
+    CollectiblesSource, ReadRef, SharedReference, TaskId, TraitTypeId, ValueTypeId,
 };
 
 <span class="attr">#[derive(Error, Debug)]
@@ -582,9 +577,26 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>CellId {
+    <span class="kw">pub </span>type_id: ValueTypeId,
+    <span class="kw">pub </span>index: u32,
+}
+
+<span class="kw">impl </span>Display <span class="kw">for </span>CellId {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(
+            f,
+            <span class="string">&quot;{}#{}&quot;</span>,
+            registry::get_value_type(<span class="self">self</span>.type_id).name,
+            <span class="self">self</span>.index
+        )
+    }
+}
+
+<span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>RawVc {
     TaskOutput(TaskId),
-    TaskCell(TaskId, usize),
+    TaskCell(TaskId, CellId),
 }
 
 <span class="kw">impl </span>RawVc {
@@ -846,26 +858,6 @@
     /// recomputations in the graph (as once tasks doesn&#39;t reexecute)
     </span><span class="kw">pub async fn </span>cell_local(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;RawVc&gt; {
         <span class="self">self</span>.cell_local_internal(find_cell_by_type).<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// Like [RawVc::cell_local], but allows to specify a key for selecting the
-    /// cell.
-    </span><span class="kw">pub async fn </span>keyed_cell_local&lt;
-        K: std::fmt::Debug
-            + std::cmp::Eq
-            + std::cmp::Ord
-            + std::hash::Hash
-            + Typed
-            + TypedForInput
-            + Send
-            + Sync
-            + <span class="lifetime">&#39;static</span>,
-    &gt;(
-        <span class="self">self</span>,
-        key: K,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;RawVc&gt; {
-        <span class="self">self</span>.cell_local_internal(|ty| find_cell_by_key(ty, key))
-            .<span class="kw">await
     </span>}
 
     <span class="kw">pub fn </span>get_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskId {

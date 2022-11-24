@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["with_turbo_tasks_for_testing",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["current_task_for_testing",""],["with_turbo_tasks_for_testing",""]]};

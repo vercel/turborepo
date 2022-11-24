@@ -530,13 +530,6 @@
 <span id="530">530</span>
 <span id="531">531</span>
 <span id="532">532</span>
-<span id="533">533</span>
-<span id="534">534</span>
-<span id="535">535</span>
-<span id="536">536</span>
-<span id="537">537</span>
-<span id="538">538</span>
-<span id="539">539</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -553,12 +546,12 @@
 <span class="kw">use </span>tokio::task::futures::TaskLocalFuture;
 <span class="kw">use </span>turbo_tasks::{
     backend::{
-        Backend, BackendJobId, CellContent, CellMappings, PersistentTaskType, TaskExecutionSpec,
+        Backend, BackendJobId, CellContent, PersistentTaskType, TaskExecutionSpec,
         TransientTaskType,
     },
     event::EventListener,
     util::{IdFactory, NoMoveVec},
-    RawVc, TaskId, TraitTypeId, TurboTasksBackendApi,
+    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi,
 };
 
 <span class="kw">use crate</span>::{
@@ -758,9 +751,7 @@
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TaskExecutionSpec&gt; {
         <span class="self">self</span>.with_task(task, |task| {
             <span class="kw">if </span>task.execution_started(<span class="self">self</span>, turbo_tasks) {
-                <span class="kw">let </span>cell_mappings = task.take_cell_mappings();
                 <span class="prelude-val">Some</span>(TaskExecutionSpec {
-                    cell_mappings: <span class="prelude-val">Some</span>(cell_mappings),
                     future: task.execute(turbo_tasks),
                 })
             } <span class="kw">else </span>{
@@ -783,12 +774,11 @@
     <span class="kw">fn </span>task_execution_completed(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        cell_mappings: <span class="prelude-ty">Option</span>&lt;CellMappings&gt;,
         duration: Duration,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; bool {
         <span class="self">self</span>.with_task(task, |task| {
-            task.execution_completed(cell_mappings, duration, <span class="self">self</span>, turbo_tasks)
+            task.execution_completed(duration, <span class="self">self</span>, turbo_tasks)
         })
     }
 
@@ -838,7 +828,7 @@
     <span class="kw">fn </span>try_read_task_cell(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
         reader: TaskId,
         _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt; {
@@ -857,7 +847,7 @@
     <span class="kw">fn </span>try_read_task_cell_untracked(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
         _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt; {
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(<span class="self">self</span>.with_task(task, |task| {
@@ -868,7 +858,7 @@
     <span class="kw">fn </span>track_read_task_cell(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
         reader: TaskId,
         _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) {
@@ -916,14 +906,10 @@
         });
     }
 
-    <span class="kw">fn </span>get_fresh_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) -&gt; usize {
-        <span class="self">self</span>.with_task(task, |task| task.get_fresh_cell())
-    }
-
     <span class="kw">fn </span>update_task_cell(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
         content: CellContent,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) {

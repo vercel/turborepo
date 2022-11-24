@@ -1587,24 +1587,11 @@
 <span id="1587">1587</span>
 <span id="1588">1588</span>
 <span id="1589">1589</span>
-<span id="1590">1590</span>
-<span id="1591">1591</span>
-<span id="1592">1592</span>
-<span id="1593">1593</span>
-<span id="1594">1594</span>
-<span id="1595">1595</span>
-<span id="1596">1596</span>
-<span id="1597">1597</span>
-<span id="1598">1598</span>
-<span id="1599">1599</span>
-<span id="1600">1600</span>
-<span id="1601">1601</span>
-<span id="1602">1602</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
     cmp::Ordering,
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     fmt::{<span class="self">self</span>, Debug, Display, Formatter, Write},
     future::Future,
     hash::Hash,
@@ -1617,10 +1604,10 @@
 <span class="kw">use </span>parking_lot::{Mutex, RwLock, RwLockWriteGuard};
 <span class="kw">use </span>tokio::task_local;
 <span class="kw">use </span>turbo_tasks::{
-    backend::{CellMappings, PersistentTaskType},
+    backend::PersistentTaskType,
     event::{Event, EventListener},
-    get_invalidator, registry, FunctionId, Invalidator, RawVc, TaskId, TaskInput, TraitTypeId,
-    TurboTasksBackendApi,
+    get_invalidator, registry, CellId, FunctionId, Invalidator, RawVc, TaskId, TaskInput,
+    TraitTypeId, TurboTasksBackendApi, ValueTypeId,
 };
 <span class="kw">pub type </span>NativeTaskFuture = Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;RawVc&gt;&gt; + Send&gt;&gt;;
 <span class="kw">pub type </span>NativeTaskFn = Box&lt;<span class="kw">dyn </span>Fn() -&gt; NativeTaskFuture + Send + Sync&gt;;
@@ -1635,7 +1622,7 @@
 <span class="attr">#[derive(Hash, Copy, Clone, PartialEq, Eq)]
 </span><span class="kw">pub enum </span>TaskDependency {
     TaskOutput(TaskId),
-    TaskCell(TaskId, usize),
+    TaskCell(TaskId, CellId),
     ScopeChildren(TaskScopeId),
     ScopeCollectibles(TaskScopeId, TraitTypeId),
 }
@@ -1730,10 +1717,6 @@
     ///
     /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
     </span>dependencies: HashSet&lt;TaskDependency&gt;,
-
-    <span class="doccomment">/// Mappings from key or data type to cell index, to store the data in the
-    /// same cell again.
-    </span>cell_mappings: CellMappings,
 }
 
 <span class="kw">impl </span>Debug <span class="kw">for </span>Task {
@@ -1764,7 +1747,8 @@
     </span>collectibles: MaybeCollectibles,
 
     output: Output,
-    created_cells: Vec&lt;Cell&gt;,
+    <span class="comment">// TODO use AutoMap here
+    </span>cells: HashMap&lt;ValueTypeId, Vec&lt;Cell&gt;&gt;,
     event: Event,
 
     <span class="comment">// Stats:
@@ -1781,7 +1765,7 @@
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
-            created_cells: Default::default(),
+            cells: Default::default(),
             event: Event::new(<span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">&quot;TaskState({id})::event&quot;</span>)),
             executions: Default::default(),
             total_duration: Default::default(),
@@ -1798,7 +1782,7 @@
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
-            created_cells: Default::default(),
+            cells: Default::default(),
             event: Event::new(<span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">&quot;TaskState({id})::event&quot;</span>)),
             executions: Default::default(),
             total_duration: Default::default(),
@@ -2169,16 +2153,12 @@
     <span class="attr">#[must_use]
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>execution_completed(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        cell_mappings: <span class="prelude-ty">Option</span>&lt;CellMappings&gt;,
         duration: Duration,
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; bool {
         DEPENDENCIES_TO_TRACK.with(|deps| {
             <span class="kw">let </span><span class="kw-2">mut </span>execution_data = <span class="self">self</span>.execution_data.lock();
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(cell_mappings) = cell_mappings {
-                execution_data.cell_mappings = cell_mappings;
-            }
             execution_data.dependencies = deps.take();
         });
         <span class="kw">let </span><span class="kw-2">mut </span>schedule_task = <span class="bool-val">false</span>;
@@ -2716,15 +2696,6 @@
         }
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>take_cell_mappings(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CellMappings {
-        <span class="kw">let </span><span class="kw-2">mut </span>execution_data = <span class="self">self</span>.execution_data.lock();
-        <span class="kw">let </span><span class="kw-2">mut </span>cell_mappings = take(<span class="kw-2">&amp;mut </span>execution_data.cell_mappings);
-        <span class="kw">for </span>list <span class="kw">in </span>cell_mappings.by_type.values_mut() {
-            list.<span class="number">0 </span>= <span class="number">0</span>;
-        }
-        cell_mappings
-    }
-
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>add_dependency_to_current(dep: TaskDependency) {
         DEPENDENCIES_TO_TRACK.with(|list| {
             <span class="kw">let </span><span class="kw-2">mut </span>list = list.borrow_mut();
@@ -2784,15 +2755,25 @@
     }
 
     <span class="doccomment">/// Access to a cell.
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>with_cell_mut&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, index: usize, func: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;mut </span>Cell) -&gt; T) -&gt; T {
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>with_cell_mut&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId, func: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;mut </span>Cell) -&gt; T) -&gt; T {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
-        func(<span class="kw-2">&amp;mut </span>state.created_cells[index])
+        <span class="kw">let </span>list = state.cells.entry(index.type_id).or_default();
+        <span class="kw">let </span>i = index.index <span class="kw">as </span>usize;
+        <span class="kw">if </span>list.len() &lt;= i {
+            list.resize_with(i + <span class="number">1</span>, Default::default);
+        }
+        func(<span class="kw-2">&amp;mut </span>list[i])
     }
 
     <span class="doccomment">/// Access to a cell.
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>with_cell&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, index: usize, func: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span>Cell) -&gt; T) -&gt; T {
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>with_cell&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId, func: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span>Cell) -&gt; T) -&gt; T {
         <span class="kw">let </span>state = <span class="self">self</span>.state.read();
-        func(<span class="kw-2">&amp;</span>state.created_cells[index])
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(list) = state.cells.get(<span class="kw-2">&amp;</span>index.type_id) {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(cell) = list.get(index.index <span class="kw">as </span>usize) {
+                <span class="kw">return </span>func(cell);
+            }
+        }
+        func(<span class="kw-2">&amp;</span>Default::default())
     }
 
     <span class="doccomment">/// For testing purposes
@@ -3105,13 +3086,6 @@
             drop(state);
             turbo_tasks.schedule_notify_tasks_set(<span class="kw-2">&amp;</span>tasks);
         }
-    }
-
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_fresh_cell(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
-        <span class="kw">let </span>index = state.created_cells.len();
-        state.created_cells.push(Cell::new());
-        index
     }
 }
 

@@ -284,17 +284,6 @@
 <span id="284">284</span>
 <span id="285">285</span>
 <span id="286">286</span>
-<span id="287">287</span>
-<span id="288">288</span>
-<span id="289">289</span>
-<span id="290">290</span>
-<span id="291">291</span>
-<span id="292">292</span>
-<span id="293">293</span>
-<span id="294">294</span>
-<span id="295">295</span>
-<span id="296">296</span>
-<span id="297">297</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{cell::RefCell, mem::take, rc::Rc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -313,10 +302,6 @@
 </span><span class="kw">pub trait </span>OptimizableChunk {
     <span class="kw">fn </span>get_optimizer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkOptimizerVc;
 }
-
-<span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
-#[derive(Debug, PartialOrd, Ord, Hash)]
-</span><span class="kw">struct </span>OptimizerKey(<span class="prelude-ty">Option</span>&lt;ChunkOptimizerVc&gt;);
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>optimize(chunks: ChunksVc, chunk_group: ChunkGroupVc) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
@@ -343,7 +328,8 @@
     <span class="kw">let </span>optimized_chunks = by_optimizer
         .into_iter()
         .map(|(optimizer, chunks)| <span class="kw">async move </span>{
-            <span class="kw">let </span>chunks = ChunksVc::keyed_cell(OptimizerKey(optimizer), chunks);
+            <span class="comment">// TODO keyed cell: this would benefit from keying the cell by optimizer
+            </span><span class="kw">let </span>chunks = ChunksVc::cell(chunks);
             <span class="prelude-val">Ok</span>(<span class="kw">if let </span><span class="prelude-val">Some</span>(optimizer) = optimizer {
                 optimizer.optimize(chunks, chunk_group).<span class="kw">await</span><span class="question-mark">?
             </span>} <span class="kw">else </span>{
@@ -366,13 +352,10 @@
     <span class="kw">pub </span>children: Vec&lt;ContainmentTree&gt;,
 }
 
-<span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
-#[derive(Debug, PartialOrd, Ord, Hash)]
-</span><span class="kw">struct </span>ChunksKey(FileSystemPathVc);
-
-<span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
-#[derive(Debug, PartialOrd, Ord, Hash)]
-</span><span class="kw">struct </span>OrphanChunkKey(ChunkVc);
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>orphan_chunk(chunk: ChunkVc) -&gt; ChunksVc {
+    ChunksVc::cell(<span class="macro">vec!</span>[chunk])
+}
 
 <span class="kw">impl </span>ContainmentTree {
     <span class="kw">async fn </span>build(
@@ -479,10 +462,8 @@
                 .into_iter()
                 .map(node_to_common_parent_tree)
                 .collect();
-            <span class="kw">let </span>chunks = <span class="prelude-val">Some</span>(ChunksVc::keyed_cell(
-                ChunksKey(node.path),
-                take(<span class="kw-2">&amp;mut </span>node.chunks),
-            ));
+            <span class="comment">// TODO keyed cell: this would benefit from keying the cell by node.path
+            </span><span class="kw">let </span>chunks = <span class="prelude-val">Some</span>(ChunksVc::cell(take(<span class="kw-2">&amp;mut </span>node.chunks)));
             ContainmentTree {
                 path: <span class="prelude-val">Some</span>(node.path),
                 chunks,
@@ -499,7 +480,7 @@
                 .map(node_to_common_parent_tree)
                 .chain(orphan_chunks.into_iter().map(|chunk| ContainmentTree {
                     path: <span class="prelude-val">None</span>,
-                    chunks: <span class="prelude-val">Some</span>(ChunksVc::keyed_cell(OrphanChunkKey(chunk), <span class="macro">vec!</span>[chunk])),
+                    chunks: <span class="prelude-val">Some</span>(orphan_chunk(chunk)),
                     children: Vec::new(),
                 }))
                 .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
@@ -536,10 +517,6 @@
         })
     }
 }
-
-<span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
-#[derive(Debug, PartialOrd, Ord, Hash)]
-</span><span class="kw">struct </span>ChunksFlattenKey(<span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;);
 
 <span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">struct </span>ListsOfChunks(Vec&lt;ChunksVc&gt;);
@@ -582,7 +559,8 @@
             .map(|tree| optimize_tree(tree, optimize))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span>children = <span class="kw">if </span>!children.is_empty() {
-            <span class="kw">let </span>lists = ListsOfChunksVc::keyed_cell(ChunksFlattenKey(tree.path), children);
+            <span class="comment">// TODO keyed cell: this would benefit from keying the cell by tree.path
+            </span><span class="kw">let </span>lists = ListsOfChunksVc::cell(children);
             <span class="prelude-val">Some</span>(flatten_chunks(lists))
         } <span class="kw">else </span>{
             <span class="prelude-val">None

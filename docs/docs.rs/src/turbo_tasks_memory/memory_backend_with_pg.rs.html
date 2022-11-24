@@ -1879,36 +1879,9 @@
 <span id="1879">1879</span>
 <span id="1880">1880</span>
 <span id="1881">1881</span>
-<span id="1882">1882</span>
-<span id="1883">1883</span>
-<span id="1884">1884</span>
-<span id="1885">1885</span>
-<span id="1886">1886</span>
-<span id="1887">1887</span>
-<span id="1888">1888</span>
-<span id="1889">1889</span>
-<span id="1890">1890</span>
-<span id="1891">1891</span>
-<span id="1892">1892</span>
-<span id="1893">1893</span>
-<span id="1894">1894</span>
-<span id="1895">1895</span>
-<span id="1896">1896</span>
-<span id="1897">1897</span>
-<span id="1898">1898</span>
-<span id="1899">1899</span>
-<span id="1900">1900</span>
-<span id="1901">1901</span>
-<span id="1902">1902</span>
-<span id="1903">1903</span>
-<span id="1904">1904</span>
-<span id="1905">1905</span>
-<span id="1906">1906</span>
-<span id="1907">1907</span>
-<span id="1908">1908</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
-    collections::{BinaryHeap, HashSet},
+    collections::{BinaryHeap, HashMap, HashSet},
     fmt::Debug,
     future::Future,
     mem::{replace, take},
@@ -1924,7 +1897,7 @@
 <span class="kw">use </span>concurrent_queue::ConcurrentQueue;
 <span class="kw">use </span>turbo_tasks::{
     backend::{
-        Backend, BackendJobId, CellContent, CellMappings, PersistentTaskType, TaskExecutionSpec,
+        Backend, BackendJobId, CellContent, PersistentTaskType, TaskExecutionSpec,
         TransientTaskType,
     },
     event::{Event, EventListener},
@@ -1933,7 +1906,7 @@
         PersistedGraphApi, ReadTaskState, TaskCell, TaskData,
     },
     util::{IdFactory, NoMoveVec, SharedError},
-    RawVc, TaskId, TraitTypeId, TurboTasksBackendApi,
+    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi,
 };
 
 <span class="kw">type </span>RootTaskFn =
@@ -1975,8 +1948,7 @@
     need_persist: bool,
     has_changes: bool,
     freshness: TaskFreshness,
-    cells: Vec&lt;(TaskCell, HashSet&lt;TaskId&gt;)&gt;,
-    cell_mappings: <span class="prelude-ty">Option</span>&lt;CellMappings&gt;,
+    cells: HashMap&lt;CellId, (TaskCell, HashSet&lt;TaskId&gt;)&gt;,
     output: <span class="prelude-ty">Option</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc, SharedError&gt;&gt;,
     output_dependent: HashSet&lt;TaskId&gt;,
     dependencies: HashSet&lt;RawVc&gt;,
@@ -1992,7 +1964,6 @@
             need_persist: Default::default(),
             has_changes: Default::default(),
             cells: Default::default(),
-            cell_mappings: Default::default(),
             output: Default::default(),
             output_dependent: Default::default(),
             dependencies: Default::default(),
@@ -2179,9 +2150,8 @@
                     cells: data
                         .cells
                         .into_iter()
-                        .map(|s| (s, HashSet::new()))
+                        .map(|(k, s)| (k, (s, HashSet::new())))
                         .collect(),
-                    cell_mappings: data.cell_mappings,
                     output: <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(data.output)),
                     output_dependent: HashSet::new(),
                     dependencies: data.dependencies.into_iter().collect(),
@@ -2667,7 +2637,6 @@
                                 <span class="kw-2">ref </span>children,
                                 <span class="kw-2">ref </span>dependencies,
                                 <span class="kw-2">ref </span>cells,
-                                <span class="kw-2">ref </span>cell_mappings,
                                 ..
                             }),
                         ..
@@ -2702,8 +2671,10 @@
                                         <span class="kw">let </span>data = TaskData {
                                             children: children.iter().cloned().collect(),
                                             dependencies: dependencies.iter().cloned().collect(),
-                                            cells: cells.iter().map(|(s, <span class="kw">_</span>)| s.clone()).collect(),
-                                            cell_mappings: cell_mappings.clone(),
+                                            cells: cells
+                                                .iter()
+                                                .map(|(k, (s, <span class="kw">_</span>))| (<span class="kw-2">*</span>k, s.clone()))
+                                                .collect(),
                                             output: <span class="kw-2">*</span>output,
                                         };
                                         <span class="kw">let </span>externally_active =
@@ -2953,8 +2924,6 @@
         mem_state.freshness = TaskFreshness::NeverExecuted;
         <span class="kw">let </span>deps = take(<span class="kw-2">&amp;mut </span>mem_state.dependencies);
         <span class="kw">let </span>children = take(<span class="kw-2">&amp;mut </span>mem_state.children);
-        <span class="kw">let </span><span class="kw-2">mut </span>cell_mappings = mem_state.cell_mappings.take().unwrap_or_default();
-        cell_mappings.reset();
         drop(state);
         <span class="kw">for </span>dep <span class="kw">in </span>deps {
             <span class="kw">let </span>(<span class="kw-2">mut </span>state, <span class="kw">_</span>) = <span class="self">self</span>.mem_state_mut(dep.get_task_id(), turbo_tasks);
@@ -2964,7 +2933,7 @@
                     mem_state.output_dependent.remove(<span class="kw-2">&amp;</span>task);
                 }
                 RawVc::TaskCell(<span class="kw">_</span>, i) =&gt; {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, dependent)) = mem_state.cells.get_mut(i) {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, dependent)) = mem_state.cells.get_mut(<span class="kw-2">&amp;</span>i) {
                         dependent.remove(<span class="kw-2">&amp;</span>task);
                     }
                 }
@@ -2984,10 +2953,7 @@
                 )
             }
         };
-        <span class="prelude-val">Some</span>(TaskExecutionSpec {
-            future,
-            cell_mappings: <span class="prelude-val">Some</span>(cell_mappings),
-        })
+        <span class="prelude-val">Some</span>(TaskExecutionSpec { future })
     }
 
     <span class="kw">fn </span>task_execution_result(
@@ -3026,7 +2992,6 @@
     <span class="kw">fn </span>task_execution_completed(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        cell_mappings: <span class="prelude-ty">Option</span>&lt;CellMappings&gt;,
         duration: Duration,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; bool {
@@ -3045,7 +3010,6 @@
             ..
         } = <span class="kw-2">*</span>state;
         <span class="kw">let </span>mem_state = memory.as_mut().unwrap();
-        mem_state.cell_mappings = cell_mappings;
         <span class="kw">if </span>mem_state.freshness == TaskFreshness::Dirty {
             <span class="kw">return </span><span class="bool-val">true</span>;
         }
@@ -3213,7 +3177,7 @@
     <span class="kw">fn </span>try_read_task_cell(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
         reader: TaskId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt; {
@@ -3235,7 +3199,7 @@
             </span><span class="macro">println!</span>(<span class="string">&quot;waiting (fresh task) {} waits on {}&quot;</span>, reader, task);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(mem_state.event_cells.listen()));
         }
-        <span class="kw">if let </span><span class="prelude-val">Some</span>((cell, dependent)) = mem_state.cells.get_mut(index) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>((cell, dependent)) = mem_state.cells.get_mut(<span class="kw-2">&amp;</span>index) {
             <span class="kw">match </span>cell {
                 TaskCell::Content(content) =&gt; {
                     <span class="kw">let </span>content = content.clone();
@@ -3279,7 +3243,7 @@
     <span class="kw">fn </span>try_read_task_cell_untracked(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt; {
         <span class="kw">let </span>(<span class="kw-2">mut </span>state, <span class="kw">_</span>) = <span class="self">self</span>.mem_state_mut(task, turbo_tasks);
@@ -3291,7 +3255,7 @@
         <span class="kw">let </span>mem_state = memory.as_mut().unwrap();
         <span class="kw">let </span>(cell, <span class="kw">_</span>) = mem_state
             .cells
-            .get(index)
+            .get(<span class="kw-2">&amp;</span>index)
             .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Cannot read non-existing cell&quot;</span>))<span class="question-mark">?</span>;
         <span class="kw">match </span>cell {
             TaskCell::Content(content) =&gt; {
@@ -3317,12 +3281,12 @@
     <span class="kw">fn </span>try_read_own_task_cell_untracked(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
         <span class="kw">let </span>(state, <span class="kw">_</span>) = <span class="self">self</span>.mem_state_mut(task, turbo_tasks);
         <span class="kw">let </span>mem_state = state.memory.as_ref().unwrap();
-        <span class="kw">if let </span><span class="prelude-val">Some</span>((cell, <span class="kw">_</span>)) = mem_state.cells.get(index) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>((cell, <span class="kw">_</span>)) = mem_state.cells.get(<span class="kw-2">&amp;</span>index) {
             <span class="kw">match </span>cell {
                 TaskCell::Content(content) =&gt; <span class="prelude-val">Ok</span>(content.clone()),
                 TaskCell::NeedComputation =&gt; <span class="prelude-val">Ok</span>(CellContent(<span class="prelude-val">None</span>)),
@@ -3335,13 +3299,13 @@
     <span class="kw">fn </span>track_read_task_cell(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
         reader: TaskId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) {
         <span class="kw">let </span>(<span class="kw-2">mut </span>state, <span class="kw">_</span>) = <span class="self">self</span>.mem_state_mut(task, turbo_tasks);
         <span class="kw">let </span>mem_state = state.memory.as_mut().unwrap();
-        <span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, dependent)) = mem_state.cells.get_mut(index) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, dependent)) = mem_state.cells.get_mut(<span class="kw-2">&amp;</span>index) {
             <span class="kw">let </span>need_dependency = dependent.insert(reader);
             drop(state);
             <span class="kw">if </span>need_dependency {
@@ -3382,24 +3346,10 @@
         <span class="macro">todo!</span>()
     }
 
-    <span class="kw">fn </span>get_fresh_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) -&gt; usize {
-        <span class="kw">let </span>(<span class="kw-2">mut </span>state, task_info) = <span class="self">self</span>.mem_state_mut(task, turbo_tasks);
-        <span class="kw">if let </span>TaskType::Persistent(<span class="kw">_</span>) = task_info.task_type {
-            <span class="kw">let </span>mem_state = state.memory.as_mut().unwrap();
-            <span class="kw">let </span>index = mem_state.cells.len();
-            mem_state
-                .cells
-                .push((TaskCell::Content(CellContent(<span class="prelude-val">None</span>)), HashSet::new()));
-            index
-        } <span class="kw">else </span>{
-            <span class="macro">panic!</span>(<span class="string">&quot;Only Persistent Tasks can store data&quot;</span>)
-        }
-    }
-
     <span class="kw">fn </span>update_task_cell(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
         content: CellContent,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) {
@@ -3411,11 +3361,7 @@
         } = <span class="kw-2">*</span>state;
         <span class="kw">let </span>mem_state = memory.as_mut().unwrap();
         mem_state.has_changes = <span class="bool-val">true</span>;
-        <span class="kw">let </span>(cell, dependent) = mem_state
-            .cells
-            .get_mut(index)
-            .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Cannot update non-existing cell&quot;</span>))
-            .unwrap();
+        <span class="kw">let </span>(cell, dependent) = mem_state.cells.entry(index).or_default();
         <span class="kw-2">*</span>cell = TaskCell::Content(content);
         mem_state.event_cells.notify(usize::MAX);
         <span class="kw">let </span>is_persisted = persisted.is_some();

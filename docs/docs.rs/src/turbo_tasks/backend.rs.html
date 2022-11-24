@@ -389,29 +389,10 @@
 <span id="389">389</span>
 <span id="390">390</span>
 <span id="391">391</span>
-<span id="392">392</span>
-<span id="393">393</span>
-<span id="394">394</span>
-<span id="395">395</span>
-<span id="396">396</span>
-<span id="397">397</span>
-<span id="398">398</span>
-<span id="399">399</span>
-<span id="400">400</span>
-<span id="401">401</span>
-<span id="402">402</span>
-<span id="403">403</span>
-<span id="404">404</span>
-<span id="405">405</span>
-<span id="406">406</span>
-<span id="407">407</span>
-<span id="408">408</span>
-<span id="409">409</span>
-<span id="410">410</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Any,
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fmt::{Debug, Display},
     future::Future,
     pin::Pin,
@@ -424,11 +405,9 @@
 
 <span class="kw">pub use </span><span class="kw">crate</span>::id::BackendJobId;
 <span class="kw">use crate</span>::{
-    event::EventListener,
-    manager::TurboTasksBackendApi,
-    registry,
-    task_input::{SharedReference, SharedValue},
-    FunctionId, RawVc, ReadRef, TaskId, TaskIdProvider, TaskInput, TraitTypeId, ValueTypeId,
+    event::EventListener, manager::TurboTasksBackendApi, raw_vc::CellId, registry,
+    task_input::SharedReference, FunctionId, RawVc, ReadRef, TaskId, TaskIdProvider, TaskInput,
+    TraitTypeId,
 };
 
 <span class="doccomment">/// Different Task types
@@ -517,27 +496,13 @@
     }
 }
 
-<span class="attr">#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>CellMappings {
-    <span class="comment">// TODO use [SerializableMagicAny]
-    </span><span class="kw">pub </span>by_key: HashMap&lt;(ValueTypeId, SharedValue), usize&gt;,
-    <span class="kw">pub </span>by_type: HashMap&lt;ValueTypeId, (usize, Vec&lt;usize&gt;)&gt;,
-}
-
-<span class="kw">impl </span>CellMappings {
-    <span class="kw">pub fn </span>reset(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="kw">for </span>list <span class="kw">in </span><span class="self">self</span>.by_type.values_mut() {
-            list.<span class="number">0 </span>= <span class="number">0</span>;
-        }
-    }
-}
-
 <span class="kw">pub struct </span>TaskExecutionSpec {
-    <span class="kw">pub </span>cell_mappings: <span class="prelude-ty">Option</span>&lt;CellMappings&gt;,
     <span class="kw">pub </span>future: Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;RawVc&gt;&gt; + Send&gt;&gt;,
 }
 
-<span class="attr">#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+<span class="comment">// TODO technically CellContent is already indexed by the ValueTypeId, so we
+// don&#39;t need to store it here
+</span><span class="attr">#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>CellContent(<span class="kw">pub </span><span class="prelude-ty">Option</span>&lt;SharedReference&gt;);
 
 <span class="kw">impl </span>Display <span class="kw">for </span>CellContent {
@@ -617,7 +582,6 @@
     <span class="kw">fn </span>task_execution_completed(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        cell_mappings: <span class="prelude-ty">Option</span>&lt;CellMappings&gt;,
         duration: Duration,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; bool;
@@ -655,7 +619,7 @@
     <span class="kw">fn </span>try_read_task_cell(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
         reader: TaskId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt;;
@@ -665,7 +629,7 @@
     </span><span class="kw">fn </span>try_read_task_cell_untracked(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt;;
 
@@ -674,7 +638,7 @@
     </span><span class="kw">fn </span>try_read_own_task_cell_untracked(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         current_task: TaskId,
-        index: usize,
+        index: CellId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
         <span class="kw">match </span><span class="self">self</span>.try_read_task_cell_untracked(current_task, index, turbo_tasks)<span class="question-mark">? </span>{
@@ -686,7 +650,7 @@
     <span class="kw">fn </span>track_read_task_cell(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
         reader: TaskId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     );
@@ -715,12 +679,10 @@
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     );
 
-    <span class="kw">fn </span>get_fresh_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) -&gt; usize;
-
     <span class="kw">fn </span>update_task_cell(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
         content: CellContent,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     );

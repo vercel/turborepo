@@ -34,14 +34,6 @@
 <span id="34">34</span>
 <span id="35">35</span>
 <span id="36">36</span>
-<span id="37">37</span>
-<span id="38">38</span>
-<span id="39">39</span>
-<span id="40">40</span>
-<span id="41">41</span>
-<span id="42">42</span>
-<span id="43">43</span>
-<span id="44">44</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashSet, fmt::Debug};
 
 <span class="kw">use </span>turbo_tasks::{backend::CellContent, TaskId, TurboTasksBackendApi};
@@ -54,14 +46,6 @@
 }
 
 <span class="kw">impl </span>Cell {
-    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            content: CellContent(<span class="prelude-val">None</span>),
-            updates: <span class="number">0</span>,
-            dependent_tasks: HashSet::new(),
-        }
-    }
-
     <span class="kw">pub fn </span>read_content(<span class="kw-2">&amp;mut </span><span class="self">self</span>, reader: TaskId) -&gt; CellContent {
         <span class="self">self</span>.dependent_tasks.insert(reader);
         <span class="self">self</span>.read_content_untracked()

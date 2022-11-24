@@ -177,7 +177,7 @@
 };
 <span class="kw">pub use </span>native_function::{NativeFunction, NativeFunctionVc};
 <span class="kw">pub use </span>nothing::{Nothing, NothingVc};
-<span class="kw">pub use </span>raw_vc::{CollectiblesFuture, RawVc, ReadRawVcFuture, ResolveTypeError};
+<span class="kw">pub use </span>raw_vc::{CellId, CollectiblesFuture, RawVc, ReadRawVcFuture, ResolveTypeError};
 <span class="kw">pub use </span>read_ref::ReadRef;
 <span class="kw">pub use </span>task_input::{FromTaskInput, SharedReference, SharedValue, TaskInput};
 <span class="kw">pub use </span>turbo_tasks_macros::{function, value, value_impl, value_trait};
@@ -190,11 +190,11 @@
 </span><span class="kw">pub mod </span>macro_helpers {
     <span class="kw">pub use </span>once_cell::sync::{Lazy, OnceCell};
 
-    <span class="kw">pub use </span><span class="kw">super</span>::manager::{find_cell_by_key, find_cell_by_type};
+    <span class="kw">pub use </span><span class="kw">super</span>::manager::find_cell_by_type;
 }
 
 <span class="kw">pub mod </span>test_helpers {
-    <span class="kw">pub use </span><span class="kw">super</span>::manager::with_turbo_tasks_for_testing;
+    <span class="kw">pub use </span><span class="kw">super</span>::manager::{current_task_for_testing, with_turbo_tasks_for_testing};
 }
 
 <span class="kw">pub fn </span>register() {

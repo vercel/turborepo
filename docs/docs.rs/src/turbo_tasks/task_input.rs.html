@@ -843,7 +843,7 @@
     registry, turbo_tasks,
     value::{TransientInstance, TransientValue, Value},
     value_type::TypedForInput,
-    RawVc, TaskId, TraitType, Typed, ValueTypeId,
+    CellId, RawVc, TaskId, TraitType, Typed, ValueTypeId,
 };
 
 <span class="attr">#[derive(Clone)]
@@ -1149,7 +1149,7 @@
 #[derive(Debug, Hash, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>TaskInput {
     TaskOutput(TaskId),
-    TaskCell(TaskId, usize),
+    TaskCell(TaskId, CellId),
     List(Vec&lt;TaskInput&gt;),
     String(String),
     Bool(bool),

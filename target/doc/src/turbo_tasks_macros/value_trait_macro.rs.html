@@ -315,13 +315,6 @@
 <span id="315">315</span>
 <span id="316">316</span>
 <span id="317">317</span>
-<span id="318">318</span>
-<span id="319">319</span>
-<span id="320">320</span>
-<span id="321">321</span>
-<span id="322">322</span>
-<span id="323">323</span>
-<span id="324">324</span>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::{Ident, TokenStream <span class="kw">as </span>TokenStream2};
 <span class="kw">use </span>quote::quote;
@@ -539,13 +532,6 @@
             <span class="doccomment">/// see [turbo_tasks::RawVc::cell_local]
             </span><span class="kw">pub async fn </span>cell_local(<span class="self">self</span>) -&gt; turbo_tasks::Result&lt;<span class="self">Self</span>&gt; {
                 <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ node: <span class="self">self</span>.node.cell_local().<span class="kw">await</span><span class="question-mark">? </span>})
-            }
-
-            <span class="doccomment">/// see [turbo_tasks::RawVc::keyed_cell_local]
-            </span><span class="kw">pub async fn </span>keyed_cell_local&lt;
-                K: std::fmt::Debug + std::cmp::Eq + std::cmp::Ord + std::hash::Hash + turbo_tasks::Typed + turbo_tasks::TypedForInput + Send + Sync + <span class="lifetime">&#39;static</span>,
-            &gt;(<span class="self">self</span>, key: K) -&gt; turbo_tasks::Result&lt;<span class="self">Self</span>&gt; {
-                <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ node: <span class="self">self</span>.node.keyed_cell_local(key).<span class="kw">await</span><span class="question-mark">? </span>})
             }
 
             <span class="kw">pub async fn </span>resolve_from(super_trait_vc: <span class="kw">impl </span>std::convert::Into&lt;turbo_tasks::RawVc&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;, turbo_tasks::ResolveTypeError&gt; {

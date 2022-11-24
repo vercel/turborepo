@@ -1159,56 +1159,12 @@
 <span id="1159">1159</span>
 <span id="1160">1160</span>
 <span id="1161">1161</span>
-<span id="1162">1162</span>
-<span id="1163">1163</span>
-<span id="1164">1164</span>
-<span id="1165">1165</span>
-<span id="1166">1166</span>
-<span id="1167">1167</span>
-<span id="1168">1168</span>
-<span id="1169">1169</span>
-<span id="1170">1170</span>
-<span id="1171">1171</span>
-<span id="1172">1172</span>
-<span id="1173">1173</span>
-<span id="1174">1174</span>
-<span id="1175">1175</span>
-<span id="1176">1176</span>
-<span id="1177">1177</span>
-<span id="1178">1178</span>
-<span id="1179">1179</span>
-<span id="1180">1180</span>
-<span id="1181">1181</span>
-<span id="1182">1182</span>
-<span id="1183">1183</span>
-<span id="1184">1184</span>
-<span id="1185">1185</span>
-<span id="1186">1186</span>
-<span id="1187">1187</span>
-<span id="1188">1188</span>
-<span id="1189">1189</span>
-<span id="1190">1190</span>
-<span id="1191">1191</span>
-<span id="1192">1192</span>
-<span id="1193">1193</span>
-<span id="1194">1194</span>
-<span id="1195">1195</span>
-<span id="1196">1196</span>
-<span id="1197">1197</span>
-<span id="1198">1198</span>
-<span id="1199">1199</span>
-<span id="1200">1200</span>
-<span id="1201">1201</span>
-<span id="1202">1202</span>
-<span id="1203">1203</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
-    collections::HashSet,
-    fmt::Debug,
+    collections::{HashMap, HashSet},
     future::Future,
     hash::Hash,
-    mem::take,
     panic::AssertUnwindSafe,
     pin::Pin,
     sync::{
@@ -1221,20 +1177,21 @@
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>futures::FutureExt;
+<span class="kw">use </span>nohash_hasher::BuildNoHashHasher;
 <span class="kw">use </span>serde::{de::Visitor, Deserialize, Serialize};
 <span class="kw">use </span>tokio::{runtime::Handle, select, task_local};
 
 <span class="kw">use crate</span>::{
-    backend::{Backend, CellContent, CellMappings, PersistentTaskType, TransientTaskType},
+    backend::{Backend, CellContent, PersistentTaskType, TransientTaskType},
     event::{Event, EventListener},
     id::{BackendJobId, FunctionId, TraitTypeId},
     id_factory::IdFactory,
-    raw_vc::RawVc,
-    task_input::{SharedReference, SharedValue, TaskInput},
+    raw_vc::{CellId, RawVc},
+    task_input::{SharedReference, TaskInput},
     timed_future::{<span class="self">self</span>, TimedFuture},
     trace::TraceRawVcs,
     util::FormatDuration,
-    Nothing, NothingVc, TaskId, Typed, TypedForInput, ValueTraitVc, ValueTypeId,
+    Nothing, NothingVc, TaskId, ValueTraitVc, ValueTypeId,
 };
 
 <span class="kw">pub trait </span>TurboTasksCallApi: Sync + Send {
@@ -1281,7 +1238,7 @@
     <span class="kw">fn </span>try_read_task_cell(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt;;
 
     <span class="doccomment">/// INVALIDATION: Be careful with this, it will not track dependencies, so
@@ -1289,7 +1246,7 @@
     </span><span class="kw">fn </span>try_read_task_cell_untracked(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt;;
 
     <span class="kw">fn </span>try_read_task_collectibles(
@@ -1307,12 +1264,11 @@
     </span><span class="kw">fn </span>try_read_own_task_cell_untracked(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         current_task: TaskId,
-        index: usize,
+        index: CellId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt;;
 
-    <span class="kw">fn </span>get_fresh_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId) -&gt; usize;
-    <span class="kw">fn </span>read_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: usize) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt;;
-    <span class="kw">fn </span>update_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: usize, content: CellContent);
+    <span class="kw">fn </span>read_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt;;
+    <span class="kw">fn </span>update_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId, content: CellContent);
 }
 
 <span class="kw">pub trait </span>TaskIdProvider {
@@ -1392,7 +1348,7 @@
     <span class="doccomment">/// The current TurboTasks instance
     </span><span class="kw">static </span>TURBO_TASKS: Arc&lt;<span class="kw">dyn </span>TurboTasksApi&gt;;
 
-    <span class="kw">static </span>PREVIOUS_CELLS: RefCell&lt;CellMappings&gt;;
+    <span class="kw">static </span>CELL_COUNTERS: RefCell&lt;HashMap&lt;ValueTypeId, u32, BuildNoHashHasher&lt;ValueTypeId&gt;&gt;&gt;;
 
     <span class="kw">static </span>CURRENT_TASK_ID: TaskId;
 
@@ -1535,20 +1491,12 @@
                 }
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(execution) = this.backend.try_start_task_execution(task_id, <span class="kw-2">&amp;*</span>this) {
                     <span class="comment">// Setup thread locals
-                    </span><span class="kw">let </span>has_cell_mappings = execution.cell_mappings.is_some();
-
-                    <span class="kw">let </span>cell_mappings = RefCell::new(execution.cell_mappings.unwrap_or_default());
-                    <span class="kw">let </span>(result, duration, cell_mappings) = PREVIOUS_CELLS
-                        .scope(cell_mappings, <span class="kw">async </span>{
+                    </span><span class="kw">let </span>(result, duration) = CELL_COUNTERS
+                        .scope(Default::default(), <span class="kw">async </span>{
                             <span class="kw">let </span>(result, duration) =
                                 TimedFuture::new(AssertUnwindSafe(execution.future).catch_unwind())
                                     .<span class="kw">await</span>;
-                            <span class="kw">let </span>cell_mappings = <span class="kw">if </span>has_cell_mappings {
-                                <span class="prelude-val">Some</span>(PREVIOUS_CELLS.with(|s| take(<span class="kw-2">&amp;mut *</span>s.borrow_mut())))
-                            } <span class="kw">else </span>{
-                                <span class="prelude-val">None
-                            </span>};
-                            (result, duration, cell_mappings)
+                            (result, duration)
                         })
                         .<span class="kw">await</span>;
                     <span class="kw">if </span><span class="macro">cfg!</span>(feature = <span class="string">&quot;log_function_stats&quot;</span>) &amp;&amp; duration.as_millis() &gt; <span class="number">1000 </span>{
@@ -1567,12 +1515,9 @@
                     });
                     this.backend.task_execution_result(task_id, result, <span class="kw-2">&amp;*</span>this);
                     this.notify_scheduled_tasks_internal();
-                    <span class="kw">let </span>reexecute = this.backend.task_execution_completed(
-                        task_id,
-                        cell_mappings,
-                        duration,
-                        <span class="kw-2">&amp;*</span>this,
-                    );
+                    <span class="kw">let </span>reexecute = this
+                        .backend
+                        .task_execution_completed(task_id, duration, <span class="kw-2">&amp;*</span>this);
                     <span class="kw">if </span>!reexecute {
                         <span class="kw">break</span>;
                     }
@@ -1881,7 +1826,7 @@
     <span class="kw">fn </span>try_read_task_cell(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt; {
         <span class="self">self</span>.backend
             .try_read_task_cell(task, index, current_task(<span class="string">&quot;reading Vcs&quot;</span>), <span class="self">self</span>)
@@ -1890,7 +1835,7 @@
     <span class="kw">fn </span>try_read_task_cell_untracked(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
-        index: usize,
+        index: CellId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt; {
         <span class="self">self</span>.backend.try_read_task_cell_untracked(task, index, <span class="self">self</span>)
     }
@@ -1898,7 +1843,7 @@
     <span class="kw">fn </span>try_read_own_task_cell_untracked(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         current_task: TaskId,
-        index: usize,
+        index: CellId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
         <span class="self">self</span>.backend
             .try_read_own_task_cell_untracked(current_task, index, <span class="self">self</span>)
@@ -1946,16 +1891,12 @@
         }
     }
 
-    <span class="kw">fn </span>get_fresh_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId) -&gt; usize {
-        <span class="self">self</span>.backend.get_fresh_cell(task, <span class="self">self</span>)
-    }
-
-    <span class="kw">fn </span>read_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: usize) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
+    <span class="kw">fn </span>read_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
         <span class="comment">// INVALIDATION: don&#39;t need to track a dependency to itself
         </span><span class="self">self</span>.try_read_own_task_cell_untracked(current_task(<span class="string">&quot;reading Vcs&quot;</span>), index)
     }
 
-    <span class="kw">fn </span>update_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: usize, content: CellContent) {
+    <span class="kw">fn </span>update_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId, content: CellContent) {
         <span class="self">self</span>.backend.update_task_cell(
             current_task(<span class="string">&quot;cellting turbo_tasks values&quot;</span>),
             index,
@@ -2181,8 +2122,12 @@
 ) -&gt; <span class="kw">impl </span>Future&lt;Output = T&gt; {
     TURBO_TASKS.scope(
         tt,
-        CURRENT_TASK_ID.scope(current_task, PREVIOUS_CELLS.scope(Default::default(), f)),
+        CURRENT_TASK_ID.scope(current_task, CELL_COUNTERS.scope(Default::default(), f)),
     )
+}
+
+<span class="kw">pub fn </span>current_task_for_testing() -&gt; TaskId {
+    CURRENT_TASK_ID.with(|id| <span class="kw-2">*</span>id)
 }
 
 <span class="doccomment">/// Get an [Invalidator] that can be used to invalidate the current [Task]
@@ -2252,7 +2197,7 @@
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>read_task_cell(
     this: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksApi,
     id: TaskId,
-    index: usize,
+    index: CellId,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
     <span class="kw">loop </span>{
         <span class="kw">match </span>this.try_read_task_cell(id, index)<span class="question-mark">? </span>{
@@ -2267,7 +2212,7 @@
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>read_task_cell_untracked(
     this: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksApi,
     id: TaskId,
-    index: usize,
+    index: CellId,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
     <span class="kw">loop </span>{
         <span class="kw">match </span>this.try_read_task_cell_untracked(id, index)<span class="question-mark">? </span>{
@@ -2292,8 +2237,7 @@
 
 <span class="kw">pub struct </span>CurrentCellRef {
     current_task: TaskId,
-    index: usize,
-    type_id: ValueTypeId,
+    index: CellId,
 }
 
 <span class="kw">impl </span>CurrentCellRef {
@@ -2313,7 +2257,10 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(update) = update {
             tt.update_current_task_cell(
                 <span class="self">self</span>.index,
-                CellContent(<span class="prelude-val">Some</span>(SharedReference(<span class="prelude-val">Some</span>(<span class="self">self</span>.type_id), Arc::new(update)))),
+                CellContent(<span class="prelude-val">Some</span>(SharedReference(
+                    <span class="prelude-val">Some</span>(<span class="self">self</span>.index.type_id),
+                    Arc::new(update),
+                ))),
             )
         }
     }
@@ -2334,7 +2281,7 @@
         tt.update_current_task_cell(
             <span class="self">self</span>.index,
             CellContent(<span class="prelude-val">Some</span>(SharedReference(
-                <span class="prelude-val">Some</span>(<span class="self">self</span>.type_id),
+                <span class="prelude-val">Some</span>(<span class="self">self</span>.index.type_id),
                 Arc::new(new_content),
             ))),
         )
@@ -2360,47 +2307,16 @@
     }
 }
 
-<span class="kw">pub fn </span>find_cell_by_key&lt;
-    K: Debug + Eq + Ord + Hash + Typed + TypedForInput + Send + Sync + <span class="lifetime">&#39;static</span>,
-&gt;(
-    type_id: ValueTypeId,
-    key: K,
-) -&gt; CurrentCellRef {
-    PREVIOUS_CELLS.with(|c| {
-        <span class="kw">let </span>current_task = current_task(<span class="string">&quot;cellting turbo_tasks values&quot;</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>map = c.borrow_mut();
-        <span class="kw">let </span>index = <span class="kw-2">*</span>map
-            .by_key
-            .entry((
-                type_id,
-                SharedValue(<span class="prelude-val">Some</span>(K::get_value_type_id()), Arc::new(key)),
-            ))
-            .or_insert_with(|| with_turbo_tasks(|tt| tt.get_fresh_cell(current_task)));
-        CurrentCellRef {
-            current_task,
-            index,
-            type_id,
-        }
-    })
-}
-
 <span class="kw">pub fn </span>find_cell_by_type(type_id: ValueTypeId) -&gt; CurrentCellRef {
-    PREVIOUS_CELLS.with(|cell| {
-        <span class="kw">let </span>current_task = current_task(<span class="string">&quot;cellting turbo_tasks values&quot;</span>);
+    CELL_COUNTERS.with(|cell| {
+        <span class="kw">let </span>current_task = current_task(<span class="string">&quot;celling turbo_tasks values&quot;</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>map = cell.borrow_mut();
-        <span class="kw">let </span>(<span class="kw-2">ref mut </span>current_index, <span class="kw-2">ref mut </span>list) = map.by_type.entry(type_id).or_default();
-        <span class="kw">let </span>index = <span class="kw">if let </span><span class="prelude-val">Some</span>(i) = list.get(<span class="kw-2">*</span>current_index) {
-            <span class="kw-2">*</span>i
-        } <span class="kw">else </span>{
-            <span class="kw">let </span>index = turbo_tasks().get_fresh_cell(current_task);
-            list.push(index);
-            index
-        };
+        <span class="kw">let </span>current_index = map.entry(type_id).or_default();
+        <span class="kw">let </span>index = <span class="kw-2">*</span>current_index;
         <span class="kw-2">*</span>current_index += <span class="number">1</span>;
         CurrentCellRef {
             current_task,
-            index,
-            type_id,
+            index: CellId { type_id, index },
         }
     })
 }
