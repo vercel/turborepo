@@ -162,20 +162,16 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
     }
 
     /// see [HashMap::entry](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.entry)
-    pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
-        if self.len() >= MAX_LIST_SIZE {
-            self.convert_to_map();
-        } else if self.len() <= MIN_HASH_SIZE {
-            self.convert_to_list();
-        }
+    pub fn entry(&mut self, key: K) -> Entry<'_, K, V, H> {
+        let this = self as *mut Self;
         match self {
             AutoMap::List(list) => match list.iter().position(|(k, _)| *k == key) {
                 Some(index) => Entry::Occupied(OccupiedEntry::List { list, index }),
-                None => Entry::Vacant(VacantEntry::List { list, key }),
+                None => Entry::Vacant(VacantEntry::List { this, list, key }),
             },
             AutoMap::Map(map) => match map.entry(key) {
                 std::collections::hash_map::Entry::Occupied(entry) => {
-                    Entry::Occupied(OccupiedEntry::Map(entry))
+                    Entry::Occupied(OccupiedEntry::Map { this, entry })
                 }
                 std::collections::hash_map::Entry::Vacant(entry) => {
                     Entry::Vacant(VacantEntry::Map(entry))
@@ -353,12 +349,12 @@ impl<'a, K, V> Iterator for ValuesMut<'a, K, V> {
     }
 }
 
-pub enum Entry<'a, K, V> {
-    Occupied(OccupiedEntry<'a, K, V>),
-    Vacant(VacantEntry<'a, K, V>),
+pub enum Entry<'a, K, V, H> {
+    Occupied(OccupiedEntry<'a, K, V, H>),
+    Vacant(VacantEntry<'a, K, V, H>),
 }
 
-impl<'a, K, V> Entry<'a, K, V> {
+impl<'a, K: Eq + Hash, V, H: BuildHasher + Default + 'a> Entry<'a, K, V, H> {
     /// see [HashMap::Entry::or_insert](https://doc.rust-lang.org/std/collections/hash_map/enum.Entry.html#method.or_insert)
     pub fn or_insert_with(self, default: impl FnOnce() -> V) -> &'a mut V {
         match self {
@@ -368,7 +364,7 @@ impl<'a, K, V> Entry<'a, K, V> {
     }
 }
 
-impl<'a, K, V: Default> Entry<'a, K, V> {
+impl<'a, K: Eq + Hash, V: Default, H: BuildHasher + Default + 'a> Entry<'a, K, V, H> {
     /// see [HashMap::Entry::or_default](https://doc.rust-lang.org/std/collections/hash_map/enum.Entry.html#method.or_default)
     pub fn or_default(self) -> &'a mut V {
         match self {
@@ -378,20 +374,23 @@ impl<'a, K, V: Default> Entry<'a, K, V> {
     }
 }
 
-pub enum OccupiedEntry<'a, K, V> {
+pub enum OccupiedEntry<'a, K, V, H> {
     List {
         list: &'a mut Vec<(K, V)>,
         index: usize,
     },
-    Map(std::collections::hash_map::OccupiedEntry<'a, K, V>),
+    Map {
+        this: *mut AutoMap<K, V, H>,
+        entry: std::collections::hash_map::OccupiedEntry<'a, K, V>,
+    },
 }
 
-impl<'a, K, V> OccupiedEntry<'a, K, V> {
+impl<'a, K: Eq + Hash, V, H: BuildHasher> OccupiedEntry<'a, K, V, H> {
     /// see [HashMap::OccupiedEntry::get_mut](https://doc.rust-lang.org/std/collections/hash_map/enum.OccupiedEntry.html#method.get_mut)
     pub fn get_mut(&mut self) -> &mut V {
         match self {
             OccupiedEntry::List { list, index } => &mut list[*index].1,
-            OccupiedEntry::Map(e) => e.get_mut(),
+            OccupiedEntry::Map { entry, .. } => entry.get_mut(),
         }
     }
 
@@ -399,31 +398,49 @@ impl<'a, K, V> OccupiedEntry<'a, K, V> {
     pub fn into_mut(self) -> &'a mut V {
         match self {
             OccupiedEntry::List { list, index } => &mut list[index].1,
-            OccupiedEntry::Map(e) => e.into_mut(),
+            OccupiedEntry::Map { entry, .. } => entry.into_mut(),
         }
     }
+}
 
+impl<'a, K: Eq + Hash, V, H: BuildHasher + Default> OccupiedEntry<'a, K, V, H> {
     /// see [HashMap::OccupiedEntry::remove](https://doc.rust-lang.org/std/collections/hash_map/enum.OccupiedEntry.html#method.remove)
     pub fn remove(self) -> V {
         match self {
             OccupiedEntry::List { list, index } => list.swap_remove(index).1,
-            OccupiedEntry::Map(e) => e.remove(),
+            OccupiedEntry::Map { entry, this } => {
+                let v = entry.remove();
+                let this = unsafe { &mut *this };
+                if this.len() < MIN_HASH_SIZE {
+                    this.convert_to_list();
+                }
+                v
+            }
         }
     }
 }
 
-pub enum VacantEntry<'a, K, V> {
-    List { list: &'a mut Vec<(K, V)>, key: K },
+pub enum VacantEntry<'a, K, V, H> {
+    List {
+        this: *mut AutoMap<K, V, H>,
+        list: &'a mut Vec<(K, V)>,
+        key: K,
+    },
     Map(std::collections::hash_map::VacantEntry<'a, K, V>),
 }
 
-impl<'a, K, V> VacantEntry<'a, K, V> {
+impl<'a, K: Eq + Hash, V, H: BuildHasher + Default + 'a> VacantEntry<'a, K, V, H> {
     /// see [HashMap::VacantEntry::insert](https://doc.rust-lang.org/std/collections/hash_map/enum.VacantEntry.html#method.insert)
     pub fn insert(self, value: V) -> &'a mut V {
         match self {
-            VacantEntry::List { list, key } => {
-                list.push((key, value));
-                &mut list.last_mut().unwrap().1
+            VacantEntry::List { this, list, key } => {
+                if list.len() >= MAX_LIST_SIZE {
+                    let this = unsafe { &mut *this };
+                    this.convert_to_map().entry(key).or_insert(value)
+                } else {
+                    list.push((key, value));
+                    &mut list.last_mut().unwrap().1
+                }
             }
             VacantEntry::Map(entry) => entry.insert(value),
         }
