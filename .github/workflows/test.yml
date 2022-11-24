@@ -449,8 +449,8 @@ jobs:
         working-directory: crates/turbopack/tests/node-file-trace
         run: pnpm install -r --side-effects-cache false
 
-      - name: Install tests dependencies in examples/with-npm
-        working-directory: examples/with-npm
+      - name: Install tests dependencies in examples/with-yarn
+        working-directory: examples/with-yarn
         run: npm install
 
       - name: Install nextest
