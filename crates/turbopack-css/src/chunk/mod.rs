@@ -7,7 +7,7 @@ use std::{fmt::Write as _, io::Write};
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
 use turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString, ValueToStringVc};
-use turbo_tasks_fs::{File, FileSystemPathOptionVc, FileSystemPathVc};
+use turbo_tasks_fs::{rope::Rope, File, FileSystemPathOptionVc, FileSystemPathVc};
 use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -378,7 +378,7 @@ pub enum CssImport {
 
 #[turbo_tasks::value(shared)]
 pub struct CssChunkItemContent {
-    pub inner_code: String,
+    pub inner_code: Rope,
     pub imports: Vec<CssImport>,
     pub source_map: Option<ParseResultSourceMapVc>,
 }

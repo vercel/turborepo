@@ -252,7 +252,7 @@ impl CssChunkItem for ModuleChunkItem {
             let srcmap = ParseResultSourceMap::new(source_map.clone(), srcmap).cell();
 
             Ok(CssChunkItemContent {
-                inner_code: code_string,
+                inner_code: code_string.into(),
                 imports,
                 source_map: Some(srcmap),
             }
@@ -262,7 +262,8 @@ impl CssChunkItem for ModuleChunkItem {
                 inner_code: format!(
                     "/* unparseable {} */",
                     self.module.path().to_string().await?
-                ),
+                )
+                .into(),
                 imports: vec![],
                 source_map: None,
             }

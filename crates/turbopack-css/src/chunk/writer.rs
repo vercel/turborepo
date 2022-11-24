@@ -35,8 +35,8 @@ pub async fn expand_imports(content_vc: CssChunkItemContentVc) -> Result<ExpandI
 
                 let id = &*imported_chunk_item.to_string().await?;
                 let mut code = CodeBuilder::default();
-                writeln!(code, "/* import({}) */", id);
-                writeln!(code, "{}", open);
+                writeln!(code, "/* import({}) */", id)?;
+                writeln!(code, "{}", open)?;
                 result.codes.push(code.build().cell());
 
                 let imported_content_vc = imported_chunk_item.content();
@@ -53,7 +53,9 @@ pub async fn expand_imports(content_vc: CssChunkItemContentVc) -> Result<ExpandI
             None => {
                 let content = &*(*content_vc).await?;
                 let mut code = CodeBuilder::default();
-                writeln!(code, "{}", content.inner_code)?;
+                let source_map = content.source_map.map(|sm| sm.as_generate_source_map());
+                code.push_source(&content.inner_code, source_map);
+                writeln!(code)?;
                 writeln!(code, "{}", close)?;
                 result.codes.push(code.build().cell());
                 stack.pop();
