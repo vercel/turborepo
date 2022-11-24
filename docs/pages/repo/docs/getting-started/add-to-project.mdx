@@ -106,7 +106,17 @@ This means that Turbo can schedule them separately.
   </Tab>
 </Tabs>
 
-3. **Edit `.gitignore`**
+3. **Edit root `package.json`**
+
+Add to the file `package.json`at the root level, a workspace config, with the name of the project created before
+
+```json filename="package.json"
+	"workspaces": [
+		"app-name"
+	],
+```
+
+4. **Edit `.gitignore`**
 
 Add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and certain task outputs.
 
@@ -114,7 +124,7 @@ Add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and 
 + .turbo
 ```
 
-4. **Try running `build` and `lint` with `turbo`:**
+5. **Try running `build` and `lint` with `turbo`:**
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
@@ -136,7 +146,7 @@ Add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and 
 
 This runs `build` and `lint` at the same time.
 
-5. **Without making any changes to the code, try running `build` and `lint` again:**
+6. **Without making any changes to the code, try running `build` and `lint` again:**
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
@@ -168,7 +178,7 @@ Congratulations - **you just completed a build and lint in under 200ms**.
 
 To learn how this is possible, check out our [core concepts docs](/repo/docs/core-concepts/caching).
 
-6. **Try running `dev` with `turbo`:**
+7. **Try running `dev` with `turbo`:**
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
