@@ -147,7 +147,7 @@
 <span id="147">147</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Debug, hash::Hash, ops::Deref};
 
-<span class="kw">use </span>flurry::HashMap;
+<span class="kw">use </span>dashmap::{mapref::entry::Entry, DashMap};
 <span class="kw">use </span>once_cell::sync::Lazy;
 
 <span class="kw">use crate</span>::{
@@ -158,21 +158,21 @@
 };
 
 <span class="kw">static </span>FUNCTION_ID_FACTORY: IdFactory&lt;FunctionId&gt; = IdFactory::new();
-<span class="kw">static </span>FUNCTIONS_BY_NAME: Lazy&lt;HashMap&lt;String, FunctionId&gt;&gt; = Lazy::new(HashMap::new);
-<span class="kw">static </span>FUNCTIONS_BY_VALUE: Lazy&lt;HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>NativeFunction, FunctionId&gt;&gt; =
-    Lazy::new(HashMap::new);
+<span class="kw">static </span>FUNCTIONS_BY_NAME: Lazy&lt;DashMap&lt;String, FunctionId&gt;&gt; = Lazy::new(DashMap::new);
+<span class="kw">static </span>FUNCTIONS_BY_VALUE: Lazy&lt;DashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>NativeFunction, FunctionId&gt;&gt; =
+    Lazy::new(DashMap::new);
 <span class="kw">static </span>FUNCTIONS: Lazy&lt;NoMoveVec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>NativeFunction, String)&gt;&gt; = Lazy::new(NoMoveVec::new);
 
 <span class="kw">static </span>VALUE_TYPE_ID_FACTORY: IdFactory&lt;ValueTypeId&gt; = IdFactory::new();
-<span class="kw">static </span>VALUE_TYPES_BY_NAME: Lazy&lt;HashMap&lt;String, ValueTypeId&gt;&gt; = Lazy::new(HashMap::new);
-<span class="kw">static </span>VALUE_TYPES_BY_VALUE: Lazy&lt;HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>ValueType, ValueTypeId&gt;&gt; =
-    Lazy::new(HashMap::new);
+<span class="kw">static </span>VALUE_TYPES_BY_NAME: Lazy&lt;DashMap&lt;String, ValueTypeId&gt;&gt; = Lazy::new(DashMap::new);
+<span class="kw">static </span>VALUE_TYPES_BY_VALUE: Lazy&lt;DashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>ValueType, ValueTypeId&gt;&gt; =
+    Lazy::new(DashMap::new);
 <span class="kw">static </span>VALUE_TYPES: Lazy&lt;NoMoveVec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>ValueType, String)&gt;&gt; = Lazy::new(NoMoveVec::new);
 
 <span class="kw">static </span>TRAIT_TYPE_ID_FACTORY: IdFactory&lt;TraitTypeId&gt; = IdFactory::new();
-<span class="kw">static </span>TRAIT_TYPES_BY_NAME: Lazy&lt;HashMap&lt;String, TraitTypeId&gt;&gt; = Lazy::new(HashMap::new);
-<span class="kw">static </span>TRAIT_TYPES_BY_VALUE: Lazy&lt;HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>TraitType, TraitTypeId&gt;&gt; =
-    Lazy::new(HashMap::new);
+<span class="kw">static </span>TRAIT_TYPES_BY_NAME: Lazy&lt;DashMap&lt;String, TraitTypeId&gt;&gt; = Lazy::new(DashMap::new);
+<span class="kw">static </span>TRAIT_TYPES_BY_VALUE: Lazy&lt;DashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>TraitType, TraitTypeId&gt;&gt; =
+    Lazy::new(DashMap::new);
 <span class="kw">static </span>TRAIT_TYPES: Lazy&lt;NoMoveVec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>TraitType, String)&gt;&gt; = Lazy::new(NoMoveVec::new);
 
 <span class="kw">fn </span>register_thing&lt;
@@ -184,17 +184,17 @@
     value: V,
     id_factory: <span class="kw-2">&amp;</span>IdFactory&lt;K&gt;,
     store: <span class="kw-2">&amp;</span>NoMoveVec&lt;(V, String), INITIAL_CAPACITY_BITS&gt;,
-    map_by_name: <span class="kw-2">&amp;</span>HashMap&lt;String, K&gt;,
-    map_by_value: <span class="kw-2">&amp;</span>HashMap&lt;V, K&gt;,
+    map_by_name: <span class="kw-2">&amp;</span>DashMap&lt;String, K&gt;,
+    map_by_value: <span class="kw-2">&amp;</span>DashMap&lt;V, K&gt;,
 ) {
-    <span class="kw">if </span>map_by_value.pin().get(<span class="kw-2">&amp;</span>value).is_none() {
+    <span class="kw">if let </span>Entry::Vacant(e) = map_by_value.entry(value) {
         <span class="kw">let </span>new_id = id_factory.get();
         <span class="comment">// SAFETY: this is a fresh id
         </span><span class="kw">unsafe </span>{
             store.insert(<span class="kw-2">*</span>new_id, (value, global_name.to_string()));
         }
-        map_by_value.pin().insert(value, new_id);
-        map_by_name.pin().insert(global_name.to_string(), new_id);
+        map_by_name.insert(global_name.to_string(), new_id);
+        e.insert(new_id);
     }
 }
 
@@ -203,9 +203,9 @@
     V: Clone + Hash + Ord + Eq + Debug + Sync + Send,
 &gt;(
     value: V,
-    map_by_value: <span class="kw-2">&amp;</span>HashMap&lt;V, K&gt;,
+    map_by_value: <span class="kw-2">&amp;</span>DashMap&lt;V, K&gt;,
 ) -&gt; K {
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = map_by_value.pin().get(<span class="kw-2">&amp;</span>value) {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = map_by_value.get(<span class="kw-2">&amp;</span>value) {
         <span class="kw-2">*</span>id
     } <span class="kw">else </span>{
         <span class="macro">panic!</span>(<span class="string">&quot;Use of unregistered {:?}&quot;</span>, value);
@@ -228,7 +228,7 @@
 }
 
 <span class="kw">pub fn </span>get_function_id_by_global_name(global_name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;FunctionId&gt; {
-    FUNCTIONS_BY_NAME.pin().get(global_name).cloned()
+    FUNCTIONS_BY_NAME.get(global_name).map(|x| <span class="kw-2">*</span>x)
 }
 
 <span class="kw">pub fn </span>get_function(id: FunctionId) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>NativeFunction {
@@ -255,7 +255,7 @@
 }
 
 <span class="kw">pub fn </span>get_value_type_id_by_global_name(global_name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;ValueTypeId&gt; {
-    VALUE_TYPES_BY_NAME.pin().get(global_name).cloned()
+    VALUE_TYPES_BY_NAME.get(global_name).map(|x| <span class="kw-2">*</span>x)
 }
 
 <span class="kw">pub fn </span>get_value_type(id: ValueTypeId) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>ValueType {
@@ -282,7 +282,7 @@
 }
 
 <span class="kw">pub fn </span>get_trait_type_id_by_global_name(global_name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;TraitTypeId&gt; {
-    TRAIT_TYPES_BY_NAME.pin().get(global_name).cloned()
+    TRAIT_TYPES_BY_NAME.get(global_name).map(|x| <span class="kw-2">*</span>x)
 }
 
 <span class="kw">pub fn </span>get_trait(id: TraitTypeId) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>TraitType {

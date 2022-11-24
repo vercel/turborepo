@@ -139,26 +139,18 @@
 <span id="139">139</span>
 <span id="140">140</span>
 <span id="141">141</span>
-<span id="142">142</span>
-<span id="143">143</span>
-<span id="144">144</span>
-<span id="145">145</span>
-<span id="146">146</span>
-<span id="147">147</span>
-<span id="148">148</span>
-<span id="149">149</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{hash::Hash, sync::Mutex};
+</pre><pre class="rust"><code><span class="kw">use </span>std::{
+    hash::Hash,
+    sync::{Arc, Mutex},
+};
 
-<span class="kw">use </span>flurry::{HashMap, HashMapRef, TryInsertError};
+<span class="kw">use </span>dashmap::{mapref::entry::Entry, DashMap};
 
-<span class="kw">pub struct </span>OnceConcurrentlyMap&lt;
-    K: <span class="question-mark">?</span>Sized + Hash + Eq + Ord + Send + Sync + <span class="lifetime">&#39;static</span>,
-    V: Clone + Send + Sync,
-&gt; {
-    inner: HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>K, Mutex&lt;<span class="prelude-ty">Option</span>&lt;V&gt;&gt;&gt;,
+<span class="kw">pub struct </span>OnceConcurrentlyMap&lt;K: Hash + Eq + Ord + Send + Sync + <span class="lifetime">&#39;static</span>, V: Clone + Send + Sync&gt; {
+    inner: DashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>K, Arc&lt;Mutex&lt;<span class="prelude-ty">Option</span>&lt;V&gt;&gt;&gt;&gt;,
 }
 
-<span class="kw">impl</span>&lt;K: <span class="question-mark">?</span>Sized + Hash + Eq + Ord + Send + Sync, V: Clone + Send + Sync&gt; Default
+<span class="kw">impl</span>&lt;K: Hash + Eq + Ord + Send + Sync, V: Clone + Send + Sync&gt; Default
     <span class="kw">for </span>OnceConcurrentlyMap&lt;K, V&gt;
 {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
@@ -166,21 +158,21 @@
     }
 }
 
-<span class="kw">impl</span>&lt;K: <span class="question-mark">?</span>Sized + Hash + Eq + Ord + Send + Sync, V: Clone + Send + Sync&gt; OnceConcurrentlyMap&lt;K, V&gt; {
+<span class="kw">impl</span>&lt;K: Hash + Eq + Ord + Send + Sync, V: Clone + Send + Sync&gt; OnceConcurrentlyMap&lt;K, V&gt; {
     <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            inner: HashMap::new(),
+            inner: DashMap::new(),
         }
     }
 
     <span class="kw">pub fn </span>action(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K, func: <span class="kw">impl </span>FnOnce() -&gt; V) -&gt; V {
-        <span class="kw">let </span>inner = <span class="self">self</span>.inner.pin();
-
-        <span class="kw">let </span>mutex = Mutex::new(<span class="prelude-val">None</span>);
-        <span class="kw">let </span>temp = TemporarilyInserted { inner: <span class="kw-2">&amp;</span>inner, key };
-        <span class="kw">let </span>mutex = <span class="kw">match </span>temp.try_insert(mutex) {
-            <span class="prelude-val">Ok</span>(mutex) =&gt; mutex,
-            <span class="prelude-val">Err</span>(e) =&gt; e.current,
+        <span class="kw">let </span>temp = TemporarilyInserted {
+            inner: <span class="kw-2">&amp;</span><span class="self">self</span>.inner,
+            key,
+        };
+        <span class="kw">let </span>mutex = <span class="kw">match </span>temp.entry() {
+            Entry::Occupied(e) =&gt; e.get().clone(),
+            Entry::Vacant(e) =&gt; e.insert(Arc::new(Mutex::new(<span class="prelude-val">None</span>))).clone(),
         };
         <span class="kw">let </span><span class="kw-2">mut </span>guard = mutex.lock().unwrap();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;*</span>guard {
@@ -191,33 +183,25 @@
         </span><span class="kw">let </span>value = func();
         <span class="kw-2">*</span>guard = <span class="prelude-val">Some</span>(value.clone());
         drop(guard);
+        drop(temp);
         value
     }
 }
 
-<span class="kw">struct </span>TemporarilyInserted&lt;
-    <span class="lifetime">&#39;a</span>,
-    <span class="lifetime">&#39;map</span>,
-    K: <span class="lifetime">&#39;static </span>+ <span class="question-mark">?</span>Sized + Hash + Eq + Ord + Send + Sync,
-    V: Send + Sync,
-&gt; {
-    inner: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>HashMapRef&lt;<span class="lifetime">&#39;map</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>K, V&gt;,
+<span class="kw">struct </span>TemporarilyInserted&lt;<span class="lifetime">&#39;a</span>, K: <span class="lifetime">&#39;static </span>+ Hash + Eq + Ord + Send + Sync, V: Send + Sync&gt; {
+    inner: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>DashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>K, V&gt;,
     key: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>K,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;map</span>, K: <span class="question-mark">?</span>Sized + Hash + Eq + Ord + Send + Sync, V: Send + Sync&gt;
-    TemporarilyInserted&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;map</span>, K, V&gt;
-{
-    <span class="kw">fn </span>try_insert(<span class="kw-2">&amp;</span><span class="self">self</span>, value: V) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span>V, TryInsertError&lt;<span class="lifetime">&#39;_</span>, V&gt;&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, K: Hash + Eq + Ord + Send + Sync, V: Send + Sync&gt; TemporarilyInserted&lt;<span class="lifetime">&#39;a</span>, K, V&gt; {
+    <span class="kw">fn </span>entry(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Entry&lt;<span class="lifetime">&#39;a</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>K, V&gt; {
         <span class="comment">// SAFETY: We remove the value again after this function is done
         </span><span class="kw">let </span>static_key: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>K = <span class="kw">unsafe </span>{ std::mem::transmute(<span class="self">self</span>.key) };
-        <span class="self">self</span>.inner.try_insert(static_key, value)
+        <span class="self">self</span>.inner.entry(static_key)
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;map</span>, K: <span class="question-mark">?</span>Sized + Hash + Eq + Ord + Send + Sync, V: Send + Sync&gt; Drop
-    <span class="kw">for </span>TemporarilyInserted&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;map</span>, K, V&gt;
-{
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, K: Hash + Eq + Ord + Send + Sync, V: Send + Sync&gt; Drop <span class="kw">for </span>TemporarilyInserted&lt;<span class="lifetime">&#39;a</span>, K, V&gt; {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span>static_key: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>K = <span class="kw">unsafe </span>{ std::mem::transmute(<span class="self">self</span>.key) };
         <span class="self">self</span>.inner.remove(<span class="kw-2">&amp;</span>static_key);
@@ -228,7 +212,7 @@
     K: Clone + Hash + Eq + Ord + Send + Sync + <span class="lifetime">&#39;static</span>,
     V: Clone + Send + Sync,
 &gt; {
-    inner: HashMap&lt;K, Mutex&lt;<span class="prelude-ty">Option</span>&lt;V&gt;&gt;&gt;,
+    inner: DashMap&lt;K, Arc&lt;Mutex&lt;<span class="prelude-ty">Option</span>&lt;V&gt;&gt;&gt;&gt;,
 }
 
 <span class="kw">impl</span>&lt;K: Clone + Hash + Eq + Ord + Send + Sync, V: Clone + Send + Sync&gt; Default
@@ -244,18 +228,18 @@
 {
     <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            inner: HashMap::new(),
+            inner: DashMap::new(),
         }
     }
 
     <span class="kw">pub fn </span>action(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K, func: <span class="kw">impl </span>FnOnce() -&gt; V) -&gt; V {
-        <span class="kw">let </span>inner = <span class="self">self</span>.inner.pin();
-
-        <span class="kw">let </span>mutex = Mutex::new(<span class="prelude-val">None</span>);
-        <span class="kw">let </span>temp = SafeTemporarilyInserted { inner: <span class="kw-2">&amp;</span>inner, key };
-        <span class="kw">let </span>mutex = <span class="kw">match </span>temp.try_insert(mutex) {
-            <span class="prelude-val">Ok</span>(mutex) =&gt; mutex,
-            <span class="prelude-val">Err</span>(e) =&gt; e.current,
+        <span class="kw">let </span>temp = SafeTemporarilyInserted {
+            inner: <span class="kw-2">&amp;</span><span class="self">self</span>.inner,
+            key,
+        };
+        <span class="kw">let </span>mutex = <span class="kw">match </span>temp.entry() {
+            Entry::Occupied(e) =&gt; e.get().clone(),
+            Entry::Vacant(e) =&gt; e.insert(Arc::new(Mutex::new(<span class="prelude-val">None</span>))).clone(),
         };
         <span class="kw">let </span><span class="kw-2">mut </span>guard = mutex.lock().unwrap();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="kw-2">&amp;*</span>guard {
@@ -266,31 +250,31 @@
         </span><span class="kw">let </span>value = func();
         <span class="kw-2">*</span>guard = <span class="prelude-val">Some</span>(value.clone());
         drop(guard);
+        drop(temp);
         value
     }
 }
 
 <span class="kw">struct </span>SafeTemporarilyInserted&lt;
     <span class="lifetime">&#39;a</span>,
-    <span class="lifetime">&#39;map</span>,
     K: <span class="lifetime">&#39;static </span>+ Clone + Hash + Eq + Ord + Send + Sync,
     V: Send + Sync,
 &gt; {
-    inner: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>HashMapRef&lt;<span class="lifetime">&#39;map</span>, K, V&gt;,
+    inner: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>DashMap&lt;K, V&gt;,
     key: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>K,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;map</span>, K: Clone + Hash + Eq + Ord + Send + Sync, V: Send + Sync&gt;
-    SafeTemporarilyInserted&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;map</span>, K, V&gt;
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, K: Clone + Hash + Eq + Ord + Send + Sync, V: Send + Sync&gt;
+    SafeTemporarilyInserted&lt;<span class="lifetime">&#39;a</span>, K, V&gt;
 {
-    <span class="kw">fn </span>try_insert(<span class="kw-2">&amp;</span><span class="self">self</span>, value: V) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span>V, TryInsertError&lt;<span class="lifetime">&#39;_</span>, V&gt;&gt; {
+    <span class="kw">fn </span>entry(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Entry&lt;<span class="lifetime">&#39;_</span>, K, V&gt; {
         <span class="comment">// SAFETY: We remove the value again after this function is done
-        </span><span class="self">self</span>.inner.try_insert(<span class="self">self</span>.key.clone(), value)
+        </span><span class="self">self</span>.inner.entry(<span class="self">self</span>.key.clone())
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;map</span>, K: Clone + Hash + Eq + Ord + Send + Sync, V: Send + Sync&gt; Drop
-    <span class="kw">for </span>SafeTemporarilyInserted&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;map</span>, K, V&gt;
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, K: Clone + Hash + Eq + Ord + Send + Sync, V: Send + Sync&gt; Drop
+    <span class="kw">for </span>SafeTemporarilyInserted&lt;<span class="lifetime">&#39;a</span>, K, V&gt;
 {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.inner.remove(<span class="self">self</span>.key);

@@ -1877,8 +1877,6 @@
 <span id="1877">1877</span>
 <span id="1878">1878</span>
 <span id="1879">1879</span>
-<span id="1880">1880</span>
-<span id="1881">1881</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BinaryHeap, HashMap, HashSet},
@@ -1895,6 +1893,7 @@
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>concurrent_queue::ConcurrentQueue;
+<span class="kw">use </span>dashmap::{mapref::entry::Entry, DashMap, DashSet};
 <span class="kw">use </span>turbo_tasks::{
     backend::{
         Backend, BackendJobId, CellContent, PersistentTaskType, TaskExecutionSpec,
@@ -2014,19 +2013,19 @@
 <span class="kw">pub struct </span>MemoryBackendWithPersistedGraph&lt;P: PersistedGraph&gt; {
     <span class="kw">pub </span>pg: P,
     tasks: NoMoveVec&lt;Task&gt;,
-    cache: flurry::HashMap&lt;PersistentTaskType, TaskId&gt;,
+    cache: DashMap&lt;PersistentTaskType, TaskId&gt;,
     background_job_id_factory: IdFactory&lt;BackendJobId&gt;,
     background_jobs: NoMoveVec&lt;BackgroundJob&gt;,
-    only_known_to_memory_tasks: flurry::HashSet&lt;TaskId&gt;,
+    only_known_to_memory_tasks: DashSet&lt;TaskId&gt;,
     <span class="doccomment">/// Tasks that were selected to persist
     </span>persist_queue1: ConcurrentQueue&lt;TaskId&gt;,
-    persist_queue1_queued: flurry::HashSet&lt;TaskId&gt;,
-    need_persisting: flurry::HashSet&lt;TaskId&gt;,
+    persist_queue1_queued: DashSet&lt;TaskId&gt;,
+    need_persisting: DashSet&lt;TaskId&gt;,
     <span class="doccomment">/// Task sorted by importance, sharded to avoid lock contention
     </span>persist_queue_by_duration: [Mutex&lt;BinaryHeap&lt;(Duration, TaskId)&gt;&gt;; <span class="number">64</span>],
     persist_capacity: AtomicUsize,
     persist_job: BackendJobId,
-    partial_lookups: flurry::HashMap&lt;PersistentTaskType, bool&gt;,
+    partial_lookups: DashMap&lt;PersistentTaskType, bool&gt;,
     <span class="attr">#[cfg(feature = <span class="string">&quot;unsafe_once_map&quot;</span>)]
     </span>partial_lookup: turbo_tasks::util::OnceConcurrentlyMap&lt;PersistentTaskType, bool&gt;,
     <span class="attr">#[cfg(not(feature = <span class="string">&quot;unsafe_once_map&quot;</span>))]
@@ -2043,17 +2042,17 @@
         <span class="self">Self </span>{
             pg,
             tasks: NoMoveVec::new(),
-            cache: flurry::HashMap::new(),
+            cache: DashMap::new(),
             background_job_id_factory,
             background_jobs: NoMoveVec::new(),
-            only_known_to_memory_tasks: flurry::HashSet::new(),
+            only_known_to_memory_tasks: DashSet::new(),
             persist_queue1: ConcurrentQueue::unbounded(),
-            persist_queue1_queued: flurry::HashSet::new(),
-            need_persisting: flurry::HashSet::new(),
+            persist_queue1_queued: DashSet::new(),
+            need_persisting: DashSet::new(),
             persist_queue_by_duration: [(); <span class="number">64</span>].map(|<span class="kw">_</span>| Mutex::new(BinaryHeap::new())),
             persist_capacity: AtomicUsize::new(num_cpus::get()),
             persist_job,
-            partial_lookups: flurry::HashMap::new(),
+            partial_lookups: DashMap::new(),
             <span class="attr">#[cfg(feature = <span class="string">&quot;unsafe_once_map&quot;</span>)]
             </span>partial_lookup: turbo_tasks::util::OnceConcurrentlyMap::new(),
             <span class="attr">#[cfg(not(feature = <span class="string">&quot;unsafe_once_map&quot;</span>))]
@@ -2193,22 +2192,21 @@
 
     <span class="kw">fn </span>lookup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        cache: <span class="kw-2">&amp;</span>flurry::HashMapRef&lt;<span class="lifetime">&#39;_</span>, PersistentTaskType, TaskId&gt;,
         task_type: <span class="kw-2">&amp;</span>PersistentTaskType,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TaskId&gt; {
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..task_type.len() {
             <span class="kw">let </span>partial = task_type.partial(i);
-            <span class="kw">let </span>complete_cached = <span class="self">self</span>.partial_lookups.pin().get(<span class="kw-2">&amp;</span>partial).copied();
+            <span class="kw">let </span>complete_cached = <span class="self">self</span>.partial_lookups.get(<span class="kw-2">&amp;</span>partial).map(|x| <span class="kw-2">*</span>x);
             <span class="kw">let </span>complete = complete_cached.unwrap_or_else(|| {
                 <span class="self">self</span>.partial_lookup.action(<span class="kw-2">&amp;</span>partial, || {
                     <span class="kw">let </span>complete = <span class="self">self</span>.pg_lookup(<span class="kw-2">&amp;</span>partial, turbo_tasks);
-                    <span class="self">self</span>.partial_lookups.pin().insert(partial.clone(), complete);
+                    <span class="self">self</span>.partial_lookups.insert(partial.clone(), complete);
                     complete
                 })
             });
             <span class="kw">if </span>complete {
-                <span class="kw">return </span>cache.get(task_type).copied();
+                <span class="kw">return </span><span class="self">self</span>.cache.get(task_type).map(|x| <span class="kw-2">*</span>x);
             }
         }
         <span class="self">self</span>.pg_lookup_one(task_type, turbo_tasks)
@@ -2617,13 +2615,11 @@
     }
 
     <span class="kw">fn </span>persist(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) -&gt; bool {
-        <span class="kw">let </span>persist_queue1_queued = <span class="self">self</span>.persist_queue1_queued.pin();
         <span class="kw">loop </span>{
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="kw-2">mut </span>task) = <span class="self">self</span>.persist_queue1.pop() {
-                persist_queue1_queued.remove(<span class="kw-2">&amp;</span>task);
-                <span class="kw">let </span>need_persisting = <span class="self">self</span>.need_persisting.pin();
+                <span class="self">self</span>.persist_queue1_queued.remove(<span class="kw-2">&amp;</span>task);
                 <span class="lifetime">&#39;outer</span>: <span class="kw">loop </span>{
-                    need_persisting.remove(<span class="kw-2">&amp;</span>task);
+                    <span class="self">self</span>.need_persisting.remove(<span class="kw-2">&amp;</span>task);
                     <span class="kw">let </span>(<span class="kw-2">mut </span>state, task_info) = <span class="self">self</span>.state_mut(task, turbo_tasks);
                     <span class="kw">if let </span>TaskState {
                         <span class="kw-2">ref mut </span>persisted,
@@ -2652,8 +2648,8 @@
                                             .map(|vc| vc.get_task_id())
                                             .chain(children.iter().copied())
                                         {
-                                            <span class="kw">if </span>need_persisting.contains(<span class="kw-2">&amp;</span>higher_prio_task) {
-                                                <span class="kw">if </span>persist_queue1_queued.insert(task) {
+                                            <span class="kw">if </span><span class="self">self</span>.need_persisting.contains(<span class="kw-2">&amp;</span>higher_prio_task) {
+                                                <span class="kw">if </span><span class="self">self</span>.persist_queue1_queued.insert(task) {
                                                     <span class="self">self</span>.persist_queue1.push(task).unwrap();
                                                 }
                                                 task = higher_prio_task;
@@ -2661,11 +2657,9 @@
                                             }
                                         }
                                         <span class="kw">if </span>!dependencies.is_empty() {
-                                            <span class="kw">let </span>only_known_to_memory_tasks =
-                                                <span class="self">self</span>.only_known_to_memory_tasks.pin();
                                             <span class="kw">for </span>dep <span class="kw">in </span>dependencies.iter() {
                                                 <span class="kw">let </span>task = dep.get_task_id();
-                                                only_known_to_memory_tasks.remove(<span class="kw-2">&amp;</span>task);
+                                                <span class="self">self</span>.only_known_to_memory_tasks.remove(<span class="kw-2">&amp;</span>task);
                                             }
                                         }
                                         <span class="kw">let </span>data = TaskData {
@@ -2736,12 +2730,12 @@
                         //     .map(|d| d.get_task_id())
                         //     .collect::&lt;HashSet&lt;_&gt;&gt;();
                         // for dep in dependencies {
-                        //     if persist_queue1_queued.insert(dep) {
+                        //     if self.persist_queue1_queued.insert(dep) {
                         //         self.persist_queue1.push(dep).unwrap();
                         //         did_something = true;
                         //     }
                         // }
-                        </span><span class="kw">if </span>persist_queue1_queued.insert(task) {
+                        </span><span class="kw">if </span><span class="self">self</span>.persist_queue1_queued.insert(task) {
                             <span class="self">self</span>.persist_queue1.push(task).unwrap();
                             did_something = <span class="bool-val">true</span>;
                         }
@@ -3027,9 +3021,7 @@
         drop(state);
 
         <span class="kw">if let </span>TaskType::Persistent(<span class="kw">_</span>) = task_info.task_type {
-            <span class="kw">if </span>has_changes
-                &amp;&amp; (is_persisted || !<span class="self">self</span>.only_known_to_memory_tasks.pin().contains(<span class="kw-2">&amp;</span>task))
-            {
+            <span class="kw">if </span>has_changes &amp;&amp; (is_persisted || !<span class="self">self</span>.only_known_to_memory_tasks.contains(<span class="kw-2">&amp;</span>task)) {
                 <span class="kw">for </span>task <span class="kw">in </span><span class="self">self</span>.pg_make_dependent_dirty(RawVc::TaskOutput(task), turbo_tasks) {
                     <span class="kw">let </span>(<span class="kw-2">mut </span>state, <span class="kw">_</span>) = <span class="self">self</span>.state_mut(task, turbo_tasks);
                     <span class="kw">if </span>!state.scheduled {
@@ -3041,7 +3033,7 @@
                 }
             }
             <span class="kw">if </span>has_changes || is_dirty_persisted {
-                <span class="self">self</span>.need_persisting.pin().insert(task);
+                <span class="self">self</span>.need_persisting.insert(task);
                 <span class="self">self</span>.persist_queue_by_duration[<span class="kw-2">*</span>task % <span class="self">self</span>.persist_queue_by_duration.len()]
                     .lock()
                     .unwrap()
@@ -3373,7 +3365,7 @@
             drop(state);
         }
         <span class="kw">if let </span>TaskType::Persistent(<span class="kw">_</span>) = task_info.task_type {
-            <span class="kw">if </span>is_persisted || !<span class="self">self</span>.only_known_to_memory_tasks.pin().contains(<span class="kw-2">&amp;</span>task) {
+            <span class="kw">if </span>is_persisted || !<span class="self">self</span>.only_known_to_memory_tasks.contains(<span class="kw-2">&amp;</span>task) {
                 <span class="kw">for </span>task <span class="kw">in </span><span class="self">self</span>.pg_make_dependent_dirty(RawVc::TaskCell(task, index), turbo_tasks)
                 {
                     <span class="kw">let </span>(<span class="kw-2">mut </span>state, <span class="kw">_</span>) = <span class="self">self</span>.state_mut(task, turbo_tasks);
@@ -3394,12 +3386,11 @@
         parent_task: TaskId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; TaskId {
-        <span class="kw">let </span>cache = <span class="self">self</span>.cache.pin();
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(task) = cache.get(<span class="kw-2">&amp;</span>task_type) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(task) = <span class="self">self</span>.cache.get(<span class="kw-2">&amp;</span>task_type) {
             <span class="self">self</span>.connect(parent_task, <span class="kw-2">*</span>task, turbo_tasks);
             <span class="kw">return </span><span class="kw-2">*</span>task;
         }
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(task) = <span class="self">self</span>.lookup(<span class="kw-2">&amp;</span>cache, <span class="kw-2">&amp;</span>task_type, turbo_tasks) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(task) = <span class="self">self</span>.lookup(<span class="kw-2">&amp;</span>task_type, turbo_tasks) {
             <span class="comment">// a return value from lookup was already added to the cache by the id mapping
             </span><span class="self">self</span>.connect(parent_task, task, turbo_tasks);
             <span class="kw">return </span>task;
@@ -3421,23 +3412,24 @@
         </span><span class="kw">unsafe </span>{
             <span class="self">self</span>.tasks.insert(<span class="kw-2">*</span>task, new_task);
         }
-        <span class="kw">match </span>cache.try_insert(task_type, task) {
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                <span class="self">self</span>.only_known_to_memory_tasks.pin().insert(task);
-                <span class="attr">#[cfg(feature = <span class="string">&quot;log_scheduled_tasks&quot;</span>)]
-                </span><span class="macro">println!</span>(<span class="string">&quot;schedule({task}) in get_or_create_persistent_task&quot;</span>);
-                turbo_tasks.schedule(task);
-                <span class="self">self</span>.connect_already_counted(parent_task, task, turbo_tasks);
-                task
-            }
-            <span class="prelude-val">Err</span>(e) =&gt; {
+        <span class="kw">match </span><span class="self">self</span>.cache.entry(task_type) {
+            Entry::Occupied(e) =&gt; {
+                <span class="kw">let </span>existing_task = <span class="kw-2">*</span>e.into_ref();
                 <span class="comment">// SAFETY: We are still the only owner of this task and id
                 </span><span class="kw">unsafe </span>{
                     <span class="self">self</span>.tasks.remove(<span class="kw-2">*</span>task);
                     turbo_tasks.reuse_task_id(task);
                 }
-                <span class="kw">let </span>task = <span class="kw-2">*</span>e.current;
-                <span class="self">self</span>.connect(parent_task, task, turbo_tasks);
+                <span class="self">self</span>.connect(parent_task, existing_task, turbo_tasks);
+                existing_task
+            }
+            Entry::Vacant(e) =&gt; {
+                e.insert(task);
+                <span class="self">self</span>.only_known_to_memory_tasks.insert(task);
+                <span class="attr">#[cfg(feature = <span class="string">&quot;log_scheduled_tasks&quot;</span>)]
+                </span><span class="macro">println!</span>(<span class="string">&quot;schedule({task}) in get_or_create_persistent_task&quot;</span>);
+                turbo_tasks.schedule(task);
+                <span class="self">self</span>.connect_already_counted(parent_task, task, turbo_tasks);
                 task
             }
         }
@@ -3467,7 +3459,7 @@
         </span><span class="kw">unsafe </span>{
             <span class="self">self</span>.tasks.insert(<span class="kw-2">*</span>task, new_task);
         }
-        <span class="self">self</span>.only_known_to_memory_tasks.pin().insert(task);
+        <span class="self">self</span>.only_known_to_memory_tasks.insert(task);
         task
     }
 }
@@ -3479,7 +3471,7 @@
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, P: PersistedGraph&gt; PersistedGraphApi <span class="kw">for </span>MemoryBackendPersistedGraphApi&lt;<span class="lifetime">&#39;a</span>, P&gt; {
     <span class="kw">fn </span>get_or_create_task_type(<span class="kw-2">&amp;</span><span class="self">self</span>, task_type: PersistentTaskType) -&gt; TaskId {
-        <span class="kw">let </span>cache = <span class="self">self</span>.backend.cache.pin();
+        <span class="kw">let </span>cache = <span class="kw-2">&amp;</span><span class="self">self</span>.backend.cache;
         <span class="comment">// We could try a cache.get first to avoid insert and remove
         // but it seems very unlikely that we actually already know the task type
         </span><span class="kw">let </span>new_task = Task {
@@ -3492,13 +3484,17 @@
         </span><span class="kw">unsafe </span>{
             <span class="self">self</span>.backend.tasks.insert(<span class="kw-2">*</span>task, new_task);
         }
-        <span class="kw">match </span>cache.try_insert(task_type, task) {
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; task,
-            <span class="prelude-val">Err</span>(e) =&gt; {
+        <span class="kw">match </span>cache.entry(task_type) {
+            Entry::Occupied(e) =&gt; {
+                <span class="kw">let </span>value = <span class="kw-2">*</span>e.into_ref();
                 <span class="kw">unsafe </span>{
                     <span class="self">self</span>.turbo_tasks.reuse_task_id(task);
                 }
-                <span class="kw-2">*</span>e.current
+                value
+            }
+            Entry::Vacant(e) =&gt; {
+                e.insert(task);
+                task
             }
         }
     }
