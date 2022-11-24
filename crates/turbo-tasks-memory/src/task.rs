@@ -8,19 +8,18 @@ use std::{
     hash::Hash,
     mem::{replace, take},
     pin::Pin,
-    sync::Mutex,
     time::Duration,
 };
 
 use anyhow::Result;
-use auto_hash_map::AutoSet;
-use parking_lot::{RwLock, RwLockWriteGuard};
+use auto_hash_map::{AutoMap, AutoSet};
+use parking_lot::{Mutex, RwLock, RwLockWriteGuard};
 use tokio::task_local;
 use turbo_tasks::{
-    backend::{CellMappings, PersistentTaskType},
+    backend::PersistentTaskType,
     event::{Event, EventListener},
-    get_invalidator, registry, FunctionId, Invalidator, RawVc, TaskId, TaskInput, TraitTypeId,
-    TurboTasksBackendApi,
+    get_invalidator, registry, CellId, FunctionId, Invalidator, RawVc, TaskId, TaskInput,
+    TraitTypeId, TurboTasksBackendApi, ValueTypeId,
 };
 pub type NativeTaskFuture = Pin<Box<dyn Future<Output = Result<RawVc>> + Send>>;
 pub type NativeTaskFn = Box<dyn Fn() -> NativeTaskFuture + Send + Sync>;
@@ -35,7 +34,7 @@ macro_rules! log_scope_update {
 #[derive(Hash, Copy, Clone, PartialEq, Eq)]
 pub enum TaskDependency {
     TaskOutput(TaskId),
-    TaskCell(TaskId, usize),
+    TaskCell(TaskId, CellId),
     ScopeChildren(TaskScopeId),
     ScopeCollectibles(TaskScopeId, TraitTypeId),
 }
@@ -130,10 +129,6 @@ struct TaskExecutionData {
     ///
     /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
     dependencies: AutoSet<TaskDependency>,
-
-    /// Mappings from key or data type to cell index, to store the data in the
-    /// same cell again.
-    cell_mappings: CellMappings,
 }
 
 impl Debug for Task {
@@ -164,7 +159,7 @@ struct TaskState {
     collectibles: MaybeCollectibles,
 
     output: Output,
-    created_cells: Vec<Cell>,
+    cells: AutoMap<ValueTypeId, Vec<Cell>>,
     event: Event,
 
     // Stats:
@@ -181,7 +176,7 @@ impl TaskState {
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
-            created_cells: Default::default(),
+            cells: Default::default(),
             event: Event::new(move || format!("TaskState({id})::event")),
             executions: Default::default(),
             total_duration: Default::default(),
@@ -198,7 +193,7 @@ impl TaskState {
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
-            created_cells: Default::default(),
+            cells: Default::default(),
             event: Event::new(move || format!("TaskState({id})::event")),
             executions: Default::default(),
             total_duration: Default::default(),
@@ -300,7 +295,8 @@ use crate::{
     memory_backend::Job,
     output::Output,
     scope::{ScopeChildChangeEffect, TaskScopeId, TaskScopes},
-    stats, MemoryBackend,
+    stats::{self, StatsReferences},
+    MemoryBackend,
 };
 
 impl Task {
@@ -426,7 +422,7 @@ impl Task {
 
     #[cfg(not(feature = "report_expensive"))]
     fn clear_dependencies(&self, backend: &MemoryBackend) {
-        let mut execution_data = self.execution_data.lock().unwrap();
+        let mut execution_data = self.execution_data.lock();
         let dependencies = take(&mut execution_data.dependencies);
         drop(execution_data);
 
@@ -441,7 +437,7 @@ impl Task {
 
         use turbo_tasks::util::FormatDuration;
         let start = Instant::now();
-        let mut execution_data = self.execution_data.lock().unwrap();
+        let mut execution_data = self.execution_data.lock();
         let dependencies = take(&mut execution_data.dependencies);
         drop(execution_data);
 
@@ -568,16 +564,12 @@ impl Task {
     #[must_use]
     pub(crate) fn execution_completed(
         &self,
-        cell_mappings: Option<CellMappings>,
         duration: Duration,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool {
         DEPENDENCIES_TO_TRACK.with(|deps| {
-            let mut execution_data = self.execution_data.lock().unwrap();
-            if let Some(cell_mappings) = cell_mappings {
-                execution_data.cell_mappings = cell_mappings;
-            }
+            let mut execution_data = self.execution_data.lock();
             execution_data.dependencies = deps.take();
         });
         let mut schedule_task = false;
@@ -1115,15 +1107,6 @@ impl Task {
         }
     }
 
-    pub(crate) fn take_cell_mappings(&self) -> CellMappings {
-        let mut execution_data = self.execution_data.lock().unwrap();
-        let mut cell_mappings = take(&mut execution_data.cell_mappings);
-        for list in cell_mappings.by_type.values_mut() {
-            list.0 = 0;
-        }
-        cell_mappings
-    }
-
     pub(crate) fn add_dependency_to_current(dep: TaskDependency) {
         DEPENDENCIES_TO_TRACK.with(|list| {
             let mut list = list.borrow_mut();
@@ -1135,11 +1118,7 @@ impl Task {
         match &self.ty {
             TaskType::Root(bound_fn) => bound_fn(),
             TaskType::Once(mutex) => {
-                let future = mutex
-                    .lock()
-                    .unwrap()
-                    .take()
-                    .expect("Task can only be executed once");
+                let future = mutex.lock().take().expect("Task can only be executed once");
                 // let task = self.clone();
                 Box::pin(future)
             }
@@ -1187,15 +1166,25 @@ impl Task {
     }
 
     /// Access to a cell.
-    pub(crate) fn with_cell_mut<T>(&self, index: usize, func: impl FnOnce(&mut Cell) -> T) -> T {
+    pub(crate) fn with_cell_mut<T>(&self, index: CellId, func: impl FnOnce(&mut Cell) -> T) -> T {
         let mut state = self.state.write();
-        func(&mut state.created_cells[index])
+        let list = state.cells.entry(index.type_id).or_default();
+        let i = index.index as usize;
+        if list.len() <= i {
+            list.resize_with(i + 1, Default::default);
+        }
+        func(&mut list[i])
     }
 
     /// Access to a cell.
-    pub(crate) fn with_cell<T>(&self, index: usize, func: impl FnOnce(&Cell) -> T) -> T {
+    pub(crate) fn with_cell<T>(&self, index: CellId, func: impl FnOnce(&Cell) -> T) -> T {
         let state = self.state.read();
-        func(&state.created_cells[index])
+        if let Some(list) = state.cells.get(&index.type_id) {
+            if let Some(cell) = list.get(index.index as usize) {
+                return func(cell);
+            }
+        }
+        func(&Default::default())
     }
 
     /// For testing purposes
@@ -1246,12 +1235,7 @@ impl Task {
         }
     }
 
-    pub fn get_stats_references(
-        &self,
-    ) -> (
-        Vec<(stats::ReferenceType, TaskId)>,
-        Vec<(stats::ReferenceType, TaskScopeId)>,
-    ) {
+    pub fn get_stats_references(&self) -> StatsReferences {
         let mut refs = Vec::new();
         let mut scope_refs = Vec::new();
         {
@@ -1261,7 +1245,7 @@ impl Task {
             }
         }
         {
-            let execution_data = self.execution_data.lock().unwrap();
+            let execution_data = self.execution_data.lock();
             for dep in execution_data.dependencies.iter() {
                 match dep {
                     TaskDependency::TaskOutput(task) | TaskDependency::TaskCell(task, _) => {
@@ -1281,7 +1265,10 @@ impl Task {
                 }
             }
         }
-        (refs, scope_refs)
+        StatsReferences {
+            tasks: refs,
+            scopes: scope_refs,
+        }
     }
 
     fn state_string(state: &TaskState) -> String {
@@ -1510,13 +1497,6 @@ impl Task {
             drop(state);
             turbo_tasks.schedule_notify_tasks_set(&tasks);
         }
-    }
-
-    pub(crate) fn get_fresh_cell(&self) -> usize {
-        let mut state = self.state.write();
-        let index = state.created_cells.len();
-        state.created_cells.push(Cell::new());
-        index
     }
 }
 
