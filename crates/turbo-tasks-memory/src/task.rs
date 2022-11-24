@@ -1248,22 +1248,18 @@ impl Task {
             for child in state.children.iter() {
                 refs.push((stats::ReferenceType::Child, *child));
             }
-            match state.state_type {
-                Done { ref dependencies } => {
-                    for dep in dependencies.iter() {
-                        match dep {
-                            TaskDependency::TaskOutput(task)
-                            | TaskDependency::TaskCell(task, _) => {
-                                refs.push((stats::ReferenceType::Dependency, *task))
-                            }
-                            TaskDependency::ScopeChildren(scope)
-                            | TaskDependency::ScopeCollectibles(scope, _) => {
-                                scope_refs.push((stats::ReferenceType::Dependency, *scope))
-                            }
+            if let Done { ref dependencies } = state.state_type {
+                for dep in dependencies.iter() {
+                    match dep {
+                        TaskDependency::TaskOutput(task) | TaskDependency::TaskCell(task, _) => {
+                            refs.push((stats::ReferenceType::Dependency, *task))
+                        }
+                        TaskDependency::ScopeChildren(scope)
+                        | TaskDependency::ScopeCollectibles(scope, _) => {
+                            scope_refs.push((stats::ReferenceType::Dependency, *scope))
                         }
                     }
                 }
-                _ => {}
             }
         }
         {
