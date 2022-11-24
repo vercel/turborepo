@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use auto_hash_map::AutoMap;
+use auto_hash_map::{AutoMap, AutoSet};
 pub use turbo_tasks_macros::ValueDebugFormat;
 
 use crate::{self as turbo_tasks};
@@ -114,6 +114,33 @@ where
             let mut values_string = vec![];
             for value in values {
                 match value {
+                    ValueDebugFormatString::Sync(string) => {
+                        values_string.push(PassthroughDebug::new_string(string));
+                    }
+                    ValueDebugFormatString::Async(future) => {
+                        values_string.push(PassthroughDebug::new_string(future.await?));
+                    }
+                }
+            }
+            Ok(format!("{:#?}", values_string))
+        }))
+    }
+}
+
+impl<K> ValueDebugFormat for AutoSet<K>
+where
+    K: ValueDebugFormat,
+{
+    fn value_debug_format(&self) -> ValueDebugFormatString {
+        let values = self
+            .iter()
+            .map(|item| item.value_debug_format())
+            .collect::<Vec<_>>();
+
+        ValueDebugFormatString::Async(Box::pin(async move {
+            let mut values_string = Vec::with_capacity(values.len());
+            for item in values {
+                match item {
                     ValueDebugFormatString::Sync(string) => {
                         values_string.push(PassthroughDebug::new_string(string));
                     }
