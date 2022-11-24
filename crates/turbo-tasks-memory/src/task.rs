@@ -759,7 +759,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
-        let mut queue = VecDeque::new();
+        let mut queue = VecDeque::with_capacity(0);
         self.add_to_scope_internal_shallow(
             id,
             is_optimization_scope,
@@ -916,7 +916,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
-        let mut queue = VecDeque::new();
+        let mut queue = VecDeque::with_capacity(0);
         self.remove_from_scope_internal_shallow(id, backend, turbo_tasks, &mut queue);
         run_remove_from_scope_queue(queue, id, backend, turbo_tasks);
     }
@@ -1535,8 +1535,8 @@ pub fn run_add_to_scope_queue(
                 &mut queue,
             );
         });
-        if queue.len() > SPLIT_OFF_QUEUE_AT {
-            let split_off_queue = queue.split_off(SPLIT_OFF_QUEUE_AT);
+        while queue.len() > SPLIT_OFF_QUEUE_AT {
+            let split_off_queue = queue.split_off(queue.len() - SPLIT_OFF_QUEUE_AT);
             turbo_tasks.schedule_backend_foreground_job(backend.create_backend_job(
                 Job::AddToScopeQueue(split_off_queue, id, is_optimization_scope),
             ));
@@ -1555,8 +1555,8 @@ pub fn run_remove_from_scope_queue(
         backend.with_task(child, |child| {
             child.remove_from_scope_internal_shallow(id, backend, turbo_tasks, &mut queue);
         });
-        if queue.len() > SPLIT_OFF_QUEUE_AT {
-            let split_off_queue = queue.split_off(SPLIT_OFF_QUEUE_AT);
+        while queue.len() > SPLIT_OFF_QUEUE_AT {
+            let split_off_queue = queue.split_off(queue.len() - SPLIT_OFF_QUEUE_AT);
 
             turbo_tasks.schedule_backend_foreground_job(
                 backend.create_backend_job(Job::RemoveFromScopeQueue(split_off_queue, id)),
