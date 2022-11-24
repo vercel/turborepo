@@ -1,8 +1,8 @@
 use std::{
     borrow::Borrow,
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::{hash_map::RandomState, HashMap},
     fmt::{Debug, Formatter},
-    hash::{BuildHasher, BuildHasherDefault, Hash},
+    hash::{BuildHasher, Hash},
     marker::PhantomData,
 };
 
@@ -15,7 +15,7 @@ use serde::{
 use crate::{MAX_LIST_SIZE, MIN_HASH_SIZE};
 
 #[derive(Clone)]
-pub enum AutoMap<K, V, H = BuildHasherDefault<DefaultHasher>> {
+pub enum AutoMap<K, V, H = RandomState> {
     List(Vec<(K, V)>),
     Map(Box<HashMap<K, V, H>>),
 }
@@ -32,11 +32,13 @@ impl<K: Debug, V: Debug, H> Debug for AutoMap<K, V, H> {
     }
 }
 
-impl<K, V> AutoMap<K, V, BuildHasherDefault<DefaultHasher>> {
+impl<K, V> AutoMap<K, V, RandomState> {
+    /// see [HashMap::new](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.new)
     pub fn new() -> Self {
         AutoMap::List(Vec::new())
     }
 
+    /// see [HashMap::with_capacity](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.with_capacity)
     pub fn with_capacity(capacity: usize) -> Self {
         if capacity < MAX_LIST_SIZE {
             AutoMap::List(Vec::with_capacity(capacity))
@@ -55,7 +57,7 @@ impl<K, V, H: BuildHasher> AutoMap<K, V, H> {
     }
 
     pub fn with_capacity_and_hasher(capacity: usize, hasher: H) -> Self {
-        if capacity < MAX_LIST_SIZE {
+        if capacity <= MAX_LIST_SIZE {
             AutoMap::List(Vec::with_capacity(capacity))
         } else {
             AutoMap::Map(Box::new(HashMap::with_capacity_and_hasher(

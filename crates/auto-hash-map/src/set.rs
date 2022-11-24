@@ -1,7 +1,7 @@
 use std::{
-    collections::hash_map::DefaultHasher,
+    collections::hash_map::RandomState,
     fmt::Debug,
-    hash::{BuildHasher, BuildHasherDefault, Hash},
+    hash::{BuildHasher, Hash},
     marker::PhantomData,
 };
 
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::AutoMap;
 
 #[derive(Clone)]
-pub struct AutoSet<K, H = BuildHasherDefault<DefaultHasher>> {
+pub struct AutoSet<K, H = RandomState> {
     map: AutoMap<K, (), H>,
 }
 
@@ -28,7 +28,7 @@ impl<K: Debug, H> Debug for AutoSet<K, H> {
     }
 }
 
-impl<K> AutoSet<K, BuildHasherDefault<DefaultHasher>> {
+impl<K> AutoSet<K, RandomState> {
     /// see [HashSet::new](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.new)
     pub fn new() -> Self {
         Self {
@@ -97,11 +97,6 @@ impl<K, H> AutoSet<K, H> {
     pub fn iter(&self) -> Iter<'_, K> {
         Iter(self.map.iter())
     }
-
-    /// see [HashSet::into_iter](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.into_iter)
-    pub fn into_iter(self) -> IntoIter<K> {
-        IntoIter(self.map.into_iter())
-    }
 }
 
 impl<K, H> IntoIterator for AutoSet<K, H> {
@@ -109,7 +104,7 @@ impl<K, H> IntoIterator for AutoSet<K, H> {
     type IntoIter = IntoIter<K>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.into_iter()
+        IntoIter(self.map.into_iter())
     }
 }
 
