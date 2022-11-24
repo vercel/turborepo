@@ -282,7 +282,7 @@ impl Backend for MemoryBackend {
         self.try_get_output(
             task,
             strongly_consistent,
-            || format!("reading task output untracked"),
+            || "reading task output untracked".to_string(),
             turbo_tasks,
             |output| output.read_untracked(),
         )
