@@ -226,14 +226,6 @@ impl<K, V, H> AutoMap<K, V, H> {
         }
     }
 
-    /// see [HashMap::into_iter](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.into_iter)
-    pub fn into_iter(self) -> IntoIter<K, V> {
-        match self {
-            AutoMap::List(list) => IntoIter::List(list.into_iter()),
-            AutoMap::Map(map) => IntoIter::Map(map.into_iter()),
-        }
-    }
-
     /// see [HashMap::is_empty](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.is_empty)
     pub fn is_empty(&self) -> bool {
         match self {
@@ -272,7 +264,10 @@ impl<K, V, H> IntoIterator for AutoMap<K, V, H> {
     type IntoIter = IntoIter<K, V>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.into_iter()
+        match self {
+            AutoMap::List(list) => IntoIter::List(list.into_iter()),
+            AutoMap::Map(map) => IntoIter::Map(map.into_iter()),
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 use std::{
-    collections::hash_map::DefaultHasher,
+    collections::hash_map::RandomState,
     fmt::{Debug, Formatter},
-    hash::{BuildHasher, BuildHasherDefault, Hash},
+    hash::{BuildHasher, Hash},
     iter::FilterMap,
 };
 
@@ -11,7 +11,7 @@ use auto_hash_map::{
 };
 
 #[derive(Clone)]
-pub struct CountHashSet<T, H = BuildHasherDefault<DefaultHasher>> {
+pub struct CountHashSet<T, H = RandomState> {
     inner: AutoMap<T, isize, H>,
     negative_entries: usize,
 }
