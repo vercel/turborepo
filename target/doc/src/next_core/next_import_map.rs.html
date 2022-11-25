@@ -257,6 +257,8 @@
 <span id="257">257</span>
 <span id="258">258</span>
 <span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringsVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
@@ -318,6 +320,7 @@
                 request_to_import_mapping(app_dir, <span class="string">&quot;next/dist/compiled/react-dom/*&quot;</span>),
             );
         }
+        ContextType::Fallback =&gt; {}
         ContextType::Other =&gt; {}
     }
     import_map.cell()
@@ -345,6 +348,7 @@
                 );
             }
         }
+        ContextType::Fallback =&gt; {}
         ContextType::Other =&gt; {}
     }
 

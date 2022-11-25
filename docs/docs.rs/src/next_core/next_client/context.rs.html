@@ -225,6 +225,7 @@
 <span id="225">225</span>
 <span id="226">226</span>
 <span id="227">227</span>
+<span id="228">228</span>
 </pre><pre class="rust"><code><span class="kw">use </span>core::{default::Default, result::Result::Ok};
 <span class="kw">use </span>std::collections::HashMap;
 
@@ -282,6 +283,7 @@
 </span><span class="kw">pub enum </span>ContextType {
     Pages { pages_dir: FileSystemPathVc },
     App { app_dir: FileSystemPathVc },
+    Fallback,
     Other,
 }
 
@@ -394,7 +396,7 @@
             ContextType::Pages { .. } | ContextType::App { .. } =&gt; {
                 server_root.join(<span class="string">&quot;/_next/static/chunks&quot;</span>)
             }
-            ContextType::Other =&gt; server_root.join(<span class="string">&quot;/_chunks&quot;</span>),
+            ContextType::Fallback | ContextType::Other =&gt; server_root.join(<span class="string">&quot;/_chunks&quot;</span>),
         },
         get_client_assets_path(server_root, ty),
     )
@@ -411,7 +413,7 @@
         ContextType::Pages { .. } | ContextType::App { .. } =&gt; {
             server_root.join(<span class="string">&quot;/_next/static/assets&quot;</span>)
         }
-        ContextType::Other =&gt; server_root.join(<span class="string">&quot;/_assets&quot;</span>),
+        ContextType::Fallback | ContextType::Other =&gt; server_root.join(<span class="string">&quot;/_assets&quot;</span>),
     }
 }
 
