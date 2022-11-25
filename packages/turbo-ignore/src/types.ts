@@ -1,14 +1,15 @@
-export type NonFatalErrorKeys =
+export type NonFatalErrorKey =
   | "MISSING_LOCKFILE"
   | "NO_PACKAGE_MANAGER"
-  | "FIRST_COMMIT";
+  | "UNREACHABLE_PARENT"
+  | "UNREACHABLE_COMMIT";
 
 export interface NonFatalError {
   regex: RegExp;
   message: string;
 }
 
-export type NonFatalErrors = Record<NonFatalErrorKeys, NonFatalError>;
+export type NonFatalErrors = Record<NonFatalErrorKey, NonFatalError>;
 
 export interface TurboIgnoreArgs {
   // the working directory to use when looking for a workspace

@@ -44,9 +44,9 @@ describe("parseArgs()", () => {
   });
 
   it("correctly finds fallback", async () => {
-    const result = parseArgs({ argv: ["--fallback=false"] });
+    const result = parseArgs({ argv: ["--fallback=HEAD^"] });
     expect(result.workspace).toBe(undefined);
-    expect(result.fallback).toBe("false");
+    expect(result.fallback).toBe("HEAD^");
     expect(mockExit.exit).toHaveBeenCalledTimes(0);
   });
 
@@ -59,10 +59,10 @@ describe("parseArgs()", () => {
 
   it("correctly finds fallback and workspace", async () => {
     const result = parseArgs({
-      argv: ["this-workspace", "--fallback=false"],
+      argv: ["this-workspace", "--fallback=HEAD~10"],
     });
     expect(result.workspace).toBe("this-workspace");
-    expect(result.fallback).toBe("false");
+    expect(result.fallback).toBe("HEAD~10");
     expect(mockExit.exit).toHaveBeenCalledTimes(0);
   });
 });

@@ -6,20 +6,24 @@ import { getWorkspace } from "./getWorkspace";
 import { info, warn, error } from "./logger";
 import { shouldWarn } from "./errors";
 import { TurboIgnoreArgs } from "./types";
+import { checkCommit } from "./checkCommit";
 
 function ignoreBuild() {
-  info(`ignoring the change`);
+  const ignoreLog = "⬜️  ignoring the change";
+  console.log(`\n${ignoreLog}`);
   return process.exit(0);
 }
 
 function continueBuild() {
-  info(`proceeding with deployment`);
+  const proceedLog = "✅  proceeding with deployment";
+
+  console.log(`\n${proceedLog}`);
   return process.exit(1);
 }
 
 export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
   info(
-    "Using Turborepo to determine if this project is affected by the commit...\n"
+    `Using Turborepo to determine if this project is affected by the commit...\n`
   );
 
   // set default directory
@@ -44,6 +48,20 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
   const workspace = getWorkspace(args);
   if (!workspace) {
     return continueBuild();
+  }
+
+  // check the commit message
+  const parsedCommit = checkCommit({ workspace });
+  if (parsedCommit.result === "skip") {
+    info(parsedCommit.reason);
+    return ignoreBuild();
+  }
+  if (parsedCommit.result === "deploy") {
+    info(parsedCommit.reason);
+    return continueBuild();
+  }
+  if (parsedCommit.result === "conflict") {
+    info(parsedCommit.reason);
   }
 
   // Get the start of the comparison (previous deployment when available, or previous commit by default)
