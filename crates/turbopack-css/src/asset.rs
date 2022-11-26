@@ -239,7 +239,7 @@ impl CssChunkItem for ModuleChunkItem {
                 )
             });
 
-            let mut code_string = format!("/* {} */\n", self.module.path().to_string().await?);
+            let mut code_string = String::new();
             let mut srcmap = vec![];
 
             let mut code_gen = CodeGenerator::new(
@@ -269,5 +269,10 @@ impl CssChunkItem for ModuleChunkItem {
             }
             .into())
         }
+    }
+
+    #[turbo_tasks::function]
+    fn chunking_context(&self) -> ChunkingContextVc {
+        self.context
     }
 }

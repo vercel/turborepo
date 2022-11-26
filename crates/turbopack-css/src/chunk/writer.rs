@@ -1,12 +1,13 @@
-use std::{collections::VecDeque, fmt::Write, io::Write as _};
+use std::{collections::VecDeque, io::Write as _};
 
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, ValueToString};
-use turbo_tasks_fs::rope::RopeVc;
+use turbo_tasks_fs::rope::{Rope, RopeBuilder};
 use turbopack_core::code_builder::{Code, CodeBuilder, CodeVc};
+use turbopack_ecmascript::utils::stringify_module_id;
 
-use super::CssImport;
-use crate::{parse::ParseResultSourceMapVc, CssChunkItemContentVc};
+use super::{CssChunkItemVc, CssImport};
+use crate::parse::{ParseResultSourceMap, ParseResultSourceMapVc};
 
 #[turbo_tasks::value]
 #[derive(Default)]
@@ -16,10 +17,10 @@ pub struct ExpandImportsResult {
 }
 
 #[turbo_tasks::function]
-pub async fn expand_imports(content_vc: CssChunkItemContentVc) -> Result<ExpandImportsResultVc> {
-    let content = &*content_vc.await?;
+pub async fn expand_imports(chunk_item: CssChunkItemVc) -> Result<ExpandImportsResultVc> {
+    let content = chunk_item.content().await?;
     let mut stack = vec![(
-        content_vc,
+        chunk_item,
         content.imports.iter().cloned().collect::<VecDeque<_>>(),
         (0, "".to_string()),
     )];
@@ -27,22 +28,24 @@ pub async fn expand_imports(content_vc: CssChunkItemContentVc) -> Result<ExpandI
         external_imports: vec![],
         codes: vec![],
     };
+    let mut indenter = Indent::default();
 
-    while let Some((content_vc, imports, (indent, close))) = stack.last_mut() {
+    while let Some((chunk_item, imports, (indent, close))) = stack.last_mut() {
         match imports.pop_front() {
             Some(CssImport::Internal(import, imported_chunk_item)) => {
                 let (open, inner_indent, close) = import.await?.attributes.await?.print_block()?;
 
                 let id = &*imported_chunk_item.to_string().await?;
-                let mut code = CodeBuilder::default();
-                writeln!(code, "/* import({}) */", id)?;
-                writeln!(code, "{}", open)?;
+                let mut code = CodeBuilderWithIndent::default();
+                code.push_str(&format!("/* import({}) */\n", id), &indenter)?;
+                code.push_str(&format!("{}\n", open), &indenter)?;
                 result.codes.push(code.build().cell());
 
                 let imported_content_vc = imported_chunk_item.content();
                 let imported_content = &*imported_content_vc.await?;
+                indenter.push(inner_indent);
                 stack.push((
-                    imported_content_vc,
+                    imported_chunk_item,
                     imported_content.imports.iter().cloned().collect(),
                     (inner_indent, close),
                 ));
@@ -51,12 +54,16 @@ pub async fn expand_imports(content_vc: CssChunkItemContentVc) -> Result<ExpandI
                 result.external_imports.push(url_vc);
             }
             None => {
-                let content = &*(*content_vc).await?;
-                let mut code = CodeBuilder::default();
-                let source_map = content.source_map.map(|sm| sm.as_generate_source_map());
-                code.push_source(&content.inner_code, source_map);
-                writeln!(code)?;
-                writeln!(code, "{}", close)?;
+                let mut code = CodeBuilderWithIndent::default();
+                code.push_str(
+                    &format!("/* {} */\n", stringify_module_id(&*chunk_item.id().await?)),
+                    &indenter,
+                )?;
+                let content = chunk_item.content().await?;
+                code.push_source(&content.inner_code, content.source_map, &indenter)
+                    .await?;
+                indenter.pop(*indent);
+                code.push_str(&format!("\n{}\n", close), &indenter)?;
                 result.codes.push(code.build().cell());
                 stack.pop();
             }
@@ -66,58 +73,85 @@ pub async fn expand_imports(content_vc: CssChunkItemContentVc) -> Result<ExpandI
     Ok(result.cell())
 }
 
-pub struct WriterWithIndent<T: Write> {
-    writer: T,
-    indent_str: String,
+struct CodeBuilderWithIndent {
+    code: CodeBuilder,
     needs_indent: bool,
 }
 
-impl<T: Write> WriterWithIndent<T> {
-    pub fn new(buffer: T) -> Self {
+impl Default for CodeBuilderWithIndent {
+    fn default() -> Self {
         Self {
-            writer: buffer,
-            indent_str: "".to_string(),
+            code: CodeBuilder::default(),
             needs_indent: true,
         }
     }
+}
 
-    pub fn push_indent(&mut self, indent: usize) -> std::fmt::Result {
-        self.indent_str += &" ".repeat(indent);
+#[derive(Default)]
+struct Indent(String);
 
-        Ok(())
+impl Indent {
+    pub fn push(&mut self, n: usize) {
+        self.0 += &" ".repeat(n);
     }
 
-    pub fn pop_indent(&mut self, indent: usize) -> std::fmt::Result {
-        self.indent_str = " ".repeat(self.indent_str.len().saturating_sub(indent));
+    pub fn pop(&mut self, n: usize) {
+        self.0 = " ".repeat(self.0.len().saturating_sub(n));
+    }
 
-        Ok(())
+    pub fn to_str(&self) -> &str {
+        &self.0
     }
 }
 
-impl<T: Write> Write for WriterWithIndent<T> {
-    #[inline]
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        for c in s.chars() {
-            self.write_char(c)?;
-        }
-
+impl CodeBuilderWithIndent {
+    pub async fn push_source(
+        &mut self,
+        code: &Rope,
+        map: Option<ParseResultSourceMapVc>,
+        indent: &Indent,
+    ) -> Result<()> {
+        let indented = self.wrap_indent(&code.to_str()?, indent)?;
+        let indented_map = if let Some(map) = map {
+            Some(
+                ParseResultSourceMap::with_indent(&*map.await?, indent.to_str().len() as u32)
+                    .cell()
+                    .as_generate_source_map(),
+            )
+        } else {
+            None
+        };
+        self.code.push_source(&indented, indented_map);
         Ok(())
     }
 
-    #[inline]
-    fn write_char(&mut self, c: char) -> std::fmt::Result {
-        if c == '\n' {
-            self.writer.write_char('\n')?;
-            self.needs_indent = true;
+    pub fn push_str(&mut self, code: &str, indent: &Indent) -> Result<()> {
+        let indented = self.wrap_indent(code, indent)?;
+        self.code.push_source(&indented, None);
+        Ok(())
+    }
 
-            return Ok(());
+    fn wrap_indent(&mut self, code: &str, indent: &Indent) -> Result<Rope> {
+        let mut indented = RopeBuilder::default();
+        for c in code.chars() {
+            if c == '\n' {
+                write!(indented, "\n")?;
+                self.needs_indent = true;
+
+                continue;
+            }
+
+            if self.needs_indent {
+                write!(indented, "{}", indent.to_str())?;
+                self.needs_indent = false;
+            }
+
+            write!(indented, "{}", c)?;
         }
+        Ok(indented.build())
+    }
 
-        if self.needs_indent {
-            self.writer.write_str(&self.indent_str)?;
-            self.needs_indent = false;
-        }
-
-        self.writer.write_char(c)
+    pub fn build(self) -> Code {
+        self.code.build()
     }
 }

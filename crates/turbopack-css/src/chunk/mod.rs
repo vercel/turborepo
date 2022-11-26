@@ -124,8 +124,8 @@ impl CssChunkContentVc {
         let mut codes = Vec::new();
         for entry in this.main_entries.await?.iter() {
             let entry_placeable = CssChunkPlaceableVc::cast_from(entry);
-            let entry_content = entry_placeable.as_chunk_item(this.context).content();
-            let expanded = expand_imports(entry_content).await?;
+            let entry_item = entry_placeable.as_chunk_item(this.context);
+            let expanded = expand_imports(entry_item).await?;
 
             for external_import in &expanded.external_imports {
                 external_imports.insert(*external_import);
@@ -144,7 +144,17 @@ impl CssChunkContentVc {
             code.push_code(&*prebuilt.await?);
         }
 
-        Ok(code.build().cell())
+        if code.has_source_map() {
+            let chunk_path = this.chunk_path.await?;
+            write!(
+                code,
+                "/* sourceMappingURL={}.map */",
+                chunk_path.file_name()
+            )?;
+        }
+
+        let c = code.build().cell();
+        Ok(c)
     }
 
     #[turbo_tasks::function]
