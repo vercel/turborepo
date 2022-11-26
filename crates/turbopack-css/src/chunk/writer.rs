@@ -4,7 +4,6 @@ use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, ValueToString};
 use turbo_tasks_fs::rope::{Rope, RopeBuilder};
 use turbopack_core::code_builder::{Code, CodeBuilder, CodeVc};
-use turbopack_ecmascript::utils::stringify_module_id;
 
 use super::{CssChunkItemVc, CssImport};
 use crate::parse::{ParseResultSourceMap, ParseResultSourceMapVc};
@@ -55,15 +54,15 @@ pub async fn expand_imports(chunk_item: CssChunkItemVc) -> Result<ExpandImportsR
             }
             None => {
                 let mut code = CodeBuilderWithIndent::default();
-                code.push_str(
-                    &format!("/* {} */\n", stringify_module_id(&*chunk_item.id().await?)),
-                    &indenter,
-                )?;
+                let id = &*chunk_item.to_string().await?;
+                code.push_str(&format!("/* {} */\n", id), &indenter)?;
+
                 let content = chunk_item.content().await?;
                 code.push_source(&content.inner_code, content.source_map, &indenter)
                     .await?;
                 indenter.pop(*indent);
                 code.push_str(&format!("\n{}\n", close), &indenter)?;
+
                 result.codes.push(code.build().cell());
                 stack.pop();
             }
