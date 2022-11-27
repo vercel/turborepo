@@ -86,6 +86,11 @@ impl Request {
             Pattern::Constant(ref r) => {
                 if r.is_empty() {
                     Request::Empty
+                } else if r.starts_with("/ROOT/") {
+                    Request::Raw {
+                        path: request,
+                        force_in_context: false,
+                    }
                 } else if r.starts_with('/') {
                     Request::ServerRelative { path: request }
                 } else if r.starts_with('#') {

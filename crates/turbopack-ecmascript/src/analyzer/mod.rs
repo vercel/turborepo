@@ -419,6 +419,7 @@ impl JsValue {
     pub fn as_str(&self) -> Option<&str> {
         match self {
             JsValue::Constant(c) => c.as_str(),
+            JsValue::Path(_, c) => c.as_str(),
             _ => None,
         }
     }
@@ -904,14 +905,6 @@ impl JsValue {
                         "child_process",
                         "The Node.js child_process module: https://nodejs.org/api/child_process.html",
                     ),
-                    WellKnownObjectKind::CjsModule => (
-                      "module",
-                      "The CommonJS module object: https://nodejs.org/api/modules.html#the-module-object",
-                    ),
-                    WellKnownObjectKind::CjsExports => (
-                      "module.exports",
-                      "The CommonJS module.exports object: https://nodejs.org/api/modules.html#moduleexports",
-                    ),
                     WellKnownObjectKind::OsModule | WellKnownObjectKind::OsModuleDefault => (
                         "os",
                         "The Node.js os module: https://nodejs.org/api/os.html",
@@ -970,7 +963,7 @@ impl JsValue {
                     WellKnownFunctionKind::Require => ("require".to_string(), "The require method from CommonJS"),
                     WellKnownFunctionKind::RequireResolve => ("require.resolve".to_string(), "The require.resolve method from CommonJS"),
                     WellKnownFunctionKind::Define => ("define".to_string(), "The define method from AMD"),
-                    WellKnownFunctionKind::FsReadMethod(name) => (
+                    WellKnownFunctionKind::FsOperateMethod(name) => (
                         format!("fs.{name}"),
                         "A file reading method from the Node.js fs module: https://nodejs.org/api/fs.html",
                     ),
@@ -1534,7 +1527,6 @@ impl JsValue {
                 | FreeVarKind::Require
                 | FreeVarKind::Define
                 | FreeVarKind::Import
-                | FreeVarKind::Module
                 | FreeVarKind::NodeProcess,
             ) => false,
             JsValue::FreeVar(FreeVarKind::Other(_)) => false,
@@ -1941,9 +1933,6 @@ pub enum FreeVarKind {
     /// A reference to `import`
     Import,
 
-    /// CommonJS `module`
-    Module,
-
     /// Node.js process
     NodeProcess,
 
@@ -1965,9 +1954,6 @@ pub enum WellKnownObjectKind {
     ChildProcessDefault,
     OsModule,
     OsModuleDefault,
-    // module.exports
-    CjsModule,
-    CjsExports,
     NodeProcess,
     NodePreGyp,
     NodeExpressApp,
@@ -1986,7 +1972,7 @@ pub enum WellKnownFunctionKind {
     Require,
     RequireResolve,
     Define,
-    FsReadMethod(JsWord),
+    FsOperateMethod(JsWord),
     PathToFileUrl,
     ChildProcessSpawnMethod(JsWord),
     ChildProcessFork,
@@ -2042,9 +2028,6 @@ pub mod test_utils {
             JsValue::FreeVar(FreeVarKind::Filename) => "__filename".into(),
             JsValue::FreeVar(FreeVarKind::NodeProcess) => {
                 JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess)
-            }
-            JsValue::FreeVar(FreeVarKind::Module) => {
-                JsValue::WellKnownObject(WellKnownObjectKind::CjsModule)
             }
             JsValue::FreeVar(kind) => {
                 JsValue::Unknown(Some(Arc::new(JsValue::FreeVar(kind))), "unknown global")

@@ -199,7 +199,7 @@ pub fn path_resolve(cwd: JsValue, mut args: Vec<JsValue>) -> JsValue {
         return JsValue::Unknown(None, "cwd is not static analyzable");
     }
     if args.len() == 1 {
-        return args.into_iter().next().unwrap();
+        return JsValue::Path(1, box args.into_iter().next().unwrap());
     }
 
     // path.resolve stops at the string starting with `/`
@@ -262,7 +262,8 @@ pub fn path_resolve(cwd: JsValue, mut args: Vec<JsValue>) -> JsValue {
         last_was_str = is_str;
     }
 
-    JsValue::concat(results)
+    let v = JsValue::concat(results);
+    JsValue::Path(1 + v.total_nodes(), box v)
 }
 
 pub fn path_dirname(mut args: Vec<JsValue>) -> JsValue {
@@ -399,7 +400,6 @@ pub async fn well_known_object_member(
         WellKnownObjectKind::ChildProcess | WellKnownObjectKind::ChildProcessDefault => {
             child_process_module_member(kind, prop)
         }
-        WellKnownObjectKind::CjsModule => cjs_module_member(prop),
         WellKnownObjectKind::OsModule | WellKnownObjectKind::OsModuleDefault => {
             os_module_member(kind, prop)
         }
@@ -462,7 +462,7 @@ pub fn fs_module_member(kind: WellKnownObjectKind, prop: JsValue) -> JsValue {
                 | "createReadStream" | "exists" | "open" | "openSync" | "readFile" | "readFileSync"
                 | "readdir" | "readdirSync",
             ) => {
-                return JsValue::WellKnownFunction(WellKnownFunctionKind::FsReadMethod(
+                return JsValue::WellKnownFunction(WellKnownFunctionKind::FsOperateMethod(
                     word.into(),
                 ));
             }
@@ -520,20 +520,6 @@ pub fn child_process_module_member(kind: WellKnownObjectKind, prop: JsValue) -> 
                 box prop,
             ))),
             "unsupported property on Node.js child_process module",
-        ),
-    }
-}
-
-fn cjs_module_member(prop: JsValue) -> JsValue {
-    match prop.as_str() {
-        Some("exports") => JsValue::WellKnownObject(WellKnownObjectKind::CjsExports),
-        Some("require") => JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
-        _ => JsValue::Unknown(
-            Some(Arc::new(JsValue::member(
-                box JsValue::WellKnownObject(WellKnownObjectKind::CjsModule),
-                box prop,
-            ))),
-            "unsupported property on Node.js cjs module",
         ),
     }
 }

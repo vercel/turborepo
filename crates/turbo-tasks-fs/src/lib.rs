@@ -721,6 +721,12 @@ impl FileSystemPath {
 #[turbo_tasks::value(transparent)]
 pub struct FileSystemPathOption(Option<FileSystemPathVc>);
 
+impl FileSystemPathOptionVc {
+    pub fn new(fs: FileSystemVc, path: String) -> Self {
+        FileSystemPathOption(Some(FileSystemPathVc::new_normalized(fs, path))).cell()
+    }
+}
+
 #[turbo_tasks::value_impl]
 impl FileSystemPathVc {
     /// Create a new FileSystemPathVc from a path withing a FileSystem. The

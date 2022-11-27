@@ -46,6 +46,12 @@ pub enum Effect {
         span: Span,
         ast_path: Vec<AstParentKind>,
     },
+    CjsExport {
+        span: Span,
+        name: JsValue,
+        value: JsValue,
+        ast_path: Vec<AstParentKind>,
+    },
 }
 
 impl Effect {
@@ -94,6 +100,9 @@ impl Effect {
                 span: _,
                 ast_path: _,
             } => {}
+            Effect::CjsExport { value, .. } => {
+                value.normalize();
+            }
         }
     }
 }
@@ -760,6 +769,84 @@ impl VisitAstPath for Analyzer<'_> {
         n: &'ast AssignExpr,
         ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
     ) {
+        // handle cjs exports
+        match &n.left {
+            PatOrExpr::Expr(box Expr::Member(MemberExpr {
+                obj: box Expr::Ident(ref i),
+                prop: MemberProp::Ident(prop_ident),
+                ..
+            }))
+            | PatOrExpr::Pat(box Pat::Expr(box Expr::Member(MemberExpr {
+                obj: box Expr::Ident(ref i),
+                prop: MemberProp::Ident(prop_ident),
+                ..
+            }))) => {
+                let Ident { ref sym, .. } = i;
+                let Ident { sym: prop, .. } = prop_ident;
+                if sym == "exports" {
+                    // exports.foo = ...
+                    self.data.effects.push(Effect::CjsExport {
+                        span: i.span(),
+                        name: JsValue::Variable(prop_ident.to_id()),
+                        value: self.eval_context.eval(&n.right),
+                        ast_path: as_parent_path(ast_path),
+                    });
+                } else if sym == "module" && prop == "exports" {
+                    // module.exports = ...
+                    if let Expr::Object(ObjectLit { props, .. }) = &*n.right {
+                        for prop in props.iter() {
+                            match prop {
+                                PropOrSpread::Prop(box Prop::Shorthand(shorthand)) => {
+                                    self.data.effects.push(Effect::CjsExport {
+                                        span: i.span(),
+                                        name: JsValue::Variable(shorthand.to_id()),
+                                        value: JsValue::Variable(shorthand.to_id()),
+                                        ast_path: as_parent_path(ast_path),
+                                    });
+                                }
+                                PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
+                                    value,
+                                    key,
+                                    ..
+                                })) => {
+                                    self.data.effects.push(Effect::CjsExport {
+                                        span: i.span(),
+                                        name: self.eval_context.eval_prop_name(key),
+                                        value: self.eval_context.eval(&value),
+                                        ast_path: as_parent_path(ast_path),
+                                    });
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+            PatOrExpr::Expr(box Expr::Member(MemberExpr {
+                obj:
+                    box Expr::Member(MemberExpr {
+                        obj: box Expr::Ident(Ident { ref sym, .. }),
+                        prop: MemberProp::Ident(Ident { sym: ref prop, .. }),
+                        ..
+                    }),
+                prop: MemberProp::Ident(Ident { sym: exported, .. }),
+                ..
+            }))
+            | PatOrExpr::Pat(box Pat::Expr(box Expr::Member(MemberExpr {
+                obj:
+                    box Expr::Member(MemberExpr {
+                        obj: box Expr::Ident(Ident { ref sym, .. }),
+                        prop: MemberProp::Ident(Ident { sym: ref prop, .. }),
+                        ..
+                    }),
+                prop: MemberProp::Ident(Ident { sym: exported, .. }),
+                ..
+            }))) if sym == "module" && prop == "exports" => {
+                let mut exports = Vec::new();
+                exports.push((exported.clone(), self.eval_context.eval(&n.right)));
+            }
+            _ => {}
+        }
         ast_path.with(
             AstParentNodeRef::AssignExpr(n, AssignExprField::Left),
             |ast_path| match &n.left {

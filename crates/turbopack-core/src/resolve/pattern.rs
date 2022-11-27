@@ -8,7 +8,8 @@ use turbo_tasks::{
     primitives::StringVc, trace::TraceRawVcs, Value, ValueToString, ValueToStringVc,
 };
 use turbo_tasks_fs::{
-    DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathVc, LinkContent, LinkType,
+    DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathOptionVc,
+    FileSystemPathVc, LinkContent, LinkType,
 };
 
 #[turbo_tasks::value(shared, serialization = "auto_for_input")]
@@ -662,9 +663,12 @@ pub async fn read_matches(
                     if handled.insert(str) {
                         if let Some(fs_path) = &*if force_in_context {
                             context.try_join_inside(str).await?
-                        } else {
+                        } else if !str.starts_with("/ROOT/") {
                             context.try_join(str).await?
+                        } else {
+                            FileSystemPathOptionVc::new(context.fs(), str.to_string()).await?
                         } {
+                            println!("Found {}", fs_path.await?.path);
                             // This explicit deref of `context` is necessary
                             #[allow(clippy::explicit_auto_deref)]
                             let should_match =

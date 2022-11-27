@@ -81,7 +81,7 @@ pub(crate) enum Reexport {
 
 /// The storage for all kinds of imports.
 ///
-/// Note that wHen it's initialized by calling `analyze`, it only contains ESM
+/// Note that when it's initialized by calling `analyze`, it only contains ESM
 /// import/exports.
 #[derive(Default, Debug)]
 pub(crate) struct ImportMap {

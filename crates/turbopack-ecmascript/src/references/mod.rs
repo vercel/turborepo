@@ -606,7 +606,7 @@ pub(crate) async fn analyze_ecmascript_module(
                         )
                     }
 
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::FsReadMethod(name)) => {
+                    JsValue::WellKnownFunction(WellKnownFunctionKind::FsOperateMethod(name)) => {
                         let args = linked_args().await?;
                         if !args.is_empty() {
                             let pat = js_value_to_pattern(&args[0]);
@@ -657,7 +657,6 @@ pub(crate) async fn analyze_ecmascript_module(
                                 ),
                             )
                         }
-                        analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
                         return Ok(());
                     }
 
@@ -1165,6 +1164,26 @@ pub(crate) async fn analyze_ecmascript_module(
                             ),
                         );
                     }
+                    Effect::CjsExport {
+                        name, value, span, ..
+                    } => {
+                        let value = link_value(value).await?;
+                        let pat = js_value_to_pattern(&value);
+                        if !pat.has_constant_parts() {
+                            let (value_desc, hints) = value.explain(10, 2);
+                            handler.span_warn_with_code(
+                                span,
+                                &format!(
+                                    "module.exports.{name} = {value_desc} is very dynamic{hints}",
+                                ),
+                                DiagnosticId::Lint(
+                                    errors::failed_to_analyse::ecmascript::FS_METHOD.to_string(),
+                                ),
+                            )
+                        } else {
+                            analysis.add_reference(DirAssetReferenceVc::new(source, pat.into()));
+                        }
+                    }
                 }
             }
         }
@@ -1399,9 +1418,6 @@ async fn value_visitor_inner(
             JsValue::FreeVar(FreeVarKind::Import) => {
                 JsValue::WellKnownFunction(WellKnownFunctionKind::Import)
             }
-            JsValue::FreeVar(FreeVarKind::Module) => {
-                JsValue::WellKnownObject(WellKnownObjectKind::CjsModule)
-            }
             JsValue::FreeVar(FreeVarKind::NodeProcess) => {
                 JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess)
             }
@@ -1419,7 +1435,7 @@ async fn value_visitor_inner(
                 "fs/promises" if *environment.node_externals().await? => {
                     JsValue::WellKnownObject(WellKnownObjectKind::FsModule)
                 }
-                "fs" if *environment.node_externals().await? => {
+                "fs" | "fs-extra" | "fs-plus" if *environment.node_externals().await? => {
                     JsValue::WellKnownObject(WellKnownObjectKind::FsModule)
                 }
                 "child_process" if *environment.node_externals().await? => {
