@@ -134,7 +134,7 @@ impl CodeBuilderWithIndent {
         let mut indented = RopeBuilder::default();
         for c in code.chars() {
             if c == '\n' {
-                write!(indented, "\n")?;
+                writeln!(indented)?;
                 self.needs_indent = true;
 
                 continue;

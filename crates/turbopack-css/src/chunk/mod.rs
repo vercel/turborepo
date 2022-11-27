@@ -25,10 +25,7 @@ use turbopack_core::{
 use turbopack_ecmascript::utils::FormatIter;
 use writer::expand_imports;
 
-use self::{
-    optimize::CssChunkOptimizerVc, source_map::CssChunkSourceMapAssetReferenceVc,
-    writer::ExpandImportsResult,
-};
+use self::{optimize::CssChunkOptimizerVc, source_map::CssChunkSourceMapAssetReferenceVc};
 use crate::{
     embed::CssEmbeddableVc, parse::ParseResultSourceMapVc, util::stringify_str,
     ImportAssetReferenceVc,
@@ -397,9 +394,6 @@ pub struct CssChunkItemContent {
 pub trait CssChunkItem: ChunkItem + ValueToString {
     fn content(&self) -> CssChunkItemContentVc;
     fn chunking_context(&self) -> ChunkingContextVc;
-    fn id(&self) -> ModuleIdVc {
-        CssChunkContextVc::of(self.chunking_context()).chunk_item_id(*self)
-    }
 }
 
 #[async_trait::async_trait]

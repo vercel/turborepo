@@ -62,8 +62,7 @@ impl CssChunkSourceMapAssetReferenceVc {
 impl AssetReference for CssChunkSourceMapAssetReference {
     #[turbo_tasks::function]
     async fn resolve_reference(&self) -> Result<ResolveResultVc> {
-        let mut source_maps = Vec::new();
-        source_maps.push(CssChunkSourceMapAsset { chunk: self.chunk }.cell().into());
+        let source_maps = vec![CssChunkSourceMapAsset { chunk: self.chunk }.cell().into()];
         Ok(ResolveResult::Alternatives(source_maps, vec![]).cell())
     }
 }
