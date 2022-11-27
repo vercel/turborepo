@@ -145,7 +145,7 @@ impl CssChunkContentVc {
             let chunk_path = this.chunk_path.await?;
             write!(
                 code,
-                "/* sourceMappingURL={}.map */",
+                "/*# sourceMappingURL={}.map*/",
                 chunk_path.file_name()
             )?;
         }
