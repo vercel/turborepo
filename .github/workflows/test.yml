@@ -293,11 +293,11 @@ jobs:
         run: |
           # Known set of feature combinations we need to support
           # next-swc/core
-          cargo check -p next-binding --features __swc_core_next_core --features __swc_core_binding_napi_plugin --features __swc_core_testing_transform --features __swc_testing --features __swc_transform_styled_components --features __swc_transform_styled_jsx --features __swc_transform_emotion --features __swc_transform_modularize_imports
+          cargo check -p next-binding --features __swc_core_next_core,__swc_core_binding_napi_plugin,__swc_core_testing_transform,__swc_testing,__swc_transform_styled_components,__swc_transform_styled_jsx,__swc_transform_emotion,__swc_transform_modularize_imports
           # next-swc/napi
-          cargo check -p next-binding --features __swc_core_binding_napi --features __swc_core_binding_napi_plugin --features __feature_next_dev_server --features __feature_node_file_trace --features __feature_mdx_rs
+          cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__feature_next_dev_server,__feature_node_file_trace,__feature_mdx_rs
           # next-swc/wasm
-          cargo check -p next-binding --features __swc_core_binding_wasm --features __swc_core_binding_wasm_plugin --features __feature_mdx_rs --target wasm32-unknown-unknown
+          cargo check -p next-binding --features __swc_core_binding_wasm,__swc_core_binding_wasm_plugin,__feature_mdx_rs --target wasm32-unknown-unknown
 
   rust_lint:
     needs: [determine_jobs, rust_prepare]
