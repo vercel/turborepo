@@ -254,8 +254,8 @@ fn get_task_label(ty: &TaskType, stats: &ExportedTaskStats, max_values: &MaxValu
     </tr>
     <tr>
         <td>exec</td>
-        <td bgcolor=\"{}\">{} ms</td>
-        <td bgcolor=\"{}\">avg {} ms</td>
+        <td bgcolor=\"{}\">{}</td>
+        <td bgcolor=\"{}\">{}</td>
     </tr>
     <tr>
         <td>scopes</td>
