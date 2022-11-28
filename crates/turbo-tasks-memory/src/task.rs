@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     cell::RefCell,
-    cmp::Ordering,
+    cmp::{max, Ordering},
     collections::VecDeque,
     fmt::{self, Debug, Display, Formatter, Write},
     future::Future,
@@ -738,6 +738,9 @@ impl Task {
                     }
                 }
 
+                if queue.capacity() == 0 {
+                    queue.reserve(max(children.len(), SPLIT_OFF_QUEUE_AT * 2));
+                }
                 queue.extend(children.iter().copied().map(|child| (child, depth + 1)));
 
                 // add to dirty list of the scope (potentially schedule)
@@ -903,6 +906,9 @@ impl Task {
             TaskScopes::Inner(ref mut set, _) => {
                 if set.remove(id) {
                     self.remove_self_from_scope(&mut state, id, backend, turbo_tasks);
+                    if queue.capacity() == 0 {
+                        queue.reserve(max(state.children.len(), SPLIT_OFF_QUEUE_AT * 2));
+                    }
                     queue.extend(state.children.iter().copied());
                     drop(state);
                 }
