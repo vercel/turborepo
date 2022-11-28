@@ -145,7 +145,7 @@ pub struct EventListener {
     description: Arc<dyn Fn() -> String + Sync + Send>,
     note: Arc<dyn Fn() -> String + Sync + Send>,
     // Timeout need to stay pinned while polling and also while it's dropped.
-    // So it's important to but it into a pinned Box to be able to take it out of the Option.
+    // So it's important to put it into a pinned Box to be able to take it out of the Option.
     future: Option<Pin<Box<Timeout<event_listener::EventListener>>>>,
     duration: Duration,
 }
@@ -185,7 +185,7 @@ impl Future for EventListener {
                         FormatDuration(self.duration)
                     );
                     self.duration *= 2;
-                    // SAFETY: Taking from Option is safe because we the value is inside of a pinned
+                    // SAFETY: Taking from Option is safe because the value is inside of a pinned
                     // Box. Pinning must continue until dropped.
                     let future = self.future.take().unwrap();
                     self.future = Some(Box::pin(timeout(
