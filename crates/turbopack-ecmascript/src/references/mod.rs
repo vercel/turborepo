@@ -635,49 +635,8 @@ pub(crate) async fn analyze_ecmascript_module(
                         )
                     }
 
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::PathResolve(..)) => {
-                        let parent_path = source.path().parent().await?;
-                        let args = linked_args().await?;
-
-                        let linked_func_call = link_value(JsValue::call(
-                            box JsValue::WellKnownFunction(WellKnownFunctionKind::PathResolve(
-                                box parent_path.path.as_str().into(),
-                            )),
-                            args,
-                        ))
-                        .await?;
-
-                        let pat = js_value_to_pattern(&linked_func_call);
-                        if !pat.has_constant_parts() {
-                            let (args, hints) = explain_args(&linked_args().await?);
-                            handler.span_warn_with_code(
-                                span,
-                                &format!("path.resolve({args}) is very dynamic{hints}",),
-                                DiagnosticId::Lint(
-                                    errors::failed_to_analyse::ecmascript::PATH_METHOD.to_string(),
-                                ),
-                            )
-                        }
-                        return Ok(());
-                    }
-
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin) => {
-                        let linked_func_call = link_value(JsValue::call(
-                            box JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin),
-                            args.clone(),
-                        ))
-                        .await?;
-                        let pat = js_value_to_pattern(&linked_func_call);
-                        if !pat.has_constant_parts() {
-                            let (args, hints) = explain_args(&linked_args().await?);
-                            handler.span_warn_with_code(
-                                span,
-                                &format!("path.join({args}) is very dynamic{hints}",),
-                                DiagnosticId::Lint(
-                                    errors::failed_to_analyse::ecmascript::PATH_METHOD.to_string(),
-                                ),
-                            )
-                        }
+                    JsValue::WellKnownFunction(WellKnownFunctionKind::PathResolve(..))
+                    | JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin) => {
                         return Ok(());
                     }
                     JsValue::WellKnownFunction(WellKnownFunctionKind::ChildProcessSpawnMethod(
