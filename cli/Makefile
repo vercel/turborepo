@@ -82,7 +82,7 @@ e2e: corepack install turbo
 	node -r esbuild-register scripts/e2e/e2e.ts
 
 cmd/turbo/version.go: ../version.txt
-	# Update this automatically to avoid issues with this being overwritten during use
+	# Update this atomically to avoid issues with this being overwritten during use
 	node -e 'console.log(`package main\n\nconst turboVersion = "$(TURBO_VERSION)"`)' > cmd/turbo/version.go.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
