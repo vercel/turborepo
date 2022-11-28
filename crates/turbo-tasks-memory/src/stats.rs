@@ -60,7 +60,7 @@ pub enum ReferenceType {
 pub struct ExportedTaskStats {
     pub count: usize,
     pub active_count: usize,
-    pub executions: Option<u64>,
+    pub executions: Option<u32>,
     pub roots: usize,
     pub scopes: usize,
     pub total_duration: Option<Duration>,

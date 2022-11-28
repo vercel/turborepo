@@ -88,10 +88,10 @@ pub fn create_table(root: GroupTree, stats_type: StatsType) -> String {
         let (executions_label, executions_color) =
             if let Some((executions, max_updates)) = stats.executions.zip(max_values.updates) {
                 (
-                    executions.saturating_sub(stats.count as u64).to_string(),
+                    executions.saturating_sub(stats.count as u32).to_string(),
                     as_frac_color(
-                        executions.saturating_sub(stats.count as u64),
-                        max_updates as u64,
+                        executions.saturating_sub(stats.count as u32),
+                        max_updates as u32,
                     ),
                 )
             } else {

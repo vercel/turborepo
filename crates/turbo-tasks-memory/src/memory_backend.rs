@@ -5,7 +5,7 @@ use std::{
     future::Future,
     hash::BuildHasherDefault,
     pin::Pin,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{bail, Result};
@@ -243,10 +243,11 @@ impl Backend for MemoryBackend {
         &self,
         task: TaskId,
         duration: Duration,
+        instant: Instant,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool {
         self.with_task(task, |task| {
-            task.execution_completed(duration, self, turbo_tasks)
+            task.execution_completed(duration, instant, self, turbo_tasks)
         })
     }
 

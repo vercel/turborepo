@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use turbo_tasks::StatsType;
+use turbo_tasks::{small_duration::SmallDuration, StatsType};
 
 /// Keeps track of the number of times a task has been executed, and its
 /// duration.
@@ -36,14 +36,15 @@ impl TaskStats {
     }
 
     /// Registers a task duration.
-    pub fn register_duration(&mut self, duration: Duration) {
+    pub fn register_execution(&mut self, duration: Duration, duration_since_start: Duration) {
         match self {
             Self::Full(stats) => {
-                stats.total_duration += duration;
-                stats.last_duration = duration;
+                stats.total_duration += duration.into();
+                stats.last_duration = duration.into();
             }
             Self::Essential(stats) => {
-                stats.last_duration = duration.as_nanos().try_into().unwrap_or(u64::MAX);
+                stats.last_duration = duration.into();
+                stats.last_execution_relative_to_start = duration_since_start.into();
             }
         }
     }
@@ -57,7 +58,8 @@ impl TaskStats {
                 stats.last_duration = Duration::ZERO;
             }
             Self::Essential(stats) => {
-                stats.last_duration = 0;
+                stats.last_duration = SmallDuration::MIN;
+                stats.last_execution_relative_to_start = SmallDuration::MIN;
             }
         }
     }
@@ -65,32 +67,43 @@ impl TaskStats {
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub struct TaskStatsEssential {
-    /// The last duration of the task in nanoseconds.
-    last_duration: u64,
+    /// The last duration of the task, with a precision of 10 microseconds.
+    last_duration: SmallDuration<10_000>,
+    /// The last execution of the task relative to the start of the program,
+    /// with a precision of 1 millisecond.
+    last_execution_relative_to_start: SmallDuration<1_000_000>,
 }
 
 impl TaskStatsEssential {
     /// Returns the last duration of the task.
     pub fn last_duration(&self) -> Duration {
-        Duration::from_nanos(self.last_duration)
+        self.last_duration.into()
+    }
+
+    /// Returns the last execution of the task relative to the start of the
+    /// program.
+    #[allow(dead_code)] // NOTE(alexkirsz) This will be useful for GC.
+    pub fn last_execution_relative_to_start(&self) -> Duration {
+        self.last_execution_relative_to_start.into()
     }
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub struct TaskStatsFull {
-    // While a u64 might be optimistic for executions, `TaskStatsFull` is aligned to 8 bytes
-    // anyway, so it makes no difference to the size of this struct.
     /// The number of times the task has been executed.
-    executions: u64,
+    executions: u32,
     /// The last duration of the task.
     last_duration: Duration,
     /// The total duration of the task.
     total_duration: Duration,
+    /// The last execution of the task relative to the start of the program,
+    /// with a precision of 1 millisecond.
+    last_execution_relative_to_start: SmallDuration<1_000_000>,
 }
 
 impl TaskStatsFull {
     /// Returns the number of times the task has been executed.
-    pub fn executions(&self) -> u64 {
+    pub fn executions(&self) -> u32 {
         self.executions
     }
 
@@ -102,5 +115,12 @@ impl TaskStatsFull {
     /// Returns the total duration of the task.
     pub fn total_duration(&self) -> Duration {
         self.total_duration
+    }
+
+    /// Returns the last execution of the task relative to the start of the
+    /// program.
+    #[allow(dead_code)] // NOTE(alexkirsz) This will be useful for GC.
+    pub fn last_execution_relative_to_start(&self) -> Duration {
+        self.last_execution_relative_to_start.into()
     }
 }

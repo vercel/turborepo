@@ -231,7 +231,7 @@ fn get_task_label(
             total_duration.as_micros() / (executions as u128),
             max_avg_duration.as_micros(),
         ));
-        let avg = (total_duration.as_micros() as u64 / executions) as f32 / 1000.0;
+        let avg = (total_duration.as_micros() as u32 / executions) as f32 / 1000.0;
         (format!("avg {}ms", avg), avg_color)
     } else {
         ("avg N/A".to_string(), "#ffffff".to_string())
@@ -240,10 +240,10 @@ fn get_task_label(
     let (updates_label, updates_color) =
         if let Some((executions, max_updates)) = stats.executions.zip(max_values.updates) {
             let updates_color = as_color(as_frac(
-                executions.saturating_sub(stats.count as u64),
-                max_updates as u64,
+                executions.saturating_sub(stats.count as u32),
+                max_updates as u32,
             ));
-            let updates = executions - stats.count as u64;
+            let updates = executions - stats.count as u32;
             (format!("{}", updates), updates_color)
         } else {
             ("N/A".to_string(), "#ffffff".to_string())

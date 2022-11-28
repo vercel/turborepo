@@ -53,6 +53,7 @@ pub mod primitives;
 mod raw_vc;
 mod read_ref;
 pub mod registry;
+pub mod small_duration;
 mod task_input;
 mod timed_future;
 pub mod trace;

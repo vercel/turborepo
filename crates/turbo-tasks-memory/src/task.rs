@@ -8,7 +8,7 @@ use std::{
     hash::Hash,
     mem::{replace, take},
     pin::Pin,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::Result;
@@ -569,6 +569,7 @@ impl Task {
     pub(crate) fn execution_completed(
         &self,
         duration: Duration,
+        instant: Instant,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool {
@@ -580,7 +581,9 @@ impl Task {
         let mut clear_dependencies = false;
         {
             let mut state = self.state.write();
-            state.stats.register_duration(duration);
+            state
+                .stats
+                .register_execution(duration, turbo_tasks.program_duration_until(instant));
             match state.state_type {
                 InProgress => {
                     state.state_type = Done;
@@ -1591,7 +1594,7 @@ impl Eq for Task {}
 pub struct TaskStatsInfo {
     pub total_duration: Option<Duration>,
     pub last_duration: Duration,
-    pub executions: Option<u64>,
+    pub executions: Option<u32>,
     pub root_scoped: bool,
     pub child_scopes: usize,
     pub active: bool,

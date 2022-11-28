@@ -161,6 +161,8 @@ pub trait TurboTasksBackendApi: TaskIdProvider + TurboTasksCallApi + Sync + Send
     fn stats_type(&self) -> StatsType;
     /// Sets the stats reporting type.
     fn set_stats_type(&self, stats_type: StatsType);
+    /// Returns the duration from the start of the program to the given instant.
+    fn program_duration_until(&self, instant: Instant) -> Duration;
 }
 
 impl StatsType {
@@ -212,6 +214,7 @@ pub struct TurboTasks<B: Backend + 'static> {
     // NOTE(alexkirsz) We use an atomic bool instead of a lock around `StatsType` to avoid the
     // locking overhead.
     enable_full_stats: AtomicBool,
+    program_start: Instant,
 }
 
 // TODO implement our own thread pool and make these thread locals instead
@@ -253,6 +256,7 @@ impl<B: Backend> TurboTasks<B> {
             event_foreground: Event::new(|| "TurboTasks::event_foreground".to_string()),
             event_background: Event::new(|| "TurboTasks::event_background".to_string()),
             enable_full_stats: AtomicBool::new(false),
+            program_start: Instant::now(),
         });
         this.backend.startup(&*this);
         this
@@ -363,12 +367,12 @@ impl<B: Backend> TurboTasks<B> {
                 }
                 if let Some(execution) = this.backend.try_start_task_execution(task_id, &*this) {
                     // Setup thread locals
-                    let (result, duration) = CELL_COUNTERS
+                    let (result, duration, instant) = CELL_COUNTERS
                         .scope(Default::default(), async {
-                            let (result, duration) =
+                            let (result, duration, instant) =
                                 TimedFuture::new(AssertUnwindSafe(execution.future).catch_unwind())
                                     .await;
-                            (result, duration)
+                            (result, duration, instant)
                         })
                         .await;
                     if cfg!(feature = "log_function_stats") && duration.as_millis() > 1000 {
@@ -389,7 +393,7 @@ impl<B: Backend> TurboTasks<B> {
                     this.notify_scheduled_tasks_internal();
                     let reexecute = this
                         .backend
-                        .task_execution_completed(task_id, duration, &*this);
+                        .task_execution_completed(task_id, duration, instant, &*this);
                     if !reexecute {
                         break;
                     }
@@ -853,6 +857,10 @@ impl<B: Backend> TurboTasksBackendApi for TurboTasks<B> {
             StatsType::Full => self.enable_full_stats.store(true, Ordering::Release),
             StatsType::Essential => self.enable_full_stats.store(false, Ordering::Release),
         }
+    }
+
+    fn program_duration_until(&self, instant: Instant) -> Duration {
+        instant - self.program_start
     }
 }
 
