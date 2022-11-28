@@ -450,6 +450,102 @@
 <span id="450">450</span>
 <span id="451">451</span>
 <span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
+<span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::VecDeque,
     fs::{create_dir_all, File},
@@ -458,6 +554,7 @@
 };
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>indoc::{formatdoc, indoc};
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tempfile::TempDir;
 
@@ -483,6 +580,24 @@
     </span>}
 }
 
+<span class="kw">fn </span>write_file&lt;P: AsRef&lt;Path&gt;&gt;(name: <span class="kw-2">&amp;</span>str, path: P, content: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    File::create(path)
+        .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;creating {name}&quot;</span>))<span class="question-mark">?
+        </span>.write_all(content)
+        .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;writing {name}&quot;</span>))
+}
+
+<span class="doccomment">/// How to run effects in components.
+</span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+</span><span class="kw">pub enum </span>EffectMode {
+    <span class="doccomment">/// As a direct `useEffect` hook in the component&#39;s body.
+    </span>Hook,
+    <span class="doccomment">/// Rendering an &lt;Effect /&gt; client-side component that has the `useEffect`
+    /// hook instead. Good for testing React Server Components, as they can&#39;t
+    /// use `useEffect` hooks directly.
+    </span>Component,
+}
+
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>TestAppBuilder {
     <span class="kw">pub </span>target: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
@@ -491,6 +606,7 @@
     <span class="kw">pub </span>dynamic_import_count: usize,
     <span class="kw">pub </span>flatness: usize,
     <span class="kw">pub </span>package_json: <span class="prelude-ty">Option</span>&lt;PackageJsonConfig&gt;,
+    <span class="kw">pub </span>effect_mode: EffectMode,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>TestAppBuilder {
@@ -502,16 +618,34 @@
             dynamic_import_count: <span class="number">0</span>,
             flatness: <span class="number">5</span>,
             package_json: <span class="prelude-val">Some</span>(Default::default()),
+            effect_mode: EffectMode::Hook,
         }
     }
 }
 
-<span class="kw">fn </span>write_file&lt;P: AsRef&lt;Path&gt;&gt;(name: <span class="kw-2">&amp;</span>str, path: P, content: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    File::create(path)
-        .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;creating {name}&quot;</span>))<span class="question-mark">?
-        </span>.write_all(content)
-        .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;writing {name}&quot;</span>))
-}
+<span class="kw">const </span>SETUP_IMPORTS: <span class="kw-2">&amp;</span>str = <span class="macro">indoc! </span>{<span class="string">r#&quot;
+import React from &quot;react&quot;;
+&quot;#</span>};
+<span class="kw">const </span>SETUP_EFFECT_PROPS: <span class="kw-2">&amp;</span>str = <span class="macro">indoc! </span>{<span class="string">r#&quot;
+let EFFECT_PROPS = {};
+&quot;#</span>};
+<span class="kw">const </span>SETUP_EVAL: <span class="kw-2">&amp;</span>str = <span class="macro">indoc! </span>{<span class="string">r#&quot;
+/* @turbopack-bench:eval-start */ 
+/* @turbopack-bench:eval-end */
+&quot;#</span>};
+<span class="kw">const </span>USE_EFFECT: <span class="kw-2">&amp;</span>str = <span class="macro">indoc! </span>{<span class="string">r#&quot;
+React.useEffect(() =&gt; {
+    if (EFFECT_PROPS.hydration) {
+        globalThis.__turbopackBenchBinding &amp;&amp; globalThis.__turbopackBenchBinding(&quot;Hydration done&quot;);
+    }
+    if (EFFECT_PROPS.message) {
+        globalThis.__turbopackBenchBinding &amp;&amp; globalThis.__turbopackBenchBinding(EFFECT_PROPS.message);
+    }
+}, [EFFECT_PROPS]);
+&quot;#</span>};
+<span class="kw">const </span>EFFECT_ELEMENT: <span class="kw-2">&amp;</span>str = <span class="macro">indoc! </span>{<span class="string">r#&quot;
+&lt;Effect {...EFFECT_PROPS} /&gt;
+&quot;#</span>};
 
 <span class="kw">impl </span>TestAppBuilder {
     <span class="kw">pub fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;TestApp&gt; {
@@ -520,8 +654,8 @@
         } <span class="kw">else </span>{
             TestAppTarget::Temp(tempfile::tempdir().context(<span class="string">&quot;creating tempdir&quot;</span>)<span class="question-mark">?</span>)
         };
-        <span class="kw">let </span>app = TestApp { target };
-        <span class="kw">let </span>path = app.path();
+        <span class="kw">let </span>path = target.path();
+        <span class="kw">let </span><span class="kw-2">mut </span>modules = <span class="macro">vec!</span>[];
         <span class="kw">let </span>src = path.join(<span class="string">&quot;src&quot;</span>);
         create_dir_all(<span class="kw-2">&amp;</span>src).context(<span class="string">&quot;creating src dir&quot;</span>)<span class="question-mark">?</span>;
 
@@ -530,29 +664,61 @@
         <span class="kw">let </span><span class="kw-2">mut </span>remaining_dynamic_imports = <span class="self">self</span>.dynamic_import_count;
 
         <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::new();
-        queue.push_back(src.join(<span class="string">&quot;triangle.jsx&quot;</span>));
+        queue.push_back((src.join(<span class="string">&quot;triangle.jsx&quot;</span>), <span class="number">0</span>));
         remaining_modules -= <span class="number">1</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>is_root = <span class="bool-val">true</span>;
 
-        <span class="kw">while let </span><span class="prelude-val">Some</span>(file) = queue.pop_front() {
+        <span class="kw">let </span>(additional_body, additional_elements) = <span class="kw">match </span><span class="self">self</span>.effect_mode {
+            EffectMode::Component =&gt; (<span class="string">&quot;&quot;</span>, EFFECT_ELEMENT),
+            EffectMode::Hook =&gt; (USE_EFFECT, <span class="string">&quot;&quot;</span>),
+        };
+
+        <span class="kw">while let </span><span class="prelude-val">Some</span>((file, depth)) = queue.pop_front() {
+            modules.push((file.clone(), depth));
+
+            <span class="kw">let </span>setup_imports = <span class="kw">match </span><span class="self">self</span>.effect_mode {
+                EffectMode::Hook =&gt; SETUP_IMPORTS.to_string(),
+                EffectMode::Component =&gt; {
+                    <span class="kw">let </span>relative_effect = <span class="kw">if </span>src == file.parent().unwrap() {
+                        <span class="string">&quot;./effect.jsx&quot;</span>.to_string()
+                    } <span class="kw">else </span>{
+                        pathdiff::diff_paths(src.join(<span class="string">&quot;effect.jsx&quot;</span>), file.parent().unwrap())
+                            .unwrap()
+                            .display()
+                            .to_string()
+                    };
+                    <span class="macro">formatdoc! </span>{<span class="string">r#&quot;
+                        {SETUP_IMPORTS}
+                        import Effect from &quot;{relative_effect}&quot;;
+                    &quot;#</span>}
+                }
+            };
+
             <span class="kw">let </span>leaf = remaining_modules == <span class="number">0
                 </span>|| (!queue.is_empty()
                     &amp;&amp; (queue.len() + remaining_modules) % (<span class="self">self</span>.flatness + <span class="number">1</span>) == <span class="number">0</span>);
             <span class="kw">if </span>leaf {
-                File::create(file)
-                    .context(<span class="string">&quot;creating file&quot;</span>)<span class="question-mark">?
-                    </span>.write_all(
-                        <span class="string">r#&quot;import React from &quot;react&quot;;
+                write_file(
+                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;leaf file {}&quot;</span>, file.display()),
+                    <span class="kw-2">&amp;</span>file,
+                    <span class="macro">formatdoc! </span>{<span class="string">r#&quot;
+                        {setup_imports}
 
-function Triangle({ style }) {
-    return &lt;polygon points=&quot;-5,4.33 0,-4.33 5,4.33&quot; style={style} /&gt;;
-}
+                        {SETUP_EFFECT_PROPS}
+                        {SETUP_EVAL}
 
-export default React.memo(Triangle);
-&quot;#
-                        </span>.as_bytes(),
-                    )
-                    .context(<span class="string">&quot;writing file&quot;</span>)<span class="question-mark">?</span>;
+                        function Triangle({{ style }}) {{
+                            {additional_body}
+                            return &lt;&gt;
+                                &lt;polygon points=&quot;-5,4.33 0,-4.33 5,4.33&quot; style={{style}} /&gt;
+                                {additional_elements}
+                            &lt;/&gt;;
+                        }}
+
+                        export default React.memo(Triangle);
+                    &quot;#</span>}
+                    .as_bytes(),
+                )<span class="question-mark">?</span>;
             } <span class="kw">else </span>{
                 <span class="kw">let </span>in_subdirectory = decide(remaining_directories, remaining_modules / <span class="number">3</span>);
 
@@ -579,7 +745,7 @@ export default React.memo(Triangle);
                         f.file_name().unwrap().to_str().unwrap(),
                         i
                     ));
-                    queue.push_back(f);
+                    queue.push_back((f, depth + <span class="number">1</span>));
                 }
                 remaining_modules = remaining_modules.saturating_sub(<span class="number">3</span>);
 
@@ -608,106 +774,111 @@ export default React.memo(Triangle);
                     })
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                 {
-                    <span class="kw">let </span>(extra_imports, extra) = <span class="kw">if </span>is_root {
+                    <span class="kw">let </span>setup_hydration = <span class="kw">if </span>is_root {
                         is_root = <span class="bool-val">false</span>;
-                        (
-                            <span class="string">&quot;import Detector from \&quot;./detector.jsx\&quot;;\n&quot;</span>,
-                            <span class="string">&quot;\n        &lt;Detector /&gt;&quot;</span>,
-                        )
-                    } <span class="kw">else </span>{
-                        (<span class="string">&quot;&quot;</span>, <span class="string">&quot;&quot;</span>)
-                    };
-                    File::create(<span class="kw-2">&amp;</span>file)
-                        .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;creating file with children {}&quot;</span>, file.display()))<span class="question-mark">?
-                        </span>.write_all(
-                            <span class="macro">format!</span>(
-                                <span class="string">r#&quot;import React from &quot;react&quot;;
-{a}
-{b}
-{c}
-{extra_imports}
-function Container({{ style }}) {{
-    return &lt;&gt;
-        &lt;g transform=&quot;translate(0 -2.16)   scale(0.5 0.5)&quot;&gt;
-            {a_}
-        &lt;/g&gt;
-        &lt;g transform=&quot;translate(-2.5 2.16) scale(0.5 0.5)&quot;&gt;
-            {b_}
-        &lt;/g&gt;
-        &lt;g transform=&quot;translate(2.5 2.16)  scale(0.5 0.5)&quot;&gt;
-            {c_}
-        &lt;/g&gt;{extra}
-    &lt;/&gt;;
-}}
+                        <span class="string">&quot;\nEFFECT_PROPS.hydration = true;&quot;
+                    </span>} <span class="kw">else </span>{
+                        <span class="string">&quot;&quot;
+                    </span>};
+                    write_file(
+                        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;file with children {}&quot;</span>, file.display()),
+                        <span class="kw-2">&amp;</span>file,
+                        <span class="macro">formatdoc! </span>{<span class="string">r#&quot;
+                            {setup_imports}
+                            {a}
+                            {b}
+                            {c}
 
-export default React.memo(Container);
-&quot;#
-                            </span>)
-                            .as_bytes(),
-                        )
-                        .with_context(|| {
-                            <span class="macro">format!</span>(<span class="string">&quot;writing file with children {}&quot;</span>, file.display())
-                        })<span class="question-mark">?</span>;
+                            {SETUP_EFFECT_PROPS}{setup_hydration}
+                            {SETUP_EVAL}
+
+                            function Container({{ style }}) {{
+                                {additional_body}
+                                return &lt;&gt;
+                                    &lt;g transform=&quot;translate(0 -2.16)   scale(0.5 0.5)&quot;&gt;
+                                        {a_}
+                                    &lt;/g&gt;
+                                    &lt;g transform=&quot;translate(-2.5 2.16) scale(0.5 0.5)&quot;&gt;
+                                        {b_}
+                                    &lt;/g&gt;
+                                    &lt;g transform=&quot;translate(2.5 2.16)  scale(0.5 0.5)&quot;&gt;
+                                        {c_}
+                                    &lt;/g&gt;
+                                    {additional_elements}
+                                &lt;/&gt;;
+                            }}
+
+                            export default React.memo(Container);
+                        &quot;#</span>}
+                        .as_bytes(),
+                    )<span class="question-mark">?</span>;
                 } <span class="kw">else </span>{
                     <span class="macro">unreachable!</span>()
                 }
             }
         }
 
-        <span class="kw">let </span>bootstrap = <span class="string">r#&quot;import React from &quot;react&quot;;
-import { createRoot } from &quot;react-dom/client&quot;;
-import Triangle from &quot;./triangle.jsx&quot;;
+        <span class="kw">let </span>bootstrap = <span class="macro">indoc! </span>{<span class="string">r#&quot;
+            import React from &quot;react&quot;;
+            import { createRoot } from &quot;react-dom/client&quot;;
+            import Triangle from &quot;./triangle.jsx&quot;;
 
-function App() {
-    return &lt;svg height=&quot;100%&quot; viewBox=&quot;-5 -4.33 10 8.66&quot; style={{ }}&gt;
-        &lt;Triangle style={{ fill: &quot;white&quot; }}/&gt;
-    &lt;/svg&gt;
-}
+            function App() {
+                return &lt;svg height=&quot;100%&quot; viewBox=&quot;-5 -4.33 10 8.66&quot; style={{ }}&gt;
+                    &lt;Triangle style={{ fill: &quot;white&quot; }}/&gt;
+                &lt;/svg&gt;
+            }
 
-document.body.style.backgroundColor = &quot;black&quot;;
-let root = document.createElement(&quot;main&quot;);
-document.body.appendChild(root);
-createRoot(root).render(&lt;App /&gt;);
-&quot;#</span>;
-        write_file(<span class="string">&quot;bootrap file&quot;</span>, src.join(<span class="string">&quot;index.jsx&quot;</span>), bootstrap.as_bytes())<span class="question-mark">?</span>;
+            document.body.style.backgroundColor = &quot;black&quot;;
+            let root = document.createElement(&quot;main&quot;);
+            document.body.appendChild(root);
+            createRoot(root).render(&lt;App /&gt;);
+        &quot;#</span>};
+        write_file(
+            <span class="string">&quot;bootstrap file&quot;</span>,
+            src.join(<span class="string">&quot;index.jsx&quot;</span>),
+            bootstrap.as_bytes(),
+        )<span class="question-mark">?</span>;
 
         <span class="kw">let </span>pages = src.join(<span class="string">&quot;pages&quot;</span>);
         create_dir_all(<span class="kw-2">&amp;</span>pages)<span class="question-mark">?</span>;
 
         <span class="comment">// The page is e. g. used by Next.js
-        </span><span class="kw">let </span>bootstrap_page = <span class="string">r#&quot;import React from &quot;react&quot;;
-import Triangle from &quot;../triangle.jsx&quot;;
+        </span><span class="kw">let </span>bootstrap_page = <span class="macro">indoc! </span>{<span class="string">r#&quot;
+            import React from &quot;react&quot;;
+            import Triangle from &quot;../triangle.jsx&quot;;
 
-export default function Page() {
-    return &lt;svg height=&quot;100%&quot; viewBox=&quot;-5 -4.33 10 8.66&quot; style={{ backgroundColor: &quot;black&quot; }}&gt;
-        &lt;Triangle style={{ fill: &quot;white&quot; }}/&gt;
-    &lt;/svg&gt;
-}
-&quot;#</span>;
+            export default function Page() {
+                return &lt;svg height=&quot;100%&quot; viewBox=&quot;-5 -4.33 10 8.66&quot; style={{ backgroundColor: &quot;black&quot; }}&gt;
+                    &lt;Triangle style={{ fill: &quot;white&quot; }}/&gt;
+                &lt;/svg&gt;
+            }
+        &quot;#</span>};
         write_file(
-            <span class="string">&quot;bootrap page&quot;</span>,
+            <span class="string">&quot;bootstrap page&quot;</span>,
             pages.join(<span class="string">&quot;page.jsx&quot;</span>),
             bootstrap_page.as_bytes(),
         )<span class="question-mark">?</span>;
 
         <span class="comment">// The page is e. g. used by Next.js
-        </span><span class="kw">let </span>bootstrap_static_page = <span class="string">r#&quot;import React from &quot;react&quot;;
-import Triangle from &quot;../triangle.jsx&quot;;
+        </span><span class="kw">let </span>bootstrap_static_page = <span class="macro">indoc! </span>{<span class="string">r#&quot;
+            import React from &quot;react&quot;;
+            import Triangle from &quot;../triangle.jsx&quot;;
 
-export default function Page() {
-    return &lt;svg height=&quot;100%&quot; viewBox=&quot;-5 -4.33 10 8.66&quot; style={{ backgroundColor: &quot;black&quot; }}&gt;
-        &lt;Triangle style={{ fill: &quot;white&quot; }}/&gt;
-    &lt;/svg&gt;
-}
+            export default function Page() {
+                return &lt;svg height=&quot;100%&quot; viewBox=&quot;-5 -4.33 10 8.66&quot; style={{ backgroundColor: &quot;black&quot; }}&gt;
+                    &lt;Triangle style={{ fill: &quot;white&quot; }}/&gt;
+                &lt;/svg&gt;
+            }
 
-export function getStaticProps() {
-    return {
-        props: {}
-    };
-}
-&quot;#</span>;
+            export function getStaticProps() {
+                return {
+                    props: {}
+                };
+            }
+        &quot;#</span>};
         write_file(
-            <span class="string">&quot;bootrap static page&quot;</span>,
+            <span class="string">&quot;bootstrap static page&quot;</span>,
             pages.join(<span class="string">&quot;static.jsx&quot;</span>),
             bootstrap_static_page.as_bytes(),
         )<span class="question-mark">?</span>;
@@ -717,109 +888,116 @@ export function getStaticProps() {
         create_dir_all(app_dir.join(<span class="string">&quot;client&quot;</span>))<span class="question-mark">?</span>;
 
         <span class="comment">// The page is e. g. used by Next.js
-        </span><span class="kw">let </span>bootstrap_app_page = <span class="string">r#&quot;import React from &quot;react&quot;;
-import Triangle from &quot;../../triangle.jsx&quot;;
+        </span><span class="kw">let </span>bootstrap_app_page = <span class="macro">indoc! </span>{<span class="string">r#&quot;
+            import React from &quot;react&quot;;
+            import Triangle from &quot;../../triangle.jsx&quot;;
 
-export default function Page() {
-    return &lt;svg height=&quot;100%&quot; viewBox=&quot;-5 -4.33 10 8.66&quot; style={{ backgroundColor: &quot;black&quot; }}&gt;
-        &lt;Triangle style={{ fill: &quot;white&quot; }}/&gt;
-    &lt;/svg&gt;
-}
-&quot;#</span>;
-        File::create(app_dir.join(<span class="string">&quot;app/page.jsx&quot;</span>))
-            .context(<span class="string">&quot;creating bootstrap app page&quot;</span>)<span class="question-mark">?
-            </span>.write_all(bootstrap_app_page.as_bytes())
-            .context(<span class="string">&quot;writing bootstrap app page&quot;</span>)<span class="question-mark">?</span>;
+            export default function Page() {
+                return &lt;svg height=&quot;100%&quot; viewBox=&quot;-5 -4.33 10 8.66&quot; style={{ backgroundColor: &quot;black&quot; }}&gt;
+                    &lt;Triangle style={{ fill: &quot;white&quot; }}/&gt;
+                &lt;/svg&gt;
+            }
+        &quot;#</span>};
+        write_file(
+            <span class="string">&quot;bootstrap app page&quot;</span>,
+            app_dir.join(<span class="string">&quot;app/page.jsx&quot;</span>),
+            bootstrap_app_page.as_bytes(),
+        )<span class="question-mark">?</span>;
 
-        <span class="comment">// The component is used to measure hydration and commit time for app/page.jsx
-        </span><span class="kw">let </span>detector_component = <span class="string">r#&quot;&quot;use client&quot;;
+        <span class="kw">if </span><span class="macro">matches!</span>(<span class="self">self</span>.effect_mode, EffectMode::Component) {
+            <span class="comment">// The component is used to measure hydration and commit time for app/page.jsx
+            </span><span class="kw">let </span>effect_component = <span class="macro">formatdoc! </span>{<span class="string">r#&quot;
+                &quot;use client&quot;;
 
-import React from &quot;react&quot;;
+                import React from &quot;react&quot;;
 
-export default function Detector({ message }) {
-    React.useEffect(() =&gt; {
-        globalThis.__turbopackBenchBinding &amp;&amp; globalThis.__turbopackBenchBinding(&quot;Hydration done&quot;);
-    });
-    React.useEffect(() =&gt; {
-        message &amp;&amp; globalThis.__turbopackBenchBinding &amp;&amp; globalThis.__turbopackBenchBinding(message);
-    }, [message]);
-    return null;
-}
-&quot;#</span>;
-        File::create(src.join(<span class="string">&quot;detector.jsx&quot;</span>))
-            .context(<span class="string">&quot;creating detector component&quot;</span>)<span class="question-mark">?
-            </span>.write_all(detector_component.as_bytes())
-            .context(<span class="string">&quot;writing detector component&quot;</span>)<span class="question-mark">?</span>;
+                export default function Effect(EFFECT_PROPS) {{
+                    {USE_EFFECT}
+                    return null;
+                }}
+            &quot;#</span>};
+            write_file(
+                <span class="string">&quot;effect component&quot;</span>,
+                src.join(<span class="string">&quot;effect.jsx&quot;</span>),
+                effect_component.as_bytes(),
+            )<span class="question-mark">?</span>;
+        }
 
         <span class="comment">// The page is e. g. used by Next.js
-        </span><span class="kw">let </span>bootstrap_app_client_page = <span class="string">r#&quot;&quot;use client&quot;;
-import React from &quot;react&quot;;
-import Triangle from &quot;../../triangle.jsx&quot;;
+        </span><span class="kw">let </span>bootstrap_app_client_page = <span class="macro">indoc! </span>{<span class="string">r#&quot;
+            &quot;use client&quot;;
+            import React from &quot;react&quot;;
+            import Triangle from &quot;../../triangle.jsx&quot;;
 
-export default function Page() {
-    return &lt;svg height=&quot;100%&quot; viewBox=&quot;-5 -4.33 10 8.66&quot; style={{ backgroundColor: &quot;black&quot; }}&gt;
-        &lt;Triangle style={{ fill: &quot;white&quot; }}/&gt;
-    &lt;/svg&gt;
-}
-&quot;#</span>;
-        File::create(app_dir.join(<span class="string">&quot;client/page.jsx&quot;</span>))
-            .context(<span class="string">&quot;creating bootstrap app client page&quot;</span>)<span class="question-mark">?
-            </span>.write_all(bootstrap_app_client_page.as_bytes())
-            .context(<span class="string">&quot;writing bootstrap app client page&quot;</span>)<span class="question-mark">?</span>;
+            export default function Page() {
+                return &lt;svg height=&quot;100%&quot; viewBox=&quot;-5 -4.33 10 8.66&quot; style={{ backgroundColor: &quot;black&quot; }}&gt;
+                    &lt;Triangle style={{ fill: &quot;white&quot; }}/&gt;
+                &lt;/svg&gt;
+            }
+        &quot;#</span>};
+        write_file(
+            <span class="string">&quot;bootstrap app client page&quot;</span>,
+            app_dir.join(<span class="string">&quot;client/page.jsx&quot;</span>),
+            bootstrap_app_client_page.as_bytes(),
+        )<span class="question-mark">?</span>;
 
         <span class="comment">// This root layout is e. g. used by Next.js
-        </span><span class="kw">let </span>bootstrap_layout = <span class="string">r#&quot;export default function RootLayout({ children }) {
-    return (
-        &lt;html lang=&quot;en&quot;&gt;
-            &lt;head&gt;
-                &lt;meta charSet=&quot;UTF-8&quot; /&gt;
-                &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot; /&gt;
-                &lt;title&gt;Turbopack Test App&lt;/title&gt;
-            &lt;/head&gt;
-            &lt;body&gt;
-                {children}
-            &lt;/body&gt;
-        &lt;/html&gt;
-    );
-}
-        &quot;#</span>;
-        File::create(app_dir.join(<span class="string">&quot;layout.jsx&quot;</span>))
-            .context(<span class="string">&quot;creating bootstrap html in root&quot;</span>)<span class="question-mark">?
-            </span>.write_all(bootstrap_layout.as_bytes())
-            .context(<span class="string">&quot;writing bootstrap html in root&quot;</span>)<span class="question-mark">?</span>;
+        </span><span class="kw">let </span>bootstrap_layout = <span class="macro">indoc! </span>{<span class="string">r#&quot;
+            export default function RootLayout({ children }) {
+                return (
+                    &lt;html lang=&quot;en&quot;&gt;
+                        &lt;head&gt;
+                            &lt;meta charSet=&quot;UTF-8&quot; /&gt;
+                            &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot; /&gt;
+                            &lt;title&gt;Turbopack Test App&lt;/title&gt;
+                        &lt;/head&gt;
+                        &lt;body&gt;
+                            {children}
+                        &lt;/body&gt;
+                    &lt;/html&gt;
+                );
+            }
+        &quot;#</span>};
+        write_file(
+            <span class="string">&quot;bootstrap layout&quot;</span>,
+            app_dir.join(<span class="string">&quot;layout.jsx&quot;</span>),
+            bootstrap_layout.as_bytes(),
+        )<span class="question-mark">?</span>;
 
         <span class="comment">// This HTML is used e. g. by Vite
-        </span><span class="kw">let </span>bootstrap_html = <span class="string">r#&quot;&lt;!DOCTYPE html&gt;
-&lt;html lang=&quot;en&quot;&gt;
-    &lt;head&gt;
-        &lt;meta charset=&quot;UTF-8&quot; /&gt;
-        &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot; /&gt;
-        &lt;title&gt;Turbopack Test App&lt;/title&gt;
-    &lt;/head&gt;
-    &lt;body&gt;
-        &lt;script type=&quot;module&quot; src=&quot;/src/index.jsx&quot;&gt;&lt;/script&gt;
-    &lt;/body&gt;
-&lt;/html&gt;
-&quot;#</span>;
+        </span><span class="kw">let </span>bootstrap_html = <span class="macro">indoc! </span>{<span class="string">r#&quot;
+            &lt;!DOCTYPE html&gt;
+            &lt;html lang=&quot;en&quot;&gt;
+                &lt;head&gt;
+                    &lt;meta charset=&quot;UTF-8&quot; /&gt;
+                    &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot; /&gt;
+                    &lt;title&gt;Turbopack Test App&lt;/title&gt;
+                &lt;/head&gt;
+                &lt;body&gt;
+                    &lt;script type=&quot;module&quot; src=&quot;/src/index.jsx&quot;&gt;&lt;/script&gt;
+                &lt;/body&gt;
+            &lt;/html&gt;
+        &quot;#</span>};
         write_file(
-            <span class="string">&quot;bootstrap html&quot;</span>,
+            <span class="string">&quot;bootstrap html in root&quot;</span>,
             path.join(<span class="string">&quot;index.html&quot;</span>),
             bootstrap_html.as_bytes(),
         )<span class="question-mark">?</span>;
 
         <span class="comment">// This HTML is used e. g. by webpack
-        </span><span class="kw">let </span>bootstrap_html2 = <span class="string">r#&quot;&lt;!DOCTYPE html&gt;
-&lt;html lang=&quot;en&quot;&gt;
-    &lt;head&gt;
-        &lt;meta charset=&quot;UTF-8&quot; /&gt;
-        &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot; /&gt;
-        &lt;title&gt;Turbopack Test App&lt;/title&gt;
-    &lt;/head&gt;
-    &lt;body&gt;
-        &lt;script src=&quot;main.js&quot;&gt;&lt;/script&gt;
-    &lt;/body&gt;
-&lt;/html&gt;
-&quot;#</span>;
+        </span><span class="kw">let </span>bootstrap_html2 = <span class="macro">indoc! </span>{<span class="string">r#&quot;
+            &lt;!DOCTYPE html&gt;
+            &lt;html lang=&quot;en&quot;&gt;
+                &lt;head&gt;
+                    &lt;meta charset=&quot;UTF-8&quot; /&gt;
+                    &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot; /&gt;
+                    &lt;title&gt;Turbopack Test App&lt;/title&gt;
+                &lt;/head&gt;
+                &lt;body&gt;
+                    &lt;script src=&quot;main.js&quot;&gt;&lt;/script&gt;
+                &lt;/body&gt;
+            &lt;/html&gt;
+        &quot;#</span>};
 
         <span class="kw">let </span>public = path.join(<span class="string">&quot;public&quot;</span>);
         create_dir_all(<span class="kw-2">&amp;</span>public).context(<span class="string">&quot;creating public dir&quot;</span>)<span class="question-mark">?</span>;
@@ -857,13 +1035,14 @@ export default function Page() {
                     <span class="string">&quot;react-dom&quot;</span>: package_json.react_version.clone(),
                 }
             });
-            File::create(path.join(<span class="string">&quot;package.json&quot;</span>))
-                .context(<span class="string">&quot;creating package.json&quot;</span>)<span class="question-mark">?
-                </span>.write_all(<span class="macro">format!</span>(<span class="string">&quot;{:#}&quot;</span>, package_json).as_bytes())
-                .context(<span class="string">&quot;writing package.json&quot;</span>)<span class="question-mark">?</span>;
+            write_file(
+                <span class="string">&quot;package.json&quot;</span>,
+                path.join(<span class="string">&quot;package.json&quot;</span>),
+                <span class="macro">format!</span>(<span class="string">&quot;{:#}&quot;</span>, package_json).as_bytes(),
+            )<span class="question-mark">?</span>;
         }
 
-        <span class="prelude-val">Ok</span>(app)
+        <span class="prelude-val">Ok</span>(TestApp { target, modules })
     }
 }
 
@@ -888,18 +1067,31 @@ export default function Page() {
     Temp(TempDir),
 }
 
+<span class="kw">impl </span>TestAppTarget {
+    <span class="doccomment">/// Returns the path to the directory containing the app.
+    </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Path {
+        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self </span>{
+            TestAppTarget::Set(target) =&gt; target.as_path(),
+            TestAppTarget::Temp(target) =&gt; target.path(),
+        }
+    }
+}
+
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>TestApp {
     target: TestAppTarget,
+    modules: Vec&lt;(PathBuf, usize)&gt;,
 }
 
 <span class="kw">impl </span>TestApp {
     <span class="doccomment">/// Returns the path to the directory containing the app.
     </span><span class="kw">pub fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Path {
-        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.target {
-            TestAppTarget::Set(target) =&gt; target.as_path(),
-            TestAppTarget::Temp(target) =&gt; target.path(),
-        }
+        <span class="self">self</span>.target.path()
+    }
+
+    <span class="doccomment">/// Returns the list of modules and their depth in this app.
+    </span><span class="kw">pub fn </span>modules(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[(PathBuf, usize)] {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.modules
     }
 }
 </code></pre></div>
