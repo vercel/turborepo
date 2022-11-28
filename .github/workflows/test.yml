@@ -206,7 +206,9 @@ jobs:
       # download-artifact doesn't restore execution permissions
       - name: Make turbo executable
         shell: bash
-        run: chmod +x cli/shim/turbo
+        run: |
+          chmod +x cli/shim/turbo
+          cat cli/shim/turbo
       - name: Run E2E Tests
         shell: bash
         run: pnpm -- turbo-prebuilt run test --filter=cli --color
