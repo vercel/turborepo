@@ -113,10 +113,6 @@ pub struct Task {
     state: RwLock<TaskState>,
 }
 
-/// Task data that is only modified during task execution.
-#[derive(Default)]
-struct TaskExecutionData {}
-
 impl Debug for Task {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut result = f.debug_struct("Task");
@@ -606,7 +602,7 @@ impl Task {
         }
 
         let id = self.id;
-        let mut clear_dependencies = None;
+        let mut clear_dependencies = HashSet::new();
         {
             let mut state = self.state.write();
             match state.state_type {
@@ -617,7 +613,7 @@ impl Task {
                 Done {
                     ref mut dependencies,
                 } => {
-                    clear_dependencies = Some(take(dependencies));
+                    clear_dependencies = take(dependencies);
                     // add to dirty lists and potentially schedule
                     let mut active = false;
                     for scope in state.scopes.iter() {
@@ -654,22 +650,19 @@ impl Task {
             }
         }
 
-        if let Some(dependencies) = clear_dependencies {
-            self.clear_dependencies(dependencies, backend);
+        if !clear_dependencies.is_empty() {
+            self.clear_dependencies(clear_dependencies, backend);
         }
     }
 
     pub(crate) fn schedule_when_dirty(&self, turbo_tasks: &dyn TurboTasksBackendApi) {
         let mut state = self.state.write();
-        match state.state_type {
-            TaskStateType::Dirty { ref mut event } => {
-                state.state_type = Scheduled {
-                    event: event.take(),
-                };
-                drop(state);
-                turbo_tasks.schedule(self.id);
-            }
-            _ => drop(state),
+        if let TaskStateType::Dirty { ref mut event } = state.state_type {
+            state.state_type = Scheduled {
+                event: event.take(),
+            };
+            drop(state);
+            turbo_tasks.schedule(self.id);
         }
     }
 
