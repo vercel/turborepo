@@ -209,7 +209,7 @@ jobs:
         run: chmod +x cli/shim/turbo
       - name: Run E2E Tests
         shell: bash
-        run: pnpm -- turbo run test --filter=cli --color
+        run: pnpm -- turbo-prebuilt run test --filter=cli --color
 
   go_examples:
     name: Go Cli Examples
@@ -308,7 +308,7 @@ jobs:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
           TURBO_REMOTE_ONLY: true
-        run: pnpm -- turbo run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
+        run: pnpm -- turbo-prebuilt run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
 
   rust_prepare:
     name: Check rust crates
@@ -374,9 +374,6 @@ jobs:
         with:
           name: turborepo-${{ matrix.os.name }}
           path: |
-            internal/turbodprotocol/turbod.pb.go
-            internal/turbodprotocol/turbod_grpc.pb.go
-            cli/libturbo.a
             cli/shim/turbo
             cli/shim/turbo.exe
 
@@ -409,7 +406,7 @@ jobs:
         run: chmod +x cli/shim/turbo
       - name: Run E2E Tests
         shell: bash
-        run: pnpm -- turbo run e2e --filter=cli
+        run: pnpm -- turbo-prebuilt run e2e --filter=cli
 
   rust_lint:
     needs: [determine_jobs, rust_prepare]
@@ -998,7 +995,7 @@ jobs:
   node_lint:
     name: Node.js linting
     runs-on: ubuntu-latest
-    needs: determine_jobs
+    needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.node == 'true'
     steps:
       - name: Checkout
@@ -1006,12 +1003,18 @@ jobs:
 
       - uses: ./.github/actions/setup-node
 
-      - uses: ./.github/actions/setup-go
+      - name: Download Turborepo build
+        uses: actions/download-artifact@v3
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          name: turborepo-ubuntu
+
+      # download-artifact doesn't restore execution permissions
+      - name: Make turbo executable
+        shell: bash
+        run: chmod +x cli/shim/turbo
 
       - name: Format check
-        run: pnpm -- turbo run check:fmt
+        run: pnpm -- turbo-prebuilt run check:fmt
 
   final:
     name: Ok
