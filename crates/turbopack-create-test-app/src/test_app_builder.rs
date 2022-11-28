@@ -134,7 +134,7 @@ impl TestAppBuilder {
                     let relative_effect = if src == file.parent().unwrap() {
                         "./effect.jsx".to_string()
                     } else {
-                        pathdiff::diff_paths(&src.join("effect.jsx"), file.parent().unwrap())
+                        pathdiff::diff_paths(src.join("effect.jsx"), file.parent().unwrap())
                             .unwrap()
                             .display()
                             .to_string()
