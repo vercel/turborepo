@@ -21,10 +21,10 @@ where
 /// or "false" is are considered true.
 pub fn read_env_bool(name: &str) -> bool {
     let config = std::env::var(name).ok();
-    match config.as_deref() {
-        None | Some("") | Some("0") | Some("no") | Some("false") => false,
-        _ => true,
-    }
+    !matches!(
+        config.as_deref(),
+        None | Some("") | Some("0") | Some("no") | Some("false")
+    )
 }
 
 /// Reads a comma-separated environment variable as a vector.

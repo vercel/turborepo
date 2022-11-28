@@ -34,12 +34,10 @@ impl Bundler for Vite {
             } else {
                 "Vite SSR"
             }
+        } else if self.swc {
+            "Vite SWC CSR"
         } else {
-            if self.swc {
-                "Vite SWC CSR"
-            } else {
-                "Vite CSR"
-            }
+            "Vite CSR"
         }
     }
 

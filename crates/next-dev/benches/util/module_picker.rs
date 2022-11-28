@@ -41,6 +41,6 @@ impl ModulePicker {
         let mut rng = self.rng.lock();
         // Sample from all depths uniformly.
         let depth = self.depths.choose(&mut *rng).unwrap();
-        &self.modules_by_depth[depth].choose(&mut *rng).unwrap()
+        self.modules_by_depth[depth].choose(&mut *rng).unwrap()
     }
 }

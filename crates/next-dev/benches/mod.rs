@@ -252,7 +252,7 @@ fn bench_hmr_internal(mut g: BenchmarkGroup<WallTime>, location: CodeLocation) {
                                     for iter in 0..iters {
                                         let module = module_picker.pick();
                                         let duration = make_change(
-                                            &module,
+                                            module,
                                             bundler,
                                             &mut guard,
                                             location,
