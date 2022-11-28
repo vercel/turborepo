@@ -40,7 +40,83 @@ describe("turboIgnore()", () => {
       expect.anything()
     );
 
-    validateLogs(["exec error: error"], mockConsole.error);
+    validateLogs(["UNKNOWN_ERROR: error"], mockConsole.error);
+
+    expectBuild(mockExit);
+    mockExec.mockRestore();
+  });
+
+  it("throws pretty error and allows build when exec fails", async () => {
+    const mockExec = jest
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
+        if (callback) {
+          return callback(
+            {
+              message:
+                "run failed: We did not detect an in-use package manager for your project",
+            } as unknown as ExecException,
+            "stdout",
+            "stderr"
+          ) as unknown as ChildProcess;
+        }
+        return {} as unknown as ChildProcess;
+      });
+
+    turboIgnore({
+      args: { workspace: "test-workspace" },
+    });
+
+    expect(mockExec).toHaveBeenCalledWith(
+      "npx turbo run build --filter=test-workspace...[HEAD^] --dry=json",
+      expect.anything(),
+      expect.anything()
+    );
+
+    validateLogs(
+      [
+        `turbo-ignore could not complete - no package manager detected, please commit a lockfile, or set "packageManager" in your root "package.json"`,
+      ],
+      mockConsole.warn
+    );
+
+    expectBuild(mockExit);
+    mockExec.mockRestore();
+  });
+
+  it("throws pretty error and allows build when fallback fails", async () => {
+    const mockExec = jest
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
+        if (callback) {
+          return callback(
+            {
+              message:
+                "ERROR run failed: failed to resolve packages to run: commit HEAD^ does not exist",
+            } as unknown as ExecException,
+            "stdout",
+            "stderr"
+          ) as unknown as ChildProcess;
+        }
+        return {} as unknown as ChildProcess;
+      });
+
+    turboIgnore({
+      args: { workspace: "test-workspace" },
+    });
+
+    expect(mockExec).toHaveBeenCalledWith(
+      "npx turbo run build --filter=test-workspace...[HEAD^] --dry=json",
+      expect.anything(),
+      expect.anything()
+    );
+
+    validateLogs(
+      [
+        `turbo-ignore could not complete - not enough information available to compare`,
+      ],
+      mockConsole.warn
+    );
 
     expectBuild(mockExit);
     mockExec.mockRestore();
