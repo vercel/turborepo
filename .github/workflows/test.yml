@@ -374,6 +374,8 @@ jobs:
         with:
           name: turborepo-${{ matrix.os.name }}
           path: |
+            internal/turbodprotocol/turbod.pb.go
+            internal/turbodprotocol/turbod_grpc.pb.go
             cli/libturbo.a
             cli/shim/turbo
             cli/shim/turbo.exe
