@@ -426,13 +426,19 @@ impl Backend for MemoryBackend {
                 PersistentTaskType::Native(fn_id, inputs) => {
                     // TODO inputs doesn't need to be cloned when are would be able to get a
                     // reference to the task type stored inside of the task
-                    Task::new_native(id, inputs.clone(), *fn_id)
+                    Task::new_native(id, inputs.clone(), *fn_id, turbo_tasks.stats_type())
                 }
                 PersistentTaskType::ResolveNative(fn_id, inputs) => {
-                    Task::new_resolve_native(id, inputs.clone(), *fn_id)
+                    Task::new_resolve_native(id, inputs.clone(), *fn_id, turbo_tasks.stats_type())
                 }
                 PersistentTaskType::ResolveTrait(trait_type, trait_fn_name, inputs) => {
-                    Task::new_resolve_trait(id, *trait_type, trait_fn_name.clone(), inputs.clone())
+                    Task::new_resolve_trait(
+                        id,
+                        *trait_type,
+                        trait_fn_name.clone(),
+                        inputs.clone(),
+                        turbo_tasks.stats_type(),
+                    )
                 }
             };
             // Safety: We have a fresh task id that nobody knows about yet
@@ -472,9 +478,10 @@ impl Backend for MemoryBackend {
             scope.increment_tasks();
             scope.increment_unfinished_tasks(self);
         });
+        let stats_type = turbo_tasks.stats_type();
         let task = match task_type {
-            TransientTaskType::Root(f) => Task::new_root(id, scope, move || f() as _),
-            TransientTaskType::Once(f) => Task::new_once(id, scope, f),
+            TransientTaskType::Root(f) => Task::new_root(id, scope, move || f() as _, stats_type),
+            TransientTaskType::Once(f) => Task::new_once(id, scope, f, stats_type),
         };
         // SAFETY: We have a fresh task id where nobody knows about yet
         #[allow(unused_variables)]

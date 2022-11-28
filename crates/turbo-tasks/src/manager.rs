@@ -110,6 +110,18 @@ pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
     fn update_current_task_cell(&self, index: CellId, content: CellContent);
 }
 
+/// The type of stats reporting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatsType {
+    /// Only report stats essential to Turbo Tasks' operation.
+    Essential,
+    /// Full stats reporting.
+    ///
+    /// This is useful for debugging, but it has a slight memory and performance
+    /// impact.
+    Full,
+}
+
 pub trait TaskIdProvider {
     fn get_fresh_task_id(&self) -> TaskId;
     /// # Safety
@@ -144,6 +156,23 @@ pub trait TurboTasksBackendApi: TaskIdProvider + TurboTasksCallApi + Sync + Send
     /// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `invalidate_tasks()` on all tasks.
     fn schedule_notify_tasks_set(&self, tasks: &HashSet<TaskId>);
+
+    /// Returns the stats reporting type.
+    fn stats_type(&self) -> StatsType;
+    /// Sets the stats reporting type.
+    fn set_stats_type(&self, stats_type: StatsType);
+}
+
+impl StatsType {
+    /// Returns `true` if the stats type is `Essential`.
+    pub fn is_essential(self) -> bool {
+        matches!(self, Self::Essential)
+    }
+
+    /// Returns `true` if the stats type is `Full`.
+    pub fn is_full(self) -> bool {
+        matches!(self, Self::Full)
+    }
 }
 
 impl TaskIdProvider for &dyn TurboTasksBackendApi {
@@ -180,6 +209,9 @@ pub struct TurboTasks<B: Backend + 'static> {
     event: Event,
     event_foreground: Event,
     event_background: Event,
+    // NOTE(alexkirsz) We use an atomic bool instead of a lock around `StatsType` to avoid the
+    // locking overhead.
+    enable_full_stats: AtomicBool,
 }
 
 // TODO implement our own thread pool and make these thread locals instead
@@ -220,6 +252,7 @@ impl<B: Backend> TurboTasks<B> {
             event: Event::new(|| "TurboTasks::event".to_string()),
             event_foreground: Event::new(|| "TurboTasks::event_foreground".to_string()),
             event_background: Event::new(|| "TurboTasks::event_background".to_string()),
+            enable_full_stats: AtomicBool::new(false),
         });
         this.backend.startup(&*this);
         this
@@ -806,6 +839,20 @@ impl<B: Backend> TurboTasksBackendApi for TurboTasks<B> {
 
     fn schedule(&self, task: TaskId) {
         self.schedule(task)
+    }
+
+    fn stats_type(&self) -> StatsType {
+        match self.enable_full_stats.load(Ordering::Acquire) {
+            true => StatsType::Full,
+            false => StatsType::Essential,
+        }
+    }
+
+    fn set_stats_type(&self, stats_type: StatsType) {
+        match stats_type {
+            StatsType::Full => self.enable_full_stats.store(true, Ordering::Release),
+            StatsType::Essential => self.enable_full_stats.store(false, Ordering::Release),
+        }
     }
 }
 

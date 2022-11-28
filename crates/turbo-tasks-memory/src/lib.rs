@@ -15,4 +15,3 @@ pub mod viz;
 
 pub use memory_backend::MemoryBackend;
 pub use memory_backend_with_pg::MemoryBackendWithPersistedGraph;
-pub use task_stats::enable_full_stats;

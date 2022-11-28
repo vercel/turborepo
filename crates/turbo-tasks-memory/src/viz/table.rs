@@ -1,7 +1,6 @@
-use turbo_tasks::util::FormatDuration;
+use turbo_tasks::{util::FormatDuration, StatsType};
 
 use super::*;
-use crate::task_stats::full_stats;
 
 pub fn wrap_html(table_html: &str) -> String {
     format!(
@@ -34,10 +33,10 @@ document.addEventListener("click",function(b){try{var p=function(a){return v&&a.
     )
 }
 
-pub fn create_table(root: GroupTree) -> String {
+pub fn create_table(root: GroupTree, stats_type: StatsType) -> String {
     let max_values = get_max_values(&root);
     let mut out = String::new();
-    if !full_stats() {
+    if !stats_type.is_full() {
         out += r#"<p class="full-stats-disclaimer">Full stats collection is disabled. Run with --full-stats to enable it.</p>"#;
     }
     out += r#"<table class="sortable"><thead><tr>"#;

@@ -1,5 +1,6 @@
+use turbo_tasks::StatsType;
+
 use super::*;
-use crate::task_stats::full_stats;
 
 pub fn wrap_html(graph: &str) -> String {
     format!(
@@ -40,7 +41,11 @@ impl<'a> GlobalData<'a> {
     }
 }
 
-pub fn visualize_stats_tree(root: GroupTree, tree_ref_type: ReferenceType) -> String {
+pub fn visualize_stats_tree(
+    root: GroupTree,
+    tree_ref_type: ReferenceType,
+    stats_type: StatsType,
+) -> String {
     let max_values = get_max_values(&root);
     let mut depths = HashMap::new();
     compute_depths(&root, 0, &mut depths);
@@ -50,7 +55,14 @@ pub fn visualize_stats_tree(root: GroupTree, tree_ref_type: ReferenceType) -> St
         output: "digraph {\nrankdir=LR\n\n".to_string(),
         edges: String::new(),
     };
-    visualize_stats_tree_internal(&root, 0, tree_ref_type, &max_values, &mut global_data);
+    visualize_stats_tree_internal(
+        &root,
+        0,
+        tree_ref_type,
+        &max_values,
+        &mut global_data,
+        stats_type,
+    );
     global_data.output += &global_data.edges;
     global_data.output += "\n}";
     global_data.output
@@ -62,6 +74,7 @@ fn visualize_stats_tree_internal<'a>(
     tree_ref_type: ReferenceType,
     max_values: &MaxValues,
     global_data: &mut GlobalData<'a>,
+    stats_type: StatsType,
 ) {
     let GroupTree {
         primary,
@@ -70,7 +83,7 @@ fn visualize_stats_tree_internal<'a>(
     } = node;
     if let Some((ty, stats)) = primary {
         let id = global_data.get_id(ty);
-        let label = get_task_label(ty, stats, max_values);
+        let label = get_task_label(ty, stats, max_values, stats_type);
         writeln!(
             &mut global_data.output,
             "subgraph cluster_{id} {{\ncolor=lightgray;"
@@ -92,7 +105,7 @@ fn visualize_stats_tree_internal<'a>(
     }
     for (ty, stats) in task_types.iter() {
         let id = global_data.get_id(ty);
-        let label = get_task_label(ty, stats, max_values);
+        let label = get_task_label(ty, stats, max_values, stats_type);
         writeln!(
             &mut global_data.output,
             "task_{id} [shape=plaintext, label={label}]"
@@ -108,7 +121,14 @@ fn visualize_stats_tree_internal<'a>(
         );
     }
     for child in children.iter() {
-        visualize_stats_tree_internal(child, depth + 1, tree_ref_type, max_values, global_data);
+        visualize_stats_tree_internal(
+            child,
+            depth + 1,
+            tree_ref_type,
+            max_values,
+            global_data,
+            stats_type,
+        );
     }
     if primary.is_some() {
         global_data.output.push_str("}\n");
@@ -182,7 +202,12 @@ fn visualize_stats_references_internal<'a>(
     }
 }
 
-fn get_task_label(ty: &TaskType, stats: &ExportedTaskStats, max_values: &MaxValues) -> String {
+fn get_task_label(
+    ty: &TaskType,
+    stats: &ExportedTaskStats,
+    max_values: &MaxValues,
+    stats_type: StatsType,
+) -> String {
     let (total_millis, total_color) = if let Some((total_duration, max_total_duration)) =
         stats.total_duration.zip(max_values.total_duration)
     {
@@ -230,7 +255,7 @@ fn get_task_label(ty: &TaskType, stats: &ExportedTaskStats, max_values: &MaxValu
         max_scopes,
     );
 
-    let full_stats_disclaimer = if full_stats() {
+    let full_stats_disclaimer = if stats_type.is_full() {
         "".to_string()
     } else {
         r##"<tr>

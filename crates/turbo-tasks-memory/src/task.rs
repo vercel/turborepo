@@ -17,8 +17,8 @@ use tokio::task_local;
 use turbo_tasks::{
     backend::PersistentTaskType,
     event::{Event, EventListener},
-    get_invalidator, registry, CellId, FunctionId, Invalidator, RawVc, TaskId, TaskInput,
-    TraitTypeId, TurboTasksBackendApi, ValueTypeId,
+    get_invalidator, registry, CellId, FunctionId, Invalidator, RawVc, StatsType, TaskId,
+    TaskInput, TraitTypeId, TurboTasksBackendApi, ValueTypeId,
 };
 pub type NativeTaskFuture = Pin<Box<dyn Future<Output = Result<RawVc>> + Send>>;
 pub type NativeTaskFn = Box<dyn Fn() -> NativeTaskFuture + Send + Sync>;
@@ -167,7 +167,7 @@ struct TaskState {
 }
 
 impl TaskState {
-    fn new(id: TaskId) -> Self {
+    fn new(id: TaskId, stats_type: StatsType) -> Self {
         Self {
             scopes: Default::default(),
             state_type: Default::default(),
@@ -176,13 +176,13 @@ impl TaskState {
             output: Default::default(),
             cells: Default::default(),
             event: Event::new(move || format!("TaskState({id})::event")),
-            stats: TaskStats::new(),
+            stats: TaskStats::new(stats_type),
             #[cfg(feature = "track_wait_dependencies")]
             last_waiting_task: Default::default(),
         }
     }
 
-    fn new_scheduled_in_scope(id: TaskId, scope: TaskScopeId) -> Self {
+    fn new_scheduled_in_scope(id: TaskId, scope: TaskScopeId, stats_type: StatsType) -> Self {
         Self {
             scopes: TaskScopes::Inner(CountHashSet::from([scope]), 0),
             state_type: Scheduled,
@@ -191,7 +191,7 @@ impl TaskState {
             output: Default::default(),
             cells: Default::default(),
             event: Event::new(move || format!("TaskState({id})::event")),
-            stats: TaskStats::new(),
+            stats: TaskStats::new(stats_type),
             #[cfg(feature = "track_wait_dependencies")]
             last_waiting_task: Default::default(),
         }
@@ -295,13 +295,18 @@ use crate::{
 };
 
 impl Task {
-    pub(crate) fn new_native(id: TaskId, inputs: Vec<TaskInput>, native_fn: FunctionId) -> Self {
+    pub(crate) fn new_native(
+        id: TaskId,
+        inputs: Vec<TaskInput>,
+        native_fn: FunctionId,
+        stats_type: StatsType,
+    ) -> Self {
         let bound_fn = registry::get_function(native_fn).bind(&inputs);
         Self {
             id,
             inputs,
             ty: TaskType::Native(native_fn, bound_fn),
-            state: RwLock::new(TaskState::new(id)),
+            state: RwLock::new(TaskState::new(id, stats_type)),
             execution_data: Default::default(),
         }
     }
@@ -310,12 +315,13 @@ impl Task {
         id: TaskId,
         inputs: Vec<TaskInput>,
         native_fn: FunctionId,
+        stats_type: StatsType,
     ) -> Self {
         Self {
             id,
             inputs,
             ty: TaskType::ResolveNative(native_fn),
-            state: RwLock::new(TaskState::new(id)),
+            state: RwLock::new(TaskState::new(id, stats_type)),
             execution_data: Default::default(),
         }
     }
@@ -325,12 +331,13 @@ impl Task {
         trait_type: TraitTypeId,
         trait_fn_name: Cow<'static, str>,
         inputs: Vec<TaskInput>,
+        stats_type: StatsType,
     ) -> Self {
         Self {
             id,
             inputs,
             ty: TaskType::ResolveTrait(trait_type, trait_fn_name),
-            state: RwLock::new(TaskState::new(id)),
+            state: RwLock::new(TaskState::new(id, stats_type)),
             execution_data: Default::default(),
         }
     }
@@ -339,12 +346,13 @@ impl Task {
         id: TaskId,
         scope: TaskScopeId,
         functor: impl Fn() -> NativeTaskFuture + Sync + Send + 'static,
+        stats_type: StatsType,
     ) -> Self {
         Self {
             id,
             inputs: Vec::new(),
             ty: TaskType::Root(Box::new(functor)),
-            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope)),
+            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope, stats_type)),
             execution_data: Default::default(),
         }
     }
@@ -353,12 +361,13 @@ impl Task {
         id: TaskId,
         scope: TaskScopeId,
         functor: impl Future<Output = Result<RawVc>> + Send + 'static,
+        stats_type: StatsType,
     ) -> Self {
         Self {
             id,
             inputs: Vec::new(),
             ty: TaskType::Once(Mutex::new(Some(Box::pin(functor)))),
-            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope)),
+            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope, stats_type)),
             execution_data: Default::default(),
         }
     }
@@ -1201,7 +1210,7 @@ impl Task {
         let state = self.state.read();
 
         let (total_duration, last_duration, executions) = match &state.stats {
-            TaskStats::Small(stats) => (None, stats.last_duration(), None),
+            TaskStats::Essential(stats) => (None, stats.last_duration(), None),
             TaskStats::Full(stats) => (
                 Some(stats.total_duration()),
                 stats.last_duration(),

@@ -71,8 +71,8 @@ pub use id::{
 pub use join_iter_ext::{JoinIterExt, TryJoinIterExt};
 pub use manager::{
     dynamic_call, emit, get_invalidator, run_once, spawn_blocking, spawn_thread, trait_call,
-    turbo_tasks, Invalidator, TaskIdProvider, TurboTasks, TurboTasksApi, TurboTasksBackendApi,
-    TurboTasksCallApi,
+    turbo_tasks, Invalidator, StatsType, TaskIdProvider, TurboTasks, TurboTasksApi,
+    TurboTasksBackendApi, TurboTasksCallApi,
 };
 pub use native_function::{NativeFunction, NativeFunctionVc};
 pub use nothing::{Nothing, NothingVc};

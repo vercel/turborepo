@@ -1,38 +1,21 @@
-use std::{
-    sync::atomic::{AtomicBool, Ordering},
-    time::Duration,
-};
+use std::time::Duration;
 
-static ENABLE_FULL_STATS: AtomicBool = AtomicBool::new(false);
-
-/// Enables full stats collection.
-///
-/// This is useful for debugging, but it has a slight memory and performance
-/// impact.
-pub fn enable_full_stats() {
-    ENABLE_FULL_STATS.store(true, Ordering::Release);
-}
-
-/// Returns `true` if full stats collection is enabled.
-pub fn full_stats() -> bool {
-    ENABLE_FULL_STATS.load(Ordering::Acquire)
-}
+use turbo_tasks::StatsType;
 
 /// Keeps track of the number of times a task has been executed, and its
 /// duration.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TaskStats {
-    Small(TaskStatsSmall),
+    Essential(TaskStatsEssential),
     Full(Box<TaskStatsFull>),
 }
 
 impl TaskStats {
     /// Creates a new [`TaskStats`].
-    pub fn new() -> Self {
-        if full_stats() {
-            Self::Full(Box::default())
-        } else {
-            Self::Small(TaskStatsSmall::default())
+    pub fn new(stats_type: StatsType) -> Self {
+        match stats_type {
+            turbo_tasks::StatsType::Essential => Self::Essential(TaskStatsEssential::default()),
+            turbo_tasks::StatsType::Full => Self::Full(Box::default()),
         }
     }
 
@@ -59,7 +42,7 @@ impl TaskStats {
                 stats.total_duration += duration;
                 stats.last_duration = duration;
             }
-            Self::Small(stats) => {
+            Self::Essential(stats) => {
                 stats.last_duration = duration.as_nanos().try_into().unwrap_or(u64::MAX);
             }
         }
@@ -73,7 +56,7 @@ impl TaskStats {
                 stats.total_duration = Duration::ZERO;
                 stats.last_duration = Duration::ZERO;
             }
-            Self::Small(stats) => {
+            Self::Essential(stats) => {
                 stats.last_duration = 0;
             }
         }
@@ -81,12 +64,12 @@ impl TaskStats {
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub struct TaskStatsSmall {
+pub struct TaskStatsEssential {
     /// The last duration of the task in nanoseconds.
     last_duration: u64,
 }
 
-impl TaskStatsSmall {
+impl TaskStatsEssential {
     /// Returns the last duration of the task.
     pub fn last_duration(&self) -> Duration {
         Duration::from_nanos(self.last_duration)

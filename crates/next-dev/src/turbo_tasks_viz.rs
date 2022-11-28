@@ -2,7 +2,7 @@ use std::{str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use mime::Mime;
-use turbo_tasks::{get_invalidator, TurboTasks, Value};
+use turbo_tasks::{get_invalidator, TurboTasks, TurboTasksBackendApi, Value};
 use turbo_tasks_fs::File;
 use turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
@@ -53,7 +53,11 @@ impl ContentSource for TurboTasksSource {
                     stats.add_id(b, task);
                 });
                 let tree = stats.treeify(ReferenceType::Dependency);
-                let graph = viz::graph::visualize_stats_tree(tree, ReferenceType::Dependency);
+                let graph = viz::graph::visualize_stats_tree(
+                    tree,
+                    ReferenceType::Dependency,
+                    tt.stats_type(),
+                );
                 viz::graph::wrap_html(&graph)
             }
             "call-graph" => {
@@ -63,7 +67,8 @@ impl ContentSource for TurboTasksSource {
                     stats.add_id(b, task);
                 });
                 let tree = stats.treeify(ReferenceType::Child);
-                let graph = viz::graph::visualize_stats_tree(tree, ReferenceType::Child);
+                let graph =
+                    viz::graph::visualize_stats_tree(tree, ReferenceType::Child, tt.stats_type());
                 viz::graph::wrap_html(&graph)
             }
             "table" => {
@@ -81,7 +86,7 @@ impl ContentSource for TurboTasksSource {
                         });
                     });
                     let tree = stats.treeify(ReferenceType::Dependency);
-                    let table = viz::table::create_table(tree);
+                    let table = viz::table::create_table(tree, tt.stats_type());
                     viz::table::wrap_html(&table)
                 } else {
                     return Ok(ContentSourceResultVc::exact(
