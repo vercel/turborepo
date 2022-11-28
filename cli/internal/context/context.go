@@ -420,8 +420,9 @@ func (c *Context) resolveDepGraph(wg *errgroup.Group, workspace *fs.PackageJSON,
 	}
 }
 
-// TopologicalGraphAncestors returns the ancestors of a set of nodes in the workspace graph.
-func (c *Context) TopologicalGraphAncestors(start []string) ([]string, error) {
+// InternalDependencies finds all dependencies required by the slice of starting
+// packages, as well as the starting packages themselves.
+func (c *Context) InternalDependencies(start []string) ([]string, error) {
 	vertices := make(dag.Set)
 	for _, v := range start {
 		vertices.Add(v)
@@ -443,6 +444,7 @@ func (c *Context) TopologicalGraphAncestors(start []string) ([]string, error) {
 	for _, dep := range s.List() {
 		targets = append(targets, dep.(string))
 	}
+	sort.Strings(targets)
 
 	return targets, nil
 }
