@@ -1205,7 +1205,7 @@ macro_rules! for_each_children_async {
                 $value.update_total_nodes();
                 ($value, m1 || m2)
             }
-            JsValue::Path(_, box value) =>{
+            JsValue::Path(_, box value) => {
               let (v, modified) = $visit_fn(take(value), $($args),+).await?;
               *value = v;
               $value.update_total_nodes();

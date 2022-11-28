@@ -90,6 +90,7 @@ use crate::{
         },
         esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
     },
+    utils::js_value_path_to_pattern,
     EcmascriptInputTransformsVc,
 };
 
@@ -1027,7 +1028,43 @@ pub(crate) async fn analyze_ecmascript_module(
                             ),
                         )
                     }
-                    _ => {}
+                    _ => {
+                        fn visit_path(
+                            source: AssetVc,
+                            analysis: &mut AnalyzeEcmascriptModuleResultBuilder,
+                            value: &JsValue,
+                        ) {
+                            match value {
+                                JsValue::Path(_, path) => {
+                                    let pat = js_value_to_pattern(&path);
+                                    analysis.add_reference(DirAssetReferenceVc::new(
+                                        source,
+                                        pat.into(),
+                                    ));
+                                }
+                                JsValue::Alternatives(..)
+                                | JsValue::Call(..)
+                                | JsValue::MemberCall(..)
+                                | JsValue::New(..)
+                                | JsValue::Object(..)
+                                | JsValue::Function(..) => {
+                                    value.for_each_children(&mut |v| {
+                                        visit_path(source, analysis, v)
+                                    });
+                                }
+                                JsValue::Unknown(Some(v), ..) => {
+                                    visit_path(source, analysis, v);
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        let linked_args = linked_args().await?;
+
+                        for arg in linked_args {
+                            visit_path(source, analysis, &arg);
+                        }
+                    }
                 }
                 Ok(())
             }
@@ -1168,7 +1205,7 @@ pub(crate) async fn analyze_ecmascript_module(
                         name, value, span, ..
                     } => {
                         let value = link_value(value).await?;
-                        let pat = js_value_to_pattern(&value);
+                        let pat = js_value_path_to_pattern(&value);
                         if !pat.has_constant_parts() {
                             let (value_desc, hints) = value.explain(10, 2);
                             handler.span_warn_with_code(

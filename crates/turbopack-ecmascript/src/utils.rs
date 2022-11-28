@@ -11,7 +11,7 @@ use swc_core::{
 };
 use turbopack_core::{chunk::ModuleId, resolve::pattern::Pattern};
 
-use crate::analyzer::{ConstantNumber, ConstantValue, JsValue};
+use crate::analyzer::{ConstantNumber, ConstantValue, JsValue, ObjectPart};
 
 pub fn unparen(expr: &Expr) -> &Expr {
     if let Some(expr) = expr.as_paren() {
@@ -45,6 +45,38 @@ pub fn js_value_to_pattern(value: &JsValue) -> Pattern {
             // or is that already covered by normalization of JsValue
             Pattern::Dynamic
         }
+        _ => Pattern::Dynamic,
+    };
+    result.normalize();
+    result
+}
+
+pub fn js_value_path_to_pattern(value: &JsValue) -> Pattern {
+    let mut result = match value {
+        JsValue::Alternatives(_, alts) => {
+            Pattern::Alternatives(alts.iter().map(js_value_path_to_pattern).collect())
+        }
+        JsValue::Object(_, parts) => {
+            let mut result = Vec::new();
+            for part in parts {
+                if let ObjectPart::KeyValue(_, value) = part {
+                    result.push(js_value_path_to_pattern(value));
+                }
+            }
+            Pattern::Alternatives(result)
+        }
+        JsValue::Function(_, value) => js_value_path_to_pattern(value),
+        JsValue::Call(_, _, values)
+        | JsValue::New(_, _, values)
+        | JsValue::MemberCall(_, _, _, values)
+        | JsValue::Array(_, values) => {
+            let mut result = Vec::new();
+            for val in values {
+                result.push(js_value_path_to_pattern(val));
+            }
+            Pattern::Alternatives(result)
+        }
+        JsValue::Path(_, v) => js_value_to_pattern(&v),
         _ => Pattern::Dynamic,
     };
     result.normalize();

@@ -668,7 +668,6 @@ pub async fn read_matches(
                         } else {
                             FileSystemPathOptionVc::new(context.fs(), str.to_string()).await?
                         } {
-                            println!("Found {}", fs_path.await?.path);
                             // This explicit deref of `context` is necessary
                             #[allow(clippy::explicit_auto_deref)]
                             let should_match =
