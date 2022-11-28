@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use anyhow::{anyhow, Context, Result};
 use indexmap::{indexset, IndexSet};
 
@@ -97,6 +99,102 @@ pub(crate) fn get_font_axes(
     }
 }
 
+// Derived from https://github.com/vercel/next.js/blob/9e098da0915a2a4581bebe2270953a1216be1ba4/packages/font/src/google/utils.ts#L128
+pub(crate) fn get_stylesheet_url(
+    font_family: &str,
+    axes: &FontAxes,
+    display: &str,
+) -> Result<String> {
+    // Variants are all combinations of weight and style, each variant will result
+    // in a separate font file
+    let mut variants: Vec<Vec<(&str, &str)>> = vec![];
+    for wght in &axes.wght {
+        if axes.ital.is_empty() {
+            let mut variant = vec![];
+            variant.push(("wght", &wght[..]));
+            if let Some(variable_axes) = &axes.variable_axes {
+                for (key, val) in variable_axes {
+                    variant.push((key, &val[..]));
+                }
+            }
+            variants.push(variant);
+        } else {
+            for ital in &axes.ital {
+                let mut variant = vec![];
+                variant.push((
+                    "ital",
+                    match ital {
+                        FontItal::Normal => "0",
+                        FontItal::Italic => "1",
+                    },
+                ));
+                variant.push(("wght", &wght[..]));
+                if let Some(variable_axes) = &axes.variable_axes {
+                    for (key, val) in variable_axes {
+                        variant.push((key, &val[..]));
+                    }
+                }
+                variants.push(variant);
+            }
+        }
+    }
+
+    for variant in &mut variants {
+        // Sort the pairs within the variant by the tag name
+        variant.sort_by(|a, b| {
+            let is_a_lowercase = a.0.chars().next().unwrap_or_default() as usize > 96;
+            let is_b_lowercase = b.0.chars().next().unwrap_or_default() as usize > 96;
+
+            if is_a_lowercase && !is_b_lowercase {
+                Ordering::Less
+            } else if is_b_lowercase && !is_a_lowercase {
+                Ordering::Greater
+            } else {
+                a.0.cmp(b.0)
+            }
+        });
+    }
+
+    let first_variant = variants
+        .first()
+        .context("Requires at least one axis (e.g. wght)")?;
+
+    // Always use the first variant's keys. There's an implicit invariant from the
+    // code above that the keys across each variant are identical, and therefore
+    // will be sorted identically across variants.
+    //
+    // Generates a comma-separated list of axis names, e.g. `ital,opsz,wght`.
+    let variant_keys_str = first_variant
+        .iter()
+        .map(|pair| pair.0)
+        .collect::<Vec<&str>>()
+        .join(",");
+
+    let mut variant_values = variants
+        .iter()
+        .map(|variant| {
+            variant
+                .iter()
+                .map(|pair| pair.1)
+                .collect::<Vec<&str>>()
+                .join(",")
+        })
+        .collect::<Vec<String>>();
+    variant_values.sort();
+    // An encoding of the series of sorted variant values, with variants delimited
+    // by `;` and the values within a variant delimited by `,` e.g.
+    // `"0,10..100,500;1,10.100;500"`
+    let variant_values_str = variant_values.join(";");
+
+    Ok(format!(
+        "https://fonts.googleapis.com/css2?family={}:{}@{}&display={}",
+        font_family.replace(' ', "+"),
+        variant_keys_str,
+        variant_values_str,
+        display
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
@@ -105,7 +203,7 @@ mod tests {
     use super::get_font_axes;
     use crate::next_font_google::{
         options::{FontData, FontWeights},
-        util::{FontAxes, FontItal},
+        util::{get_stylesheet_url, FontAxes, FontItal},
     };
 
     #[test]
@@ -208,6 +306,69 @@ mod tests {
                 variable_axes: Some(vec![("slnt".to_owned(), "-10..0".to_owned())])
             }
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_stylesheet_url_no_axes() -> Result<()> {
+        assert_eq!(
+            get_stylesheet_url(
+                "Roboto Mono",
+                &FontAxes {
+                    wght: indexset! {"500".to_owned()},
+                    ital: indexset! {FontItal::Normal},
+                    variable_axes: None
+                },
+                "optional"
+            )?,
+            "https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,500&display=optional"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_stylesheet_url_sorts_axes() -> Result<()> {
+        assert_eq!(
+            get_stylesheet_url(
+                "Roboto Serif",
+                &FontAxes {
+                    wght: indexset! {"500".to_owned()},
+                    ital: indexset! {FontItal::Normal},
+                    variable_axes: Some(vec![
+                        ("GRAD".to_owned(), "-50..100".to_owned()),
+                        ("opsz".to_owned(), "8..144".to_owned()),
+                        ("wdth".to_owned(), "50..150".to_owned()),
+                    ])
+                },
+                "optional"
+            )?,
+            "https://fonts.googleapis.com/css2?family=Roboto+Serif:ital,opsz,wdth,wght,GRAD@0,8..144,50..150,500,-50..100&display=optional"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_stylesheet_url_encodes_all_weight_ital_combinations() -> Result<()> {
+        assert_eq!(
+            get_stylesheet_url(
+                "Roboto Serif",
+                &FontAxes {
+                    wght: indexset! {"500".to_owned(), "300".to_owned()},
+                    ital: indexset! {FontItal::Normal, FontItal::Italic},
+                    variable_axes: Some(vec![
+                        ("GRAD".to_owned(), "-50..100".to_owned()),
+                        ("opsz".to_owned(), "8..144".to_owned()),
+                        ("wdth".to_owned(), "50..150".to_owned()),
+                    ])
+                },
+                "optional"
+            )?,
+            // Note ;-delimited sections for normal@300, normal@500, italic@300, italic@500
+            "https://fonts.googleapis.com/css2?family=Roboto+Serif:ital,opsz,wdth,wght,GRAD@0,8..144,50..150,300,-50..100;0,8..144,50..150,500,-50..100;1,8..144,50..150,300,-50..100;1,8..144,50..150,500,-50..100&display=optional"
+        );
+
         Ok(())
     }
 }
