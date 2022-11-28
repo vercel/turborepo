@@ -57,7 +57,7 @@ pub enum ReferenceType {
 }
 
 #[derive(Clone, Debug)]
-pub struct TaskStats {
+pub struct ExportedTaskStats {
     pub count: usize,
     pub active_count: usize,
     pub executions: Option<u64>,
@@ -70,7 +70,7 @@ pub struct TaskStats {
     pub references: HashMap<(ReferenceType, TaskType), ReferenceStats>,
 }
 
-impl Default for TaskStats {
+impl Default for ExportedTaskStats {
     fn default() -> Self {
         Self {
             count: 0,
@@ -88,7 +88,7 @@ impl Default for TaskStats {
 }
 
 pub struct Stats {
-    tasks: HashMap<TaskType, TaskStats>,
+    tasks: HashMap<TaskType, ExportedTaskStats>,
 }
 
 impl Default for Stats {
@@ -187,7 +187,7 @@ impl Stats {
         })
     }
 
-    pub fn merge(&mut self, mut select: impl FnMut(&TaskType, &TaskStats) -> bool) {
+    pub fn merge(&mut self, mut select: impl FnMut(&TaskType, &ExportedTaskStats) -> bool) {
         let merged: HashMap<_, _> = self
             .tasks
             .drain_filter(|ty, stats| select(ty, stats))
@@ -196,7 +196,7 @@ impl Stats {
         for stats in self.tasks.values_mut() {
             fn merge_refs(
                 refs: HashMap<(ReferenceType, TaskType), ReferenceStats>,
-                merged: &HashMap<TaskType, TaskStats>,
+                merged: &HashMap<TaskType, ExportedTaskStats>,
             ) -> HashMap<(ReferenceType, TaskType), ReferenceStats> {
                 refs.into_iter()
                     .flat_map(|((ref_ty, ty), stats)| {
@@ -304,7 +304,7 @@ impl Stats {
         }
 
         fn into_group<'a>(
-            tasks: &HashMap<TaskType, TaskStats>,
+            tasks: &HashMap<TaskType, ExportedTaskStats>,
             children: &HashMap<Option<&'a TaskType>, Vec<&'a TaskType>>,
             ty: Option<&'a TaskType>,
         ) -> GroupTree {
@@ -335,7 +335,7 @@ impl Stats {
 
 #[derive(Debug)]
 pub struct GroupTree {
-    pub primary: Option<(TaskType, TaskStats)>,
+    pub primary: Option<(TaskType, ExportedTaskStats)>,
     pub children: Vec<GroupTree>,
-    pub task_types: Vec<(TaskType, TaskStats)>,
+    pub task_types: Vec<(TaskType, ExportedTaskStats)>,
 }

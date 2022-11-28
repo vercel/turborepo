@@ -181,7 +181,7 @@ fn visualize_stats_references_internal<'a>(
     }
 }
 
-fn get_task_label(ty: &TaskType, stats: &TaskStats, max_values: &MaxValues) -> String {
+fn get_task_label(ty: &TaskType, stats: &ExportedTaskStats, max_values: &MaxValues) -> String {
     let (total_millis, total_color) = if let Some((total_duration, max_total_duration)) =
         stats.total_duration.zip(max_values.total_duration)
     {

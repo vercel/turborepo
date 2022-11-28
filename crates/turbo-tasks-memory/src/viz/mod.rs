@@ -11,7 +11,7 @@ use std::{
 
 use turbo_tasks_hash::hash_xxh3_hash64;
 
-use crate::stats::{GroupTree, ReferenceStats, ReferenceType, TaskStats, TaskType};
+use crate::stats::{ExportedTaskStats, GroupTree, ReferenceStats, ReferenceType, TaskType};
 
 fn escape_in_template_str(s: &str) -> String {
     s.replace('\\', "\\\\")
@@ -49,7 +49,7 @@ fn get_max_values(node: &GroupTree) -> MaxValues {
     get_max_values_internal(0, node)
 }
 
-pub fn get_avg_dependencies_count_times_100(stats: &TaskStats) -> usize {
+pub fn get_avg_dependencies_count_times_100(stats: &ExportedTaskStats) -> usize {
     stats
         .references
         .iter()
