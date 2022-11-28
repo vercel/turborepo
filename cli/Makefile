@@ -25,6 +25,9 @@ turbo: $(GENERATED_FILES) $(SRC_FILES) go.mod
 shim: libturbo.a
 	cargo build --manifest-path ../shim/Cargo.toml
 
+shim/turbo: libturbo.a
+	cargo build -Z unstable-options --manifest-path ../shim/Cargo.toml --out-dir shim
+
 libturbo.a: $(GENERATED_FILES) $(SRC_FILES) go.mod
 	go build -buildmode=c-archive -o libturbo.a  ./cmd/turbo/...
 
@@ -78,7 +81,7 @@ corepack:
 	which corepack || npm install -g corepack@latest
 	corepack enable
 
-e2e: corepack install turbo
+e2e: corepack install shim/turbo
 	node -r esbuild-register scripts/e2e/e2e.ts
 
 cmd/turbo/version.go: ../version.txt

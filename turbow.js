@@ -4,9 +4,9 @@ const path = require("path");
 
 let binPath;
 if (path.sep === "\\") {
-  binPath = ".\\target\\debug\\turbo.exe";
+  binPath = ".\\cli\\shim\\turbo.exe";
 } else {
-  binPath = "./target/debug/turbo";
+  binPath = "./cli/shim/turbo";
 }
 
 try {

@@ -24,4 +24,4 @@ runs:
         key: debug-${{ inputs.target }}
     - name: Build Turborepo
       shell: bash
-      run: cargo build --manifest-path ./shim/Cargo.toml
+      run: cd cli && make shim/turbo

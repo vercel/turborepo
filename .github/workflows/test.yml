@@ -340,13 +340,13 @@ jobs:
         with:
           name: turborepo-${{ matrix.os.name }}
           path: |
-            target/debug/turbo
-            target/debug/turbo.exe
+            cli/shim/turbo
+            cli/shim/turbo.exe
 
   turborepo_e2e:
     name: Run Turborepo E2E Tests on ${{ matrix.os.name }}
     needs: [determine_jobs, build_turborepo]
-    if: needs.determine_jobs.outputs.go == 'true' || needs.determine_jobs.outputs.turborepo_integration_tests == 'true' || needs.determine_jobs.outputs.node == 'true'
+    if: needs.determine_jobs.outputs.go == 'true' || needs.determine_jobs.outputs.node == 'true'
     runs-on: ${{ matrix.os.runner }}
     strategy:
       matrix:
@@ -365,8 +365,12 @@ jobs:
       - name: Download Turborepo build
         uses: actions/download-artifact@v3
         with:
-          key: turborepo-${{ matrix.os.name }}
+          name: turborepo-${{ matrix.os.name }}
           path: target/
+      # download-artifact doesn't restore execution permissions
+      - name: Make turbo executable
+        shell: bash
+        run: chmod +x cli/shim/turbo
       - name: Run E2E Tests
         shell: bash
         run: pnpm -- turbo run e2e --filter=cli
