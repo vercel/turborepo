@@ -1,4 +1,5 @@
 use super::*;
+use crate::task_stats::full_stats;
 
 pub fn wrap_html(graph: &str) -> String {
     format!(
@@ -229,6 +230,19 @@ fn get_task_label(ty: &TaskType, stats: &ExportedTaskStats, max_values: &MaxValu
         max_scopes,
     );
 
+    let full_stats_disclaimer = if full_stats() {
+        "".to_string()
+    } else {
+        r##"<tr>
+    <td colspan="3" align="center" border="0" cellpadding="0">
+        <font point-size="10" color="#00000090">
+            <i>Full stats collection is disabled. Pass --full-stats to enable it.</i>
+        </font>
+    </td>
+</tr>"##
+            .to_string()
+    };
+
     format!(
         "<
 <table border=\"0\" cellborder=\"1\" cellspacing=\"0\">
@@ -248,6 +262,7 @@ fn get_task_label(ty: &TaskType, stats: &ExportedTaskStats, max_values: &MaxValu
         <td bgcolor=\"{}\">{} roots</td>
         <td bgcolor=\"{}\">avg {}</td>
     </tr>
+    {}
 </table>>",
         total_color,
         escape_html(&ty.to_string()),
@@ -262,6 +277,7 @@ fn get_task_label(ty: &TaskType, stats: &ExportedTaskStats, max_values: &MaxValu
         as_color(roots),
         stats.roots,
         as_color(scopes),
-        (100 * stats.scopes / stats.count) as f32 / 100.0
+        (100 * stats.scopes / stats.count) as f32 / 100.0,
+        full_stats_disclaimer
     )
 }

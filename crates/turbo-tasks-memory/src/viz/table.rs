@@ -1,6 +1,7 @@
 use turbo_tasks::util::FormatDuration;
 
 use super::*;
+use crate::task_stats::full_stats;
 
 pub fn wrap_html(table_html: &str) -> String {
     format!(
@@ -9,7 +10,17 @@ pub fn wrap_html(table_html: &str) -> String {
 <head>
   <meta charset=\"utf-8\">
   <title>turbo-tasks table</title>
-  <style>{style}</style>
+  <style>
+    {style}
+
+    .full-stats-disclaimer {{
+        font-size: 0.8rem;
+        opacity: 0.6;
+        font-style: italic;
+        margin: 0;
+        padding: 0.8rem 1rem;
+    }}
+  </style>
 </head>
 <body>
   {table_html}
@@ -26,6 +37,9 @@ document.addEventListener("click",function(b){try{var p=function(a){return v&&a.
 pub fn create_table(root: GroupTree) -> String {
     let max_values = get_max_values(&root);
     let mut out = String::new();
+    if !full_stats() {
+        out += r#"<p class="full-stats-disclaimer">Full stats collection is disabled. Run with --full-stats to enable it.</p>"#;
+    }
     out += r#"<table class="sortable"><thead><tr>"#;
     out += r#"<th>function</th>"#;
     out += r#"<th>initial executions</th>"#;

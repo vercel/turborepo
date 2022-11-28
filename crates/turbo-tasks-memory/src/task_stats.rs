@@ -5,8 +5,17 @@ use std::{
 
 static ENABLE_FULL_STATS: AtomicBool = AtomicBool::new(false);
 
+/// Enables full stats collection.
+///
+/// This is useful for debugging, but it has a slight memory and performance
+/// impact.
 pub fn enable_full_stats() {
     ENABLE_FULL_STATS.store(true, Ordering::Release);
+}
+
+/// Returns `true` if full stats collection is enabled.
+pub fn full_stats() -> bool {
+    ENABLE_FULL_STATS.load(Ordering::Acquire)
 }
 
 /// Keeps track of the number of times a task has been executed, and its
@@ -20,7 +29,7 @@ pub enum TaskStats {
 impl TaskStats {
     /// Creates a new [`TaskStats`].
     pub fn new() -> Self {
-        if ENABLE_FULL_STATS.load(Ordering::Acquire) {
+        if full_stats() {
             Self::Full(Box::new(TaskStatsFull::default()))
         } else {
             Self::Small(TaskStatsSmall::default())
