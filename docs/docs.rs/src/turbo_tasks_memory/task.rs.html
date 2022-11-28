@@ -1700,23 +1700,6 @@
     </span>ty: TaskType,
     <span class="doccomment">/// The mutable state of the task
     </span>state: RwLock&lt;TaskState&gt;,
-    <span class="comment">// TODO technically we need no lock here as it&#39;s only written
-    // during execution, which doesn&#39;t happen in parallel
-    </span><span class="doccomment">/// Mutable state that is used during task execution.
-    /// It will only be accessed from the task execution, which happens
-    /// non-concurrently.
-    </span>execution_data: Mutex&lt;TaskExecutionData&gt;,
-}
-
-<span class="doccomment">/// Task data that is only modified during task execution.
-</span><span class="attr">#[derive(Default)]
-</span><span class="kw">struct </span>TaskExecutionData {
-    <span class="doccomment">/// Cells/Scopes that the task has read during execution.
-    /// The Task will keep these tasks alive as invalidations that happen there
-    /// might affect this task.
-    ///
-    /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
-    </span>dependencies: HashSet&lt;TaskDependency&gt;,
 }
 
 <span class="kw">impl </span>Debug <span class="kw">for </span>Task {
@@ -1724,8 +1707,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>result = f.debug_struct(<span class="string">&quot;Task&quot;</span>);
         result.field(<span class="string">&quot;type&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.ty);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(state) = <span class="self">self</span>.state.try_read() {
-            result.field(<span class="string">&quot;scopes&quot;</span>, <span class="kw-2">&amp;</span>state.scopes);
-            result.field(<span class="string">&quot;state&quot;</span>, <span class="kw-2">&amp;</span>state.state_type);
+            result.field(<span class="string">&quot;state&quot;</span>, <span class="kw-2">&amp;</span>Task::state_string(<span class="kw-2">&amp;</span>state));
         }
         result.finish()
     }
@@ -1749,7 +1731,6 @@
     output: Output,
     <span class="comment">// TODO use AutoMap here
     </span>cells: HashMap&lt;ValueTypeId, Vec&lt;Cell&gt;&gt;,
-    event: Event,
 
     <span class="comment">// Stats:
     </span>executions: u32,
@@ -1761,12 +1742,13 @@
     <span class="kw">fn </span>new(id: TaskId) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             scopes: Default::default(),
-            state_type: Default::default(),
+            state_type: Dirty {
+                event: Event::new(<span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">&quot;TaskState({id})::event&quot;</span>)),
+            },
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
             cells: Default::default(),
-            event: Event::new(<span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">&quot;TaskState({id})::event&quot;</span>)),
             executions: Default::default(),
             total_duration: Default::default(),
             last_duration: Default::default(),
@@ -1778,12 +1760,13 @@
     <span class="kw">fn </span>new_scheduled_in_scope(id: TaskId, scope: TaskScopeId) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             scopes: TaskScopes::Inner(CountHashSet::from([scope]), <span class="number">0</span>),
-            state_type: Scheduled,
+            state_type: Scheduled {
+                event: Event::new(<span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">&quot;TaskState({id})::event&quot;</span>)),
+            },
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
             cells: Default::default(),
-            event: Event::new(<span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">&quot;TaskState({id})::event&quot;</span>)),
             executions: Default::default(),
             total_duration: Default::default(),
             last_duration: Default::default(),
@@ -1839,41 +1822,41 @@
     }
 }
 
-<span class="attr">#[derive(PartialEq, Eq, Debug)]
-</span><span class="kw">enum </span>TaskStateType {
+<span class="kw">enum </span>TaskStateType {
     <span class="doccomment">/// Ready
     ///
     /// on invalidation this will move to Dirty or Scheduled depending on active
     /// flag
-    </span>Done,
+    </span>Done {
+        <span class="doccomment">/// Cells/Scopes that the task has read during execution.
+        /// The Task will keep these tasks alive as invalidations that happen
+        /// there might affect this task.
+        ///
+        /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
+        </span>dependencies: HashSet&lt;TaskDependency&gt;,
+    },
 
     <span class="doccomment">/// Execution is invalid, but not yet scheduled
     ///
     /// on activation this will move to Scheduled
-    </span>Dirty,
+    </span>Dirty { event: Event },
 
     <span class="doccomment">/// Execution is invalid and scheduled
     ///
     /// on start this will move to InProgress or Dirty depending on active flag
-    </span>Scheduled,
+    </span>Scheduled { event: Event },
 
     <span class="doccomment">/// Execution is happening
     ///
     /// on finish this will move to Done
     ///
     /// on invalidation this will move to InProgressDirty
-    </span>InProgress,
+    </span>InProgress { event: Event },
 
     <span class="doccomment">/// Invalid execution is happening
     ///
     /// on finish this will move to Dirty or Scheduled depending on active flag
-    </span>InProgressDirty,
-}
-
-<span class="kw">impl </span>Default <span class="kw">for </span>TaskStateType {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        Dirty
-    }
+    </span>InProgressDirty { event: Event },
 }
 
 <span class="kw">use </span>TaskStateType::<span class="kw-2">*</span>;
@@ -1896,7 +1879,6 @@
             inputs,
             ty: TaskType::Native(native_fn, bound_fn),
             state: RwLock::new(TaskState::new(id)),
-            execution_data: Default::default(),
         }
     }
 
@@ -1910,7 +1892,6 @@
             inputs,
             ty: TaskType::ResolveNative(native_fn),
             state: RwLock::new(TaskState::new(id)),
-            execution_data: Default::default(),
         }
     }
 
@@ -1925,7 +1906,6 @@
             inputs,
             ty: TaskType::ResolveTrait(trait_type, trait_fn_name),
             state: RwLock::new(TaskState::new(id)),
-            execution_data: Default::default(),
         }
     }
 
@@ -1939,7 +1919,6 @@
             inputs: Vec::new(),
             ty: TaskType::Root(Box::new(functor)),
             state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope)),
-            execution_data: Default::default(),
         }
     }
 
@@ -1953,7 +1932,6 @@
             inputs: Vec::new(),
             ty: TaskType::Once(Mutex::new(<span class="prelude-val">Some</span>(Box::pin(functor)))),
             state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope)),
-            execution_data: Default::default(),
         }
     }
 
@@ -2010,25 +1988,18 @@
     }
 
     <span class="attr">#[cfg(not(feature = <span class="string">&quot;report_expensive&quot;</span>))]
-    </span><span class="kw">fn </span>clear_dependencies(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;</span>MemoryBackend) {
-        <span class="kw">let </span><span class="kw-2">mut </span>execution_data = <span class="self">self</span>.execution_data.lock();
-        <span class="kw">let </span>dependencies = take(<span class="kw-2">&amp;mut </span>execution_data.dependencies);
-        drop(execution_data);
-
+    </span><span class="kw">fn </span>clear_dependencies(<span class="kw-2">&amp;</span><span class="self">self</span>, dependencies: HashSet&lt;TaskDependency&gt;, backend: <span class="kw-2">&amp;</span>MemoryBackend) {
         <span class="kw">for </span>dep <span class="kw">in </span>dependencies.into_iter() {
             Task::remove_dependency(dep, <span class="self">self</span>.id, backend);
         }
     }
 
     <span class="attr">#[cfg(feature = <span class="string">&quot;report_expensive&quot;</span>)]
-    </span><span class="kw">fn </span>clear_dependencies(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;</span>MemoryBackend) {
+    </span><span class="kw">fn </span>clear_dependencies(<span class="kw-2">&amp;</span><span class="self">self</span>, dependencies: HashSet&lt;TaskDependency&gt;, backend: <span class="kw-2">&amp;</span>MemoryBackend) {
         <span class="kw">use </span>std::time::Instant;
 
         <span class="kw">use </span>turbo_tasks::util::FormatDuration;
         <span class="kw">let </span>start = Instant::now();
-        <span class="kw">let </span><span class="kw-2">mut </span>execution_data = <span class="self">self</span>.execution_data.lock();
-        <span class="kw">let </span>dependencies = take(<span class="kw-2">&amp;mut </span>execution_data.dependencies);
-        drop(execution_data);
 
         <span class="kw">let </span>count = dependencies.len();
 
@@ -2052,14 +2023,15 @@
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; bool {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
-        <span class="kw">let </span>state_type = <span class="kw-2">&amp;</span>state.state_type;
-        <span class="kw">match </span>state_type {
-            Done | InProgress | InProgressDirty =&gt; {
+        <span class="kw">match </span>state.state_type {
+            Done { .. } | InProgress { .. } | InProgressDirty { .. } =&gt; {
                 <span class="comment">// should not start in this state
                 </span><span class="kw">return </span><span class="bool-val">false</span>;
             }
-            Scheduled =&gt; {
-                state.state_type = InProgress;
+            Scheduled { <span class="kw-2">ref mut </span>event } =&gt; {
+                state.state_type = InProgress {
+                    event: event.take(),
+                };
                 state.executions += <span class="number">1</span>;
                 <span class="comment">// TODO we need to reconsider the approach of doing scope changes in background
                 // since they affect collectibles and need to be computed eagerly to allow
@@ -2112,7 +2084,7 @@
                     })
                 }
             }
-            Dirty =&gt; {
+            Dirty { .. } =&gt; {
                 <span class="kw">let </span>state_type = Task::state_string(<span class="kw-2">&amp;</span>state);
                 drop(state);
                 <span class="macro">panic!</span>(
@@ -2131,20 +2103,20 @@
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
         <span class="kw">match </span>state.state_type {
-            InProgress =&gt; <span class="kw">match </span>result {
+            InProgress { .. } =&gt; <span class="kw">match </span>result {
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(result)) =&gt; state.output.link(result, turbo_tasks),
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(err)) =&gt; state.output.error(err, turbo_tasks),
                 <span class="prelude-val">Err</span>(message) =&gt; state.output.panic(message, turbo_tasks),
             },
-            InProgressDirty =&gt; {
+            InProgressDirty { .. } =&gt; {
                 <span class="comment">// We don&#39;t want to assign the output cell here
                 // as we want to avoid unnecessary updates
                 // TODO maybe this should be controlled by a heuristic
             </span>}
-            Dirty | Scheduled | Done =&gt; {
+            Dirty { .. } | Scheduled { .. } | Done { .. } =&gt; {
                 <span class="macro">panic!</span>(
-                    <span class="string">&quot;Task execution completed in unexpected state {:?}&quot;</span>,
-                    state.state_type
+                    <span class="string">&quot;Task execution completed in unexpected state {}&quot;</span>,
+                    Task::state_string(<span class="kw-2">&amp;</span>state)
                 )
             }
         };
@@ -2157,28 +2129,28 @@
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; bool {
-        DEPENDENCIES_TO_TRACK.with(|deps| {
-            <span class="kw">let </span><span class="kw-2">mut </span>execution_data = <span class="self">self</span>.execution_data.lock();
-            execution_data.dependencies = deps.take();
-        });
         <span class="kw">let </span><span class="kw-2">mut </span>schedule_task = <span class="bool-val">false</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>clear_dependencies = <span class="bool-val">false</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dependencies = DEPENDENCIES_TO_TRACK.with(|deps| deps.take());
         {
             <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
+
             state.total_duration += duration;
             state.last_duration = duration;
             <span class="kw">match </span>state.state_type {
-                InProgress =&gt; {
-                    state.state_type = Done;
+                InProgress { <span class="kw-2">ref mut </span>event } =&gt; {
+                    <span class="kw">let </span>event = event.take();
+                    state.state_type = Done {
+                        dependencies: take(<span class="kw-2">&amp;mut </span>dependencies),
+                    };
                     <span class="kw">for </span>scope <span class="kw">in </span>state.scopes.iter() {
                         backend.with_scope(scope, |scope| {
                             scope.decrement_unfinished_tasks(backend);
                         })
                     }
-                    state.event.notify(usize::MAX);
+                    event.notify(usize::MAX);
                 }
-                InProgressDirty =&gt; {
-                    clear_dependencies = <span class="bool-val">true</span>;
+                InProgressDirty { <span class="kw-2">ref mut </span>event } =&gt; {
+                    <span class="kw">let </span>event = event.take();
                     <span class="kw">let </span><span class="kw-2">mut </span>active = <span class="bool-val">false</span>;
                     <span class="kw">for </span>scope <span class="kw">in </span>state.scopes.iter() {
                         <span class="kw">if </span>backend.with_scope(scope, |scope| scope.state.lock().is_active()) {
@@ -2187,22 +2159,22 @@
                         }
                     }
                     <span class="kw">if </span>active {
-                        state.state_type = Scheduled;
+                        state.state_type = Scheduled { event };
                         schedule_task = <span class="bool-val">true</span>;
                     } <span class="kw">else </span>{
-                        state.state_type = Dirty;
+                        state.state_type = Dirty { event };
                     }
                 }
-                Dirty | Scheduled | Done =&gt; {
+                Dirty { .. } | Scheduled { .. } | Done { .. } =&gt; {
                     <span class="macro">panic!</span>(
-                        <span class="string">&quot;Task execution completed in unexpected state {:?}&quot;</span>,
-                        state.state_type
+                        <span class="string">&quot;Task execution completed in unexpected state {}&quot;</span>,
+                        Task::state_string(<span class="kw-2">&amp;</span>state)
                     )
                 }
             };
         }
-        <span class="kw">if </span>clear_dependencies {
-            <span class="self">self</span>.clear_dependencies(backend)
+        <span class="kw">if </span>!dependencies.is_empty() {
+            <span class="self">self</span>.clear_dependencies(dependencies, backend);
         }
 
         <span class="kw">if let </span>TaskType::Once(<span class="kw">_</span>) = <span class="self">self</span>.ty {
@@ -2217,47 +2189,67 @@
             <span class="comment">// once task won&#39;t become dirty
             </span><span class="kw">return</span>;
         }
-        <span class="self">self</span>.clear_dependencies(backend);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
-        <span class="kw">match </span>state.state_type {
-            Dirty | Scheduled | InProgressDirty =&gt; {
-                <span class="comment">// already dirty
-            </span>}
-            Done =&gt; {
-                <span class="comment">// add to dirty lists and potentially schedule
-                </span><span class="kw">let </span><span class="kw-2">mut </span>active = <span class="bool-val">false</span>;
-                <span class="kw">for </span>scope <span class="kw">in </span>state.scopes.iter() {
-                    backend.with_scope(scope, |scope| {
-                        scope.increment_unfinished_tasks(backend);
-                        <span class="macro">log_scope_update!</span>(<span class="string">&quot;add unfinished task: {} -&gt; {}&quot;</span>, <span class="kw-2">*</span>scope.id, <span class="kw-2">*</span><span class="self">self</span>.id);
-                        <span class="kw">let </span><span class="kw-2">mut </span>scope = scope.state.lock();
-                        <span class="kw">if </span>scope.is_active() {
-                            active = <span class="bool-val">true</span>;
-                        } <span class="kw">else </span>{
-                            scope.add_dirty_task(<span class="self">self</span>.id);
-                        }
-                    });
+        <span class="kw">let </span>id = <span class="self">self</span>.id;
+        <span class="kw">let </span><span class="kw-2">mut </span>clear_dependencies = HashSet::new();
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
+            <span class="kw">match </span>state.state_type {
+                Dirty { .. } | Scheduled { .. } | InProgressDirty { .. } =&gt; {
+                    <span class="comment">// already dirty
+                    </span>drop(state);
                 }
-                <span class="kw">if </span>active {
-                    state.state_type = Scheduled;
-                    drop(state);
-                    turbo_tasks.schedule(<span class="self">self</span>.id);
-                } <span class="kw">else </span>{
-                    state.state_type = Dirty;
+                Done {
+                    <span class="kw-2">ref mut </span>dependencies,
+                } =&gt; {
+                    clear_dependencies = take(dependencies);
+                    <span class="comment">// add to dirty lists and potentially schedule
+                    </span><span class="kw">let </span><span class="kw-2">mut </span>active = <span class="bool-val">false</span>;
+                    <span class="kw">for </span>scope <span class="kw">in </span>state.scopes.iter() {
+                        backend.with_scope(scope, |scope| {
+                            scope.increment_unfinished_tasks(backend);
+                            <span class="macro">log_scope_update!</span>(<span class="string">&quot;add unfinished task: {} -&gt; {}&quot;</span>, <span class="kw-2">*</span>scope.id, <span class="kw-2">*</span><span class="self">self</span>.id);
+                            <span class="kw">let </span><span class="kw-2">mut </span>scope = scope.state.lock();
+                            <span class="kw">if </span>scope.is_active() {
+                                active = <span class="bool-val">true</span>;
+                            } <span class="kw">else </span>{
+                                scope.add_dirty_task(<span class="self">self</span>.id);
+                            }
+                        });
+                    }
+                    <span class="kw">if </span>active {
+                        state.state_type = Scheduled {
+                            event: Event::new(<span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">&quot;TaskState({id})::event&quot;</span>)),
+                        };
+                        drop(state);
+                        turbo_tasks.schedule(<span class="self">self</span>.id);
+                    } <span class="kw">else </span>{
+                        state.state_type = Dirty {
+                            event: Event::new(<span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">&quot;TaskState({id})::event&quot;</span>)),
+                        };
+                        drop(state);
+                    }
+                }
+                InProgress { <span class="kw-2">ref mut </span>event } =&gt; {
+                    state.state_type = InProgressDirty {
+                        event: event.take(),
+                    };
                     drop(state);
                 }
             }
-            InProgress =&gt; {
-                state.state_type = InProgressDirty;
-            }
+        }
+
+        <span class="kw">if </span>!clear_dependencies.is_empty() {
+            <span class="self">self</span>.clear_dependencies(clear_dependencies, backend);
         }
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>schedule_when_dirty(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
-        <span class="kw">if </span>state.state_type == TaskStateType::Dirty {
-            state.state_type = Scheduled;
+        <span class="kw">if let </span>TaskStateType::Dirty { <span class="kw-2">ref mut </span>event } = state.state_type {
+            state.state_type = Scheduled {
+                event: event.take(),
+            };
             drop(state);
             turbo_tasks.schedule(<span class="self">self</span>.id);
         }
@@ -2374,13 +2366,15 @@
         <span class="kw">let </span><span class="kw-2">mut </span>schedule_self = <span class="bool-val">false</span>;
         backend.with_scope(id, |scope| {
             scope.increment_tasks();
-            <span class="kw">if </span>!<span class="macro">matches!</span>(state.state_type, TaskStateType::Done) {
+            <span class="kw">if </span>!<span class="macro">matches!</span>(state.state_type, TaskStateType::Done { .. }) {
                 scope.increment_unfinished_tasks(backend);
                 <span class="macro">log_scope_update!</span>(<span class="string">&quot;add unfinished task (added): {} -&gt; {}&quot;</span>, <span class="kw-2">*</span>scope.id, <span class="kw-2">*</span><span class="self">self</span>.id);
-                <span class="kw">if </span>state.state_type == TaskStateType::Dirty {
+                <span class="kw">if let </span>TaskStateType::Dirty { <span class="kw-2">ref mut </span>event } = state.state_type {
                     <span class="kw">let </span><span class="kw-2">mut </span>scope = scope.state.lock();
                     <span class="kw">if </span>scope.is_active() {
-                        state.state_type = Scheduled;
+                        state.state_type = Scheduled {
+                            event: event.take(),
+                        };
                         schedule_self = <span class="bool-val">true</span>;
                     } <span class="kw">else </span>{
                         scope.add_dirty_task(<span class="self">self</span>.id);
@@ -2421,11 +2415,15 @@
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) {
         backend.with_scope(id, |scope| {
-            <span class="kw">if </span>!<span class="macro">matches!</span>(state.state_type, Done) {
-                scope.decrement_unfinished_tasks(backend);
-                <span class="kw">if </span>state.state_type == TaskStateType::Dirty {
+            <span class="kw">match </span>state.state_type {
+                Done { .. } =&gt; {}
+                Dirty { .. } =&gt; {
+                    scope.decrement_unfinished_tasks(backend);
                     <span class="kw">let </span><span class="kw-2">mut </span>scope = scope.state.lock();
                     scope.remove_dirty_task(<span class="self">self</span>.id);
+                }
+                <span class="kw">_ </span>=&gt; {
+                    scope.decrement_unfinished_tasks(backend);
                 }
             }
             scope.decrement_tasks();
@@ -2786,7 +2784,7 @@
 
     <span class="kw">pub fn </span>is_pending(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="kw">let </span>state = <span class="self">self</span>.state.read();
-        state.state_type != TaskStateType::Done
+        !<span class="macro">matches!</span>(state.state_type, TaskStateType::Done { .. })
     }
 
     <span class="kw">pub fn </span>reset_stats(<span class="kw-2">&amp;</span><span class="self">self</span>) {
@@ -2832,17 +2830,16 @@
             <span class="kw">for </span>child <span class="kw">in </span>state.children.iter() {
                 refs.push((stats::ReferenceType::Child, <span class="kw-2">*</span>child));
             }
-        }
-        {
-            <span class="kw">let </span>execution_data = <span class="self">self</span>.execution_data.lock();
-            <span class="kw">for </span>dep <span class="kw">in </span>execution_data.dependencies.iter() {
-                <span class="kw">match </span>dep {
-                    TaskDependency::TaskOutput(task) | TaskDependency::TaskCell(task, <span class="kw">_</span>) =&gt; {
-                        refs.push((stats::ReferenceType::Dependency, <span class="kw-2">*</span>task))
-                    }
-                    TaskDependency::ScopeChildren(scope)
-                    | TaskDependency::ScopeCollectibles(scope, <span class="kw">_</span>) =&gt; {
-                        scope_refs.push((stats::ReferenceType::Dependency, <span class="kw-2">*</span>scope))
+            <span class="kw">if let </span>Done { <span class="kw-2">ref </span>dependencies } = state.state_type {
+                <span class="kw">for </span>dep <span class="kw">in </span>dependencies.iter() {
+                    <span class="kw">match </span>dep {
+                        TaskDependency::TaskOutput(task) | TaskDependency::TaskCell(task, <span class="kw">_</span>) =&gt; {
+                            refs.push((stats::ReferenceType::Dependency, <span class="kw-2">*</span>task))
+                        }
+                        TaskDependency::ScopeChildren(scope)
+                        | TaskDependency::ScopeCollectibles(scope, <span class="kw">_</span>) =&gt; {
+                            scope_refs.push((stats::ReferenceType::Dependency, <span class="kw-2">*</span>scope))
+                        }
                     }
                 }
             }
@@ -2862,11 +2859,11 @@
 
     <span class="kw">fn </span>state_string(state: <span class="kw-2">&amp;</span>TaskState) -&gt; String {
         <span class="kw">let </span><span class="kw-2">mut </span>state_str = <span class="kw">match </span>state.state_type {
-            Scheduled =&gt; <span class="string">&quot;scheduled&quot;</span>.to_string(),
-            InProgress =&gt; <span class="string">&quot;in progress&quot;</span>.to_string(),
-            InProgressDirty =&gt; <span class="string">&quot;in progress (dirty)&quot;</span>.to_string(),
-            Done =&gt; <span class="string">&quot;done&quot;</span>.to_string(),
-            Dirty =&gt; <span class="string">&quot;dirty&quot;</span>.to_string(),
+            Scheduled { .. } =&gt; <span class="string">&quot;scheduled&quot;</span>.to_string(),
+            InProgress { .. } =&gt; <span class="string">&quot;in progress&quot;</span>.to_string(),
+            InProgressDirty { .. } =&gt; <span class="string">&quot;in progress (dirty)&quot;</span>.to_string(),
+            Done { .. } =&gt; <span class="string">&quot;done&quot;</span>.to_string(),
+            Dirty { .. } =&gt; <span class="string">&quot;dirty&quot;</span>.to_string(),
         };
         <span class="kw">match </span>state.scopes {
             TaskScopes::Root(root) =&gt; {
@@ -2996,14 +2993,17 @@
             }
         }
         <span class="kw">match </span>state.state_type {
-            Done =&gt; {
+            Done { .. } =&gt; {
                 <span class="kw">let </span>result = func(<span class="kw-2">&amp;mut </span>state.output)<span class="question-mark">?</span>;
                 drop(state);
 
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(result))
             }
-            Dirty | Scheduled | InProgress | InProgressDirty =&gt; {
-                <span class="kw">let </span>listener = state.event.listen();
+            Dirty { <span class="kw-2">ref </span>event }
+            | Scheduled { <span class="kw-2">ref </span>event }
+            | InProgress { <span class="kw-2">ref </span>event }
+            | InProgressDirty { <span class="kw-2">ref </span>event } =&gt; {
+                <span class="kw">let </span>listener = event.listen();
                 drop(state);
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(listener))
             }

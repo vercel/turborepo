@@ -145,9 +145,26 @@
 <span id="145">145</span>
 <span id="146">146</span>
 <span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt::{Debug, Formatter},
     future::Future,
+    mem::replace,
     pin::Pin,
 };
 <span class="attr">#[cfg(feature = <span class="string">&quot;hanging_detection&quot;</span>)]
@@ -178,6 +195,13 @@
             listener: <span class="self">self</span>.event.listen(),
         }
     }
+
+    <span class="doccomment">/// pulls out the event listener, leaving a new, empty event in its place.
+    </span><span class="kw">pub fn </span>take(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            event: replace(<span class="kw-2">&amp;mut </span><span class="self">self</span>.event, event_listener::Event::new()),
+        }
+    }
 }
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;hanging_detection&quot;</span>)]
@@ -197,6 +221,14 @@
             description: <span class="self">self</span>.description.clone(),
             future: <span class="prelude-val">Some</span>(timeout(Duration::from_secs(<span class="number">10</span>), <span class="self">self</span>.event.listen())),
             duration: Duration::from_secs(<span class="number">10</span>),
+        }
+    }
+
+    <span class="doccomment">/// pulls out the event listener, leaving a new, empty event in its place.
+    </span><span class="kw">pub fn </span>take(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Event {
+        <span class="self">Self </span>{
+            description: <span class="self">self</span>.description.clone(),
+            event: replace(<span class="kw-2">&amp;mut </span><span class="self">self</span>.event, event_listener::Event::new()),
         }
     }
 }
