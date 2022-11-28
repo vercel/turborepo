@@ -214,37 +214,53 @@ jobs:
 
   go_examples:
     name: Go Cli Examples
-    needs: determine_jobs
+    needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.examples == 'true'
     timeout-minutes: 15
 
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
         manager: [yarn, npm]
         example: [with-yarn, with-npm, non-monorepo]
         include:
-          - os: ubuntu-latest
+          - os:
+              name: ubuntu
+              runner: ubuntu-latest
             manager: pnpm
             example: basic
-          - os: macos-latest
+          - os:
+              name: macos
+              runner: macos-latest
             manager: pnpm
             example: basic
-          - os: ubuntu-latest
+          - os:
+              name: ubuntu
+              runner: ubuntu-latest
             manager: pnpm
             example: kitchen-sink
-          - os: macos-latest
+          - os:
+              name: macos
+              runner: macos-latest
             manager: pnpm
             example: kitchen-sink
-          - os: ubuntu-latest
+          - os:
+              name: ubuntu
+              runner: ubuntu-latest
             manager: pnpm
             example: with-svelte
-          - os: macos-latest
+          - os:
+              name: macos
+              runner: macos-latest
             manager: pnpm
             example: with-svelte
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os.runner }}
     steps:
       # Used by scripts/check-examples.sh
       - name: Install Sponge
@@ -259,10 +275,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
+      - name: Download Turborepo build
+        uses: actions/download-artifact@v3
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          name: turborepo-${{ matrix.os.name }}
+          path: cli/shim/
+
+      # download-artifact doesn't restore execution permissions
+      - name: Make turbo executable
+        shell: bash
+        run: chmod +x cli/shim/turbo
 
       - name: Setup Pnpm
         uses: pnpm/action-setup@v2.2.4
