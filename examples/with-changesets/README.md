@@ -31,7 +31,7 @@ Run the following command:
 ```sh
 npx degit vercel/turbo/examples/with-changesets with-changesets
 cd with-changesets
-yarn install
+pnpm install
 git init . && git add . && git commit -m "Init"
 ```
 
