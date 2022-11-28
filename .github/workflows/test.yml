@@ -272,6 +272,8 @@ jobs:
 
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
@@ -286,6 +288,16 @@ jobs:
         with:
           command: check
           args: --workspace --all-targets
+
+      - name: Run cargo feature check for next-binding
+        run: |
+          # Known set of feature combinations we need to support
+          # next-swc/core
+          cargo check -p next-binding --features __swc_core_next_core,__swc_core_binding_napi_plugin,__swc_core_testing_transform,__swc_testing,__swc_transform_styled_components,__swc_transform_styled_jsx,__swc_transform_emotion,__swc_transform_modularize_imports
+          # next-swc/napi
+          cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__feature_next_dev_server,__feature_node_file_trace,__feature_mdx_rs
+          # next-swc/wasm
+          cargo check -p next-binding --features __swc_core_binding_wasm,__swc_core_binding_wasm_plugin,__feature_mdx_rs --target wasm32-unknown-unknown
 
   rust_lint:
     needs: [determine_jobs, rust_prepare]
