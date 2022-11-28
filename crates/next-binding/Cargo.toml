@@ -1,0 +1,23 @@
+[package]
+name = "next-binding"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+autobenches = false
+
+[lib]
+bench = false
+
+[features]
+__swc_core_binding_napi = []
+__swc_core_binding_wasm = []
+
+__feature_next_dev_server = []
+__feature_node_file_trace = []
+__feature_mdx_rs = []
+
+__swc_transform_styled_components = []
+__swc_transform_styled_jsx = []
+__swc_transform_emotion = []
+
+[dependencies]
