@@ -8,8 +8,7 @@ use turbo_tasks::{
     primitives::StringVc, trace::TraceRawVcs, Value, ValueToString, ValueToStringVc,
 };
 use turbo_tasks_fs::{
-    DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathOptionVc,
-    FileSystemPathVc, LinkContent, LinkType,
+    DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathVc, LinkContent, LinkType,
 };
 
 #[turbo_tasks::value(shared, serialization = "auto_for_input")]
@@ -663,10 +662,10 @@ pub async fn read_matches(
                     if handled.insert(str) {
                         if let Some(fs_path) = &*if force_in_context {
                             context.try_join_inside(str).await?
-                        } else if !str.starts_with("/ROOT/") {
-                            context.try_join(str).await?
+                        } else if let Some(striped_root) = str.strip_prefix("/ROOT/") {
+                            context.root().try_join(striped_root).await?
                         } else {
-                            FileSystemPathOptionVc::new(context.fs(), str.to_string()).await?
+                            context.try_join(str).await?
                         } {
                             // This explicit deref of `context` is necessary
                             #[allow(clippy::explicit_auto_deref)]
@@ -676,7 +675,8 @@ pub async fn read_matches(
                             if should_match {
                                 let len = prefix.len();
                                 prefix.push_str(str);
-                                match *fs_path.get_type().await? {
+                                let file_type = *fs_path.get_type().await?;
+                                match file_type {
                                     FileSystemEntryType::File => results
                                         .push(PatternMatch::File(prefix.to_string(), *fs_path)),
                                     FileSystemEntryType::Directory => results.push(
