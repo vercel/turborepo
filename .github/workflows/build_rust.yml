@@ -82,7 +82,7 @@ jobs:
           # https://github.com/actions/download-artifact#download-all-artifacts
           name: ${{ matrix.settings.lib-cache-key }}
           # Optional, a directory where to extract artifact(s), defaults to the current directory
-          path: shim/libturbo
+          path: turborepo/libturbo
           # Optional, choose how to exit the action if no artifact is found
           # can be one of:
           #  "fail", "warn", "ignore"
@@ -94,7 +94,7 @@ jobs:
       #   uses: actions/download-artifact@v3
       #   with:
       #     name: ${{ matrix.settings.lib-cache-key }}
-      #     path: shim/libturbo
+      #     path: turborepo/libturbo
       - name: Build Setup
         if: ${{ matrix.settings.setup }}
         run: ${{ matrix.settings.setup }}
@@ -110,8 +110,8 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: shim-${{ matrix.settings.target }}
-          path: shim/target/${{ matrix.settings.target }}/release/turbo*
+          name: turborepo-${{ matrix.settings.target }}
+          path: turborepo/target/${{ matrix.settings.target }}/release/turbo*
 
   final-publish:
     name: "Publish To NPM"
@@ -146,41 +146,41 @@ jobs:
       - name: Download Apple ARM64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-aarch64-apple-darwin
+          name: turborepo-aarch64-apple-darwin
           path: cli/dist-darwin-arm64
 
       - name: Download Ubuntu ARM64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-aarch64-unknown-linux-gnu
+          name: turborepo-aarch64-unknown-linux-gnu
           path: cli/dist-linux-arm64
 
       - name: Download Windows ARM64 (Ships as x86_64) Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-x86_64-pc-windows-gnu
+          name: turborepo-x86_64-pc-windows-gnu
           path: cli/dist-windows-arm64
 
       - name: Download Ubuntu x86_64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-x86_64-unknown-linux-gnu
+          name: turborepo-x86_64-unknown-linux-gnu
           path: cli/dist-linux-amd64
 
       - name: Download Apple x86_64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-x86_64-apple-darwin
+          name: turborepo-x86_64-apple-darwin
           path: cli/dist-darwin-amd64
 
       - name: Download Windows x86_64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-x86_64-pc-windows-gnu
+          name: turborepo-x86_64-pc-windows-gnu
           path: cli/dist-windows-amd64
 
       - name: Perform Release
-        run: cd cli && make publish-shim
+        run: cd cli && make publish-turborepo
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -189,5 +189,5 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: shim-combined
+          name: turborepo-combined
           path: cli/dist

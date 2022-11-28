@@ -72,7 +72,8 @@ impl PackageManager {
     pub fn get_workspace_globs(&self, root_path: &Path) -> Result<Globs> {
         let globs = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
-                let workspace_yaml = fs::read_to_string(root_path.join("pnpm-workspace.yaml"))?;
+                let workspace_yaml =
+                    fs::read_to_string(root_path.join("../../../pnpm-workspace.yaml"))?;
                 let workspaces: PnpmWorkspaces = serde_yaml::from_str(&workspace_yaml)?;
                 if workspaces.packages.is_empty() {
                     return Err(anyhow!(
@@ -85,7 +86,8 @@ impl PackageManager {
                 }
             }
             PackageManager::Berry | PackageManager::Npm | PackageManager::Yarn => {
-                let package_json_text = fs::read_to_string(root_path.join("package.json"))?;
+                let package_json_text =
+                    fs::read_to_string(root_path.join("../../../package.json"))?;
                 let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)?;
 
                 if package_json.workspaces.is_empty() {
@@ -133,7 +135,7 @@ impl PackageManager {
                     .ok()
             }
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
-                let pnpm_lock_path = repo_root.join("pnpm-lock.yaml");
+                let pnpm_lock_path = repo_root.join("../../../pnpm-lock.yaml");
                 let pnpm_lock_text = fs::read_to_string(pnpm_lock_path).ok()?;
                 let pnpm_lock: serde_yaml::Value = serde_yaml::from_str(&pnpm_lock_text).ok()?;
 

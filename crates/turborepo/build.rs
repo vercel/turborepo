@@ -57,7 +57,7 @@ fn build_debug_libturbo() -> String {
     let cli_path = env::var_os("CARGO_WORKSPACE_DIR")
         .map(PathBuf::from)
         .unwrap()
-        .join("cli");
+        .join("../../cli");
     let target = build_target::target().unwrap();
     let mut cmd = Command::new("make");
     cmd.current_dir(&cli_path);

@@ -68,7 +68,7 @@ impl RepoState {
         // What we look for next is a directory that contains a `package.json`.
         let potential_roots = current_dir
             .ancestors()
-            .filter(|path| fs::metadata(path.join("package.json")).is_ok());
+            .filter(|path| fs::metadata(path.join("../../../package.json")).is_ok());
 
         let mut first_package_json_dir = None;
         // We loop through these directories and see if there are workspaces defined in

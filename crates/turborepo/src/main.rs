@@ -316,16 +316,20 @@ impl TurboState {
             }
         }
 
-        let local_turbo_path = repo_state.root.join("node_modules").join(".bin").join({
-            #[cfg(windows)]
-            {
-                "turbo.cmd"
-            }
-            #[cfg(not(windows))]
-            {
-                "turbo"
-            }
-        });
+        let local_turbo_path = repo_state
+            .root
+            .join("../../../node_modules")
+            .join(".bin")
+            .join({
+                #[cfg(windows)]
+                {
+                    "turbo.cmd"
+                }
+                #[cfg(not(windows))]
+                {
+                    "turbo"
+                }
+            });
 
         if matches!(repo_state.mode, RepoMode::SinglePackage) && self.parsed_args.is_run_command() {
             self.raw_args.push("--single-package".to_string());
@@ -370,7 +374,7 @@ impl Args {
 }
 
 fn get_version() -> &'static str {
-    include_str!("../../version.txt")
+    include_str!("../../../version.txt")
         .split_once('\n')
         .expect("Failed to read version from version.txt")
         .0
