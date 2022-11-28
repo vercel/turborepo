@@ -203,7 +203,6 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: turborepo-${{ matrix.os.name }}
-          path: cli/shim
       # download-artifact doesn't restore execution permissions
       - name: Make turbo executable
         shell: bash
@@ -279,7 +278,6 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: turborepo-${{ matrix.os.name }}
-          path: cli/shim/
 
       # download-artifact doesn't restore execution permissions
       - name: Make turbo executable
@@ -376,6 +374,7 @@ jobs:
         with:
           name: turborepo-${{ matrix.os.name }}
           path: |
+            cli/libturbo.a
             cli/shim/turbo
             cli/shim/turbo.exe
 
@@ -402,7 +401,6 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: turborepo-${{ matrix.os.name }}
-          path: cli/shim/
       # download-artifact doesn't restore execution permissions
       - name: Make turbo executable
         shell: bash
