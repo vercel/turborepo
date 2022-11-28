@@ -30,7 +30,7 @@ impl TaskStats {
     /// Creates a new [`TaskStats`].
     pub fn new() -> Self {
         if full_stats() {
-            Self::Full(Box::new(TaskStatsFull::default()))
+            Self::Full(Box::default())
         } else {
             Self::Small(TaskStatsSmall::default())
         }
