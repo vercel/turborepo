@@ -16,6 +16,7 @@ use std::{
 use anyhow::{anyhow, Result};
 use clap::{CommandFactory, Parser, Subcommand};
 use serde::Serialize;
+use update_notifier::UpdateNotifier;
 
 use crate::{
     ffi::{nativeRunWithArgs, nativeRunWithTurboState, GoString},
@@ -446,6 +447,10 @@ fn get_version() -> &'static str {
 }
 
 fn main() -> Result<()> {
+    let mut updater =
+        UpdateNotifier::new(String::from("turbo"), Some(String::from("latest")), None);
+    updater.check();
+
     let clap_args = Args::parse();
     // --help doesn't work with ignore_errors in clap.
     if clap_args.help {
