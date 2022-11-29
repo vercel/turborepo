@@ -5,7 +5,7 @@ Test help flag
   $ ${TURBO} -h
   The build system that makes ship happen
   
-  Usage: turbo [OPTIONS] [TASKS]... [-- <FORWARDED_ARGS>...] [COMMAND]
+  Usage: turbo [OPTIONS] [COMMAND]
   
   Commands:
     bin         Get the path to the Turbo binary
@@ -56,8 +56,6 @@ Test help flag
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
         --single-package                 Run turbo in single-package mode
-    [FORWARDED_ARGS]...              
-    [TASKS]...
 
 
 
@@ -67,7 +65,7 @@ Test help flag
   $ ${TURBO} --help
   The build system that makes ship happen
   
-  Usage: turbo [OPTIONS] [TASKS]... [-- <FORWARDED_ARGS>...] [COMMAND]
+  Usage: turbo [OPTIONS] [COMMAND]
   
   Commands:
     bin         Get the path to the Turbo binary
@@ -118,8 +116,6 @@ Test help flag
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
         --single-package                 Run turbo in single-package mode
-    [FORWARDED_ARGS]...              
-    [TASKS]...
 
 Test help flag for link command
   $ ${TURBO} link -h
