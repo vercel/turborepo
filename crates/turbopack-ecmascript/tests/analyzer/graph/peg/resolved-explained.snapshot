@@ -286,26 +286,20 @@ describeExpectation = (...) => {
 }[arguments[0]["type"]](arguments[0])
 - *0* unsupported expression
 
-describeExpected = (...) => (???*0* | `${???*3*} or ${???*6*}` | ???*9*)
-- *0* ???*1*[0]
-  ⚠️  property on unknown
-- *1* ???*2*(arguments[0]["length"])
-  ⚠️  call of unknown function
-- *2* FreeVar(Array)
+describeExpected = (...) => (???*0* | `${???*2*} or ${???*4*}` | ???*6*)
+- *0* new ???*1*(arguments[0]["length"])[0]
+  ⚠️  property on new expression
+- *1* FreeVar(Array)
   ⚠️  unknown global
-- *3* ???*4*[0]
-  ⚠️  property on unknown
-- *4* ???*5*(arguments[0]["length"])
-  ⚠️  call of unknown function
+- *2* new ???*3*(arguments[0]["length"])[0]
+  ⚠️  property on new expression
+- *3* FreeVar(Array)
+  ⚠️  unknown global
+- *4* new ???*5*(arguments[0]["length"])[1]
+  ⚠️  property on new expression
 - *5* FreeVar(Array)
   ⚠️  unknown global
-- *6* ???*7*[1]
-  ⚠️  property on unknown
-- *7* ???*8*(arguments[0]["length"])
-  ⚠️  call of unknown function
-- *8* FreeVar(Array)
-  ⚠️  unknown global
-- *9* unsupported expression
+- *6* unsupported expression
 
 describeFound = (...) => (
   | `"${...[...](/\n/g, "\n")["replace"](/\r/g, "\r")["replace"](/[\x00-\x0F]/g, (...) => `\x0${...(...)["toUpperCase"]()}`)["replace"](
@@ -319,10 +313,8 @@ description#75 = arguments[0]
 
 description#79 = arguments[0]
 
-descriptions = ???*0*
-- *0* ???*1*(arguments[0]["length"])
-  ⚠️  call of unknown function
-- *1* FreeVar(Array)
+descriptions = new ???*0*(arguments[0]["length"])
+- *0* FreeVar(Array)
   ⚠️  unknown global
 
 details = (
@@ -580,12 +572,18 @@ peg$SyntaxError = (...) => ???*0*
 
 peg$anyExpectation = (...) => {"type": "any"}
 
-peg$buildSimpleError = (...) => ???*0*
+peg$buildSimpleError = (...) => new (...) => ???*0*(arguments[0], null, null, arguments[1])
 - *0* FreeVar(undefined)
   ⚠️  unknown global
 
-peg$buildStructuredError = (...) => ???*0*
+peg$buildStructuredError = (...) => new (...) => ???*0*(???*1*, arguments[0], arguments[1], arguments[2])
 - *0* FreeVar(undefined)
+  ⚠️  unknown global
+- *1* ???*2*(arguments[0], arguments[1])
+  ⚠️  call of unknown function
+- *2* (...) => ???*3*["buildMessage"]
+  ⚠️  property on function
+- *3* FreeVar(undefined)
   ⚠️  unknown global
 
 peg$c0 = (...) => {"type": "sql", "body": arguments[0]}

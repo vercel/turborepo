@@ -1,9 +1,9 @@
 *arrow function 2666* = (...) => (
-  | ["node", ["bin/esbuild"]]
+  | ["node", [Path("bin/esbuild")]]
   | [
         (
           | ???*0*
-          | `"esbuild"/resolved/lib${("/" | "")}pnpapi-${(???*1* | ???*2* | "esbuild-linux-64")}-${???*3*}`
+          | Path(`"esbuild"/resolved/lib${("/" | "")}pnpapi-${(???*1* | ???*2* | "esbuild-linux-64")}-${???*3*}`)
           | ???*7*
           | ???*8*
           | ???*13*
@@ -48,7 +48,7 @@
 - *17* subpath
   ⚠️  pattern without value
 
-args = (["bin/esbuild"] | [])
+args = ([Path("bin/esbuild")] | [])
 
 binPath = (???*0* | ???*1* | ???*6*)
 - *0* binPath
@@ -75,7 +75,7 @@ binPath = (???*0* | ???*1* | ???*6*)
 - *10* subpath
   ⚠️  pattern without value
 
-binTargetPath = `"esbuild"/resolved/lib${("/" | "")}pnpapi-${(???*0* | ???*1* | "esbuild-linux-64")}-${???*2*}`
+binTargetPath = Path(`"esbuild"/resolved/lib${("/" | "")}pnpapi-${(???*0* | ???*1* | "esbuild-linux-64")}-${???*2*}`)
 - *0* pkg
   ⚠️  pattern without value
 - *1* FreeVar(undefined)
@@ -91,7 +91,7 @@ binTargetPath = `"esbuild"/resolved/lib${("/" | "")}pnpapi-${(???*0* | ???*1* | 
 command = (
   | "node"
   | ???*0*
-  | `"esbuild"/resolved/lib${("/" | "")}pnpapi-${(???*1* | ???*2* | "esbuild-linux-64")}-${???*3*}`
+  | Path(`"esbuild"/resolved/lib${("/" | "")}pnpapi-${(???*1* | ???*2* | "esbuild-linux-64")}-${???*3*}`)
   | ???*7*
   | ???*8*
   | ???*13*
@@ -142,11 +142,11 @@ e#6 = ???*0*
   ⚠️  pattern without value
 
 esbuildCommandAndArgs = (...) => (
-  | ["node", ["bin/esbuild"]]
+  | ["node", [Path("bin/esbuild")]]
   | [
         (
           | ???*0*
-          | `"esbuild"/resolved/lib${("/" | "")}pnpapi-${(???*1* | ???*2* | "esbuild-linux-64")}-${???*3*}`
+          | Path(`"esbuild"/resolved/lib${("/" | "")}pnpapi-${(???*1* | ???*2* | "esbuild-linux-64")}-${???*3*}`)
           | ???*7*
           | ???*8*
           | ???*13*
@@ -195,7 +195,7 @@ esbuildLibDir = ""esbuild"/resolved/lib"
 
 generateBinPath = (...) => (
   | ???*0*
-  | `"esbuild"/resolved/lib${("/" | "")}pnpapi-${(???*1* | ???*2* | "esbuild-linux-64")}-${???*3*}`
+  | Path(`"esbuild"/resolved/lib${("/" | "")}pnpapi-${(???*1* | ???*2* | "esbuild-linux-64")}-${???*3*}`)
   | ???*7*
   | ???*8*
   | ???*13*
@@ -305,4 +305,7 @@ subpath#4 = (???*0* | "esbuild.exe" | "bin/esbuild")
 - *0* subpath
   ⚠️  pattern without value
 
-x = (["bin/esbuild", "--service=0.14.12", "--ping"] | ["--service=0.14.12", "--ping"])
+x = (
+  | [Path("bin/esbuild"), "--service=0.14.12", "--ping"]
+  | ["--service=0.14.12", "--ping"]
+)
