@@ -1588,6 +1588,17 @@
 <span id="1588">1588</span>
 <span id="1589">1589</span>
 <span id="1590">1590</span>
+<span id="1591">1591</span>
+<span id="1592">1592</span>
+<span id="1593">1593</span>
+<span id="1594">1594</span>
+<span id="1595">1595</span>
+<span id="1596">1596</span>
+<span id="1597">1597</span>
+<span id="1598">1598</span>
+<span id="1599">1599</span>
+<span id="1600">1600</span>
+<span id="1601">1601</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -1598,7 +1609,7 @@
     hash::Hash,
     mem::{replace, take},
     pin::Pin,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 <span class="kw">use </span>anyhow::Result;
@@ -1607,8 +1618,8 @@
 <span class="kw">use </span>turbo_tasks::{
     backend::PersistentTaskType,
     event::{Event, EventListener},
-    get_invalidator, registry, CellId, FunctionId, Invalidator, RawVc, TaskId, TaskInput,
-    TraitTypeId, TurboTasksBackendApi, ValueTypeId,
+    get_invalidator, registry, CellId, FunctionId, Invalidator, RawVc, StatsType, TaskId,
+    TaskInput, TraitTypeId, TurboTasksBackendApi, ValueTypeId,
 };
 <span class="kw">pub type </span>NativeTaskFuture = Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;RawVc&gt;&gt; + Send&gt;&gt;;
 <span class="kw">pub type </span>NativeTaskFn = Box&lt;<span class="kw">dyn </span>Fn() -&gt; NativeTaskFuture + Send + Sync&gt;;
@@ -1734,13 +1745,11 @@
     </span>cells: HashMap&lt;ValueTypeId, Vec&lt;Cell&gt;&gt;,
 
     <span class="comment">// Stats:
-    </span>executions: u32,
-    total_duration: Duration,
-    last_duration: Duration,
+    </span>stats: TaskStats,
 }
 
 <span class="kw">impl </span>TaskState {
-    <span class="kw">fn </span>new(id: TaskId) -&gt; <span class="self">Self </span>{
+    <span class="kw">fn </span>new(id: TaskId, stats_type: StatsType) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             scopes: Default::default(),
             state_type: Dirty {
@@ -1750,15 +1759,13 @@
             collectibles: Default::default(),
             output: Default::default(),
             cells: Default::default(),
-            executions: Default::default(),
-            total_duration: Default::default(),
-            last_duration: Default::default(),
+            stats: TaskStats::new(stats_type),
             <span class="attr">#[cfg(feature = <span class="string">&quot;track_wait_dependencies&quot;</span>)]
             </span>last_waiting_task: Default::default(),
         }
     }
 
-    <span class="kw">fn </span>new_scheduled_in_scope(id: TaskId, scope: TaskScopeId) -&gt; <span class="self">Self </span>{
+    <span class="kw">fn </span>new_scheduled_in_scope(id: TaskId, scope: TaskScopeId, stats_type: StatsType) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             scopes: TaskScopes::Inner(CountHashSet::from([scope]), <span class="number">0</span>),
             state_type: Scheduled {
@@ -1768,9 +1775,7 @@
             collectibles: Default::default(),
             output: Default::default(),
             cells: Default::default(),
-            executions: Default::default(),
-            total_duration: Default::default(),
-            last_duration: Default::default(),
+            stats: TaskStats::new(stats_type),
             <span class="attr">#[cfg(feature = <span class="string">&quot;track_wait_dependencies&quot;</span>)]
             </span>last_waiting_task: Default::default(),
         }
@@ -1869,17 +1874,23 @@
     output::Output,
     scope::{ScopeChildChangeEffect, TaskScopeId, TaskScopes},
     stats::{<span class="self">self</span>, StatsReferences},
+    task_stats::TaskStats,
     MemoryBackend,
 };
 
 <span class="kw">impl </span>Task {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new_native(id: TaskId, inputs: Vec&lt;TaskInput&gt;, native_fn: FunctionId) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new_native(
+        id: TaskId,
+        inputs: Vec&lt;TaskInput&gt;,
+        native_fn: FunctionId,
+        stats_type: StatsType,
+    ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>bound_fn = registry::get_function(native_fn).bind(<span class="kw-2">&amp;</span>inputs);
         <span class="self">Self </span>{
             id,
             inputs,
             ty: TaskType::Native(native_fn, bound_fn),
-            state: RwLock::new(TaskState::new(id)),
+            state: RwLock::new(TaskState::new(id, stats_type)),
         }
     }
 
@@ -1887,12 +1898,13 @@
         id: TaskId,
         inputs: Vec&lt;TaskInput&gt;,
         native_fn: FunctionId,
+        stats_type: StatsType,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             id,
             inputs,
             ty: TaskType::ResolveNative(native_fn),
-            state: RwLock::new(TaskState::new(id)),
+            state: RwLock::new(TaskState::new(id, stats_type)),
         }
     }
 
@@ -1901,12 +1913,13 @@
         trait_type: TraitTypeId,
         trait_fn_name: Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;,
         inputs: Vec&lt;TaskInput&gt;,
+        stats_type: StatsType,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             id,
             inputs,
             ty: TaskType::ResolveTrait(trait_type, trait_fn_name),
-            state: RwLock::new(TaskState::new(id)),
+            state: RwLock::new(TaskState::new(id, stats_type)),
         }
     }
 
@@ -1914,12 +1927,13 @@
         id: TaskId,
         scope: TaskScopeId,
         functor: <span class="kw">impl </span>Fn() -&gt; NativeTaskFuture + Sync + Send + <span class="lifetime">&#39;static</span>,
+        stats_type: StatsType,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             id,
             inputs: Vec::new(),
             ty: TaskType::Root(Box::new(functor)),
-            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope)),
+            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope, stats_type)),
         }
     }
 
@@ -1927,12 +1941,13 @@
         id: TaskId,
         scope: TaskScopeId,
         functor: <span class="kw">impl </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;RawVc&gt;&gt; + Send + <span class="lifetime">&#39;static</span>,
+        stats_type: StatsType,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             id,
             inputs: Vec::new(),
             ty: TaskType::Once(Mutex::new(<span class="prelude-val">Some</span>(Box::pin(functor)))),
-            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope)),
+            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope, stats_type)),
         }
     }
 
@@ -2033,7 +2048,7 @@
                 state.state_type = InProgress {
                     event: event.take(),
                 };
-                state.executions += <span class="number">1</span>;
+                state.stats.increment_executions();
                 <span class="comment">// TODO we need to reconsider the approach of doing scope changes in background
                 // since they affect collectibles and need to be computed eagerly to allow
                 // strongly_consistent to work properly.
@@ -2127,6 +2142,7 @@
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>execution_completed(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         duration: Duration,
+        instant: Instant,
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; bool {
@@ -2134,9 +2150,9 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dependencies = DEPENDENCIES_TO_TRACK.with(|deps| deps.take());
         {
             <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
-
-            state.total_duration += duration;
-            state.last_duration = duration;
+            state
+                .stats
+                .register_execution(duration, turbo_tasks.program_duration_until(instant));
             <span class="kw">match </span>state.state_type {
                 InProgress { <span class="kw-2">ref mut </span>event } =&gt; {
                     <span class="kw">let </span>event = event.take();
@@ -2778,9 +2794,7 @@
     <span class="doccomment">/// For testing purposes
     </span><span class="kw">pub fn </span>reset_executions(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
-        <span class="kw">if </span>state.executions &gt; <span class="number">1 </span>{
-            state.executions = <span class="number">1</span>;
-        }
+        state.stats.reset_executions()
     }
 
     <span class="kw">pub fn </span>is_pending(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
@@ -2790,17 +2804,25 @@
 
     <span class="kw">pub fn </span>reset_stats(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
-        state.executions = <span class="number">0</span>;
-        state.total_duration = Duration::ZERO;
-        state.last_duration = Duration::ZERO;
+        state.stats.reset();
     }
 
     <span class="kw">pub fn </span>get_stats_info(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;</span>MemoryBackend) -&gt; TaskStatsInfo {
         <span class="kw">let </span>state = <span class="self">self</span>.state.read();
+
+        <span class="kw">let </span>(total_duration, last_duration, executions) = <span class="kw">match </span><span class="kw-2">&amp;</span>state.stats {
+            TaskStats::Essential(stats) =&gt; (<span class="prelude-val">None</span>, stats.last_duration(), <span class="prelude-val">None</span>),
+            TaskStats::Full(stats) =&gt; (
+                <span class="prelude-val">Some</span>(stats.total_duration()),
+                stats.last_duration(),
+                <span class="prelude-val">Some</span>(stats.executions()),
+            ),
+        };
+
         TaskStatsInfo {
-            total_duration: state.total_duration,
-            last_duration: state.last_duration,
-            executions: state.executions,
+            total_duration,
+            last_duration,
+            executions,
             root_scoped: <span class="macro">matches!</span>(state.scopes, TaskScopes::Root(<span class="kw">_</span>)),
             child_scopes: <span class="kw">match </span>state.scopes {
                 TaskScopes::Root(<span class="kw">_</span>) =&gt; <span class="number">1</span>,
@@ -3171,9 +3193,9 @@
 <span class="kw">impl </span>Eq <span class="kw">for </span>Task {}
 
 <span class="kw">pub struct </span>TaskStatsInfo {
-    <span class="kw">pub </span>total_duration: Duration,
+    <span class="kw">pub </span>total_duration: <span class="prelude-ty">Option</span>&lt;Duration&gt;,
     <span class="kw">pub </span>last_duration: Duration,
-    <span class="kw">pub </span>executions: u32,
+    <span class="kw">pub </span>executions: <span class="prelude-ty">Option</span>&lt;u32&gt;,
     <span class="kw">pub </span>root_scoped: bool,
     <span class="kw">pub </span>child_scopes: usize,
     <span class="kw">pub </span>active: bool,

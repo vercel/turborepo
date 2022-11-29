@@ -1173,6 +1173,61 @@
 <span id="1173">1173</span>
 <span id="1174">1174</span>
 <span id="1175">1175</span>
+<span id="1176">1176</span>
+<span id="1177">1177</span>
+<span id="1178">1178</span>
+<span id="1179">1179</span>
+<span id="1180">1180</span>
+<span id="1181">1181</span>
+<span id="1182">1182</span>
+<span id="1183">1183</span>
+<span id="1184">1184</span>
+<span id="1185">1185</span>
+<span id="1186">1186</span>
+<span id="1187">1187</span>
+<span id="1188">1188</span>
+<span id="1189">1189</span>
+<span id="1190">1190</span>
+<span id="1191">1191</span>
+<span id="1192">1192</span>
+<span id="1193">1193</span>
+<span id="1194">1194</span>
+<span id="1195">1195</span>
+<span id="1196">1196</span>
+<span id="1197">1197</span>
+<span id="1198">1198</span>
+<span id="1199">1199</span>
+<span id="1200">1200</span>
+<span id="1201">1201</span>
+<span id="1202">1202</span>
+<span id="1203">1203</span>
+<span id="1204">1204</span>
+<span id="1205">1205</span>
+<span id="1206">1206</span>
+<span id="1207">1207</span>
+<span id="1208">1208</span>
+<span id="1209">1209</span>
+<span id="1210">1210</span>
+<span id="1211">1211</span>
+<span id="1212">1212</span>
+<span id="1213">1213</span>
+<span id="1214">1214</span>
+<span id="1215">1215</span>
+<span id="1216">1216</span>
+<span id="1217">1217</span>
+<span id="1218">1218</span>
+<span id="1219">1219</span>
+<span id="1220">1220</span>
+<span id="1221">1221</span>
+<span id="1222">1222</span>
+<span id="1223">1223</span>
+<span id="1224">1224</span>
+<span id="1225">1225</span>
+<span id="1226">1226</span>
+<span id="1227">1227</span>
+<span id="1228">1228</span>
+<span id="1229">1229</span>
+<span id="1230">1230</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -1285,6 +1340,18 @@
     <span class="kw">fn </span>update_current_task_cell(<span class="kw-2">&amp;</span><span class="self">self</span>, index: CellId, content: CellContent);
 }
 
+<span class="doccomment">/// The type of stats reporting.
+</span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+</span><span class="kw">pub enum </span>StatsType {
+    <span class="doccomment">/// Only report stats essential to Turbo Tasks&#39; operation.
+    </span>Essential,
+    <span class="doccomment">/// Full stats reporting.
+    ///
+    /// This is useful for debugging, but it has a slight memory and performance
+    /// impact.
+    </span>Full,
+}
+
 <span class="kw">pub trait </span>TaskIdProvider {
     <span class="kw">fn </span>get_fresh_task_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskId;
     <span class="doccomment">/// # Safety
@@ -1319,6 +1386,25 @@
     <span class="doccomment">/// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `invalidate_tasks()` on all tasks.
     </span><span class="kw">fn </span>schedule_notify_tasks_set(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: <span class="kw-2">&amp;</span>HashSet&lt;TaskId&gt;);
+
+    <span class="doccomment">/// Returns the stats reporting type.
+    </span><span class="kw">fn </span>stats_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StatsType;
+    <span class="doccomment">/// Sets the stats reporting type.
+    </span><span class="kw">fn </span>set_stats_type(<span class="kw-2">&amp;</span><span class="self">self</span>, stats_type: StatsType);
+    <span class="doccomment">/// Returns the duration from the start of the program to the given instant.
+    </span><span class="kw">fn </span>program_duration_until(<span class="kw-2">&amp;</span><span class="self">self</span>, instant: Instant) -&gt; Duration;
+}
+
+<span class="kw">impl </span>StatsType {
+    <span class="doccomment">/// Returns `true` if the stats type is `Essential`.
+    </span><span class="kw">pub fn </span>is_essential(<span class="self">self</span>) -&gt; bool {
+        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Essential)
+    }
+
+    <span class="doccomment">/// Returns `true` if the stats type is `Full`.
+    </span><span class="kw">pub fn </span>is_full(<span class="self">self</span>) -&gt; bool {
+        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Full)
+    }
 }
 
 <span class="kw">impl </span>TaskIdProvider <span class="kw">for </span><span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi {
@@ -1355,6 +1441,10 @@
     event: Event,
     event_foreground: Event,
     event_background: Event,
+    <span class="comment">// NOTE(alexkirsz) We use an atomic bool instead of a lock around `StatsType` to avoid the
+    // locking overhead.
+    </span>enable_full_stats: AtomicBool,
+    program_start: Instant,
 }
 
 <span class="comment">// TODO implement our own thread pool and make these thread locals instead
@@ -1395,6 +1485,8 @@
             event: Event::new(|| <span class="string">&quot;TurboTasks::event&quot;</span>.to_string()),
             event_foreground: Event::new(|| <span class="string">&quot;TurboTasks::event_foreground&quot;</span>.to_string()),
             event_background: Event::new(|| <span class="string">&quot;TurboTasks::event_background&quot;</span>.to_string()),
+            enable_full_stats: AtomicBool::new(<span class="bool-val">false</span>),
+            program_start: Instant::now(),
         });
         this.backend.startup(<span class="kw-2">&amp;*</span>this);
         this
@@ -1507,12 +1599,12 @@
                 }
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(execution) = this.backend.try_start_task_execution(task_id, <span class="kw-2">&amp;*</span>this) {
                     <span class="comment">// Setup thread locals
-                    </span><span class="kw">let </span>(result, duration) = CELL_COUNTERS
+                    </span><span class="kw">let </span>(result, duration, instant) = CELL_COUNTERS
                         .scope(Default::default(), <span class="kw">async </span>{
-                            <span class="kw">let </span>(result, duration) =
+                            <span class="kw">let </span>(result, duration, instant) =
                                 TimedFuture::new(AssertUnwindSafe(execution.future).catch_unwind())
                                     .<span class="kw">await</span>;
-                            (result, duration)
+                            (result, duration, instant)
                         })
                         .<span class="kw">await</span>;
                     <span class="kw">if </span><span class="macro">cfg!</span>(feature = <span class="string">&quot;log_function_stats&quot;</span>) &amp;&amp; duration.as_millis() &gt; <span class="number">1000 </span>{
@@ -1533,7 +1625,7 @@
                     this.notify_scheduled_tasks_internal();
                     <span class="kw">let </span>reexecute = this
                         .backend
-                        .task_execution_completed(task_id, duration, <span class="kw-2">&amp;*</span>this);
+                        .task_execution_completed(task_id, duration, instant, <span class="kw-2">&amp;*</span>this);
                     <span class="kw">if </span>!reexecute {
                         <span class="kw">break</span>;
                     }
@@ -1995,6 +2087,24 @@
     <span class="attr">#[track_caller]
     </span><span class="kw">fn </span>schedule(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId) {
         <span class="self">self</span>.schedule(task)
+    }
+
+    <span class="kw">fn </span>stats_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StatsType {
+        <span class="kw">match </span><span class="self">self</span>.enable_full_stats.load(Ordering::Acquire) {
+            <span class="bool-val">true </span>=&gt; StatsType::Full,
+            <span class="bool-val">false </span>=&gt; StatsType::Essential,
+        }
+    }
+
+    <span class="kw">fn </span>set_stats_type(<span class="kw-2">&amp;</span><span class="self">self</span>, stats_type: StatsType) {
+        <span class="kw">match </span>stats_type {
+            StatsType::Full =&gt; <span class="self">self</span>.enable_full_stats.store(<span class="bool-val">true</span>, Ordering::Release),
+            StatsType::Essential =&gt; <span class="self">self</span>.enable_full_stats.store(<span class="bool-val">false</span>, Ordering::Release),
+        }
+    }
+
+    <span class="kw">fn </span>program_duration_until(<span class="kw-2">&amp;</span><span class="self">self</span>, instant: Instant) -&gt; Duration {
+        instant - <span class="self">self</span>.program_start
     }
 }
 

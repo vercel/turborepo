@@ -115,11 +115,20 @@
 <span id="115">115</span>
 <span id="116">116</span>
 <span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{str::FromStr, sync::Arc, time::Duration};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>mime::Mime;
-<span class="kw">use </span>turbo_tasks::{get_invalidator, TurboTasks, Value};
+<span class="kw">use </span>turbo_tasks::{get_invalidator, TurboTasks, TurboTasksBackendApi, Value};
 <span class="kw">use </span>turbo_tasks_fs::File;
 <span class="kw">use </span>turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
@@ -170,7 +179,11 @@
                     stats.add_id(b, task);
                 });
                 <span class="kw">let </span>tree = stats.treeify(ReferenceType::Dependency);
-                <span class="kw">let </span>graph = viz::graph::visualize_stats_tree(tree, ReferenceType::Dependency);
+                <span class="kw">let </span>graph = viz::graph::visualize_stats_tree(
+                    tree,
+                    ReferenceType::Dependency,
+                    tt.stats_type(),
+                );
                 viz::graph::wrap_html(<span class="kw-2">&amp;</span>graph)
             }
             <span class="string">&quot;call-graph&quot; </span>=&gt; {
@@ -180,7 +193,8 @@
                     stats.add_id(b, task);
                 });
                 <span class="kw">let </span>tree = stats.treeify(ReferenceType::Child);
-                <span class="kw">let </span>graph = viz::graph::visualize_stats_tree(tree, ReferenceType::Child);
+                <span class="kw">let </span>graph =
+                    viz::graph::visualize_stats_tree(tree, ReferenceType::Child, tt.stats_type());
                 viz::graph::wrap_html(<span class="kw-2">&amp;</span>graph)
             }
             <span class="string">&quot;table&quot; </span>=&gt; {
@@ -190,11 +204,15 @@
                     <span class="kw">let </span>active_only = query.contains_key(<span class="string">&quot;active&quot;</span>);
                     b.with_all_cached_tasks(|task| {
                         stats.add_id_conditional(b, task, |<span class="kw">_</span>, info| {
-                            info.executions &gt; <span class="number">0 </span>&amp;&amp; (!active_only || info.active)
+                            (!active_only || info.active)
+                                &amp;&amp; info
+                                    .executions
+                                    .map(|executions| executions &gt; <span class="number">0</span>)
+                                    .unwrap_or(<span class="bool-val">true</span>)
                         });
                     });
                     <span class="kw">let </span>tree = stats.treeify(ReferenceType::Dependency);
-                    <span class="kw">let </span>table = viz::table::create_table(tree);
+                    <span class="kw">let </span>table = viz::table::create_table(tree, tt.stats_type());
                     viz::table::wrap_html(<span class="kw-2">&amp;</span>table)
                 } <span class="kw">else </span>{
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(

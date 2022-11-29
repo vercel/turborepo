@@ -52,6 +52,10 @@
 <span id="52">52</span>
 <span id="53">53</span>
 <span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     future::Future,
     pin::Pin,
@@ -92,7 +96,7 @@
 }
 
 <span class="kw">impl</span>&lt;T, F: Future&lt;Output = T&gt;&gt; Future <span class="kw">for </span>TimedFuture&lt;T, F&gt; {
-    <span class="kw">type </span>Output = (T, Duration);
+    <span class="kw">type </span>Output = (T, Duration, Instant);
 
     <span class="kw">fn </span>poll(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Poll&lt;<span class="self">Self</span>::Output&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.project();
@@ -101,7 +105,11 @@
         <span class="kw">let </span>elapsed = start.elapsed();
         <span class="kw-2">*</span>this.duration += elapsed;
         <span class="kw">match </span>result {
-            Poll::Ready(r) =&gt; Poll::Ready((r, <span class="kw-2">*</span>this.duration + <span class="kw-2">*</span>this.cell.lock().unwrap())),
+            Poll::Ready(r) =&gt; Poll::Ready((
+                r,
+                <span class="kw-2">*</span>this.duration + <span class="kw-2">*</span>this.cell.lock().unwrap(),
+                start + elapsed,
+            )),
             Poll::Pending =&gt; Poll::Pending,
         }
     }

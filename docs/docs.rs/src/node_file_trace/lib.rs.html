@@ -583,6 +583,7 @@
 <span id="583">583</span>
 <span id="584">584</span>
 <span id="585">585</span>
+<span id="586">586</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>nft_json;
@@ -607,7 +608,7 @@
     backend::Backend,
     primitives::{OptionStringVc, StringsVc},
     util::FormatDuration,
-    NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, Value,
+    NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
 <span class="kw">use </span>turbo_tasks_fs::{
     glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystemVc, ReadGlobResultVc,
@@ -978,7 +979,8 @@
                 stats.add_id(b, root_task);
                 <span class="comment">// stats.merge_resolve();
                 </span><span class="kw">let </span>tree = stats.treeify(ReferenceType::Child);
-                <span class="kw">let </span>graph = viz::graph::visualize_stats_tree(tree, ReferenceType::Child);
+                <span class="kw">let </span>graph =
+                    viz::graph::visualize_stats_tree(tree, ReferenceType::Child, tt.stats_type());
                 fs::write(<span class="string">&quot;graph.html&quot;</span>, viz::graph::wrap_html(<span class="kw-2">&amp;</span>graph)).unwrap();
                 <span class="macro">println!</span>(<span class="string">&quot;graph.html written&quot;</span>);
             }

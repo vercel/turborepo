@@ -1877,6 +1877,7 @@
 <span id="1877">1877</span>
 <span id="1878">1878</span>
 <span id="1879">1879</span>
+<span id="1880">1880</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BinaryHeap, HashMap, HashSet},
@@ -1888,7 +1889,7 @@
         atomic::{AtomicU32, AtomicUsize, Ordering},
         Mutex, MutexGuard,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -2987,6 +2988,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         duration: Duration,
+        _instant: Instant,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; bool {
         <span class="attr">#[cfg(feature = <span class="string">&quot;log_running_tasks&quot;</span>)]

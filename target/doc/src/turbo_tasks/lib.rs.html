@@ -99,6 +99,7 @@
 <span id="99">99</span>
 <span id="100">100</span>
 <span id="101">101</span>
+<span id="102">102</span>
 </pre><pre class="rust"><code><span class="doccomment">//! A task scheduling and caching system that is focused on incremental
 //! execution.
 //!
@@ -154,6 +155,7 @@
 <span class="kw">mod </span>raw_vc;
 <span class="kw">mod </span>read_ref;
 <span class="kw">pub mod </span>registry;
+<span class="kw">pub mod </span>small_duration;
 <span class="kw">mod </span>task_input;
 <span class="kw">mod </span>timed_future;
 <span class="kw">pub mod </span>trace;
@@ -172,8 +174,8 @@
 <span class="kw">pub use </span>join_iter_ext::{JoinIterExt, TryJoinIterExt};
 <span class="kw">pub use </span>manager::{
     dynamic_call, emit, get_invalidator, run_once, spawn_blocking, spawn_thread, trait_call,
-    turbo_tasks, Invalidator, TaskIdProvider, TurboTasks, TurboTasksApi, TurboTasksBackendApi,
-    TurboTasksCallApi,
+    turbo_tasks, Invalidator, StatsType, TaskIdProvider, TurboTasks, TurboTasksApi,
+    TurboTasksBackendApi, TurboTasksCallApi,
 };
 <span class="kw">pub use </span>native_function::{NativeFunction, NativeFunctionVc};
 <span class="kw">pub use </span>nothing::{Nothing, NothingVc};

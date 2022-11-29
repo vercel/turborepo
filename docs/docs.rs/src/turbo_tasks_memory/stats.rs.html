@@ -331,6 +331,14 @@
 <span id="331">331</span>
 <span id="332">332</span>
 <span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::{<span class="self">self</span>, max},
     collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
@@ -390,28 +398,28 @@
 }
 
 <span class="attr">#[derive(Clone, Debug)]
-</span><span class="kw">pub struct </span>TaskStats {
+</span><span class="kw">pub struct </span>ExportedTaskStats {
     <span class="kw">pub </span>count: usize,
     <span class="kw">pub </span>active_count: usize,
-    <span class="kw">pub </span>executions: usize,
+    <span class="kw">pub </span>executions: <span class="prelude-ty">Option</span>&lt;u32&gt;,
     <span class="kw">pub </span>roots: usize,
     <span class="kw">pub </span>scopes: usize,
-    <span class="kw">pub </span>total_duration: Duration,
+    <span class="kw">pub </span>total_duration: <span class="prelude-ty">Option</span>&lt;Duration&gt;,
     <span class="kw">pub </span>total_current_duration: Duration,
     <span class="kw">pub </span>total_update_duration: Duration,
     <span class="kw">pub </span>max_duration: Duration,
     <span class="kw">pub </span>references: HashMap&lt;(ReferenceType, TaskType), ReferenceStats&gt;,
 }
 
-<span class="kw">impl </span>Default <span class="kw">for </span>TaskStats {
+<span class="kw">impl </span>Default <span class="kw">for </span>ExportedTaskStats {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             count: <span class="number">0</span>,
             active_count: <span class="number">0</span>,
-            executions: <span class="number">0</span>,
+            executions: <span class="prelude-val">None</span>,
             roots: <span class="number">0</span>,
             scopes: <span class="number">0</span>,
-            total_duration: Duration::ZERO,
+            total_duration: <span class="prelude-val">None</span>,
             total_current_duration: Duration::ZERO,
             total_update_duration: Duration::ZERO,
             max_duration: Duration::ZERO,
@@ -421,7 +429,7 @@
 }
 
 <span class="kw">pub struct </span>Stats {
-    tasks: HashMap&lt;TaskType, TaskStats&gt;,
+    tasks: HashMap&lt;TaskType, ExportedTaskStats&gt;,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>Stats {
@@ -438,7 +446,11 @@
     }
 
     <span class="kw">pub fn </span>add(<span class="kw-2">&amp;mut </span><span class="self">self</span>, backend: <span class="kw-2">&amp;</span>MemoryBackend, task: <span class="kw-2">&amp;</span>Task) {
-        <span class="self">self</span>.add_conditional(backend, task, |<span class="kw">_</span>, info| info.executions &gt; <span class="number">0</span>)
+        <span class="self">self</span>.add_conditional(backend, task, |<span class="kw">_</span>, info| {
+            info.executions
+                .map(|executions| executions &gt; <span class="number">0</span>)
+                .unwrap_or(<span class="bool-val">true</span>)
+        })
     }
 
     <span class="kw">pub fn </span>add_conditional(
@@ -465,13 +477,17 @@
         <span class="kw">if </span>active {
             stats.active_count += <span class="number">1
         </span>}
-        stats.total_duration += total_duration;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(total_duration) = total_duration {
+            <span class="kw-2">*</span>stats.total_duration.get_or_insert(Duration::ZERO) += total_duration;
+        }
         stats.total_current_duration += last_duration;
-        <span class="kw">if </span>executions &gt; <span class="number">1 </span>{
+        <span class="kw">if </span>executions.map(|executions| executions &gt; <span class="number">1</span>).unwrap_or(<span class="bool-val">true</span>) {
             stats.total_update_duration += last_duration;
         }
         stats.max_duration = max(stats.max_duration, last_duration);
-        stats.executions += executions <span class="kw">as </span>usize;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(executions) = executions {
+            <span class="kw-2">*</span>stats.executions.get_or_insert(<span class="number">0</span>) += executions;
+        }
         <span class="kw">if </span>root_scoped {
             stats.roots += <span class="number">1</span>;
         }
@@ -512,7 +528,7 @@
         })
     }
 
-    <span class="kw">pub fn </span>merge(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw-2">mut </span>select: <span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>TaskType, <span class="kw-2">&amp;</span>TaskStats) -&gt; bool) {
+    <span class="kw">pub fn </span>merge(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw-2">mut </span>select: <span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>TaskType, <span class="kw-2">&amp;</span>ExportedTaskStats) -&gt; bool) {
         <span class="kw">let </span>merged: HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = <span class="self">self
             </span>.tasks
             .drain_filter(|ty, stats| select(ty, stats))
@@ -521,7 +537,7 @@
         <span class="kw">for </span>stats <span class="kw">in </span><span class="self">self</span>.tasks.values_mut() {
             <span class="kw">fn </span>merge_refs(
                 refs: HashMap&lt;(ReferenceType, TaskType), ReferenceStats&gt;,
-                merged: <span class="kw-2">&amp;</span>HashMap&lt;TaskType, TaskStats&gt;,
+                merged: <span class="kw-2">&amp;</span>HashMap&lt;TaskType, ExportedTaskStats&gt;,
             ) -&gt; HashMap&lt;(ReferenceType, TaskType), ReferenceStats&gt; {
                 refs.into_iter()
                     .flat_map(|((ref_ty, ty), stats)| {
@@ -629,7 +645,7 @@
         }
 
         <span class="kw">fn </span>into_group&lt;<span class="lifetime">&#39;a</span>&gt;(
-            tasks: <span class="kw-2">&amp;</span>HashMap&lt;TaskType, TaskStats&gt;,
+            tasks: <span class="kw-2">&amp;</span>HashMap&lt;TaskType, ExportedTaskStats&gt;,
             children: <span class="kw-2">&amp;</span>HashMap&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType&gt;, Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType&gt;&gt;,
             ty: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType&gt;,
         ) -&gt; GroupTree {
@@ -660,9 +676,9 @@
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>GroupTree {
-    <span class="kw">pub </span>primary: <span class="prelude-ty">Option</span>&lt;(TaskType, TaskStats)&gt;,
+    <span class="kw">pub </span>primary: <span class="prelude-ty">Option</span>&lt;(TaskType, ExportedTaskStats)&gt;,
     <span class="kw">pub </span>children: Vec&lt;GroupTree&gt;,
-    <span class="kw">pub </span>task_types: Vec&lt;(TaskType, TaskStats)&gt;,
+    <span class="kw">pub </span>task_types: Vec&lt;(TaskType, ExportedTaskStats)&gt;,
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="turbo_tasks_memory" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

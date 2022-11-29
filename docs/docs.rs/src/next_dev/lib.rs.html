@@ -478,6 +478,13 @@
 <span id="478">478</span>
 <span id="479">479</span>
 <span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -502,8 +509,8 @@
 };
 <span class="kw">use </span>owo_colors::OwoColorize;
 <span class="kw">use </span>turbo_tasks::{
-    primitives::StringsVc, util::FormatDuration, RawVc, TransientInstance, TransientValue,
-    TurboTasks, Value,
+    primitives::StringsVc, util::FormatDuration, RawVc, StatsType, TransientInstance,
+    TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
 <span class="kw">use </span>turbo_tasks_fs::{DiskFileSystemVc, FileSystemVc};
 <span class="kw">use </span>turbo_tasks_memory::MemoryBackend;
@@ -858,6 +865,13 @@
     };
 
     <span class="kw">let </span>tt = TurboTasks::new(MemoryBackend::new());
+
+    <span class="kw">let </span>stats_type = <span class="kw">match </span>options.full_stats {
+        <span class="bool-val">true </span>=&gt; StatsType::Full,
+        <span class="bool-val">false </span>=&gt; StatsType::Essential,
+    };
+    tt.set_stats_type(stats_type);
+
     <span class="kw">let </span>tt_clone = tt.clone();
 
     <span class="attr">#[allow(unused_mut)]
