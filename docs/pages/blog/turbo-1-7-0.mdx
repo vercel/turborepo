@@ -1,0 +1,268 @@
+---
+title: Turborepo 1.7
+date: 2022/11/28
+description: Turborepo 1.7 brings composable configuration, a new flag for development tasks, and some legacy clean-up.
+tag: "web development"
+ogImage: /images/blog/turbo-1-7-0/twitter-card.png
+---
+
+import { Tabs, Tab } from '../../components/Tabs'
+
+# Turborepo 1.7
+
+import { Authors } from '../../components/Authors'
+import Callout from '../../components/Callout'
+import Date from "../../components/blog/Date";
+
+<Date>
+  Friday, November 28th, 2022
+</Date>
+
+<Authors authors={[
+  'mattpocock',
+  'gregsoltis',
+  'nathanhammond',
+  'tomknickman',
+  'jaredpalmer',
+  'mehulkar',
+  'chrisolszewski',
+  'dobesv'
+]} />
+
+Turborepo 1.7 raises the bar for ergonomics in Turborepo by allowing composable configuration, adds a new `persistent` flag, and improves the default of the `outputs` key.
+
+- [**Composable `turbo.json`**](#composable-turbojson): Break your huge `turbo.json` file into smaller, composable chunks, colocated with your workspaces.
+- [**`outputs` default changed**](#outputs-default-changed): We've removed a legacy default for `outputs`, making your `turbo.json` files cleaner.
+- [**`persistent` flag**](#the-persistent-flag): We've solved a common footgun with the `--parallel` flag, making your development tasks more robust.
+
+Update today by running `npm install turbo@latest`.
+
+## Composable `turbo.json`
+
+Configuring Turborepo's behavior happens in a configuration file - `turbo.json`. Until 1.7, you could only have _one_ in your entire repository. For complicated monorepos, this often meant a huge wall of configuration.
+
+In 1.7, workspaces can declare their own `turbo.json` files. This makes workspaces more portable and easier to manage.
+
+### Cleaning up messy configuration
+
+Let's say you have two applications - one Next.js app and one Vite.js app. Until now, you'd have a single `turbo.json` file at the root:
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "dev": {
+      "cache": false
+    },
+    "build": {
+      "outputs": [
+        // dist is the output directory for Vite
+        "dist/**",
+        // .next is the output directory for Next.js
+        ".next/**"
+      ]
+    },
+  }
+}
+```
+
+This `turbo.json` is a little messy - it contains configuration that pertains to both our Vite app and our Next.js app. In 1.7, you can now split these into separate files:
+
+```json filename="apps/vite-app/turbo.json"
+{
+  "pipeline": {
+    "dev": {
+      "cache": false
+    },
+    "build": {
+      "outputs": [
+        // Our Vite app can now just specify the outputs
+        // it needs caching
+        "dist/**",
+      ]
+    },
+  }
+}
+```
+
+```json filename="apps/next-app/turbo.json"
+{
+  "pipeline": {
+    "dev": {
+      "cache": false
+    },
+    "build": {
+      "outputs": [
+        // Our Next app can now just specify the outputs
+        // it needs caching
+        ".next/**"
+      ]
+    },
+  }
+}
+```
+
+### Extending from the root
+
+You might have noticed that we've got some duplication - the `dev` configuration is duplicated in both files. This is totally fine - it means that the config is located in the workspace where it's used. But if we want to clean it up, we can use the new `extends` keyword.
+
+Let's first remove our `dev` config from the `turbo.json` files in the app directory.
+
+```diff filename="apps/next-app/turbo.json"
+{
+  "pipeline": {
+-   "dev": {
+-     "cache": false
+-   },
+    "build": {
+      "outputs": [
+        ".next/**"
+      ]
+    },
+  }
+}
+```
+
+Next, add it to the root `turbo.json`.
+
+```diff filename="turbo.json"
+{
+  "pipeline": {
++   "dev": {
++     "cache": false
++   },
+  }
+}
+```
+
+Finally, let's go back to the app `turbo.json` and add an `extends` key, targeting `//`:
+
+```diff filename="apps/next-app/turbo.json"
+{
++ "extends": ["//"],
+  "pipeline": {
+    "build": {
+      "outputs": [
+        ".next/**"
+      ]
+    },
+  }
+}
+```
+
+In Turborepo, `//` is used as an alias for the root directory. So this config now extends the root, meaning we get access to our `dev` configuration in the app's `turbo.json`.
+
+### Extending other configs
+
+You can also use `extends` to target workspaces other than the root. This opens up an interesting workflow: creating workspaces which provide different turbo configurations to the rest of the monorepo.
+
+For instance, imagine a workspace called `@acme/next-turbo-config`:
+
+```json filename="packages/next-turbo-config/package.json"
+{
+  "name": "@acme/next-turbo-config"
+}
+```
+
+This could have a `turbo.json` file inside, which provides some standard Next.js config for Turbo:
+
+```json filename="packages/next-turbo-config/turbo.json"
+{
+  "pipeline": {
+    "dev": {
+      "cache": false
+    },
+    "build": {
+      "outputs": [".next/**"]
+    },
+    "lint": {
+      "outputs": []
+    }
+  }
+}
+```
+
+Using the `extends` key, you'd be able to extend this `turbo.json` by referencing it by workspace name:
+
+```json filename="apps/my-next-app/turbo.json"
+{
+  "extends": ["@acme/next-turbo-config"]
+}
+```
+
+In the future, this pattern will enable importable `turbo.json` configurations, similar to ESLint configs. While importing `turbo.json` configs from `node_modules` isn't supported yet, we're excited about the deeper framework integration this will bring.
+
+## `outputs` default changed
+
+For a long time, Turborepo has had a slightly awkward default value for the `outputs` array in `turbo.json`:
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      // If not specified, outputs defaulted to:
+      "outputs": [
+        "dist/**",
+        "build/**"
+      ]
+    }
+  }
+}
+```
+
+At launch, we felt this was a useful default that encouraged users to specify `dist` and `build` as their outputs.
+
+However, we've decided that as of 1.7 we'll be moving to a more sensible default: an empty array.
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      // If not specified, outputs NOW default to:
+      "outputs": []
+    }
+  }
+}
+```
+
+This feels much cleaner. No more implicit defaults, no more gotcha's. You also no longer need to specify `outputs: []` anywhere.
+
+If you've been relying on the previous behavior, we've created a codemod to help you migrate easily:
+
+```bash
+npx @turbo/codemod set-default-outputs
+```
+
+## The `persistent` flag
+
+You can now add a `persistent` key to task configuration. Set this key when the task starts a long-running process that does not exit, such as a dev server or `--watch` mode for a test runner. For example:
+
+```diff filename="turbo.json"
+{
+  "pipeline": {
+    "dev": {
+      "cache": false,
++     "persistent": true
+    }
+  }
+}
+```
+
+`persistent` helps us overcome a footgun that many users fire - depending on a task that never exits.
+
+Previously, if `test` (non-persistent) depended on `dev` (persistent), `test` would never run, because `dev` never exits. Our advice was to use the `--parallel` flag, but this had its own problems. Instead of Turborepo's [clever sequencing](/repo/docs/core-concepts/running-tasks), it would simply run all tasks in parallel, which often caused more headaches.
+
+After talking with users, we realized that the optimal way to handle this would be to prevent the footgun in the first place. When `persistent` is set, Turborepo will ensure that no other tasks can `dependsOn` this task.
+
+After this change, Turborepo will detect this configuration and throw an error. In most cases, that means you can drop the `--parallel` flag too. We've already dropped it from all our examples, and may look to deprecate it if our users find that `persistent` is a good enough replacement.
+
+## Community contributions
+
+### `errors-only` mode
+
+Thanks to a great contribution from [dobesv](https://github.com/dobesv), you can now specify `--errors-only` on any `turbo run` command.
+
+```bash
+turbo run build --errors-only
+```
+
+This will now only show errors in the output, meaning if something is failing you can ensure you're only seeing relevant messages in the terminal.
