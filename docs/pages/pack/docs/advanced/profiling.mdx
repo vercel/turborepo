@@ -59,8 +59,8 @@ Once the program exits, the profiler will open the trace file in Instruments. Re
 # Install `heaptrack` and `heaptrack_gui`
 sudo apt install heaptrack heaptrack_gui
 
-# Compile without the alternative allocator: 
-cargo build --bin next-dev --release --no-default-features --features cli
+# Compile with debug info but without the alternative allocator:
+CARGO_PROFILE_RELEASE_DEBUG=1 cargo build --bin next-dev --release --no-default-features --features cli
 
 # Run the binary with heaptrack (it will be much slower than usual)
 heaptrack target/release/next-dev [...]
