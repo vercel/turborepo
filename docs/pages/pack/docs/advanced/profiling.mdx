@@ -55,22 +55,21 @@ Once the program exits, the profiler will open the trace file in Instruments. Re
 
 ### Memory usage
 
-- Install `heaptrack`
-- Disable the alternative allocator via feature flag `TODO: add feature flag`
-- Run `heaptrack target/release/next-dev [...]`
+``` sh
+# Install `heaptrack` and `heaptrack_gui`
+sudo apt install heaptrack heaptrack_gui
 
-### Convert memory usage to flamegraph
+# Compile without the alternative allocator: 
+cargo build --bin next-dev --release --no-default-features --features cli
 
-- Install the FlameGraph project: `git clone https://github.com/brendangregg/FlameGraph`
+# Run the binary with heaptrack (it will be much slower than usual)
+heaptrack target/release/next-dev [...]
 
+# Stop it anytime
+
+# Open the GUI and open the heaptrack.next-dev.XXX.gz file
+heaptrack_gui
 ```
-# For the leaked allocations (the memory that was in use when the program exited)
-heaptrack_print heaptrack.next-dev.XXX.gz -m0 -t0 -p0 -a0 -T0 -l1 -F stacks.txt --flamegraph-cost-type leaked > heap.txt
-../FlameGraph/flamegraph.pl --colors mem --countname allocations --width 2400 --reverse < stacks.txt > heap_graph.svg
-# This will take some time...
-```
-
-- Open `heap_graph.svg` in a browser
 
 ## On other platforms
 
