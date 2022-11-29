@@ -63,7 +63,18 @@
         "cli/**/*.go",
         "cli/go.mod",
         "cli/go.sum",
-        "cli/scripts/e2e/e2e.ts"
+        "cli/scripts/e2e/e2e.ts",
+        "Cargo.toml",
+        "Cargo.lock",
+        "shim/**/*"
+      ]
+    },
+    "cli#e2e-prebuilt": {
+      "outputs": [],
+      "inputs": [
+        "cli/scripts/e2e/e2e.ts",
+        "cli/scripts/monorepo.ts",
+        "cli/shim/turbo"
       ]
     },
     "cli#integration-tests": {

@@ -84,6 +84,9 @@ corepack:
 e2e: corepack install shim/turbo
 	node -r esbuild-register scripts/e2e/e2e.ts
 
+e2e-prebuilt: corepack install
+	node -r esbuild-register scripts/e2e/e2e.ts
+
 cmd/turbo/version.go: ../version.txt
 	# Update this atomically to avoid issues with this being overwritten during use
 	node -e 'console.log(`package main\n\nconst turboVersion = "$(TURBO_VERSION)"`)' > cmd/turbo/version.go.txt

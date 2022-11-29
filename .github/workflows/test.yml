@@ -418,7 +418,7 @@ jobs:
           ${{ github.workspace }}/cli/shim/turbo --version
       - name: Run E2E Tests
         shell: bash
-        run: pnpm -- turbo-prebuilt run e2e --filter=cli
+        run: pnpm -- turbo-prebuilt run e2e-prebuilt --filter=cli
 
   rust_lint:
     needs: [determine_jobs, rust_prepare]
