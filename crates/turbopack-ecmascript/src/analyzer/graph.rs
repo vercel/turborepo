@@ -761,15 +761,16 @@ impl Analyzer<'_> {
             _ => box JsValue::alternatives(values),
         }
     }
-}
 
-impl VisitAstPath for Analyzer<'_> {
-    fn visit_assign_expr<'ast: 'r, 'r>(
+    fn handle_cjs_exports<'ast: 'r, 'r>(
         &mut self,
         n: &'ast AssignExpr,
         ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
     ) {
-        // handle cjs exports
+        // skip if too deep
+        if ast_path.len() >= 10 {
+            return;
+        }
         match &n.left {
             PatOrExpr::Expr(box Expr::Member(MemberExpr {
                 obj: box Expr::Ident(ref i),
@@ -847,6 +848,16 @@ impl VisitAstPath for Analyzer<'_> {
             }
             _ => {}
         }
+    }
+}
+
+impl VisitAstPath for Analyzer<'_> {
+    fn visit_assign_expr<'ast: 'r, 'r>(
+        &mut self,
+        n: &'ast AssignExpr,
+        ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
+    ) {
+        self.handle_cjs_exports(n, ast_path);
         ast_path.with(
             AstParentNodeRef::AssignExpr(n, AssignExprField::Left),
             |ast_path| match &n.left {
