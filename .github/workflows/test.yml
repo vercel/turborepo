@@ -211,13 +211,13 @@ jobs:
       # download-artifact doesn't restore execution permissions
       - name: Make turbo executable
         shell: bash
-        if: ${{ matrix.os.name }} != 'windows'
+        if: ${{ matrix.os.name != 'windows' }}
         run: |
           chmod +x ${{ github.workspace }}/cli/shim/turbo
           ${{ github.workspace }}/cli/shim/turbo --version
       - name: Make turbo executable
         shell: bash
-        if: ${{ matrix.os.name }} == 'windows'
+        if: ${{ matrix.os.name == 'windows' }}
         run: |
           chmod +x ${{ github.workspace }}/cli/shim/turbo.exe
           ${{ github.workspace }}/cli/shim/turbo --version
@@ -420,13 +420,13 @@ jobs:
       # download-artifact doesn't restore execution permissions
       - name: Make turbo executable
         shell: bash
-        if: ${{ matrix.os.name }} != 'windows'
+        if: ${{ matrix.os.name != 'windows' }}
         run: |
           chmod +x ${{ github.workspace }}/cli/shim/turbo
           ${{ github.workspace }}/cli/shim/turbo --version
       - name: Make turbo executable
         shell: bash
-        if: ${{ matrix.os.name }} == 'windows'
+        if: ${{ matrix.os.name == 'windows' }}
         run: |
           chmod +x ${{ github.workspace }}/cli/shim/turbo.exe
           ${{ github.workspace }}/cli/shim/turbo --version
