@@ -19,7 +19,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/process"
-	"github.com/vercel/turbo/cli/internal/runcache"
 	"github.com/vercel/turbo/cli/internal/scm"
 	"github.com/vercel/turbo/cli/internal/scope"
 	"github.com/vercel/turbo/cli/internal/signals"
@@ -50,7 +49,8 @@ func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *si
 	if err != nil {
 		return err
 	}
-	tasks, passThroughArgs := parseTasksAndPassthroughArgsFromRust(&args)
+	tasks := args.Command.Run.Tasks
+	passThroughArgs := args.Command.Run.PassThroughArgs
 	if len(tasks) == 0 {
 		return errors.New("at least one task must be specified")
 	}
@@ -100,10 +100,7 @@ func optsFromExecutionState(executionState *turbostate.CLIExecutionStateFromRust
 	runPayload := executionState.ParsedArgs.Command.Run
 	opts := getDefaultOptions()
 	// aliases := make(map[string]string)
-	// Scope flags
-	opts.scopeOpts.FilterPatterns = runPayload.Filter
-	opts.scopeOpts.IgnorePatterns = runPayload.Ignore
-	opts.scopeOpts.GlobalDepPatterns = runPayload.GlobalDeps
+	scope.OptsFromArgs(&opts.scopeOpts, &executionState.ParsedArgs)
 
 	// Cache flags
 	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
@@ -159,10 +156,8 @@ func optsFromExecutionState(executionState *turbostate.CLIExecutionStateFromRust
 func optsFromFlags(flags *pflag.FlagSet) *Opts {
 	opts := getDefaultOptions()
 	aliases := make(map[string]string)
-	scope.AddFlags(&opts.scopeOpts, flags)
 	addRunOpts(&opts.runOpts, flags, aliases)
 	cache.AddFlags(&opts.cacheOpts, flags)
-	runcache.AddFlags(&opts.runcacheOpts, flags)
 	flags.SetNormalizeFunc(func(f *pflag.FlagSet, name string) pflag.NormalizedName {
 		if alias, ok := aliases[name]; ok {
 			return pflag.NormalizedName(alias)

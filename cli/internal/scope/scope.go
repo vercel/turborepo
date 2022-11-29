@@ -2,6 +2,7 @@ package scope
 
 import (
 	"fmt"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
-	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/context"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/packagemanager"
@@ -36,11 +36,11 @@ var _sinceHelp = `Limit/Set scope to changed packages since a
 mergebase. This uses the git diff ${target_branch}...
 mechanism to identify which packages have changed.`
 
-func addLegacyFlags(opts *LegacyFilter, flags *pflag.FlagSet) {
-	flags.BoolVar(&opts.IncludeDependencies, "include-dependencies", false, "Include the dependencies of tasks in execution.")
-	flags.BoolVar(&opts.SkipDependents, "no-deps", false, "Exclude dependent task consumers from execution.")
-	flags.StringArrayVar(&opts.Entrypoints, "scope", nil, "Specify package(s) to act as entry points for task execution. Supports globs.")
-	flags.StringVar(&opts.Since, "since", "", _sinceHelp)
+func addLegacyFlagsFromArgs(opts *LegacyFilter, args *turbostate.ParsedArgsFromRust) {
+	opts.IncludeDependencies = args.Command.Run.IncludeDependencies
+	opts.SkipDependents = args.Command.Run.NoDeps
+	opts.Entrypoints = args.Command.Run.Scope
+	opts.Since = args.Command.Run.Since
 }
 
 // Opts holds the options for how to select the entrypoint packages for a turbo run
@@ -66,12 +66,12 @@ match any filter will be included.`
 in the root directory. Includes turbo.json, root package.json, and the root lockfile by default.`
 )
 
-// AddFlags adds the flags relevant to this package to the given FlagSet
-func AddFlags(opts *Opts, flags *pflag.FlagSet) {
-	flags.StringArrayVar(&opts.FilterPatterns, "filter", nil, _filterHelp)
-	flags.StringArrayVar(&opts.IgnorePatterns, "ignore", nil, _ignoreHelp)
-	flags.StringArrayVar(&opts.GlobalDepPatterns, "global-deps", nil, _globalDepHelp)
-	addLegacyFlags(&opts.LegacyFilter, flags)
+// OptsFromArgs adds the settings relevant to this package to the given Opts
+func OptsFromArgs(opts *Opts, args *turbostate.ParsedArgsFromRust) {
+	opts.FilterPatterns = args.Command.Run.Filter
+	opts.IgnorePatterns = args.Command.Run.Ignore
+	opts.GlobalDepPatterns = args.Command.Run.GlobalDeps
+	addLegacyFlagsFromArgs(&opts.LegacyFilter, args)
 }
 
 // asFilterPatterns normalizes legacy selectors to filter syntax

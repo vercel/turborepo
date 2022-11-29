@@ -39,6 +39,7 @@ pub enum DryRunMode {
 #[clap(author, about = "The build system that makes ship happen", long_about = None)]
 #[clap(disable_help_subcommand = true)]
 #[clap(disable_version_flag = true)]
+#[clap(arg_required_else_help = true)]
 pub struct Args {
     #[clap(long, global = true)]
     pub version: bool,
@@ -81,10 +82,10 @@ pub struct Args {
     pub verbosity: Option<u8>,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
-    #[clap(subcommand)]
-    pub command: Option<Command>,
     #[clap(flatten, next_help_heading = "Run Arguments")]
     pub run_args: Option<RunArgs>,
+    #[clap(subcommand)]
+    pub command: Option<Command>,
 }
 
 #[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
@@ -127,6 +128,8 @@ impl Args {
 /// --single-package flag into non-build commands.
 #[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
 pub enum Command {
+    // NOTE: Empty variants still have an empty struct attached so that serde serializes
+    // them as `{ "Bin": {} }` instead of as `"Bin"`.
     /// Get the path to the Turbo binary
     Bin {},
     /// Generate the autocompletion script for the specified shell
@@ -265,7 +268,10 @@ pub struct RunArgs {
     /// Run turbo in single-package mode
     #[clap(long)]
     pub single_package: bool,
+    // NOTE: The following two are hidden because clap displays them in the help text incorrectly:
+    // > Usage: turbo [OPTIONS] [TASKS]... [-- <FORWARDED_ARGS>...] [COMMAND]
+    #[clap(hide = true)]
     pub tasks: Vec<String>,
-    #[clap(last = true)]
-    pub forwarded_args: Vec<String>,
+    #[clap(last = true, hide = true)]
+    pub pass_through_args: Vec<String>,
 }

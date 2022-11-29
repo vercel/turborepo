@@ -151,23 +151,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo"},
 		},
 		{
-			"force",
-			[]string{"foo", "--force"},
-			&Opts{
-				runOpts: runOpts{
-					concurrency: 10,
-				},
-				cacheOpts: cache.Opts{
-					Workers: 10,
-				},
-				runcacheOpts: runcache.Opts{
-					SkipReads: true,
-				},
-				scopeOpts: scope.Opts{},
-			},
-			[]string{"foo"},
-		},
-		{
 			"remote-only",
 			[]string{"foo", "--remote-only"},
 			&Opts{
@@ -180,23 +163,6 @@ func TestParseConfig(t *testing.T) {
 				},
 				runcacheOpts: runcache.Opts{},
 				scopeOpts:    scope.Opts{},
-			},
-			[]string{"foo"},
-		},
-		{
-			"no-cache",
-			[]string{"foo", "--no-cache"},
-			&Opts{
-				runOpts: runOpts{
-					concurrency: 10,
-				},
-				cacheOpts: cache.Opts{
-					Workers: 10,
-				},
-				runcacheOpts: runcache.Opts{
-					SkipWrites: true,
-				},
-				scopeOpts: scope.Opts{},
 			},
 			[]string{"foo"},
 		},

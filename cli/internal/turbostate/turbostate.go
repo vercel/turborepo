@@ -55,6 +55,7 @@ type RunPayload struct {
 	NoDeps              bool     `json:"no_deps"`
 	Only                bool     `json:"only"`
 	OutputLogs          string   `json:"output_logs"`
+	PassThroughArgs     []string `json:"pass_through_args"`
 	Parallel            bool     `json:"parallel"`
 	Profile             string   `json:"profile"`
 	RemoteOnly          bool     `json:"remote_only"`

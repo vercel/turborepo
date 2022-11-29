@@ -334,12 +334,20 @@ fn main() -> Result<()> {
 mod test {
     use clap::Parser;
     use itertools::Itertools;
+    use pretty_assertions::assert_eq;
 
     struct CommandTestCase {
         command: &'static str,
         command_args: Vec<Vec<&'static str>>,
         global_args: Vec<Vec<&'static str>>,
         expected_output: Args,
+    }
+
+    fn get_default_run_args() -> RunArgs {
+        RunArgs {
+            cache_workers: 10,
+            ..RunArgs::default()
+        }
     }
 
     impl CommandTestCase {
@@ -381,17 +389,12 @@ mod test {
 
     #[test]
     fn test_parse_run() {
-        let default_run_args = RunArgs {
-            cache_workers: 10,
-            ..RunArgs::default()
-        };
-
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
             Args {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -402,7 +405,7 @@ mod test {
             Args {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()],
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -414,7 +417,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     cache_dir: Some("foobar".to_string()),
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -426,7 +429,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     cache_workers: 100,
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -438,7 +441,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     concurrency: Some("20".to_string()),
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -450,7 +453,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     continue_execution: true,
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -462,7 +465,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     dry_run: Some(DryRunMode::Stdout),
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -474,7 +477,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     dry_run: Some(DryRunMode::Json),
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -495,7 +498,7 @@ mod test {
                         "fire".to_string(),
                         "air".to_string()
                     ],
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -507,7 +510,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     force: true,
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -519,7 +522,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     global_deps: vec![".env".to_string()],
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -540,7 +543,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     global_deps: vec![".env".to_string(), ".env.development".to_string()],
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -552,7 +555,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     graph: Some("stdout".to_string()),
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -564,7 +567,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     graph: Some("out.html".to_string()),
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -576,7 +579,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     ignore: vec!["foo.js".to_string()],
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -591,7 +594,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     ignore: vec!["foo.js".to_string(), "bar.js".to_string()],
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -603,7 +606,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     include_dependencies: true,
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -615,7 +618,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     no_cache: true,
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -627,7 +630,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     no_daemon: true,
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -639,7 +642,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     no_deps: true,
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -651,7 +654,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     output_logs: OutputLogsMode::Full,
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -663,7 +666,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     output_logs: OutputLogsMode::None,
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -675,7 +678,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     output_logs: OutputLogsMode::HashOnly,
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -687,7 +690,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     parallel: true,
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -699,7 +702,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     profile: Some("profile_out".to_string()),
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -711,7 +714,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     remote_only: true,
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -724,7 +727,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     scope: vec!["foo".to_string(), "bar".to_string()],
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -736,7 +739,7 @@ mod test {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
                     since: Some("foo".to_string()),
-                    ..default_run_args.clone()
+                    ..get_default_run_args()
                 })),
                 ..Args::default()
             }
@@ -745,7 +748,10 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "build"]).unwrap(),
             Args {
-                tasks: vec!["build".to_string()],
+                run_args: Some(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    ..get_default_run_args()
+                }),
                 ..Args::default()
             }
         );
@@ -753,7 +759,10 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "build", "lint", "test"]).unwrap(),
             Args {
-                tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()],
+                run_args: Some(RunArgs {
+                    tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()],
+                    ..get_default_run_args()
+                }),
                 ..Args::default()
             }
         );
@@ -764,7 +773,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "bin"]).unwrap(),
             Args {
-                command: Some(Command::Bin { help: false }),
+                command: Some(Command::Bin {}),
                 ..Args::default()
             }
         );
@@ -774,7 +783,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
-                command: Some(Command::Bin { help: false }),
+                command: Some(Command::Bin {}),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
             },
@@ -787,10 +796,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "login"]).unwrap(),
             Args {
-                command: Some(Command::Login {
-                    help: false,
-                    sso_team: None
-                }),
+                command: Some(Command::Login { sso_team: None }),
                 ..Args::default()
             }
         );
@@ -800,10 +806,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
-                command: Some(Command::Login {
-                    help: false,
-                    sso_team: None,
-                }),
+                command: Some(Command::Login { sso_team: None }),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
             },
@@ -816,7 +819,6 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
                 command: Some(Command::Login {
-                    help: false,
                     sso_team: Some("my-team".to_string()),
                 }),
                 cwd: Some("../examples/basic".to_string()),
@@ -831,7 +833,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "logout"]).unwrap(),
             Args {
-                command: Some(Command::Logout { help: false }),
+                command: Some(Command::Logout {}),
                 ..Args::default()
             }
         );
@@ -841,7 +843,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
-                command: Some(Command::Logout { help: false }),
+                command: Some(Command::Logout {}),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
             },
@@ -854,7 +856,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "unlink"]).unwrap(),
             Args {
-                command: Some(Command::Unlink { help: false }),
+                command: Some(Command::Unlink {}),
                 ..Args::default()
             }
         );
@@ -864,7 +866,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
-                command: Some(Command::Unlink { help: false }),
+                command: Some(Command::Unlink {}),
                 cwd: Some("../examples/basic".to_string()),
                 ..Args::default()
             },
@@ -875,7 +877,6 @@ mod test {
     #[test]
     fn test_parse_prune() {
         let default_prune = Command::Prune {
-            help: false,
             scope: None,
             docker: false,
             output_dir: "out".to_string(),
@@ -905,7 +906,6 @@ mod test {
             Args::try_parse_from(["turbo", "prune", "--scope", "bar"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
-                    help: false,
                     scope: Some("bar".to_string()),
                     docker: false,
                     output_dir: "out".to_string(),
@@ -918,7 +918,6 @@ mod test {
             Args::try_parse_from(["turbo", "prune", "--docker"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
-                    help: false,
                     scope: None,
                     docker: true,
                     output_dir: "out".to_string(),
@@ -931,7 +930,6 @@ mod test {
             Args::try_parse_from(["turbo", "prune", "--out-dir", "dist"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
-                    help: false,
                     scope: None,
                     docker: false,
                     output_dir: "dist".to_string(),
@@ -946,7 +944,6 @@ mod test {
             global_args: vec![],
             expected_output: Args {
                 command: Some(Command::Prune {
-                    help: false,
                     scope: None,
                     docker: true,
                     output_dir: "dist".to_string(),
@@ -962,7 +959,6 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/basic"]],
             expected_output: Args {
                 command: Some(Command::Prune {
-                    help: false,
                     scope: None,
                     docker: true,
                     output_dir: "dist".to_string(),
@@ -983,7 +979,6 @@ mod test {
             global_args: vec![],
             expected_output: Args {
                 command: Some(Command::Prune {
-                    help: false,
                     scope: Some("foo".to_string()),
                     docker: true,
                     output_dir: "dist".to_string(),
@@ -992,5 +987,47 @@ mod test {
             },
         }
         .test();
+    }
+
+    #[test]
+    fn test_pass_through_args() {
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--", "--script-arg=42"]).unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    pass_through_args: vec!["--script-arg=42".to_string()],
+                    ..get_default_run_args()
+                })),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo",
+                "run",
+                "build",
+                "--",
+                "--script-arg=42",
+                "--foo",
+                "--bar",
+                "bat"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Run(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    pass_through_args: vec![
+                        "--script-arg=42".to_string(),
+                        "--foo".to_string(),
+                        "--bar".to_string(),
+                        "bat".to_string()
+                    ],
+                    ..get_default_run_args()
+                })),
+                ..Args::default()
+            }
+        );
     }
 }

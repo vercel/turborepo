@@ -23,9 +23,9 @@ fn test_no_arguments() {
         .append_context("turbo", "no arguments")
         .append_context(
             "expect",
-            "`turbo` with no arguments should exit with code 1",
+            "`turbo` with no arguments should exit with code 2",
         )
-        .code(1);
+        .code(2);
 }
 
 #[test]

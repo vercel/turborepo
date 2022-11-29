@@ -78,7 +78,7 @@ corepack:
 	which corepack || npm install -g corepack@latest
 	corepack enable
 
-e2e: corepack install turbo
+e2e: corepack install shim
 	node -r esbuild-register scripts/e2e/e2e.ts
 
 cmd/turbo/version.go: ../version.txt
@@ -258,7 +258,10 @@ bench/turbo: demo/turbo turbo
 
 bench: bench/lerna bench/lage bench/nx bench/turbo
 
-clean: clean-go clean-build clean-demo
+clean: clean-go clean-build clean-demo clean-rust
+
+clean-rust:
+	cargo clean
 
 clean-build:
 	rm -f turbo

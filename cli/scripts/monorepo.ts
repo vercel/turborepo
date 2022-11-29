@@ -5,7 +5,10 @@ import fs from "fs-extra";
 import os from "os";
 import path from "path";
 const isWin = process.platform === "win32";
-const turboPath = path.join(__dirname, "../turbo" + (isWin ? ".exe" : ""));
+const turboPath = path.join(
+  __dirname,
+  "../../target/debug/turbo" + (isWin ? ".exe" : "")
+);
 
 type NPMClient = "npm" | "pnpm6" | "pnpm" | "yarn" | "berry";
 
@@ -323,15 +326,7 @@ fs.copyFileSync(
     args?: readonly string[],
     options?: execa.SyncOptions<string>
   ) {
-    const resolvedArgs = [...args];
-
-    // Include these to make sure we don't error.
-    if (command == "run") {
-      resolvedArgs.unshift("--experimental-use-daemon");
-      resolvedArgs.unshift("--stream");
-    }
-
-    return execa.sync(turboPath, [command, ...resolvedArgs], {
+    return execa.sync(turboPath, [command, ...args], {
       cwd: this.root,
       shell: true,
       ...options,

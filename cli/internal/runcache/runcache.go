@@ -12,7 +12,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
-	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/colorcache"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -34,33 +33,6 @@ type Opts struct {
 	TaskOutputModeOverride *util.TaskOutputMode
 	LogReplayer            LogReplayer
 	OutputWatcher          OutputWatcher
-}
-
-// AddFlags adds the flags relevant to the runcache package to the given FlagSet
-func AddFlags(opts *Opts, flags *pflag.FlagSet) {
-	flags.BoolVar(&opts.SkipReads, "force", false, "Ignore the existing cache (to force execution).")
-	flags.BoolVar(&opts.SkipWrites, "no-cache", false, "Avoid saving task results to the cache. Useful for development/watch tasks.")
-
-	//	defaultTaskOutputMode, err := util.ToTaskOutputModeString(util.FullTaskOutput)
-	// if err != nil {
-	//		panic(err)
-	// }
-
-	//	flags.AddFlag(&pflag.Flag{
-	//		Name: "output-logs",
-	//		Usage: `Set type of process output logging. Use "full" to show
-	//all output. Use "hash-only" to show only turbo-computed
-	//task hashes. Use "new-only" to show only new output with
-	//only hashes for cached tasks. Use "none" to hide process
-	//output.`,
-	//		DefValue: defaultTaskOutputMode,
-	//		Value:    &taskOutputModeValue{opts: opts},
-	//	})
-	_ = flags.Bool("stream", true, "Unused")
-	if err := flags.MarkDeprecated("stream", "[WARNING] The --stream flag is unnecessary and has been deprecated. It will be removed in future versions of turbo."); err != nil {
-		// fail fast if we've misconfigured our flags
-		panic(err)
-	}
 }
 
 type taskOutputModeValue struct {
