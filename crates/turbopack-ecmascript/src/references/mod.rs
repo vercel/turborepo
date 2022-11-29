@@ -995,7 +995,7 @@ pub(crate) async fn analyze_ecmascript_module(
                         ) {
                             match value {
                                 JsValue::Path(_, path) => {
-                                    let pat = js_value_to_pattern(&path);
+                                    let pat = js_value_to_pattern(path);
                                     analysis.add_reference(DirAssetReferenceVc::new(
                                         source,
                                         pat.into(),

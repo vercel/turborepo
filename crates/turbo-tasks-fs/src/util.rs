@@ -60,9 +60,6 @@ pub fn unix_to_sys(path: &str) -> Cow<'_, str> {
 /// Returns None if the path would need to start with ".." to be equal.
 pub fn normalize_path(str: &str) -> Option<String> {
     let mut seqments = Vec::new();
-    if str.starts_with('/') {
-        seqments.push("");
-    }
     for seqment in str.split('/') {
         match seqment {
             "." | "" => {}
