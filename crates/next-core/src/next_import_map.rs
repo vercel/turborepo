@@ -2,18 +2,14 @@ use anyhow::Result;
 use turbo_tasks::{primitives::StringsVc, Value};
 use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
 use turbopack_core::resolve::{
-    options::{
-        ImportMap, ImportMapResult, ImportMapResultVc, ImportMapVc, ImportMapping,
-        ImportMappingReplacement, ImportMappingReplacementVc, ImportMappingVc, ResolvedMap,
-        ResolvedMapVc,
-    },
-    parse::{Request, RequestVc},
+    options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap, ResolvedMapVc},
     AliasPattern,
 };
 
 use crate::{
     embed_js::{attached_next_js_package_path, VIRTUAL_PACKAGE_NAME},
     next_client::context::ContextType,
+    next_font_google::{NextFontGoogleCssModuleReplacerVc, NextFontGoogleReplacerVc},
     next_server::ServerContextType,
 };
 
@@ -30,7 +26,12 @@ pub fn get_next_client_import_map(
 
     import_map.insert_alias(
         AliasPattern::exact("@next/font/google/target.css"),
-        ImportMapping::Dynamic(NextFontGoogleReplacerVc::new().into()).into(),
+        ImportMapping::Dynamic(NextFontGoogleReplacerVc::new(project_path).into()).into(),
+    );
+
+    import_map.insert_alias(
+        AliasPattern::exact("@vercel/turbopack-next/internal/font/google/cssmodule.module.css"),
+        ImportMapping::Dynamic(NextFontGoogleCssModuleReplacerVc::new(project_path).into()).into(),
     );
 
     match ty.into_value() {
@@ -116,6 +117,14 @@ pub async fn get_next_server_import_map(
     let package_root = attached_next_js_package_path(project_path);
 
     insert_next_shared_aliases(&mut import_map, package_root);
+    import_map.insert_alias(
+        AliasPattern::exact("@next/font/google/target.css"),
+        ImportMapping::Dynamic(NextFontGoogleReplacerVc::new(project_path).into()).into(),
+    );
+    import_map.insert_alias(
+        AliasPattern::exact("@vercel/turbopack-next/internal/font/google/cssmodule.module.css"),
+        ImportMapping::Dynamic(NextFontGoogleCssModuleReplacerVc::new(project_path).into()).into(),
+    );
 
     match ty.into_value() {
         ServerContextType::Pages { pages_dir } => {
@@ -269,28 +278,4 @@ fn request_to_import_mapping(context_path: FileSystemPathVc, request: &str) -> I
 /// request.
 fn external_request_to_import_mapping(request: &str) -> ImportMappingVc {
     ImportMapping::External(Some(request.to_string())).into()
-}
-
-#[turbo_tasks::value(shared)]
-struct NextFontGoogleReplacer {}
-
-#[turbo_tasks::value_impl]
-impl NextFontGoogleReplacerVc {
-    #[turbo_tasks::function]
-    fn new() -> Self {
-        Self::cell(NextFontGoogleReplacer {})
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl ImportMappingReplacement for NextFontGoogleReplacer {
-    #[turbo_tasks::function]
-    fn replace(&self, _capture: &str) -> ImportMappingVc {
-        ImportMapping::Ignore.into()
-    }
-
-    #[turbo_tasks::function]
-    async fn result(&self, _request: RequestVc) -> Result<ImportMapResultVc> {
-        Ok(ImportMapResult::NoEntry.into())
-    }
 }
