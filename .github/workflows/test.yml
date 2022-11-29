@@ -221,8 +221,7 @@ jobs:
         run: |
           chmod +x cli/shim/turbo.exe
           ./cli/shim/turbo.exe --version
-      - name: Run E2E Tests
-        shell: bash
+      - name: Run Unit Tests
         run: pnpm -- turbo-prebuilt run test --filter=cli --color
 
   go_examples:
@@ -431,7 +430,6 @@ jobs:
           chmod +x cli/shim/turbo.exe
           ./cli/shim/turbo.exe --version
       - name: Run E2E Tests
-        shell: bash
         run: pnpm -- turbo-prebuilt run e2e-prebuilt --filter=cli
 
   rust_lint:
