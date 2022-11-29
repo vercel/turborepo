@@ -179,6 +179,14 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
             },
         }
     }
+
+    /// see [HashMap::shrink_to_fit](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.shrink_to_fit)
+    pub fn shrink_to_fit(&mut self) {
+        match self {
+            AutoMap::List(list) => list.shrink_to_fit(),
+            AutoMap::Map(map) => map.shrink_to_fit(),
+        }
+    }
 }
 
 impl<K: Eq + Hash, V, H: BuildHasher> AutoMap<K, V, H> {
