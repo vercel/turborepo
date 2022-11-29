@@ -97,9 +97,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.65"
+version = "1.0.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98161a4e3e2184da77bb14f02184cdd111e83bbbcc9979dfee3c44b9a85f5602"
+checksum = "216261ddc8289130e551ddcd5ce8a064710c0d064a4d2895c67151c92b5443f6"
 dependencies = [
  "backtrace",
 ]
@@ -5219,6 +5219,15 @@ dependencies = [
 [[package]]
 name = "turbo-shim"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "semver 1.0.14",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "turborepo",
+ "yarn-lock-parser",
+]
 
 [[package]]
 name = "turbo-tasks"
@@ -5645,12 +5654,10 @@ dependencies = [
  "globset",
  "itertools",
  "predicates",
- "semver 1.0.14",
  "serde",
  "serde_json",
  "serde_yaml",
  "walkdir",
- "yarn-lock-parser",
 ]
 
 [[package]]

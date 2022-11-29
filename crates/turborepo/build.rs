@@ -12,7 +12,7 @@ fn main() {
     println!("cargo:rustc-link-lib=turbo");
 
     let bindings = bindgen::Builder::default()
-        .header("../cli/libturbo.h")
+        .header("../../cli/libturbo.h")
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
@@ -57,7 +57,7 @@ fn build_debug_libturbo() -> String {
     let cli_path = env::var_os("CARGO_WORKSPACE_DIR")
         .map(PathBuf::from)
         .unwrap()
-        .join("../../cli");
+        .join("cli");
     let target = build_target::target().unwrap();
     let mut cmd = Command::new("make");
     cmd.current_dir(&cli_path);

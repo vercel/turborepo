@@ -43,7 +43,7 @@ pub fn generate_register() {
     if lib_entry.exists() {
         entries.push(("register.rs".to_string(), lib_entry));
     } else {
-        let bin_entry = src_dir.join("main.rs");
+        let bin_entry = src_dir.join("lib.rs");
         if bin_entry.exists() {
             entries.push(("register.rs".to_string(), bin_entry));
         }

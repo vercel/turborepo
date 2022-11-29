@@ -1,30 +1,18 @@
 mod commands;
 mod ffi;
-mod package_manager;
-mod repo_state;
 
 use std::{
     env,
-    env::current_exe,
     ffi::CString,
-    fs,
     os::raw::{c_char, c_int},
-    path::PathBuf,
     process,
-    process::Stdio,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand};
-use semver::Version;
 use serde::Serialize;
 
-use crate::{
-    ffi::{nativeRunWithArgs, nativeRunWithTurboState, GoString},
-    repo_state::{RepoMode, RepoState, MINIMUM_SUPPORTED_LOCAL_TURBO},
-};
-
-static TURBO_JSON: &str = "turbo.json";
+use crate::ffi::{nativeRunWithArgs, nativeRunWithTurboState, GoString};
 
 #[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
 #[clap(author, about = "The build system that makes ship happen", long_about = None)]
@@ -165,14 +153,7 @@ enum Command {
     },
 }
 
-/// The entire state of the execution, including args, repo state, etc.
-#[derive(Debug, Serialize)]
-struct TurboState {
-    parsed_args: Args,
-    raw_args: Vec<String>,
-}
-
-impl TryInto<GoString> for TurboState {
+impl TryInto<GoString> for Args {
     type Error = anyhow::Error;
 
     fn try_into(self) -> std::result::Result<GoString, Self::Error> {
@@ -195,32 +176,32 @@ impl TryInto<GoString> for TurboState {
 /// * `command`: The parsed command.
 ///
 /// returns: Result<bool, Error>
-fn try_run_help(command: &Command) -> Result<bool> {
-    let (help, command_name) = match command {
-        Command::Bin { help, .. } => (help, "bin"),
-        Command::Completion { help, .. } => (help, "completion"),
-        Command::Daemon { help, .. } => (help, "daemon"),
-        Command::Help { help, .. } => (help, "help"),
-        Command::Link { help, .. } => (help, "link"),
-        Command::Login { help, .. } => (help, "login"),
-        Command::Logout { help, .. } => (help, "logout"),
-        Command::Prune { help, .. } => (help, "prune"),
-        Command::Run { help, .. } => (help, "run"),
-        Command::Unlink { help, .. } => (help, "unlink"),
-    };
+// fn try_run_help(command: &Command) -> Result<bool> {
+//     let (help, command_name) = match command {
+//         Command::Bin { help, .. } => (help, "bin"),
+//         Command::Completion { help, .. } => (help, "completion"),
+//         Command::Daemon { help, .. } => (help, "daemon"),
+//         Command::Help { help, .. } => (help, "help"),
+//         Command::Link { help, .. } => (help, "link"),
+//         Command::Login { help, .. } => (help, "login"),
+//         Command::Logout { help, .. } => (help, "logout"),
+//         Command::Prune { help, .. } => (help, "prune"),
+//         Command::Run { help, .. } => (help, "run"),
+//         Command::Unlink { help, .. } => (help, "unlink"),
+//     };
+//
+//     if *help {
+//         Args::command()
+//             .find_subcommand_mut(command_name)
+//             .unwrap_or_else(|| panic!("Could not find subcommand:
+// {command_name}"))             .print_long_help()?;
+//         Ok(true)
+//     } else {
+//         Ok(false)
+//     }
+// }
 
-    if *help {
-        Args::command()
-            .find_subcommand_mut(command_name)
-            .unwrap_or_else(|| panic!("Could not find subcommand: {command_name}"))
-            .print_long_help()?;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
-}
-
-impl TurboState {
+impl Args {
     /// Runs the Go code linked in current binary.
     ///
     /// # Arguments
@@ -228,8 +209,8 @@ impl TurboState {
     /// * `args`: Arguments for turbo
     ///
     /// returns: Result<i32, Error>
-    fn run_current_turbo(self) -> Result<i32> {
-        match self.parsed_args.command {
+    fn run(self) -> Result<i32> {
+        match self.command {
             Some(Command::Bin { .. }) => {
                 commands::bin::run()?;
                 Ok(0)
@@ -243,9 +224,7 @@ impl TurboState {
                 Ok(exit_code.try_into()?)
             }
             _ => {
-                let mut args = self
-                    .raw_args
-                    .iter()
+                let mut args = env::args()
                     .map(|s| {
                         let c_string = CString::new(s.as_str())?;
                         Ok(c_string.into_raw())
@@ -262,164 +241,36 @@ impl TurboState {
             }
         }
     }
-
-    /// Attempts to run correct turbo by finding nearest package.json,
-    /// then finding local turbo installation. If the current binary is the
-    /// local turbo installation, then we run current turbo. Otherwise we
-    /// kick over to the local turbo installation.
-    ///
-    /// # Arguments
-    ///
-    /// * `turbo_state`: state for current execution
-    ///
-    /// returns: Result<i32, Error>
-    fn run_correct_turbo(mut self, current_dir: PathBuf) -> Result<i32> {
-        // Run help for subcommand if `--help` or `-h` is passed.
-        if let Some(command) = &self.parsed_args.command {
-            if try_run_help(command)? {
-                return Ok(0);
-            }
-        }
-
-        // We run this *before* the local turbo code because login/logout/link/unlink
-        // should work regardless of whether or not we're in a monorepo.
-        if matches!(
-            self.parsed_args.command,
-            Some(Command::Login { .. })
-                | Some(Command::Link { .. })
-                | Some(Command::Logout { .. })
-                | Some(Command::Unlink { .. })
-        ) {
-            let exit_code = unsafe { nativeRunWithTurboState(self.try_into()?) };
-            return Ok(exit_code.try_into()?);
-        }
-
-        let repo_state = RepoState::infer(&current_dir)?;
-
-        if let Some(local_turbo_version) = repo_state.infer_local_turbo_version()? {
-            let minimum_supported_turbo_version = Version::parse(MINIMUM_SUPPORTED_LOCAL_TURBO)?;
-            if local_turbo_version < minimum_supported_turbo_version {
-                return Err(anyhow!(
-                    "Your local turbo installation is too old. Please update it to at least {}.",
-                    minimum_supported_turbo_version
-                ));
-            }
-
-            let current_turbo_version: Version = get_version().parse()?;
-            if local_turbo_version > current_turbo_version {
-                return Err(anyhow!(
-                    "Your local turbo installation ({}) is newer than your global turbo \
-                     installation ({}). Please update your global turbo installation.",
-                    local_turbo_version,
-                    current_turbo_version
-                ));
-            }
-        }
-
-        let local_turbo_path = repo_state
-            .root
-            .join("../../../node_modules")
-            .join(".bin")
-            .join({
-                #[cfg(windows)]
-                {
-                    "turbo.cmd"
-                }
-                #[cfg(not(windows))]
-                {
-                    "turbo"
-                }
-            });
-
-        if matches!(repo_state.mode, RepoMode::SinglePackage) && self.parsed_args.is_run_command() {
-            self.raw_args.push("--single-package".to_string());
-        }
-        let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
-        // If the local turbo path doesn't exist or if we are local turbo, then we go
-        // ahead and run the Go code linked in the current binary.
-        if current_turbo_is_local_turbo || !local_turbo_path.try_exists()? {
-            return self.run_current_turbo();
-        }
-
-        // Otherwise, we spawn a process that executes the local turbo
-        // that we've found in node_modules/.bin/turbo.
-        let mut command = process::Command::new(local_turbo_path)
-            .args(&self.raw_args)
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .expect("Failed to execute turbo.");
-
-        Ok(command.wait()?.code().unwrap_or(2))
-    }
 }
 
-impl Args {
-    /// Checks if either we have an explicit run command, i.e. `turbo run build`
-    /// or an implicit run, i.e. `turbo build`, where the command after `turbo`
-    /// is not one of the reserved commands like `link`, `login`, `bin`,
-    /// etc.
-    ///
-    /// # Arguments
-    ///
-    /// * `clap_args`:
-    ///
-    /// returns: bool
-    fn is_run_command(&self) -> bool {
-        let is_explicit_run = matches!(self.command, Some(Command::Run { .. }));
-        let is_implicit_run = self.command.is_none() && !self.tasks.is_empty();
-
-        is_explicit_run || is_implicit_run
-    }
-}
-
-fn get_version() -> &'static str {
+pub fn get_version() -> &'static str {
     include_str!("../../../version.txt")
         .split_once('\n')
         .expect("Failed to read version from version.txt")
         .0
 }
 
-fn main() -> Result<()> {
+pub fn run() -> Result<i32> {
     let clap_args = Args::parse();
     // --help doesn't work with ignore_errors in clap.
     if clap_args.help {
         let mut command = Args::command();
         command.print_help()?;
-        process::exit(0);
+        return Ok(0);
     }
     // --version flag doesn't work with ignore_errors in clap, so we have to handle
     // it manually
     if clap_args.version {
         println!("{}", get_version());
-        process::exit(0);
+        return Ok(0);
     }
-
-    let current_dir = if let Some(cwd) = &clap_args.cwd {
-        fs::canonicalize::<PathBuf>(cwd.into())?
-    } else {
-        env::current_dir()?
-    };
 
     let args: Vec<_> = env::args().skip(1).collect();
     if args.is_empty() {
         process::exit(1);
     }
 
-    let turbo_state = TurboState {
-        parsed_args: clap_args,
-        raw_args: env::args().skip(1).collect(),
-    };
-
-    let exit_code = match turbo_state.run_correct_turbo(current_dir) {
-        Ok(exit_code) => exit_code,
-        Err(e) => {
-            eprintln!("failed {:?}", e);
-            2
-        }
-    };
-
-    process::exit(exit_code)
+    clap_args.run()
 }
 
 #[cfg(test)]
