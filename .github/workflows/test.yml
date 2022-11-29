@@ -220,7 +220,7 @@ jobs:
         if: ${{ matrix.os.name == 'windows' }}
         run: |
           chmod +x cli/shim/turbo.exe
-          ./cli/shim/turbo --version
+          ./cli/shim/turbo.exe --version
       - name: Run E2E Tests
         shell: bash
         run: pnpm -- turbo-prebuilt run test --filter=cli --color
@@ -429,7 +429,7 @@ jobs:
         if: ${{ matrix.os.name == 'windows' }}
         run: |
           chmod +x cli/shim/turbo.exe
-          ./cli/shim/turbo --version
+          ./cli/shim/turbo.exe --version
       - name: Run E2E Tests
         shell: bash
         run: pnpm -- turbo-prebuilt run e2e-prebuilt --filter=cli
