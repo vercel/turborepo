@@ -1587,6 +1587,7 @@
 <span id="1587">1587</span>
 <span id="1588">1588</span>
 <span id="1589">1589</span>
+<span id="1590">1590</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -2967,6 +2968,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         strongly_consistent: bool,
         func: F,
+        note: <span class="kw">impl </span>Fn() -&gt; String + Sync + Send + <span class="lifetime">&#39;static</span>,
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;T, EventListener&gt;&gt; {
@@ -3003,7 +3005,7 @@
             | Scheduled { <span class="kw-2">ref </span>event }
             | InProgress { <span class="kw-2">ref </span>event }
             | InProgressDirty { <span class="kw-2">ref </span>event } =&gt; {
-                <span class="kw">let </span>listener = event.listen();
+                <span class="kw">let </span>listener = event.listen_with_note(note);
                 drop(state);
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(listener))
             }

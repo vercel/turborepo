@@ -161,6 +161,46 @@
 <span id="161">161</span>
 <span id="162">162</span>
 <span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt::{Debug, Formatter},
     future::Future,
@@ -196,6 +236,16 @@
         }
     }
 
+    <span class="doccomment">/// see [event_listener::Event]::listen
+    </span><span class="kw">pub fn </span>listen_with_note(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _note: <span class="kw">impl </span>Fn() -&gt; String + Sync + Send + <span class="lifetime">&#39;static</span>,
+    ) -&gt; EventListener {
+        EventListener {
+            listener: <span class="self">self</span>.event.listen(),
+        }
+    }
+
     <span class="doccomment">/// pulls out the event listener, leaving a new, empty event in its place.
     </span><span class="kw">pub fn </span>take(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
@@ -219,7 +269,27 @@
     </span><span class="kw">pub fn </span>listen(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EventListener {
         EventListener {
             description: <span class="self">self</span>.description.clone(),
-            future: <span class="prelude-val">Some</span>(timeout(Duration::from_secs(<span class="number">10</span>), <span class="self">self</span>.event.listen())),
+            note: Arc::new(|| String::new()),
+            future: <span class="prelude-val">Some</span>(Box::pin(timeout(
+                Duration::from_secs(<span class="number">10</span>),
+                <span class="self">self</span>.event.listen(),
+            ))),
+            duration: Duration::from_secs(<span class="number">10</span>),
+        }
+    }
+
+    <span class="doccomment">/// see [event_listener::Event]::listen
+    </span><span class="kw">pub fn </span>listen_with_note(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        note: <span class="kw">impl </span>Fn() -&gt; String + Sync + Send + <span class="lifetime">&#39;static</span>,
+    ) -&gt; EventListener {
+        EventListener {
+            description: <span class="self">self</span>.description.clone(),
+            note: Arc::new(note),
+            future: <span class="prelude-val">Some</span>(Box::pin(timeout(
+                Duration::from_secs(<span class="number">10</span>),
+                <span class="self">self</span>.event.listen(),
+            ))),
             duration: Duration::from_secs(<span class="number">10</span>),
         }
     }
@@ -276,16 +346,23 @@
 <span class="attr">#[cfg(feature = <span class="string">&quot;hanging_detection&quot;</span>)]
 </span><span class="kw">pub struct </span>EventListener {
     description: Arc&lt;<span class="kw">dyn </span>Fn() -&gt; String + Sync + Send&gt;,
-    future: <span class="prelude-ty">Option</span>&lt;Timeout&lt;event_listener::EventListener&gt;&gt;,
+    note: Arc&lt;<span class="kw">dyn </span>Fn() -&gt; String + Sync + Send&gt;,
+    <span class="comment">// Timeout need to stay pinned while polling and also while it&#39;s dropped.
+    // So it&#39;s important to put it into a pinned Box to be able to take it out of the Option.
+    </span>future: <span class="prelude-ty">Option</span>&lt;Pin&lt;Box&lt;Timeout&lt;event_listener::EventListener&gt;&gt;&gt;&gt;,
     duration: Duration,
 }
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;hanging_detection&quot;</span>)]
 </span><span class="kw">impl </span>Debug <span class="kw">for </span>EventListener {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        f.debug_tuple(<span class="string">&quot;EventListener&quot;</span>)
-            .field(<span class="kw-2">&amp;</span>(<span class="self">self</span>.description)())
-            .finish()
+        <span class="kw">let </span><span class="kw-2">mut </span>t = f.debug_tuple(<span class="string">&quot;EventListener&quot;</span>);
+        t.field(<span class="kw-2">&amp;</span>(<span class="self">self</span>.description)());
+        <span class="kw">let </span>note = (<span class="self">self</span>.note)();
+        <span class="kw">if </span>!note.is_empty() {
+            t.field(<span class="kw-2">&amp;</span>note);
+        }
+        t.finish()
     }
 }
 
@@ -294,29 +371,32 @@
     <span class="kw">type </span>Output = ();
 
     <span class="kw">fn </span>poll(
-        <span class="self">self</span>: std::pin::Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
+        <span class="kw-2">mut </span><span class="self">self</span>: std::pin::Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
         cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; std::task::Poll&lt;<span class="self">Self</span>::Output&gt; {
-        <span class="kw">let </span>this = <span class="kw">unsafe </span>{ <span class="self">self</span>.get_unchecked_mut() };
-        <span class="kw">while let </span><span class="prelude-val">Some</span>(future) = this.future.as_mut() {
-            <span class="comment">// SAFETY: future is never moved as it&#39;s part of the pinned `self`
-            </span><span class="kw">match </span><span class="macro">ready!</span>(<span class="kw">unsafe </span>{ Pin::new_unchecked(future) }.poll(cx)) {
+        <span class="kw">while let </span><span class="prelude-val">Some</span>(future) = <span class="self">self</span>.future.as_mut() {
+            <span class="kw">match </span><span class="macro">ready!</span>(future.as_mut().poll(cx)) {
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                    this.future = <span class="prelude-val">None</span>;
+                    <span class="self">self</span>.future = <span class="prelude-val">None</span>;
                     <span class="kw">return </span>Poll::Ready(());
                 }
                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
                     <span class="kw">use </span><span class="kw">crate</span>::util::FormatDuration;
                     <span class="macro">eprintln!</span>(
                         <span class="string">&quot;{:?} is potentially hanging (waiting for {})&quot;</span>,
-                        this,
-                        FormatDuration(this.duration)
+                        <span class="self">self</span>,
+                        FormatDuration(<span class="self">self</span>.duration)
                     );
-                    this.duration <span class="kw-2">*</span>= <span class="number">2</span>;
-                    this.future = <span class="prelude-val">Some</span>(timeout(
-                        this.duration,
-                        this.future.take().unwrap().into_inner(),
-                    ));
+                    <span class="self">self</span>.duration <span class="kw-2">*</span>= <span class="number">2</span>;
+                    <span class="comment">// SAFETY: Taking from Option is safe because the value is inside of a pinned
+                    // Box. Pinning must continue until dropped.
+                    </span><span class="kw">let </span>future = <span class="self">self</span>.future.take().unwrap();
+                    <span class="self">self</span>.future = <span class="prelude-val">Some</span>(Box::pin(timeout(
+                        <span class="self">self</span>.duration,
+                        <span class="comment">// SAFETY: We can move the inner future since it&#39;s an EventListener and
+                        // that is Unpin.
+                        </span><span class="kw">unsafe </span>{ Pin::into_inner_unchecked(future) }.into_inner(),
+                    )));
                 }
             }
         }

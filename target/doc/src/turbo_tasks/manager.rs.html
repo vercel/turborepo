@@ -1159,6 +1159,20 @@
 <span id="1159">1159</span>
 <span id="1160">1160</span>
 <span id="1161">1161</span>
+<span id="1162">1162</span>
+<span id="1163">1163</span>
+<span id="1164">1164</span>
+<span id="1165">1165</span>
+<span id="1166">1166</span>
+<span id="1167">1167</span>
+<span id="1168">1168</span>
+<span id="1169">1169</span>
+<span id="1170">1170</span>
+<span id="1171">1171</span>
+<span id="1172">1172</span>
+<span id="1173">1173</span>
+<span id="1174">1174</span>
+<span id="1175">1175</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -1408,6 +1422,7 @@
     <span class="comment">// TODO make sure that all dependencies settle before reading them
     </span><span class="doccomment">/// Creates a new root task, that is only executed once.
     /// Dependencies will not invalidate the task.
+    </span><span class="attr">#[track_caller]
     </span><span class="kw">pub fn </span>spawn_once_task(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         future: <span class="kw">impl </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;RawVc&gt;&gt; + Send + <span class="lifetime">&#39;static</span>,
@@ -1476,7 +1491,8 @@
         ))
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>schedule(<span class="kw-2">&amp;</span><span class="self">self</span>, task_id: TaskId) {
+    <span class="attr">#[track_caller]
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>schedule(<span class="kw-2">&amp;</span><span class="self">self</span>, task_id: TaskId) {
         <span class="self">self</span>.begin_primary_job();
         <span class="self">self</span>.scheduled_tasks.fetch_add(<span class="number">1</span>, Ordering::AcqRel);
 
@@ -1541,7 +1557,10 @@
         );
 
         <span class="attr">#[cfg(feature = <span class="string">&quot;tokio_tracing&quot;</span>)]
-        </span>tokio::task::Builder::new().name(<span class="kw-2">&amp;</span>description).spawn(future);
+        </span>tokio::task::Builder::new()
+            .name(<span class="kw-2">&amp;</span>description)
+            .spawn(future)
+            .unwrap();
         <span class="attr">#[cfg(not(feature = <span class="string">&quot;tokio_tracing&quot;</span>))]
         </span>tokio::task::spawn(future);
     }
@@ -1626,7 +1645,9 @@
     }
 
     <span class="kw">pub async fn </span>get_or_wait_update_info(<span class="kw-2">&amp;</span><span class="self">self</span>, aggregation: Duration) -&gt; (Duration, usize) {
-        <span class="kw">let </span>listener = <span class="self">self</span>.event.listen();
+        <span class="kw">let </span>listener = <span class="self">self
+            </span>.event
+            .listen_with_note(|| <span class="string">&quot;wait for update info&quot;</span>.to_string());
         <span class="kw">if </span>aggregation.is_zero() {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(info) = <span class="kw-2">*</span><span class="self">self</span>.aggregated_update.lock().unwrap() {
                 <span class="kw">return </span>info;
@@ -1683,7 +1704,8 @@
         <span class="self">self</span>.backend.stop(<span class="self">self</span>);
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>schedule_background_job&lt;
+    <span class="attr">#[track_caller]
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>schedule_background_job&lt;
         T: FnOnce(Arc&lt;TurboTasks&lt;B&gt;&gt;) -&gt; F + Send + <span class="lifetime">&#39;static</span>,
         F: Future&lt;Output = ()&gt; + Send + <span class="lifetime">&#39;static</span>,
     &gt;(
@@ -1714,7 +1736,8 @@
         }));
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>schedule_foreground_job&lt;
+    <span class="attr">#[track_caller]
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>schedule_foreground_job&lt;
         T: FnOnce(Arc&lt;TurboTasks&lt;B&gt;&gt;) -&gt; F + Send + <span class="lifetime">&#39;static</span>,
         F: Future&lt;Output = ()&gt; + Send + <span class="lifetime">&#39;static</span>,
     &gt;(
@@ -1762,7 +1785,8 @@
         <span class="self">self</span>.trait_call(trait_type, trait_fn_name, inputs)
     }
 
-    <span class="kw">fn </span>run_once(
+    <span class="attr">#[track_caller]
+    </span><span class="kw">fn </span>run_once(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         future: Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;,
     ) -&gt; TaskId {
@@ -1772,7 +1796,8 @@
         })
     }
 
-    <span class="kw">fn </span>run_once_process(
+    <span class="attr">#[track_caller]
+    </span><span class="kw">fn </span>run_once_process(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         future: Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;,
     ) -&gt; TaskId {
@@ -1910,12 +1935,14 @@
     <span class="kw">fn </span>pin(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>TurboTasksBackendApi&gt; {
         <span class="self">self</span>.pin()
     }
-    <span class="kw">fn </span>schedule_backend_background_job(<span class="kw-2">&amp;</span><span class="self">self</span>, id: BackendJobId) {
+    <span class="attr">#[track_caller]
+    </span><span class="kw">fn </span>schedule_backend_background_job(<span class="kw-2">&amp;</span><span class="self">self</span>, id: BackendJobId) {
         <span class="self">self</span>.schedule_background_job(<span class="kw">move </span>|this| <span class="kw">async move </span>{
             this.backend.run_backend_job(id, <span class="kw-2">&amp;*</span>this).<span class="kw">await</span>;
         })
     }
-    <span class="kw">fn </span>schedule_backend_foreground_job(<span class="kw-2">&amp;</span><span class="self">self</span>, id: BackendJobId) {
+    <span class="attr">#[track_caller]
+    </span><span class="kw">fn </span>schedule_backend_foreground_job(<span class="kw-2">&amp;</span><span class="self">self</span>, id: BackendJobId) {
         <span class="self">self</span>.schedule_foreground_job(<span class="kw">move </span>|this| <span class="kw">async move </span>{
             this.backend.run_backend_job(id, <span class="kw-2">&amp;*</span>this).<span class="kw">await</span>;
         })
@@ -1965,7 +1992,8 @@
         };
     }
 
-    <span class="kw">fn </span>schedule(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId) {
+    <span class="attr">#[track_caller]
+    </span><span class="kw">fn </span>schedule(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId) {
         <span class="self">self</span>.schedule(task)
     }
 }

@@ -530,6 +530,17 @@
 <span id="530">530</span>
 <span id="531">531</span>
 <span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -622,11 +633,12 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: TaskId,
         strongly_consistent: bool,
+        note: <span class="kw">impl </span>Fn() -&gt; String + Sync + Send + <span class="lifetime">&#39;static</span>,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
         func: F,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;T, EventListener&gt;&gt; {
         <span class="self">self</span>.with_task(id, |task| {
-            task.get_or_wait_output(strongly_consistent, func, <span class="self">self</span>, turbo_tasks)
+            task.get_or_wait_output(strongly_consistent, func, note, <span class="self">self</span>, turbo_tasks)
         })
     }
 
@@ -792,10 +804,16 @@
         <span class="kw">if </span>task == reader {
             <span class="macro">bail!</span>(<span class="string">&quot;reading it&#39;s own output is not possible&quot;</span>);
         }
-        <span class="self">self</span>.try_get_output(task, strongly_consistent, turbo_tasks, |output| {
-            Task::add_dependency_to_current(TaskDependency::TaskOutput(task));
-            output.read(reader)
-        })
+        <span class="self">self</span>.try_get_output(
+            task,
+            strongly_consistent,
+            <span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">&quot;reading task output from {reader}&quot;</span>),
+            turbo_tasks,
+            |output| {
+                Task::add_dependency_to_current(TaskDependency::TaskOutput(task));
+                output.read(reader)
+            },
+        )
     }
 
     <span class="kw">fn </span>try_read_task_output_untracked(
@@ -804,9 +822,13 @@
         strongly_consistent: bool,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc, EventListener&gt;&gt; {
-        <span class="self">self</span>.try_get_output(task, strongly_consistent, turbo_tasks, |output| {
-            output.read_untracked()
-        })
+        <span class="self">self</span>.try_get_output(
+            task,
+            strongly_consistent,
+            || <span class="string">&quot;reading task output untracked&quot;</span>.to_string(),
+            turbo_tasks,
+            |output| output.read_untracked(),
+        )
     }
 
     <span class="kw">fn </span>track_read_task_output(
