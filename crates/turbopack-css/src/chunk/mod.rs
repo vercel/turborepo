@@ -2,7 +2,7 @@ pub(crate) mod optimize;
 pub mod source_map;
 pub(crate) mod writer;
 
-use std::{fmt::Write as _, io::Write};
+use std::io::Write;
 
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
@@ -16,7 +16,6 @@ use turbopack_core::{
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
         Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem, ChunkItemVc,
         ChunkReferenceVc, ChunkVc, ChunkableAssetVc, ChunkingContextVc, FromChunkableAsset,
-        ModuleId, ModuleIdVc,
     },
     code_builder::{CodeBuilder, CodeVc},
     reference::{AssetReferenceVc, AssetReferencesVc},
@@ -117,16 +116,14 @@ impl CssChunkContentVc {
         let this = self.await?;
         let chunk_name = this.chunk_path.to_string();
 
-        let mut external_imports = IndexSet::new();
+        let mut external_imports = Vec::new();
         let mut codes = Vec::new();
         for entry in this.main_entries.await?.iter() {
             let entry_placeable = CssChunkPlaceableVc::cast_from(entry);
             let entry_item = entry_placeable.as_chunk_item(this.context);
             let expanded = expand_imports(entry_item).await?;
 
-            for external_import in &expanded.external_imports {
-                external_imports.insert(*external_import);
-            }
+            external_imports.extend(expanded.external_imports.iter().copied());
             for code in &expanded.codes {
                 codes.push(*code);
             }
@@ -134,8 +131,15 @@ impl CssChunkContentVc {
 
         let mut code = CodeBuilder::default();
         writeln!(code, "/* chunk {} */", chunk_name.await?)?;
+        // Remove duplicate imports
+        let external_imports = external_imports
+            .iter()
+            .try_join()
+            .await?
+            .into_iter()
+            .collect::<IndexSet<_>>();
         for external_import in external_imports {
-            writeln!(code, "@import {};", stringify_str(&external_import.await?))?;
+            writeln!(code, "@import {};", stringify_str(&external_import))?;
         }
         for prebuilt in codes {
             code.push_code(&*prebuilt.await?);
@@ -145,7 +149,7 @@ impl CssChunkContentVc {
             let chunk_path = this.chunk_path.await?;
             write!(
                 code,
-                "/*# sourceMappingURL={}.map*/",
+                "\n/*# sourceMappingURL={}.map*/",
                 chunk_path.file_name()
             )?;
         }
@@ -350,21 +354,6 @@ impl CssChunkContextVc {
     #[turbo_tasks::function]
     pub fn of(context: ChunkingContextVc) -> CssChunkContextVc {
         CssChunkContext { context }.cell()
-    }
-
-    #[turbo_tasks::function]
-    pub async fn chunk_item_id(self, chunk_item: CssChunkItemVc) -> Result<ModuleIdVc> {
-        let layer = &*self.await?.context.layer().await?;
-        let mut s = chunk_item.to_string().await?.clone_value();
-        if !layer.is_empty() {
-            if s.ends_with(')') {
-                s.pop();
-                write!(s, ", {layer})")?;
-            } else {
-                write!(s, " ({layer})")?;
-            }
-        }
-        Ok(ModuleId::String(s).cell())
     }
 }
 
