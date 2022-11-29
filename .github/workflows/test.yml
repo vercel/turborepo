@@ -219,8 +219,8 @@ jobs:
         shell: bash
         if: ${{ matrix.os.name == 'windows' }}
         run: |
-          chmod +x ${{ github.workspace }}/cli/shim/turbo.exe
-          ${{ github.workspace }}/cli/shim/turbo --version
+          chmod +x cli/shim/turbo.exe
+          ./cli/shim/turbo --version
       - name: Run E2E Tests
         shell: bash
         run: pnpm -- turbo-prebuilt run test --filter=cli --color
@@ -428,8 +428,8 @@ jobs:
         shell: bash
         if: ${{ matrix.os.name == 'windows' }}
         run: |
-          chmod +x ${{ github.workspace }}/cli/shim/turbo.exe
-          ${{ github.workspace }}/cli/shim/turbo --version
+          chmod +x cli/shim/turbo.exe
+          ./cli/shim/turbo --version
       - name: Run E2E Tests
         shell: bash
         run: pnpm -- turbo-prebuilt run e2e-prebuilt --filter=cli
