@@ -207,7 +207,8 @@ jobs:
       - name: Make turbo executable
         shell: bash
         run: |
-          chmod +x cli/shim/turbo
+          chmod +x ${{ github.workspace }}cli/shim/turbo
+          ${{ github.workspace }}/cli/shim/turbo --version
       - name: Run E2E Tests
         shell: bash
         run: pnpm -- turbo-prebuilt run test --filter=cli --color
@@ -283,7 +284,9 @@ jobs:
       # download-artifact doesn't restore execution permissions
       - name: Make turbo executable
         shell: bash
-        run: chmod +x cli/shim/turbo
+        run: |
+          chmod +x ${{ github.workspace}}/cli/shim/turbo
+          ${{ github.workspace }}/cli/shim/turbo --version
 
       - name: Setup Pnpm
         uses: pnpm/action-setup@v2.2.4
@@ -404,7 +407,9 @@ jobs:
       # download-artifact doesn't restore execution permissions
       - name: Make turbo executable
         shell: bash
-        run: chmod +x cli/shim/turbo
+        run: |
+          chmod +x ${{ github.workspace }}/cli/shim/turbo
+          ${{ github.workspace }}/cli/shim/turbo --version
       - name: Run E2E Tests
         shell: bash
         run: pnpm -- turbo-prebuilt run e2e --filter=cli
@@ -1012,7 +1017,9 @@ jobs:
       # download-artifact doesn't restore execution permissions
       - name: Make turbo executable
         shell: bash
-        run: chmod +x cli/shim/turbo
+        run: |
+          chmod +x ${{ github.workspace }}cli/shim/turbo
+          ${{ github.workspace }}cli/shim/turbo --version
 
       - name: Format check
         run: pnpm -- turbo-prebuilt run check:fmt
