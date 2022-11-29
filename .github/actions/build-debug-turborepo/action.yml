@@ -24,4 +24,7 @@ runs:
         key: debug-${{ inputs.target }}
     - name: Build Turborepo
       shell: bash
-      run: cd cli && make shim/turbo
+      run: |
+        cd cli
+        make shim/turbo
+        strip shim/turbo
