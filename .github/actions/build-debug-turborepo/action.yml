@@ -27,4 +27,12 @@ runs:
       run: |
         cd cli
         make shim/turbo
-        strip shim/turbo
+        cd ..
+    - name: Strip Turborepo binary
+      shell: bash
+      run: strip shim/turbo.exe
+      if: ${{ inputs.target }} == 'windows'
+    - name: Strip Turborepo binary
+      shell: bash
+      run: strip shim/turbo
+      if: ${{ inputs.target }} != 'windows'
