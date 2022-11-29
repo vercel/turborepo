@@ -5,6 +5,8 @@ on:
     # Run every week on Sunday 12:42
     - cron: "42 12 * * 0"
 
+  workflow_dispatch:
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
