@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/vercel/turbo/cli/internal/core"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -48,13 +49,27 @@ func (w *Warnings) append(err error) {
 
 // Context of the CLI
 type Context struct {
-	// TODO(gsoltis): should the RootPackageJSON be included in PackageInfos?
-	PackageInfos     map[interface{}]*fs.PackageJSON
-	PackageNames     []string
-	TopologicalGraph dag.AcyclicGraph
-	RootNode         string
-	Lockfile         lockfile.Lockfile
-	PackageManager   *packagemanager.PackageManager
+	// WorkspaceInfos contains the contents of package.json for every workspace
+	// TODO(gsoltis): should the RootPackageJSON be included in WorkspaceInfos?
+	WorkspaceInfos graph.WorkspaceInfos
+
+	// WorkspaceNames is all the names of the workspaces
+	WorkspaceNames []string
+
+	// WorkspaceGraph is a graph of workspace dependencies
+	// (based on package.json dependencies and devDependencies)
+	WorkspaceGraph dag.AcyclicGraph
+
+	// RootNode is a sigil identifying the root workspace
+	RootNode string
+
+	// Lockfile is a struct to read the lockfile based on the package manager
+	Lockfile lockfile.Lockfile
+
+	// PackageManager is an abstraction for all the info a package manager
+	// can give us about the repo.
+	PackageManager *packagemanager.PackageManager
+
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
 	mutex sync.Mutex
@@ -129,13 +144,12 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 
 // SinglePackageGraph constructs a Context instance from a single package.
 func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
-	packageInfos := make(map[interface{}]*fs.PackageJSON)
-	packageInfos[util.RootPkgName] = rootPackageJSON
+	workspaceInfos := map[string]*fs.PackageJSON{util.RootPkgName: rootPackageJSON}
 	c := &Context{
-		PackageInfos: packageInfos,
-		RootNode:     core.ROOT_NODE_NAME,
+		WorkspaceInfos: workspaceInfos,
+		RootNode:       core.ROOT_NODE_NAME,
 	}
-	c.TopologicalGraph.Connect(dag.BasicEdge(util.RootPkgName, core.ROOT_NODE_NAME))
+	c.WorkspaceGraph.Connect(dag.BasicEdge(util.RootPkgName, core.ROOT_NODE_NAME))
 	packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON)
 	if err != nil {
 		return nil, err
@@ -148,7 +162,7 @@ func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *
 func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
 	c := &Context{}
 	rootpath := repoRoot.ToStringDuringMigration()
-	c.PackageInfos = make(map[interface{}]*fs.PackageJSON)
+	c.WorkspaceInfos = make(graph.WorkspaceInfos)
 	c.RootNode = core.ROOT_NODE_NAME
 
 	var warnings Warnings
@@ -193,7 +207,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 		return nil, err
 	}
 	populateGraphWaitGroup := &errgroup.Group{}
-	for _, pkg := range c.PackageInfos {
+	for _, pkg := range c.WorkspaceInfos {
 		pkg := pkg
 		populateGraphWaitGroup.Go(func() error {
 			return c.populateTopologicGraphForPackageJSON(pkg, rootpath, pkg.Name, &warnings)
@@ -210,7 +224,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve dependencies for root package: %v", err)
 	}
-	c.PackageInfos[util.RootPkgName] = rootPackageJSON
+	c.WorkspaceInfos[util.RootPkgName] = rootPackageJSON
 
 	return c, warnings.errorOrNil()
 }
@@ -283,9 +297,9 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 
 	// split out internal vs. external deps
 	for depName, depVersion := range depMap {
-		if item, ok := c.PackageInfos[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir.ToStringDuringMigration(), rootpath) {
+		if item, ok := c.WorkspaceInfos[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir.ToStringDuringMigration(), rootpath) {
 			internalDepsSet.Add(depName)
-			c.TopologicalGraph.Connect(dag.BasicEdge(vertexName, depName))
+			c.WorkspaceGraph.Connect(dag.BasicEdge(vertexName, depName))
 		} else {
 			externalUnresolvedDepsSet.Add(depName)
 		}
@@ -318,7 +332,7 @@ func (c *Context) populateTopologicGraphForPackageJSON(pkg *fs.PackageJSON, root
 
 	// when there are no internal dependencies, we need to still add these leafs to the graph
 	if internalDepsSet.Len() == 0 {
-		c.TopologicalGraph.Connect(dag.BasicEdge(pkg.Name, core.ROOT_NODE_NAME))
+		c.WorkspaceGraph.Connect(dag.BasicEdge(pkg.Name, core.ROOT_NODE_NAME))
 	}
 	pkg.ExternalDeps = make([]string, 0, externalDepSet.Cardinality())
 	for _, v := range externalDepSet.ToSlice() {
@@ -352,15 +366,15 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 		if err != nil {
 			return err
 		}
-		c.TopologicalGraph.Add(pkg.Name)
+		c.WorkspaceGraph.Add(pkg.Name)
 		pkg.PackageJSONPath = turbopath.AnchoredSystemPathFromUpstream(relativePkgJSONPath)
 		pkg.Dir = turbopath.AnchoredSystemPathFromUpstream(filepath.Dir(relativePkgJSONPath))
-		if c.PackageInfos[pkg.Name] != nil {
-			existing := c.PackageInfos[pkg.Name]
+		if c.WorkspaceInfos[pkg.Name] != nil {
+			existing := c.WorkspaceInfos[pkg.Name]
 			return fmt.Errorf("Failed to add workspace \"%s\" from %s, it already exists at %s", pkg.Name, pkg.Dir, existing.Dir)
 		}
-		c.PackageInfos[pkg.Name] = pkg
-		c.PackageNames = append(c.PackageNames, pkg.Name)
+		c.WorkspaceInfos[pkg.Name] = pkg
+		c.WorkspaceNames = append(c.WorkspaceNames, pkg.Name)
 	}
 	return nil
 }
@@ -404,4 +418,33 @@ func (c *Context) resolveDepGraph(wg *errgroup.Group, workspace *fs.PackageJSON,
 			return nil
 		})
 	}
+}
+
+// InternalDependencies finds all dependencies required by the slice of starting
+// packages, as well as the starting packages themselves.
+func (c *Context) InternalDependencies(start []string) ([]string, error) {
+	vertices := make(dag.Set)
+	for _, v := range start {
+		vertices.Add(v)
+	}
+	s := make(dag.Set)
+	memoFunc := func(v dag.Vertex, d int) error {
+		s.Add(v)
+		return nil
+	}
+
+	if err := c.WorkspaceGraph.DepthFirstWalk(vertices, memoFunc); err != nil {
+		return nil, err
+	}
+
+	// Use for loop so we can coerce to string
+	// .List() returns a list of interface{} types, but
+	// we know they are strings.
+	targets := make([]string, 0, s.Len())
+	for _, dep := range s.List() {
+		targets = append(targets, dep.(string))
+	}
+	sort.Strings(targets)
+
+	return targets, nil
 }

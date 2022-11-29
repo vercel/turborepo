@@ -160,7 +160,7 @@ pub enum Command {
     /// Prepare a subset of your monorepo.
     Prune {
         #[clap(long)]
-        scope: Option<String>,
+        scope: Vec<String>,
         #[clap(long)]
         docker: bool,
         #[clap(long = "out-dir", default_value_t = String::from("out"), value_parser)]

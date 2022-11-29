@@ -3,7 +3,8 @@ import path from "path";
 import { getTurboRoot } from "turbo-utils";
 import { getComparison } from "./getComparison";
 import { getWorkspace } from "./getWorkspace";
-import { info, error } from "./logger";
+import { info, warn, error } from "./logger";
+import { shouldWarn } from "./errors";
 import { TurboIgnoreArgs } from "./types";
 
 function ignoreBuild() {
@@ -62,7 +63,12 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
     },
     (err, stdout) => {
       if (err) {
-        error(`exec error: ${err}`);
+        const { level, code, message } = shouldWarn({ err: err.message });
+        if (level === "warn") {
+          warn(message);
+        } else {
+          error(`${code}: ${err}`);
+        }
         return continueBuild();
       }
 

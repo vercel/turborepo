@@ -5,7 +5,7 @@ use std::{
     future::Future,
     hash::BuildHasherDefault,
     pin::Pin,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{bail, Result};
@@ -14,12 +14,12 @@ use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
 use turbo_tasks::{
     backend::{
-        Backend, BackendJobId, CellContent, CellMappings, PersistentTaskType, TaskExecutionSpec,
+        Backend, BackendJobId, CellContent, PersistentTaskType, TaskExecutionSpec,
         TransientTaskType,
     },
     event::EventListener,
     util::{IdFactory, NoMoveVec},
-    RawVc, TaskId, TraitTypeId, TurboTasksBackendApi,
+    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi,
 };
 
 use crate::{
@@ -90,11 +90,12 @@ impl MemoryBackend {
         &self,
         id: TaskId,
         strongly_consistent: bool,
+        note: impl Fn() -> String + Sync + Send + 'static,
         turbo_tasks: &dyn TurboTasksBackendApi,
         func: F,
     ) -> Result<Result<T, EventListener>> {
         self.with_task(id, |task| {
-            task.get_or_wait_output(strongly_consistent, func, self, turbo_tasks)
+            task.get_or_wait_output(strongly_consistent, func, note, self, turbo_tasks)
         })
     }
 
@@ -219,9 +220,7 @@ impl Backend for MemoryBackend {
     ) -> Option<TaskExecutionSpec> {
         self.with_task(task, |task| {
             if task.execution_started(self, turbo_tasks) {
-                let cell_mappings = task.take_cell_mappings();
                 Some(TaskExecutionSpec {
-                    cell_mappings: Some(cell_mappings),
                     future: task.execute(turbo_tasks),
                 })
             } else {
@@ -244,12 +243,12 @@ impl Backend for MemoryBackend {
     fn task_execution_completed(
         &self,
         task: TaskId,
-        cell_mappings: Option<CellMappings>,
         duration: Duration,
+        instant: Instant,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool {
         self.with_task(task, |task| {
-            task.execution_completed(cell_mappings, duration, self, turbo_tasks)
+            task.execution_completed(duration, instant, self, turbo_tasks)
         })
     }
 
@@ -263,10 +262,16 @@ impl Backend for MemoryBackend {
         if task == reader {
             bail!("reading it's own output is not possible");
         }
-        self.try_get_output(task, strongly_consistent, turbo_tasks, |output| {
-            Task::add_dependency_to_current(TaskDependency::TaskOutput(task));
-            output.read(reader)
-        })
+        self.try_get_output(
+            task,
+            strongly_consistent,
+            move || format!("reading task output from {reader}"),
+            turbo_tasks,
+            |output| {
+                Task::add_dependency_to_current(TaskDependency::TaskOutput(task));
+                output.read(reader)
+            },
+        )
     }
 
     fn try_read_task_output_untracked(
@@ -275,9 +280,13 @@ impl Backend for MemoryBackend {
         strongly_consistent: bool,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> Result<Result<RawVc, EventListener>> {
-        self.try_get_output(task, strongly_consistent, turbo_tasks, |output| {
-            output.read_untracked()
-        })
+        self.try_get_output(
+            task,
+            strongly_consistent,
+            || "reading task output untracked".to_string(),
+            turbo_tasks,
+            |output| output.read_untracked(),
+        )
     }
 
     fn track_read_task_output(
@@ -299,7 +308,7 @@ impl Backend for MemoryBackend {
     fn try_read_task_cell(
         &self,
         task: TaskId,
-        index: usize,
+        index: CellId,
         reader: TaskId,
         _turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> Result<Result<CellContent, EventListener>> {
@@ -318,7 +327,7 @@ impl Backend for MemoryBackend {
     fn try_read_task_cell_untracked(
         &self,
         task: TaskId,
-        index: usize,
+        index: CellId,
         _turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> Result<Result<CellContent, EventListener>> {
         Ok(Ok(self.with_task(task, |task| {
@@ -329,7 +338,7 @@ impl Backend for MemoryBackend {
     fn track_read_task_cell(
         &self,
         task: TaskId,
-        index: usize,
+        index: CellId,
         reader: TaskId,
         _turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
@@ -377,14 +386,10 @@ impl Backend for MemoryBackend {
         });
     }
 
-    fn get_fresh_cell(&self, task: TaskId, _turbo_tasks: &dyn TurboTasksBackendApi) -> usize {
-        self.with_task(task, |task| task.get_fresh_cell())
-    }
-
     fn update_task_cell(
         &self,
         task: TaskId,
-        index: usize,
+        index: CellId,
         content: CellContent,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
@@ -433,13 +438,19 @@ impl Backend for MemoryBackend {
                 PersistentTaskType::Native(fn_id, inputs) => {
                     // TODO inputs doesn't need to be cloned when are would be able to get a
                     // reference to the task type stored inside of the task
-                    Task::new_native(id, inputs.clone(), *fn_id)
+                    Task::new_native(id, inputs.clone(), *fn_id, turbo_tasks.stats_type())
                 }
                 PersistentTaskType::ResolveNative(fn_id, inputs) => {
-                    Task::new_resolve_native(id, inputs.clone(), *fn_id)
+                    Task::new_resolve_native(id, inputs.clone(), *fn_id, turbo_tasks.stats_type())
                 }
                 PersistentTaskType::ResolveTrait(trait_type, trait_fn_name, inputs) => {
-                    Task::new_resolve_trait(id, *trait_type, trait_fn_name.clone(), inputs.clone())
+                    Task::new_resolve_trait(
+                        id,
+                        *trait_type,
+                        trait_fn_name.clone(),
+                        inputs.clone(),
+                        turbo_tasks.stats_type(),
+                    )
                 }
             };
             // Safety: We have a fresh task id that nobody knows about yet
@@ -479,9 +490,10 @@ impl Backend for MemoryBackend {
             scope.increment_tasks();
             scope.increment_unfinished_tasks(self);
         });
+        let stats_type = turbo_tasks.stats_type();
         let task = match task_type {
-            TransientTaskType::Root(f) => Task::new_root(id, scope, move || f() as _),
-            TransientTaskType::Once(f) => Task::new_once(id, scope, f),
+            TransientTaskType::Root(f) => Task::new_root(id, scope, move || f() as _, stats_type),
+            TransientTaskType::Once(f) => Task::new_once(id, scope, f, stats_type),
         };
         // SAFETY: We have a fresh task id where nobody knows about yet
         #[allow(unused_variables)]

@@ -1,9 +1,5 @@
 {
   "private": true,
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --no-cache --parallel --continue",
@@ -17,8 +13,9 @@
   "devDependencies": {
     "@changesets/cli": "^2.22.0",
     "eslint": "^7.32.0",
-    "eslint-config-acme": "*",
+    "eslint-config-acme": "workspace:*",
     "prettier": "^2.5.1",
     "turbo": "latest"
-  }
+  },
+  "packageManager": "pnpm@7.15.0"
 }

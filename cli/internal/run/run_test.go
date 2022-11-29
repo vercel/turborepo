@@ -50,25 +50,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo"},
 		},
 		{
-			"scope",
-			[]string{"foo", "--scope=foo", "--scope=blah"},
-			&Opts{
-				runOpts: runOpts{
-					concurrency: 10,
-				},
-				cacheOpts: cache.Opts{
-					Workers: 10,
-				},
-				runcacheOpts: runcache.Opts{},
-				scopeOpts: scope.Opts{
-					LegacyFilter: scope.LegacyFilter{
-						Entrypoints: []string{"foo", "blah"},
-					},
-				},
-			},
-			[]string{"foo"},
-		},
-		{
 			"concurrency",
 			[]string{"foo", "--concurrency=12"},
 			&Opts{
@@ -185,23 +166,6 @@ func TestParseConfig(t *testing.T) {
 			[]string{"foo"},
 		},
 		{
-			"can specify filter patterns",
-			[]string{"foo", "--filter=bar", "--filter=...[main]"},
-			&Opts{
-				runOpts: runOpts{
-					concurrency: 10,
-				},
-				cacheOpts: cache.Opts{
-					Workers: 10,
-				},
-				runcacheOpts: runcache.Opts{},
-				scopeOpts: scope.Opts{
-					FilterPatterns: []string{"bar", "...[main]"},
-				},
-			},
-			[]string{"foo"},
-		},
-		{
 			"continue on errors",
 			[]string{"foo", "--continue"},
 			&Opts{
@@ -304,9 +268,9 @@ func Test_dontSquashTasks(t *testing.T) {
 	}
 
 	completeGraph := &graph.CompleteGraph{
-		TopologicalGraph: *topoGraph,
-		Pipeline:         pipeline,
-		PackageInfos:     workspaceInfos,
+		WorkspaceGraph: *topoGraph,
+		Pipeline:       pipeline,
+		WorkspaceInfos: workspaceInfos,
 	}
 
 	engine, err := buildTaskGraphEngine(completeGraph, rs)
@@ -344,8 +308,8 @@ func Test_taskSelfRef(t *testing.T) {
 	}
 
 	completeGraph := &graph.CompleteGraph{
-		TopologicalGraph: *topoGraph,
-		Pipeline:         pipeline,
+		WorkspaceGraph: *topoGraph,
+		Pipeline:       pipeline,
 	}
 
 	_, err := buildTaskGraphEngine(completeGraph, rs)

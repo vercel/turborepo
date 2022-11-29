@@ -32,9 +32,9 @@ type LoginPayload struct {
 
 // PrunePayload is the extra flags passed for the `prune` subcommand
 type PrunePayload struct {
-	Scope     string `json:"scope"`
-	Docker    bool   `json:"docker"`
-	OutputDir string `json:"output_dir"`
+	Scope     []string `json:"scope"`
+	Docker    bool     `json:"docker"`
+	OutputDir string   `json:"output_dir"`
 }
 
 // RunPayload is the extra flags passed for the `run` subcommand

@@ -19,7 +19,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/core"
-	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/taskhash"
@@ -73,7 +72,7 @@ func DryRun(
 	}
 
 	// Render the dry run as text
-	if err := displayDryTextRun(base.UI, tasksRun, packagesInScope, g.PackageInfos, singlePackage); err != nil {
+	if err := displayDryTextRun(base.UI, tasksRun, packagesInScope, g.WorkspaceInfos, singlePackage); err != nil {
 		return err
 	}
 
@@ -198,14 +197,14 @@ func renderDryRunFullJSON(tasksRun []hashedTask, packagesInScope []string) (stri
 	return string(bytes), nil
 }
 
-func displayDryTextRun(ui cli.Ui, tasksRun []hashedTask, packagesInScope []string, packageInfos map[interface{}]*fs.PackageJSON, isSinglePackage bool) error {
+func displayDryTextRun(ui cli.Ui, tasksRun []hashedTask, packagesInScope []string, workspaceInfos graph.WorkspaceInfos, isSinglePackage bool) error {
 	if !isSinglePackage {
 		ui.Output("")
 		ui.Info(util.Sprintf("${CYAN}${BOLD}Packages in Scope${RESET}"))
 		p := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 		fmt.Fprintln(p, "Name\tPath\t")
 		for _, pkg := range packagesInScope {
-			fmt.Fprintf(p, "%s\t%s\t\n", pkg, packageInfos[pkg].Dir)
+			fmt.Fprintf(p, "%s\t%s\t\n", pkg, workspaceInfos[pkg].Dir)
 		}
 		if err := p.Flush(); err != nil {
 			return err

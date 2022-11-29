@@ -77,25 +77,6 @@ func parseTasksAndPassthroughArgs(remainingArgs []string, flags *pflag.FlagSet) 
 	return remainingArgs, nil
 }
 
-func parseTasksAndPassthroughArgsFromRust(args *turbostate.ParsedArgsFromRust) ([]string, []string) {
-	for i, task := range args.Command.Run.Tasks {
-		if task == "--" {
-			var tasks []string
-			var passthroughArgs []string
-			// If the `--` has arguments after it, we set passthroughArgs to them
-			if i < len(args.Command.Run.Tasks)-1 {
-				passthroughArgs = args.Command.Run.Tasks[(i + 1):]
-			}
-			if i > 0 {
-				tasks = args.Command.Run.Tasks[0:(i - 1)]
-			}
-
-			return tasks, passthroughArgs
-		}
-	}
-	return args.Command.Run.Tasks, nil
-}
-
 func optsFromExecutionState(executionState *turbostate.CLIExecutionStateFromRust) (*Opts, error) {
 	runPayload := executionState.ParsedArgs.Command.Run
 	opts := getDefaultOptions()
@@ -235,7 +216,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
-	if err := util.ValidateGraph(&pkgDepGraph.TopologicalGraph); err != nil {
+	if err := util.ValidateGraph(&pkgDepGraph.WorkspaceGraph); err != nil {
 		return errors.Wrap(err, "Invalid package dependency graph")
 	}
 
@@ -286,11 +267,11 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	// TODO: consolidate some of these arguments
 	g := &graph.CompleteGraph{
-		TopologicalGraph: pkgDepGraph.TopologicalGraph,
-		Pipeline:         pipeline,
-		PackageInfos:     pkgDepGraph.PackageInfos,
-		GlobalHash:       globalHash,
-		RootNode:         pkgDepGraph.RootNode,
+		WorkspaceGraph: pkgDepGraph.WorkspaceGraph,
+		Pipeline:       pipeline,
+		WorkspaceInfos: pkgDepGraph.WorkspaceInfos,
+		GlobalHash:     globalHash,
+		RootNode:       pkgDepGraph.RootNode,
 	}
 	rs := &runSpec{
 		Targets:      targets,
@@ -300,7 +281,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	packageManager := pkgDepGraph.PackageManager
 
 	vertexSet := make(util.Set)
-	for _, v := range g.TopologicalGraph.Vertices() {
+	for _, v := range g.WorkspaceGraph.Vertices() {
 		vertexSet.Add(v)
 	}
 
@@ -309,7 +290,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	if err != nil {
 		return errors.Wrap(err, "error preparing engine")
 	}
-	tracker := taskhash.NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.PackageInfos)
+	tracker := taskhash.NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.WorkspaceInfos)
 	err = tracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.runOpts.concurrency, r.base.RepoRoot)
 	if err != nil {
 		return errors.Wrap(err, "error hashing package files")
@@ -319,9 +300,9 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	// except for the root. Rebuild the task graph for backwards compatibility.
 	// We still use dependencies specified by the pipeline configuration.
 	if rs.Opts.runOpts.parallel {
-		for _, edge := range g.TopologicalGraph.Edges() {
+		for _, edge := range g.WorkspaceGraph.Edges() {
 			if edge.Target() != g.RootNode {
-				g.TopologicalGraph.RemoveEdge(edge)
+				g.WorkspaceGraph.RemoveEdge(edge)
 			}
 		}
 		engine, err = buildTaskGraphEngine(g, rs)
@@ -411,7 +392,7 @@ func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient anal
 }
 
 func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, error) {
-	engine := core.NewEngine(&g.TopologicalGraph)
+	engine := core.NewEngine(&g.WorkspaceGraph)
 
 	for taskName, taskDefinition := range g.Pipeline {
 		deps := make(util.Set)

@@ -2,7 +2,6 @@ package scope
 
 import (
 	"fmt"
-	"github.com/vercel/turbo/cli/internal/turbostate"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,10 +10,11 @@ import (
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/context"
-	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/scm"
 	scope_filter "github.com/vercel/turbo/cli/internal/scope/filter"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/util/filter"
 )
@@ -115,10 +115,10 @@ func (l *LegacyFilter) asFilterPatterns() []string {
 // packages represents a default "all packages".
 func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, bool, error) {
 	filterResolver := &scope_filter.Resolver{
-		Graph:                  &ctx.TopologicalGraph,
-		PackageInfos:           ctx.PackageInfos,
+		Graph:                  &ctx.WorkspaceGraph,
+		WorkspaceInfos:         ctx.WorkspaceInfos,
 		Cwd:                    cwd,
-		PackagesChangedInRange: opts.getPackageChangeFunc(scm, cwd, ctx.PackageInfos, ctx.PackageManager),
+		PackagesChangedInRange: opts.getPackageChangeFunc(scm, cwd, ctx.WorkspaceInfos, ctx.PackageManager),
 	}
 	filterPatterns := opts.FilterPatterns
 	legacyFilterPatterns := opts.LegacyFilter.asFilterPatterns()
@@ -131,7 +131,7 @@ func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, 
 
 	if isAllPackages {
 		// no filters specified, run every package
-		for _, f := range ctx.PackageNames {
+		for _, f := range ctx.WorkspaceNames {
 			filteredPkgs.Add(f)
 		}
 	}
@@ -139,7 +139,7 @@ func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, 
 	return filteredPkgs, isAllPackages, nil
 }
 
-func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos map[interface{}]*fs.PackageJSON, packageManager *packagemanager.PackageManager) scope_filter.PackagesChangedInRange {
+func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos graph.WorkspaceInfos, packageManager *packagemanager.PackageManager) scope_filter.PackagesChangedInRange {
 	return func(fromRef string, toRef string) (util.Set, error) {
 		// We could filter changed files at the git level, since it's possible
 		// that the changes we're interested in are scoped, but we need to handle
@@ -246,7 +246,7 @@ func fileInPackage(changedFile string, packagePath string) bool {
 	return false
 }
 
-func getChangedPackages(changedFiles []string, packageInfos map[interface{}]*fs.PackageJSON) util.Set {
+func getChangedPackages(changedFiles []string, packageInfos graph.WorkspaceInfos) util.Set {
 	changedPackages := make(util.Set)
 	for _, changedFile := range changedFiles {
 		found := false

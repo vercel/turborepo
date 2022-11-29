@@ -40,17 +40,20 @@ npm create vite@latest
   </Tab>
   <Tab>
     ```bash
-    pnpm install turbo --save-dev
+    pnpm install turbo --save-dev --workspace-root
     ```
   </Tab>
 </Tabs>
 
 2. **Add a `turbo.json` file at the base of your new repository:**
 
+For more information on configuring your `turbo.json`, see the [Configuration Options](/repo/docs/reference/configuration) documentation.
+
 <Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
   <Tab>
 ```json filename="turbo.json"
 {
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       "outputs": [".next/**"]
@@ -65,6 +68,7 @@ npm create vite@latest
   <Tab>
 ```json filename="turbo.json"
 {
+  "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
       "outputs": ["dist/**"]
@@ -102,7 +106,15 @@ This means that Turbo can schedule them separately.
   </Tab>
 </Tabs>
 
-3. **Try running `build` and `lint` with `turbo`:**
+3. **Edit `.gitignore`**
+
+Add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and certain task outputs.
+
+```diff
++ .turbo
+```
+
+4. **Try running `build` and `lint` with `turbo`:**
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
@@ -124,7 +136,7 @@ This means that Turbo can schedule them separately.
 
 This runs `build` and `lint` at the same time.
 
-4. **Without making any changes to the code, try running `build` and `lint` again:**
+5. **Without making any changes to the code, try running `build` and `lint` again:**
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
@@ -156,7 +168,7 @@ Congratulations - **you just completed a build and lint in under 200ms**.
 
 To learn how this is possible, check out our [core concepts docs](/repo/docs/core-concepts/caching).
 
-5. **Try running `dev` with `turbo`:**
+6. **Try running `dev` with `turbo`:**
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>

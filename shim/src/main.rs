@@ -781,10 +781,10 @@ mod test {
         CommandTestCase {
             command: "bin",
             command_args: vec![],
-            global_args: vec![vec!["--cwd", "../examples/basic"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Bin {}),
-                cwd: Some("../examples/basic".to_string()),
+                cwd: Some("../examples/with-yarn".to_string()),
                 ..Args::default()
             },
         }
@@ -804,10 +804,10 @@ mod test {
         CommandTestCase {
             command: "login",
             command_args: vec![],
-            global_args: vec![vec!["--cwd", "../examples/basic"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Login { sso_team: None }),
-                cwd: Some("../examples/basic".to_string()),
+                cwd: Some("../examples/with-yarn".to_string()),
                 ..Args::default()
             },
         }
@@ -816,12 +816,12 @@ mod test {
         CommandTestCase {
             command: "login",
             command_args: vec![vec!["--sso-team", "my-team"]],
-            global_args: vec![vec!["--cwd", "../examples/basic"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Login {
                     sso_team: Some("my-team".to_string()),
                 }),
-                cwd: Some("../examples/basic".to_string()),
+                cwd: Some("../examples/with-yarn".to_string()),
                 ..Args::default()
             },
         }
@@ -841,10 +841,10 @@ mod test {
         CommandTestCase {
             command: "logout",
             command_args: vec![],
-            global_args: vec![vec!["--cwd", "../examples/basic"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Logout {}),
-                cwd: Some("../examples/basic".to_string()),
+                cwd: Some("../examples/with-yarn".to_string()),
                 ..Args::default()
             },
         }
@@ -864,10 +864,10 @@ mod test {
         CommandTestCase {
             command: "unlink",
             command_args: vec![],
-            global_args: vec![vec!["--cwd", "../examples/basic"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Unlink {}),
-                cwd: Some("../examples/basic".to_string()),
+                cwd: Some("../examples/with-yarn".to_string()),
                 ..Args::default()
             },
         }
@@ -893,10 +893,10 @@ mod test {
         CommandTestCase {
             command: "prune",
             command_args: vec![],
-            global_args: vec![vec!["--cwd", "../examples/basic"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(default_prune),
-                cwd: Some("../examples/basic".to_string()),
+                cwd: Some("../examples/with-yarn".to_string()),
                 ..Args::default()
             },
         }
@@ -956,14 +956,14 @@ mod test {
         CommandTestCase {
             command: "prune",
             command_args: vec![vec!["--out-dir", "dist"], vec!["--docker"]],
-            global_args: vec![vec!["--cwd", "../examples/basic"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Prune {
                     scope: None,
                     docker: true,
                     output_dir: "dist".to_string(),
                 }),
-                cwd: Some("../examples/basic".to_string()),
+                cwd: Some("../examples/with-yarn".to_string()),
                 ..Args::default()
             },
         }

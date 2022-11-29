@@ -52,6 +52,7 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v3
+
       - name: CI related changes
         id: ci
         uses: technote-space/get-diff-action@v6
@@ -59,6 +60,7 @@ jobs:
           PATTERNS: |
             .github/actions/**
             .github/workflows/test.yml
+
       - name: Rust related changes
         id: rust
         uses: technote-space/get-diff-action@v6
@@ -74,6 +76,7 @@ jobs:
             rust-toolchain
             !**.md
             !**.mdx
+
       - name: Rust Benchmark related changes
         id: rust_bench
         uses: technote-space/get-diff-action@v6
@@ -81,18 +84,16 @@ jobs:
           PATTERNS: |
             crates/next-dev/benches/**
             !*.md
+
       - name: Go related changes
+        ## Warning: When we add Integration tests to this workflow
+        # we need to add shim/ directory to this as well
         id: go
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
-            pnpm-lock.yaml
-            package.json
             cli/**
-            packages/**
-            shim/**
-            !**.md
-            !**.mdx
+
       - name: Examples related changes
         id: examples
         uses: technote-space/get-diff-action@v6
@@ -105,6 +106,7 @@ jobs:
             scripts/run-example.sh
             !**.md
             !**.mdx
+
       - name: Node.js related changes
         id: node
         uses: technote-space/get-diff-action@v6
@@ -156,28 +158,30 @@ jobs:
       - name: golangci Linting
         uses: golangci/golangci-lint-action@v3
         with:
-          # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
+          # More config options documented here: https://github.com/golangci/golangci-lint-action
           version: latest
-
-          # Optional: working directory, useful for monorepos
           working-directory: cli
-
-          # Optional: golangci-lint command line arguments.
-          # args: --issues-exit-code=0
           args: --new-from-rev=${{ github.event.pull_request.base.sha || 'HEAD~1' }}
 
-          # Optional: show only new issues if it's a pull request. The default value is `false`.
-          # only-new-issues: true
+  go_unit:
+    name: Go Unit Tests
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.go == 'true'
+    timeout-minutes: 15
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
-          # Optional: if set to true then the all caching functionality will be complete disabled,
-          #           takes precedence over all other caching options.
-          # skip-cache: true
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-          # Optional: if set to true then the action don't cache or restore ~/go/pkg.
-          # skip-pkg-cache: true
-
-          # Optional: if set to true then the action don't cache or restore ~/.cache/go-build.
-          # skip-build-cache: true
+      - run: pnpm -- turbo run test --filter=cli --color
 
   go_examples:
     name: Go Cli Examples
@@ -190,14 +194,26 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         manager: [yarn, npm]
-        example: [basic, design-system, kitchen-sink, non-monorepo]
+        example: [with-yarn, with-npm, non-monorepo]
         include:
           - os: ubuntu-latest
             manager: pnpm
-            example: with-pnpm
+            example: basic
           - os: macos-latest
             manager: pnpm
-            example: with-pnpm
+            example: basic
+          - os: ubuntu-latest
+            manager: pnpm
+            example: kitchen-sink
+          - os: macos-latest
+            manager: pnpm
+            example: kitchen-sink
+          - os: ubuntu-latest
+            manager: pnpm
+            example: with-svelte
+          - os: macos-latest
+            manager: pnpm
+            example: with-svelte
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -256,6 +272,8 @@ jobs:
 
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
@@ -270,6 +288,16 @@ jobs:
         with:
           command: check
           args: --workspace --all-targets
+
+      - name: Run cargo feature check for next-binding
+        run: |
+          # Known set of feature combinations we need to support
+          # next-swc/core
+          cargo check -p next-binding --features __swc_core_next_core,__swc_core_binding_napi_plugin,__swc_core_testing_transform,__swc_testing,__swc_transform_styled_components,__swc_transform_styled_jsx,__swc_transform_emotion,__swc_transform_modularize_imports
+          # next-swc/napi
+          cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__feature_next_dev_server,__feature_node_file_trace,__feature_mdx_rs
+          # next-swc/wasm
+          cargo check -p next-binding --features __swc_core_binding_wasm,__swc_core_binding_wasm_plugin,__feature_mdx_rs --target wasm32-unknown-unknown
 
   rust_lint:
     needs: [determine_jobs, rust_prepare]
@@ -353,7 +381,7 @@ jobs:
 
               if [[ -f "expected-clippy-warnings-raw" ]]; then
                 clippy_warnings_raw=$(cat clippy-warnings-raw)
-                diff clippy-warnings-raw clippy-warnings
+                diff clippy-warnings-raw expected-clippy-warnings-raw
               fi
               exit 1
             fi
@@ -433,8 +461,8 @@ jobs:
         working-directory: crates/turbopack/tests/node-file-trace
         run: pnpm install -r --side-effects-cache false
 
-      - name: Install tests dependencies in examples/basic
-        working-directory: examples/basic
+      - name: Install tests dependencies in examples/with-yarn
+        working-directory: examples/with-yarn
         run: npm install
 
       - name: Install nextest
@@ -772,6 +800,89 @@ jobs:
         with:
           commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})
 
+  next_js_integration:
+    needs: [determine_jobs, rust_prepare, rust_build_release]
+    if: needs.determine_jobs.outputs.rust == 'true'
+    name: Next.js integration test
+    runs-on: ubuntu-latest-8-core-oss
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [16, 18]
+        group: [1, 2]
+    env:
+      # Enabling backtract will makes snapshot tests fail
+      RUST_BACKTRACE: 0
+      NEXT_TELEMETRY_DISABLED: 1
+      NEXT_TEST_JOB: 1
+      __INTERNAL_CUSTOM_TURBOPACK_BINARY: ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev
+
+    steps:
+      # https://github.com/actions/virtual-environments/issues/1187
+      - name: tune linux network
+        run: sudo ethtool -K eth0 tx off rx off
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          repository: vercel/next.js
+          ref: v13.0.5-canary.5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2.2.4
+        with:
+          version: 7.3.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: pnpm
+
+      - name: Download binary
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Validate next-dev binary
+        run: |
+          chmod +x ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev
+          ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev --display-version
+
+      - name: Install dependencies
+        run: |
+          corepack disable
+          pnpm install
+          pnpm run build
+
+      - run: npm i -g playwright-chromium@1.22.2 && npx playwright install-deps
+        timeout-minutes: 15
+
+      - run: npx @replayio/playwright install chromium
+
+      - run: |
+          chmod +x ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev
+          node run-tests.js --type development --timings -g ${{ matrix.group }}/2
+        name: Run test/development
+        env:
+          RECORD_REPLAY_METADATA_TEST_RUN_TITLE: testDev / Group ${{ matrix.group }}
+
+      - run: |
+          chmod +x ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev
+          node run-tests.js --type e2e --timings -g ${{ matrix.group }}/3
+        name: Run test/e2e (dev)
+        env:
+          RECORD_REPLAY_METADATA_TEST_RUN_TITLE: testDevE2E / Group ${{ matrix.group }} / Node ${{ matrix.node }}
+          NEXT_TEST_MODE: dev
+          RECORD_REPLAY_TEST_METRICS: 1
+
+      - run: |
+          chmod +x ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev
+          xvfb-run node run-tests.js --timings -g ${{ matrix.group }}/20
+        name: Test Integration
+        env:
+          RECORD_REPLAY_METADATA_TEST_RUN_TITLE: testIntegration / Group ${{ matrix.group }}
+
   node_lint:
     name: Node.js linting
     runs-on: ubuntu-latest
@@ -795,6 +906,7 @@ jobs:
     needs:
       - determine_jobs
       - go_lint
+      - go_unit
       - go_examples
       - rust_prepare
       - rust_lint
@@ -820,51 +932,67 @@ jobs:
         run: |
           echo "The following steps have failed in CI" > comment.md
           echo >> comment.md
+
       - name: Determine Jobs failed
         if: always() && needs.determine_jobs.result != 'success' && needs.determine_jobs.result != 'skipped'
         run: |
           echo "- Determining jobs" >> failures.md
           exit 1
+
       - name: Go Linting failed
         if: always() && needs.go_lint.result != 'success' && needs.go_lint.result != 'skipped'
         run: |
           echo "- Go lints" >> failures.md
           exit 1
+
+      - name: Go Unit Tests failed
+        if: always() && needs.go_unit.result != 'success' && needs.go_unit.result != 'skipped'
+        run: |
+          echo "- Go Unit Tests" >> failures.md
+          exit 1
+
       - name: Go Examples failed
         if: always() && needs.go_examples.result != 'success' && needs.go_examples.result != 'skipped'
         run: |
           echo "- Go Examples" >> failures.md
           exit 1
+
       - name: Rust Check failed
         if: always() && needs.rust_prepare.result != 'success' && needs.rust_prepare.result != 'skipped'
         run: |
           echo "- Rust checks" >> failures.md
           exit 1
+
       - name: Rust Linting failed
         if: always() && needs.rust_lint.result != 'success' && needs.rust_lint.result != 'skipped'
         run: |
           echo "- Rust lints" >> failures.md
           exit 1
+
       - name: Rust Testing failed
         if: always() && needs.rust_test.result != 'success' && needs.rust_test.result != 'skipped'
         run: |
           echo "- Rust tests" >> failures.md
           exit 1
+
       - name: Rust Benchmark Testing failed
         if: always() && needs.rust_test_bench.result != 'success' && needs.rust_test_bench.result != 'skipped'
         run: |
           echo "- Rust benchmark tests" >> failures.md
           exit 1
+
       - name: Rust Release Build failed
         if: always() && needs.rust_build_release.result != 'success' && needs.rust_build_release.result != 'skipped'
         run: |
           echo "- Rust release build" >> failures.md
           exit 1
+
       - name: Rust benchmarks
         if: always() && needs.rust_bench_commit.result != 'success' && needs.rust_bench_commit.result != 'skipped'
         run: |
           echo "- Rust benchmarks" >> failures.md
           exit 1
+
       - name: Node.js Linting failed
         if: always() && needs.node_lint.result != 'success' && needs.node_lint.result != 'skipped'
         run: |
