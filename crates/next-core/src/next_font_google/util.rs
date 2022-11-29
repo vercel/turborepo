@@ -5,6 +5,8 @@ use indexmap::{indexset, IndexSet};
 
 use super::options::{FontData, FontWeights};
 
+const GOOGLE_FONTS_STYLESHEET_URL: &str = "https://fonts.googleapis.com/css2";
+
 #[derive(Debug, PartialEq)]
 pub(crate) struct FontAxes {
     pub(crate) wght: IndexSet<String>,
@@ -81,12 +83,15 @@ pub(crate) fn get_font_axes(
                 }
             }
 
-            let Some(weight_axis) = weight_axis else {
-                return Err(anyhow!("Expected wght axis to appear in font data for {}", font_family));
+            let wght = match weight_axis {
+                Some(weight_axis) => {
+                    indexset! {weight_axis}
+                }
+                None => indexset! {},
             };
 
             Ok(FontAxes {
-                wght: indexset! {weight_axis},
+                wght,
                 ital,
                 variable_axes: Some(variable_axes),
             })
@@ -108,26 +113,18 @@ pub(crate) fn get_stylesheet_url(
     // Variants are all combinations of weight and style, each variant will result
     // in a separate font file
     let mut variants: Vec<Vec<(&str, &str)>> = vec![];
-    for wght in &axes.wght {
-        if axes.ital.is_empty() {
-            let mut variant = vec![];
-            variant.push(("wght", &wght[..]));
-            if let Some(variable_axes) = &axes.variable_axes {
-                for (key, val) in variable_axes {
-                    variant.push((key, &val[..]));
-                }
+    if axes.wght.is_empty() {
+        let mut variant = vec![];
+        if let Some(variable_axes) = &axes.variable_axes {
+            for (key, val) in variable_axes {
+                variant.push((key.as_str(), &val[..]));
             }
-            variants.push(variant);
-        } else {
-            for ital in &axes.ital {
+        }
+        variants.push(variant);
+    } else {
+        for wght in &axes.wght {
+            if axes.ital.is_empty() {
                 let mut variant = vec![];
-                variant.push((
-                    "ital",
-                    match ital {
-                        FontItal::Normal => "0",
-                        FontItal::Italic => "1",
-                    },
-                ));
                 variant.push(("wght", &wght[..]));
                 if let Some(variable_axes) = &axes.variable_axes {
                     for (key, val) in variable_axes {
@@ -135,6 +132,24 @@ pub(crate) fn get_stylesheet_url(
                     }
                 }
                 variants.push(variant);
+            } else {
+                for ital in &axes.ital {
+                    let mut variant = vec![];
+                    variant.push((
+                        "ital",
+                        match ital {
+                            FontItal::Normal => "0",
+                            FontItal::Italic => "1",
+                        },
+                    ));
+                    variant.push(("wght", &wght[..]));
+                    if let Some(variable_axes) = &axes.variable_axes {
+                        for (key, val) in variable_axes {
+                            variant.push((key, &val[..]));
+                        }
+                    }
+                    variants.push(variant);
+                }
             }
         }
     }
@@ -157,8 +172,7 @@ pub(crate) fn get_stylesheet_url(
 
     let first_variant = variants
         .first()
-        .context("Requires at least one axis (e.g. wght)")?;
-
+        .context("Requires at least one font variant")?;
     // Always use the first variant's keys. There's an implicit invariant from the
     // code above that the keys across each variant are identical, and therefore
     // will be sorted identically across variants.
@@ -187,7 +201,8 @@ pub(crate) fn get_stylesheet_url(
     let variant_values_str = variant_values.join(";");
 
     Ok(format!(
-        "https://fonts.googleapis.com/css2?family={}:{}@{}&display={}",
+        "{}?family={}:{}@{}&display={}",
+        GOOGLE_FONTS_STYLESHEET_URL,
         font_family.replace(' ', "+"),
         variant_keys_str,
         variant_values_str,
@@ -310,6 +325,47 @@ mod tests {
     }
 
     #[test]
+    fn test_no_wght_axis() -> Result<()> {
+        let data: FontData = serde_json::from_str(
+            r#"
+            {
+                "Inter": {
+                    "weights": [
+                        "400",
+                        "variable"
+                    ],
+                    "styles": ["normal", "italic"],
+                    "axes": [
+                        {
+                            "tag": "slnt",
+                            "min": -10,
+                            "max": 0,
+                            "defaultValue": 0
+                        }
+                    ]
+                }
+            }
+  "#,
+        )?;
+
+        assert_eq!(
+            get_font_axes(
+                &data,
+                "Inter",
+                &FontWeights::Variable,
+                &indexset! {},
+                &Some(vec!["slnt".to_owned()]),
+            )?,
+            FontAxes {
+                wght: indexset! {},
+                ital: indexset! {},
+                variable_axes: Some(vec![("slnt".to_owned(), "-10..0".to_owned())])
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_stylesheet_url_no_axes() -> Result<()> {
         assert_eq!(
             get_stylesheet_url(
@@ -367,6 +423,27 @@ mod tests {
             )?,
             // Note ;-delimited sections for normal@300, normal@500, italic@300, italic@500
             "https://fonts.googleapis.com/css2?family=Roboto+Serif:ital,opsz,wdth,wght,GRAD@0,8..144,50..150,300,-50..100;0,8..144,50..150,500,-50..100;1,8..144,50..150,300,-50..100;1,8..144,50..150,500,-50..100&display=optional"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_variable_font_without_wgth_axis() -> Result<()> {
+        assert_eq!(
+            get_stylesheet_url(
+                "Nabla",
+                &FontAxes {
+                    wght: indexset! {},
+                    ital: indexset! {},
+                    variable_axes: Some(vec![
+                        ("EDPT".to_owned(), "0..200".to_owned()),
+                        ("EHLT".to_owned(), "0..24".to_owned()),
+                    ])
+                },
+                "optional"
+            )?,
+            "https://fonts.googleapis.com/css2?family=Nabla:EDPT,EHLT@0..200,0..24&display=optional"
         );
 
         Ok(())
