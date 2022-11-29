@@ -22,7 +22,7 @@ Clone the design system example locally or [from GitHub](https://github.com/verc
 ```bash
 npx degit vercel/turbo/examples/design-system design-system
 cd design-system
-yarn install
+pnpm install
 git init . && git add . && git commit -m "Init"
 ```
 

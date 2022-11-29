@@ -9,4 +9,8 @@ function error(...args: any[]) {
   console.error(TURBO_IGNORE_PREFIX, ...args);
 }
 
-export { info, error };
+function warn(...args: any[]) {
+  console.warn(TURBO_IGNORE_PREFIX, ...args);
+}
+
+export { info, warn, error };

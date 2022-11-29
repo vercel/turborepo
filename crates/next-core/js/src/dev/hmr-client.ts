@@ -13,7 +13,12 @@ import type {
 
 import stripAnsi from "@vercel/turbopack-next/compiled/strip-ansi";
 
-import { onBuildOk, onRefresh, onTurbopackError } from "../overlay/client";
+import {
+  onBeforeRefresh,
+  onBuildOk,
+  onRefresh,
+  onTurbopackIssues,
+} from "../overlay/client";
 import { addEventListener, sendMessage } from "./websocket";
 import { ModuleId } from "@vercel/turbopack-runtime/types";
 import { HmrUpdateEntry } from "@vercel/turbopack-runtime/types/protocol";
@@ -90,18 +95,18 @@ type AggregatedUpdates = {
 };
 
 // we aggregate all updates until the issues are resolved
-const chunksWithErrors: Map<ChunkPath, AggregatedUpdates> = new Map();
+const chunksWithUpdates: Map<ChunkPath, AggregatedUpdates> = new Map();
 
 function aggregateUpdates(
   msg: ServerMessage,
-  hasErrors: boolean
+  hasIssues: boolean
 ): ServerMessage {
   const key = resourceKey(msg.resource);
-  const aggregated = chunksWithErrors.get(key);
+  const aggregated = chunksWithUpdates.get(key);
 
   if (msg.type === "issues" && aggregated != null) {
-    if (!hasErrors) {
-      chunksWithErrors.delete(key);
+    if (!hasIssues) {
+      chunksWithUpdates.delete(key);
     }
 
     return {
@@ -119,8 +124,8 @@ function aggregateUpdates(
   if (msg.type !== "partial") return msg;
 
   if (aggregated == null) {
-    if (hasErrors) {
-      chunksWithErrors.set(key, {
+    if (hasIssues) {
+      chunksWithUpdates.set(key, {
         added: msg.instruction.added,
         modified: msg.instruction.modified,
         deleted: new Set(msg.instruction.deleted),
@@ -167,10 +172,10 @@ function aggregateUpdates(
     aggregated.deleted.add(moduleId);
   }
 
-  if (!hasErrors) {
-    chunksWithErrors.delete(key);
+  if (!hasIssues) {
+    chunksWithUpdates.delete(key);
   } else {
-    chunksWithErrors.set(key, aggregated);
+    chunksWithUpdates.set(key, aggregated);
   }
 
   return {
@@ -193,21 +198,20 @@ function compareByList(list: any[], a: any, b: any) {
 }
 
 function handleIssues(msg: ServerMessage): boolean {
-  let issueToReport = null;
+  let hasCriticalIssues = false;
 
   for (const issue of msg.issues) {
     if (CRITICAL.includes(issue.severity)) {
-      issueToReport = issue;
-      break;
+      console.error(stripAnsi(issue.formatted));
+      hasCriticalIssues = true;
     }
   }
 
-  if (issueToReport) {
-    console.error(stripAnsi(issueToReport.formatted));
-    onTurbopackError(issueToReport);
+  if (msg.issues.length > 0) {
+    onTurbopackIssues(msg.issues);
   }
 
-  return issueToReport != null;
+  return hasCriticalIssues;
 }
 
 const SEVERITY_ORDER = ["bug", "fatal", "error", "warning", "info", "log"];
@@ -227,20 +231,21 @@ function handleSocketMessage(msg: ServerMessage) {
     return compareByList(CATEGORY_ORDER, a.category, b.category);
   });
 
-  const hasErrors = handleIssues(msg);
-  const aggregatedMsg = aggregateUpdates(msg, hasErrors);
+  const hasIssues = handleIssues(msg);
+  const aggregatedMsg = aggregateUpdates(msg, hasIssues);
 
-  if (hasErrors) return;
-
-  if (chunksWithErrors.size === 0) {
-    onBuildOk();
-  }
+  if (hasIssues) return;
 
   if (aggregatedMsg.type !== "issues") {
+    onBeforeRefresh();
     triggerUpdate(aggregatedMsg);
-    if (chunksWithErrors.size === 0) {
+    if (chunksWithUpdates.size === 0) {
       onRefresh();
     }
+  }
+
+  if (chunksWithUpdates.size === 0) {
+    onBuildOk();
   }
 }
 
