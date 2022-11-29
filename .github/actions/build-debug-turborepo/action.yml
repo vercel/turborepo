@@ -30,9 +30,9 @@ runs:
         cd ..
     - name: Strip Turborepo binary
       shell: bash
-      run: strip shim/turbo.exe
+      run: strip cli/shim/turbo.exe
       if: ${{ inputs.target == 'windows' }}
     - name: Strip Turborepo binary
       shell: bash
-      run: strip shim/turbo
+      run: strip cli/shim/turbo
       if: ${{ inputs.target != 'windows' }}
