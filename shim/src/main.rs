@@ -877,7 +877,7 @@ mod test {
     #[test]
     fn test_parse_prune() {
         let default_prune = Command::Prune {
-            scope: None,
+            scope: Vec::new(),
             docker: false,
             output_dir: "out".to_string(),
         };
@@ -906,7 +906,7 @@ mod test {
             Args::try_parse_from(["turbo", "prune", "--scope", "bar"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
-                    scope: Some("bar".to_string()),
+                    scope: vec!["bar".to_string()],
                     docker: false,
                     output_dir: "out".to_string(),
                 }),
@@ -918,7 +918,7 @@ mod test {
             Args::try_parse_from(["turbo", "prune", "--docker"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
-                    scope: None,
+                    scope: Vec::new(),
                     docker: true,
                     output_dir: "out".to_string(),
                 }),
@@ -930,7 +930,7 @@ mod test {
             Args::try_parse_from(["turbo", "prune", "--out-dir", "dist"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
-                    scope: None,
+                    scope: Vec::new(),
                     docker: false,
                     output_dir: "dist".to_string(),
                 }),
@@ -944,7 +944,7 @@ mod test {
             global_args: vec![],
             expected_output: Args {
                 command: Some(Command::Prune {
-                    scope: None,
+                    scope: Vec::new(),
                     docker: true,
                     output_dir: "dist".to_string(),
                 }),
@@ -959,7 +959,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Prune {
-                    scope: None,
+                    scope: Vec::new(),
                     docker: true,
                     output_dir: "dist".to_string(),
                 }),
@@ -979,7 +979,7 @@ mod test {
             global_args: vec![],
             expected_output: Args {
                 command: Some(Command::Prune {
-                    scope: Some("foo".to_string()),
+                    scope: vec!["foo".to_string()],
                     docker: true,
                     output_dir: "dist".to_string(),
                 }),
