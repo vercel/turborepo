@@ -2,10 +2,16 @@ use std::cmp::Ordering;
 
 use anyhow::{anyhow, Context, Result};
 use indexmap::{indexset, IndexSet};
+use once_cell::sync::Lazy;
+use regex::Regex;
 
 use super::options::{FontData, FontWeights};
 
 const GOOGLE_FONTS_STYLESHEET_URL: &str = "https://fonts.googleapis.com/css2";
+static SINGLE_LINE_BLOCK_COMMENT_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"/\* (.+?) \*/").unwrap());
+static GOOGLE_FONT_FILE_URL_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"src: url\((.+?)\)").unwrap());
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct FontAxes {
@@ -210,15 +216,64 @@ pub(crate) fn get_stylesheet_url(
     ))
 }
 
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub(crate) struct FontResource {
+    pub(crate) url: String,
+    pub(crate) should_preload: bool,
+}
+
+// Derived from https://github.com/vercel/next.js/blob/b0aa73b4cf23cb77bd492cfed7624d5cfbbd4990/packages/font/src/google/loader.ts#L114
+pub(crate) fn extract_font_urls(
+    stylesheet: &str,
+    subsets: &[&str],
+    should_preload: bool,
+) -> Result<Vec<FontResource>> {
+    let mut declarations: Vec<FontResource> = vec![];
+    let mut current_subset = None;
+    for line in stylesheet.split('\n') {
+        let new_subset = SINGLE_LINE_BLOCK_COMMENT_RE
+            .captures(line)
+            .and_then(|captures| captures.get(1))
+            .map(|m| m.as_str());
+
+        match new_subset {
+            Some(subset) => {
+                current_subset = Some(subset);
+            }
+            None => {
+                let font_url = GOOGLE_FONT_FILE_URL_RE
+                    .captures(line)
+                    .and_then(|captures| captures.get(1))
+                    .map(|m| m.as_str());
+
+                if let Some(url) = font_url {
+                    if !declarations.iter().any(|d| d.url == url) {
+                        declarations.push(FontResource {
+                            url: url.to_owned(),
+                            should_preload: should_preload
+                                && subsets.contains(&current_subset.context(
+                                    "Invariant: subset should be set by preceeding comment at \
+                                     this point",
+                                )?),
+                        })
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(declarations)
+}
+
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
     use indexmap::indexset;
 
-    use super::get_font_axes;
+    use super::{extract_font_urls, get_font_axes};
     use crate::next_font_google::{
         options::{FontData, FontWeights},
-        util::{get_stylesheet_url, FontAxes, FontItal},
+        util::{get_stylesheet_url, FontAxes, FontItal, FontResource},
     };
 
     #[test]
@@ -444,6 +499,49 @@ mod tests {
                 "optional"
             )?,
             "https://fonts.googleapis.com/css2?family=Nabla:EDPT,EHLT@0..200,0..24&display=optional"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_extract_font_urls_preloads_subsets() -> Result<()> {
+        assert_eq!(
+            extract_font_urls(
+                r#"/* latin-ext */
+@font-face {
+  font-family: 'Roboto Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: optional;
+  src: url(https://fonts.gstatic.com/s/robotoserif/v8/R71RjywflP6FLr3gZx7K8UyuXDs9zVwDmXCb8lxYgmuii32UGoVldX6UgfjL4-3sMM_kB_qXSEXTJQCFLH5-_bcEliotl658ANxaV4jcFyRM.woff2) format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Roboto Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: optional;
+  src: url(https://fonts.gstatic.com/s/robotoserif/v8/R71RjywflP6FLr3gZx7K8UyuXDs9zVwDmXCb8lxYgmuii32UGoVldX6UgfjL4-3sMM_kB_qXSEXTJQCFLH5-_bcEliotl6B8ANxaV4jcFw.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+"#,
+                &["latin"],
+                true
+            )?,
+            vec![
+                FontResource {
+                    url:"https://fonts.gstatic.com/s/robotoserif/v8/R71RjywflP6FLr3gZx7K8UyuXDs9zVwDmXCb8lxYgmuii32UGoVldX6UgfjL4-3sMM_kB_qXSEXTJQCFLH5-_bcEliotl658ANxaV4jcFyRM.woff2".to_owned(),
+                    should_preload: false
+                },
+                FontResource {
+                    url:"https://fonts.gstatic.com/s/robotoserif/v8/R71RjywflP6FLr3gZx7K8UyuXDs9zVwDmXCb8lxYgmuii32UGoVldX6UgfjL4-3sMM_kB_qXSEXTJQCFLH5-_bcEliotl6B8ANxaV4jcFw.woff2".to_owned(),
+                    should_preload: true
+                }
+            ]
         );
 
         Ok(())
