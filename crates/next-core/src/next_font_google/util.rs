@@ -225,8 +225,8 @@ pub(crate) struct FontResource {
 // Derived from https://github.com/vercel/next.js/blob/b0aa73b4cf23cb77bd492cfed7624d5cfbbd4990/packages/font/src/google/loader.ts#L114
 pub(crate) fn extract_font_urls(
     stylesheet: &str,
-    subsets: &[&str],
-    should_preload: bool,
+    subsets: Option<&Vec<String>>,
+    should_preload_subsets: bool,
 ) -> Result<Vec<FontResource>> {
     let mut declarations: Vec<FontResource> = vec![];
     let mut current_subset = None;
@@ -248,13 +248,24 @@ pub(crate) fn extract_font_urls(
 
                 if let Some(url) = font_url {
                     if !declarations.iter().any(|d| d.url == url) {
+                        let should_preload = match subsets {
+                            Some(subsets) => {
+                                should_preload_subsets
+                                    && subsets.contains(
+                                        &current_subset
+                                            .context(
+                                                "Invariant: subset should be set by preceeding \
+                                                 comment at this point",
+                                            )?
+                                            .to_owned(),
+                                    )
+                            }
+                            None => false,
+                        };
+
                         declarations.push(FontResource {
                             url: url.to_owned(),
-                            should_preload: should_preload
-                                && subsets.contains(&current_subset.context(
-                                    "Invariant: subset should be set by preceeding comment at \
-                                     this point",
-                                )?),
+                            should_preload,
                         })
                     }
                 }

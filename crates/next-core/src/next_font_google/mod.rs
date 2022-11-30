@@ -1,5 +1,10 @@
 use anyhow::{anyhow, Context, Result};
 use indexmap::IndexMap;
+use turbo_tasks::{
+    primitives::{OptionStringVc, StringVc},
+    TryJoinIterExt,
+};
+use turbo_tasks_fetch::fetch;
 use turbo_tasks_fs::{FileContent, FileSystemPathVc};
 use turbopack_core::{
     resolve::{
@@ -18,7 +23,7 @@ use crate::{
     next_font_google::{
         options::{options_from_request, FontDataEntry},
         request::NextFontRequest,
-        util::{get_font_axes, get_stylesheet_url},
+        util::{extract_font_urls, get_font_axes, get_stylesheet_url},
     },
 };
 
@@ -150,6 +155,31 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
             )?;
 
             println!("url is {}", url);
+            let res = fetch(
+                StringVc::cell(url),
+                OptionStringVc::cell(Some(
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, \
+                     like Gecko) Chrome/104.0.0.0 Safari/537.36"
+                        .to_owned(),
+                )),
+            );
+            let font_urls = extract_font_urls(
+                &res.await?.body.to_string().await?,
+                options.subsets.as_ref(),
+                options.preload,
+            )?;
+
+            let mut requests = vec![];
+            for font_url in &font_urls {
+                requests.push(fetch(
+                    StringVc::cell(font_url.url.to_owned()),
+                    OptionStringVc::cell(None),
+                ));
+            }
+
+            for response in requests.iter().try_join().await? {
+                println!("received response with status {}", response.status);
+            }
 
             let css_asset = VirtualAssetVc::new(
                 attached_next_js_package_path(self.project_path)
