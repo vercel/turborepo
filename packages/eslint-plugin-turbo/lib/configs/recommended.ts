@@ -7,7 +7,7 @@ const envVars = getEnvVarDependencies({
 });
 const settings = {
   turbo: {
-    envVars: envVars ? [...envVars] : [],
+    envVars: envVars ? [...envVars].sort() : [],
   },
 };
 
