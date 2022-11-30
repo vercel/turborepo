@@ -4,7 +4,6 @@ import type { Issue } from "@vercel/turbopack-runtime/types/protocol";
 
 import * as Bus from "./bus";
 import { ShadowPortal } from "./components/ShadowPortal";
-import { BuildError } from "./container/BuildError";
 import { Errors, SupportedErrorEvent } from "./container/Errors";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { Base } from "./styles/Base";
@@ -25,7 +24,11 @@ type RefreshState =
 
 type OverlayState = {
   nextId: number;
-  issue: Issue | null;
+
+  // issues are from turbopack
+  issues: Issue[];
+
+  // errors are client side
   errors: SupportedErrorEvent[];
 
   refreshState: RefreshState;
@@ -47,10 +50,10 @@ function pushErrorFilterDuplicates(
 function reducer(state: OverlayState, ev: Bus.BusEvent): OverlayState {
   switch (ev.type) {
     case Bus.TYPE_BUILD_OK: {
-      return { ...state, issue: null };
+      return { ...state, issues: [] };
     }
-    case Bus.TYPE_TURBOPACK_ERROR: {
-      return { ...state, issue: ev.issue };
+    case Bus.TYPE_TURBOPACK_ISSUES: {
+      return { ...state, issues: ev.issues };
     }
     case Bus.TYPE_BEFORE_REFRESH: {
       return { ...state, refreshState: { type: "pending", errors: [] } };
@@ -58,7 +61,7 @@ function reducer(state: OverlayState, ev: Bus.BusEvent): OverlayState {
     case Bus.TYPE_REFRESH: {
       return {
         ...state,
-        issue: null,
+        issues: [],
         errors:
           // Errors can come in during updates. In this case, UNHANDLED_ERROR
           // and UNHANDLED_REJECTION events might be dispatched between the
@@ -126,71 +129,67 @@ type ReactDevOverlayProps = {
   children?: React.ReactNode;
 };
 
-const ReactDevOverlay: React.FunctionComponent<ReactDevOverlayProps> =
-  function ReactDevOverlay({ children, preventDisplay, globalOverlay }) {
-    const [state, dispatch] = React.useReducer<
-      React.Reducer<OverlayState, Bus.BusEvent>
-    >(reducer, {
-      nextId: 1,
-      issue: null,
-      errors: [],
-      refreshState: {
-        type: "idle",
-      },
-    });
+export default function ReactDevOverlay({
+  children,
+  preventDisplay,
+  globalOverlay,
+}: ReactDevOverlayProps) {
+  const [state, dispatch] = React.useReducer<
+    React.Reducer<OverlayState, Bus.BusEvent>
+  >(reducer, {
+    nextId: 1,
+    issues: [],
+    errors: [],
+    refreshState: {
+      type: "idle",
+    },
+  });
 
-    React.useEffect(() => {
-      Bus.on(dispatch);
-      return function () {
-        Bus.off(dispatch);
-      };
-    }, [dispatch]);
+  React.useEffect(() => {
+    Bus.on(dispatch);
+    return function () {
+      Bus.off(dispatch);
+    };
+  }, [dispatch]);
 
-    const onComponentError = React.useCallback(
-      (_error: Error, _componentStack: string | null) => {
-        // TODO: special handling
-      },
-      []
-    );
+  const onComponentError = React.useCallback(
+    (_error: Error, _componentStack: string | null) => {
+      // TODO: special handling
+    },
+    []
+  );
 
-    const hasBuildError = state.issue != null;
-    const hasRuntimeErrors = Boolean(state.errors.length);
+  const hasBuildError = state.issues.length > 0;
+  const hasRuntimeErrors = state.errors.length > 0;
 
-    const errorType = hasBuildError
-      ? "build"
-      : hasRuntimeErrors
-      ? "runtime"
-      : null;
+  const errorType = hasBuildError
+    ? "build"
+    : hasRuntimeErrors
+    ? "runtime"
+    : null;
 
-    const isMounted = hasBuildError || hasRuntimeErrors;
+  const isMounted = hasBuildError || hasRuntimeErrors;
 
-    return (
-      <React.Fragment>
-        <ErrorBoundary
-          globalOverlay={globalOverlay}
-          isMounted={isMounted}
-          onError={onComponentError}
-        >
-          {children ?? null}
-        </ErrorBoundary>
-        {isMounted ? (
-          <ShadowPortal globalOverlay={globalOverlay}>
-            <CssReset />
-            <Base />
-            <ComponentStyles />
+  return (
+    <React.Fragment>
+      <ErrorBoundary
+        globalOverlay={globalOverlay}
+        isMounted={isMounted}
+        onError={onComponentError}
+      >
+        {children ?? null}
+      </ErrorBoundary>
+      {isMounted ? (
+        <ShadowPortal globalOverlay={globalOverlay}>
+          <CssReset />
+          <Base />
+          <ComponentStyles />
 
-            {shouldPreventDisplay(
-              errorType,
-              preventDisplay
-            ) ? null : hasBuildError ? (
-              <BuildError issue={state.issue!} />
-            ) : hasRuntimeErrors ? (
-              <Errors errors={state.errors} />
-            ) : undefined}
-          </ShadowPortal>
-        ) : undefined}
-      </React.Fragment>
-    );
-  };
-
-export default ReactDevOverlay;
+          {shouldPreventDisplay(errorType, preventDisplay) ? null : (
+            <Errors issues={state.issues} errors={state.errors} />
+          )}
+        </ShadowPortal>
+      ) : null}
+    </React.Fragment>
+  );
+}
