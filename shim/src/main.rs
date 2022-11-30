@@ -303,6 +303,16 @@ fn get_version() -> &'static str {
         .0
 }
 
+/// Checks for `TURBO_BINARY_PATH` variable. If it is set,
+/// we do not do any inference, we simply run the command as
+/// the current binary. This is due to legacy behavior of `TURBO_BINARY_PATH`
+/// that lets users dynamically set the path of the turbo binary. Because
+/// inference involves finding a local turbo installation and executing that
+/// binary, these two features are fundamentally incompatible.
+fn is_turbo_binary_path_set() -> bool {
+    env::var("TURBO_BINARY_PATH").is_ok()
+}
+
 fn main() -> Result<()> {
     let mut clap_args = Args::new()?;
 
@@ -327,7 +337,8 @@ fn main() -> Result<()> {
             | Some(Command::Link { .. })
             | Some(Command::Logout { .. })
             | Some(Command::Unlink { .. })
-    ) {
+    ) || is_turbo_binary_path_set()
+    {
         let serialized_state = turbo_state.try_into()?;
         let exit_code = unsafe { nativeRunWithTurboState(serialized_state) };
         process::exit(exit_code.try_into()?);
