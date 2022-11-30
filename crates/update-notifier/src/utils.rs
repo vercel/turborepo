@@ -11,8 +11,6 @@ pub fn ms_since_epoch() -> u128 {
 }
 
 pub fn get_version() -> &'static str {
-    // TODO: this should probably be passed in?
-
     log::debug!("fetching current version");
     include_str!("../../../version.txt")
         .split_once('\n')

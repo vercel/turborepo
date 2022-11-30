@@ -12,31 +12,22 @@ struct NpmVersionData {
 
 const REGISTRY_URL: &str = "https://registry.npmjs.org";
 const DEFAULT_TAG: &str = "latest";
-const TIMEOUT: Duration = Duration::from_millis(800);
+const DEFAULT_TIMEOUT: Duration = Duration::from_millis(800);
 
 pub async fn get_latest_version(
     package: &str,
     tag: Option<&str>,
     timeout: Option<Duration>,
 ) -> Result<String, UpdateNotifierError> {
-    log::debug!("fetching latest version");
-    let tag = tag.unwrap_or_else(|| DEFAULT_TAG);
-    let timeout = timeout.unwrap_or_else(|| TIMEOUT);
+    let tag = tag.unwrap_or(DEFAULT_TAG);
+    let timeout = timeout.unwrap_or(DEFAULT_TIMEOUT);
     let client: Client = reqwest::Client::new();
     let url = format!("{}/{}/{}", REGISTRY_URL, package, tag);
+
+    // send request
     log::debug!("fetching {:?}", url);
-    let resp = client.get(url).timeout(timeout).send().await;
-    match resp {
-        Ok(r) => {
-            let json_result = r.json::<NpmVersionData>().await;
-            match json_result {
-                Ok(v) => Ok(v.version.to_string()),
-                Err(err) => Err(UpdateNotifierError::FetchError(err)),
-            }
-        }
-        Err(err) => {
-            log::error!("failed to fetch latest version {:?}", err);
-            Err(UpdateNotifierError::FetchError(err))
-        }
-    }
+    let resp = client.get(url).timeout(timeout).send().await?;
+
+    let json_result = resp.json::<NpmVersionData>().await?;
+    Ok(json_result.version)
 }

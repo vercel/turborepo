@@ -13,7 +13,7 @@ mod ui;
 mod utils;
 
 // default interval to check for new updates (one per day)
-const INTERVAL: Duration = Duration::from_secs(60 * 60 * 24);
+const DEFAULT_INTERVAL: Duration = Duration::from_secs(60 * 60 * 24);
 
 #[derive(Debug)]
 pub struct UpdateNotifier {
@@ -39,9 +39,52 @@ pub enum UpdateNotifierError {
     ParseError(#[from] SemVerError),
     #[error("Failed to parse JSON")]
     JsonError(#[from] SerdeError),
+    #[error("Failed to write to terminal")]
+    DisplayLengthError(#[from] ui::utils::GetDisplayLengthError),
+    #[error("Unknown Error")]
+    Internal(),
 }
 
 impl UpdateNotifier {
+    pub fn new(package: String, tag: Option<String>, interval: Option<Duration>) -> Self {
+        let tmp = utils::get_config_path();
+
+        // ignore if it doesn't exist, we don't care
+        if tmp.try_exists().unwrap_or(false) {
+            let file = std::fs::File::open(tmp);
+            let file = match file {
+                Ok(f) => f,
+                Err(_) => {
+                    log::debug!("failed to read local config, writing first version");
+                    return Self::first_run(package, tag, interval);
+                }
+            };
+            let reader = std::io::BufReader::new(file);
+            let json_result: Result<UpdateNotifierConfig, SerdeError> =
+                serde_json::from_reader(reader);
+            match json_result {
+                Ok(v) => {
+                    log::debug!("found local version config {:?}", v);
+                    Self {
+                        config: UpdateNotifierConfig {
+                            current_version: utils::get_version().to_string(),
+                            ..v
+                        },
+                        package,
+                        tag,
+                        interval: interval.unwrap_or(DEFAULT_INTERVAL),
+                    }
+                }
+                Err(_) => {
+                    log::debug!("failed to find version config");
+                    Self::first_run(package, tag, interval)
+                }
+            }
+        } else {
+            Self::first_run(package, tag, interval)
+        }
+    }
+
     fn should_refresh(&self) -> bool {
         if self.config.latest_version.is_none() {
             log::debug!("no latest version found in local config");
@@ -66,7 +109,7 @@ impl UpdateNotifier {
         }
     }
 
-    fn update_message(&self) {
+    fn update_message(&self) -> Result<(), UpdateNotifierError> {
         let turbo = "@turborepo";
         let turbo_gradient = turbo.gradient([RGB::new(0, 153, 247), RGB::new(241, 23, 18)]);
 
@@ -74,20 +117,21 @@ impl UpdateNotifier {
             Some(v) => v,
             None => {
                 log::error!("no latest version found in local config");
-                return;
+                return Err(UpdateNotifierError::Internal());
             }
         };
 
         let msg = format!(
             "
             Update available {} ≫ {}
-            Changelog: https://github.com/vercel/turbo/releases/tag/v{}Run \
-             \"{}\" to update
+            Changelog: {}/releases/tag/v{}
+            Run \"{}\" to update
 
             Follow {} for updates: {}
             ",
             &self.config.current_version.dimmed(),
             &latest_version.green().bold(),
+            "https://github.com/vercel/turbo",
             &latest_version,
             // TODO: make this package manager aware
             "npm i -g turbo".cyan().bold(),
@@ -95,7 +139,7 @@ impl UpdateNotifier {
             "https://twitter.com/turborepo",
         );
 
-        ui::rectangle(&msg);
+        ui::message(&msg)
     }
 
     fn first_run(package: String, tag: Option<String>, interval: Option<Duration>) -> Self {
@@ -106,48 +150,9 @@ impl UpdateNotifier {
                 latest_version: None,
                 last_checked: None,
             },
-            interval: interval.unwrap_or(INTERVAL),
+            interval: interval.unwrap_or(DEFAULT_INTERVAL),
             package,
             tag,
-        }
-    }
-
-    pub fn new(package: String, tag: Option<String>, interval: Option<Duration>) -> Self {
-        let tmp = utils::get_config_path();
-
-        // ignore if it doesn't exist, we don't care
-        if tmp.try_exists().unwrap_or(false) {
-            let file = std::fs::File::open(tmp);
-            let file = match file {
-                Ok(f) => f,
-                Err(_) => {
-                    log::debug!("failed to open local config, writing first version");
-                    return Self::first_run(package, tag, interval);
-                }
-            };
-            let reader = std::io::BufReader::new(file);
-            let json_result: Result<UpdateNotifierConfig, SerdeError> =
-                serde_json::from_reader(reader);
-            match json_result {
-                Ok(v) => {
-                    log::debug!("found local version config {:?}", v);
-                    Self {
-                        config: UpdateNotifierConfig {
-                            current_version: utils::get_version().to_string(),
-                            ..v
-                        },
-                        package,
-                        tag,
-                        interval: interval.unwrap_or(INTERVAL),
-                    }
-                }
-                Err(_) => {
-                    log::debug!("failed to find version config");
-                    Self::first_run(package, tag, interval)
-                }
-            }
-        } else {
-            Self::first_run(package, tag, interval)
         }
     }
 
@@ -173,15 +178,7 @@ impl UpdateNotifier {
     #[tokio::main]
     async fn update(&mut self) -> Result<(), UpdateNotifierError> {
         let latest_version =
-            fetch::get_latest_version(&self.package, self.tag.as_deref(), None).await;
-        let latest_version = match latest_version {
-            Ok(v) => v,
-            Err(err) => {
-                log::debug!("failed to fetch latest version {:?}", err);
-                return Err(err);
-            }
-        };
-
+            fetch::get_latest_version(&self.package, self.tag.as_deref(), None).await?;
         let current_version = String::from(utils::get_version());
         let now = utils::ms_since_epoch();
 
@@ -192,7 +189,7 @@ impl UpdateNotifier {
 
         // persist
         self.save();
-        return Ok(());
+        Ok(())
     }
 
     pub fn check(&mut self) -> Result<(), UpdateNotifierError> {
@@ -207,13 +204,13 @@ impl UpdateNotifier {
             log::debug!("checking if {} > {}", latest_version, current_version);
             if latest_version > current_version {
                 log::debug!("update available");
-                self.update_message();
+                self.update_message()?;
                 return Ok(());
             } else {
                 log::debug!("no update available");
                 return Ok(());
             }
         }
-        return Ok(());
+        Ok(())
     }
 }

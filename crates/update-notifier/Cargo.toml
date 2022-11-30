@@ -2,14 +2,12 @@
 name = "update-notifier"
 version = "0.1.0"
 edition = "2021"
-description = "Output update notification to the console when new version on npm package is available"
+description = "Display update notification when new version of npm package is available"
 license = "MPL-2.0"
 publish = false
 
-
 [dependencies]
 colored            = "2.0"
-env_logger         = "0.10"
 log                = "0.4"
 reqwest            = { version = "0.11", features = ["json"] }
 semver             = "1.0"

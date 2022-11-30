@@ -447,9 +447,10 @@ fn get_version() -> &'static str {
 }
 
 fn main() -> Result<()> {
-    let mut updater =
-        UpdateNotifier::new(String::from("turbo"), Some(String::from("latest")), None);
-    updater.check();
+    // check for updates
+    let mut updater = UpdateNotifier::new("turbo".to_string(), Some("latest".to_string()), None);
+    // ignore error if update check fails
+    updater.check().ok();
 
     let clap_args = Args::parse();
     // --help doesn't work with ignore_errors in clap.
