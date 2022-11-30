@@ -7,6 +7,7 @@ only when:
 
 1. The examples themselves have changed
 2. The turbo version has changed
+3. We force a build on vercel
 
 We recommend using `npx turbo-ignore` in your own projects.
 
@@ -24,6 +25,11 @@ const abortBuild = () => process.exit(ABORT_BUILD_CODE);
 const example = process.argv[2];
 
 const ignoreCheck = () => {
+  if (process.env.TURBO_FORCE === "true") {
+    console.log("\u226B `TURBO_FORCE` detected");
+    continueBuild();
+  }
+
   // no app name (directory) was passed in via args
   if (!example) {
     console.log(
