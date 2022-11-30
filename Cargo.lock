@@ -678,6 +678,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap_complete"
+version = "4.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7b3c9eae0de7bf8e3f904a5e40612b21fb2e2e566456d177809a48b892d24da"
+dependencies = [
+ "clap 4.0.22",
+]
+
+[[package]]
 name = "clap_derive"
 version = "4.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6224,6 +6233,7 @@ dependencies = [
  "bindgen",
  "build-target",
  "clap 4.0.22",
+ "clap_complete",
  "globset",
  "itertools",
  "predicates",

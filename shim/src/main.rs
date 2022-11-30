@@ -6,20 +6,21 @@ use std::{
     env,
     env::current_exe,
     ffi::CString,
-    fs,
+    fs, io,
     mem::take,
-    os::raw::{c_char, c_int},
     path::{Path, PathBuf},
     process,
     process::Stdio,
 };
 
 use anyhow::{anyhow, Result};
+use clap::CommandFactory;
+use clap_complete::generate;
 use serde::Serialize;
 
 use crate::{
     commands::{Args, Command, RunArgs},
-    ffi::{nativeRunWithArgs, nativeRunWithTurboState, GoString},
+    ffi::{nativeRunWithTurboState, GoString},
     package_manager::PackageManager,
 };
 
@@ -87,7 +88,8 @@ impl TurboState {
             Some(Command::Link { .. })
             | Some(Command::Login { .. })
             | Some(Command::Logout { .. })
-            | Some(Command::Unlink { .. }) => {
+            | Some(Command::Unlink { .. })
+            | Some(Command::Completion { .. }) => {
                 unreachable!()
             }
             Some(Command::Daemon { .. })
@@ -96,24 +98,6 @@ impl TurboState {
             | None => {
                 let serialized_state = self.try_into()?;
                 let exit_code = unsafe { nativeRunWithTurboState(serialized_state) };
-                Ok(exit_code.try_into()?)
-            }
-            Some(Command::Completion {}) => {
-                let mut args = env::args()
-                    .skip(1)
-                    .map(|s| {
-                        let c_string = CString::new(s.as_str())?;
-                        Ok(c_string.into_raw())
-                    })
-                    .collect::<Result<Vec<*mut c_char>>>()?;
-
-                // With vectors there is a possibility of over-allocating, whether
-                // from the allocator itself or the Vec implementation.
-                // Therefore we shrink the vector to just the length we need.
-                args.shrink_to_fit();
-                let argc: c_int = args.len() as c_int;
-                let argv = args.as_mut_ptr();
-                let exit_code = unsafe { nativeRunWithArgs(argc, argv) };
                 Ok(exit_code.try_into()?)
             }
         }
@@ -331,24 +315,32 @@ fn main() -> Result<()> {
 
     // We run this *before* doing any inference because login/logout/link/unlink
     // should work regardless of whether or not we're in a monorepo.
-    if matches!(
-        turbo_state.parsed_args.command,
+    let exit_code = match turbo_state.parsed_args.command {
         Some(Command::Login { .. })
-            | Some(Command::Link { .. })
-            | Some(Command::Logout { .. })
-            | Some(Command::Unlink { .. })
-    ) || is_turbo_binary_path_set()
-    {
-        let serialized_state = turbo_state.try_into()?;
-        let exit_code = unsafe { nativeRunWithTurboState(serialized_state) };
-        process::exit(exit_code.try_into()?);
-    }
+        | Some(Command::Link { .. })
+        | Some(Command::Logout { .. })
+        | Some(Command::Unlink { .. })
+            if is_turbo_binary_path_set() =>
+        {
+            let serialized_state = turbo_state.try_into()?;
+            let exit_code = unsafe { nativeRunWithTurboState(serialized_state) };
+            exit_code.try_into()?
+        }
+        Some(Command::Completion { shell }) => {
+            generate(shell, &mut Args::command(), "turbo", &mut io::stdout());
 
-    let exit_code = match turbo_state.run_correct_turbo(&current_dir) {
-        Ok(exit_code) => exit_code,
-        Err(e) => {
-            eprintln!("failed: {:?}", e);
-            2
+            0
+        }
+        _ => {
+            let exit_code = match turbo_state.run_correct_turbo(&current_dir) {
+                Ok(exit_code) => exit_code,
+                Err(e) => {
+                    eprintln!("failed: {:?}", e);
+                    2
+                }
+            };
+
+            exit_code
         }
     };
 

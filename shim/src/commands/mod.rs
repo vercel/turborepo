@@ -4,6 +4,7 @@ use std::{env, process};
 
 use anyhow::Result;
 use clap::{ArgAction, Parser, Subcommand, ValueEnum};
+use clap_complete::Shell;
 use serde::Serialize;
 
 use crate::get_version;
@@ -133,7 +134,8 @@ pub enum Command {
     /// Get the path to the Turbo binary
     Bin {},
     /// Generate the autocompletion script for the specified shell
-    Completion {},
+    #[serde(skip)]
+    Completion { shell: Shell },
     /// Runs the Turborepo background daemon
     Daemon {
         /// Set the idle timeout for turbod (default 4h0m0s)
