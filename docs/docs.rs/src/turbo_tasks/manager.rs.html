@@ -1228,10 +1228,11 @@
 <span id="1228">1228</span>
 <span id="1229">1229</span>
 <span id="1230">1230</span>
+<span id="1231">1231</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     future::Future,
     hash::Hash,
     panic::AssertUnwindSafe,
@@ -1245,6 +1246,7 @@
 };
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>nohash_hasher::BuildNoHashHasher;
 <span class="kw">use </span>serde::{de::Visitor, Deserialize, Serialize};
@@ -1322,11 +1324,11 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         trait_id: TraitTypeId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;HashSet&lt;RawVc&gt;, EventListener&gt;&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;AutoSet&lt;RawVc&gt;, EventListener&gt;&gt;;
 
     <span class="kw">fn </span>emit_collectible(<span class="kw-2">&amp;</span><span class="self">self</span>, trait_type: TraitTypeId, collectible: RawVc);
     <span class="kw">fn </span>unemit_collectible(<span class="kw-2">&amp;</span><span class="self">self</span>, trait_type: TraitTypeId, collectible: RawVc);
-    <span class="kw">fn </span>unemit_collectibles(<span class="kw-2">&amp;</span><span class="self">self</span>, trait_type: TraitTypeId, collectibles: <span class="kw-2">&amp;</span>HashSet&lt;RawVc&gt;);
+    <span class="kw">fn </span>unemit_collectibles(<span class="kw-2">&amp;</span><span class="self">self</span>, trait_type: TraitTypeId, collectibles: <span class="kw-2">&amp;</span>AutoSet&lt;RawVc&gt;);
 
     <span class="doccomment">/// INVALIDATION: Be careful with this, it will not track dependencies, so
     /// using it could break cache invalidation.
@@ -1385,7 +1387,7 @@
 
     <span class="doccomment">/// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `invalidate_tasks()` on all tasks.
-    </span><span class="kw">fn </span>schedule_notify_tasks_set(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: <span class="kw-2">&amp;</span>HashSet&lt;TaskId&gt;);
+    </span><span class="kw">fn </span>schedule_notify_tasks_set(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: <span class="kw-2">&amp;</span>AutoSet&lt;TaskId&gt;);
 
     <span class="doccomment">/// Returns the stats reporting type.
     </span><span class="kw">fn </span>stats_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StatsType;
@@ -1970,7 +1972,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
         trait_id: TraitTypeId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;HashSet&lt;RawVc&gt;, EventListener&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;AutoSet&lt;RawVc&gt;, EventListener&gt;&gt; {
         <span class="self">self</span>.backend.try_read_task_collectibles(
             task,
             trait_id,
@@ -1997,7 +1999,7 @@
         );
     }
 
-    <span class="kw">fn </span>unemit_collectibles(<span class="kw-2">&amp;</span><span class="self">self</span>, trait_type: TraitTypeId, collectibles: <span class="kw-2">&amp;</span>HashSet&lt;RawVc&gt;) {
+    <span class="kw">fn </span>unemit_collectibles(<span class="kw-2">&amp;</span><span class="self">self</span>, trait_type: TraitTypeId, collectibles: <span class="kw-2">&amp;</span>AutoSet&lt;RawVc&gt;) {
         <span class="kw">for </span>collectible <span class="kw">in </span>collectibles {
             <span class="self">self</span>.backend.unemit_collectible(
                 trait_type,
@@ -2073,7 +2075,7 @@
 
     <span class="doccomment">/// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `dependent_cell_updated()` on all tasks.
-    </span><span class="kw">fn </span>schedule_notify_tasks_set(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: <span class="kw-2">&amp;</span>HashSet&lt;TaskId&gt;) {
+    </span><span class="kw">fn </span>schedule_notify_tasks_set(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: <span class="kw-2">&amp;</span>AutoSet&lt;TaskId&gt;) {
         <span class="kw">let </span>result = TASKS_TO_NOTIFY.try_with(|tasks_list| {
             <span class="kw">let </span><span class="kw-2">mut </span>list = tasks_list.borrow_mut();
             list.extend(tasks.iter());
@@ -2364,7 +2366,7 @@
     this: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksApi,
     id: TaskId,
     trait_id: TraitTypeId,
-) -&gt; <span class="prelude-ty">Result</span>&lt;HashSet&lt;RawVc&gt;&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;AutoSet&lt;RawVc&gt;&gt; {
     <span class="kw">loop </span>{
         <span class="kw">match </span>this.try_read_task_collectibles(id, trait_id)<span class="question-mark">? </span>{
             <span class="prelude-val">Ok</span>(result) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(result),

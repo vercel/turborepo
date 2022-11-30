@@ -124,18 +124,18 @@
 <span id="124">124</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
-    collections::HashSet,
     fmt::{Debug, Display},
 };
 
 <span class="kw">use </span>anyhow::{anyhow, Error, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>turbo_tasks::{util::SharedError, RawVc, TaskId, TurboTasksBackendApi};
 
 <span class="attr">#[derive(Default, Debug)]
 </span><span class="kw">pub struct </span>Output {
     <span class="kw">pub</span>(<span class="kw">crate</span>) content: OutputContent,
     updates: u32,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) dependent_tasks: HashSet&lt;TaskId&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) dependent_tasks: AutoSet&lt;TaskId&gt;,
 }
 
 <span class="attr">#[derive(Clone, Debug)]

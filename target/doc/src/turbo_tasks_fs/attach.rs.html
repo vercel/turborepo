@@ -171,10 +171,8 @@
 <span id="171">171</span>
 <span id="172">172</span>
 <span id="173">173</span>
-<span id="174">174</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
-
-<span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>auto_hash_map::AutoMap;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, CompletionVc, ValueToString, ValueToStringVc};
 
 <span class="kw">use crate</span>::{
@@ -293,7 +291,7 @@
             DirectoryContent::NotFound =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(DirectoryContentVc::not_found()),
         };
 
-        <span class="kw">let </span><span class="kw-2">mut </span>converted_entries = HashMap::with_capacity(entries.len());
+        <span class="kw">let </span><span class="kw-2">mut </span>converted_entries = AutoMap::with_capacity(entries.len());
         <span class="kw">for </span>(name, entry) <span class="kw">in </span>entries {
             <span class="kw">use </span>DirectoryEntry::<span class="kw-2">*</span>;
 

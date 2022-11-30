@@ -536,7 +536,6 @@
 <span id="536">536</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Any,
-    collections::HashSet,
     fmt::{Debug, Display},
     future::{Future, IntoFuture},
     hash::Hash,
@@ -547,6 +546,7 @@
 };
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 
@@ -1042,13 +1042,13 @@
 
 <span class="kw">pub struct </span>CollectiblesFuture&lt;T: ValueTraitVc&gt; {
     turbo_tasks: Arc&lt;<span class="kw">dyn </span>TurboTasksApi&gt;,
-    inner: ReadRawVcFuture&lt;RawVcSet, HashSet&lt;RawVc&gt;&gt;,
+    inner: ReadRawVcFuture&lt;RawVcSet, AutoSet&lt;RawVc&gt;&gt;,
     take: bool,
     phantom: PhantomData&lt;<span class="kw">fn</span>() -&gt; T&gt;,
 }
 
 <span class="kw">impl</span>&lt;T: ValueTraitVc&gt; Future <span class="kw">for </span>CollectiblesFuture&lt;T&gt; {
-    <span class="kw">type </span>Output = <span class="prelude-ty">Result</span>&lt;HashSet&lt;T&gt;&gt;;
+    <span class="kw">type </span>Output = <span class="prelude-ty">Result</span>&lt;AutoSet&lt;T&gt;&gt;;
 
     <span class="kw">fn </span>poll(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, cx: <span class="kw-2">&amp;mut </span>std::task::Context&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Poll&lt;<span class="self">Self</span>::Output&gt; {
         <span class="comment">// SAFETY: we are not moving `this`

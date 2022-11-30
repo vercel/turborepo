@@ -393,7 +393,6 @@
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Any,
     borrow::Cow,
-    collections::HashSet,
     fmt::{Debug, Display},
     future::Future,
     pin::Pin,
@@ -402,6 +401,7 @@
 };
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">pub use </span><span class="kw">crate</span>::id::BackendJobId;
@@ -663,7 +663,7 @@
         trait_id: TraitTypeId,
         reader: TaskId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;HashSet&lt;RawVc&gt;, EventListener&gt;&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;AutoSet&lt;RawVc&gt;, EventListener&gt;&gt;;
 
     <span class="kw">fn </span>emit_collectible(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

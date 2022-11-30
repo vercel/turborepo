@@ -1605,6 +1605,7 @@
 <span id="1605">1605</span>
 <span id="1606">1606</span>
 <span id="1607">1607</span>
+<span id="1608">1608</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -1636,6 +1637,7 @@
 };
 
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>auto_hash_map::AutoMap;
 <span class="kw">use </span>bitflags::bitflags;
 <span class="kw">use </span>glob::GlobVc;
 <span class="kw">use </span>invalidator_map::InvalidatorMap;
@@ -3152,12 +3154,12 @@
 <span class="attr">#[turbo_tasks::value]
 #[derive(Debug)]
 </span><span class="kw">pub enum </span>DirectoryContent {
-    Entries(HashMap&lt;String, DirectoryEntry&gt;),
+    Entries(AutoMap&lt;String, DirectoryEntry&gt;),
     NotFound,
 }
 
 <span class="kw">impl </span>DirectoryContentVc {
-    <span class="kw">pub fn </span>new(entries: HashMap&lt;String, DirectoryEntry&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(entries: AutoMap&lt;String, DirectoryEntry&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(DirectoryContent::Entries(entries))
     }
 

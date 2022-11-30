@@ -294,12 +294,12 @@
 <span id="294">294</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::{type_name, Any},
-    collections::{HashMap, HashSet},
     fmt::{<span class="self">self</span>, Debug, Display, Formatter},
     hash::Hash,
     sync::Arc,
 };
 
+<span class="kw">use </span>auto_hash_map::{AutoMap, AutoSet};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use crate</span>::{
@@ -366,9 +366,9 @@
     <span class="doccomment">/// A readable name of the type
     </span><span class="kw">pub </span>name: String,
     <span class="doccomment">/// List of traits available
-    </span><span class="kw">pub </span>traits: HashSet&lt;TraitTypeId&gt;,
+    </span><span class="kw">pub </span>traits: AutoSet&lt;TraitTypeId&gt;,
     <span class="doccomment">/// List of trait methods available
-    </span><span class="kw">pub </span>trait_methods: HashMap&lt;(TraitTypeId, String), FunctionId&gt;,
+    </span><span class="kw">pub </span>trait_methods: AutoMap&lt;(TraitTypeId, String), FunctionId&gt;,
 
     <span class="doccomment">/// Functors for serialization
     </span>magic_serialization: <span class="prelude-ty">Option</span>&lt;(MagicSerializationFn, MagicAnyDeserializeSeed)&gt;,
@@ -428,8 +428,8 @@
     </span><span class="kw">pub fn </span>new&lt;T&gt;() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             name: std::any::type_name::&lt;T&gt;().to_string(),
-            traits: HashSet::new(),
-            trait_methods: HashMap::new(),
+            traits: AutoSet::new(),
+            trait_methods: AutoMap::new(),
             magic_serialization: <span class="prelude-val">None</span>,
             any_serialization: <span class="prelude-val">None</span>,
         }
@@ -441,8 +441,8 @@
     &gt;() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             name: std::any::type_name::&lt;T&gt;().to_string(),
-            traits: HashSet::new(),
-            trait_methods: HashMap::new(),
+            traits: AutoSet::new(),
+            trait_methods: AutoMap::new(),
             magic_serialization: <span class="prelude-val">Some</span>((
                 &lt;<span class="kw">dyn </span>MagicAny&gt;::as_serialize::&lt;T&gt;,
                 MagicAnyDeserializeSeed::new::&lt;T&gt;(),
@@ -457,8 +457,8 @@
     &gt;() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             name: std::any::type_name::&lt;T&gt;().to_string(),
-            traits: HashSet::new(),
-            trait_methods: HashMap::new(),
+            traits: AutoSet::new(),
+            trait_methods: AutoMap::new(),
             magic_serialization: <span class="prelude-val">None</span>,
             any_serialization: <span class="prelude-val">Some</span>((any_as_serialize::&lt;T&gt;, AnyDeserializeSeed::new::&lt;T&gt;())),
         }
@@ -533,7 +533,7 @@
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>TraitType {
     <span class="kw">pub </span>name: String,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) default_trait_methods: HashMap&lt;String, FunctionId&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) default_trait_methods: AutoMap&lt;String, FunctionId&gt;,
 }
 
 <span class="kw">impl </span>Hash <span class="kw">for </span>TraitType {
@@ -572,7 +572,7 @@
     <span class="kw">pub fn </span>new(name: String) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             name,
-            default_trait_methods: HashMap::new(),
+            default_trait_methods: AutoMap::new(),
         }
     }
 

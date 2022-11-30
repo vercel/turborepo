@@ -34,15 +34,17 @@
 <span id="34">34</span>
 <span id="35">35</span>
 <span id="36">36</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashSet, fmt::Debug};
+<span id="37">37</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
+<span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>turbo_tasks::{backend::CellContent, TaskId, TurboTasksBackendApi};
 
 <span class="attr">#[derive(Default, Debug)]
 </span><span class="kw">pub struct </span>Cell {
     content: CellContent,
     updates: u32,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) dependent_tasks: HashSet&lt;TaskId&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) dependent_tasks: AutoSet&lt;TaskId&gt;,
 }
 
 <span class="kw">impl </span>Cell {

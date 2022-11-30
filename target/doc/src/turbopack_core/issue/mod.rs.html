@@ -576,13 +576,13 @@
 
 <span class="kw">use </span>std::{
     cmp::Ordering,
-    collections::HashSet,
     fmt::{Display, Formatter},
     future::IntoFuture,
     sync::Arc,
 };
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>turbo_tasks::{
     emit,
@@ -750,7 +750,7 @@
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>ItemIssueProcessingPath(
     <span class="prelude-ty">Option</span>&lt;IssueProcessingPathItemVc&gt;,
-    HashSet&lt;IssueProcessingPathVc&gt;,
+    AutoSet&lt;IssueProcessingPathVc&gt;,
 );
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -905,7 +905,7 @@
 </span><span class="attr">#[derive(Debug)]
 #[turbo_tasks::value]
 </span><span class="kw">pub struct </span>CapturedIssues {
-    issues: HashSet&lt;IssueVc&gt;,
+    issues: AutoSet&lt;IssueVc&gt;,
     <span class="attr">#[cfg(feature = <span class="string">&quot;issue_path&quot;</span>)]
     </span>processing_path: ItemIssueProcessingPathVc,
 }

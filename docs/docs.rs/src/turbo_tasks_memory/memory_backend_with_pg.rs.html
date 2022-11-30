@@ -1878,9 +1878,10 @@
 <span id="1878">1878</span>
 <span id="1879">1879</span>
 <span id="1880">1880</span>
+<span id="1881">1881</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
-    collections::{BinaryHeap, HashMap, HashSet},
+    collections::{BinaryHeap, HashMap},
     fmt::Debug,
     future::Future,
     mem::{replace, take},
@@ -1893,6 +1894,7 @@
 };
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>concurrent_queue::ConcurrentQueue;
 <span class="kw">use </span>dashmap::{mapref::entry::Entry, DashMap, DashSet};
 <span class="kw">use </span>turbo_tasks::{
@@ -1948,11 +1950,11 @@
     need_persist: bool,
     has_changes: bool,
     freshness: TaskFreshness,
-    cells: HashMap&lt;CellId, (TaskCell, HashSet&lt;TaskId&gt;)&gt;,
+    cells: HashMap&lt;CellId, (TaskCell, AutoSet&lt;TaskId&gt;)&gt;,
     output: <span class="prelude-ty">Option</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc, SharedError&gt;&gt;,
-    output_dependent: HashSet&lt;TaskId&gt;,
-    dependencies: HashSet&lt;RawVc&gt;,
-    children: HashSet&lt;TaskId&gt;,
+    output_dependent: AutoSet&lt;TaskId&gt;,
+    dependencies: AutoSet&lt;RawVc&gt;,
+    children: AutoSet&lt;TaskId&gt;,
     event: Event,
     event_cells: Event,
 }
@@ -2150,10 +2152,10 @@
                     cells: data
                         .cells
                         .into_iter()
-                        .map(|(k, s)| (k, (s, HashSet::new())))
+                        .map(|(k, s)| (k, (s, AutoSet::new())))
                         .collect(),
                     output: <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(data.output)),
-                    output_dependent: HashSet::new(),
+                    output_dependent: AutoSet::new(),
                     dependencies: data.dependencies.into_iter().collect(),
                     children: data.children.into_iter().collect(),
                     need_persist: Default::default(),
@@ -2974,7 +2976,7 @@
             mem_state.output = <span class="prelude-val">Some</span>(result.map_err(SharedError::new));
             take(<span class="kw-2">&amp;mut </span>mem_state.output_dependent)
         } <span class="kw">else </span>{
-            HashSet::new()
+            AutoSet::new()
         };
 
         drop(state);
@@ -3316,7 +3318,7 @@
         _trait_id: TraitTypeId,
         _reader: TaskId,
         _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;HashSet&lt;RawVc&gt;, EventListener&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;AutoSet&lt;RawVc&gt;, EventListener&gt;&gt; {
         <span class="macro">todo!</span>()
     }
 

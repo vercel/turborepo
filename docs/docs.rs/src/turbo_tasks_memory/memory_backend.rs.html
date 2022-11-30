@@ -549,10 +549,11 @@
 <span id="549">549</span>
 <span id="550">550</span>
 <span id="551">551</span>
+<span id="552">552</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
-    collections::{HashSet, VecDeque},
+    collections::VecDeque,
     future::Future,
     hash::BuildHasherDefault,
     pin::Pin,
@@ -560,6 +561,7 @@
 };
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>dashmap::{mapref::entry::Entry, DashMap};
 <span class="kw">use </span>rustc_hash::FxHasher;
 <span class="kw">use </span>tokio::task::futures::TaskLocalFuture;
@@ -755,7 +757,7 @@
     }
 
     <span class="kw">type </span>ExecutionScopeFuture&lt;T: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;static</span>&gt; =
-        TaskLocalFuture&lt;RefCell&lt;HashSet&lt;TaskDependency&gt;&gt;, T&gt;;
+        TaskLocalFuture&lt;RefCell&lt;AutoSet&lt;TaskDependency&gt;&gt;, T&gt;;
     <span class="kw">fn </span>execution_scope&lt;T: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;static</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _task: TaskId,
@@ -907,7 +909,7 @@
         trait_id: TraitTypeId,
         reader: TaskId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;HashSet&lt;RawVc&gt;, EventListener&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;AutoSet&lt;RawVc&gt;, EventListener&gt;&gt; {
         <span class="self">self</span>.with_task(id, |task| {
             task.try_read_task_collectibles(reader, trait_id, <span class="self">self</span>, turbo_tasks)
         })
@@ -1056,8 +1058,8 @@
 }
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Job {
-    RemoveFromScopes(HashSet&lt;TaskId&gt;, Vec&lt;TaskScopeId&gt;),
-    RemoveFromScope(HashSet&lt;TaskId&gt;, TaskScopeId),
+    RemoveFromScopes(AutoSet&lt;TaskId&gt;, Vec&lt;TaskScopeId&gt;),
+    RemoveFromScope(AutoSet&lt;TaskId&gt;, TaskScopeId),
     ScheduleWhenDirty(Vec&lt;TaskId&gt;),
     <span class="doccomment">/// Add tasks from a scope. Scheduled by `run_add_from_scope_queue` to
     /// split off work.

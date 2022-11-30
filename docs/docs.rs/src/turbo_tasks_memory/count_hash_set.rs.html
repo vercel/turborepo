@@ -156,19 +156,43 @@
 <span id="156">156</span>
 <span id="157">157</span>
 <span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
-    collections::{
-        hash_map::{Entry, IntoIter, Iter, RandomState},
-        HashMap,
-    },
+    collections::hash_map::RandomState,
+    fmt::{Debug, Formatter},
     hash::{BuildHasher, Hash},
     iter::FilterMap,
 };
 
-<span class="attr">#[derive(Clone, Debug)]
+<span class="kw">use </span>auto_hash_map::{
+    map::{Entry, IntoIter, Iter},
+    AutoMap,
+};
+
+<span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>CountHashSet&lt;T, H = RandomState&gt; {
-    inner: HashMap&lt;T, isize, H&gt;,
+    inner: AutoMap&lt;T, isize, H&gt;,
     negative_entries: usize,
+}
+
+<span class="kw">impl</span>&lt;T: Debug, H&gt; Debug <span class="kw">for </span>CountHashSet&lt;T, H&gt; {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+        f.debug_struct(<span class="string">&quot;CountHashSet&quot;</span>)
+            .field(<span class="string">&quot;inner&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.inner)
+            .field(<span class="string">&quot;negative_entries&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.negative_entries)
+            .finish()
+    }
 }
 
 <span class="kw">impl</span>&lt;T: Eq + Hash, H: BuildHasher + Default, <span class="kw">const </span>N: usize&gt; From&lt;[T; N]&gt; <span class="kw">for </span>CountHashSet&lt;T, H&gt; {
@@ -206,7 +230,7 @@
     </span>}
 }
 
-<span class="kw">impl</span>&lt;T: Eq + Hash, H: BuildHasher&gt; CountHashSet&lt;T, H&gt; {
+<span class="kw">impl</span>&lt;T: Eq + Hash, H: BuildHasher + Default&gt; CountHashSet&lt;T, H&gt; {
     <span class="doccomment">/// Returns true, when the value has become visible from outside
     </span><span class="kw">pub fn </span>add_count(<span class="kw-2">&amp;mut </span><span class="self">self</span>, item: T, count: usize) -&gt; bool {
         <span class="kw">match </span><span class="self">self</span>.inner.entry(item) {

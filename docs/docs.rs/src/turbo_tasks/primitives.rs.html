@@ -78,9 +78,11 @@
 <span id="78">78</span>
 <span id="79">79</span>
 <span id="80">80</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashSet, ops::Deref};
+<span id="81">81</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::ops::Deref;
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>auto_hash_map::AutoSet;
 
 <span class="kw">use crate</span>::{<span class="self">self </span><span class="kw">as </span>turbo_tasks, RawVc, ValueToString, ValueToStringVc};
 
@@ -122,7 +124,7 @@
 </span><span class="kw">pub struct </span>Usize(usize);
 
 <span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">pub struct </span>RawVcSet(HashSet&lt;RawVc&gt;);
+</span><span class="kw">pub struct </span>RawVcSet(AutoSet&lt;RawVc&gt;);
 
 <span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">pub struct </span>JsonValue(serde_json::Value);

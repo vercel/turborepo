@@ -216,6 +216,7 @@
 <span id="216">216</span>
 <span id="217">217</span>
 <span id="218">218</span>
+<span id="219">219</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Testing utilities and macros for turbo-tasks and applications based on it.
 
 </span><span class="attr">#![feature(box_syntax)]
@@ -225,13 +226,14 @@
 
 <span class="kw">use </span>std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     future::Future,
     mem::replace,
     sync::{Arc, Mutex, Weak},
 };
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>turbo_tasks::{
     backend::CellContent,
     event::{Event, EventListener},
@@ -391,7 +393,7 @@
     <span class="kw">fn </span>unemit_collectibles(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _trait_type: turbo_tasks::TraitTypeId,
-        _collectibles: <span class="kw-2">&amp;</span>HashSet&lt;RawVc&gt;,
+        _collectibles: <span class="kw-2">&amp;</span>AutoSet&lt;RawVc&gt;,
     ) {
         <span class="macro">unimplemented!</span>()
     }
@@ -400,7 +402,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _task: TaskId,
         _trait_id: TraitTypeId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;HashSet&lt;RawVc&gt;, EventListener&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;AutoSet&lt;RawVc&gt;, EventListener&gt;&gt; {
         <span class="macro">unimplemented!</span>()
     }
 

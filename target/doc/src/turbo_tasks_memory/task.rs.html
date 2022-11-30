@@ -1603,7 +1603,7 @@
     borrow::Cow,
     cell::RefCell,
     cmp::Ordering,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::VecDeque,
     fmt::{<span class="self">self</span>, Debug, Display, Formatter, Write},
     future::Future,
     hash::Hash,
@@ -1613,6 +1613,7 @@
 };
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>auto_hash_map::{AutoMap, AutoSet};
 <span class="kw">use </span>parking_lot::{Mutex, RwLock, RwLockWriteGuard};
 <span class="kw">use </span>tokio::task_local;
 <span class="kw">use </span>turbo_tasks::{
@@ -1642,7 +1643,7 @@
 <span class="macro">task_local! </span>{
     <span class="doccomment">/// Vc/Scopes that are read during task execution
     /// These will be stored as dependencies when the execution has finished
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>DEPENDENCIES_TO_TRACK: RefCell&lt;HashSet&lt;TaskDependency&gt;&gt;;
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>DEPENDENCIES_TO_TRACK: RefCell&lt;AutoSet&lt;TaskDependency&gt;&gt;;
 }
 
 <span class="kw">type </span>OnceTaskFn = Mutex&lt;<span class="prelude-ty">Option</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;RawVc&gt;&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;&gt;&gt;;
@@ -1735,14 +1736,13 @@
     </span>state_type: TaskStateType,
 
     <span class="doccomment">/// Children are only modified from execution
-    </span>children: HashSet&lt;TaskId&gt;,
+    </span>children: AutoSet&lt;TaskId&gt;,
 
     <span class="doccomment">/// Collectibles are only modified from execution
     </span>collectibles: MaybeCollectibles,
 
     output: Output,
-    <span class="comment">// TODO use AutoMap here
-    </span>cells: HashMap&lt;ValueTypeId, Vec&lt;Cell&gt;&gt;,
+    cells: AutoMap&lt;ValueTypeId, Vec&lt;Cell&gt;&gt;,
 
     <span class="comment">// Stats:
     </span>stats: TaskStats,
@@ -1792,8 +1792,8 @@
 <span class="doccomment">/// The collectibles of a task.
 </span><span class="attr">#[derive(Default)]
 </span><span class="kw">struct </span>Collectibles {
-    emitted: HashSet&lt;(TraitTypeId, RawVc)&gt;,
-    unemitted: HashSet&lt;(TraitTypeId, RawVc)&gt;,
+    emitted: AutoSet&lt;(TraitTypeId, RawVc)&gt;,
+    unemitted: AutoSet&lt;(TraitTypeId, RawVc)&gt;,
 }
 
 <span class="kw">impl </span>MaybeCollectibles {
@@ -1839,7 +1839,7 @@
         /// there might affect this task.
         ///
         /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
-        </span>dependencies: HashSet&lt;TaskDependency&gt;,
+        </span>dependencies: AutoSet&lt;TaskDependency&gt;,
     },
 
     <span class="doccomment">/// Execution is invalid, but not yet scheduled
@@ -2004,14 +2004,14 @@
     }
 
     <span class="attr">#[cfg(not(feature = <span class="string">&quot;report_expensive&quot;</span>))]
-    </span><span class="kw">fn </span>clear_dependencies(<span class="kw-2">&amp;</span><span class="self">self</span>, dependencies: HashSet&lt;TaskDependency&gt;, backend: <span class="kw-2">&amp;</span>MemoryBackend) {
+    </span><span class="kw">fn </span>clear_dependencies(<span class="kw-2">&amp;</span><span class="self">self</span>, dependencies: AutoSet&lt;TaskDependency&gt;, backend: <span class="kw-2">&amp;</span>MemoryBackend) {
         <span class="kw">for </span>dep <span class="kw">in </span>dependencies.into_iter() {
             Task::remove_dependency(dep, <span class="self">self</span>.id, backend);
         }
     }
 
     <span class="attr">#[cfg(feature = <span class="string">&quot;report_expensive&quot;</span>)]
-    </span><span class="kw">fn </span>clear_dependencies(<span class="kw-2">&amp;</span><span class="self">self</span>, dependencies: HashSet&lt;TaskDependency&gt;, backend: <span class="kw-2">&amp;</span>MemoryBackend) {
+    </span><span class="kw">fn </span>clear_dependencies(<span class="kw-2">&amp;</span><span class="self">self</span>, dependencies: AutoSet&lt;TaskDependency&gt;, backend: <span class="kw-2">&amp;</span>MemoryBackend) {
         <span class="kw">use </span>std::time::Instant;
 
         <span class="kw">use </span>turbo_tasks::util::FormatDuration;
@@ -2078,7 +2078,7 @@
                     <span class="kw">let </span>unemitted = collectibles.unemitted;
                     state.scopes.iter().for_each(|id| {
                         backend.with_scope(id, |scope| {
-                            <span class="kw">let </span><span class="kw-2">mut </span>tasks = HashSet::new();
+                            <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::new();
                             {
                                 <span class="kw">let </span><span class="kw-2">mut </span>state = scope.state.lock();
                                 emitted
@@ -2208,7 +2208,7 @@
         }
 
         <span class="kw">let </span>id = <span class="self">self</span>.id;
-        <span class="kw">let </span><span class="kw-2">mut </span>clear_dependencies = HashSet::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>clear_dependencies = AutoSet::new();
         {
             <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
             <span class="kw">match </span>state.state_type {
@@ -2400,7 +2400,7 @@
             }
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(collectibles) = state.collectibles.as_ref() {
-                <span class="kw">let </span><span class="kw-2">mut </span>tasks = HashSet::new();
+                <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::new();
                 {
                     <span class="kw">let </span><span class="kw-2">mut </span>scope_state = scope.state.lock();
                     collectibles
@@ -2446,7 +2446,7 @@
             scope.decrement_tasks();
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(collectibles) = state.collectibles.as_ref() {
-                <span class="kw">let </span><span class="kw-2">mut </span>tasks = HashSet::new();
+                <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::new();
                 {
                     <span class="kw">let </span><span class="kw-2">mut </span>scope_state = scope.state.lock();
                     collectibles
@@ -2592,7 +2592,7 @@
                 <span class="self">self</span>.ty
             );
             <span class="kw">let </span><span class="kw-2">mut </span>active_counter = <span class="number">0isize</span>;
-            <span class="kw">let </span><span class="kw-2">mut </span>tasks = HashSet::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::new();
             <span class="kw">let </span><span class="kw-2">mut </span>scopes_to_add_as_parent = Vec::new();
             <span class="kw">let </span><span class="kw-2">mut </span>scopes_to_remove_as_parent = Vec::new();
             <span class="kw">for </span>(scope_id, count) <span class="kw">in </span>scopes.iter() {
@@ -3040,7 +3040,7 @@
         trait_id: TraitTypeId,
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;HashSet&lt;RawVc&gt;, EventListener&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;AutoSet&lt;RawVc&gt;, EventListener&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
         state = <span class="self">self</span>.ensure_root_scoped(state, backend, turbo_tasks);
         <span class="comment">// We need to wait for all foreground jobs to be finished as there could be
@@ -3071,7 +3071,7 @@
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
         <span class="kw">if </span>state.collectibles.emit(trait_type, collectible) {
-            <span class="kw">let </span><span class="kw-2">mut </span>tasks = HashSet::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::new();
             state
                 .scopes
                 .iter()
@@ -3096,7 +3096,7 @@
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
         <span class="kw">if </span>state.collectibles.unemit(trait_type, collectible) {
-            <span class="kw">let </span><span class="kw-2">mut </span>tasks = HashSet::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>tasks = AutoSet::new();
             state
                 .scopes
                 .iter()
