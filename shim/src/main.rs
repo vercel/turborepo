@@ -18,7 +18,7 @@ use anyhow::{anyhow, Result};
 use serde::Serialize;
 
 use crate::{
-    commands::{Args, Command},
+    commands::{Args, Command, RunArgs},
     ffi::{nativeRunWithArgs, nativeRunWithTurboState, GoString},
     package_manager::PackageManager,
 };
@@ -156,6 +156,19 @@ impl TurboState {
 
     fn spawn_local_turbo(&self, local_turbo_path: &Path) -> Result<i32> {
         let mut raw_args: Vec<_> = env::args().skip(1).collect();
+        let has_single_package_flag = self
+            .parsed_args
+            .run_args
+            .as_ref()
+            .map_or(false, |run_args| run_args.single_package)
+            || matches!(
+                self.parsed_args.command,
+                Some(Command::Run(RunArgs {
+                    single_package: true,
+                    ..
+                }))
+            );
+
         if matches!(
             self.repo_state,
             Some(RepoState {
@@ -163,6 +176,7 @@ impl TurboState {
                 ..
             })
         ) && self.parsed_args.is_run_command()
+            && !has_single_package_flag
         {
             raw_args.push("--single-package".to_string());
         }
