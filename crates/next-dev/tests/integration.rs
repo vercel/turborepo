@@ -128,7 +128,7 @@ async fn run_test(resource: &str) -> JestRunResult {
 
     let server = NextDevServerBuilder::new(
         TurboTasks::new(MemoryBackend::new()),
-        project_dir.to_string_lossy().to_string(),
+        sys_to_unix(&project_dir.to_string_lossy()).to_string(),
         workspace_root,
     )
     .entry_request(EntryRequest::Module(
