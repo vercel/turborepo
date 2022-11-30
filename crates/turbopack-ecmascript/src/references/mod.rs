@@ -1331,14 +1331,18 @@ fn analyze_amd_define_with_deps(
     ));
 }
 
-/// Currently used to generate the "root" path to a
-/// __filename/__dirname/import.meta.url reference.
-///
-/// TODO: This should be updated to generate a real system path on the fly
-/// during runtime, so that the generated code is constant between systems but
-/// the runtime evaluation can take into account the project's actual root
-/// directory.
+/// Used to generate the "root" path to a __filename/__dirname/import.meta.url
+/// reference.
 pub async fn as_abs_path(path: FileSystemPathVc) -> Result<JsValue> {
+    // TODO: This should be updated to generate a real system path on the fly
+    // during runtime, so that the generated code is constant between systems
+    // but the runtime evaluation can take into account the project's
+    // actual root directory.
+    require_resolve(path).await
+}
+
+/// Generates an absolute path usable for `require.resolve()` calls.
+async fn require_resolve(path: FileSystemPathVc) -> Result<JsValue> {
     Ok(format!("/ROOT/{}", path.await?.path.as_str()).into())
 }
 
@@ -1371,11 +1375,11 @@ async fn value_visitor_inner(
                     let request = RequestVc::parse(Value::new(pat.clone()));
                     let resolved = cjs_resolve(origin, request).await?;
                     match &*resolved {
-                        ResolveResult::Single(asset, _) => as_abs_path(asset.path()).await?,
+                        ResolveResult::Single(asset, _) => require_resolve(asset.path()).await?,
                         ResolveResult::Alternatives(assets, _) => JsValue::alternatives(
                             assets
                                 .iter()
-                                .map(|asset| as_abs_path(asset.path()))
+                                .map(|asset| require_resolve(asset.path()))
                                 .try_join()
                                 .await?,
                         ),
