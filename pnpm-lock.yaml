@@ -117,6 +117,14 @@ importers:
       '@vercel/ncc': 0.34.0
       find-up: 6.3.0
 
+  crates/next-dev/test-harness:
+    specifiers:
+      expect: ^24.5.0
+      jest-circus-browser: ^1.0.7
+    dependencies:
+      expect: 24.9.0
+      jest-circus-browser: 1.0.7
+
   crates/next-dev/tests:
     specifiers:
       '@turbo/pack-test-harness': '*'
@@ -126,20 +134,12 @@ importers:
       react-test-renderer: ^18.2.0
       styled-jsx: ^5.1.0
     devDependencies:
-      '@turbo/pack-test-harness': link:test-harness
+      '@turbo/pack-test-harness': link:../test-harness
       next: 13.0.1_biqbaboplfbrettd7655fr4n2y
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       react-test-renderer: 18.2.0_react@18.2.0
       styled-jsx: 5.1.0_react@18.2.0
-
-  crates/next-dev/tests/test-harness:
-    specifiers:
-      expect: ^24.5.0
-      jest-circus-browser: ^1.0.7
-    dependencies:
-      expect: 24.9.0
-      jest-circus-browser: 1.0.7
 
   crates/turbopack-ecmascript/js:
     specifiers:
