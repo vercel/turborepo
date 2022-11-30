@@ -1331,7 +1331,14 @@ fn analyze_amd_define_with_deps(
     ));
 }
 
-async fn as_abs_path(path: FileSystemPathVc) -> Result<JsValue> {
+/// Currently used to generate the "root" path to a
+/// __filename/__dirname/import.meta.url reference.
+///
+/// TODO: This should be updated to generate a real system path on the fly
+/// during runtime, so that the generated code is constant between systems but
+/// the runtime evaluation can take into account the project's actual root
+/// directory.
+pub async fn as_abs_path(path: FileSystemPathVc) -> Result<JsValue> {
     Ok(format!("/ROOT/{}", path.await?.path.as_str()).into())
 }
 

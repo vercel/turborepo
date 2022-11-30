@@ -10,7 +10,7 @@ use turbopack_core::chunk::ChunkingContextVc;
 use crate::{
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor, magic_identifier,
-    references::{esm::base::insert_hoisted_stmt, AstPathVc},
+    references::{as_abs_path, esm::base::insert_hoisted_stmt, AstPathVc},
 };
 
 #[turbo_tasks::value(shared)]
@@ -49,13 +49,22 @@ impl CodeGenerateable for ImportMetaRef {
         // the file. The first reference is responsible for injecting the
         // module-level variable to hold the mutable "meta object".
         if self.initialize {
-            let path = format!("/{}", self.path.await?.path);
+            let path = as_abs_path(self.path).await?.as_str().map_or_else(
+                || {
+                    quote!(
+                        "(() => { throw new Error('could not convert import.meta.url to filepath') \
+                         })()" as Expr
+                    )
+                },
+                |path| format!("file://{path}").into(),
+            );
+
             visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {
                 let name = Ident::new(magic_identifier::encode("import.meta").into(), DUMMY_SP);
                 let meta = quote!(
-                    "const $name = { url: new URL($url, location.href).href };" as Stmt,
+                    "const $name = { url: $path };" as Stmt,
                     name = name,
-                    url: Expr = path.clone().into(),
+                    path: Expr = path.clone(),
                 );
                 insert_hoisted_stmt(program, meta);
             }));
