@@ -279,14 +279,15 @@ type hashedTask struct {
 }
 
 type hashedSinglePackageTask struct {
-	Task            string   `json:"task"`
-	Hash            string   `json:"hash"`
-	Command         string   `json:"command"`
-	Outputs         []string `json:"outputs"`
-	ExcludedOutputs []string `json:"excludedOutputs"`
-	LogFile         string   `json:"logFile"`
-	Dependencies    []string `json:"dependencies"`
-	Dependents      []string `json:"dependents"`
+	Task            string           `json:"task"`
+	Hash            string           `json:"hash"`
+	CacheState      cache.ItemStatus `json:"cacheState"`
+	Command         string           `json:"command"`
+	Outputs         []string         `json:"outputs"`
+	ExcludedOutputs []string         `json:"excludedOutputs"`
+	LogFile         string           `json:"logFile"`
+	Dependencies    []string         `json:"dependencies"`
+	Dependents      []string         `json:"dependents"`
 }
 
 func (ht *hashedTask) toSinglePackageTask() hashedSinglePackageTask {
@@ -299,12 +300,14 @@ func (ht *hashedTask) toSinglePackageTask() hashedSinglePackageTask {
 		dependents[i] = util.StripPackageName(dependent)
 	}
 	return hashedSinglePackageTask{
-		Task:         util.RootTaskTaskName(ht.TaskID),
-		Hash:         ht.Hash,
-		Command:      ht.Command,
-		Outputs:      ht.Outputs,
-		LogFile:      ht.LogFile,
-		Dependencies: dependencies,
-		Dependents:   dependents,
+		Task:            util.RootTaskTaskName(ht.TaskID),
+		Hash:            ht.Hash,
+		CacheState:      ht.CacheState,
+		Command:         ht.Command,
+		Outputs:         ht.Outputs,
+		ExcludedOutputs: ht.ExcludedOutputs,
+		LogFile:         ht.LogFile,
+		Dependencies:    dependencies,
+		Dependents:      dependents,
 	}
 }
