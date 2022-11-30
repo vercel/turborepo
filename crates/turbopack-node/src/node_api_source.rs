@@ -22,6 +22,7 @@ use crate::path_regex::PathRegexVc;
 pub fn create_node_api_source(
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
+    pathname: StringVc,
     path_regex: PathRegexVc,
     entry: NodeEntryVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
@@ -29,6 +30,7 @@ pub fn create_node_api_source(
     NodeApiContentSource {
         specificity,
         server_root,
+        pathname,
         path_regex,
         entry,
         runtime_entries,
@@ -44,9 +46,10 @@ pub fn create_node_api_source(
 /// for Node.js execution during rendering. The `chunking_context` should emit
 /// to this directory.
 #[turbo_tasks::value]
-struct NodeApiContentSource {
+pub(crate) struct NodeApiContentSource {
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
+    pub(crate) pathname: StringVc,
     path_regex: PathRegexVc,
     entry: NodeEntryVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,

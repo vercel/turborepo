@@ -21,8 +21,8 @@ use super::{
 /// served once.
 #[turbo_tasks::value(serialization = "none", eq = "manual", cell = "new")]
 pub struct ConditionalContentSource {
-    activator: ContentSourceVc,
-    action: ContentSourceVc,
+    pub activator: ContentSourceVc,
+    pub action: ContentSourceVc,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     state: Arc<Mutex<State>>,
 }

@@ -67,10 +67,10 @@ pub fn create_node_rendered_source(
 
 /// see [create_node_rendered_source]
 #[turbo_tasks::value]
-struct NodeRenderContentSource {
+pub(crate) struct NodeRenderContentSource {
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
-    pathname: StringVc,
+    pub(crate) pathname: StringVc,
     path_regex: PathRegexVc,
     entry: NodeEntryVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
