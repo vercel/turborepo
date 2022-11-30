@@ -28,6 +28,9 @@ runs:
         cd cli
         make shim/turbo
         cd ..
+    - name: Check for any changes
+      shell: bash
+      run: git diff
     - name: Strip Turborepo binary
       shell: bash
       run: strip cli/shim/turbo.exe
