@@ -309,8 +309,6 @@ In this pipeline, we create an intermediary dummy `topo` task. Since we don't ha
   fanning out tasks in such a concise and elegant way.
 </Callout>
 
- 
-
 ### Tips
 
 #### Tasks that are in the `pipeline` but not in SOME `package.json`
@@ -320,5 +318,3 @@ Sometimes tasks declared in the `pipeline` are not present in all workspaces' `p
 #### `pipeline` tasks are the only ones that `turbo` knows about
 
 `turbo` will only account for tasks declared in the `pipeline` configuration. If it's not listed there, `turbo` will not know how to run them.
-
-#### 
