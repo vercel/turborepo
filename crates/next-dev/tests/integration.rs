@@ -126,6 +126,8 @@ async fn run_test(resource: &str) -> JestRunResult {
     let workspace_root = workspace_root.to_string_lossy().to_string();
     let requested_addr = get_free_local_addr().unwrap();
 
+    println!("-=--------------------------- {:#?}", project_dir);
+
     let server = NextDevServerBuilder::new(
         TurboTasks::new(MemoryBackend::new()),
         project_dir.to_string_lossy().to_string(),

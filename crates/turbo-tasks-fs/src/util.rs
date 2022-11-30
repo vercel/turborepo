@@ -7,9 +7,15 @@ use std::path::Path;
 ///
 /// see also [normalize_path] for normalization.
 pub fn join_path(fs_path: &str, join: &str) -> Option<String> {
+    let join = sys_to_unix(join);
+    let join: &str = join.as_ref();
     // Paths that we join are written as source code (eg, `join_path(fs_path,
     // "foo/bar.js")`) and it's expected that they will never contain a
     // backslash.
+    println!("ooooooooooooooooo {:#?}", join);
+    if join.contains('\\') {
+        panic!("rr");
+    }
     debug_assert!(
         !join.contains('\\'),
         "joined path {} must not contain a Windows directory '\\', it must be normalized to Unix \

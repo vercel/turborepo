@@ -750,7 +750,7 @@ impl FileSystemPathVc {
     #[turbo_tasks::function]
     pub async fn join(self, path: &str) -> Result<Self> {
         let this = self.await?;
-        if let Some(path) = join_path(&this.path, path) {
+        if let Some(path) = join_path(&this.path, &path) {
             Ok(Self::new_normalized(this.fs, path))
         } else {
             bail!(
