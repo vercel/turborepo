@@ -23,8 +23,10 @@ runs:
       uses: actions-rs/toolchain@v1
       if: ${{ inputs.target == 'windows' }}
       with:
-        target: x86_64-pc-windows-gnu
+        profile: minimal
         override: true
+        target: x86_64-pc-windows-gnu
+        default: true
     - name: "Setup Rust Cache"
       uses: Swatinem/rust-cache@v2
       with:
