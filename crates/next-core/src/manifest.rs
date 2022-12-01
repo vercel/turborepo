@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
+use indexmap::IndexSet;
 use mime::APPLICATION_JSON;
 use turbo_tasks::primitives::StringsVc;
 use turbo_tasks_fs::File;
@@ -25,7 +26,7 @@ impl DevManifestContentSourceVc {
     async fn find_routes(self) -> Result<StringsVc> {
         let this = &*self.await?;
         let mut queue = this.page_roots.clone();
-        let mut routes = HashSet::new();
+        let mut routes = IndexSet::new();
 
         while let Some(content_source) = queue.pop() {
             if let Some(combined_source) =
@@ -62,6 +63,8 @@ impl DevManifestContentSourceVc {
 
             // ignore anything else
         }
+
+        routes.sort();
 
         Ok(StringsVc::cell(routes.into_iter().collect()))
     }
