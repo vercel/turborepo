@@ -12,7 +12,7 @@
     "format:rs": "cargo fmt --all",
     "format:toml": "taplo format",
     "lint": "eslint . --ext js,jsx,ts,tsx",
-    "turbo": "cd cli && make shim && cd .. && node turbow.js",
+    "turbo": "cd cli && make turbo && cd .. && node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
     "run-example": "./scripts/run-example.sh"
   },
