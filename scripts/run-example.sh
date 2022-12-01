@@ -41,6 +41,9 @@ function setup_git {
   echo "" >> .git/config
   echo "[init]" >> .git/config
   echo "  defaultBranch = main" >> .git/config
+
+  echo "shim/src/ffi.rs" >> .gitignore
+  echo "cli/libturbo.h" >> .gitignore
   git init . -q
   git add .
   git commit -m "Initial commit"
