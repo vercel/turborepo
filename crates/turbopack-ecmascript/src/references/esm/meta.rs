@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use anyhow::Result;
 use swc_core::{
     common::DUMMY_SP,
@@ -43,7 +45,7 @@ impl CodeGenerateable for ImportMetaBinding {
                         as Expr
                 )
             },
-            |path| format!("file://{path}").into(),
+            |path| format!("file://{}", encode_path(path)).into(),
         );
 
         let visitor = create_visitor!(visit_mut_program(program: &mut Program) {
@@ -97,6 +99,72 @@ impl CodeGenerateable for ImportMetaRef {
     }
 }
 
+/// URL encodes special chars that would appear in the "pathname" portion.
+/// https://github.com/nodejs/node/blob/3bed5f11e039153eff5cbfd9513b8f55fd53fc43/lib/internal/url.js#L1513-L1526
+fn encode_path(path: &'_ str) -> Cow<'_, str> {
+    let mut encoded = String::new();
+    let mut start = 0;
+    for (i, c) in path.chars().enumerate() {
+        let mapping = match c {
+            '%' => "%25",
+            '\\' => "%5C",
+            '\n' => "%0A",
+            '\r' => "%0D",
+            '\t' => "%09",
+            _ => continue,
+        };
+
+        if encoded.is_empty() {
+            encoded.reserve(path.len());
+        }
+
+        encoded += &path[start..i];
+        encoded += mapping;
+        start = i + 1;
+    }
+
+    if encoded.is_empty() {
+        return Cow::Borrowed(path);
+    }
+    encoded += &path[start..];
+    Cow::Owned(encoded)
+}
+
 fn meta_ident() -> Ident {
     Ident::new(magic_identifier::encode("import.meta").into(), DUMMY_SP)
+}
+
+#[cfg(test)]
+mod test {
+    use super::encode_path;
+
+    #[test]
+    fn test_encode_path_regular() {
+        let input = "abc";
+        assert_eq!(encode_path(input), "abc");
+    }
+
+    #[test]
+    fn test_encode_path_special_chars() {
+        let input = "abc%def\\ghi\njkl\rmno\tpqr";
+        assert_eq!(encode_path(input), "abc%25def%5Cghi%0Ajkl%0Dmno%09pqr");
+    }
+
+    #[test]
+    fn test_encode_path_special_char_start() {
+        let input = "%abc";
+        assert_eq!(encode_path(input), "%25abc");
+    }
+
+    #[test]
+    fn test_encode_path_special_char_end() {
+        let input = "abc%";
+        assert_eq!(encode_path(input), "abc%25");
+    }
+
+    #[test]
+    fn test_encode_path_special_char_contiguous() {
+        let input = "%%%";
+        assert_eq!(encode_path(input), "%25%25%25");
+    }
 }
