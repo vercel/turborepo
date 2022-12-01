@@ -91,7 +91,7 @@ export default async function openGraphImage(
     return new Response(undefined, {
       status: 302,
       headers: {
-        "Location": "https://turbo.build/og-image.png",
+        Location: "https://turbo.build/og-image.png",
       },
     });
   }

@@ -11,7 +11,7 @@
     "format:prettier": "prettier -w .",
     "format:rs": "cargo fmt --all",
     "format:toml": "taplo format",
-    "lint": "eslint . --ext js,jsx,ts,tsx -c ./.eslintrc.js",
+    "lint": "eslint . --ext js,jsx,ts,tsx",
     "turbo": "cd cli && make shim/turbo && cd .. && node turbow.js",
     "turbo-prebuilt": "node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
@@ -34,10 +34,10 @@
     "typescript": "^4.8.4"
   },
   "lint-staged": {
-    "*.@(js|ts)": [
-      "eslint --quiet --fix"
+    "*.{js,jsx,ts,tsx}": [
+      "prettier --write"
     ],
-    "*.{ts,tsx,md,mdx,js,jsx,mjs,yml,yaml,css}": [
+    "*.{md,mdx,mjs,yml,yaml,css}": [
       "prettier --write"
     ],
     "*.go": [

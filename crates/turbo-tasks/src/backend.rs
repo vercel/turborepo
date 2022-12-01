@@ -1,15 +1,15 @@
 use std::{
     any::Any,
     borrow::Cow,
-    collections::HashSet,
     fmt::{Debug, Display},
     future::Future,
     pin::Pin,
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, Result};
+use auto_hash_map::AutoSet;
 use serde::{Deserialize, Serialize};
 
 pub use crate::id::BackendJobId;
@@ -192,6 +192,7 @@ pub trait Backend: Sync + Send {
         &self,
         task: TaskId,
         duration: Duration,
+        instant: Instant,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool;
 
@@ -270,7 +271,7 @@ pub trait Backend: Sync + Send {
         trait_id: TraitTypeId,
         reader: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> Result<Result<HashSet<RawVc>, EventListener>>;
+    ) -> Result<Result<AutoSet<RawVc>, EventListener>>;
 
     fn emit_collectible(
         &self,
