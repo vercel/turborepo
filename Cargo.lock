@@ -2912,15 +2912,9 @@ name = "next-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "futures",
- "indexmap",
- "mime",
  "rand",
- "regex",
  "serde",
  "serde_json",
- "serde_qs",
- "sourcemap",
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
@@ -2932,7 +2926,7 @@ dependencies = [
  "turbopack-dev-server",
  "turbopack-ecmascript",
  "turbopack-env",
- "url",
+ "turbopack-node",
 ]
 
 [[package]]
@@ -6734,6 +6728,29 @@ dependencies = [
  "turbo-tasks-fs",
  "turbopack-core",
  "turbopack-ecmascript",
+]
+
+[[package]]
+name = "turbopack-node"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "indexmap",
+ "mime",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_qs",
+ "tokio",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbopack",
+ "turbopack-core",
+ "turbopack-dev-server",
+ "turbopack-ecmascript",
+ "url",
 ]
 
 [[package]]
