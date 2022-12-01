@@ -19,10 +19,7 @@ GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
-turbo: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	CGO_ENABLED=1 go build $(GO_FLAGS) ./cmd/turbo
-
-shim: libturbo.a
+turbo: libturbo.a
 	cargo build --manifest-path ../shim/Cargo.toml
 
 libturbo.a: $(GENERATED_FILES) $(SRC_FILES) go.mod
@@ -78,7 +75,7 @@ corepack:
 	which corepack || npm install -g corepack@latest
 	corepack enable
 
-e2e: corepack install shim
+e2e: corepack install turbo
 	node -r esbuild-register scripts/e2e/e2e.ts
 
 cmd/turbo/version.go: ../version.txt
@@ -110,10 +107,6 @@ snapshot-turbo-cross:
 .PHONY: snapshot-turbo-darwin
 snapshot-turbo-darwin:
 	goreleaser release --snapshot --rm-dist -f darwin-release.yml
-
-.PHONY: snapshot-turbo
-snapshot-turbo: clean
-	goreleaser release --snapshot --rm-dist -f combined-release.yml
 
 .PHONY: snapshot-lib-turbo-darwin
 snapshot-lib-turbo-darwin:
@@ -184,8 +177,8 @@ publish: clean build
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
 
-.PHONY: snapshot-shim
-snapshot-shim:
+.PHONY: snapshot-turbo
+snapshot-turbo:
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 
@@ -204,8 +197,8 @@ snapshot-shim:
 	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
 
 
-.PHONY: publish-shim
-publish-shim:
+.PHONY: publish-turbo
+publish-turbo:
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 
@@ -280,10 +273,10 @@ $(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
 
 INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
 
-integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack shim
+integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
 
-integration-tests-interactive: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack shim
+integration-tests-interactive: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` -i $(INTEGRATION_TEST_FILES)
 
 # use target testbed-<some directory under integration_tests> to set up the testbed directory
