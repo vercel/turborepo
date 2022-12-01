@@ -29,7 +29,6 @@ function cleanup {
   rm -rf packages/*/.turbo
   rm -rf *.log
   rm -f ../../shim/src/ffi.rs
-  rm -f ../../cli/libturbo.h
 }
 
 function setup_git {

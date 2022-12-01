@@ -310,7 +310,7 @@ fn main() -> Result<()> {
         }
     }
 
-    let turbo_state = TurboState {
+    let mut turbo_state = TurboState {
         repo_state: None,
         parsed_args: clap_args,
     };
@@ -329,6 +329,8 @@ fn main() -> Result<()> {
         }
         _ => {
             if is_turbo_binary_path_set() {
+                let repo_state = RepoState::infer(&current_dir)?;
+                turbo_state.repo_state = Some(repo_state);
                 turbo_state.native_run()?
             } else {
                 match turbo_state.run_correct_turbo(&current_dir) {
