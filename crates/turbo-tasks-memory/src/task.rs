@@ -2,23 +2,24 @@ use std::{
     borrow::Cow,
     cell::RefCell,
     cmp::Ordering,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::VecDeque,
     fmt::{self, Debug, Display, Formatter, Write},
     future::Future,
     hash::Hash,
     mem::{replace, take},
     pin::Pin,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::Result;
+use auto_hash_map::{AutoMap, AutoSet};
 use parking_lot::{Mutex, RwLock, RwLockWriteGuard};
 use tokio::task_local;
 use turbo_tasks::{
     backend::PersistentTaskType,
     event::{Event, EventListener},
-    get_invalidator, registry, CellId, FunctionId, Invalidator, RawVc, TaskId, TaskInput,
-    TraitTypeId, TurboTasksBackendApi, ValueTypeId,
+    get_invalidator, registry, CellId, FunctionId, Invalidator, RawVc, StatsType, TaskId,
+    TaskInput, TraitTypeId, TurboTasksBackendApi, ValueTypeId,
 };
 pub type NativeTaskFuture = Pin<Box<dyn Future<Output = Result<RawVc>> + Send>>;
 pub type NativeTaskFn = Box<dyn Fn() -> NativeTaskFuture + Send + Sync>;
@@ -41,7 +42,7 @@ pub enum TaskDependency {
 task_local! {
     /// Vc/Scopes that are read during task execution
     /// These will be stored as dependencies when the execution has finished
-    pub(crate) static DEPENDENCIES_TO_TRACK: RefCell<HashSet<TaskDependency>>;
+    pub(crate) static DEPENDENCIES_TO_TRACK: RefCell<AutoSet<TaskDependency>>;
 }
 
 type OnceTaskFn = Mutex<Option<Pin<Box<dyn Future<Output = Result<RawVc>> + Send + 'static>>>>;
@@ -134,23 +135,20 @@ struct TaskState {
     state_type: TaskStateType,
 
     /// Children are only modified from execution
-    children: HashSet<TaskId>,
+    children: AutoSet<TaskId>,
 
     /// Collectibles are only modified from execution
     collectibles: MaybeCollectibles,
 
     output: Output,
-    // TODO use AutoMap here
-    cells: HashMap<ValueTypeId, Vec<Cell>>,
+    cells: AutoMap<ValueTypeId, Vec<Cell>>,
 
     // Stats:
-    executions: u32,
-    total_duration: Duration,
-    last_duration: Duration,
+    stats: TaskStats,
 }
 
 impl TaskState {
-    fn new(id: TaskId) -> Self {
+    fn new(id: TaskId, stats_type: StatsType) -> Self {
         Self {
             scopes: Default::default(),
             state_type: Dirty {
@@ -160,15 +158,13 @@ impl TaskState {
             collectibles: Default::default(),
             output: Default::default(),
             cells: Default::default(),
-            executions: Default::default(),
-            total_duration: Default::default(),
-            last_duration: Default::default(),
+            stats: TaskStats::new(stats_type),
             #[cfg(feature = "track_wait_dependencies")]
             last_waiting_task: Default::default(),
         }
     }
 
-    fn new_scheduled_in_scope(id: TaskId, scope: TaskScopeId) -> Self {
+    fn new_scheduled_in_scope(id: TaskId, scope: TaskScopeId, stats_type: StatsType) -> Self {
         Self {
             scopes: TaskScopes::Inner(CountHashSet::from([scope]), 0),
             state_type: Scheduled {
@@ -178,9 +174,7 @@ impl TaskState {
             collectibles: Default::default(),
             output: Default::default(),
             cells: Default::default(),
-            executions: Default::default(),
-            total_duration: Default::default(),
-            last_duration: Default::default(),
+            stats: TaskStats::new(stats_type),
             #[cfg(feature = "track_wait_dependencies")]
             last_waiting_task: Default::default(),
         }
@@ -197,8 +191,8 @@ struct MaybeCollectibles {
 /// The collectibles of a task.
 #[derive(Default)]
 struct Collectibles {
-    emitted: HashSet<(TraitTypeId, RawVc)>,
-    unemitted: HashSet<(TraitTypeId, RawVc)>,
+    emitted: AutoSet<(TraitTypeId, RawVc)>,
+    unemitted: AutoSet<(TraitTypeId, RawVc)>,
 }
 
 impl MaybeCollectibles {
@@ -244,7 +238,7 @@ enum TaskStateType {
         /// there might affect this task.
         ///
         /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
-        dependencies: HashSet<TaskDependency>,
+        dependencies: AutoSet<TaskDependency>,
     },
 
     /// Execution is invalid, but not yet scheduled
@@ -279,17 +273,23 @@ use crate::{
     output::Output,
     scope::{ScopeChildChangeEffect, TaskScopeId, TaskScopes},
     stats::{self, StatsReferences},
+    task_stats::TaskStats,
     MemoryBackend,
 };
 
 impl Task {
-    pub(crate) fn new_native(id: TaskId, inputs: Vec<TaskInput>, native_fn: FunctionId) -> Self {
+    pub(crate) fn new_native(
+        id: TaskId,
+        inputs: Vec<TaskInput>,
+        native_fn: FunctionId,
+        stats_type: StatsType,
+    ) -> Self {
         let bound_fn = registry::get_function(native_fn).bind(&inputs);
         Self {
             id,
             inputs,
             ty: TaskType::Native(native_fn, bound_fn),
-            state: RwLock::new(TaskState::new(id)),
+            state: RwLock::new(TaskState::new(id, stats_type)),
         }
     }
 
@@ -297,12 +297,13 @@ impl Task {
         id: TaskId,
         inputs: Vec<TaskInput>,
         native_fn: FunctionId,
+        stats_type: StatsType,
     ) -> Self {
         Self {
             id,
             inputs,
             ty: TaskType::ResolveNative(native_fn),
-            state: RwLock::new(TaskState::new(id)),
+            state: RwLock::new(TaskState::new(id, stats_type)),
         }
     }
 
@@ -311,12 +312,13 @@ impl Task {
         trait_type: TraitTypeId,
         trait_fn_name: Cow<'static, str>,
         inputs: Vec<TaskInput>,
+        stats_type: StatsType,
     ) -> Self {
         Self {
             id,
             inputs,
             ty: TaskType::ResolveTrait(trait_type, trait_fn_name),
-            state: RwLock::new(TaskState::new(id)),
+            state: RwLock::new(TaskState::new(id, stats_type)),
         }
     }
 
@@ -324,12 +326,13 @@ impl Task {
         id: TaskId,
         scope: TaskScopeId,
         functor: impl Fn() -> NativeTaskFuture + Sync + Send + 'static,
+        stats_type: StatsType,
     ) -> Self {
         Self {
             id,
             inputs: Vec::new(),
             ty: TaskType::Root(Box::new(functor)),
-            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope)),
+            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope, stats_type)),
         }
     }
 
@@ -337,12 +340,13 @@ impl Task {
         id: TaskId,
         scope: TaskScopeId,
         functor: impl Future<Output = Result<RawVc>> + Send + 'static,
+        stats_type: StatsType,
     ) -> Self {
         Self {
             id,
             inputs: Vec::new(),
             ty: TaskType::Once(Mutex::new(Some(Box::pin(functor)))),
-            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope)),
+            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope, stats_type)),
         }
     }
 
@@ -399,14 +403,14 @@ impl Task {
     }
 
     #[cfg(not(feature = "report_expensive"))]
-    fn clear_dependencies(&self, dependencies: HashSet<TaskDependency>, backend: &MemoryBackend) {
+    fn clear_dependencies(&self, dependencies: AutoSet<TaskDependency>, backend: &MemoryBackend) {
         for dep in dependencies.into_iter() {
             Task::remove_dependency(dep, self.id, backend);
         }
     }
 
     #[cfg(feature = "report_expensive")]
-    fn clear_dependencies(&self, dependencies: HashSet<TaskDependency>, backend: &MemoryBackend) {
+    fn clear_dependencies(&self, dependencies: AutoSet<TaskDependency>, backend: &MemoryBackend) {
         use std::time::Instant;
 
         use turbo_tasks::util::FormatDuration;
@@ -443,7 +447,7 @@ impl Task {
                 state.state_type = InProgress {
                     event: event.take(),
                 };
-                state.executions += 1;
+                state.stats.increment_executions();
                 // TODO we need to reconsider the approach of doing scope changes in background
                 // since they affect collectibles and need to be computed eagerly to allow
                 // strongly_consistent to work properly.
@@ -473,7 +477,7 @@ impl Task {
                     let unemitted = collectibles.unemitted;
                     state.scopes.iter().for_each(|id| {
                         backend.with_scope(id, |scope| {
-                            let mut tasks = HashSet::new();
+                            let mut tasks = AutoSet::new();
                             {
                                 let mut state = scope.state.lock();
                                 emitted
@@ -537,6 +541,7 @@ impl Task {
     pub(crate) fn execution_completed(
         &self,
         duration: Duration,
+        instant: Instant,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool {
@@ -544,9 +549,9 @@ impl Task {
         let mut dependencies = DEPENDENCIES_TO_TRACK.with(|deps| deps.take());
         {
             let mut state = self.state.write();
-
-            state.total_duration += duration;
-            state.last_duration = duration;
+            state
+                .stats
+                .register_execution(duration, turbo_tasks.program_duration_until(instant));
             match state.state_type {
                 InProgress { ref mut event } => {
                     let event = event.take();
@@ -602,7 +607,7 @@ impl Task {
         }
 
         let id = self.id;
-        let mut clear_dependencies = HashSet::new();
+        let mut clear_dependencies = AutoSet::new();
         {
             let mut state = self.state.write();
             match state.state_type {
@@ -794,7 +799,7 @@ impl Task {
             }
 
             if let Some(collectibles) = state.collectibles.as_ref() {
-                let mut tasks = HashSet::new();
+                let mut tasks = AutoSet::new();
                 {
                     let mut scope_state = scope.state.lock();
                     collectibles
@@ -840,7 +845,7 @@ impl Task {
             scope.decrement_tasks();
 
             if let Some(collectibles) = state.collectibles.as_ref() {
-                let mut tasks = HashSet::new();
+                let mut tasks = AutoSet::new();
                 {
                     let mut scope_state = scope.state.lock();
                     collectibles
@@ -986,7 +991,7 @@ impl Task {
                 self.ty
             );
             let mut active_counter = 0isize;
-            let mut tasks = HashSet::new();
+            let mut tasks = AutoSet::new();
             let mut scopes_to_add_as_parent = Vec::new();
             let mut scopes_to_remove_as_parent = Vec::new();
             for (scope_id, count) in scopes.iter() {
@@ -1188,9 +1193,7 @@ impl Task {
     /// For testing purposes
     pub fn reset_executions(&self) {
         let mut state = self.state.write();
-        if state.executions > 1 {
-            state.executions = 1;
-        }
+        state.stats.reset_executions()
     }
 
     pub fn is_pending(&self) -> bool {
@@ -1200,17 +1203,25 @@ impl Task {
 
     pub fn reset_stats(&self) {
         let mut state = self.state.write();
-        state.executions = 0;
-        state.total_duration = Duration::ZERO;
-        state.last_duration = Duration::ZERO;
+        state.stats.reset();
     }
 
     pub fn get_stats_info(&self, backend: &MemoryBackend) -> TaskStatsInfo {
         let state = self.state.read();
+
+        let (total_duration, last_duration, executions) = match &state.stats {
+            TaskStats::Essential(stats) => (None, stats.last_duration(), None),
+            TaskStats::Full(stats) => (
+                Some(stats.total_duration()),
+                stats.last_duration(),
+                Some(stats.executions()),
+            ),
+        };
+
         TaskStatsInfo {
-            total_duration: state.total_duration,
-            last_duration: state.last_duration,
-            executions: state.executions,
+            total_duration,
+            last_duration,
+            executions,
             root_scoped: matches!(state.scopes, TaskScopes::Root(_)),
             child_scopes: match state.scopes {
                 TaskScopes::Root(_) => 1,
@@ -1428,7 +1439,7 @@ impl Task {
         trait_id: TraitTypeId,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> Result<Result<HashSet<RawVc>, EventListener>> {
+    ) -> Result<Result<AutoSet<RawVc>, EventListener>> {
         let mut state = self.state.write();
         state = self.ensure_root_scoped(state, backend, turbo_tasks);
         // We need to wait for all foreground jobs to be finished as there could be
@@ -1459,7 +1470,7 @@ impl Task {
     ) {
         let mut state = self.state.write();
         if state.collectibles.emit(trait_type, collectible) {
-            let mut tasks = HashSet::new();
+            let mut tasks = AutoSet::new();
             state
                 .scopes
                 .iter()
@@ -1484,7 +1495,7 @@ impl Task {
     ) {
         let mut state = self.state.write();
         if state.collectibles.unemit(trait_type, collectible) {
-            let mut tasks = HashSet::new();
+            let mut tasks = AutoSet::new();
             state
                 .scopes
                 .iter()
@@ -1581,9 +1592,9 @@ impl PartialEq for Task {
 impl Eq for Task {}
 
 pub struct TaskStatsInfo {
-    pub total_duration: Duration,
+    pub total_duration: Option<Duration>,
     pub last_duration: Duration,
-    pub executions: u32,
+    pub executions: Option<u32>,
     pub root_scoped: bool,
     pub child_scopes: usize,
     pub active: bool,

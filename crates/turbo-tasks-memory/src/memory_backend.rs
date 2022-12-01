@@ -1,14 +1,15 @@
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::{HashSet, VecDeque},
+    collections::VecDeque,
     future::Future,
     hash::BuildHasherDefault,
     pin::Pin,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{bail, Result};
+use auto_hash_map::AutoSet;
 use dashmap::{mapref::entry::Entry, DashMap};
 use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
@@ -204,7 +205,7 @@ impl Backend for MemoryBackend {
     }
 
     type ExecutionScopeFuture<T: Future<Output = Result<()>> + Send + 'static> =
-        TaskLocalFuture<RefCell<HashSet<TaskDependency>>, T>;
+        TaskLocalFuture<RefCell<AutoSet<TaskDependency>>, T>;
     fn execution_scope<T: Future<Output = Result<()>> + Send + 'static>(
         &self,
         _task: TaskId,
@@ -244,10 +245,11 @@ impl Backend for MemoryBackend {
         &self,
         task: TaskId,
         duration: Duration,
+        instant: Instant,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool {
         self.with_task(task, |task| {
-            task.execution_completed(duration, self, turbo_tasks)
+            task.execution_completed(duration, instant, self, turbo_tasks)
         })
     }
 
@@ -355,7 +357,7 @@ impl Backend for MemoryBackend {
         trait_id: TraitTypeId,
         reader: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> Result<Result<HashSet<RawVc>, EventListener>> {
+    ) -> Result<Result<AutoSet<RawVc>, EventListener>> {
         self.with_task(id, |task| {
             task.try_read_task_collectibles(reader, trait_id, self, turbo_tasks)
         })
@@ -437,13 +439,19 @@ impl Backend for MemoryBackend {
                 PersistentTaskType::Native(fn_id, inputs) => {
                     // TODO inputs doesn't need to be cloned when are would be able to get a
                     // reference to the task type stored inside of the task
-                    Task::new_native(id, inputs.clone(), *fn_id)
+                    Task::new_native(id, inputs.clone(), *fn_id, turbo_tasks.stats_type())
                 }
                 PersistentTaskType::ResolveNative(fn_id, inputs) => {
-                    Task::new_resolve_native(id, inputs.clone(), *fn_id)
+                    Task::new_resolve_native(id, inputs.clone(), *fn_id, turbo_tasks.stats_type())
                 }
                 PersistentTaskType::ResolveTrait(trait_type, trait_fn_name, inputs) => {
-                    Task::new_resolve_trait(id, *trait_type, trait_fn_name.clone(), inputs.clone())
+                    Task::new_resolve_trait(
+                        id,
+                        *trait_type,
+                        trait_fn_name.clone(),
+                        inputs.clone(),
+                        turbo_tasks.stats_type(),
+                    )
                 }
             };
             // Safety: We have a fresh task id that nobody knows about yet
@@ -483,9 +491,10 @@ impl Backend for MemoryBackend {
             scope.increment_tasks();
             scope.increment_unfinished_tasks(self);
         });
+        let stats_type = turbo_tasks.stats_type();
         let task = match task_type {
-            TransientTaskType::Root(f) => Task::new_root(id, scope, move || f() as _),
-            TransientTaskType::Once(f) => Task::new_once(id, scope, f),
+            TransientTaskType::Root(f) => Task::new_root(id, scope, move || f() as _, stats_type),
+            TransientTaskType::Once(f) => Task::new_once(id, scope, f, stats_type),
         };
         // SAFETY: We have a fresh task id where nobody knows about yet
         #[allow(unused_variables)]
@@ -497,8 +506,8 @@ impl Backend for MemoryBackend {
 }
 
 pub(crate) enum Job {
-    RemoveFromScopes(HashSet<TaskId>, Vec<TaskScopeId>),
-    RemoveFromScope(HashSet<TaskId>, TaskScopeId),
+    RemoveFromScopes(AutoSet<TaskId>, Vec<TaskScopeId>),
+    RemoveFromScope(AutoSet<TaskId>, TaskScopeId),
     ScheduleWhenDirty(Vec<TaskId>),
     /// Add tasks from a scope. Scheduled by `run_add_from_scope_queue` to
     /// split off work.
