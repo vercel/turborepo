@@ -12,15 +12,19 @@ export function mockEnv() {
 }
 
 export function validateLogs(
-  logs: Array<string | (() => boolean)>,
+  logs: Array<string | (() => boolean | Array<any>)>,
   mockConsole: SpyConsole["log"] | SpyConsole["error"]
 ) {
   logs.forEach((log, idx) => {
-    expect(mockConsole).toHaveBeenNthCalledWith(
-      idx + 1,
-      "≫  ",
-      typeof log === "function" ? log() : log
-    );
+    if (typeof log === "function") {
+      const expected = log();
+      expect(mockConsole).toHaveBeenNthCalledWith(
+        idx + 1,
+        ...(Array.isArray(expected) ? expected : [expected])
+      );
+    } else {
+      expect(mockConsole).toHaveBeenNthCalledWith(idx + 1, "≫  ", log);
+    }
   });
 }
 

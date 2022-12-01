@@ -37,12 +37,18 @@ use turbopack_ecmascript::{
     EcmascriptInputTransformsVc, EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
 };
 use turbopack_env::ProcessEnvAssetVc;
+use turbopack_node::{
+    create_node_rendered_source,
+    node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
+    NodeEntry, NodeEntryVc,
+};
 
 use crate::{
     app_render::{
         next_layout_entry_transition::NextLayoutEntryTransition, LayoutSegment, LayoutSegmentsVc,
     },
     embed_js::{next_js_file, wrap_with_next_js_fs},
+    env::env_for_js,
     fallback::get_fallback_page,
     next_client::{
         context::{
@@ -59,11 +65,6 @@ use crate::{
     next_server::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
-    },
-    nodejs::{
-        create_node_rendered_source,
-        node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
-        NodeEntry, NodeEntryVc,
     },
     util::regular_expression_for_path,
 };
@@ -252,8 +253,8 @@ pub async fn create_app_source(
         externals,
     );
 
-    let server_runtime_entries =
-        vec![ProcessEnvAssetVc::new(project_root, env).as_ecmascript_chunk_placeable()];
+    let server_runtime_entries = vec![ProcessEnvAssetVc::new(project_root, env_for_js(env, false))
+        .as_ecmascript_chunk_placeable()];
 
     let fallback_page = get_fallback_page(project_root, server_root, env, browserslist_query);
 

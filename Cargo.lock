@@ -208,6 +208,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "auto-hash-map"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "auto_impl"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2876,15 +2883,10 @@ name = "next-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "futures",
  "indexmap",
- "mime",
  "rand",
- "regex",
  "serde",
  "serde_json",
- "serde_qs",
- "sourcemap",
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
@@ -2896,7 +2898,7 @@ dependencies = [
  "turbopack-dev-server",
  "turbopack-ecmascript",
  "turbopack-env",
- "url",
+ "turbopack-node",
 ]
 
 [[package]]
@@ -6257,6 +6259,7 @@ version = "0.1.0"
 dependencies = [
  "any_key",
  "anyhow",
+ "auto-hash-map",
  "bitflags",
  "dashmap",
  "erased-serde",
@@ -6314,6 +6317,7 @@ name = "turbo-tasks-fs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "auto-hash-map",
  "bitflags",
  "bytes",
  "concurrent-queue",
@@ -6377,6 +6381,7 @@ name = "turbo-tasks-memory"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "auto-hash-map",
  "concurrent-queue",
  "criterion",
  "dashmap",
@@ -6398,6 +6403,7 @@ name = "turbo-tasks-testing"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "auto-hash-map",
  "lazy_static",
  "tokio",
  "turbo-tasks",
@@ -6463,6 +6469,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "auto-hash-map",
  "browserslist-rs",
  "futures",
  "indexmap",
@@ -6611,6 +6618,29 @@ dependencies = [
  "turbo-tasks-fs",
  "turbopack-core",
  "turbopack-ecmascript",
+]
+
+[[package]]
+name = "turbopack-node"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "indexmap",
+ "mime",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_qs",
+ "tokio",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbopack",
+ "turbopack-core",
+ "turbopack-dev-server",
+ "turbopack-ecmascript",
+ "url",
 ]
 
 [[package]]

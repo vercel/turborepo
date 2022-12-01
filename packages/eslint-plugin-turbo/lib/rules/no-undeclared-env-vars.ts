@@ -34,6 +34,22 @@ const meta: Rule.RuleMetaData = {
   ],
 };
 
+/**
+ * Normalize the value of the cwd
+ * Extracted from eslint
+ * SPDX-License-Identifier: MIT
+ */
+function normalizeCwd(cwd: string | undefined): string | undefined {
+  if (cwd) {
+    return cwd;
+  }
+  if (typeof process === "object") {
+    return process.cwd();
+  }
+
+  return undefined;
+}
+
 function create(context: Rule.RuleContext): Rule.RuleListener {
   const { options } = context;
   const allowList: Array<string> = options?.[0]?.allowList || [];
@@ -46,9 +62,11 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
       console.error(`Unable to convert "${allowed}" to regex`);
     }
   });
+
+  const cwd = normalizeCwd(context.getCwd ? context.getCwd() : undefined);
   const turboConfig = options?.[0]?.turboConfig;
   const turboVars = getEnvVarDependencies({
-    cwd: context.getCwd(),
+    cwd,
     turboConfig,
   });
 

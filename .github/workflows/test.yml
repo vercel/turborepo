@@ -387,6 +387,9 @@ jobs:
             fi
           fi
 
+      - name: Check Cargo.toml formatting (taplo)
+        run: npx @taplo/cli format --check
+
       - name: Check licenses
         uses: EmbarkStudios/cargo-deny-action@v1
         with:
