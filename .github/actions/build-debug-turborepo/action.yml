@@ -18,6 +18,13 @@ runs:
         github-token: ${{ inputs.github-token }}
     - name: "Setup Rust toolchain"
       uses: actions-rs/toolchain@v1
+      with:
+        target: ${{ inputs.target }}
+    - name: "Setup Rust toolchain"
+      uses: actions-rs/toolchain@v1
+      if: ${{ inputs.target == 'windows' }}
+      with:
+        target: x86_64-pc-windows-gnu
     - name: "Setup Rust Cache"
       uses: Swatinem/rust-cache@v2
       with:
