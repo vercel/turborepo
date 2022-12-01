@@ -216,10 +216,10 @@ pub(crate) fn get_stylesheet_url(
     ))
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
-pub(crate) struct FontResource {
-    pub(crate) url: String,
-    pub(crate) should_preload: bool,
+#[derive(Debug, PartialEq)]
+pub(crate) struct ExtractedFonts {
+    pub(crate) all_urls: IndexSet<String>,
+    pub(crate) preload_urls: IndexSet<String>,
 }
 
 // Derived from https://github.com/vercel/next.js/blob/b0aa73b4cf23cb77bd492cfed7624d5cfbbd4990/packages/font/src/google/loader.ts#L114
@@ -227,8 +227,10 @@ pub(crate) fn extract_font_urls(
     stylesheet: &str,
     subsets: Option<&Vec<String>>,
     should_preload_subsets: bool,
-) -> Result<Vec<FontResource>> {
-    let mut declarations: Vec<FontResource> = vec![];
+) -> Result<ExtractedFonts> {
+    let mut all_urls = IndexSet::new();
+    let mut preload_urls = IndexSet::new();
+
     let mut current_subset = None;
     for line in stylesheet.split('\n') {
         let new_subset = SINGLE_LINE_BLOCK_COMMENT_RE
@@ -247,7 +249,9 @@ pub(crate) fn extract_font_urls(
                     .map(|m| m.as_str());
 
                 if let Some(url) = font_url {
-                    if !declarations.iter().any(|d| d.url == url) {
+                    if !all_urls.contains(url) {
+                        all_urls.insert(url.to_owned());
+
                         let should_preload = match subsets {
                             Some(subsets) => {
                                 should_preload_subsets
@@ -262,18 +266,19 @@ pub(crate) fn extract_font_urls(
                             }
                             None => false,
                         };
-
-                        declarations.push(FontResource {
-                            url: url.to_owned(),
-                            should_preload,
-                        })
+                        if should_preload {
+                            preload_urls.insert(url.to_owned());
+                        }
                     }
                 }
             }
         }
     }
 
-    Ok(declarations)
+    Ok(ExtractedFonts {
+        all_urls,
+        preload_urls,
+    })
 }
 
 #[cfg(test)]
@@ -284,7 +289,7 @@ mod tests {
     use super::{extract_font_urls, get_font_axes};
     use crate::next_font_google::{
         options::{FontData, FontWeights},
-        util::{get_stylesheet_url, FontAxes, FontItal, FontResource},
+        util::{get_stylesheet_url, ExtractedFonts, FontAxes, FontItal},
     };
 
     #[test]
@@ -518,41 +523,64 @@ mod tests {
     #[test]
     fn test_extract_font_urls_preloads_subsets() -> Result<()> {
         assert_eq!(
+            // From https://fonts.googleapis.com/css2?family=Roboto+Serif:ital,opsz,wdth,wght,GRAD@0,8..144,50..150,300,-50..100%253B0,8..144,50..150,500,-50..100%253B1,8..144,50..150,300,-50..100%253B1,8..144,50..150,500,-50..100&display=optional
             extract_font_urls(
-                r#"/* latin-ext */
+                r#"/* cyrillic-ext */
 @font-face {
   font-family: 'Roboto Serif';
-  font-style: normal;
-  font-weight: 400;
-  font-stretch: 100%;
+  font-style: italic;
+  font-weight: 300;
+  font-stretch: 50% 150%;
   font-display: optional;
-  src: url(https://fonts.gstatic.com/s/robotoserif/v8/R71RjywflP6FLr3gZx7K8UyuXDs9zVwDmXCb8lxYgmuii32UGoVldX6UgfjL4-3sMM_kB_qXSEXTJQCFLH5-_bcEliotl658ANxaV4jcFyRM.woff2) format('woff2');
+  src: url(https://fonts.gstatic.com/s/robotoserif/v8/R70DjywflP6FLr3gZx7K8UyEVSPzb5CTn22byl0.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Roboto Serif';
+  font-style: italic;
+  font-weight: 300;
+  font-stretch: 50% 150%;
+  font-display: optional;
+  src: url(https://fonts.gstatic.com/s/robotoserif/v8/R70DjywflP6FLr3gZx7K8UyEVSPxb5CTn22byl0.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Roboto Serif';
+  font-style: italic;
+  font-weight: 300;
+  font-stretch: 50% 150%;
+  font-display: optional;
+  src: url(https://fonts.gstatic.com/s/robotoserif/v8/R70DjywflP6FLr3gZx7K8UyEVSPwb5CTn22byl0.woff2) format('woff2');
   unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 /* latin */
 @font-face {
   font-family: 'Roboto Serif';
-  font-style: normal;
-  font-weight: 400;
-  font-stretch: 100%;
+  font-style: italic;
+  font-weight: 300;
+  font-stretch: 50% 150%;
   font-display: optional;
-  src: url(https://fonts.gstatic.com/s/robotoserif/v8/R71RjywflP6FLr3gZx7K8UyuXDs9zVwDmXCb8lxYgmuii32UGoVldX6UgfjL4-3sMM_kB_qXSEXTJQCFLH5-_bcEliotl6B8ANxaV4jcFw.woff2) format('woff2');
+  src: url(https://fonts.gstatic.com/s/robotoserif/v8/R70DjywflP6FLr3gZx7K8UyEVSP-b5CTn22b.woff2) format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 "#,
-                &["latin"],
+                Some(vec!["latin".to_owned()]).as_ref(),
                 true
             )?,
-            vec![
-                FontResource {
-                    url:"https://fonts.gstatic.com/s/robotoserif/v8/R71RjywflP6FLr3gZx7K8UyuXDs9zVwDmXCb8lxYgmuii32UGoVldX6UgfjL4-3sMM_kB_qXSEXTJQCFLH5-_bcEliotl658ANxaV4jcFyRM.woff2".to_owned(),
-                    should_preload: false
+            ExtractedFonts {
+                all_urls: indexset! {
+                    // All very similar, but unique urls
+                    "https://fonts.gstatic.com/s/robotoserif/v8/R70DjywflP6FLr3gZx7K8UyEVSPzb5CTn22byl0.woff2".to_owned(),
+                    "https://fonts.gstatic.com/s/robotoserif/v8/R70DjywflP6FLr3gZx7K8UyEVSPxb5CTn22byl0.woff2".to_owned(),
+                    "https://fonts.gstatic.com/s/robotoserif/v8/R70DjywflP6FLr3gZx7K8UyEVSPwb5CTn22byl0.woff2".to_owned(),
+                    "https://fonts.gstatic.com/s/robotoserif/v8/R70DjywflP6FLr3gZx7K8UyEVSP-b5CTn22b.woff2".to_owned()
                 },
-                FontResource {
-                    url:"https://fonts.gstatic.com/s/robotoserif/v8/R71RjywflP6FLr3gZx7K8UyuXDs9zVwDmXCb8lxYgmuii32UGoVldX6UgfjL4-3sMM_kB_qXSEXTJQCFLH5-_bcEliotl6B8ANxaV4jcFw.woff2".to_owned(),
-                    should_preload: true
+                preload_urls: indexset! {
+                    "https://fonts.gstatic.com/s/robotoserif/v8/R70DjywflP6FLr3gZx7K8UyEVSP-b5CTn22b.woff2".to_owned()
                 }
-            ]
+            }
         );
 
         Ok(())
