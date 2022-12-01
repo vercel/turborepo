@@ -71,12 +71,10 @@
 <span id="71">71</span>
 <span id="72">72</span>
 <span id="73">73</span>
-<span id="74">74</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::ValueToString;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
-
-<span class="kw">use </span><span class="kw">crate</span>::path_regex::{PathRegexBuilder, PathRegexVc};
+<span class="kw">use </span>turbopack_node::path_regex::{PathRegexBuilder, PathRegexVc};
 
 <span class="doccomment">/// Converts a filename within the server root to a regular expression with
 /// named capture groups for every dynamic segment.

@@ -29,7 +29,6 @@
 <span id="29">29</span>
 <span id="30">30</span>
 <span id="31">31</span>
-<span id="32">32</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 
@@ -42,17 +41,15 @@
 <span class="kw">mod </span>next_client_component;
 <span class="kw">mod </span>next_import_map;
 <span class="kw">pub mod </span>next_server;
-<span class="kw">mod </span>nodejs;
-<span class="kw">mod </span>path_regex;
 <span class="kw">pub mod </span>react_refresh;
 <span class="kw">mod </span>runtime;
 <span class="kw">mod </span>server_rendered_source;
-<span class="kw">pub mod </span>source_map;
 <span class="kw">mod </span>util;
 <span class="kw">mod </span>web_entry_source;
 
 <span class="kw">pub use </span>app_source::create_app_source;
 <span class="kw">pub use </span>server_rendered_source::create_server_rendered_source;
+<span class="kw">pub use </span>turbopack_node::source_map;
 <span class="kw">pub use </span>web_entry_source::create_web_entry_source;
 
 <span class="kw">pub fn </span>register() {
@@ -60,6 +57,7 @@
     turbo_tasks_fs::register();
     turbopack_dev_server::register();
     turbopack::register();
+    turbopack_node::register();
     <span class="macro">include!</span>(<span class="macro">concat!</span>(<span class="macro">env!</span>(<span class="string">&quot;OUT_DIR&quot;</span>), <span class="string">&quot;/register.rs&quot;</span>));
 }
 </code></pre></div>

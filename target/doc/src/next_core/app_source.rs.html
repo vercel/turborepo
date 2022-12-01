@@ -657,6 +657,11 @@
     EcmascriptInputTransformsVc, EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
 };
 <span class="kw">use </span>turbopack_env::ProcessEnvAssetVc;
+<span class="kw">use </span>turbopack_node::{
+    create_node_rendered_source,
+    node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
+    NodeEntry, NodeEntryVc,
+};
 
 <span class="kw">use crate</span>::{
     app_render::{
@@ -679,11 +684,6 @@
     next_server::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
-    },
-    nodejs::{
-        create_node_rendered_source,
-        node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
-        NodeEntry, NodeEntryVc,
     },
     util::regular_expression_for_path,
 };
