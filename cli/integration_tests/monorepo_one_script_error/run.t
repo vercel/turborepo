@@ -32,7 +32,6 @@ Note that npm reports any failed script as exit code 1, even though we "exit 2"
     Time:\s*[\.0-9]+m?s  (re)
   
    ERROR  run failed: command  exited (1)
-  error: command  exited (1)
   [1]
 
 Make sure error isn't cached
@@ -64,7 +63,6 @@ Make sure error isn't cached
     Time:\s*[\.0-9]+m?s  (re)
   
    ERROR  run failed: command  exited (1)
-  error: command  exited (1)
   [1]
 
 Running with --output-mode=errors-only gives error output only
@@ -89,5 +87,4 @@ Running with --output-mode=errors-only gives error output only
     Time:\s*[\.0-9]+m?s  (re)
   
    ERROR  run failed: command  exited (1)
-  error: command  exited (1)
   [1]
