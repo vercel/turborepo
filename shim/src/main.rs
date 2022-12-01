@@ -70,16 +70,7 @@ impl TurboState {
     /// * `args`: Arguments for turbo
     ///
     /// returns: Result<i32, Error>
-    fn run_current_turbo(mut self) -> Result<i32> {
-        // If there is no command, we set the command to `Command::Run` with
-        // `self.parsed_args.run_args` as arguments.
-        if self.parsed_args.command.is_none() {
-            if let Some(run_args) = take(&mut self.parsed_args.run_args) {
-                self.parsed_args.command = Some(Command::Run(run_args));
-            } else {
-                return Err(anyhow!("No command specified"));
-            }
-        }
+    fn run_current_turbo(self) -> Result<i32> {
         match self.parsed_args.command {
             Some(Command::Bin { .. }) => {
                 commands::bin::run()?;
@@ -309,6 +300,15 @@ fn main() -> Result<()> {
     };
 
     clap_args.cwd = Some(current_dir.to_string_lossy().to_string());
+    // If there is no command, we set the command to `Command::Run` with
+    // `self.parsed_args.run_args` as arguments.
+    if clap_args.command.is_none() {
+        if let Some(run_args) = take(&mut clap_args.run_args) {
+            clap_args.command = Some(Command::Run(run_args));
+        } else {
+            return Err(anyhow!("No command specified"));
+        }
+    }
 
     let turbo_state = TurboState {
         repo_state: None,
