@@ -8,4 +8,7 @@ disallowed-methods = [
   # sets), but the hash **is not stable** and must not be observed.
   # Use Xxh3Hash64Hasher::write with value's bytes directly.
   "std::hash::Hasher::hash",
+  # We forbid the use of VecDeque::new as it allocates, which is kind of unexpected
+  # Instead use VecDeque::with_capacity to make it explicit or opt-out of that.
+  "std::collections::VecDeque::new"
 ]

@@ -762,6 +762,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
+        // VecDeque::new() would allocate with 7 items capacity. We don't want that.
         let mut queue = VecDeque::with_capacity(0);
         self.add_to_scope_internal_shallow(
             id,
@@ -922,6 +923,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
+        // VecDeque::new() would allocate with 7 items capacity. We don't want that.
         let mut queue = VecDeque::with_capacity(0);
         self.remove_from_scope_internal_shallow(id, backend, turbo_tasks, &mut queue);
         run_remove_from_scope_queue(queue, id, backend, turbo_tasks);
