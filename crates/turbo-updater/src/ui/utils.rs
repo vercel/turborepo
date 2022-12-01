@@ -76,7 +76,6 @@ pub fn render_message(
         // Left aligned text with no border.
         // Used when term width is unknown.
         Layout::Unknown => {
-            log::debug!("rendering unknown layout");
             for line in lines.iter() {
                 println!("{}", line);
             }
@@ -85,7 +84,6 @@ pub fn render_message(
         // Left aligned text with top and bottom border.
         // Used when text cannot be centered without wrapping
         Layout::Small => {
-            log::debug!("rendering small layout");
             x_border(width, BorderAlignment::Divider);
             for (line, line_display_width) in lines.iter().zip(lines_display_width.iter()) {
                 if *line_display_width == 0 {
@@ -101,7 +99,6 @@ pub fn render_message(
         // Used when text can be centered without wrapping, but
         // there isn't enough room to include the box with padding.
         Layout::Medium => {
-            log::debug!("rendering medium layout");
             x_border(width, BorderAlignment::Divider);
             for (line, line_display_width) in lines.iter().zip(lines_display_width.iter()) {
                 if *line_display_width == 0 {
@@ -123,7 +120,6 @@ pub fn render_message(
 
         // Centered text with border on all sides
         Layout::Large => {
-            log::debug!("rendering large layout");
             x_border(full_message_width, BorderAlignment::Top);
             for (line, line_display_width) in lines.iter().zip(lines_display_width.iter()) {
                 if *line_display_width == 0 {

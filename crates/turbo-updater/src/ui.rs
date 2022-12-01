@@ -10,15 +10,10 @@ pub fn message(text: &str) -> Result<(), UpdateNotifierError> {
     let lines: Vec<&str> = text.split('\n').map(|line| line.trim()).collect();
 
     // get the display width of each line so we can center it within the box later
-    let lines_display_width: Result<Vec<usize>, utils::GetDisplayLengthError> = lines
+    let lines_display_width = lines
         .iter()
         .map(|line| utils::get_display_length(line))
-        .collect();
-
-    let lines_display_width = match lines_display_width {
-        Ok(lines_display_width) => lines_display_width,
-        Err(e) => return Err(UpdateNotifierError::DisplayLengthError(e)),
-    };
+        .collect::<Result<Vec<_>, _>>()?;
 
     // find the longest line to determine layout
     let longest_line = lines_display_width
@@ -45,7 +40,7 @@ pub fn message(text: &str) -> Result<(), UpdateNotifierError> {
         let term_width = if term_width > 2 {
             usize::from(term_width) - 2
         } else {
-            usize::from(term_width)
+            term_width.into()
         };
 
         let can_fit_box = term_width >= full_message_width;
