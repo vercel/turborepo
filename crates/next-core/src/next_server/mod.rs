@@ -14,8 +14,7 @@ use turbopack_core::environment::{
 use turbopack_ecmascript::EcmascriptInputTransform;
 
 use crate::{
-    module_options_context_util::add_next_font_transform,
-    next_import_map::get_next_server_import_map,
+    next_client::context::add_next_font_transform, next_import_map::get_next_server_import_map,
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
