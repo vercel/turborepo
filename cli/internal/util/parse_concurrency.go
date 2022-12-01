@@ -6,8 +6,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-
-	"github.com/spf13/pflag"
 )
 
 var (

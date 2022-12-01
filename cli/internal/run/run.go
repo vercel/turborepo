@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/analytics"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
@@ -70,13 +69,6 @@ func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *si
 	return nil
 }
 
-func parseTasksAndPassthroughArgs(remainingArgs []string, flags *pflag.FlagSet) ([]string, []string) {
-	if argSplit := flags.ArgsLenAtDash(); argSplit != -1 {
-		return remainingArgs[:argSplit], remainingArgs[argSplit:]
-	}
-	return remainingArgs, nil
-}
-
 func optsFromExecutionState(executionState *turbostate.CLIExecutionStateFromRust) (*Opts, error) {
 	runPayload := executionState.ParsedArgs.Command.Run
 	opts := getDefaultOptions()
@@ -132,20 +124,6 @@ func optsFromExecutionState(executionState *turbostate.CLIExecutionStateFromRust
 	}
 
 	return opts, nil
-}
-
-func optsFromFlags(flags *pflag.FlagSet) *Opts {
-	opts := getDefaultOptions()
-	aliases := make(map[string]string)
-	addRunOpts(&opts.runOpts, flags, aliases)
-	cache.AddFlags(&opts.cacheOpts, flags)
-	flags.SetNormalizeFunc(func(f *pflag.FlagSet, name string) pflag.NormalizedName {
-		if alias, ok := aliases[name]; ok {
-			return pflag.NormalizedName(alias)
-		}
-		return pflag.NormalizedName(name)
-	})
-	return opts
 }
 
 func configureRun(base *cmdutil.CmdBase, opts *Opts, signalWatcher *signals.Watcher) *run {
