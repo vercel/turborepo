@@ -390,7 +390,7 @@ impl TaskScope {
         if let Entry::Occupied(mut entry) = state.collectibles.entry(trait_type) {
             let (collectibles, dependent_tasks) = entry.get_mut();
             dependent_tasks.remove(&reader);
-            if dependent_tasks.is_empty() && collectibles.is_unset() {
+            if collectibles.is_unset() && dependent_tasks.is_empty() {
                 entry.remove();
             }
         }
@@ -559,8 +559,7 @@ impl TaskScopeState {
                     .insert(Default::default())
                     .0
                     .add_count(collectible, count);
-                // It's always a new entry
-                debug_assert!(result);
+                debug_assert!(result, "this must be always a new entry");
                 log_scope_update!("add_collectible {} -> {}", *self.id, collectible);
                 Some(ScopeCollectibleChangeEffect {
                     notify: AutoSet::new(),
@@ -596,7 +595,6 @@ impl TaskScopeState {
                 let (collectibles, dependent_tasks) = entry.get_mut();
                 if collectibles.remove_count(collectible, count) {
                     let notify = take(dependent_tasks);
-                    debug_assert!(dependent_tasks.is_empty());
                     if collectibles.is_unset() {
                         entry.remove();
                     }
@@ -612,8 +610,7 @@ impl TaskScopeState {
                     .0
                     .remove_count(collectible, count);
 
-                // This is never visible from outside
-                debug_assert!(!result);
+                debug_assert!(!result, "this must never be visible from outside");
                 None
             }
         }
