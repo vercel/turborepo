@@ -26,6 +26,7 @@ use turbopack_env::ProcessEnvAssetVc;
 use crate::{
     embed_js::attached_next_js_package_path,
     env::env_for_js,
+    module_options_context_util::add_next_font_transform,
     next_client::runtime_entry::{RuntimeEntriesVc, RuntimeEntry},
     next_import_map::{
         get_next_client_fallback_import_map, get_next_client_import_map,
@@ -99,7 +100,6 @@ pub async fn get_client_module_options_context(
         // we try resolve it once at the root and pass down a context to all
         // the modules.
         enable_emotion: true,
-        enable_nextjs_font: true,
         enable_react_refresh,
         enable_styled_components: true,
         enable_styled_jsx: true,
@@ -108,7 +108,7 @@ pub async fn get_client_module_options_context(
         ..Default::default()
     };
 
-    Ok(module_options_context.cell())
+    Ok(add_next_font_transform(module_options_context.cell()))
 }
 
 #[turbo_tasks::function]
