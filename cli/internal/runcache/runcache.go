@@ -35,22 +35,6 @@ type Opts struct {
 	OutputWatcher          OutputWatcher
 }
 
-type taskOutputModeValue struct {
-	opts *Opts
-}
-
-func (l *taskOutputModeValue) String() string {
-	var outputMode util.TaskOutputMode
-	if l.opts.TaskOutputModeOverride != nil {
-		outputMode = *l.opts.TaskOutputModeOverride
-	}
-	taskOutputMode, err := util.ToTaskOutputModeString(outputMode)
-	if err != nil {
-		panic(err)
-	}
-	return taskOutputMode
-}
-
 // SetTaskOutputMode parses the task output mode from string and then sets it in opts
 func (opts *Opts) SetTaskOutputMode(value string) error {
 	outputMode, err := util.FromTaskOutputModeString(value)
@@ -58,15 +42,6 @@ func (opts *Opts) SetTaskOutputMode(value string) error {
 		return fmt.Errorf("must be one of \"%v\"", TaskOutputModes())
 	}
 	opts.TaskOutputModeOverride = &outputMode
-	return nil
-}
-
-func (l *taskOutputModeValue) Set(value string) error {
-	outputMode, err := util.FromTaskOutputModeString(value)
-	if err != nil {
-		return fmt.Errorf("must be one of \"%v\"", TaskOutputModes())
-	}
-	l.opts.TaskOutputModeOverride = &outputMode
 	return nil
 }
 

@@ -446,156 +446,17 @@ func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, er
 	return engine, nil
 }
 
-var (
-	_profileHelp = `File to write turbo's performance profile output into.
-You can load the file up in chrome://tracing to see
-which parts of your build were slow.`
-	_continueHelp = `Continue execution even if a task exits with an error
-or non-zero exit code. The default behavior is to bail`
-	_dryRunHelp = `List the packages in scope and the tasks that would be run,
-but don't actually run them. Passing --dry=json or
---dry-run=json will render the output in JSON format.`
-	_graphHelp = `Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html).
-Outputs dot graph to stdout when if no filename is provided`
-	_concurrencyHelp = `Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution.`
-	_parallelHelp    = `Execute all tasks in parallel.`
-	_onlyHelp        = `Run only the specified tasks, not their dependencies.`
-)
-
-func addRunOpts(opts *runOpts, flags *pflag.FlagSet, aliases map[string]string) {
-	flags.AddFlag(&pflag.Flag{
-		Name:     "concurrency",
-		Usage:    _concurrencyHelp,
-		DefValue: "10",
-		Value: &util.ConcurrencyValue{
-			Value: &opts.concurrency,
-		},
-	})
-	flags.BoolVar(&opts.parallel, "parallel", false, _parallelHelp)
-	flags.StringVar(&opts.profile, "profile", "", _profileHelp)
-	flags.BoolVar(&opts.continueOnError, "continue", false, _continueHelp)
-	flags.BoolVar(&opts.only, "only", false, _onlyHelp)
-	flags.BoolVar(&opts.noDaemon, "no-daemon", false, "Run without using turbo's daemon process")
-	flags.BoolVar(&opts.singlePackage, "single-package", false, "Run turbo in single-package mode")
-	// This is a no-op flag, we don't need it anymore
-	flags.Bool("experimental-use-daemon", false, "Use the experimental turbo daemon")
-	if err := flags.MarkHidden("experimental-use-daemon"); err != nil {
-		panic(err)
-	}
-	if err := flags.MarkHidden("only"); err != nil {
-		// fail fast if we've messed up our flag configuration
-		panic(err)
-	}
-	if err := flags.MarkHidden("single-package"); err != nil {
-		panic(err)
-	}
-	aliases["dry"] = "dry-run"
-	flags.AddFlag(&pflag.Flag{
-		Name:        "dry-run",
-		Usage:       _dryRunHelp,
-		DefValue:    "",
-		NoOptDefVal: _dryRunNoValue,
-		Value:       &dryRunValue{opts: opts},
-	})
-	flags.AddFlag(&pflag.Flag{
-		Name:        "graph",
-		Usage:       _graphHelp,
-		DefValue:    "",
-		NoOptDefVal: _graphNoValue,
-		Value:       &graphValue{opts: opts},
-	})
-}
-
 const (
-	_graphText      = "graph"
 	_graphNoValue   = "stdout"
 	_graphTextValue = "true"
 )
 
-// graphValue implements a flag that can be treated as a boolean (--graph)
-// or a string (--graph=output.svg).
-type graphValue struct {
-	opts *runOpts
-}
-
-var _ pflag.Value = &graphValue{}
-
-func (d *graphValue) String() string {
-	if d.opts.graphDot {
-		return _graphText
-	}
-	return d.opts.graphFile
-}
-
-func (d *graphValue) Set(value string) error {
-	if value == _graphNoValue {
-		// this case matches the NoOptDefValue, which is used when the flag
-		// is passed, but does not have a value (i.e. boolean flag)
-		d.opts.graphDot = true
-	} else if value == _graphTextValue {
-		// "true" is equivalent to just setting the boolean flag
-		d.opts.graphDot = true
-	} else {
-		d.opts.graphDot = false
-		d.opts.graphFile = value
-	}
-	return nil
-}
-
-// Type implements Value.Type, and in this case is used to
-// show the alias in the usage test.
-func (d *graphValue) Type() string {
-	return ""
-}
-
 // dry run custom flag
 const (
-	_dryRunText      = "dry run"
-	_dryRunJSONText  = "json"
 	_dryRunJSONValue = "Json"
 	_dryRunNoValue   = "Stdout"
 	_dryRunTextValue = "Text"
 )
-
-// dryRunValue implements a flag that can be treated as a boolean (--dry-run)
-// or a string (--dry-run=json).
-type dryRunValue struct {
-	opts *runOpts
-}
-
-var _ pflag.Value = &dryRunValue{}
-
-func (d *dryRunValue) String() string {
-	if d.opts.dryRunJSON {
-		return _dryRunJSONText
-	} else if d.opts.dryRun {
-		return _dryRunText
-	}
-	return ""
-}
-
-func (d *dryRunValue) Set(value string) error {
-	if value == _dryRunJSONValue {
-		d.opts.dryRun = true
-		d.opts.dryRunJSON = true
-	} else if value == _dryRunNoValue {
-		// this case matches the NoOptDefValue, which is used when the flag
-		// is passed, but does not have a value (i.e. boolean flag)
-		d.opts.dryRun = true
-	} else if value == _dryRunTextValue {
-		// "text" is equivalent to just setting the boolean flag
-		d.opts.dryRun = true
-	} else {
-		return fmt.Errorf("invalid dry-run mode: %v", value)
-	}
-	return nil
-}
-
-// Type implements Value.Type, and in this case is used to
-// show the alias in the usage test.
-func (d *dryRunValue) Type() string {
-	return "/ dry "
-}
 
 func validateTasks(pipeline fs.Pipeline, tasks []string) error {
 	for _, task := range tasks {

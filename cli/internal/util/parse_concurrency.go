@@ -46,26 +46,3 @@ type ConcurrencyValue struct {
 	Value *int
 	raw   string
 }
-
-var _ pflag.Value = &ConcurrencyValue{}
-
-// String implements pflag.Value.String for ConcurrencyValue
-func (cv *ConcurrencyValue) String() string {
-	return cv.raw
-}
-
-// Set implements pflag.Value.Set for ConcurrencyValue
-func (cv *ConcurrencyValue) Set(value string) error {
-	parsed, err := ParseConcurrency(value)
-	if err != nil {
-		return err
-	}
-	cv.raw = value
-	*cv.Value = parsed
-	return nil
-}
-
-// Type implements pflag.Value.Type for ConcurrencyValue
-func (cv *ConcurrencyValue) Type() string {
-	return "number|percentage"
-}
