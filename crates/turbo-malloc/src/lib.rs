@@ -1,7 +1,11 @@
+mod counter;
+
 use std::{
     alloc::{GlobalAlloc, Layout},
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::Ordering,
 };
+
+use self::counter::{add, remove, thread_stop, ALLOCATED};
 
 /// Turbo's preferred global allocator. This is a new type instead of a type
 /// alias because you can't use type aliases to instantiate unit types (E0423).
@@ -11,9 +15,11 @@ impl TurboMalloc {
     pub fn memory_usage() -> usize {
         ALLOCATED.load(Ordering::Relaxed)
     }
-}
 
-static ALLOCATED: AtomicUsize = AtomicUsize::new(0);
+    pub fn thread_stop() {
+        thread_stop();
+    }
+}
 
 #[cfg(all(
     feature = "custom_allocator",
@@ -23,20 +29,20 @@ unsafe impl GlobalAlloc for TurboMalloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let ret = mimalloc::MiMalloc.alloc(layout);
         if !ret.is_null() {
-            ALLOCATED.fetch_add(layout.size(), Ordering::Relaxed);
+            add(layout.size());
         }
         ret
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         mimalloc::MiMalloc.dealloc(ptr, layout);
-        ALLOCATED.fetch_sub(layout.size(), Ordering::Relaxed);
+        remove(layout.size());
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         let ret = mimalloc::MiMalloc.alloc_zeroed(layout);
         if ret.is_null() {
-            ALLOCATED.fetch_add(layout.size(), Ordering::Relaxed);
+            add(layout.size());
         }
         ret
     }
@@ -46,9 +52,9 @@ unsafe impl GlobalAlloc for TurboMalloc {
         if !ret.is_null() {
             let old_size = layout.size();
             if old_size < new_size {
-                ALLOCATED.fetch_add(new_size - old_size, Ordering::Relaxed);
+                add(new_size - old_size);
             } else {
-                ALLOCATED.fetch_sub(old_size - new_size, Ordering::Relaxed);
+                remove(old_size - new_size);
             }
         }
         ret
@@ -63,20 +69,20 @@ unsafe impl GlobalAlloc for TurboMalloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let ret = std::alloc::System.alloc(layout);
         if !ret.is_null() {
-            ALLOCATED.fetch_add(layout.size(), Ordering::Relaxed);
+            add(layout.size());
         }
         ret
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         std::alloc::System.dealloc(ptr, layout);
-        ALLOCATED.fetch_sub(layout.size(), Ordering::Relaxed);
+        remove(layout.size());
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         let ret = std::alloc::System.alloc_zeroed(layout);
         if ret.is_null() {
-            ALLOCATED.fetch_add(layout.size(), Ordering::Relaxed);
+            add(layout.size());
         }
         ret
     }
@@ -86,9 +92,9 @@ unsafe impl GlobalAlloc for TurboMalloc {
         if !ret.is_null() {
             let old_size = layout.size();
             if old_size < new_size {
-                ALLOCATED.fetch_add(new_size - old_size, Ordering::Relaxed);
+                add(new_size - old_size);
             } else {
-                ALLOCATED.fetch_sub(old_size - new_size, Ordering::Relaxed);
+                remove(old_size - new_size);
             }
         }
         ret
