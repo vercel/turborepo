@@ -28,6 +28,8 @@
 <span id="28">28</span>
 <span id="29">29</span>
 <span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Environment Variable support for turbopack.
 //!
 //! Environment variables can come from multiple sources, including the rust
@@ -43,10 +45,12 @@
 #![feature(min_specialization)]
 
 </span><span class="kw">mod </span>asset;
+<span class="kw">mod </span>embeddable;
 <span class="kw">mod </span>issue;
 <span class="kw">mod </span>try_env;
 
 <span class="kw">pub use </span>asset::{ProcessEnvAsset, ProcessEnvAssetVc};
+<span class="kw">pub use </span>embeddable::EmbeddableProcessEnvVc;
 <span class="kw">pub use </span>issue::{ProcessEnvIssue, ProcessEnvIssueVc};
 <span class="kw">pub use </span>try_env::TryDotenvProcessEnvVc;
 

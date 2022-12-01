@@ -106,6 +106,12 @@
 <span id="106">106</span>
 <span id="107">107</span>
 <span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
 <span class="kw">use </span>turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
@@ -121,6 +127,12 @@
 </span><span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>CombinedContentSource {
     <span class="kw">pub </span>sources: Vec&lt;ContentSourceVc&gt;,
+}
+
+<span class="kw">impl </span>CombinedContentSourceVc {
+    <span class="kw">pub fn </span>new(sources: Vec&lt;ContentSourceVc&gt;) -&gt; <span class="self">Self </span>{
+        CombinedContentSource { sources }.cell()
+    }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]

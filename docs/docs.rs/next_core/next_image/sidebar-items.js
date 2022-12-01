@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["NextImageContentSource","Serves, resizes, optimizes, and re-encodes images to be used with next/image."],["NextImageContentSourceVc","Vc for [`NextImageContentSource`]"]],"type":[["NextImageContentSourceReadRef","see [turbo_tasks::ReadRef]"]]};

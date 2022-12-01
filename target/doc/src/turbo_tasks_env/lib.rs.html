@@ -62,9 +62,17 @@
 <span id="62">62</span>
 <span id="63">63</span>
 <span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>command_line;
+<span class="kw">mod </span>custom;
 <span class="kw">mod </span>dotenv;
 <span class="kw">mod </span>filter;
 
@@ -75,7 +83,8 @@
 <span class="kw">use </span>turbo_tasks::primitives::OptionStringVc;
 
 <span class="kw">pub use </span><span class="self">self</span>::{
-    command_line::CommandLineProcessEnvVc, dotenv::DotenvProcessEnvVc, filter::FilterProcessEnvVc,
+    command_line::CommandLineProcessEnvVc, custom::CustomProcessEnvVc, dotenv::DotenvProcessEnvVc,
+    filter::FilterProcessEnvVc,
 };
 
 <span class="attr">#[turbo_tasks::value(transparent)]
@@ -100,14 +109,19 @@
     </span><span class="kw">fn </span>read_all(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EnvMapVc;
 
     <span class="doccomment">/// Reads a single env variable. Ignores casing.
-    </span><span class="kw">async fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;OptionStringVc&gt; {
-        <span class="prelude-val">Ok</span>(OptionStringVc::cell(
-            to_uppercase_map(<span class="self">self</span>.read_all())
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.get(<span class="kw-2">&amp;</span>name.to_uppercase())
-                .cloned(),
-        ))
+    </span><span class="kw">fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; OptionStringVc {
+        case_insensitive_read(<span class="self">self</span>.read_all(), name)
     }
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">pub async fn </span>case_insensitive_read(map: EnvMapVc, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;OptionStringVc&gt; {
+    <span class="prelude-val">Ok</span>(OptionStringVc::cell(
+        to_uppercase_map(map)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.get(<span class="kw-2">&amp;</span>name.to_uppercase())
+            .cloned(),
+    ))
 }
 
 <span class="attr">#[turbo_tasks::function]

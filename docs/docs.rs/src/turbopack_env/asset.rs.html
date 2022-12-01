@@ -137,6 +137,8 @@
 <span id="137">137</span>
 <span id="138">138</span>
 <span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::Result;
@@ -257,16 +259,18 @@
         <span class="kw">let </span>asset = <span class="self">self</span>.inner.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>env = asset.env.read_all().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// TODO this is not completely correct as env vars need to ignore casing
-        // So `process.env.path === process.env.PATH === process.env.PaTh`
-        </span><span class="kw">let </span><span class="kw-2">mut </span>code = <span class="string">&quot;const env = process.env;\n\n&quot;</span>.to_string();
+        <span class="comment">// TODO: In SSR, we use the native process.env, which can only contain string
+        // values. We need to inject literal values (to emulate webpack&#39;s
+        // DefinePlugin), so create a new regular object out of the old env.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>code = <span class="string">&quot;const env = process.env = {...process.env};\n\n&quot;</span>.to_string();
+
         <span class="kw">for </span>(name, val) <span class="kw">in </span><span class="kw-2">&amp;*</span>env {
-            <span class="macro">writeln!</span>(
-                code,
-                <span class="string">&quot;env[{}] = {};&quot;</span>,
-                stringify_str(name),
-                stringify_str(val),
-            )<span class="question-mark">?</span>;
+            <span class="comment">// It&#39;s assumed the env has passed through an EmbeddableProcessEnv, so the value
+            // is ready to be directly embedded. Values _after_ an embeddable
+            // env can be used to inject live code into the output.
+            // TODO this is not completely correct as env vars need to ignore casing
+            // So `process.env.path === process.env.PATH === process.env.PaTh`
+            </span><span class="macro">writeln!</span>(code, <span class="string">&quot;env[{}] = {};&quot;</span>, stringify_str(name), val)<span class="question-mark">?</span>;
         }
 
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {

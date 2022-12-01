@@ -262,10 +262,6 @@
 <span id="262">262</span>
 <span id="263">263</span>
 <span id="264">264</span>
-<span id="265">265</span>
-<span id="266">266</span>
-<span id="267">267</span>
-<span id="268">268</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     process::{Command, Stdio},
     str::FromStr,
@@ -464,13 +460,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>runtime_versions(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;RuntimeVersionsVc&gt; {
         <span class="kw">let </span>str = <span class="kw">match </span><span class="kw-2">*</span><span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.node_version.<span class="kw">await</span><span class="question-mark">? </span>{
-            NodeJsVersion::Current(process_env) =&gt; get_current_nodejs_version(StringVc::cell(
-                process_env
-                    .read(<span class="string">&quot;PATH&quot;</span>)
-                    .<span class="kw">await</span><span class="question-mark">?
-                    </span>.clone_value()
-                    .context(<span class="string">&quot;env must have PATH&quot;</span>)<span class="question-mark">?</span>,
-            )),
+            NodeJsVersion::Current(process_env) =&gt; get_current_nodejs_version(process_env),
             NodeJsVersion::Static(version) =&gt; version,
         }
         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -517,11 +507,13 @@
 </span><span class="kw">pub struct </span>RuntimeVersions(<span class="attr">#[turbo_tasks(trace_ignore)] </span><span class="kw">pub </span>Versions);
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub async fn </span>get_current_nodejs_version(path_env: StringVc) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+</span><span class="kw">pub async fn </span>get_current_nodejs_version(env: ProcessEnvVc) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+    <span class="kw">let </span>path_read = env.read(<span class="string">&quot;PATH&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>path = path_read.as_ref().context(<span class="string">&quot;env must have PATH&quot;</span>)<span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>cmd = Command::new(<span class="string">&quot;node&quot;</span>);
     cmd.arg(<span class="string">&quot;--version&quot;</span>);
     cmd.env_clear();
-    cmd.env(<span class="string">&quot;PATH&quot;</span>, path_env.<span class="kw">await</span><span class="question-mark">?</span>.clone());
+    cmd.env(<span class="string">&quot;PATH&quot;</span>, path);
     cmd.stdin(Stdio::piped());
     cmd.stdout(Stdio::piped());
 

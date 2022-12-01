@@ -253,7 +253,7 @@
 
 <span class="kw">use crate</span>::{
     embed_js::attached_next_js_package_path,
-    env::filter_for_client,
+    env::env_for_js,
     next_client::runtime_entry::{RuntimeEntriesVc, RuntimeEntry},
     next_import_map::{
         get_next_client_fallback_import_map, get_next_client_import_map,
@@ -430,7 +430,7 @@
             </span>.as_request();
 
     <span class="kw">let </span><span class="kw-2">mut </span>runtime_entries = <span class="macro">vec!</span>[RuntimeEntry::Ecmascript(
-        ProcessEnvAssetVc::new(project_root, filter_for_client(env)).into(),
+        ProcessEnvAssetVc::new(project_root, env_for_js(env, <span class="bool-val">true</span>)).into(),
     )
     .cell()];
 

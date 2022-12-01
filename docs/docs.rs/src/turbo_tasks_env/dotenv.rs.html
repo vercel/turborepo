@@ -87,7 +87,11 @@
 <span id="87">87</span>
 <span id="88">88</span>
 <span id="89">89</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::env;
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{env, sync::MutexGuard};
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexMap;
@@ -130,14 +134,14 @@
             <span class="kw">let </span>res;
             <span class="kw">let </span>vars;
             {
-                <span class="kw">let </span>_lock = GLOBAL_ENV_LOCK.lock().unwrap();
+                <span class="kw">let </span>lock = GLOBAL_ENV_LOCK.lock().unwrap();
 
                 <span class="comment">// Unfortunately, dotenvy only looks up variable references from the global env.
                 // So we must mutate while we process. Afterwards, we can restore the initial
                 // state.
                 </span><span class="kw">let </span>initial = env::vars().collect();
 
-                restore_env(<span class="kw-2">&amp;</span>initial, prior);
+                restore_env(<span class="kw-2">&amp;</span>initial, prior, <span class="kw-2">&amp;</span>lock);
 
                 <span class="comment">// from_read will load parse and evalute the Read, and set variables
                 // into the global env. If a later dotenv defines an already defined
@@ -145,7 +149,7 @@
                 </span>res = dotenvy::from_read(f.read());
 
                 vars = env::vars().collect();
-                restore_env(<span class="kw-2">&amp;</span>vars, <span class="kw-2">&amp;</span>initial);
+                restore_env(<span class="kw-2">&amp;</span>vars, <span class="kw-2">&amp;</span>initial, <span class="kw-2">&amp;</span>lock);
             }
 
             <span class="kw">if </span>res.is_err() {
@@ -163,7 +167,11 @@
 }
 
 <span class="doccomment">/// Restores the global env variables to mirror `to`.
-</span><span class="kw">fn </span>restore_env(from: <span class="kw-2">&amp;</span>IndexMap&lt;String, String&gt;, to: <span class="kw-2">&amp;</span>IndexMap&lt;String, String&gt;) {
+</span><span class="kw">fn </span>restore_env(
+    from: <span class="kw-2">&amp;</span>IndexMap&lt;String, String&gt;,
+    to: <span class="kw-2">&amp;</span>IndexMap&lt;String, String&gt;,
+    _lock: <span class="kw-2">&amp;</span>MutexGuard&lt;()&gt;,
+) {
     <span class="kw">for </span>key <span class="kw">in </span>from.keys() {
         <span class="kw">if </span>!to.contains_key(key) {
             env::remove_var(key);

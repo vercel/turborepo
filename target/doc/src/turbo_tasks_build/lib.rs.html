@@ -453,6 +453,7 @@
 <span id="453">453</span>
 <span id="454">454</span>
 <span id="455">455</span>
+<span id="456">456</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{HashMap, HashSet},
     env::{<span class="self">self</span>, current_dir},
@@ -828,7 +829,8 @@
         <span class="kw">let </span>entry = <span class="self">self</span>.values.get_mut(<span class="kw-2">&amp;</span>key);
         <span class="kw">if </span>entry.is_none() {
             <span class="macro">panic!</span>(
-                <span class="string">&quot;failed to add value trait {} to {} in {}&quot;</span>,
+                <span class="string">&quot;failed to add value trait {} to {} in {}. Did you try to implement a trait on a \
+                 Vc instead of its value?&quot;</span>,
                 trait_ident,
                 ident,
                 <span class="self">self</span>.file_path.display()

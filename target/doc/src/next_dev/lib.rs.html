@@ -485,6 +485,23 @@
 <span id="485">485</span>
 <span id="486">486</span>
 <span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -505,7 +522,7 @@
 <span class="kw">use </span>devserver_options::DevServerOptions;
 <span class="kw">use </span>next_core::{
     create_app_source, create_server_rendered_source, create_web_entry_source, env::load_env,
-    source_map::NextSourceMapTraceContentSourceVc,
+    next_image::NextImageContentSourceVc, source_map::NextSourceMapTraceContentSourceVc,
 };
 <span class="kw">use </span>owo_colors::OwoColorize;
 <span class="kw">use </span>turbo_tasks::{
@@ -520,17 +537,23 @@
     fs::DevServerFileSystemVc,
     introspect::IntrospectionSource,
     source::{
-        combined::CombinedContentSource, router::RouterContentSource,
+        combined::CombinedContentSourceVc, router::RouterContentSource,
         static_assets::StaticAssetsContentSourceVc, ContentSourceVc,
     },
     DevServer,
 };
 
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub enum </span>EntryRequest {
+    Relative(String),
+    Module(String, String),
+}
+
 <span class="kw">pub struct </span>NextDevServerBuilder {
     turbo_tasks: Arc&lt;TurboTasks&lt;MemoryBackend&gt;&gt;,
     project_dir: String,
     root_dir: String,
-    entry_requests: Vec&lt;String&gt;,
+    entry_requests: Vec&lt;EntryRequest&gt;,
     server_component_externals: Vec&lt;String&gt;,
     eager_compile: bool,
     hostname: <span class="prelude-ty">Option</span>&lt;IpAddr&gt;,
@@ -567,7 +590,7 @@
         }
     }
 
-    <span class="kw">pub fn </span>entry_request(<span class="kw-2">mut </span><span class="self">self</span>, entry_asset_path: String) -&gt; NextDevServerBuilder {
+    <span class="kw">pub fn </span>entry_request(<span class="kw-2">mut </span><span class="self">self</span>, entry_asset_path: EntryRequest) -&gt; NextDevServerBuilder {
         <span class="self">self</span>.entry_requests.push(entry_asset_path);
         <span class="self">self
     </span>}
@@ -622,7 +645,6 @@
 
         <span class="kw">let </span>project_dir = <span class="self">self</span>.project_dir;
         <span class="kw">let </span>root_dir = <span class="self">self</span>.root_dir;
-        <span class="kw">let </span>entry_requests = <span class="self">self</span>.entry_requests;
         <span class="kw">let </span>server_component_externals = <span class="self">self</span>.server_component_externals;
         <span class="kw">let </span>eager_compile = <span class="self">self</span>.eager_compile;
         <span class="kw">let </span>show_all = <span class="self">self</span>.show_all;
@@ -634,6 +656,7 @@
             log_detail,
             log_level: <span class="self">self</span>.log_level,
         };
+        <span class="kw">let </span>entry_requests = Arc::new(<span class="self">self</span>.entry_requests.clone());
         <span class="kw">let </span>console_ui = Arc::new(ConsoleUi::new(log_options));
         <span class="kw">let </span>console_ui_to_dev_server = console_ui.clone();
 
@@ -647,7 +670,7 @@
             source(
                 root_dir.clone(),
                 project_dir.clone(),
-                entry_requests.clone(),
+                entry_requests.clone().into(),
                 eager_compile,
                 turbo_tasks.clone().into(),
                 console_ui.clone().into(),
@@ -744,7 +767,7 @@
 </span><span class="kw">async fn </span>source(
     root_dir: String,
     project_dir: String,
-    entry_requests: Vec&lt;String&gt;,
+    entry_requests: TransientInstance&lt;Vec&lt;EntryRequest&gt;&gt;,
     eager_compile: bool,
     turbo_tasks: TransientInstance&lt;TurboTasks&lt;MemoryBackend&gt;&gt;,
     console_ui: TransientInstance&lt;ConsoleUi&gt;,
@@ -766,13 +789,19 @@
 
     <span class="kw">let </span>dev_server_fs = DevServerFileSystemVc::new().as_file_system();
     <span class="kw">let </span>dev_server_root = dev_server_fs.root();
+    <span class="kw">let </span>entry_requests = entry_requests
+        .iter()
+        .map(|r| <span class="kw">match </span>r {
+            EntryRequest::Relative(p) =&gt; RequestVc::relative(Value::new(p.clone().into()), <span class="bool-val">false</span>),
+            EntryRequest::Module(m, p) =&gt; {
+                RequestVc::module(m.clone(), Value::new(p.clone().into()))
+            }
+        })
+        .collect();
 
     <span class="kw">let </span>web_source = create_web_entry_source(
         project_path,
-        entry_requests
-            .iter()
-            .map(|a| RequestVc::relative(Value::new(a.to_string().into()), <span class="bool-val">false</span>))
-            .collect(),
+        entry_requests,
         dev_server_root,
         env,
         eager_compile,
@@ -800,16 +829,19 @@
     .into();
     <span class="kw">let </span>static_source =
         StaticAssetsContentSourceVc::new(String::new(), project_path.join(<span class="string">&quot;public&quot;</span>)).into();
-    <span class="kw">let </span>main_source = CombinedContentSource {
-        sources: <span class="macro">vec!</span>[static_source, app_source, rendered_source, web_source],
-    }
-    .cell();
+    <span class="kw">let </span>main_source =
+        CombinedContentSourceVc::new(<span class="macro">vec!</span>[static_source, app_source, rendered_source, web_source]);
     <span class="kw">let </span>introspect = IntrospectionSource {
         roots: HashSet::from([main_source.into()]),
     }
     .cell()
     .into();
-    <span class="kw">let </span>source_map_trace = NextSourceMapTraceContentSourceVc::new(main_source.into()).into();
+    <span class="kw">let </span>main_source = main_source.into();
+    <span class="kw">let </span>source_map_trace = NextSourceMapTraceContentSourceVc::new(main_source).into();
+    <span class="kw">let </span>img_source = NextImageContentSourceVc::new(
+        CombinedContentSourceVc::new(<span class="macro">vec!</span>[static_source, rendered_source]).into(),
+    )
+    .into();
     <span class="kw">let </span>source = RouterContentSource {
         routes: <span class="macro">vec!</span>[
             (<span class="string">&quot;__turbopack__/&quot;</span>.to_string(), introspect),
@@ -818,8 +850,10 @@
                 <span class="string">&quot;__nextjs_original-stack-frame&quot;</span>.to_string(),
                 source_map_trace,
             ),
+            <span class="comment">// TODO: Load path from next.config.js
+            </span>(<span class="string">&quot;_next/image&quot;</span>.to_string(), img_source),
         ],
-        fallback: main_source.into(),
+        fallback: main_source,
     }
     .cell()
     .into();
@@ -876,7 +910,7 @@
 
     <span class="attr">#[allow(unused_mut)]
     </span><span class="kw">let </span><span class="kw-2">mut </span>server = NextDevServerBuilder::new(tt, dir, root_dir)
-        .entry_request(<span class="string">&quot;src/index&quot;</span>.into())
+        .entry_request(EntryRequest::Relative(<span class="string">&quot;src/index&quot;</span>.into()))
         .eager_compile(options.eager_compile)
         .hostname(options.hostname)
         .port(options.port)
