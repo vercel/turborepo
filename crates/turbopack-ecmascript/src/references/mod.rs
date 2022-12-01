@@ -51,7 +51,7 @@ use self::{
     cjs::CjsAssetReferenceVc,
     esm::{
         export::EsmExport, EsmAssetReferenceVc, EsmAsyncAssetReferenceVc, EsmExports,
-        EsmModuleItemVc, ImportMetaRefVc,
+        EsmModuleItemVc, ImportMetaBindingVc, ImportMetaRefVc,
     },
     node::{DirAssetReferenceVc, PackageJsonReferenceVc},
     raw::SourceAssetReferenceVc,
@@ -1163,12 +1163,12 @@ pub(crate) async fn analyze_ecmascript_module(
                         }
                     }
                     Effect::ImportMeta { span: _, ast_path } => {
-                        analysis.add_code_gen(ImportMetaRefVc::new(
-                            source.path(),
-                            first_import_meta,
-                            AstPathVc::cell(ast_path),
-                        ));
-                        first_import_meta = false;
+                        if first_import_meta {
+                            first_import_meta = false;
+                            analysis.add_code_gen(ImportMetaBindingVc::new(source.path()));
+                        }
+
+                        analysis.add_code_gen(ImportMetaRefVc::new(AstPathVc::cell(ast_path)));
                     }
                 }
             }

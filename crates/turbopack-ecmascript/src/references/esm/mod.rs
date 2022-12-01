@@ -11,6 +11,6 @@ pub use self::{
     binding::{EsmBinding, EsmBindingVc},
     dynamic::{EsmAsyncAssetReference, EsmAsyncAssetReferenceVc},
     export::{EsmExports, EsmExportsVc},
-    meta::{ImportMetaRef, ImportMetaRefVc},
+    meta::{ImportMetaBinding, ImportMetaBindingVc, ImportMetaRef, ImportMetaRefVc},
     module_item::{EsmModuleItem, EsmModuleItemVc},
 };
