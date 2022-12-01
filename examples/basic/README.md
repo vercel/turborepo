@@ -34,7 +34,7 @@ Run the following command:
 ```sh
 npx degit vercel/turbo/examples/basic basic
 cd basic
-yarn install
+pnpm install
 git init . && git add . && git commit -m "Init"
 ```
 

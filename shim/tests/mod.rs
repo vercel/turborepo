@@ -31,7 +31,7 @@ fn test_no_arguments() {
 #[test]
 fn test_find_turbo_in_example() {
     let mut cmd = Command::cargo_bin("turbo").unwrap();
-    cmd.args(["--cwd", "../examples/basic", "bin"])
+    cmd.args(["--cwd", "../examples/with-yarn", "bin"])
         .assert()
         .append_context(
             "turbo",
@@ -39,28 +39,28 @@ fn test_find_turbo_in_example() {
         )
         .append_context(
             "expect",
-            "`turbo --cwd ../../examples/basic bin` should print out local turbo binary installed \
-             in examples/basic",
+            "`turbo --cwd ../../examples/with-yarn bin` should print out local turbo binary \
+             installed in examples/with-yarn",
         )
         .success()
         .stdout(predicates::str::ends_with({
             #[cfg(target_os = "linux")]
             {
-                "examples/basic/node_modules/turbo/bin/turbo\n"
+                "examples/with-yarn/node_modules/turbo/bin/turbo\n"
             }
             #[cfg(target_os = "macos")]
             {
-                "examples/basic/node_modules/.bin/turbo\n"
+                "examples/with-yarn/node_modules/.bin/turbo\n"
             }
             #[cfg(target_os = "windows")]
             {
                 #[cfg(target_arch = "x86_64")]
                 {
-                    "examples\\basic\\node_modules\\turbo-windows-64\\bin\\turbo.exe\n"
+                    "examples\\with-yarn\\node_modules\\turbo-windows-64\\bin\\turbo.exe\n"
                 }
                 #[cfg(target_arch = "aarch64")]
                 {
-                    "examples\\basic\\node_modules\\turbo-windows-arm64\\bin\\turbo.exe\n"
+                    "examples\\with-yarn\\node_modules\\turbo-windows-arm64\\bin\\turbo.exe\n"
                 }
             }
         }));

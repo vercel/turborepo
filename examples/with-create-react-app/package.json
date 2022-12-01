@@ -1,9 +1,5 @@
 {
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "build": "turbo run build",
     "clean": "turbo run clean",
@@ -17,5 +13,5 @@
     "prettier": "^2.5.1",
     "turbo": "latest"
   },
-  "packageManager": "yarn@1.22.17"
+  "packageManager": "pnpm@7.15.0"
 }

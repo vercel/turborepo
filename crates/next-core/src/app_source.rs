@@ -37,6 +37,11 @@ use turbopack_ecmascript::{
     EcmascriptInputTransformsVc, EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
 };
 use turbopack_env::ProcessEnvAssetVc;
+use turbopack_node::{
+    create_node_rendered_source,
+    node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
+    NodeEntry, NodeEntryVc,
+};
 
 use crate::{
     app_render::{
@@ -59,11 +64,6 @@ use crate::{
     next_server::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
-    },
-    nodejs::{
-        create_node_rendered_source,
-        node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
-        NodeEntry, NodeEntryVc,
     },
     util::regular_expression_for_path,
 };
@@ -255,7 +255,7 @@ pub async fn create_app_source(
     let server_runtime_entries =
         vec![ProcessEnvAssetVc::new(project_root, env).as_ecmascript_chunk_placeable()];
 
-    let fallback_page = get_fallback_page(project_root, server_root, browserslist_query);
+    let fallback_page = get_fallback_page(project_root, server_root, env, browserslist_query);
 
     Ok(create_app_source_for_directory(
         context_ssr,

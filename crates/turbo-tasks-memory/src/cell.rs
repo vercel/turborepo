@@ -1,23 +1,16 @@
-use std::{collections::HashSet, fmt::Debug};
+use std::fmt::Debug;
 
+use auto_hash_map::AutoSet;
 use turbo_tasks::{backend::CellContent, TaskId, TurboTasksBackendApi};
 
 #[derive(Default, Debug)]
 pub struct Cell {
     content: CellContent,
     updates: u32,
-    pub(crate) dependent_tasks: HashSet<TaskId>,
+    pub(crate) dependent_tasks: AutoSet<TaskId>,
 }
 
 impl Cell {
-    pub fn new() -> Self {
-        Self {
-            content: CellContent(None),
-            updates: 0,
-            dependent_tasks: HashSet::new(),
-        }
-    }
-
     pub fn read_content(&mut self, reader: TaskId) -> CellContent {
         self.dependent_tasks.insert(reader);
         self.read_content_untracked()
