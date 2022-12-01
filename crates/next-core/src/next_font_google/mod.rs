@@ -5,7 +5,8 @@ use turbo_tasks::{
     TryJoinIterExt,
 };
 use turbo_tasks_fetch::fetch;
-use turbo_tasks_fs::{FileContent, FileSystemPathVc};
+use turbo_tasks_fs::{File, FileContent, FileContentVc, FileSystemPathVc};
+use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
     resolve::{
         options::{
@@ -163,22 +164,37 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
                         .to_owned(),
                 )),
             );
-            let font_urls = extract_font_urls(
+            let fonts = extract_font_urls(
                 &res.await?.body.to_string().await?,
                 options.subsets.as_ref(),
                 options.preload,
             )?;
 
             let mut requests = vec![];
-            for font_url in &font_urls {
+            for font_url in &fonts.all_urls {
                 requests.push(fetch(
-                    StringVc::cell(font_url.url.to_owned()),
+                    StringVc::cell(font_url.to_owned()),
                     OptionStringVc::cell(None),
                 ));
             }
 
-            for response in requests.iter().try_join().await? {
-                println!("received response with status {}", response.status);
+            let fonts_dir = self.project_path.join(".next/static/media");
+            for (url, response) in fonts
+                .all_urls
+                .iter()
+                .zip(requests.iter().try_join().await?.iter())
+            {
+                let should_preload = fonts.preload_urls.contains(url);
+                let filename = format!(
+                    "{:x}{}.{}",
+                    hash_xxh3_hash64(url),
+                    if should_preload { ".p" } else { "" },
+                    "woff2"
+                );
+                let body = &*response.body.await?;
+                fonts_dir
+                    .join(&filename)
+                    .write(FileContent::Content(File::from(body.0.clone())).into());
             }
 
             let css_asset = VirtualAssetVc::new(
