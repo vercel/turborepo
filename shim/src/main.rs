@@ -95,12 +95,14 @@ impl TurboState {
             Some(Command::Daemon { .. })
             | Some(Command::Run(_))
             | Some(Command::Prune { .. })
-            | None => {
-                let serialized_state = self.try_into()?;
-                let exit_code = unsafe { nativeRunWithTurboState(serialized_state) };
-                Ok(exit_code.try_into()?)
-            }
+            | None => self.native_run(),
         }
+    }
+
+    fn native_run(self) -> Result<i32> {
+        let serialized_state = self.try_into()?;
+        let exit_code = unsafe { nativeRunWithTurboState(serialized_state) };
+        Ok(exit_code.try_into()?)
     }
 
     /// Attempts to run correct turbo by finding nearest package.json,
@@ -319,28 +321,24 @@ fn main() -> Result<()> {
         Some(Command::Login { .. })
         | Some(Command::Link { .. })
         | Some(Command::Logout { .. })
-        | Some(Command::Unlink { .. })
-            if is_turbo_binary_path_set() =>
-        {
-            let serialized_state = turbo_state.try_into()?;
-            let exit_code = unsafe { nativeRunWithTurboState(serialized_state) };
-            exit_code.try_into()?
-        }
+        | Some(Command::Unlink { .. }) => turbo_state.native_run()?,
         Some(Command::Completion { shell }) => {
             generate(shell, &mut Args::command(), "turbo", &mut io::stdout());
 
             0
         }
         _ => {
-            let exit_code = match turbo_state.run_correct_turbo(&current_dir) {
-                Ok(exit_code) => exit_code,
-                Err(e) => {
-                    eprintln!("failed: {:?}", e);
-                    2
+            if is_turbo_binary_path_set() {
+                turbo_state.native_run()?
+            } else {
+                match turbo_state.run_correct_turbo(&current_dir) {
+                    Ok(exit_code) => exit_code,
+                    Err(e) => {
+                        eprintln!("failed: {:?}", e);
+                        2
+                    }
                 }
-            };
-
-            exit_code
+            }
         }
     };
 
