@@ -28,7 +28,6 @@ function cleanup {
   rm -rf packages/*/.next
   rm -rf packages/*/.turbo
   rm -rf *.log
-  rm -f ../../shim/src/ffi.rs
 }
 
 function setup_git {
