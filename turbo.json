@@ -1,6 +1,9 @@
 {
   "$schema": "./docs/public/schema.json",
   "pipeline": {
+    "eslint-plugin-turbo#test": {
+      "dependsOn": ["build"]
+    },
     "test": {
       "outputs": ["coverage/**/*"],
       "dependsOn": ["^build"]
