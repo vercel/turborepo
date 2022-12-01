@@ -1883,6 +1883,21 @@
 <span id="1883">1883</span>
 <span id="1884">1884</span>
 <span id="1885">1885</span>
+<span id="1886">1886</span>
+<span id="1887">1887</span>
+<span id="1888">1888</span>
+<span id="1889">1889</span>
+<span id="1890">1890</span>
+<span id="1891">1891</span>
+<span id="1892">1892</span>
+<span id="1893">1893</span>
+<span id="1894">1894</span>
+<span id="1895">1895</span>
+<span id="1896">1896</span>
+<span id="1897">1897</span>
+<span id="1898">1898</span>
+<span id="1899">1899</span>
+<span id="1900">1900</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>esm;
@@ -1936,7 +1951,7 @@
     cjs::CjsAssetReferenceVc,
     esm::{
         export::EsmExport, EsmAssetReferenceVc, EsmAsyncAssetReferenceVc, EsmExports,
-        EsmModuleItemVc,
+        EsmModuleItemVc, ImportMetaBindingVc, ImportMetaRefVc,
     },
     node::{DirAssetReferenceVc, PackageJsonReferenceVc},
     raw::SourceAssetReferenceVc,
@@ -2281,7 +2296,8 @@
 
             analysis.set_exports(exports);
 
-            <span class="kw">fn </span>handle_call_boxed&lt;
+            <span class="attr">#[allow(clippy::too_many_arguments)]
+            </span><span class="kw">fn </span>handle_call_boxed&lt;
                 <span class="lifetime">&#39;a</span>,
                 FF: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;JsValue&gt;&gt; + Send + <span class="lifetime">&#39;a</span>,
                 F: Fn(JsValue) -&gt; FF + Sync + <span class="lifetime">&#39;a</span>,
@@ -2315,7 +2331,8 @@
                 ))
             }
 
-            <span class="kw">async fn </span>handle_call&lt;
+            <span class="attr">#[allow(clippy::too_many_arguments)]
+            </span><span class="kw">async fn </span>handle_call&lt;
                 FF: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;JsValue&gt;&gt; + Send,
                 F: Fn(JsValue) -&gt; FF + Sync,
             &gt;(
@@ -2947,6 +2964,9 @@
             <span class="kw">let </span>linker = |value| value_visitor(source, origin, value, environment);
             <span class="kw">let </span>effects = take(<span class="kw-2">&amp;mut </span>var_graph.effects);
             <span class="kw">let </span>link_value = |value| link(<span class="kw-2">&amp;</span>var_graph, value, <span class="kw-2">&amp;</span>linker, <span class="kw-2">&amp;</span>cache);
+            <span class="comment">// There can be many references to import.meta, but only the first should hoist
+            // the object allocation.
+            </span><span class="kw">let </span><span class="kw-2">mut </span>first_import_meta = <span class="bool-val">true</span>;
 
             <span class="kw">for </span>effect <span class="kw">in </span>effects.into_iter() {
                 <span class="kw">match </span>effect {
@@ -3042,14 +3062,13 @@
                             }
                         }
                     }
-                    Effect::ImportMeta { span, ast_path: <span class="kw">_ </span>} =&gt; {
-                        handler.span_warn_with_code(
-                            span,
-                            <span class="string">&quot;import.meta is not yet supported&quot;</span>,
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::IMPORT_META.to_string(),
-                            ),
-                        );
+                    Effect::ImportMeta { span: <span class="kw">_</span>, ast_path } =&gt; {
+                        <span class="kw">if </span>first_import_meta {
+                            first_import_meta = <span class="bool-val">false</span>;
+                            analysis.add_code_gen(ImportMetaBindingVc::new(source.path()));
+                        }
+
+                        analysis.add_code_gen(ImportMetaRefVc::new(AstPathVc::cell(ast_path)));
                     }
                 }
             }
@@ -3212,7 +3231,18 @@
     ));
 }
 
-<span class="kw">async fn </span>as_abs_path(path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue&gt; {
+<span class="doccomment">/// Used to generate the &quot;root&quot; path to a __filename/__dirname/import.meta.url
+/// reference.
+</span><span class="kw">pub async fn </span>as_abs_path(path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue&gt; {
+    <span class="comment">// TODO: This should be updated to generate a real system path on the fly
+    // during runtime, so that the generated code is constant between systems
+    // but the runtime evaluation can take into account the project&#39;s
+    // actual root directory.
+    </span>require_resolve(path).<span class="kw">await
+</span>}
+
+<span class="doccomment">/// Generates an absolute path usable for `require.resolve()` calls.
+</span><span class="kw">async fn </span>require_resolve(path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue&gt; {
     <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">&quot;/ROOT/{}&quot;</span>, path.<span class="kw">await</span><span class="question-mark">?</span>.path.as_str()).into())
 }
 
@@ -3245,11 +3275,11 @@
                     <span class="kw">let </span>request = RequestVc::parse(Value::new(pat.clone()));
                     <span class="kw">let </span>resolved = cjs_resolve(origin, request).<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">match </span><span class="kw-2">&amp;*</span>resolved {
-                        ResolveResult::Single(asset, <span class="kw">_</span>) =&gt; as_abs_path(asset.path()).<span class="kw">await</span><span class="question-mark">?</span>,
+                        ResolveResult::Single(asset, <span class="kw">_</span>) =&gt; require_resolve(asset.path()).<span class="kw">await</span><span class="question-mark">?</span>,
                         ResolveResult::Alternatives(assets, <span class="kw">_</span>) =&gt; JsValue::alternatives(
                             assets
                                 .iter()
-                                .map(|asset| as_abs_path(asset.path()))
+                                .map(|asset| require_resolve(asset.path()))
                                 .try_join()
                                 .<span class="kw">await</span><span class="question-mark">?</span>,
                         ),

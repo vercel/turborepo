@@ -1,0 +1,342 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/turbopack-ecmascript/src/references/esm/meta.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>meta.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../../../normalize.css"><link rel="stylesheet" href="../../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../../../ayu.css" disabled><link rel="stylesheet" href="../../../../dark.css" disabled><link rel="stylesheet" href="../../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../../storage.js"></script><script defer src="../../../../source-script.js"></script><script defer src="../../../../source-files.js"></script><script defer src="../../../../main.js"></script><noscript><link rel="stylesheet" href="../../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../../turbopack_ecmascript/index.html"><img class="rust-logo" src="../../../../rust-logo.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../wheel.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
+
+<span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>swc_core::{
+    common::DUMMY_SP,
+    ecma::ast::{Expr, Ident},
+    quote,
+};
+<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span class="kw">use </span>turbopack_core::chunk::ChunkingContextVc;
+
+<span class="kw">use crate</span>::{
+    code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
+    create_visitor, magic_identifier,
+    references::{as_abs_path, esm::base::insert_hoisted_stmt, AstPathVc},
+};
+
+<span class="doccomment">/// Responsible for initializing the `import.meta` object binding, so that it
+/// may be referenced in th the file.
+///
+/// There can be many references to import.meta, and they appear at any nesting
+/// in the file. But we must only initialize the binding a single time.
+</span><span class="attr">#[turbo_tasks::value(shared)]
+#[derive(Hash, Debug)]
+</span><span class="kw">pub struct </span>ImportMetaBinding {
+    path: FileSystemPathVc,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ImportMetaBindingVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>new(path: FileSystemPathVc) -&gt; <span class="self">Self </span>{
+        ImportMetaBinding { path }.cell()
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>ImportMetaBinding {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, _context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
+        <span class="kw">let </span>path = as_abs_path(<span class="self">self</span>.path).<span class="kw">await</span><span class="question-mark">?</span>.as_str().map_or_else(
+            || {
+                <span class="macro">quote!</span>(
+                    <span class="string">&quot;(() =&gt; { throw new Error(&#39;could not convert import.meta.url to filepath&#39;) })()&quot;
+                        </span><span class="kw">as </span>Expr
+                )
+            },
+            |path| <span class="macro">format!</span>(<span class="string">&quot;file://{}&quot;</span>, encode_path(path)).into(),
+        );
+
+        <span class="kw">let </span>visitor = <span class="macro">create_visitor!</span>(visit_mut_program(program: <span class="kw-2">&amp;mut </span>Program) {
+            <span class="kw">let </span>meta = <span class="macro">quote!</span>(
+                <span class="string">&quot;const $name = { url: $path };&quot; </span><span class="kw">as </span>Stmt,
+                name = meta_ident(),
+                path: Expr = path.clone(),
+            );
+            insert_hoisted_stmt(program, meta);
+        });
+
+        <span class="prelude-val">Ok</span>(CodeGeneration {
+            visitors: <span class="macro">vec!</span>[visitor],
+        }
+        .into())
+    }
+}
+
+<span class="doccomment">/// Handles rewriting `import.meta` references into the injected binding created
+/// by ImportMetaBindi ImportMetaBinding.
+///
+/// There can be many references to import.meta, and they appear at any nesting
+/// in the file. But all references refer to the same mutable object.
+</span><span class="attr">#[turbo_tasks::value(shared)]
+#[derive(Hash, Debug)]
+</span><span class="kw">pub struct </span>ImportMetaRef {
+    ast_path: AstPathVc,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ImportMetaRefVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>new(ast_path: AstPathVc) -&gt; <span class="self">Self </span>{
+        ImportMetaRef { ast_path }.cell()
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>ImportMetaRef {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, _context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
+        <span class="kw">let </span>ast_path = <span class="kw-2">&amp;</span><span class="self">self</span>.ast_path.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>visitor = <span class="macro">create_visitor!</span>(ast_path, visit_mut_expr(expr: <span class="kw-2">&amp;mut </span>Expr) {
+            <span class="kw-2">*</span>expr = Expr::Ident(meta_ident());
+        });
+
+        <span class="prelude-val">Ok</span>(CodeGeneration {
+            visitors: <span class="macro">vec!</span>[visitor],
+        }
+        .into())
+    }
+}
+
+<span class="doccomment">/// URL encodes special chars that would appear in the &quot;pathname&quot; portion.
+/// https://github.com/nodejs/node/blob/3bed5f11e039153eff5cbfd9513b8f55fd53fc43/lib/internal/url.js#L1513-L1526
+</span><span class="kw">fn </span>encode_path(path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span>str) -&gt; Cow&lt;<span class="lifetime">&#39;_</span>, str&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>encoded = String::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>start = <span class="number">0</span>;
+    <span class="kw">for </span>(i, c) <span class="kw">in </span>path.chars().enumerate() {
+        <span class="kw">let </span>mapping = <span class="kw">match </span>c {
+            <span class="string">&#39;%&#39; </span>=&gt; <span class="string">&quot;%25&quot;</span>,
+            <span class="string">&#39;\\&#39; </span>=&gt; <span class="string">&quot;%5C&quot;</span>,
+            <span class="string">&#39;\n&#39; </span>=&gt; <span class="string">&quot;%0A&quot;</span>,
+            <span class="string">&#39;\r&#39; </span>=&gt; <span class="string">&quot;%0D&quot;</span>,
+            <span class="string">&#39;\t&#39; </span>=&gt; <span class="string">&quot;%09&quot;</span>,
+            <span class="kw">_ </span>=&gt; <span class="kw">continue</span>,
+        };
+
+        <span class="kw">if </span>encoded.is_empty() {
+            encoded.reserve(path.len());
+        }
+
+        encoded += <span class="kw-2">&amp;</span>path[start..i];
+        encoded += mapping;
+        start = i + <span class="number">1</span>;
+    }
+
+    <span class="kw">if </span>encoded.is_empty() {
+        <span class="kw">return </span>Cow::Borrowed(path);
+    }
+    encoded += <span class="kw-2">&amp;</span>path[start..];
+    Cow::Owned(encoded)
+}
+
+<span class="kw">fn </span>meta_ident() -&gt; Ident {
+    Ident::new(magic_identifier::encode(<span class="string">&quot;import.meta&quot;</span>).into(), DUMMY_SP)
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>test {
+    <span class="kw">use </span><span class="kw">super</span>::encode_path;
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_encode_path_regular() {
+        <span class="kw">let </span>input = <span class="string">&quot;abc&quot;</span>;
+        <span class="macro">assert_eq!</span>(encode_path(input), <span class="string">&quot;abc&quot;</span>);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_encode_path_special_chars() {
+        <span class="kw">let </span>input = <span class="string">&quot;abc%def\\ghi\njkl\rmno\tpqr&quot;</span>;
+        <span class="macro">assert_eq!</span>(encode_path(input), <span class="string">&quot;abc%25def%5Cghi%0Ajkl%0Dmno%09pqr&quot;</span>);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_encode_path_special_char_start() {
+        <span class="kw">let </span>input = <span class="string">&quot;%abc&quot;</span>;
+        <span class="macro">assert_eq!</span>(encode_path(input), <span class="string">&quot;%25abc&quot;</span>);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_encode_path_special_char_end() {
+        <span class="kw">let </span>input = <span class="string">&quot;abc%&quot;</span>;
+        <span class="macro">assert_eq!</span>(encode_path(input), <span class="string">&quot;abc%25&quot;</span>);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_encode_path_special_char_contiguous() {
+        <span class="kw">let </span>input = <span class="string">&quot;%%%&quot;</span>;
+        <span class="macro">assert_eq!</span>(encode_path(input), <span class="string">&quot;%25%25%25&quot;</span>);
+    }
+}
+</code></pre></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../../" data-current-crate="turbopack_ecmascript" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

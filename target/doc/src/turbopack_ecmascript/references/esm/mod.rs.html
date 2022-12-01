@@ -12,10 +12,13 @@
 <span id="12">12</span>
 <span id="13">13</span>
 <span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>base;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>binding;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>dynamic;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>export;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>meta;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>module_id;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>module_item;
 
@@ -24,6 +27,7 @@
     binding::{EsmBinding, EsmBindingVc},
     dynamic::{EsmAsyncAssetReference, EsmAsyncAssetReferenceVc},
     export::{EsmExports, EsmExportsVc},
+    meta::{ImportMetaBinding, ImportMetaBindingVc, ImportMetaRef, ImportMetaRefVc},
     module_item::{EsmModuleItem, EsmModuleItemVc},
 };
 </code></pre></div>
