@@ -123,13 +123,12 @@ async fn run_test(resource: &str) -> JestRunResult {
     let package_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace_root = package_root.parent().unwrap().parent().unwrap();
     let project_dir = workspace_root.join(resource);
-    let workspace_root = workspace_root.to_string_lossy().to_string();
     let requested_addr = get_free_local_addr().unwrap();
 
     let server = NextDevServerBuilder::new(
         TurboTasks::new(MemoryBackend::new()),
         sys_to_unix(&project_dir.to_string_lossy()).to_string(),
-        workspace_root,
+        sys_to_unix(&workspace_root.to_string_lossy()).to_string(),
     )
     .entry_request(EntryRequest::Module(
         "@turbo/pack-test-harness".to_string(),
