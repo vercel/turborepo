@@ -28,6 +28,8 @@ function cleanup {
   rm -rf packages/*/.next
   rm -rf packages/*/.turbo
   rm -rf *.log
+  rm -f ../../shim/src/ffi.rs
+  rm -f ../../cli/libturbo.h
 }
 
 function setup_git {
@@ -41,9 +43,6 @@ function setup_git {
   echo "" >> .git/config
   echo "[init]" >> .git/config
   echo "  defaultBranch = main" >> .git/config
-
-  echo "shim/src/ffi.rs" >> .gitignore
-  echo "cli/libturbo.h" >> .gitignore
   git init . -q
   git add .
   git commit -m "Initial commit"
