@@ -180,7 +180,7 @@ jobs:
           path: cli/dist-windows-amd64
 
       - name: Perform Release
-        run: cd cli && make publish-shim
+        run: cd cli && make publish-turbo
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

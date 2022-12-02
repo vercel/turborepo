@@ -4,6 +4,7 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/vercel/turbo/cli/internal/cmd"
 	"github.com/vercel/turbo/cli/internal/turbostate"
@@ -11,6 +12,7 @@ import (
 
 func main() {
 	fmt.Printf("ERROR: Go binary cannot be used on its own. Please build as c-archive and use with Rust crate")
+	os.Exit(1)
 }
 
 //export nativeRunWithTurboState

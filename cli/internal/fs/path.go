@@ -48,6 +48,13 @@ func AbsoluteSystemPathFromUpstream(s string) turbopath.AbsoluteSystemPath {
 
 // GetCwd returns the calculated working directory after traversing symlinks.
 func GetCwd(cwdRaw string) (turbopath.AbsoluteSystemPath, error) {
+	if cwdRaw == "" {
+		var err error
+		cwdRaw, err = os.Getwd()
+		if err != nil {
+			return "", err
+		}
+	}
 	// We evaluate symlinks here because the package managers
 	// we support do the same.
 	cwdRaw, err := filepath.EvalSymlinks(cwdRaw)
