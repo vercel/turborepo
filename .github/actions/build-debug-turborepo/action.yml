@@ -19,14 +19,10 @@ runs:
     - name: "Setup Rust toolchain"
       uses: actions-rs/toolchain@v1
       if: ${{ inputs.target != 'windows' }}
-    - name: "Setup Rust toolchain"
-      uses: actions-rs/toolchain@v1
+    - name: "Set Windows default host to MingW"
       if: ${{ inputs.target == 'windows' }}
-      with:
-        profile: minimal
-        override: true
-        target: x86_64-pc-windows-gnu
-        default: true
+      shell: bash
+      run: rustup set default-host x86_64-pc-windows-gnu && rustup show
     - name: "Setup Rust Cache"
       uses: Swatinem/rust-cache@v2
       with:

@@ -397,6 +397,7 @@ jobs:
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.go == 'true' || needs.determine_jobs.outputs.node == 'true'
     runs-on: ${{ matrix.os.runner }}
+    timeout-minutes: 15
     strategy:
       matrix:
         os:
