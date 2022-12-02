@@ -12,12 +12,6 @@ const SITE_ROOT = "https://turbo.build";
  * @type {import('nextra-theme-docs').DocsThemeConfig}
  */
 const theme = {
-  project: {
-    icon: Github,
-  },
-  chat: {
-    icon: Discord,
-  },
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
   getNextSeoProps: function SEO() {
     const router = useRouter();
@@ -151,7 +145,15 @@ const theme = {
   editLink: {
     text: "Edit this page on GitHub",
   },
-  navbar: Navigation,
+  navbar: {
+    component: Navigation,
+    extraContent: (
+      <>
+        <Github />
+        <Discord />
+      </>
+    ),
+  },
   search: {
     placeholder: "Search documentation…",
   },
