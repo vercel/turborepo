@@ -12,12 +12,12 @@ export function getComparison(args: GetComparisonArgs): {
   ref: string;
   type: "previousDeploy" | "headRelative" | "customFallback";
 } | null {
-  const { fallback = "HEAD^", workspace } = args;
+  const { fallback, workspace } = args;
   if (process.env.VERCEL === "1") {
     if (process.env.VERCEL_GIT_PREVIOUS_SHA) {
       // use the commit SHA of the last successful deployment for this project / branch
       info(
-        `found previous deployment ("${process.env.VERCEL_GIT_PREVIOUS_SHA}") for "${workspace}" on "${process.env.VERCEL_GIT_COMMIT_REF}"`
+        `found previous deployment ("${process.env.VERCEL_GIT_PREVIOUS_SHA}") for "${workspace}" on branch "${process.env.VERCEL_GIT_COMMIT_REF}"`
       );
       return {
         ref: process.env.VERCEL_GIT_PREVIOUS_SHA,
@@ -25,10 +25,10 @@ export function getComparison(args: GetComparisonArgs): {
       };
     } else {
       info(
-        `no previous deployments found for "${workspace}" on "${process.env.VERCEL_GIT_COMMIT_REF}".`
+        `no previous deployments found for "${workspace}" on branch "${process.env.VERCEL_GIT_COMMIT_REF}".`
       );
-      if (fallback && fallback !== "false") {
-        info(`falling back to ${fallback}`);
+      if (fallback) {
+        info(`falling back to ref ${fallback}`);
         return { ref: fallback, type: "customFallback" };
       }
 
