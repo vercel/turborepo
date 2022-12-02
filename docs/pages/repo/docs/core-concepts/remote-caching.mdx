@@ -43,6 +43,12 @@ If you want to link your local turborepo to your Remote Cache, first authenticat
 npx turbo login
 ```
 
+<Callout>
+  If your Remote Cache is configured to use single-sign-on you will need to run
+  `npx turbo login --sso-team=TEAMNAME` in order to get a cache token with the
+  correct privileges.
+</Callout>
+
 Next, link your Turborepo to your remote cache:
 
 ```sh

@@ -25,7 +25,7 @@ use turbopack_env::ProcessEnvAssetVc;
 
 use crate::{
     embed_js::attached_next_js_package_path,
-    env::filter_for_client,
+    env::env_for_js,
     next_client::runtime_entry::{RuntimeEntriesVc, RuntimeEntry},
     next_import_map::{
         get_next_client_fallback_import_map, get_next_client_import_map,
@@ -55,6 +55,7 @@ pub fn get_client_environment(browserslist_query: &str) -> EnvironmentVc {
 pub enum ContextType {
     Pages { pages_dir: FileSystemPathVc },
     App { app_dir: FileSystemPathVc },
+    Fallback,
     Other,
 }
 
@@ -167,7 +168,7 @@ pub fn get_client_chunking_context(
             ContextType::Pages { .. } | ContextType::App { .. } => {
                 server_root.join("/_next/static/chunks")
             }
-            ContextType::Other => server_root.join("/_chunks"),
+            ContextType::Fallback | ContextType::Other => server_root.join("/_chunks"),
         },
         get_client_assets_path(server_root, ty),
     )
@@ -184,7 +185,7 @@ pub fn get_client_assets_path(
         ContextType::Pages { .. } | ContextType::App { .. } => {
             server_root.join("/_next/static/assets")
         }
-        ContextType::Other => server_root.join("/_assets"),
+        ContextType::Fallback | ContextType::Other => server_root.join("/_assets"),
     }
 }
 
@@ -201,7 +202,7 @@ pub async fn get_client_runtime_entries(
             .as_request();
 
     let mut runtime_entries = vec![RuntimeEntry::Ecmascript(
-        ProcessEnvAssetVc::new(project_root, filter_for_client(env)).into(),
+        ProcessEnvAssetVc::new(project_root, env_for_js(env, true)).into(),
     )
     .cell()];
 

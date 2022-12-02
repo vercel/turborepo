@@ -11,7 +11,7 @@
     "format:prettier": "prettier -w .",
     "format:rs": "cargo fmt --all",
     "format:toml": "taplo format",
-    "lint": "eslint . --ext js,jsx,ts,tsx -c ./.eslintrc.js",
+    "lint": "eslint . --ext js,jsx,ts,tsx",
     "turbo": "cd cli && make turbo && cd .. && node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
     "run-example": "./scripts/run-example.sh"
@@ -33,10 +33,11 @@
     "typescript": "^4.8.4"
   },
   "lint-staged": {
-    "*.@(js|ts)": [
-      "eslint --quiet --fix"
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --ext js,jsx,ts,tsx --quiet --fix --",
+      "prettier --write"
     ],
-    "*.{ts,tsx,md,mdx,js,jsx,mjs,yml,yaml,css}": [
+    "*.{md,mdx,mjs,yml,yaml,css}": [
       "prettier --write"
     ],
     "*.go": [

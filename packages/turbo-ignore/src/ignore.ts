@@ -3,22 +3,27 @@ import path from "path";
 import { getTurboRoot } from "turbo-utils";
 import { getComparison } from "./getComparison";
 import { getWorkspace } from "./getWorkspace";
-import { info, error } from "./logger";
+import { info, warn, error } from "./logger";
+import { shouldWarn } from "./errors";
 import { TurboIgnoreArgs } from "./types";
+import { checkCommit } from "./checkCommit";
 
 function ignoreBuild() {
-  info(`ignoring the change`);
+  const ignoreLog = "⬜️  ignoring the change";
+  console.log(`\n${ignoreLog}`);
   return process.exit(0);
 }
 
 function continueBuild() {
-  info(`proceeding with deployment`);
+  const proceedLog = "✅  proceeding with deployment";
+
+  console.log(`\n${proceedLog}`);
   return process.exit(1);
 }
 
 export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
   info(
-    "Using Turborepo to determine if this project is affected by the commit...\n"
+    `Using Turborepo to determine if this project is affected by the commit...\n`
   );
 
   // set default directory
@@ -45,6 +50,20 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
     return continueBuild();
   }
 
+  // check the commit message
+  const parsedCommit = checkCommit({ workspace });
+  if (parsedCommit.result === "skip") {
+    info(parsedCommit.reason);
+    return ignoreBuild();
+  }
+  if (parsedCommit.result === "deploy") {
+    info(parsedCommit.reason);
+    return continueBuild();
+  }
+  if (parsedCommit.result === "conflict") {
+    info(parsedCommit.reason);
+  }
+
   // Get the start of the comparison (previous deployment when available, or previous commit by default)
   const comparison = getComparison({ workspace, fallback: args.fallback });
   if (!comparison) {
@@ -62,7 +81,12 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
     },
     (err, stdout) => {
       if (err) {
-        error(`exec error: ${err}`);
+        const { level, code, message } = shouldWarn({ err: err.message });
+        if (level === "warn") {
+          warn(message);
+        } else {
+          error(`${code}: ${err}`);
+        }
         return continueBuild();
       }
 
