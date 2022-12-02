@@ -293,11 +293,9 @@ async fn source(
         .iter()
         .map(|r| match r {
             EntryRequest::Relative(p) => RequestVc::relative(Value::new(p.clone().into()), false),
-            EntryRequest::Module(m, p) => RequestVc::module(
-                m.clone(),
-                Value::new(p.clone().into()),
-                QueryMapVc::cell(None),
-            ),
+            EntryRequest::Module(m, p) => {
+                RequestVc::module(m.clone(), Value::new(p.clone().into()), QueryMapVc::none())
+            }
         })
         .collect();
 
