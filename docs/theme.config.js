@@ -12,6 +12,9 @@ const SITE_ROOT = "https://turbo.build";
  * @type {import('nextra-theme-docs').DocsThemeConfig}
  */
 const theme = {
+  sidebar: {
+    defaultMenuCollapseLevel: Number.POSITIVE_INFINITY,
+  },
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
   getNextSeoProps: function SEO() {
     const router = useRouter();
