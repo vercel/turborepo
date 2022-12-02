@@ -126,4 +126,24 @@ This setup ships by default when you [create a new monorepo](/repo/docs/getting-
 
 ## Running tasks
 
-We recommend following the setup in the [`basics`](/repo/docs/handbook/linting#running-tasks) section.
+
+When running tsc to lint packages, our goals are still parallelization and caching. 
+
+1. Parallelization. Since we are using tsc only as linter, it is possible to run all tsc tasks in parallel. No tsc task will be dependent on the result of any other task.
+2. Caching. As a linter, Typescript behaves differently than ESLint in that Typescript linting is affected by changes in a package's dependencies. This means that cannot set `dependsOn: []` for our tsc task, otherwise we will miss changes in dependencies. The solution to this is to introduce another task and grow our graph slightly to handle this new case. See example turbo.json file below
+
+```json
+{
+  "pipeline": {
+    "topo": {
+      "dependsOn": ["^topo"]
+    },
+    "tsc": {
+      "dependsOn": ["^topo"],
+      "outputs": []
+    }
+  }
+}
+```
+
+Here we introduced a new task, `topo`. The `topo` is not defined in any workspace, but it expresses the dependency `tsc` has on the files in the workspaces it depends on. Using this technique, we can enable `tsc` to run 100% in parallel while maintaining correct caching behavior. 
