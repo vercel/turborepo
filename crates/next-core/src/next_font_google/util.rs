@@ -21,7 +21,6 @@ pub(crate) enum FontItal {
 }
 
 // Derived from https://github.com/vercel/next.js/blob/9e098da0915a2a4581bebe2270953a1216be1ba4/packages/font/src/google/utils.ts#L232
-#[allow(dead_code)]
 pub(crate) fn get_font_axes(
     font_data: &FontData,
     font_family: &str,
@@ -106,7 +105,6 @@ pub(crate) fn get_font_axes(
 }
 
 // Derived from https://github.com/vercel/next.js/blob/9e098da0915a2a4581bebe2270953a1216be1ba4/packages/font/src/google/utils.ts#L128
-#[allow(dead_code)]
 pub(crate) fn get_stylesheet_url(
     font_family: &str,
     axes: &FontAxes,

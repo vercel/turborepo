@@ -131,15 +131,20 @@ impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
         }
 
         let src = url_string(u);
-
-        self.references.push(
-            UrlAssetReferenceVc::new(
-                self.origin,
-                RequestVc::parse(Value::new(src.to_string().into())),
-                AstPathVc::cell(as_parent_path(ast_path)),
-            )
-            .into(),
-        );
+        // Ignore server-relative paths. These are currently not allowed in resolve.
+        //
+        // TODO: Create reference for server-relative paths and restore the original
+        // specifier during codegen?
+        if !src.starts_with('/') {
+            self.references.push(
+                UrlAssetReferenceVc::new(
+                    self.origin,
+                    RequestVc::parse(Value::new(src.to_string().into())),
+                    AstPathVc::cell(as_parent_path(ast_path)),
+                )
+                .into(),
+            );
+        }
 
         u.visit_children_with_path(self, ast_path);
     }
