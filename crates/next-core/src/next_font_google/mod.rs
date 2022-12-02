@@ -1,11 +1,12 @@
 use anyhow::{anyhow, Context, Result};
+use auto_hash_map::AutoMap;
 use indexmap::IndexMap;
 use turbo_tasks::{
     primitives::{OptionStringVc, StringVc},
     TryJoinIterExt,
 };
 use turbo_tasks_fetch::fetch;
-use turbo_tasks_fs::{File, FileContent, FileContentVc, FileSystemPathVc};
+use turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
 use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
     resolve::{
@@ -155,7 +156,7 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
                 &options.display,
             )?;
 
-            let res = fetch(
+            let stylesheet_res = fetch(
                 StringVc::cell(url),
                 OptionStringVc::cell(Some(
                     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, \
@@ -163,11 +164,8 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
                         .to_owned(),
                 )),
             );
-            let fonts = extract_font_urls(
-                &res.await?.body.to_string().await?,
-                options.subsets.as_ref(),
-                options.preload,
-            )?;
+            let stylesheet = &*stylesheet_res.await?.body.to_string().await?;
+            let fonts = extract_font_urls(stylesheet, options.subsets.as_ref(), options.preload)?;
 
             let mut requests = vec![];
             for font_url in &fonts.all_urls {
@@ -178,6 +176,7 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
                 ));
             }
 
+            let mut url_to_filename = AutoMap::new();
             let fonts_dir = self.project_path.join(".next/static/media");
             for (url, response) in fonts
                 .all_urls
@@ -185,26 +184,43 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
                 .zip(requests.iter().try_join().await?.iter())
             {
                 let should_preload = fonts.preload_urls.contains(url);
+                let url_file_extension = url
+                    .rsplit('.')
+                    .next()
+                    .context("font url must have file extension")?;
                 let filename = format!(
                     "{:x}{}.{}",
                     hash_xxh3_hash64(url),
                     if should_preload { ".p" } else { "" },
-                    "woff2"
+                    url_file_extension
                 );
+                url_to_filename.insert(url, filename.to_owned());
+
                 let body = &*response.body.await?;
                 fonts_dir
                     .join(&filename)
                     .write(FileContent::Content(File::from(body.0.clone())).into());
             }
 
+            let mut updated_stylesheet = stylesheet.to_owned();
+            for (url, filename) in url_to_filename {
+                updated_stylesheet =
+                    updated_stylesheet.replace(url, &format!("/_next/static/media/{}", filename));
+            }
+
             let css_asset = VirtualAssetVc::new(
                 attached_next_js_package_path(self.project_path)
                     .join("internal/font/google/cssmodule.module.css"),
                 FileContent::Content(
-                    r#".className {
-                            color: blue;
-                        }
-                "#
+                    format!(
+                        r#"{}
+
+                        .className {{
+                            font-family: "{}";
+                        }}
+                        "#,
+                        updated_stylesheet, options.font_family
+                    )
                     .into(),
                 )
                 .into(),
