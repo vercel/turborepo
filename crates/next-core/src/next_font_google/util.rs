@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use indexmap::{indexset, IndexSet};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -40,12 +40,12 @@ pub(crate) fn get_font_axes(
         .axes;
 
     let Some(defineable_axes) = all_axes else {
-        return Err(anyhow!("Font {} has no definable `axes`", font_family));
+        bail!("Font {} has no definable `axes`", font_family);
     };
 
-    let has_italic = styles.contains("italic");
-    let has_normal = styles.contains("normal");
     let ital = {
+        let has_italic = styles.contains("italic");
+        let has_normal = styles.contains("normal");
         let mut set = IndexSet::new();
         if has_normal {
             set.insert(FontItal::Normal);
