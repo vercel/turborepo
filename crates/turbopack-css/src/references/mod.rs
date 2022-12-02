@@ -131,6 +131,13 @@ impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
         }
 
         let src = url_string(u);
+        if src.starts_with('/') {
+            // Server-relative path. Ignore for now as these are currently not allowed in
+            // resolve.
+            //
+            // TODO: Create this reference and restore the original specifier during codegen
+            return u.visit_children_with_path(self, ast_path);
+        }
 
         self.references.push(
             UrlAssetReferenceVc::new(
