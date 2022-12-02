@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use anyhow::Result;
 use indexmap::IndexSet;
 use mime::APPLICATION_JSON;
@@ -10,8 +8,7 @@ use turbopack_dev_server::source::{
     combined::CombinedContentSourceVc, conditional::ConditionalContentSourceVc, ContentSource,
     ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
 };
-
-use crate::nodejs::{
+use turbopack_node::{
     node_api_source::NodeApiContentSourceVc, node_rendered_source::NodeRenderContentSourceVc,
 };
 
@@ -48,7 +45,7 @@ impl DevManifestContentSourceVc {
             }
 
             if let Some(api_source) = NodeApiContentSourceVc::resolve_from(content_source).await? {
-                routes.insert(format!("/{}", api_source.await?.pathname.await?));
+                routes.insert(format!("/{}", api_source.get_pathname().await?));
 
                 continue;
             }
@@ -56,7 +53,7 @@ impl DevManifestContentSourceVc {
             if let Some(page_source) =
                 NodeRenderContentSourceVc::resolve_from(content_source).await?
             {
-                routes.insert(format!("/{}", page_source.await?.pathname.await?));
+                routes.insert(format!("/{}", page_source.get_pathname().await?));
 
                 continue;
             }

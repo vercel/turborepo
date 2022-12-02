@@ -46,13 +46,21 @@ pub fn create_node_api_source(
 /// for Node.js execution during rendering. The `chunking_context` should emit
 /// to this directory.
 #[turbo_tasks::value]
-pub(crate) struct NodeApiContentSource {
+pub struct NodeApiContentSource {
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
-    pub(crate) pathname: StringVc,
+    pathname: StringVc,
     path_regex: PathRegexVc,
     entry: NodeEntryVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
+}
+
+#[turbo_tasks::value_impl]
+impl NodeApiContentSourceVc {
+    #[turbo_tasks::function]
+    pub async fn get_pathname(self) -> Result<StringVc> {
+        Ok(self.await?.pathname)
+    }
 }
 
 impl NodeApiContentSource {
