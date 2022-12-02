@@ -619,12 +619,16 @@
 <span id="619">619</span>
 <span id="620">620</span>
 <span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
 };
 
-<span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{
     primitives::{StringVc, StringsVc},
     TryJoinIterExt, Value, ValueToString,
@@ -687,7 +691,7 @@
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
     },
-    util::regular_expression_for_path,
+    util::{pathname_for_path, regular_expression_for_path},
 };
 
 <span class="attr">#[turbo_tasks::function]
@@ -936,12 +940,12 @@
 
         <span class="kw">let </span>layout = files.get(<span class="string">&quot;layout&quot;</span>);
 
-        <span class="comment">// TODO: Use let Some(page_file) = page in expression below when
+        <span class="comment">// If a page exists but no layout exists, create a basic root layout
+        // in `app/layout.js` or `app/layout.tsx`.
+        //
+        // TODO: Use let Some(page_file) = page in expression below when
         // https://rust-lang.github.io/rfcs/2497-if-let-chains.html lands
-        </span><span class="kw">if </span>page.is_some() &amp;&amp; layout.is_none() &amp;&amp; target == server_root {
-            <span class="comment">// If a page exists but no layout exists, create a basic root layout
-            // in `app/layout.js` or `app/layout.tsx`.
-            </span><span class="kw">let </span>page_file = page.context(<span class="string">&quot;page must not be none&quot;</span>)<span class="question-mark">?</span>;
+        </span><span class="kw">if let </span>(<span class="prelude-val">Some</span>(page_file), <span class="prelude-val">None</span>, <span class="bool-val">true</span>) = (page, layout, target == server_root) {
             <span class="comment">// Use the extension to determine if the page file is TypeScript.
             // TODO: Use the presence of a tsconfig.json instead, like Next.js
             // stable does.
@@ -979,10 +983,14 @@
         list.push(LayoutSegment { files, target }.cell());
         layouts = LayoutSegmentsVc::cell(list);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(page_path) = page {
+            <span class="kw">let </span>pathname = pathname_for_path(server_root, target, <span class="bool-val">false</span>);
+            <span class="kw">let </span>path_regex = regular_expression_for_path(server_root, target, <span class="bool-val">false</span>);
+
             sources.push(create_node_rendered_source(
                 specificity,
                 server_root,
-                regular_expression_for_path(server_root, target, <span class="bool-val">false</span>),
+                pathname,
+                path_regex,
                 AppRenderer {
                     context_ssr,
                     context,
