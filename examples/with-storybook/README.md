@@ -27,6 +27,17 @@ This turborepo has some additional tools already setup for you:
 - [ESLint](https://eslint.org/) for code linting
 - [Prettier](https://prettier.io) for code formatting
 
+## Using this example
+
+Run the following command:
+
+```sh
+npx degit vercel/turbo/examples/with-storybook with-storybook
+cd with-storybook
+pnpm install
+git init . && git add . && git commit -m "Init"
+```
+
 ### Build
 
 To build all apps and packages, run the following command:
