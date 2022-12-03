@@ -43,7 +43,7 @@ git init . && git add . && git commit -m "Init"
 To build all apps and packages, run the following command:
 
 ```
-cd my-turborepo
+cd with-storybook
 pnpm run build
 ```
 
@@ -52,6 +52,6 @@ pnpm run build
 To develop all apps, packages, and run Storybook, run the following command:
 
 ```
-cd my-turborepo
+cd with-storybook
 pnpm run dev
 ```
