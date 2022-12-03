@@ -11,7 +11,7 @@ use std::{
 
 use anyhow::Result;
 use tokio::{spawn, time::sleep};
-use turbo_tasks::{util::FormatDuration, NothingVc, TurboTasks, Value};
+use turbo_tasks::{util::FormatDuration, NothingVc, TurboTasks, TurboTasksBackendApi, Value};
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystemVc};
 use turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
@@ -19,8 +19,8 @@ use turbo_tasks_memory::{
     MemoryBackend,
 };
 use turbopack::{
-    emit, rebase::RebasedAssetVc, register, resolve_options_context::ResolveOptionsContext,
-    transition::TransitionsByNameVc,
+    emit_with_completion, rebase::RebasedAssetVc, register,
+    resolve_options_context::ResolveOptionsContext, transition::TransitionsByNameVc,
 };
 use turbopack_core::{
     context::AssetContext,
@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
             );
             let module = context.process(source.into());
             let rebased = RebasedAssetVc::new(module, input, output);
-            emit(rebased.into());
+            emit_with_completion(rebased.into(), output).await?;
 
             Ok(NothingVc::new().into())
         })
@@ -111,7 +111,11 @@ async fn main() -> Result<()> {
         // write HTML
         fs::write(
             "graph.html",
-            wrap_html(&visualize_stats_tree(tree, ReferenceType::Child)),
+            wrap_html(&visualize_stats_tree(
+                tree,
+                ReferenceType::Child,
+                tt.stats_type(),
+            )),
         )
         .unwrap();
         println!("graph.html written");

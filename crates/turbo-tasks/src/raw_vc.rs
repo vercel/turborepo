@@ -1,6 +1,5 @@
 use std::{
     any::Any,
-    collections::HashSet,
     fmt::{Debug, Display},
     future::{Future, IntoFuture},
     hash::Hash,
@@ -11,22 +10,22 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use event_listener::EventListener;
+use auto_hash_map::AutoSet;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
     backend::CellContent,
+    event::EventListener,
     manager::{
-        find_cell_by_key, find_cell_by_type, read_task_cell, read_task_cell_untracked,
-        read_task_output, read_task_output_untracked, CurrentCellRef, TurboTasksApi,
+        find_cell_by_type, read_task_cell, read_task_cell_untracked, read_task_output,
+        read_task_output_untracked, CurrentCellRef, TurboTasksApi,
     },
     primitives::{RawVcSet, RawVcSetVc},
-    registry::get_value_type,
+    registry::{self, get_value_type},
     turbo_tasks,
     value_type::ValueTraitVc,
-    CollectiblesSource, ReadRef, SharedReference, TaskId, TraitTypeId, Typed, TypedForInput,
-    ValueTypeId,
+    CollectiblesSource, ReadRef, SharedReference, TaskId, TraitTypeId, ValueTypeId,
 };
 
 #[derive(Error, Debug)]
@@ -42,9 +41,26 @@ pub enum ResolveTypeError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct CellId {
+    pub type_id: ValueTypeId,
+    pub index: u32,
+}
+
+impl Display for CellId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}#{}",
+            registry::get_value_type(self.type_id).name,
+            self.index
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum RawVc {
     TaskOutput(TaskId),
-    TaskCell(TaskId, usize),
+    TaskCell(TaskId, CellId),
 }
 
 impl RawVc {
@@ -308,26 +324,6 @@ impl RawVc {
         self.cell_local_internal(find_cell_by_type).await
     }
 
-    /// Like [RawVc::cell_local], but allows to specify a key for selecting the
-    /// cell.
-    pub async fn keyed_cell_local<
-        K: std::fmt::Debug
-            + std::cmp::Eq
-            + std::cmp::Ord
-            + std::hash::Hash
-            + Typed
-            + TypedForInput
-            + Send
-            + Sync
-            + 'static,
-    >(
-        self,
-        key: K,
-    ) -> Result<RawVc> {
-        self.cell_local_internal(|ty| find_cell_by_key(ty, key))
-            .await
-    }
-
     pub fn get_task_id(&self) -> TaskId {
         match self {
             RawVc::TaskOutput(t) | RawVc::TaskCell(t, _) => *t,
@@ -455,9 +451,11 @@ impl<T: Any + Send + Sync, U: Any + Send + Sync> Future for ReadRawVcFuture<T, U
 
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
         self.turbo_tasks.notify_scheduled_tasks();
-        let this = self.get_mut();
+        // SAFETY: we are not moving this
+        let this = unsafe { self.get_unchecked_mut() };
         'outer: loop {
             if let Some(listener) = &mut this.listener {
+                // SAFETY: listener is from previous pinned this
                 let listener = unsafe { Pin::new_unchecked(listener) };
                 if listener.poll(cx).is_pending() {
                     return Poll::Pending;
@@ -488,7 +486,8 @@ impl<T: Any + Send + Sync, U: Any + Send + Sync> Future for ReadRawVcFuture<T, U
                     }
                 }
             };
-            match Pin::new(&mut listener).poll(cx) {
+            // SAFETY: listener is from previous pinned this
+            match unsafe { Pin::new_unchecked(&mut listener) }.poll(cx) {
                 Poll::Ready(_) => continue,
                 Poll::Pending => {
                     this.listener = Some(listener);
@@ -507,17 +506,19 @@ pub struct ReadCollectiblesError {
 
 pub struct CollectiblesFuture<T: ValueTraitVc> {
     turbo_tasks: Arc<dyn TurboTasksApi>,
-    inner: ReadRawVcFuture<RawVcSet, HashSet<RawVc>>,
+    inner: ReadRawVcFuture<RawVcSet, AutoSet<RawVc>>,
     take: bool,
     phantom: PhantomData<fn() -> T>,
 }
 
 impl<T: ValueTraitVc> Future for CollectiblesFuture<T> {
-    type Output = Result<HashSet<T>>;
+    type Output = Result<AutoSet<T>>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        // SAFETY: we are not moving `this`
         let this = unsafe { self.get_unchecked_mut() };
-        let inner_pin = Pin::new(&mut this.inner);
+        // SAFETY: `this` was pinned before
+        let inner_pin = unsafe { Pin::new_unchecked(&mut this.inner) };
         match inner_pin.poll(cx) {
             Poll::Ready(r) => Poll::Ready(match r {
                 Ok(set) => {

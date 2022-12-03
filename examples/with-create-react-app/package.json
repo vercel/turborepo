@@ -1,9 +1,5 @@
 {
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "build": "turbo run build",
     "clean": "turbo run clean",
@@ -16,5 +12,6 @@
     "eslint": "^8.4.1",
     "prettier": "^2.5.1",
     "turbo": "latest"
-  }
+  },
+  "packageManager": "pnpm@7.15.0"
 }

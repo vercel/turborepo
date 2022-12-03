@@ -5,15 +5,17 @@ use std::{
     env,
     net::SocketAddr,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
+use anyhow::Context;
 use chromiumoxide::{
     browser::{Browser, BrowserConfig},
     error::CdpError::Ws,
 };
 use futures::StreamExt;
 use lazy_static::lazy_static;
-use next_dev::{register, NextDevServerBuilder};
+use next_dev::{register, EntryRequest, NextDevServerBuilder};
 use owo_colors::OwoColorize;
 use serde::Deserialize;
 use test_generator::test_resources;
@@ -22,6 +24,7 @@ use tungstenite::{error::ProtocolError::ResetWithoutClosingHandshake, Error::Pro
 use turbo_tasks::TurboTasks;
 use turbo_tasks_fs::util::sys_to_unix;
 use turbo_tasks_memory::MemoryBackend;
+use turbo_tasks_testing::retry::retry_async;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -115,26 +118,25 @@ async fn run_test(resource: &str) -> JestRunResult {
         path.to_str().unwrap()
     );
 
-    let test_entry = path.join("index.js");
-    assert!(
-        test_entry.exists(),
-        "Test entry {} must exist.",
-        test_entry.to_str().unwrap()
-    );
+    // Count the number of dirs _under_ crates/next-dev/tests
+    let test_entry = Path::new(resource).join("index.js");
     let package_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace_root = package_root.parent().unwrap().parent().unwrap();
-    let project_dir = workspace_root.join("crates/next-dev/tests");
-    let workspace_root = workspace_root.to_string_lossy().to_string();
+    let project_dir = workspace_root.join(resource);
     let requested_addr = get_free_local_addr().unwrap();
+
     let server = NextDevServerBuilder::new(
         TurboTasks::new(MemoryBackend::new()),
-        project_dir.to_string_lossy().to_string(),
-        workspace_root,
+        sys_to_unix(&project_dir.to_string_lossy()).to_string(),
+        sys_to_unix(&workspace_root.to_string_lossy()).to_string(),
     )
-    .entry_request("harness.js".into())
-    .entry_request(
-        sys_to_unix(test_entry.strip_prefix("tests").unwrap().to_str().unwrap()).to_string(),
-    )
+    .entry_request(EntryRequest::Module(
+        "@turbo/pack-test-harness".to_string(),
+        "".to_string(),
+    ))
+    .entry_request(EntryRequest::Relative(
+        sys_to_unix(test_entry.strip_prefix(resource).unwrap().to_str().unwrap()).to_string(),
+    ))
     .eager_compile(false)
     .hostname(requested_addr.ip())
     .port(requested_addr.port())
@@ -149,7 +151,7 @@ async fn run_test(resource: &str) -> JestRunResult {
     );
 
     tokio::select! {
-        r = run_browser(server.addr) => r.unwrap(),
+        r = run_browser(server.addr) => r.expect("error while running browser"),
         _ = server.future => panic!("Never resolves"),
     }
 }
@@ -164,7 +166,17 @@ async fn create_browser(
             .args(vec!["--auto-open-devtools-for-tabs"]);
     }
 
-    let (browser, mut handler) = Browser::launch(config_builder.build()?).await?;
+    let (browser, mut handler) = retry_async(
+        config_builder.build()?,
+        |c| {
+            let c = c.clone();
+            Browser::launch(c)
+        },
+        3,
+        Duration::from_millis(100),
+    )
+    .await
+    .context("Launching browser failed")?;
     // See https://crates.io/crates/chromiumoxide
     let thread_handle = tokio::task::spawn(async move {
         loop {
@@ -210,7 +222,8 @@ async fn run_test_browser(addr: SocketAddr) -> Result<JestRunResult, Box<dyn std
     let page = browser.new_page(format!("http://{}", addr)).await?;
     page.wait_for_navigation().await?;
 
-    Ok(page.evaluate("__jest__.run()").await?.into_value()?)
+    let value = page.evaluate("globalThis.waitForTests?.() ?? __jest__.run()");
+    Ok(value.await?.into_value()?)
 }
 
 fn get_free_local_addr() -> Result<SocketAddr, std::io::Error> {

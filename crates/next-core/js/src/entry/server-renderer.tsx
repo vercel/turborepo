@@ -118,6 +118,7 @@ async function runOperation(
       imageSizes: [],
       loader: "default",
       path: "",
+      loaderFile: "",
       domains: [],
       disableStaticImages: false,
       minimumCacheTTL: 0,
@@ -129,6 +130,9 @@ async function runOperation(
     },
   };
 
+  if ("getStaticPaths" in otherExports) {
+    renderOpts.getStaticPaths = otherExports.getStaticPaths;
+  }
   if ("getStaticProps" in otherExports) {
     renderOpts.getStaticProps = otherExports.getStaticProps;
   }

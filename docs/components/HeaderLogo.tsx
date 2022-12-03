@@ -41,11 +41,9 @@ function HeaderLogo() {
         <path d="M16.88 3.549L7.12 20.451" />
       </svg>
 
-      <Link href="/" passHref>
-        <a title="Home" className="hover:opacity-75">
-          <TurboLogo height={32} className={styles.desktopLogo} />
-          <TurboLogoCondensed height={32} className={styles.mobileLogo} />
-        </a>
+      <Link href="/" title="Home" className="hover:opacity-75">
+        <TurboLogo height={32} className={styles.desktopLogo} />
+        <TurboLogoCondensed height={32} className={styles.mobileLogo} />
       </Link>
       <div className={styles.siteSwitcher}>
         <SiteSwitcher />

@@ -1,10 +1,12 @@
-use std::{fmt::Display, sync::Arc, time::Duration};
+use std::{
+    fmt::{Debug, Display},
+    sync::Arc,
+    time::Duration,
+};
 
 use anyhow::Error;
 
-pub use super::{
-    id_factory::IdFactory, infinite_vec::InfiniteVec, no_move_vec::NoMoveVec, once_map::*,
-};
+pub use super::{id_factory::IdFactory, no_move_vec::NoMoveVec, once_map::*};
 
 /// A error struct that is backed by an Arc to allow cloning errors
 #[derive(Debug, Clone)]
@@ -55,6 +57,23 @@ impl Display for FormatDuration {
         }
         let ms = self.0.as_millis();
         if ms > 10 {
+            return write!(f, "{}ms", ms);
+        }
+        write!(f, "{}ms", (self.0.as_micros() as f32) / 1000.0)
+    }
+}
+
+impl Debug for FormatDuration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = self.0.as_secs();
+        if s > 100 {
+            return write!(f, "{}s", s);
+        }
+        let ms = self.0.as_millis();
+        if ms > 10000 {
+            return write!(f, "{:.2}s", (ms as f32) / 1000.0);
+        }
+        if ms > 100 {
             return write!(f, "{}ms", ms);
         }
         write!(f, "{}ms", (self.0.as_micros() as f32) / 1000.0)

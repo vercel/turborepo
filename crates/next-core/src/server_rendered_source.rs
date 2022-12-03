@@ -20,6 +20,7 @@ use turbopack_dev_server::{
     source::{
         asset_graph::AssetGraphContentSourceVc,
         combined::{CombinedContentSource, CombinedContentSourceVc},
+        specificity::SpecificityVc,
         ContentSourceData, ContentSourceVc, NoContentSourceVc,
     },
 };
@@ -28,9 +29,15 @@ use turbopack_ecmascript::{
     EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
 };
 use turbopack_env::ProcessEnvAssetVc;
+use turbopack_node::{
+    create_node_api_source, create_node_rendered_source,
+    node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
+    NodeEntry, NodeEntryVc,
+};
 
 use crate::{
     embed_js::{next_js_file, wrap_with_next_js_fs},
+    env::env_for_js,
     fallback::get_fallback_page,
     next_client::{
         context::{
@@ -44,12 +51,7 @@ use crate::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
     },
-    nodejs::{
-        create_node_api_source, create_node_rendered_source,
-        node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
-        NodeEntry, NodeEntryVc,
-    },
-    util::regular_expression_for_path,
+    util::{pathname_for_path, regular_expression_for_path},
 };
 
 /// Create a content source serving the `pages` or `src/pages` directory as
@@ -109,15 +111,17 @@ pub async fn create_server_rendered_source(
     )
     .into();
 
-    let server_runtime_entries =
-        vec![ProcessEnvAssetVc::new(project_path, env).as_ecmascript_chunk_placeable()];
+    let server_runtime_entries = vec![ProcessEnvAssetVc::new(project_path, env_for_js(env, false))
+        .as_ecmascript_chunk_placeable()];
 
-    let fallback_page = get_fallback_page(project_path, server_root, browserslist_query);
+    let fallback_page = get_fallback_page(project_path, server_root, env, browserslist_query);
 
     let server_rendered_source = create_server_rendered_source_for_directory(
         project_path,
         context,
         pages_dir,
+        SpecificityVc::exact(),
+        0,
         pages_dir,
         EcmascriptChunkPlaceablesVc::cell(server_runtime_entries),
         fallback_page,
@@ -142,6 +146,7 @@ async fn create_server_rendered_source_for_file(
     context_path: FileSystemPathVc,
     context: AssetContextVc,
     pages_dir: FileSystemPathVc,
+    specificity: SpecificityVc,
     page_file: FileSystemPathVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
     fallback_page: DevHtmlAssetVc,
@@ -161,10 +166,14 @@ async fn create_server_rendered_source_for_file(
     )
     .build();
 
+    let pathname = pathname_for_path(server_root, server_path, true);
+    let path_regex = regular_expression_for_path(server_root, server_path, true);
+
     Ok(if *is_api_path.await? {
         create_node_api_source(
+            specificity,
             server_root,
-            regular_expression_for_path(server_root, server_path, true),
+            path_regex,
             SsrEntry {
                 context,
                 entry_asset,
@@ -178,8 +187,10 @@ async fn create_server_rendered_source_for_file(
         )
     } else {
         create_node_rendered_source(
+            specificity,
             server_root,
-            regular_expression_for_path(server_root, server_path, true),
+            pathname,
+            path_regex,
             SsrEntry {
                 context,
                 entry_asset,
@@ -203,6 +214,8 @@ async fn create_server_rendered_source_for_directory(
     context_path: FileSystemPathVc,
     context: AssetContextVc,
     pages_dir: FileSystemPathVc,
+    specificity: SpecificityVc,
+    position: u32,
     input_dir: FileSystemPathVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
     fallback_page: DevHtmlAssetVc,
@@ -211,18 +224,16 @@ async fn create_server_rendered_source_for_directory(
     server_api_path: FileSystemPathVc,
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<CombinedContentSourceVc> {
-    let mut predefined_sources = vec![];
-    let mut named_placeholder_sources = vec![];
-    let mut catch_all_sources = vec![];
+    let mut sources = vec![];
     let dir_content = input_dir.read_dir().await?;
     if let DirectoryContent::Entries(entries) = &*dir_content {
         for (name, entry) in entries.iter() {
-            let sources = if name.starts_with("[[") || name.starts_with("[...") {
-                &mut catch_all_sources
+            let specificity = if name.starts_with("[[") || name.starts_with("[...") {
+                specificity.with_catch_all(position)
             } else if name.starts_with('[') {
-                &mut named_placeholder_sources
+                specificity.with_dynamic_segment(position)
             } else {
-                &mut predefined_sources
+                specificity
             };
             match entry {
                 DirectoryEntry::File(file) => {
@@ -231,13 +242,24 @@ async fn create_server_rendered_source_for_directory(
                             // pageExtensions option from next.js
                             // defaults: https://github.com/vercel/next.js/blob/611e13f5159457fedf96d850845650616a1f75dd/packages/next/server/config-shared.ts#L499
                             "js" | "ts" | "jsx" | "tsx" => {
-                                let (dev_server_path, intermediate_output_path) =
+                                let (dev_server_path, intermediate_output_path, specificity) =
                                     if basename == "index" {
-                                        (server_path.join("index.html"), intermediate_output_path)
+                                        (
+                                            server_path.join("index.html"),
+                                            intermediate_output_path,
+                                            specificity,
+                                        )
+                                    } else if basename == "404" {
+                                        (
+                                            server_path.join("[...]"),
+                                            intermediate_output_path.join(basename),
+                                            specificity.with_fallback(position),
+                                        )
                                     } else {
                                         (
                                             server_path.join(basename).join("index.html"),
                                             intermediate_output_path.join(basename),
+                                            specificity,
                                         )
                                     };
                                 sources.push((
@@ -246,6 +268,7 @@ async fn create_server_rendered_source_for_directory(
                                         context_path,
                                         context,
                                         pages_dir,
+                                        specificity,
                                         *file,
                                         runtime_entries,
                                         fallback_page,
@@ -267,6 +290,8 @@ async fn create_server_rendered_source_for_directory(
                             context_path,
                             context,
                             pages_dir,
+                            specificity,
+                            position + 1,
                             *dir,
                             runtime_entries,
                             fallback_page,
@@ -282,17 +307,12 @@ async fn create_server_rendered_source_for_directory(
             }
         }
     }
-    predefined_sources.sort_by_key(|(k, _)| *k);
-    named_placeholder_sources.sort_by_key(|(k, _)| *k);
-    catch_all_sources.sort_by_key(|(k, _)| *k);
+
+    // Ensure deterministic order since read_dir is not deterministic
+    sources.sort_by_key(|(k, _)| *k);
 
     Ok(CombinedContentSource {
-        sources: predefined_sources
-            .into_iter()
-            .chain(named_placeholder_sources.into_iter())
-            .chain(catch_all_sources.into_iter())
-            .map(|(_, v)| v)
-            .collect(),
+        sources: sources.into_iter().map(|(_, v)| v).collect(),
     }
     .cell())
 }

@@ -174,7 +174,7 @@ Multiple filters can be combined to select distinct sets of targets. Additionall
 can also exclude targets. A target that matches any filter and is not explicitly excluded will
 be in the final entrypoint selection.
 
-For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/repo/docs/core-concepts/monorepos/filtering)
+For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/repo/docs/core-concepts/monorepos/filtering).
 
 ```sh
 turbo run build --filter=my-pkg
@@ -479,8 +479,6 @@ turbo run build -vvv
 ## `turbo prune --scope=<target>`
 
 Generate a sparse/partial monorepo with a pruned lockfile for a target workspace.
-
-<Callout>This command is not yet implemented for `npm`.</Callout>
 
 This command will generate folder called `out` with the following inside of it:
 

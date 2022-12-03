@@ -4,8 +4,18 @@ Thanks for your interest in contributing to Turbo!
 
 **Important note**: At the moment, Turbo is made up of two tools, Turborepo and Turbopack, built with different languages and toolchains. In the future, Turbo will become a single toolchain built on Rust and the Turbo engine. In the meantime, please follow the respective guide when contributing to each tool:
 
-- [Contributing to Turborepo](#contributing-to-turborepo)
-- [Contributing to Turbopack](#contributing-to-turbopack)
+- [Contributing to Turbo](#contributing-to-turbo)
+  - [Contributing to Turborepo](#contributing-to-turborepo)
+    - [Building Turborepo](#building-turborepo)
+    - [Testing Turborepo](#testing-turborepo)
+  - [Debugging Turborepo](#debugging-turborepo)
+  - [Benchmarking Turborepo](#benchmarking-turborepo)
+  - [Updating `turbo`](#updating-turbo)
+  - [Publishing `turbo` to the npm registry](#publishing-turbo-to-the-npm-registry)
+  - [Contributing to Turbopack](#contributing-to-turbopack)
+    - [Testing Turbopack](#testing-turbopack)
+    - [Benchmarking Turbopack](#benchmarking-turbopack)
+  - [Troubleshooting](#troubleshooting)
 
 ## Contributing to Turborepo
 
@@ -13,8 +23,13 @@ Thanks for your interest in contributing to Turbo!
 
 Dependencies
 
-1.  On OSX: `brew install sponge jq protobuf protoc-gen-go protoc-gen-go-grpc golang`
-1.  Run `pnpm install` at root
+1. Install `jq` and `sponge`
+
+   On macOS: `brew install sponge jq`
+
+1. Install [turbo/shim](https://github.com/vercel/turbo/blob/main/shim/README.md) build requirements
+
+1. Run `pnpm install` at root
 
 Building
 
@@ -75,7 +90,11 @@ To manually run a release:
 
 Turbopack uses [Cargo workspaces][workspaces] in the Turbo monorepo. You'll find
 several workspaces inside the `crates/` directory. In order to run a particular
-crate, you can use the `cargo run -p [CRATE_NAME]` command.
+crate, you can use the `cargo run -p [CRATE_NAME]` command. For example, to test the Next.js development server, run `cargo run -p next-dev`.
+
+### Turbopack Architecture
+
+A high-level introduction to Turbopack's architecture, workspace crates, and Turbo engine (the turbo-tasks crates) is available at [crates/turbopack/architecture.md](crates/turbopack/architecture.md).
 
 ### Testing Turbopack
 
@@ -89,7 +108,7 @@ Run via:
 cargo nextest run
 ```
 
-For the test cases you need to run `yarn` to install some node_modules. See [Troubleshooting][] for solutions to common problems.
+For the test cases you need to run `pnpm install` to install some node_modules. See [Troubleshooting][] for solutions to common problems.
 
 You can also create a little demo app and run
 
@@ -100,6 +119,10 @@ cargo run -p node-file-trace -- print demo/index.js
 ### Benchmarking Turbopack
 
 See [the benchmarking README for Turbopack](crates/next-dev/benches/README.md) for details.
+
+### Profiling Turbopack
+
+See [the profiling docs for Turbopack](https://turbo.build/pack/docs/advanced/profiling) for details.
 
 ## Troubleshooting
 

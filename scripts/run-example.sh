@@ -28,9 +28,6 @@ function cleanup {
   rm -rf packages/*/.next
   rm -rf packages/*/.turbo
   rm -rf *.log
-  rm -rf yarn.lock
-  rm -rf package-lock.json
-  rm -rf pnpm-lock.yaml
 }
 
 function setup_git {
@@ -56,6 +53,13 @@ function run_npm {
   fi
 
   echo "======================================================="
+  echo "=> $folder: move lockfile"
+  echo "======================================================="
+  [ ! -f yarn.lock ] || mv yarn.lock yarn.lock.bak
+  [ ! -f pnpm-lock.yaml ] || mv pnpm-lock.yaml pnpm-lock.yaml.bak
+  [ ! -f package-lock.json ] || mv package-lock.json package-lock.json.bak
+
+  echo "======================================================="
   echo "=> $folder: npm install"
   echo "======================================================="
   npm install --force
@@ -63,12 +67,26 @@ function run_npm {
   echo "======================================================="
   echo "=> $folder: npm build lint"
   echo "======================================================="
-  npm run build lint
+  if [ $folder == "non-monorepo" ]; then
+    npx turbo build lint
+  else
+    npm run build lint
+  fi
 
   echo "======================================================="
   echo "=> $folder: npm build lint again"
   echo "======================================================="
-  npm run build lint
+  if [ $folder == "non-monorepo" ]; then
+    npx turbo build lint
+  else
+    npm run build lint
+  fi
+
+  # restore lockfile
+  rm -rf package-lock.json
+  [ ! -f yarn.lock.bak ] || mv yarn.lock.bak yarn.lock
+  [ ! -f pnpm-lock.yaml.bak ] || mv pnpm-lock.yaml.bak pnpm-lock.yaml
+  [ ! -f package-lock.json.bak ] || mv package-lock.json.bak package-lock.json
 
   echo "======================================================="
   echo "=> $folder: npm SUCCESSFUL"
@@ -82,6 +100,13 @@ function run_pnpm {
   fi
 
   echo "======================================================="
+  echo "=> $folder: move lockfile"
+  echo "======================================================="
+  [ ! -f yarn.lock ] || mv yarn.lock yarn.lock.bak
+  [ ! -f pnpm-lock.yaml ] || mv pnpm-lock.yaml pnpm-lock.yaml.bak
+  [ ! -f package-lock.json ] || mv package-lock.json package-lock.json.bak
+
+  echo "======================================================="
   echo "=> $folder: pnpm install"
   echo "======================================================="
   pnpm install
@@ -89,12 +114,26 @@ function run_pnpm {
   echo "======================================================="
   echo "=> $folder: pnpm build lint"
   echo "======================================================="
-  pnpm run build lint
+  if [ $folder == "non-monorepo" ]; then
+    pnpm turbo build lint
+  else
+    pnpm run build lint
+  fi
 
   echo "======================================================="
   echo "=> $folder: pnpm build lint again"
   echo "======================================================="
-  pnpm run build lint
+  if [ $folder == "non-monorepo" ]; then
+    pnpm turbo build lint
+  else
+    pnpm run build lint
+  fi
+
+  # restore lockfile
+  rm -rf pnpm-lock.yaml
+  [ ! -f yarn.lock.bak ] || mv yarn.lock.bak yarn.lock
+  [ ! -f pnpm-lock.yaml.bak ] || mv pnpm-lock.yaml.bak pnpm-lock.yaml
+  [ ! -f package-lock.json.bak ] || mv package-lock.json.bak package-lock.json
 
   echo "======================================================="
   echo "=> $folder: pnpm SUCCESSFUL"
@@ -108,6 +147,14 @@ function run_yarn {
   fi
 
   echo "======================================================="
+  echo "=> $folder: move lockfile"
+  echo "======================================================="
+  [ ! -f yarn.lock ] || mv yarn.lock yarn.lock.bak
+  [ ! -f pnpm-lock.yaml ] || mv pnpm-lock.yaml pnpm-lock.yaml.bak
+  [ ! -f package-lock.json ] || mv package-lock.json package-lock.json.bak
+
+
+  echo "======================================================="
   echo "=> $folder: yarn install"
   echo "======================================================="
   yarn install
@@ -115,12 +162,27 @@ function run_yarn {
   echo "======================================================="
   echo "=> $folder: yarn build lint"
   echo "======================================================="
-  yarn build lint
+  if [ $folder == "non-monorepo" ]; then
+    yarn turbo build lint
+  else
+    yarn build lint
+  fi
 
   echo "======================================================="
   echo "=> $folder: yarn build again"
   echo "======================================================="
-  yarn build lint
+  if [ $folder == "non-monorepo" ]; then
+
+    yarn turbo build lint
+  else
+    yarn build lint
+  fi
+
+    # restore lockfile
+  rm -rf yarn.lock
+  [ ! -f yarn.lock.bak ] || mv yarn.lock.bak yarn.lock
+  [ ! -f pnpm-lock.yaml.bak ] || mv pnpm-lock.yaml.bak pnpm-lock.yaml
+  [ ! -f package-lock.json.bak ] || mv package-lock.json.bak package-lock.json
 
   echo "======================================================="
   echo "=> $folder: yarn SUCCESSFUL"
@@ -136,6 +198,8 @@ if [ -f "examples/$folder/package.json" ]; then
   echo "======================================================="
   cleanup
   setup_git
+  # save the default packageManager
+  packageManager=$(cat 'package.json' | jq '.packageManager')
   if [ "$pkgManager" == "npm" ]; then
     run_npm
   elif [ "$pkgManager" == "pnpm" ]; then
@@ -148,7 +212,8 @@ if [ -f "examples/$folder/package.json" ]; then
   fi
   hasRun=1
 
-  cat package.json | jq 'del(.packageManager)' | sponge package.json
+  # reset to the default packageManager
+  cat package.json | jq ".packageManager = ${packageManager}" | sponge package.json
   if [ "$TURBO_TAG" == "canary" ]; then
     cat package.json | jq '.devDependencies.turbo = "latest"' | sponge package.json
   fi

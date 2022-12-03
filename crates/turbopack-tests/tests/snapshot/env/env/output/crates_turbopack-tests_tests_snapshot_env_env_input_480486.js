@@ -1,14 +1,14 @@
 (self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_env_env_input_480486.js", {
 
-"[project]/crates/turbopack-tests/tests/snapshot/env/env/input/.env/.env.js": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, __dirname }) => (() => {
+"[project]/crates/turbopack-tests/tests/snapshot/env/env/input/.env/.env.js": (({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, g: global, __dirname }) => (() => {
 
-const env = process.env;
+const env = process.env = {...process.env};
 
-env["FOO"] = "foo";
-env["FOOBAR"] = "foobar";
+env["FOO"] = foo;
+env["FOOBAR"] = foobar;
 
 })()),
-"[project]/crates/turbopack-tests/tests/snapshot/env/env/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, __dirname, m: module, e: exports }) { !function() {
+"[project]/crates/turbopack-tests/tests/snapshot/env/env/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
 
 console.log(process.env.FOOBAR);
 
@@ -168,10 +168,8 @@ instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/env/en
   function interopEsm(raw, ns, allowExportDefault) {
     /** @type {Object.<string, () => any>} */
     const getters = { __proto__: null };
-    if (typeof raw === "object" || typeof raw === "function") {
-      for (const key in raw) {
-        getters[key] = createGetter(raw, key);
-      }
+    for (const key in raw) {
+      getters[key] = createGetter(raw, key);
     }
     if (!(allowExportDefault && "default" in getters)) {
       getters["default"] = () => raw;
@@ -388,6 +386,7 @@ instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/env/en
         c: moduleCache,
         l: loadChunk,
         p: _process,
+        g: globalThis,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
       });
     });
@@ -911,6 +910,10 @@ instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/env/en
       // implement, but the Next.js React Refresh runtime uses this to decide
       // whether to schedule an update.
       status: () => "idle",
+
+      // NOTE(alexkirsz) Since we always return "idle" for now, these are no-ops.
+      addStatusHandler: (_handler) => {},
+      removeStatusHandler: (_handler) => {},
     };
 
     return { hot, hotState };

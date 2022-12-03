@@ -76,6 +76,16 @@ func TestInferFramework(t *testing.T) {
 			}},
 			want: getFrameworkBySlug("create-react-app"),
 		},
+		{
+			name: "Finds next in non monorepo",
+			pkg: &fs.PackageJSON{
+				Dependencies: map[string]string{
+					"next": "*",
+				},
+				Workspaces: []string{},
+			},
+			want: getFrameworkBySlug("nextjs"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

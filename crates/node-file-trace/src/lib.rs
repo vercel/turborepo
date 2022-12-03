@@ -22,7 +22,7 @@ use turbo_tasks::{
     backend::Backend,
     primitives::{OptionStringVc, StringsVc},
     util::FormatDuration,
-    NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, Value,
+    NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
 use turbo_tasks_fs::{
     glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystemVc, ReadGlobResultVc,
@@ -32,8 +32,9 @@ use turbo_tasks_memory::{
     viz, MemoryBackend,
 };
 use turbopack::{
-    emit, rebase::RebasedAssetVc, resolve_options_context::ResolveOptionsContext,
-    transition::TransitionsByNameVc, ModuleAssetContextVc,
+    emit_asset, emit_with_completion, rebase::RebasedAssetVc,
+    resolve_options_context::ResolveOptionsContext, transition::TransitionsByNameVc,
+    ModuleAssetContextVc,
 };
 use turbopack_cli_utils::issue::{ConsoleUi, IssueSeverityCliOption, LogOptions};
 use turbopack_core::{
@@ -392,7 +393,8 @@ pub async fn start(args: Arc<Args>) -> Result<Vec<String>> {
                 stats.add_id(b, root_task);
                 // stats.merge_resolve();
                 let tree = stats.treeify(ReferenceType::Child);
-                let graph = viz::graph::visualize_stats_tree(tree, ReferenceType::Child);
+                let graph =
+                    viz::graph::visualize_stats_tree(tree, ReferenceType::Child, tt.stats_type());
                 fs::write("graph.html", viz::graph::wrap_html(&graph)).unwrap();
                 println!("graph.html written");
             }
@@ -531,6 +533,7 @@ async fn main_operation(
             let input = process_input(&dir, &context, input).unwrap();
             let fs = create_fs("context directory", &context, watch).await?;
             let mut output_nft_assets = Vec::new();
+            let mut emits = Vec::new();
             for module in input_to_modules(fs, input, process_cwd, exact)
                 .await?
                 .iter()
@@ -538,7 +541,11 @@ async fn main_operation(
                 let nft_asset = NftJsonAssetVc::new(*module);
                 let path = nft_asset.path().await?.path.clone();
                 output_nft_assets.push(path);
-                emit(nft_asset.into())
+                emits.push(emit_asset(nft_asset.into()));
+            }
+            // Wait for all files to be emitted
+            for emit in emits {
+                emit.await?;
             }
             return Ok(StringsVc::cell(output_nft_assets));
         }
@@ -552,12 +559,17 @@ async fn main_operation(
             let out_fs = create_fs("output directory", &output, watch).await?;
             let input_dir = fs.root();
             let output_dir = out_fs.root();
+            let mut emits = Vec::new();
             for module in input_to_modules(fs, input, process_cwd, exact)
                 .await?
                 .iter()
             {
                 let rebased = RebasedAssetVc::new(*module, input_dir, output_dir).into();
-                emit(rebased);
+                emits.push(emit_with_completion(rebased, output_dir));
+            }
+            // Wait for all files to be emitted
+            for emit in emits {
+                emit.await?;
             }
         }
         Args::Size { common: _ } => todo!(),

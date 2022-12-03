@@ -4,6 +4,7 @@ pub mod conditional;
 pub mod lazy_instatiated;
 pub mod query;
 pub mod router;
+pub mod specificity;
 pub mod static_assets;
 
 use std::{
@@ -15,9 +16,10 @@ use std::{
 use anyhow::Result;
 use serde::{Deserialize, Serialize, Serializer};
 use turbo_tasks::{trace::TraceRawVcs, Value};
+use turbo_tasks_fs::rope::Rope;
 use turbopack_core::version::VersionedContentVc;
 
-use self::query::Query;
+use self::{query::Query, specificity::SpecificityVc};
 
 /// The result of proxying a request to another HTTP server.
 #[turbo_tasks::value(shared)]
@@ -27,13 +29,46 @@ pub struct ProxyResult {
     /// Headers arranged as contiguous (name, value) pairs.
     pub headers: Vec<String>,
     /// The body to return.
-    pub body: Vec<u8>,
+    pub body: Rope,
+}
+
+/// The return value of a content source when getting a path. A specificity is
+/// attached and when combining results this specificity should be used to order
+/// results.
+#[turbo_tasks::value(shared)]
+pub struct ContentSourceResult {
+    pub specificity: SpecificityVc,
+    pub content: ContentSourceContentVc,
+}
+
+#[turbo_tasks::value_impl]
+impl ContentSourceResultVc {
+    /// Wraps some content source content with exact match specificity.
+    #[turbo_tasks::function]
+    pub fn exact(content: ContentSourceContentVc) -> ContentSourceResultVc {
+        ContentSourceResult {
+            specificity: SpecificityVc::exact(),
+            content,
+        }
+        .cell()
+    }
+
+    /// Result when no match was found with the lowest specificity.
+    #[turbo_tasks::function]
+    pub fn not_found() -> ContentSourceResultVc {
+        ContentSourceResult {
+            specificity: SpecificityVc::not_found(),
+            content: ContentSourceContent::NotFound.cell(),
+        }
+        .cell()
+    }
 }
 
 #[turbo_tasks::value(shared)]
 #[derive(Debug)]
 // TODO add Dynamic variant in future to allow streaming and server responses
-pub enum ContentSourceResult {
+/// The content of a result that is returned by a content source.
+pub enum ContentSourceContent {
     NotFound,
     Static(VersionedContentVc),
     HttpProxy(ProxyResultVc),
@@ -44,9 +79,9 @@ pub enum ContentSourceResult {
     },
 }
 
-impl From<VersionedContentVc> for ContentSourceResultVc {
+impl From<VersionedContentVc> for ContentSourceContentVc {
     fn from(content: VersionedContentVc) -> Self {
-        ContentSourceResult::Static(content).cell()
+        ContentSourceContent::Static(content).cell()
     }
 }
 
@@ -268,8 +303,8 @@ pub trait ContentSource {
     /// Gets content by `path` and request `data` from the source. `data` is
     /// empty by default and will only be filled when returning `NeedData`.
     /// This is useful as this method call will be cached based on it's
-    /// arguments, so we want to make the arguments contain as few information
-    /// as possible to increase cache hit ratio.
+    /// arguments, so we want to make the arguments contain as little
+    /// information as possible to increase cache hit ratio.
     fn get(&self, path: &str, data: Value<ContentSourceData>) -> ContentSourceResultVc;
 }
 
@@ -289,6 +324,6 @@ impl NoContentSourceVc {
 impl ContentSource for NoContentSource {
     #[turbo_tasks::function]
     fn get(&self, _path: &str, _data: Value<ContentSourceData>) -> ContentSourceResultVc {
-        ContentSourceResult::NotFound.into()
+        ContentSourceResultVc::not_found()
     }
 }

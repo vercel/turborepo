@@ -8,12 +8,20 @@ use swc_core::{
 };
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbopack_core::{
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
+    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc},
     reference::{AssetReference, AssetReferenceVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
+    resolve::{
+        origin::ResolveOriginVc,
+        parse::{Request, RequestVc},
+        ResolveResultVc,
+    },
 };
 
-use crate::references::{css_resolve, AstPathVc};
+use crate::{
+    chunk::CssImport,
+    code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
+    references::{css_resolve, AstPathVc},
+};
 
 #[turbo_tasks::value(into = "new")]
 pub struct ImportAttributes {
@@ -28,11 +36,11 @@ pub struct ImportAttributes {
 impl ImportAttributes {
     pub fn new_from_prelude(prelude: &ImportPrelude) -> Self {
         let layer_name = prelude.layer_name.as_ref().map(|l| match l {
-            box ImportPreludeLayerName::Ident(_) => LayerName {
+            box ImportLayerName::Ident(_) => LayerName {
                 span: DUMMY_SP,
                 name: vec![],
             },
-            box ImportPreludeLayerName::Function(f) => {
+            box ImportLayerName::Function(f) => {
                 assert_eq!(f.value.len(), 1);
                 assert!(matches!(&f.value[0], ComponentValue::LayerName(_)));
                 if let ComponentValue::LayerName(layer_name) = &f.value[0] {
@@ -43,17 +51,43 @@ impl ImportAttributes {
             }
         });
 
-        let supports = prelude.supports.as_ref().map(|s| match s {
-            box ImportPreludeSupportsType::SupportsCondition(s) => s.clone(),
-            box ImportPreludeSupportsType::Declaration(d) => SupportsCondition {
-                span: DUMMY_SP,
-                conditions: vec![SupportsConditionType::SupportsInParens(
-                    SupportsInParens::Feature(SupportsFeature::Declaration(d.clone())),
-                )],
-            },
-        });
+        let (supports, media) = prelude
+            .import_conditions
+            .as_ref()
+            .map(|c| {
+                let supports = if let Some(supports) = &c.supports {
+                    let v = supports.value.iter().find(|v| {
+                        matches!(
+                            v,
+                            ComponentValue::SupportsCondition(..) | ComponentValue::Declaration(..)
+                        )
+                    });
 
-        let media = prelude.media.as_ref().map(|m| m.queries.clone());
+                    if let Some(supports) = v {
+                        match &supports {
+                            ComponentValue::SupportsCondition(s) => Some(s.clone()),
+                            ComponentValue::Declaration(d) => Some(SupportsCondition {
+                                span: DUMMY_SP,
+                                conditions: vec![SupportsConditionType::SupportsInParens(
+                                    SupportsInParens::Feature(SupportsFeature::Declaration(
+                                        Box::new(d.clone()),
+                                    )),
+                                )],
+                            }),
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                let media = c.media.as_ref().map(|m| m.queries.clone());
+
+                (supports, media)
+            })
+            .unwrap_or_else(|| (None, None));
 
         Self {
             layer_name,
@@ -183,6 +217,34 @@ impl ValueToString for ImportAssetReference {
             "import(url) {}",
             self.request.to_string().await?,
         )))
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl CodeGenerateable for ImportAssetReference {
+    #[turbo_tasks::function]
+    async fn code_generation(
+        self_vc: ImportAssetReferenceVc,
+        _context: ChunkingContextVc,
+    ) -> Result<CodeGenerationVc> {
+        let this = &*self_vc.await?;
+        let mut imports = vec![];
+        if let Request::Uri {
+            protocol,
+            remainder,
+        } = &*this.request.await?
+        {
+            imports.push(CssImport::External(StringVc::cell(format!(
+                "{}{}",
+                protocol, remainder
+            ))))
+        }
+
+        Ok(CodeGeneration {
+            visitors: vec![],
+            imports,
+        }
+        .into())
     }
 }
 

@@ -2,80 +2,36 @@ package run
 
 import (
 	gocontext "context"
-	"encoding/json"
 	"fmt"
-	"log"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"regexp"
 	"sort"
-	"strconv"
-	"strings"
 	"sync"
-	"text/tabwriter"
 	"time"
 
-	"github.com/pyr-sh/dag"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/analytics"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
-	"github.com/vercel/turbo/cli/internal/colorcache"
+	"github.com/vercel/turbo/cli/internal/config"
 	"github.com/vercel/turbo/cli/internal/context"
 	"github.com/vercel/turbo/cli/internal/core"
 	"github.com/vercel/turbo/cli/internal/daemon"
 	"github.com/vercel/turbo/cli/internal/daemonclient"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/graphvisualizer"
-	"github.com/vercel/turbo/cli/internal/logstreamer"
-	"github.com/vercel/turbo/cli/internal/nodes"
+	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/process"
 	"github.com/vercel/turbo/cli/internal/runcache"
 	"github.com/vercel/turbo/cli/internal/scm"
 	"github.com/vercel/turbo/cli/internal/scope"
 	"github.com/vercel/turbo/cli/internal/signals"
-	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/taskhash"
-	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/ui"
 	"github.com/vercel/turbo/cli/internal/util"
 
-	"github.com/fatih/color"
-	"github.com/hashicorp/go-hclog"
-	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
 )
-
-// completeGraph represents the common state inferred from the filesystem and pipeline.
-// It is not intended to include information specific to a particular run.
-type completeGraph struct {
-	TopologicalGraph dag.AcyclicGraph
-	Pipeline         fs.Pipeline
-	PackageInfos     map[interface{}]*fs.PackageJSON
-	GlobalHash       string
-	RootNode         string
-}
-
-// runSpec contains the run-specific configuration elements that come from a particular
-// invocation of turbo.
-type runSpec struct {
-	Targets      []string
-	FilteredPkgs util.Set
-	Opts         *Opts
-}
-
-func (rs *runSpec) ArgsForTask(task string) []string {
-	passThroughArgs := make([]string, 0, len(rs.Opts.runOpts.passThroughArgs))
-	for _, target := range rs.Targets {
-		if target == task {
-			passThroughArgs = append(passThroughArgs, rs.Opts.runOpts.passThroughArgs...)
-		}
-	}
-	return passThroughArgs
-}
 
 var _cmdLong = `
 Run tasks across projects in your monorepo.
@@ -102,7 +58,8 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 		SilenceErrors:         true,
 		DisableFlagsInUseLine: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			base, err := helper.GetCmdBase(cmd.Flags())
+			flagSet := config.FlagSet{FlagSet: cmd.Flags()}
+			base, err := helper.GetCmdBase(flagSet)
 			if err != nil {
 				return err
 			}
@@ -110,10 +67,12 @@ func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Comma
 			if len(tasks) == 0 {
 				return errors.New("at least one task must be specified")
 			}
-			_, packageMode := packagemanager.InferRoot(base.RepoRoot)
-			opts.runOpts.singlePackage = packageMode == packagemanager.Single
 
+			_, packageMode := packagemanager.InferRoot(base.RepoRoot)
+
+			opts.runOpts.singlePackage = packageMode == packagemanager.Single
 			opts.runOpts.passThroughArgs = passThroughArgs
+
 			run := configureRun(base, opts, signalWatcher)
 			ctx := cmd.Context()
 			if err := run.run(ctx, tasks); err != nil {
@@ -205,6 +164,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			return err
 		}
 	}
+
 	if ui.IsCI && !r.opts.runOpts.noDaemon {
 		r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
 	} else if !r.opts.runOpts.noDaemon {
@@ -219,7 +179,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
-	if err := util.ValidateGraph(&pkgDepGraph.TopologicalGraph); err != nil {
+	if err := util.ValidateGraph(&pkgDepGraph.WorkspaceGraph); err != nil {
 		return errors.Wrap(err, "Invalid package dependency graph")
 	}
 
@@ -269,12 +229,12 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	r.base.Logger.Debug("local cache folder", "path", r.opts.cacheOpts.OverrideDir)
 
 	// TODO: consolidate some of these arguments
-	g := &completeGraph{
-		TopologicalGraph: pkgDepGraph.TopologicalGraph,
-		Pipeline:         pipeline,
-		PackageInfos:     pkgDepGraph.PackageInfos,
-		GlobalHash:       globalHash,
-		RootNode:         pkgDepGraph.RootNode,
+	g := &graph.CompleteGraph{
+		WorkspaceGraph: pkgDepGraph.WorkspaceGraph,
+		Pipeline:       pipeline,
+		WorkspaceInfos: pkgDepGraph.WorkspaceInfos,
+		GlobalHash:     globalHash,
+		RootNode:       pkgDepGraph.RootNode,
 	}
 	rs := &runSpec{
 		Targets:      targets,
@@ -282,20 +242,18 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		Opts:         r.opts,
 	}
 	packageManager := pkgDepGraph.PackageManager
-	return r.runOperation(ctx, g, rs, packageManager, startAt)
-}
 
-func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec, packageManager *packagemanager.PackageManager, startAt time.Time) error {
 	vertexSet := make(util.Set)
-	for _, v := range g.TopologicalGraph.Vertices() {
+	for _, v := range g.WorkspaceGraph.Vertices() {
 		vertexSet.Add(v)
 	}
 
-	engine, err := buildTaskGraphEngine(&g.TopologicalGraph, g.Pipeline, rs)
+	engine, err := buildTaskGraphEngine(g, rs)
+
 	if err != nil {
 		return errors.Wrap(err, "error preparing engine")
 	}
-	tracker := taskhash.NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.PackageInfos)
+	tracker := taskhash.NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.WorkspaceInfos)
 	err = tracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.runOpts.concurrency, r.base.RepoRoot)
 	if err != nil {
 		return errors.Wrap(err, "error hashing package files")
@@ -305,202 +263,132 @@ func (r *run) runOperation(ctx gocontext.Context, g *completeGraph, rs *runSpec,
 	// except for the root. Rebuild the task graph for backwards compatibility.
 	// We still use dependencies specified by the pipeline configuration.
 	if rs.Opts.runOpts.parallel {
-		for _, edge := range g.TopologicalGraph.Edges() {
+		for _, edge := range g.WorkspaceGraph.Edges() {
 			if edge.Target() != g.RootNode {
-				g.TopologicalGraph.RemoveEdge(edge)
+				g.WorkspaceGraph.RemoveEdge(edge)
 			}
 		}
-		engine, err = buildTaskGraphEngine(&g.TopologicalGraph, g.Pipeline, rs)
+		engine, err = buildTaskGraphEngine(g, rs)
 		if err != nil {
 			return errors.Wrap(err, "error preparing engine")
 		}
 	}
 
+	// Graph Run
 	if rs.Opts.runOpts.graphFile != "" || rs.Opts.runOpts.graphDot {
-		graph := engine.TaskGraph
-		if r.opts.runOpts.singlePackage {
-			graph = filterSinglePackageGraphForDisplay(engine.TaskGraph)
-		}
-		visualizer := graphvisualizer.New(r.base.RepoRoot, r.base.UI, graph)
+		return GraphRun(ctx, rs, engine, r.base)
+	}
 
-		if rs.Opts.runOpts.graphDot {
-			visualizer.RenderDotGraph()
+	packagesInScope := rs.FilteredPkgs.UnsafeListOfStrings()
+	sort.Strings(packagesInScope)
+	// Initiate analytics and cache
+	analyticsClient := r.initAnalyticsClient(ctx)
+	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
+	turboCache, err := r.initCache(ctx, rs, analyticsClient)
+
+	if err != nil {
+		if errors.Is(err, cache.ErrNoCachesEnabled) {
+			r.base.UI.Warn("No caches are enabled. You can try \"turbo login\", \"turbo link\", or ensuring you are not passing --remote-only to enable caching")
 		} else {
-			err := visualizer.GenerateGraphFile(rs.Opts.runOpts.graphFile)
-			if err != nil {
-				return err
-			}
+			return errors.Wrap(err, "failed to set up caching")
 		}
-	} else if rs.Opts.runOpts.dryRun {
-		tasksRun, err := r.executeDryRun(ctx, engine, g, tracker, rs)
-		if err != nil {
-			return err
-		}
-		packagesInScope := rs.FilteredPkgs.UnsafeListOfStrings()
-		sort.Strings(packagesInScope)
-		if rs.Opts.runOpts.dryRunJSON {
-			var rendered string
-			if r.opts.runOpts.singlePackage {
-				rendered, err = renderDryRunSinglePackageJSON(tasksRun)
-			} else {
-				rendered, err = renderDryRunFullJSON(tasksRun, packagesInScope)
-			}
-			if err != nil {
-				return err
-			}
-			r.base.UI.Output(rendered)
-		} else {
-			if err := displayDryTextRun(r.base.UI, tasksRun, packagesInScope, g.PackageInfos, r.opts.runOpts.singlePackage); err != nil {
-				return err
-			}
-		}
+	}
+
+	// Dry Run
+	if rs.Opts.runOpts.dryRun {
+		return DryRun(
+			ctx,
+			g,
+			rs,
+			engine,
+			tracker,
+			turboCache,
+			packagesInScope,
+			r.base,
+		)
+	}
+
+	// Regular run
+
+	return RealRun(
+		ctx,
+		g,
+		rs,
+		engine,
+		tracker,
+		turboCache,
+		packagesInScope,
+		r.base,
+		// Extra arg only for regular runs, dry-run doesn't get this
+		packageManager,
+		startAt,
+		r.processes,
+	)
+}
+
+func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {
+	apiClient := r.base.APIClient
+	var analyticsSink analytics.Sink
+	if apiClient.IsLinked() {
+		analyticsSink = apiClient
 	} else {
-		packagesInScope := rs.FilteredPkgs.UnsafeListOfStrings()
-		sort.Strings(packagesInScope)
-		if r.opts.runOpts.singlePackage {
-			r.base.UI.Output(fmt.Sprintf("%s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", ")))))
-		} else {
-			r.base.UI.Output(fmt.Sprintf(ui.Dim("• Packages in scope: %v"), strings.Join(packagesInScope, ", ")))
-			r.base.UI.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
-		}
-		return r.executeTasks(ctx, g, rs, engine, packageManager, tracker, startAt)
+		r.opts.cacheOpts.SkipRemote = true
+		analyticsSink = analytics.NullSink
 	}
-	return nil
+	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.base.Logger.Named("analytics"))
+	return analyticsClient
 }
 
-func renderDryRunSinglePackageJSON(tasksRun []hashedTask) (string, error) {
-	singlePackageTasks := make([]hashedSinglePackageTask, len(tasksRun))
-	for i, ht := range tasksRun {
-		singlePackageTasks[i] = ht.toSinglePackageTask()
-	}
-	dryRun := &struct {
-		Tasks []hashedSinglePackageTask `json:"tasks"`
-	}{singlePackageTasks}
-	bytes, err := json.MarshalIndent(dryRun, "", "  ")
-	if err != nil {
-		return "", errors.Wrap(err, "failed to render JSON")
-	}
-	return string(bytes), nil
+func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient analytics.Client) (cache.Cache, error) {
+	apiClient := r.base.APIClient
+	// Theoretically this is overkill, but bias towards not spamming the console
+	once := &sync.Once{}
+
+	return cache.New(rs.Opts.cacheOpts, r.base.RepoRoot, apiClient, analyticsClient, func(_cache cache.Cache, err error) {
+		// Currently the HTTP Cache is the only one that can be disabled.
+		// With a cache system refactor, we might consider giving names to the caches so
+		// we can accurately report them here.
+		once.Do(func() {
+			r.base.LogWarning("Remote Caching is unavailable", err)
+		})
+	})
 }
 
-func renderDryRunFullJSON(tasksRun []hashedTask, packagesInScope []string) (string, error) {
-	dryRun := &struct {
-		Packages []string     `json:"packages"`
-		Tasks    []hashedTask `json:"tasks"`
-	}{
-		Packages: packagesInScope,
-		Tasks:    tasksRun,
-	}
-	bytes, err := json.MarshalIndent(dryRun, "", "  ")
-	if err != nil {
-		return "", errors.Wrap(err, "failed to render JSON")
-	}
-	return string(bytes), nil
-}
+func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, error) {
+	engine := core.NewEngine(&g.WorkspaceGraph)
 
-func displayDryTextRun(ui cli.Ui, tasksRun []hashedTask, packagesInScope []string, packageInfos map[interface{}]*fs.PackageJSON, isSinglePackage bool) error {
-	if !isSinglePackage {
-		ui.Output("")
-		ui.Info(util.Sprintf("${CYAN}${BOLD}Packages in Scope${RESET}"))
-		p := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
-		fmt.Fprintln(p, "Name\tPath\t")
-		for _, pkg := range packagesInScope {
-			fmt.Fprintf(p, "%s\t%s\t\n", pkg, packageInfos[pkg].Dir)
-		}
-		if err := p.Flush(); err != nil {
-			return err
-		}
-	}
-
-	ui.Output("")
-	ui.Info(util.Sprintf("${CYAN}${BOLD}Tasks to Run${RESET}"))
-
-	for _, task := range tasksRun {
-		taskName := task.TaskID
-		if isSinglePackage {
-			taskName = util.RootTaskTaskName(taskName)
-		}
-		ui.Info(util.Sprintf("${BOLD}%s${RESET}", taskName))
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Task\t=\t%s\t${RESET}", task.Task))
-		var dependencies []string
-		var dependents []string
-		if !isSinglePackage {
-			fmt.Fprintln(w, util.Sprintf("  ${GREY}Package\t=\t%s\t${RESET}", task.Package))
-			dependencies = task.Dependencies
-			dependents = task.Dependents
-		} else {
-			dependencies = make([]string, len(task.Dependencies))
-			for i, dependency := range task.Dependencies {
-				dependencies[i] = util.StripPackageName(dependency)
-			}
-			dependents = make([]string, len(task.Dependents))
-			for i, dependent := range task.Dependents {
-				dependents[i] = util.StripPackageName(dependent)
-			}
-		}
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Hash\t=\t%s\t${RESET}", task.Hash))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Local)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Local)))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Remote)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Remote)))
-		if !isSinglePackage {
-			fmt.Fprintln(w, util.Sprintf("  ${GREY}Directory\t=\t%s\t${RESET}", task.Dir))
-		}
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs, ", ")))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(dependencies, ", ")))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(dependents, ", ")))
-		if err := w.Flush(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// filterSinglePackageGraphForDisplay builds an equivalent graph with package names stripped from tasks.
-// Given that this should only be used in a single-package context, all of the package names are expected
-// to be //. Also, all nodes are always connected to the root node, so we are not concerned with leaving
-// behind any unconnected nodes.
-func filterSinglePackageGraphForDisplay(originalGraph *dag.AcyclicGraph) *dag.AcyclicGraph {
-	graph := &dag.AcyclicGraph{}
-	for _, edge := range originalGraph.Edges() {
-		src := util.StripPackageName(edge.Source().(string))
-		tgt := util.StripPackageName(edge.Target().(string))
-		graph.Add(src)
-		graph.Add(tgt)
-		graph.Connect(dag.BasicEdge(src, tgt))
-	}
-	return graph
-}
-
-func buildTaskGraphEngine(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs *runSpec) (*core.Engine, error) {
-	engine := core.NewEngine(topoGraph)
-
-	for taskName, taskDefinition := range pipeline {
-		topoDeps := make(util.Set)
+	for taskName, taskDefinition := range g.Pipeline {
 		deps := make(util.Set)
+
 		isPackageTask := util.IsPackageTask(taskName)
+
 		for _, dependency := range taskDefinition.TaskDependencies {
+			// If the current task is a workspace-specific task (including root Task)
+			// and its dependency is _also_ a workspace-specific task, we need to add
+			// a reference to this dependency directly into the engine.
+			// TODO @mehulkar: Why do we need this?
 			if isPackageTask && util.IsPackageTask(dependency) {
 				err := engine.AddDep(dependency, taskName)
 				if err != nil {
 					return nil, err
 				}
 			} else {
+				// For non-workspace-specific dependencies, we attach a reference to
+				// the task that is added into the engine.
 				deps.Add(dependency)
 			}
 		}
-		for _, dependency := range taskDefinition.TopologicalDependencies {
-			topoDeps.Add(dependency)
-		}
+
+		topoDeps := util.SetFromStrings(taskDefinition.TopologicalDependencies)
 		engine.AddTask(&core.Task{
-			Name:     taskName,
-			TopoDeps: topoDeps,
-			Deps:     deps,
+			Name:       taskName,
+			TopoDeps:   topoDeps,
+			Deps:       deps,
+			Persistent: taskDefinition.Persistent,
 		})
 	}
 
-	if err := engine.Prepare(&core.EngineExecutionOptions{
+	if err := engine.Prepare(&core.EngineBuildingOptions{
 		Packages:  rs.FilteredPkgs.UnsafeListOfStrings(),
 		TaskNames: rs.Targets,
 		TasksOnly: rs.Opts.runOpts.only,
@@ -508,44 +396,17 @@ func buildTaskGraphEngine(topoGraph *dag.AcyclicGraph, pipeline fs.Pipeline, rs 
 		return nil, err
 	}
 
+	// Check for cycles in the DAG.
 	if err := util.ValidateGraph(engine.TaskGraph); err != nil {
 		return nil, fmt.Errorf("Invalid task dependency graph:\n%v", err)
 	}
 
+	// Check that no tasks would be blocked by a persistent task
+	if err := engine.ValidatePersistentDependencies(g); err != nil {
+		return nil, fmt.Errorf("Invalid persistent task dependency:\n%v", err)
+	}
+
 	return engine, nil
-}
-
-// Opts holds the current run operations configuration
-type Opts struct {
-	runOpts      runOpts
-	cacheOpts    cache.Opts
-	runcacheOpts runcache.Opts
-	scopeOpts    scope.Opts
-}
-
-// runOpts holds the options that control the execution of a turbo run
-type runOpts struct {
-	// Show a dot graph
-	dotGraph string
-	// Force execution to be serially one-at-a-time
-	concurrency int
-	// Whether to execute in parallel (defaults to false)
-	parallel bool
-	// Whether to emit a perf profile
-	profile string
-	// If true, continue task executions even if a task fails.
-	continueOnError bool
-	passThroughArgs []string
-	// Restrict execution to only the listed task names. Default false
-	only bool
-	// Dry run flags
-	dryRun     bool
-	dryRunJSON bool
-	// Graph flags
-	graphDot      bool
-	graphFile     string
-	noDaemon      bool
-	singlePackage bool
 }
 
 var (
@@ -699,260 +560,6 @@ func (d *dryRunValue) Type() string {
 	return "/ dry "
 }
 
-func getDefaultOptions() *Opts {
-	return &Opts{
-		runOpts: runOpts{
-			concurrency: 10,
-		},
-	}
-}
-
-func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {
-	apiClient := r.base.APIClient
-	var analyticsSink analytics.Sink
-	if apiClient.IsLinked() {
-		analyticsSink = apiClient
-	} else {
-		r.opts.cacheOpts.SkipRemote = true
-		analyticsSink = analytics.NullSink
-	}
-	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.base.Logger.Named("analytics"))
-	return analyticsClient
-}
-
-func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient analytics.Client) (cache.Cache, error) {
-	apiClient := r.base.APIClient
-	// Theoretically this is overkill, but bias towards not spamming the console
-	once := &sync.Once{}
-
-	return cache.New(rs.Opts.cacheOpts, r.base.RepoRoot, apiClient, analyticsClient, func(_cache cache.Cache, err error) {
-		// Currently the HTTP Cache is the only one that can be disabled.
-		// With a cache system refactor, we might consider giving names to the caches so
-		// we can accurately report them here.
-		once.Do(func() {
-			r.base.LogWarning("Remote Caching is unavailable", err)
-		})
-	})
-}
-
-func (r *run) executeTasks(ctx gocontext.Context, g *completeGraph, rs *runSpec, engine *core.Engine, packageManager *packagemanager.PackageManager, hashes *taskhash.Tracker, startAt time.Time) error {
-	analyticsClient := r.initAnalyticsClient(ctx)
-	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
-
-	useHTTPCache := !rs.Opts.cacheOpts.SkipRemote
-	if useHTTPCache {
-		r.base.UI.Info(ui.Dim("• Remote caching enabled"))
-	} else {
-		r.base.UI.Info(ui.Dim("• Remote caching disabled"))
-	}
-
-	turboCache, err := r.initCache(ctx, rs, analyticsClient)
-	if err != nil {
-		if errors.Is(err, cache.ErrNoCachesEnabled) {
-			r.base.LogWarning("No caches are enabled. You can try \"turbo login\", \"turbo link\", or ensuring you are not passing --remote-only to enable caching", nil)
-		} else {
-			return errors.Wrap(err, "failed to set up caching")
-		}
-	}
-	defer func() {
-		_ = spinner.WaitFor(ctx, turboCache.Shutdown, r.base.UI, "...writing to cache...", 1500*time.Millisecond)
-	}()
-	colorCache := colorcache.New()
-	runState := NewRunState(startAt, rs.Opts.runOpts.profile)
-	runCache := runcache.New(turboCache, r.base.RepoRoot, rs.Opts.runcacheOpts, colorCache)
-
-	ec := &execContext{
-		colorCache:      colorCache,
-		runState:        runState,
-		rs:              rs,
-		ui:              &cli.ConcurrentUi{Ui: r.base.UI},
-		runCache:        runCache,
-		logger:          r.base.Logger,
-		packageManager:  packageManager,
-		processes:       r.processes,
-		taskHashes:      hashes,
-		repoRoot:        r.base.RepoRoot,
-		isSinglePackage: r.opts.runOpts.singlePackage,
-	}
-
-	// run the thing
-	execOpts := core.ExecOpts{
-		Parallel:    rs.Opts.runOpts.parallel,
-		Concurrency: rs.Opts.runOpts.concurrency,
-	}
-	visitor := g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
-		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
-		return ec.exec(ctx, packageTask, deps)
-	})
-	errs := engine.Execute(visitor, execOpts)
-
-	// Track if we saw any child with a non-zero exit code
-	exitCode := 0
-	exitCodeErr := &process.ChildExit{}
-	for _, err := range errs {
-		if errors.As(err, &exitCodeErr) {
-			if exitCodeErr.ExitCode > exitCode {
-				exitCode = exitCodeErr.ExitCode
-			}
-		} else if exitCode == 0 {
-			// We hit some error, it shouldn't be exit code 0
-			exitCode = 1
-		}
-		r.base.UI.Error(err.Error())
-	}
-
-	if err := runState.Close(r.base.UI, rs.Opts.runOpts.profile); err != nil {
-		return errors.Wrap(err, "error with profiler")
-	}
-	if exitCode != 0 {
-		return &process.ChildExit{
-			ExitCode: exitCode,
-		}
-	}
-	return nil
-}
-
-type hashedTask struct {
-	TaskID          string           `json:"taskId"`
-	Task            string           `json:"task"`
-	Package         string           `json:"package"`
-	Hash            string           `json:"hash"`
-	CacheState      cache.ItemStatus `json:"cacheState"`
-	Command         string           `json:"command"`
-	Outputs         []string         `json:"outputs"`
-	ExcludedOutputs []string         `json:"excludedOutputs"`
-	LogFile         string           `json:"logFile"`
-	Dir             string           `json:"directory"`
-	Dependencies    []string         `json:"dependencies"`
-	Dependents      []string         `json:"dependents"`
-}
-
-func (ht *hashedTask) toSinglePackageTask() hashedSinglePackageTask {
-	dependencies := make([]string, len(ht.Dependencies))
-	for i, depencency := range ht.Dependencies {
-		dependencies[i] = util.StripPackageName(depencency)
-	}
-	dependents := make([]string, len(ht.Dependents))
-	for i, dependent := range ht.Dependents {
-		dependents[i] = util.StripPackageName(dependent)
-	}
-	return hashedSinglePackageTask{
-		Task:         util.RootTaskTaskName(ht.TaskID),
-		Hash:         ht.Hash,
-		Command:      ht.Command,
-		Outputs:      ht.Outputs,
-		LogFile:      ht.LogFile,
-		Dependencies: dependencies,
-		Dependents:   dependents,
-	}
-}
-
-type hashedSinglePackageTask struct {
-	Task            string   `json:"task"`
-	Hash            string   `json:"hash"`
-	Command         string   `json:"command"`
-	Outputs         []string `json:"outputs"`
-	ExcludedOutputs []string `json:"excludedOutputs"`
-	LogFile         string   `json:"logFile"`
-	Dependencies    []string `json:"dependencies"`
-	Dependents      []string `json:"dependents"`
-}
-
-func (r *run) executeDryRun(ctx gocontext.Context, engine *core.Engine, g *completeGraph, taskHashes *taskhash.Tracker, rs *runSpec) ([]hashedTask, error) {
-	analyticsClient := r.initAnalyticsClient(ctx)
-	defer analyticsClient.CloseWithTimeout(50 * time.Millisecond)
-	turboCache, err := r.initCache(ctx, rs, analyticsClient)
-	defer turboCache.Shutdown()
-
-	if err != nil {
-		if errors.Is(err, cache.ErrNoCachesEnabled) {
-			r.base.LogWarning("No caches are enabled. You can try \"turbo login\", \"turbo link\", or ensuring you are not passing --remote-only to enable caching", nil)
-		} else {
-			return nil, errors.Wrap(err, "failed to set up caching")
-		}
-	}
-
-	taskIDs := []hashedTask{}
-
-	errs := engine.Execute(g.getPackageTaskVisitor(ctx, func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
-		passThroughArgs := rs.ArgsForTask(packageTask.Task)
-		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
-		hash, err := taskHashes.CalculateTaskHash(packageTask, deps, r.base.Logger, passThroughArgs)
-		if err != nil {
-			return err
-		}
-		command, ok := packageTask.Command()
-		if !ok {
-			command = "<NONEXISTENT>"
-		}
-		isRootTask := packageTask.PackageName == util.RootPkgName
-		if isRootTask && commandLooksLikeTurbo(command) {
-			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, command)
-		}
-		ancestors, err := engine.TaskGraph.Ancestors(packageTask.TaskID)
-		if err != nil {
-			return err
-		}
-		stringAncestors := []string{}
-		for _, dep := range ancestors {
-			// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
-			if !strings.Contains(dep.(string), core.ROOT_NODE_NAME) {
-				stringAncestors = append(stringAncestors, dep.(string))
-			}
-		}
-		descendents, err := engine.TaskGraph.Descendents(packageTask.TaskID)
-		if err != nil {
-			return err
-		}
-		stringDescendents := []string{}
-		for _, dep := range descendents {
-			// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
-			if !strings.Contains(dep.(string), core.ROOT_NODE_NAME) {
-				stringDescendents = append(stringDescendents, dep.(string))
-			}
-		}
-		sort.Strings(stringDescendents)
-
-		itemStatus, err := turboCache.Exists(hash)
-		if err != nil {
-			return err
-		}
-
-		taskIDs = append(taskIDs, hashedTask{
-			TaskID:          packageTask.TaskID,
-			Task:            packageTask.Task,
-			Package:         packageTask.PackageName,
-			Hash:            hash,
-			CacheState:      itemStatus,
-			Command:         command,
-			Dir:             packageTask.Pkg.Dir.ToString(),
-			Outputs:         packageTask.TaskDefinition.Outputs.Inclusions,
-			ExcludedOutputs: packageTask.TaskDefinition.Outputs.Exclusions,
-			LogFile:         packageTask.RepoRelativeLogFile(),
-			Dependencies:    stringAncestors,
-			Dependents:      stringDescendents,
-		})
-
-		return nil
-	}), core.ExecOpts{
-		Concurrency: 1,
-		Parallel:    false,
-	})
-	if len(errs) > 0 {
-		for _, err := range errs {
-			r.base.UI.Error(err.Error())
-		}
-		return nil, errors.New("errors occurred during dry-run graph traversal")
-	}
-	return taskIDs, nil
-}
-
-var _isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", regexp.QuoteMeta(string(filepath.Separator))))
-
-func commandLooksLikeTurbo(command string) bool {
-	return _isTurbo.MatchString(command)
-}
-
 func validateTasks(pipeline fs.Pipeline, tasks []string) error {
 	for _, task := range tasks {
 		if !pipeline.HasTask(task) {
@@ -960,205 +567,4 @@ func validateTasks(pipeline fs.Pipeline, tasks []string) error {
 		}
 	}
 	return nil
-}
-
-type execContext struct {
-	colorCache      *colorcache.ColorCache
-	runState        *RunState
-	rs              *runSpec
-	ui              cli.Ui
-	runCache        *runcache.RunCache
-	logger          hclog.Logger
-	packageManager  *packagemanager.PackageManager
-	processes       *process.Manager
-	taskHashes      *taskhash.Tracker
-	repoRoot        turbopath.AbsoluteSystemPath
-	isSinglePackage bool
-}
-
-func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
-	ec.logger.Error(prefix, "error", err)
-
-	if prefix != "" {
-		prefix += ": "
-	}
-
-	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
-}
-
-func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) error {
-	cmdTime := time.Now()
-
-	prefix := packageTask.OutputPrefix(ec.isSinglePackage)
-	prettyPrefix := ec.colorCache.PrefixWithColor(packageTask.PackageName, prefix)
-
-	progressLogger := ec.logger.Named("")
-	progressLogger.Debug("start")
-
-	// Setup tracer
-	tracer := ec.runState.Run(packageTask.TaskID)
-
-	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
-	hash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, ec.logger, passThroughArgs)
-	ec.logger.Debug("task hash", "value", hash)
-	if err != nil {
-		ec.ui.Error(fmt.Sprintf("Hashing error: %v", err))
-		// @TODO probably should abort fatally???
-	}
-	// TODO(gsoltis): if/when we fix https://github.com/vercel/turbo/issues/937
-	// the following block should never get hit. In the meantime, keep it after hashing
-	// so that downstream tasks can count on the hash existing
-	//
-	// bail if the script doesn't exist
-	if _, ok := packageTask.Command(); !ok {
-		progressLogger.Debug("no task in package, skipping")
-		progressLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
-		return nil
-	}
-	// Cache ---------------------------------------------
-	taskCache := ec.runCache.TaskCache(packageTask, hash)
-	// Create a logger for replaying
-	prefixedUI := &cli.PrefixedUi{
-		Ui:           ec.ui,
-		OutputPrefix: prettyPrefix,
-		InfoPrefix:   prettyPrefix,
-		ErrorPrefix:  prettyPrefix,
-		WarnPrefix:   prettyPrefix,
-	}
-	hit, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
-	if err != nil {
-		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
-	} else if hit {
-		tracer(TargetCached, nil)
-		return nil
-	}
-
-	// Setup command execution
-	argsactual := append([]string{"run"}, packageTask.Task)
-	if len(passThroughArgs) > 0 {
-		// This will be either '--' or a typed nil
-		argsactual = append(argsactual, ec.packageManager.ArgSeparator...)
-		argsactual = append(argsactual, passThroughArgs...)
-	}
-
-	cmd := exec.Command(ec.packageManager.Command, argsactual...)
-	// TODO: repoRoot probably should be AbsoluteSystemPath, but it's Join method
-	// takes a RelativeSystemPath. Resolve during migration from turbopath.AbsoluteSystemPath to
-	// AbsoluteSystemPath
-	cmd.Dir = ec.repoRoot.UntypedJoin(packageTask.Pkg.Dir.ToStringDuringMigration()).ToString()
-	envs := fmt.Sprintf("TURBO_HASH=%v", hash)
-	cmd.Env = append(os.Environ(), envs)
-
-	// Setup stdout/stderr
-	// If we are not caching anything, then we don't need to write logs to disk
-	// be careful about this conditional given the default of cache = true
-	writer, err := taskCache.OutputWriter(prettyPrefix)
-	if err != nil {
-		tracer(TargetBuildFailed, err)
-		ec.logError(progressLogger, prettyPrefix, err)
-		if !ec.rs.Opts.runOpts.continueOnError {
-			os.Exit(1)
-		}
-	}
-
-	// Create a logger
-	logger := log.New(writer, "", 0)
-	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
-	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
-	cmd.Stderr = logStreamerErr
-	cmd.Stdout = logStreamerOut
-	// Flush/Reset any error we recorded
-	logStreamerErr.FlushRecord()
-	logStreamerOut.FlushRecord()
-
-	closeOutputs := func() error {
-		var closeErrors []error
-
-		if err := logStreamerOut.Close(); err != nil {
-			closeErrors = append(closeErrors, errors.Wrap(err, "log stdout"))
-		}
-		if err := logStreamerErr.Close(); err != nil {
-			closeErrors = append(closeErrors, errors.Wrap(err, "log stderr"))
-		}
-
-		if err := writer.Close(); err != nil {
-			closeErrors = append(closeErrors, errors.Wrap(err, "log file"))
-		}
-		if len(closeErrors) > 0 {
-			msgs := make([]string, len(closeErrors))
-			for i, err := range closeErrors {
-				msgs[i] = err.Error()
-			}
-			return fmt.Errorf("could not flush log output: %v", strings.Join(msgs, ", "))
-		}
-		return nil
-	}
-
-	// Run the command
-	if err := ec.processes.Exec(cmd); err != nil {
-		// close off our outputs. We errored, so we mostly don't care if we fail to close
-		_ = closeOutputs()
-		// if we already know we're in the process of exiting,
-		// we don't need to record an error to that effect.
-		if errors.Is(err, process.ErrClosing) {
-			return nil
-		}
-		tracer(TargetBuildFailed, err)
-		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
-		if !ec.rs.Opts.runOpts.continueOnError {
-			prefixedUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
-			ec.processes.Close()
-		} else {
-			prefixedUI.Warn("command finished with error, but continuing...")
-		}
-		return err
-	}
-
-	duration := time.Since(cmdTime)
-	// Close off our outputs and cache them
-	if err := closeOutputs(); err != nil {
-		ec.logError(progressLogger, "", err)
-	} else {
-		if err = taskCache.SaveOutputs(ctx, progressLogger, prefixedUI, int(duration.Milliseconds())); err != nil {
-			ec.logError(progressLogger, "", fmt.Errorf("error caching output: %w", err))
-		}
-	}
-
-	// Clean up tracing
-	tracer(TargetBuilt, nil)
-	progressLogger.Debug("done", "status", "complete", "duration", duration)
-	return nil
-}
-
-func (g *completeGraph) getPackageTaskVisitor(ctx gocontext.Context, visitor func(ctx gocontext.Context, packageTask *nodes.PackageTask) error) func(taskID string) error {
-	return func(taskID string) error {
-
-		name, task := util.GetPackageTaskFromId(taskID)
-		pkg, ok := g.PackageInfos[name]
-		if !ok {
-			return fmt.Errorf("cannot find package %v for task %v", name, taskID)
-		}
-
-		// first check for package-tasks
-		taskDefinition, ok := g.Pipeline[fmt.Sprintf("%v", taskID)]
-		if !ok {
-			// then check for regular tasks
-			fallbackTaskDefinition, notcool := g.Pipeline[task]
-			// if neither, then bail
-			if !notcool && !ok {
-				return nil
-			}
-			// override if we need to...
-			taskDefinition = fallbackTaskDefinition
-		}
-		return visitor(ctx, &nodes.PackageTask{
-			TaskID:         taskID,
-			Task:           task,
-			PackageName:    name,
-			Pkg:            pkg,
-			TaskDefinition: &taskDefinition,
-		})
-	}
 }

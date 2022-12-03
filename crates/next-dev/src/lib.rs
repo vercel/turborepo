@@ -7,7 +7,7 @@ mod turbo_tasks_viz;
 use std::{
     collections::HashSet,
     env::current_dir,
-    future::join,
+    future::{join, Future},
     net::{IpAddr, SocketAddr},
     path::MAIN_SEPARATOR,
     sync::Arc,
@@ -18,12 +18,12 @@ use anyhow::{anyhow, Context, Result};
 use devserver_options::DevServerOptions;
 use next_core::{
     create_app_source, create_server_rendered_source, create_web_entry_source, env::load_env,
-    source_map::NextSourceMapTraceContentSourceVc,
+    next_image::NextImageContentSourceVc, source_map::NextSourceMapTraceContentSourceVc,
 };
 use owo_colors::OwoColorize;
 use turbo_tasks::{
-    primitives::StringsVc, util::FormatDuration, RawVc, TransientInstance, TransientValue,
-    TurboTasks, Value,
+    primitives::StringsVc, util::FormatDuration, RawVc, StatsType, TransientInstance,
+    TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
@@ -33,17 +33,23 @@ use turbopack_dev_server::{
     fs::DevServerFileSystemVc,
     introspect::IntrospectionSource,
     source::{
-        combined::CombinedContentSource, router::RouterContentSource,
+        combined::CombinedContentSourceVc, router::RouterContentSource,
         static_assets::StaticAssetsContentSourceVc, ContentSourceVc,
     },
     DevServer,
 };
 
+#[derive(Clone)]
+pub enum EntryRequest {
+    Relative(String),
+    Module(String, String),
+}
+
 pub struct NextDevServerBuilder {
     turbo_tasks: Arc<TurboTasks<MemoryBackend>>,
     project_dir: String,
     root_dir: String,
-    entry_requests: Vec<String>,
+    entry_requests: Vec<EntryRequest>,
     server_component_externals: Vec<String>,
     eager_compile: bool,
     hostname: Option<IpAddr>,
@@ -80,7 +86,7 @@ impl NextDevServerBuilder {
         }
     }
 
-    pub fn entry_request(mut self, entry_asset_path: String) -> NextDevServerBuilder {
+    pub fn entry_request(mut self, entry_asset_path: EntryRequest) -> NextDevServerBuilder {
         self.entry_requests.push(entry_asset_path);
         self
     }
@@ -135,7 +141,6 @@ impl NextDevServerBuilder {
 
         let project_dir = self.project_dir;
         let root_dir = self.root_dir;
-        let entry_requests = self.entry_requests;
         let server_component_externals = self.server_component_externals;
         let eager_compile = self.eager_compile;
         let show_all = self.show_all;
@@ -147,6 +152,7 @@ impl NextDevServerBuilder {
             log_detail,
             log_level: self.log_level,
         };
+        let entry_requests = Arc::new(self.entry_requests.clone());
         let console_ui = Arc::new(ConsoleUi::new(log_options));
         let console_ui_to_dev_server = console_ui.clone();
 
@@ -160,7 +166,7 @@ impl NextDevServerBuilder {
             source(
                 root_dir.clone(),
                 project_dir.clone(),
-                entry_requests.clone(),
+                entry_requests.clone().into(),
                 eager_compile,
                 turbo_tasks.clone().into(),
                 console_ui.clone().into(),
@@ -257,7 +263,7 @@ async fn output_fs(project_dir: &str, console_ui: ConsoleUiVc) -> Result<FileSys
 async fn source(
     root_dir: String,
     project_dir: String,
-    entry_requests: Vec<String>,
+    entry_requests: TransientInstance<Vec<EntryRequest>>,
     eager_compile: bool,
     turbo_tasks: TransientInstance<TurboTasks<MemoryBackend>>,
     console_ui: TransientInstance<ConsoleUi>,
@@ -279,13 +285,19 @@ async fn source(
 
     let dev_server_fs = DevServerFileSystemVc::new().as_file_system();
     let dev_server_root = dev_server_fs.root();
+    let entry_requests = entry_requests
+        .iter()
+        .map(|r| match r {
+            EntryRequest::Relative(p) => RequestVc::relative(Value::new(p.clone().into()), false),
+            EntryRequest::Module(m, p) => {
+                RequestVc::module(m.clone(), Value::new(p.clone().into()))
+            }
+        })
+        .collect();
 
     let web_source = create_web_entry_source(
         project_path,
-        entry_requests
-            .iter()
-            .map(|a| RequestVc::relative(Value::new(a.to_string().into()), false))
-            .collect(),
+        entry_requests,
         dev_server_root,
         env,
         eager_compile,
@@ -313,16 +325,19 @@ async fn source(
     .into();
     let static_source =
         StaticAssetsContentSourceVc::new(String::new(), project_path.join("public")).into();
-    let main_source = CombinedContentSource {
-        sources: vec![static_source, app_source, rendered_source, web_source],
-    }
-    .cell();
+    let main_source =
+        CombinedContentSourceVc::new(vec![static_source, app_source, rendered_source, web_source]);
     let introspect = IntrospectionSource {
         roots: HashSet::from([main_source.into()]),
     }
     .cell()
     .into();
-    let source_map_trace = NextSourceMapTraceContentSourceVc::new(rendered_source).into();
+    let main_source = main_source.into();
+    let source_map_trace = NextSourceMapTraceContentSourceVc::new(main_source).into();
+    let img_source = NextImageContentSourceVc::new(
+        CombinedContentSourceVc::new(vec![static_source, rendered_source]).into(),
+    )
+    .into();
     let source = RouterContentSource {
         routes: vec![
             ("__turbopack__/".to_string(), introspect),
@@ -331,8 +346,10 @@ async fn source(
                 "__nextjs_original-stack-frame".to_string(),
                 source_map_trace,
             ),
+            // TODO: Load path from next.config.js
+            ("_next/image".to_string(), img_source),
         ],
-        fallback: main_source.into(),
+        fallback: main_source,
     }
     .cell()
     .into();
@@ -378,24 +395,36 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
     };
 
     let tt = TurboTasks::new(MemoryBackend::new());
+
+    let stats_type = match options.full_stats {
+        true => StatsType::Full,
+        false => StatsType::Essential,
+    };
+    tt.set_stats_type(stats_type);
+
     let tt_clone = tt.clone();
 
+    #[allow(unused_mut)]
     let mut server = NextDevServerBuilder::new(tt, dir, root_dir)
-        .entry_request("src/index".into())
+        .entry_request(EntryRequest::Relative("src/index".into()))
         .eager_compile(options.eager_compile)
         .hostname(options.hostname)
         .port(options.port)
         .log_detail(options.log_detail)
         .show_all(options.show_all)
-        .allow_retry(options.allow_retry)
         .log_level(
             options
                 .log_level
                 .map_or_else(|| IssueSeverity::Warning, |l| l.0),
         );
 
-    for package in options.server_components_external_packages.iter() {
-        server = server.server_component_external(package.to_string());
+    #[cfg(feature = "serializable")]
+    {
+        server = server.allow_retry(options.allow_retry);
+
+        for package in options.server_components_external_packages.iter() {
+            server = server.server_component_external(package.to_string());
+        }
     }
 
     let server = server.build().await?;
@@ -426,9 +455,12 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
         );
 
         loop {
-            let (elapsed, _count) = tt_clone
-                .get_or_wait_update_info(Duration::from_millis(100))
-                .await;
+            let update_future = profile_timeout(
+                tt_clone.as_ref(),
+                tt_clone.get_or_wait_update_info(Duration::from_millis(100)),
+            );
+
+            let (elapsed, _count) = update_future.await;
             println!(
                 "{event_type} - updated in {elapsed}",
                 event_type = "event".purple(),
@@ -440,4 +472,33 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
     join!(stats_future, async { server.future.await.unwrap() }).await;
 
     Ok(())
+}
+
+#[cfg(feature = "profile")]
+// When profiling, exits the process when no new updates have been received for
+// a given timeout and there are no more tasks in progress.
+async fn profile_timeout<T>(tt: &TurboTasks<MemoryBackend>, future: impl Future<Output = T>) -> T {
+    /// How long to wait in between updates before force-exiting the process
+    /// during profiling.
+    const PROFILE_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
+
+    futures::pin_mut!(future);
+    loop {
+        match tokio::time::timeout(PROFILE_EXIT_TIMEOUT, &mut future).await {
+            Ok(res) => return res,
+            Err(_) => {
+                if tt.get_in_progress_count() == 0 {
+                    std::process::exit(0)
+                }
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "profile"))]
+fn profile_timeout<T>(
+    _tt: &TurboTasks<MemoryBackend>,
+    future: impl Future<Output = T>,
+) -> impl Future<Output = T> {
+    future
 }

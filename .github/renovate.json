@@ -20,6 +20,11 @@
       "enabled": false
     }
   ],
+  "ignorePaths": [
+    "**/node_modules/**",
+    "cli/integration_tests/**",
+    "crates/turbopack/tests**"
+  ],
   "prCreation": "not-pending",
   "prConcurrentLimit": 5,
   "stabilityDays": 2

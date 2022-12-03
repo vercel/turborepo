@@ -1,9 +1,5 @@
 {
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
@@ -12,9 +8,10 @@
   },
   "devDependencies": {
     "eslint": "^8.0.0",
-    "eslint-config-custom": "*",
+    "eslint-config-custom": "workspace:*",
     "prettier": "^2.7.1",
     "prettier-plugin-svelte": "^2.7.0",
     "turbo": "latest"
-  }
+  },
+  "packageManager": "pnpm@7.15.0"
 }
