@@ -72,16 +72,9 @@ pub async fn expand_imports(chunk_item: CssChunkItemVc) -> Result<ExpandImportsR
     Ok(result.cell())
 }
 
+#[derive(Default)]
 struct CodeBuilderWithIndent {
     code: CodeBuilder,
-}
-
-impl Default for CodeBuilderWithIndent {
-    fn default() -> Self {
-        Self {
-            code: CodeBuilder::default(),
-        }
-    }
 }
 
 #[derive(Default)]
