@@ -270,6 +270,37 @@ be explicitly opted into via including `//#<task>` in the pipeline configuration
 some best-effort checking to produce an error in the recursion situations, but it is up to you to only
 opt in those tasks which don't themselves trigger a `turbo` run that would recurse.
 
+### Dependencies outside of a task
+
+When your task has topological dependencies that are outside of that given task, you'll still want to enjoy the parallelism of Turborepo and ensure that your caching behavior is correct according to your code changes.
+
+To demonstrate how to do this, let's say you have a set of workspaces to do a little bit of math: `add`, `subtract`, and `multiply`. `subtract` is implemented by calling `add` with a negative number and your `multiply` works by calling `add` in a loop. So, `add` is a dependency of both `subtract` and `multiply`.
+
+You've written tests in all three of these workspaces and it's time to run them. There are two requirements here:
+
+1. All tests run in parallel to keep things speedy
+2. A change in a dependency should result in a cache miss
+
+To accomplish this, we can set up a pipeline like so:
+
+```jsonc
+{
+   "$schema": "https://turbo.build/schema.json",
+   "pipeline": {
+     "topo": {
+       "dependsOn": ["^topo"]
+     },
+     "test": {
+       "dependsOn": ["^topo"]
+     }
+   }
+ }
+```
+
+![](../../../../../public/images/docs/task-graph-with-dummy-task.png)
+
+In this pipeline, we create an intermediary dummy `topo` task. Since we don't have a `topo` command in our workspaces, the pipeline will go straight to running `test` scripts in parallel, meeting our first requirement. The second requirement will also be taken care of, falling back on Turborepo's default behavior of creating hashes for a workspace task and it's dependencies as a tree.
+
 <Callout
   type="idea"
   icon={<HeartIcon className="h-5 w-5 mt-1 text-gray-400" aria-hidden="true" />}

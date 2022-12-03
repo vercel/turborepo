@@ -91,18 +91,8 @@ const nextConfig = withNextra({
         permanent: true,
       })),
       {
-        source: "/repo/docs/getting-started",
-        destination: "/repo/docs",
-        permanent: true,
-      },
-      {
         source: "/docs/getting-started",
         destination: "/repo/docs",
-        permanent: true,
-      },
-      {
-        source: "/repo/docs/guides/workspaces",
-        destination: "/repo/docs/handbook/workspaces",
         permanent: true,
       },
       {
@@ -116,18 +106,8 @@ const nextConfig = withNextra({
         permanent: true,
       },
       {
-        source: "/repo/docs/core-concepts/why-turborepo",
-        destination: "/repo/docs/core-concepts/monorepos",
-        permanent: true,
-      },
-      {
         source: "/docs/core-concepts/why-turborepo",
         destination: "/repo/docs/core-concepts/monorepos",
-        permanent: true,
-      },
-      {
-        source: "/repo/docs/core-concepts/filtering",
-        destination: "/repo/docs/core-concepts/monorepos/filtering",
         permanent: true,
       },
       {
@@ -146,11 +126,6 @@ const nextConfig = withNextra({
         permanent: true,
       },
       {
-        source: "/repo/docs/core-concepts/pipelines",
-        destination: "/repo/docs/core-concepts/monorepos/running-tasks",
-        permanent: true,
-      },
-      {
         source: "/docs/core-concepts/pipelines",
         destination: "/repo/docs/core-concepts/monorepos/running-tasks",
         permanent: true,
@@ -160,7 +135,6 @@ const nextConfig = withNextra({
         destination: "/repo/docs/handbook/migrating-to-a-monorepo",
         permanent: true,
       },
-
       {
         source: "/discord{/}?",
         permanent: true,
@@ -192,11 +166,55 @@ const nextConfig = withNextra({
         destination: "/repo/docs/ci",
       },
       {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/core-concepts/running-tasks",
+        destination: "/repo/docs/core-concepts/monorepos/running-tasks",
+        permanent: true,
+      },
+      {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/core-concepts/why-turborepo",
+        destination: "/repo/docs/core-concepts/monorepos",
+        permanent: true,
+      },
+      {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/core-concepts/filtering",
+        destination: "/repo/docs/core-concepts/monorepos/filtering",
+        permanent: true,
+      },
+      {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/core-concepts/pipelines",
+        destination: "/repo/docs/core-concepts/monorepos/running-tasks",
+        permanent: true,
+      },
+      {
+        // This rule accidentally created a bunch of URLs.
+        //
+        // They've _never_ resolved, so _eventually_ we should be able to remove the
+        // redirects we added above to fix them.
         source: "/docs/features/:path*",
         permanent: true,
         destination: "/repo/docs/core-concepts/:path*",
       },
       {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/getting-started",
+        destination: "/repo/docs",
+        permanent: true,
+      },
+      {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/guides/workspaces",
+        destination: "/repo/docs/handbook/workspaces",
+        permanent: true,
+      },
+      {
+        // This rule accidentally created a bunch of URLs.
+        //
+        // They've _never_ resolved, so _eventually_ we should be able to remove the
+        // redirects we added above to fix them.
         source: "/docs/:path*",
         permanent: true,
         destination: "/repo/docs/:path*",

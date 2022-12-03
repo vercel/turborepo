@@ -36,6 +36,8 @@ members = [
 ]
 
 default-members = [
+  "crates/auto-hash-map",
+  "crates/next-binding",
   "crates/next-core",
   "crates/next-dev",
   "crates/node-file-trace",
@@ -79,14 +81,15 @@ opt-level = 3
 # Declare dependencies used across workspace packages requires single version bump.
 # ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
 [workspace.dependencies]
-# This version pin is workaround for https://github.com/tkaitchuck/aHash/issues/95
-indexmap = { version = "=1.6.2" }
-swc_core = { version = "0.43.23" }
+indexmap = { version = "1.9.2" }
+# Keep consistent with preset_env_base through swc_core
+browserslist-rs = { version = "0.12.2" }
+swc_core = { version = "0.44.2" }
 testing = { version = "0.31.14" }
-swc_emotion = { version = "0.28.1" }
-styled_jsx = { version = "0.29.1" }
-styled_components = { version = "0.52.1" }
-modularize_imports = { version = "0.25.5" }
-mdxjs = { version = "0.1.1" }
+swc_emotion = { version = "0.28.3" }
+styled_jsx = { version = "0.29.7" }
+styled_components = { version = "0.52.7" }
+modularize_imports = { version = "0.25.7" }
+mdxjs = { version = "0.1.3" }
 next-dev = { path = "crates/next-dev", version = "0.1.0" }
 node-file-trace = { path = "crates/node-file-trace", version = "0.1.0" }
