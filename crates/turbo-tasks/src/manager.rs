@@ -317,8 +317,7 @@ impl<B: Backend> TurboTasks<B> {
 
     /// Call a native function with arguments.
     /// All inputs must be resolved.
-    pub(crate) fn native_call(&self, func: FunctionId, mut inputs: Vec<TaskInput>) -> RawVc {
-        inputs.shrink_to_fit();
+    pub(crate) fn native_call(&self, func: FunctionId, inputs: Vec<TaskInput>) -> RawVc {
         RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
             PersistentTaskType::Native(func, inputs),
             current_task("turbo_function calls"),
@@ -328,11 +327,10 @@ impl<B: Backend> TurboTasks<B> {
 
     /// Calls a native function with arguments. Resolves arguments when needed
     /// with a wrapper [Task].
-    pub fn dynamic_call(&self, func: FunctionId, mut inputs: Vec<TaskInput>) -> RawVc {
+    pub fn dynamic_call(&self, func: FunctionId, inputs: Vec<TaskInput>) -> RawVc {
         if inputs.iter().all(|i| i.is_resolved() && !i.is_nothing()) {
             self.native_call(func, inputs)
         } else {
-            inputs.shrink_to_fit();
             RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
                 PersistentTaskType::ResolveNative(func, inputs),
                 current_task("turbo_function calls"),
@@ -347,9 +345,8 @@ impl<B: Backend> TurboTasks<B> {
         &self,
         trait_type: TraitTypeId,
         trait_fn_name: Cow<'static, str>,
-        mut inputs: Vec<TaskInput>,
+        inputs: Vec<TaskInput>,
     ) -> RawVc {
-        inputs.shrink_to_fit();
         RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
             PersistentTaskType::ResolveTrait(trait_type, trait_fn_name, inputs),
             current_task("turbo_function calls"),
