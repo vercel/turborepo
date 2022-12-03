@@ -1,0 +1,42 @@
+{
+  "name": "storybook",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "start-storybook -p 6006",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "build-storybook": "build-storybook"
+  },
+  "dependencies": {
+    "ui": "workspace:*",
+    "@mdx-js/react": "^2.1.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.5",
+    "@storybook/addon-actions": "^6.5.14",
+    "@storybook/addon-backgrounds": "^6.5.14",
+    "@storybook/builder-vite": "^0.2.5",
+    "@storybook/addon-docs": "^6.5.14",
+    "@storybook/addon-links": "^6.5.14",
+    "@storybook/addon-measure": "^6.5.14",
+    "@storybook/addon-outline": "^6.5.14",
+    "@storybook/addons": "^6.5.14",
+    "@storybook/channel-postmessage": "^6.5.14",
+    "@storybook/channel-websocket": "^6.5.14",
+    "@storybook/cli": "^6.5.14",
+    "@storybook/client-api": "^6.5.14",
+    "@storybook/preview": "7.0.0-alpha.53",
+    "@storybook/preview-web": "^6.5.14",
+    "@storybook/react": "^6.5.14",
+    "@types/react": "^18.0.24",
+    "@types/react-dom": "^18.0.8",
+    "@vitejs/plugin-react": "^2.2.0",
+    "babel-loader": "^8.3.0",
+    "typescript": "^4.6.4",
+    "vite": "^3.2.3"
+  }
+}
