@@ -1,8 +1,8 @@
-use std::{collections::VecDeque, io::Write as _};
+use std::{collections::VecDeque, fmt::Write};
 
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, ValueToString};
-use turbo_tasks_fs::rope::{Rope, RopeBuilder};
+use turbo_tasks_fs::rope::Rope;
 use turbopack_core::code_builder::{Code, CodeBuilder, CodeVc};
 
 use super::{CssChunkItemVc, CssImport};
@@ -74,14 +74,12 @@ pub async fn expand_imports(chunk_item: CssChunkItemVc) -> Result<ExpandImportsR
 
 struct CodeBuilderWithIndent {
     code: CodeBuilder,
-    needs_indent: bool,
 }
 
 impl Default for CodeBuilderWithIndent {
     fn default() -> Self {
         Self {
             code: CodeBuilder::default(),
-            needs_indent: true,
         }
     }
 }
@@ -110,7 +108,7 @@ impl CodeBuilderWithIndent {
         map: Option<ParseResultSourceMapVc>,
         indent: &Indent,
     ) -> Result<()> {
-        let indented = self.wrap_indent(&code.to_str()?, indent)?;
+        let indented = self.wrap_indent(&code.to_str()?, indent)?.into();
         let indented_map = if let Some(map) = map {
             Some(
                 ParseResultSourceMap::with_indent(&*map.await?, indent.to_str().len() as u32)
@@ -125,29 +123,17 @@ impl CodeBuilderWithIndent {
     }
 
     pub fn push_str(&mut self, code: &str, indent: &Indent) -> Result<()> {
-        let indented = self.wrap_indent(code, indent)?;
+        let indented = self.wrap_indent(code, indent)?.into();
         self.code.push_source(&indented, None);
         Ok(())
     }
 
-    fn wrap_indent(&mut self, code: &str, indent: &Indent) -> Result<Rope> {
-        let mut indented = RopeBuilder::default();
-        for c in code.chars() {
-            if c == '\n' {
-                writeln!(indented)?;
-                self.needs_indent = true;
-
-                continue;
-            }
-
-            if self.needs_indent {
-                write!(indented, "{}", indent.to_str())?;
-                self.needs_indent = false;
-            }
-
-            write!(indented, "{}", c)?;
+    fn wrap_indent(&mut self, code: &str, indent: &Indent) -> Result<String> {
+        let mut indented = String::new();
+        for line in code.split_inclusive('\n') {
+            write!(indented, "{}{}", indent.to_str(), line)?;
         }
-        Ok(indented.build())
+        Ok(indented)
     }
 
     pub fn build(self) -> Code {
