@@ -11,7 +11,7 @@
     "format:prettier": "prettier -w .",
     "format:rs": "cargo fmt --all",
     "format:toml": "taplo format",
-    "lint": "eslint . --ext js,jsx,ts,tsx",
+    "lint": "eslint . --ext js,jsx,ts,tsx --cache",
     "turbo": "cd cli && make turbo && cd .. && node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
     "run-example": "./scripts/run-example.sh"
