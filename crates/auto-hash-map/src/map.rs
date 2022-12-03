@@ -233,6 +233,13 @@ impl<K, V, H> AutoMap<K, V, H> {
             AutoMap::Map(map) => Iter::Map(map.iter()),
         }
     }
+    /// see [HashMap::iter_mut](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.iter_mut)
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
+        match self {
+            AutoMap::List(list) => IterMut::List(list.iter_mut()),
+            AutoMap::Map(map) => IterMut::Map(map.iter_mut()),
+        }
+    }
 
     /// see [HashMap::is_empty](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.is_empty)
     pub fn is_empty(&self) -> bool {
@@ -300,6 +307,22 @@ impl<'a, K, V> Iterator for Iter<'a, K, V> {
         match self {
             Iter::List(iter) => iter.next().map(|(k, v)| (k, v)),
             Iter::Map(iter) => iter.next().map(|(k, v)| (k, v)),
+        }
+    }
+}
+
+pub enum IterMut<'a, K, V> {
+    List(std::slice::IterMut<'a, (K, V)>),
+    Map(std::collections::hash_map::IterMut<'a, K, V>),
+}
+
+impl<'a, K, V> Iterator for IterMut<'a, K, V> {
+    type Item = (&'a K, &'a mut V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            IterMut::List(iter) => iter.next().map(|(k, v)| (&*k, v)),
+            IterMut::Map(iter) => iter.next().map(|(k, v)| (k, v)),
         }
     }
 }
