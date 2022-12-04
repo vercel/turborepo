@@ -39,8 +39,8 @@
 //! between identifiers in a module. The graph is built starting from exports
 //! and leading back up to module declarations and imports.
 //!
-//! The analyzer pass can be restricted to only consider some exports by passing
-//! in an [`ExportPredicate`].
+//! The analyzer pass could be restricted to only consider some exports by
+//! passing in an [`ExportPredicate`], but this hurts caching for that pass.
 //!
 //! e.g. for the given JS code:
 //!
@@ -49,14 +49,14 @@
 //! const cat = "cat";
 //!
 //! export const dog = dog;
-//! export const catndog = cat + dog;
+//! export const chimera = cat + dog;
 //! ```
 //!
 //! The graph would look like this:
 //!
 //! ```text
 //! ╔═══════╗   ┌───┐     
-//! ║catndog║──▶│cat│     
+//! ║chimera║──▶│cat│     
 //! ╚═══════╝   └───┘     
 //!     │                 
 //!     ▼                 
@@ -82,9 +82,9 @@
 //! itself is another export, then stop there.
 //!
 //! ```test
-//!  ┌ ─ ─catndog─ ─ ┐     
+//!  ┌ ─ ─chimera─ ─ ┐     
 //!   ╔═══════╗ ┌───┐      
-//!  │║catndog║ │cat││     
+//!  │║chimera║ │cat││     
 //!   ╚═══════╝ └───┘      
 //!  └ ─ ─ ─ ─ ─ ─ ─ ┘     
 //!              │         
@@ -96,7 +96,7 @@
 //!  └ ─ ─ ┘  └ ─ ─ ┘      
 //!                        
 //! ─x─ Declaration set                                            
-//! ```   
+//! ```
 //!
 //! #### 3: Final pass
 //!
@@ -117,13 +117,84 @@
 //! export const dog = virtual_dog;
 //! ```
 //!
-//! Module catndog:
+//! Module chimera:
 //! ```js
 //! import { virtual_dog } from "(dog)";
 //!
 //! const cat = "cat";
 //!
-//! export const catndog = cat + virtual_dog;
+//! export const chimera = cat + virtual_dog;
+//! ```
+//!
+//! #### A more complicated example
+//!
+//! Consider the following module:
+//!
+//! ```js
+//! let dog = "dog";
+//!
+//! function getDog() {
+//!     return dog;
+//! }
+//!
+//! function setDog(newDog) {
+//!    setDog(newDog);
+//! }
+//!
+//! export const dogRef = {
+//!     initial: dog
+//!     get: getDog,
+//!     set: setDog,
+//! };
+//!
+//! export let cat = "cat";
+//!
+//! export const initialCat = cat;
+//!
+//! export function getChimera() {
+//!     return cat + dog;
+//! }
+//! ```
+//!
+//! This example showcases two kinds of dependencies between modules:
+//! 1. Live dependencies: `cat` is a live dependency of `getChimera`, since
+//!    calling `getChimera` will always use the latest value of `cat`. The same
+//!    applies to `dog` in `getChimera`, `getDog` and `setDog`.
+//! 2. Initial dependencies: `dog` is an initial dependency of `dogRef`, since
+//!    the value of `dogRef.initial` is set to the initial value of `dog`. The
+//!    same applies to `cat` in `initialCat`.
+//!
+//! Now let's say our tree-shaking passes end up moving `cat` and `initialCat`
+//! to different modules. If we kept a live dependency on `cat` in `initialCat`,
+//! we could run into incorrect behavior if the value of `cat` is modified by
+//! another module before `initialCat` is loaded and can read the initial value
+//! of `cat`. As such, we need the `cat` module to export both an *initial*,
+//! immutable value, and a *live*, mutable value.
+//!
+//! Module cat:
+//! ```js
+//! let cat = "cat";
+//!
+//! // This could also use `Object.defineProperty(__turbopack_export_value__, ...)`.
+//! export let live = cat;
+//! export const initial = cat;
+//! ```
+//!
+//! Module initialCat:
+//! ```js
+//! import { initial as cat } from "cat";
+//!
+//! export const initialCat = cat;
+//! ```
+//!
+//! Module getChimera:
+//! ```js
+//! import { live as cat } from "cat";
+//! import { live as dog } from "dog";
+//!
+//! export function getChimera() {
+//!     return cat + dog;
+//! }
 //! ```
 //!
 //! #### Note
@@ -135,6 +206,11 @@
 //! 2. The client-side module, with SSG and SSR functions eliminated.
 //! 3. The server-side HMR module, with all but SSG and SSR functions
 //!    eliminated.
+//!
+//! For production, the second pass could also benefit from global information.
+//! If we know which exports are used together, we can merge sets more
+//! agressively. However, this might not be needed, as modules will be merged
+//! together after chunking.
 
 /// A predicate that can match any number of exports.
 ///
