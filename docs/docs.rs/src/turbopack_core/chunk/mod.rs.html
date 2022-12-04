@@ -512,8 +512,6 @@
 <span id="512">512</span>
 <span id="513">513</span>
 <span id="514">514</span>
-<span id="515">515</span>
-<span id="516">516</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>dev;
 <span class="kw">pub mod </span>optimize;
 
@@ -974,8 +972,6 @@
                                 inner_chunk_items.push(manifest_loader_item);
                                 inner_chunk_groups
                                     .push(ChunkGroupVc::from_asset(manifest_chunk, context));
-                                inner_chunk_groups
-                                    .push(ChunkGroupVc::from_asset(chunkable_asset, context));
                             } <span class="kw">else </span>{
                                 external_asset_references.push(reference);
                                 <span class="kw">continue </span><span class="lifetime">&#39;outer</span>;
