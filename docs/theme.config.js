@@ -16,7 +16,7 @@ const theme = {
     defaultMenuCollapseLevel: Number.POSITIVE_INFINITY,
   },
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
-  getNextSeoProps: function SEO() {
+  useNextSeoProps: function SEO() {
     const router = useRouter();
     const { frontMatter } = useConfig();
 
