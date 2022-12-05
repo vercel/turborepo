@@ -113,7 +113,6 @@ func optsFromExecutionState(executionState *turbostate.CLIExecutionStateFromRust
 
 	if runPayload.DryRun != "" {
 		opts.runOpts.dryRunJSON = runPayload.DryRun == _dryRunJSONValue
-		}
 
 		if runPayload.DryRun == _dryRunTextValue || runPayload.DryRun == _dryRunJSONValue || runPayload.DryRun == _dryRunNoValue {
 			opts.runOpts.dryRun = true
