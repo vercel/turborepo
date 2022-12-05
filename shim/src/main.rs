@@ -13,7 +13,7 @@ use std::{
     process::Stdio,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::CommandFactory;
 use clap_complete::generate;
 use serde::Serialize;
@@ -299,7 +299,12 @@ fn main() -> Result<()> {
         env::current_dir()?
     };
 
-    clap_args.cwd = Some(current_dir.to_string_lossy().to_string());
+    clap_args.cwd = Some(
+        current_dir
+            .to_str()
+            .context("--cwd is not valid Unicode")?
+            .to_string(),
+    );
     if clap_args.test_run {
         println!("{:#?}", clap_args);
     }
