@@ -516,6 +516,27 @@
 <span id="516">516</span>
 <span id="517">517</span>
 <span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -540,9 +561,11 @@
     source_map::NextSourceMapTraceContentSourceVc,
 };
 <span class="kw">use </span>owo_colors::OwoColorize;
+<span class="kw">use </span>turbo_malloc::TurboMalloc;
 <span class="kw">use </span>turbo_tasks::{
-    primitives::StringsVc, util::FormatDuration, RawVc, StatsType, TransientInstance,
-    TransientValue, TurboTasks, TurboTasksBackendApi, Value,
+    primitives::StringsVc,
+    util::{FormatBytes, FormatDuration},
+    RawVc, StatsType, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
 <span class="kw">use </span>turbo_tasks_fs::{DiskFileSystemVc, FileSystemVc};
 <span class="kw">use </span>turbo_tasks_memory::MemoryBackend;
@@ -980,11 +1003,20 @@
     }
 
     <span class="kw">let </span>stats_future = <span class="kw">async move </span>{
-        <span class="macro">println!</span>(
-            <span class="string">&quot;{event_type} - initial compilation {start}&quot;</span>,
-            event_type = <span class="string">&quot;event&quot;</span>.purple(),
-            start = FormatDuration(start.elapsed()),
-        );
+        <span class="kw">if </span>options.log_detail {
+            <span class="macro">println!</span>(
+                <span class="string">&quot;{event_type} - initial compilation {start} ({memory})&quot;</span>,
+                event_type = <span class="string">&quot;event&quot;</span>.purple(),
+                start = FormatDuration(start.elapsed()),
+                memory = FormatBytes(TurboMalloc::memory_usage())
+            );
+        } <span class="kw">else </span>{
+            <span class="macro">println!</span>(
+                <span class="string">&quot;{event_type} - initial compilation {start}&quot;</span>,
+                event_type = <span class="string">&quot;event&quot;</span>.purple(),
+                start = FormatDuration(start.elapsed()),
+            );
+        }
 
         <span class="kw">loop </span>{
             <span class="kw">let </span>update_future = profile_timeout(
@@ -992,12 +1024,22 @@
                 tt_clone.get_or_wait_update_info(Duration::from_millis(<span class="number">100</span>)),
             );
 
-            <span class="kw">let </span>(elapsed, _count) = update_future.<span class="kw">await</span>;
-            <span class="macro">println!</span>(
-                <span class="string">&quot;{event_type} - updated in {elapsed}&quot;</span>,
-                event_type = <span class="string">&quot;event&quot;</span>.purple(),
-                elapsed = FormatDuration(elapsed),
-            );
+            <span class="kw">let </span>(elapsed, count) = update_future.<span class="kw">await</span>;
+            <span class="kw">if </span>options.log_detail {
+                <span class="macro">println!</span>(
+                    <span class="string">&quot;{event_type} - updated in {elapsed} ({tasks} tasks, {memory})&quot;</span>,
+                    event_type = <span class="string">&quot;event&quot;</span>.purple(),
+                    elapsed = FormatDuration(elapsed),
+                    tasks = count,
+                    memory = FormatBytes(TurboMalloc::memory_usage())
+                );
+            } <span class="kw">else </span>{
+                <span class="macro">println!</span>(
+                    <span class="string">&quot;{event_type} - updated in {elapsed}&quot;</span>,
+                    event_type = <span class="string">&quot;event&quot;</span>.purple(),
+                    elapsed = FormatDuration(elapsed),
+                );
+            }
         }
     };
 

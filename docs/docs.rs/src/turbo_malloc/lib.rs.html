@@ -41,47 +41,159 @@
 <span id="41">41</span>
 <span id="42">42</span>
 <span id="43">43</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::alloc::{GlobalAlloc, Layout};
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+</pre><pre class="rust"><code><span class="kw">mod </span>counter;
+
+<span class="kw">use </span>std::alloc::{GlobalAlloc, Layout};
+
+<span class="kw">use </span><span class="self">self</span>::counter::{add, flush, get, remove};
 
 <span class="doccomment">/// Turbo&#39;s preferred global allocator. This is a new type instead of a type
 /// alias because you can&#39;t use type aliases to instantiate unit types (E0423).
 </span><span class="kw">pub struct </span>TurboMalloc;
 
-<span class="attr">#[cfg(not(all(target_os = <span class="string">&quot;linux&quot;</span>, target_arch = <span class="string">&quot;aarch64&quot;</span>)))]
-</span><span class="kw">unsafe impl </span>GlobalAlloc <span class="kw">for </span>TurboMalloc {
-    <span class="kw">unsafe fn </span>alloc(<span class="kw-2">&amp;</span><span class="self">self</span>, layout: Layout) -&gt; <span class="kw-2">*mut </span>u8 {
-        mimalloc::MiMalloc.alloc(layout)
+<span class="kw">impl </span>TurboMalloc {
+    <span class="kw">pub fn </span>memory_usage() -&gt; usize {
+        get()
     }
 
-    <span class="kw">unsafe fn </span>dealloc(<span class="kw-2">&amp;</span><span class="self">self</span>, ptr: <span class="kw-2">*mut </span>u8, layout: Layout) {
-        mimalloc::MiMalloc.dealloc(ptr, layout)
-    }
-
-    <span class="kw">unsafe fn </span>alloc_zeroed(<span class="kw-2">&amp;</span><span class="self">self</span>, layout: Layout) -&gt; <span class="kw-2">*mut </span>u8 {
-        mimalloc::MiMalloc.alloc_zeroed(layout)
-    }
-
-    <span class="kw">unsafe fn </span>realloc(<span class="kw-2">&amp;</span><span class="self">self</span>, ptr: <span class="kw-2">*mut </span>u8, layout: Layout, new_size: usize) -&gt; <span class="kw-2">*mut </span>u8 {
-        mimalloc::MiMalloc.realloc(ptr, layout, new_size)
+    <span class="kw">pub fn </span>thread_stop() {
+        flush();
     }
 }
 
-<span class="attr">#[cfg(all(target_os = <span class="string">&quot;linux&quot;</span>, target_arch = <span class="string">&quot;aarch64&quot;</span>))]
+<span class="attr">#[cfg(all(
+    feature = <span class="string">&quot;custom_allocator&quot;</span>,
+    not(all(target_os = <span class="string">&quot;linux&quot;</span>, target_arch = <span class="string">&quot;aarch64&quot;</span>))
+))]
 </span><span class="kw">unsafe impl </span>GlobalAlloc <span class="kw">for </span>TurboMalloc {
     <span class="kw">unsafe fn </span>alloc(<span class="kw-2">&amp;</span><span class="self">self</span>, layout: Layout) -&gt; <span class="kw-2">*mut </span>u8 {
-        std::alloc::System.alloc(layout)
+        <span class="kw">let </span>ret = mimalloc::MiMalloc.alloc(layout);
+        <span class="kw">if </span>!ret.is_null() {
+            add(layout.size());
+        }
+        ret
     }
 
     <span class="kw">unsafe fn </span>dealloc(<span class="kw-2">&amp;</span><span class="self">self</span>, ptr: <span class="kw-2">*mut </span>u8, layout: Layout) {
-        std::alloc::System.dealloc(ptr, layout)
+        mimalloc::MiMalloc.dealloc(ptr, layout);
+        remove(layout.size());
     }
 
     <span class="kw">unsafe fn </span>alloc_zeroed(<span class="kw-2">&amp;</span><span class="self">self</span>, layout: Layout) -&gt; <span class="kw-2">*mut </span>u8 {
-        std::alloc::System.alloc_zeroed(layout)
+        <span class="kw">let </span>ret = mimalloc::MiMalloc.alloc_zeroed(layout);
+        <span class="kw">if </span>ret.is_null() {
+            add(layout.size());
+        }
+        ret
     }
 
     <span class="kw">unsafe fn </span>realloc(<span class="kw-2">&amp;</span><span class="self">self</span>, ptr: <span class="kw-2">*mut </span>u8, layout: Layout, new_size: usize) -&gt; <span class="kw-2">*mut </span>u8 {
-        std::alloc::System.realloc(ptr, layout, new_size)
+        <span class="kw">let </span>ret = mimalloc::MiMalloc.realloc(ptr, layout, new_size);
+        <span class="kw">if </span>!ret.is_null() {
+            <span class="kw">let </span>old_size = layout.size();
+            <span class="kw">if </span>old_size &lt; new_size {
+                add(new_size - old_size);
+            } <span class="kw">else </span>{
+                remove(old_size - new_size);
+            }
+        }
+        ret
+    }
+}
+
+<span class="attr">#[cfg(any(
+    not(feature = <span class="string">&quot;custom_allocator&quot;</span>),
+    all(target_os = <span class="string">&quot;linux&quot;</span>, target_arch = <span class="string">&quot;aarch64&quot;</span>)
+))]
+</span><span class="kw">unsafe impl </span>GlobalAlloc <span class="kw">for </span>TurboMalloc {
+    <span class="kw">unsafe fn </span>alloc(<span class="kw-2">&amp;</span><span class="self">self</span>, layout: Layout) -&gt; <span class="kw-2">*mut </span>u8 {
+        <span class="kw">let </span>ret = std::alloc::System.alloc(layout);
+        <span class="kw">if </span>!ret.is_null() {
+            add(layout.size());
+        }
+        ret
+    }
+
+    <span class="kw">unsafe fn </span>dealloc(<span class="kw-2">&amp;</span><span class="self">self</span>, ptr: <span class="kw-2">*mut </span>u8, layout: Layout) {
+        std::alloc::System.dealloc(ptr, layout);
+        remove(layout.size());
+    }
+
+    <span class="kw">unsafe fn </span>alloc_zeroed(<span class="kw-2">&amp;</span><span class="self">self</span>, layout: Layout) -&gt; <span class="kw-2">*mut </span>u8 {
+        <span class="kw">let </span>ret = std::alloc::System.alloc_zeroed(layout);
+        <span class="kw">if </span>ret.is_null() {
+            add(layout.size());
+        }
+        ret
+    }
+
+    <span class="kw">unsafe fn </span>realloc(<span class="kw-2">&amp;</span><span class="self">self</span>, ptr: <span class="kw-2">*mut </span>u8, layout: Layout, new_size: usize) -&gt; <span class="kw-2">*mut </span>u8 {
+        <span class="kw">let </span>ret = std::alloc::System.realloc(ptr, layout, new_size);
+        <span class="kw">if </span>!ret.is_null() {
+            <span class="kw">let </span>old_size = layout.size();
+            <span class="kw">if </span>old_size &lt; new_size {
+                add(new_size - old_size);
+            } <span class="kw">else </span>{
+                remove(old_size - new_size);
+            }
+        }
+        ret
     }
 }
 </code></pre></div>
