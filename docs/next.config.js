@@ -58,7 +58,6 @@ const nextConfig = withNextra({
   },
   reactStrictMode: true,
   experimental: {
-    newNextLinkBehavior: true,
     legacyBrowsers: false,
   },
   webpack: (config, { webpack }) => {
