@@ -1606,6 +1606,8 @@
 <span id="1606">1606</span>
 <span id="1607">1607</span>
 <span id="1608">1608</span>
+<span id="1609">1609</span>
+<span id="1610">1610</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -1650,6 +1652,7 @@
 <span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>tokio::{fs, io::AsyncReadExt};
 <span class="kw">use </span>turbo_tasks::{
+    mark_stateful,
     primitives::{BoolVc, StringReadRef, StringVc},
     spawn_thread,
     trace::TraceRawVcs,
@@ -1879,6 +1882,7 @@
 </span><span class="kw">impl </span>DiskFileSystemVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>new(name: String, root: String) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        mark_stateful();
         <span class="comment">// create the directory for the filesystem on disk, if it doesn&#39;t exist
         </span>fs::create_dir_all(<span class="kw-2">&amp;</span>root).<span class="kw">await</span><span class="question-mark">?</span>;
 

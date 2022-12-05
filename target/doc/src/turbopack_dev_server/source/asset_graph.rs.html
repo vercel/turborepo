@@ -185,36 +185,11 @@
 <span id="185">185</span>
 <span id="186">186</span>
 <span id="187">187</span>
-<span id="188">188</span>
-<span id="189">189</span>
-<span id="190">190</span>
-<span id="191">191</span>
-<span id="192">192</span>
-<span id="193">193</span>
-<span id="194">194</span>
-<span id="195">195</span>
-<span id="196">196</span>
-<span id="197">197</span>
-<span id="198">198</span>
-<span id="199">199</span>
-<span id="200">200</span>
-<span id="201">201</span>
-<span id="202">202</span>
-<span id="203">203</span>
-<span id="204">204</span>
-<span id="205">205</span>
-<span id="206">206</span>
-<span id="207">207</span>
-<span id="208">208</span>
-<span id="209">209</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{
-    collections::{HashMap, HashSet, VecDeque},
-    sync::{Arc, Mutex},
-};
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet, VecDeque};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::indexset;
-<span class="kw">use </span>turbo_tasks::{get_invalidator, primitives::StringVc, Invalidator, Value, ValueToString};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, State, Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{AssetVc, AssetsSetVc},
@@ -228,11 +203,6 @@
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
 };
 
-<span class="kw">struct </span>State {
-    expanded: HashSet&lt;AssetVc&gt;,
-    invalidator: <span class="prelude-ty">Option</span>&lt;Invalidator&gt;,
-}
-
 <span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">struct </span>AssetsMap(HashMap&lt;String, AssetVc&gt;);
 
@@ -240,8 +210,7 @@
 </span><span class="kw">pub struct </span>AssetGraphContentSource {
     root_path: FileSystemPathVc,
     root_assets: AssetsSetVc,
-    <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
-    </span>state: <span class="prelude-ty">Option</span>&lt;Arc&lt;Mutex&lt;State&gt;&gt;&gt;,
+    expanded: <span class="prelude-ty">Option</span>&lt;State&lt;HashSet&lt;AssetVc&gt;&gt;&gt;,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -252,7 +221,7 @@
         <span class="self">Self</span>::cell(AssetGraphContentSource {
             root_path,
             root_assets: AssetsSetVc::cell(<span class="macro">indexset! </span>{ root_asset }),
-            state: <span class="prelude-val">None</span>,
+            expanded: <span class="prelude-val">None</span>,
         })
     }
 
@@ -263,10 +232,7 @@
         <span class="self">Self</span>::cell(AssetGraphContentSource {
             root_path,
             root_assets: AssetsSetVc::cell(<span class="macro">indexset! </span>{ root_asset }),
-            state: <span class="prelude-val">Some</span>(Arc::new(Mutex::new(State {
-                expanded: HashSet::new(),
-                invalidator: <span class="prelude-val">None</span>,
-            }))),
+            expanded: <span class="prelude-val">Some</span>(State::new(HashSet::new())),
         })
     }
 
@@ -276,7 +242,7 @@
         <span class="self">Self</span>::cell(AssetGraphContentSource {
             root_path,
             root_assets,
-            state: <span class="prelude-val">None</span>,
+            expanded: <span class="prelude-val">None</span>,
         })
     }
 
@@ -287,10 +253,7 @@
         <span class="self">Self</span>::cell(AssetGraphContentSource {
             root_path,
             root_assets,
-            state: <span class="prelude-val">Some</span>(Arc::new(Mutex::new(State {
-                expanded: HashSet::new(),
-                invalidator: <span class="prelude-val">None</span>,
-            }))),
+            expanded: <span class="prelude-val">Some</span>(State::new(HashSet::new())),
         })
     }
 
@@ -303,11 +266,10 @@
         <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::with_capacity(<span class="number">32</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>assets_set = HashSet::new();
         <span class="kw">let </span>root_assets = this.root_assets.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(state) = <span class="kw-2">&amp;</span>this.state {
-            <span class="kw">let </span><span class="kw-2">mut </span>state = state.lock().unwrap();
-            state.invalidator = <span class="prelude-val">Some</span>(get_invalidator());
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(expanded) = <span class="kw-2">&amp;</span>this.expanded {
+            <span class="kw">let </span>expanded = expanded.get();
             <span class="kw">for </span>root_asset <span class="kw">in </span>root_assets.iter() {
-                <span class="kw">let </span>expanded = state.expanded.contains(root_asset);
+                <span class="kw">let </span>expanded = expanded.contains(root_asset);
                 assets.push((root_asset.path(), <span class="kw-2">*</span>root_asset));
                 assets_set.insert(<span class="kw-2">*</span>root_asset);
                 <span class="kw">if </span>expanded {
@@ -325,9 +287,8 @@
         <span class="kw">while let </span><span class="prelude-val">Some</span>(references) = queue.pop_front() {
             <span class="kw">for </span>asset <span class="kw">in </span>references.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
                 <span class="kw">if </span>assets_set.insert(<span class="kw-2">*</span>asset) {
-                    <span class="kw">let </span>expanded = <span class="kw">if let </span><span class="prelude-val">Some</span>(state) = <span class="kw-2">&amp;</span>this.state {
-                        <span class="kw">let </span>state = state.lock().unwrap();
-                        state.expanded.contains(asset)
+                    <span class="kw">let </span>expanded = <span class="kw">if let </span><span class="prelude-val">Some</span>(expanded) = <span class="kw-2">&amp;</span>this.expanded {
+                        expanded.get().contains(asset)
                     } <span class="kw">else </span>{
                         <span class="bool-val">true
                     </span>};
@@ -370,13 +331,8 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(asset) = assets.get(path) {
             {
                 <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(state) = <span class="kw-2">&amp;</span>this.state {
-                    <span class="kw">let </span><span class="kw-2">mut </span>state = state.lock().unwrap();
-                    <span class="kw">if </span>state.expanded.insert(<span class="kw-2">*</span>asset) {
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>(invalidator) = state.invalidator.take() {
-                            invalidator.invalidate();
-                        }
-                    }
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(expanded) = <span class="kw-2">&amp;</span>this.expanded {
+                    expanded.update_conditionally(|expanded| expanded.insert(<span class="kw-2">*</span>asset));
                 }
             }
             <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(

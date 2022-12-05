@@ -240,18 +240,13 @@
 <span id="240">240</span>
 <span id="241">241</span>
 <span id="242">242</span>
-<span id="243">243</span>
-<span id="244">244</span>
-<span id="245">245</span>
-<span id="246">246</span>
-<span id="247">247</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{pin::Pin, sync::Mutex};
+</pre><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>futures::{prelude::<span class="kw-2">*</span>, Stream};
 <span class="kw">use </span>tokio::sync::mpsc::Sender;
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
-<span class="kw">use </span>turbo_tasks::{get_invalidator, CollectiblesSource, Invalidator, TransientInstance, Value};
+<span class="kw">use </span>turbo_tasks::{CollectiblesSource, State, TransientInstance, Value};
 <span class="kw">use </span>turbopack_core::{
     issue::{IssueVc, PlainIssueReadRef},
     version::{
@@ -381,10 +376,9 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;none&quot;</span>, eq = <span class="string">&quot;manual&quot;</span>, cell = <span class="string">&quot;new&quot;</span>)]
+<span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>VersionState {
-    <span class="attr">#[turbo_tasks(debug_ignore)]
-    </span>inner: Mutex&lt;(VersionVc, <span class="prelude-ty">Option</span>&lt;Invalidator&gt;)&gt;,
+    inner: State&lt;VersionVc&gt;,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -392,9 +386,8 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>get(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;VersionVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>lock = this.inner.lock().unwrap();
-        lock.<span class="number">1 </span>= <span class="prelude-val">Some</span>(get_invalidator());
-        <span class="prelude-val">Ok</span>(lock.<span class="number">0</span>)
+        <span class="kw">let </span>version = <span class="kw-2">*</span>this.inner.get();
+        <span class="prelude-val">Ok</span>(version)
     }
 }
 
@@ -402,17 +395,14 @@
     <span class="kw">async fn </span>new(inner: VersionVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>inner = inner.cell_local().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::cell(VersionState {
-            inner: Mutex::new((inner, <span class="prelude-val">None</span>)),
+            inner: State::new(inner),
         }))
     }
 
     <span class="kw">async fn </span>set(<span class="kw-2">&amp;</span><span class="self">self</span>, new_inner: VersionVc) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>new_inner = new_inner.cell_local().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>lock = this.inner.lock().unwrap();
-        <span class="kw">if let </span>(<span class="kw">_</span>, <span class="prelude-val">Some</span>(invalidator)) = std::mem::replace(<span class="kw-2">&amp;mut *</span>lock, (new_inner, <span class="prelude-val">None</span>)) {
-            invalidator.invalidate();
-        }
+        this.inner.set(new_inner);
         <span class="prelude-val">Ok</span>(())
     }
 }

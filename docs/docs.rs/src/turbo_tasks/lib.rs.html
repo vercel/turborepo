@@ -100,6 +100,8 @@
 <span id="100">100</span>
 <span id="101">101</span>
 <span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
 </pre><pre class="rust"><code><span class="doccomment">//! A task scheduling and caching system that is focused on incremental
 //! execution.
 //!
@@ -156,6 +158,7 @@
 <span class="kw">mod </span>read_ref;
 <span class="kw">pub mod </span>registry;
 <span class="kw">pub mod </span>small_duration;
+<span class="kw">mod </span>state;
 <span class="kw">mod </span>task_input;
 <span class="kw">mod </span>timed_future;
 <span class="kw">pub mod </span>trace;
@@ -173,14 +176,15 @@
 };
 <span class="kw">pub use </span>join_iter_ext::{JoinIterExt, TryJoinIterExt};
 <span class="kw">pub use </span>manager::{
-    dynamic_call, emit, get_invalidator, run_once, spawn_blocking, spawn_thread, trait_call,
-    turbo_tasks, Invalidator, StatsType, TaskIdProvider, TurboTasks, TurboTasksApi,
+    dynamic_call, emit, get_invalidator, mark_stateful, run_once, spawn_blocking, spawn_thread,
+    trait_call, turbo_tasks, Invalidator, StatsType, TaskIdProvider, TurboTasks, TurboTasksApi,
     TurboTasksBackendApi, TurboTasksCallApi,
 };
 <span class="kw">pub use </span>native_function::{NativeFunction, NativeFunctionVc};
 <span class="kw">pub use </span>nothing::{Nothing, NothingVc};
 <span class="kw">pub use </span>raw_vc::{CellId, CollectiblesFuture, RawVc, ReadRawVcFuture, ResolveTypeError};
 <span class="kw">pub use </span>read_ref::ReadRef;
+<span class="kw">pub use </span>state::State;
 <span class="kw">pub use </span>task_input::{FromTaskInput, SharedReference, SharedValue, TaskInput};
 <span class="kw">pub use </span>turbo_tasks_macros::{function, value, value_impl, value_trait};
 <span class="kw">pub use </span>value::{TransientInstance, TransientValue, Value};

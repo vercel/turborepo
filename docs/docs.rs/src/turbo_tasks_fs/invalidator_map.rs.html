@@ -71,6 +71,19 @@
 <span id="71">71</span>
 <span id="72">72</span>
 <span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{HashMap, HashSet},
     sync::{LockResult, Mutex, MutexGuard},
@@ -142,6 +155,19 @@
         }
 
         deserializer.deserialize_newtype_struct(<span class="string">&quot;InvalidatorMap&quot;</span>, V)
+    }
+}
+
+<span class="kw">impl </span>Drop <span class="kw">for </span>InvalidatorMap {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">while let </span><span class="prelude-val">Ok</span>((<span class="kw">_</span>, value)) = <span class="self">self</span>.queue.pop() {
+            value.invalidate();
+        }
+        <span class="kw">for </span>(<span class="kw">_</span>, invalidators) <span class="kw">in </span><span class="self">self</span>.map.lock().unwrap().drain() {
+            <span class="kw">for </span>invalidator <span class="kw">in </span>invalidators {
+                invalidator.invalidate();
+            }
+        }
     }
 }
 </code></pre></div>

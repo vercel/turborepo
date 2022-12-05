@@ -1244,6 +1244,12 @@
 <span id="1244">1244</span>
 <span id="1245">1245</span>
 <span id="1246">1246</span>
+<span id="1247">1247</span>
+<span id="1248">1248</span>
+<span id="1249">1249</span>
+<span id="1250">1250</span>
+<span id="1251">1251</span>
+<span id="1252">1252</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -2310,6 +2316,12 @@
         handle,
     }
 }
+
+<span class="doccomment">/// Marks the current task as stateful. This prevents the tasks from being
+/// dropped without persisting the state.
+</span><span class="kw">pub fn </span>mark_stateful() {
+    <span class="comment">// TODO pass this to the backend
+</span>}
 
 <span class="kw">pub fn </span>emit&lt;T: ValueTraitVc&gt;(collectible: T) {
     with_turbo_tasks(|tt| tt.emit_collectible(T::get_trait_type_id(), collectible.into()))
