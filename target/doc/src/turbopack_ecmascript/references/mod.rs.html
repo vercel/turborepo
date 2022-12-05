@@ -1898,6 +1898,16 @@
 <span id="1898">1898</span>
 <span id="1899">1899</span>
 <span id="1900">1900</span>
+<span id="1901">1901</span>
+<span id="1902">1902</span>
+<span id="1903">1903</span>
+<span id="1904">1904</span>
+<span id="1905">1905</span>
+<span id="1906">1906</span>
+<span id="1907">1907</span>
+<span id="1908">1908</span>
+<span id="1909">1909</span>
+<span id="1910">1910</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>esm;
@@ -2038,25 +2048,28 @@
         <span class="self">self</span>.exports = exports;
     }
 
-    <span class="doccomment">/// Builds the final analysis result.
-    </span><span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; AnalyzeEcmascriptModuleResultVc {
-        AnalyzeEcmascriptModuleResultVc::cell(AnalyzeEcmascriptModuleResult {
-            references: AssetReferencesVc::cell(<span class="self">self</span>.references),
-            code_generation: CodeGenerateablesVc::cell(<span class="self">self</span>.code_gens),
-            exports: <span class="self">self</span>.exports.into(),
-        })
+    <span class="doccomment">/// Builds the final analysis result. Resolves internal Vcs for performance
+    /// in using them.
+    </span><span class="kw">pub async fn </span>build(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AnalyzeEcmascriptModuleResultVc&gt; {
+        <span class="kw">for </span>r <span class="kw">in </span><span class="self">self</span>.references.iter_mut() {
+            <span class="kw-2">*</span>r = r.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+        <span class="kw">for </span>c <span class="kw">in </span><span class="self">self</span>.code_gens.iter_mut() {
+            <span class="kw-2">*</span>c = c.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+        <span class="prelude-val">Ok</span>(AnalyzeEcmascriptModuleResultVc::cell(
+            AnalyzeEcmascriptModuleResult {
+                references: AssetReferencesVc::cell(<span class="self">self</span>.references),
+                code_generation: CodeGenerateablesVc::cell(<span class="self">self</span>.code_gens),
+                exports: <span class="self">self</span>.exports.into(),
+            },
+        ))
     }
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>AnalyzeEcmascriptModuleResultBuilder {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new()
-    }
-}
-
-<span class="kw">impl </span>From&lt;AnalyzeEcmascriptModuleResultBuilder&gt; <span class="kw">for </span>AnalyzeEcmascriptModuleResultVc {
-    <span class="kw">fn </span>from(builder: AnalyzeEcmascriptModuleResultBuilder) -&gt; <span class="self">Self </span>{
-        builder.build()
     }
 }
 
@@ -2173,6 +2186,25 @@
                     title: <span class="prelude-val">None</span>,
                 },
             );
+            <span class="kw">let </span>var_graph = HANDLER.set(<span class="kw-2">&amp;</span>handler, || {
+                GLOBALS.set(globals, || create_graph(program, eval_context))
+            });
+
+            <span class="kw">for </span>(src, annotations) <span class="kw">in </span>eval_context.imports.references() {
+                <span class="kw">let </span>r = EsmAssetReferenceVc::new(
+                    origin,
+                    RequestVc::parse(Value::new(src.to_string().into())),
+                    Value::new(annotations.clone()),
+                );
+                import_references.push(r);
+            }
+            <span class="kw">for </span>r <span class="kw">in </span>import_references.iter_mut() {
+                <span class="comment">// Resolving these references here avoids many resolve wrapper tasks when
+                // passing that to other turbo tasks functions later.
+                </span><span class="kw-2">*</span>r = r.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+                analysis.add_reference(<span class="kw-2">*</span>r);
+            }
+
             <span class="kw">let </span>(
                 <span class="kw-2">mut </span>var_graph,
                 webpack_runtime,
@@ -2182,18 +2214,6 @@
                 esm_star_exports,
             ) = HANDLER.set(<span class="kw-2">&amp;</span>handler, || {
                 GLOBALS.set(globals, || {
-                    <span class="kw">let </span>var_graph = create_graph(program, eval_context);
-
-                    <span class="kw">for </span>(src, annotations) <span class="kw">in </span>eval_context.imports.references() {
-                        <span class="kw">let </span>r = EsmAssetReferenceVc::new(
-                            origin,
-                            RequestVc::parse(Value::new(src.to_string().into())),
-                            Value::new(annotations.clone()),
-                        );
-                        import_references.push(r);
-                        analysis.add_reference(r);
-                    }
-
                     <span class="comment">// TODO migrate to effects
                     </span><span class="kw">let </span><span class="kw-2">mut </span>visitor = AssetReferencesVisitor::new(
                         eval_context,
@@ -3076,8 +3096,8 @@
         ParseResult::Unparseable | ParseResult::NotFound =&gt; {}
     };
 
-    <span class="prelude-val">Ok</span>(analysis.build())
-}
+    analysis.build().<span class="kw">await
+</span>}
 
 <span class="kw">fn </span>analyze_amd_define(
     analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,

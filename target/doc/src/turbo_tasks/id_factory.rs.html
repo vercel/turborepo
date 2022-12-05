@@ -36,17 +36,25 @@
 <span id="36">36</span>
 <span id="37">37</span>
 <span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     marker::PhantomData,
     ops::Deref,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+<span class="kw">use </span>concurrent_queue::ConcurrentQueue;
+<span class="kw">use </span>once_cell::sync::Lazy;
+
 <span class="kw">pub struct </span>IdFactory&lt;T&gt; {
     next_id: AtomicUsize,
-    <span class="comment">// TODO
-    // free_ids: AtomicPtr&lt;...&gt;
-    </span>phantom_data: PhantomData&lt;T&gt;,
+    free_ids: Lazy&lt;ConcurrentQueue&lt;T&gt;&gt;,
+    phantom_data: PhantomData&lt;T&gt;,
 }
 
 <span class="kw">impl</span>&lt;T: From&lt;usize&gt; + Deref&lt;Target = usize&gt;&gt; Default <span class="kw">for </span>IdFactory&lt;T&gt; {
@@ -59,20 +67,24 @@
     <span class="kw">pub const fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             next_id: AtomicUsize::new(<span class="number">1</span>),
+            free_ids: Lazy::new(|| ConcurrentQueue::unbounded()),
             phantom_data: PhantomData,
         }
     }
 
     <span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; T {
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(id) = <span class="self">self</span>.free_ids.pop() {
+            <span class="kw">return </span>id;
+        }
         <span class="self">self</span>.next_id.fetch_add(<span class="number">1</span>, Ordering::Relaxed).into()
     }
 
     <span class="doccomment">/// # Safety
     ///
     /// It must be ensured that the id is no longer used
-    </span><span class="kw">pub unsafe fn </span>reuse(<span class="kw-2">&amp;</span><span class="self">self</span>, _id: T) {
-        <span class="comment">// TODO
-    </span>}
+    </span><span class="kw">pub unsafe fn </span>reuse(<span class="kw-2">&amp;</span><span class="self">self</span>, id: T) {
+        <span class="kw">let _ </span>= <span class="self">self</span>.free_ids.push(id);
+    }
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="turbo_tasks" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

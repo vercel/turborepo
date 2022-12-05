@@ -329,6 +329,7 @@
 <span id="329">329</span>
 <span id="330">330</span>
 <span id="331">331</span>
+<span id="332">332</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -557,6 +558,7 @@
             }
         }
         <span class="kw">for </span>c <span class="kw">in </span>code_generation.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+            <span class="kw">let </span>c = c.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
             code_gens.push(c.code_generation(context));
         }
         <span class="comment">// need to keep that around to allow references into that

@@ -1014,6 +1014,7 @@
 <span id="1014">1014</span>
 <span id="1015">1015</span>
 <span id="1016">1016</span>
+<span id="1017">1017</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashSet, fmt::Display, mem::take};
 
 <span class="kw">use </span>anyhow::Result;
@@ -1681,6 +1682,7 @@
                         </span>} <span class="kw">else </span>{
                             context.try_join(str).<span class="kw">await</span><span class="question-mark">?
                         </span>} {
+                            <span class="kw">let </span>fs_path = fs_path.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
                             <span class="comment">// This explicit deref of `context` is necessary
                             </span><span class="attr">#[allow(clippy::explicit_auto_deref)]
                             </span><span class="kw">let </span>should_match =
@@ -1691,10 +1693,9 @@
                                 prefix.push_str(str);
                                 <span class="kw">match </span><span class="kw-2">*</span>fs_path.get_type().<span class="kw">await</span><span class="question-mark">? </span>{
                                     FileSystemEntryType::File =&gt; results
-                                        .push(PatternMatch::File(prefix.to_string(), <span class="kw-2">*</span>fs_path)),
-                                    FileSystemEntryType::Directory =&gt; results.push(
-                                        PatternMatch::Directory(prefix.to_string(), <span class="kw-2">*</span>fs_path),
-                                    ),
+                                        .push(PatternMatch::File(prefix.to_string(), fs_path)),
+                                    FileSystemEntryType::Directory =&gt; results
+                                        .push(PatternMatch::Directory(prefix.to_string(), fs_path)),
                                     FileSystemEntryType::Symlink =&gt; {
                                         <span class="kw">if let </span>LinkContent::Link { link_type, .. } =
                                             <span class="kw-2">&amp;*</span>fs_path.read_link().<span class="kw">await</span><span class="question-mark">?
@@ -1702,12 +1703,12 @@
                                             <span class="kw">if </span>link_type.contains(LinkType::DIRECTORY) {
                                                 results.push(PatternMatch::Directory(
                                                     prefix.clone(),
-                                                    <span class="kw-2">*</span>fs_path,
+                                                    fs_path,
                                                 ));
                                             } <span class="kw">else </span>{
                                                 results.push(PatternMatch::File(
                                                     prefix.clone(),
-                                                    <span class="kw-2">*</span>fs_path,
+                                                    fs_path,
                                                 ))
                                             }
                                         }
@@ -1726,10 +1727,11 @@
                         </span>} <span class="kw">else </span>{
                             context.try_join(subpath).<span class="kw">await</span><span class="question-mark">?
                         </span>} {
+                            <span class="kw">let </span>fs_path = fs_path.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
                             <span class="kw">let </span>len = prefix.len();
                             prefix.push_str(subpath);
                             nested.push(read_matches(
-                                <span class="kw-2">*</span>fs_path,
+                                fs_path,
                                 prefix.to_string(),
                                 force_in_context,
                                 pattern,
