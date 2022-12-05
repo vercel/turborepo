@@ -1225,7 +1225,7 @@
             TaskInput::SharedValue(SharedValue(ty, <span class="kw">_</span>))
             | TaskInput::SharedReference(SharedReference(ty, <span class="kw">_</span>)) =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(ty) = <span class="kw-2">*</span>ty {
-                    <span class="kw">let </span>key = (trait_type, name.into_owned());
+                    <span class="kw">let </span>key = (trait_type, name);
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(func) = registry::get_value_type(ty).get_trait_method(<span class="kw-2">&amp;</span>key) {
                         <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>func)
                     } <span class="kw">else if let </span><span class="prelude-val">Some</span>(func) = registry::get_trait(trait_type)
@@ -1234,7 +1234,7 @@
                     {
                         <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>func)
                     } <span class="kw">else </span>{
-                        <span class="prelude-val">Err</span>(Cow::Owned(key.<span class="number">1</span>))
+                        <span class="prelude-val">Err</span>(key.<span class="number">1</span>)
                     }
                 } <span class="kw">else </span>{
                     <span class="prelude-val">Err</span>(name)

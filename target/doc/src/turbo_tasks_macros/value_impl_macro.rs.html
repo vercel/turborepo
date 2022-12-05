@@ -484,7 +484,7 @@
                 <span class="kw">let </span>internal_function_ident =
                     get_internal_trait_impl_function_ident(trait_ident, ident);
                 trait_registers.push(<span class="macro">quote! </span>{
-                    value.register_trait_method(&lt;#trait_ref_path <span class="kw">as </span>turbo_tasks::ValueTraitVc&gt;::get_trait_type_id(), <span class="macro">stringify!</span>(#ident).to_string(), <span class="kw-2">*</span>#function_id_ident);
+                    value.register_trait_method(&lt;#trait_ref_path <span class="kw">as </span>turbo_tasks::ValueTraitVc&gt;::get_trait_type_id(), <span class="macro">stringify!</span>(#ident).into(), <span class="kw-2">*</span>#function_id_ident);
                 });
                 <span class="kw">let </span>name = Literal::string(<span class="kw-2">&amp;</span>(struct_ident.to_string() + <span class="string">&quot;::&quot; </span>+ <span class="kw-2">&amp;</span>ident.to_string()));
                 <span class="kw">let </span>(native_function_code, <span class="kw-2">mut </span>input_raw_vc_arguments) = gen_native_function_code(

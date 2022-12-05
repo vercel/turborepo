@@ -292,8 +292,14 @@
 <span id="292">292</span>
 <span id="293">293</span>
 <span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::{type_name, Any},
+    borrow::Cow,
     fmt::{<span class="self">self</span>, Debug, Display, Formatter},
     hash::Hash,
     sync::Arc,
@@ -368,7 +374,7 @@
     <span class="doccomment">/// List of traits available
     </span><span class="kw">pub </span>traits: AutoSet&lt;TraitTypeId&gt;,
     <span class="doccomment">/// List of trait methods available
-    </span><span class="kw">pub </span>trait_methods: AutoMap&lt;(TraitTypeId, String), FunctionId&gt;,
+    </span><span class="kw">pub </span>trait_methods: AutoMap&lt;(TraitTypeId, Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;), FunctionId&gt;,
 
     <span class="doccomment">/// Functors for serialization
     </span>magic_serialization: <span class="prelude-ty">Option</span>&lt;(MagicSerializationFn, MagicAnyDeserializeSeed)&gt;,
@@ -499,7 +505,7 @@
     </span><span class="kw">pub fn </span>register_trait_method(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         trait_type: TraitTypeId,
-        name: String,
+        name: Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;,
         native_fn: FunctionId,
     ) {
         <span class="self">self</span>.trait_methods.insert((trait_type, name), native_fn);
@@ -507,7 +513,7 @@
 
     <span class="kw">pub fn </span>get_trait_method(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        trait_method_key: <span class="kw-2">&amp;</span>(TraitTypeId, String),
+        trait_method_key: <span class="kw-2">&amp;</span>(TraitTypeId, Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;),
     ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>FunctionId&gt; {
         <span class="self">self</span>.trait_methods.get(trait_method_key)
     }
@@ -533,7 +539,7 @@
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>TraitType {
     <span class="kw">pub </span>name: String,
-    <span class="kw">pub</span>(<span class="kw">crate</span>) default_trait_methods: AutoMap&lt;String, FunctionId&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) default_trait_methods: AutoMap&lt;Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;, FunctionId&gt;,
 }
 
 <span class="kw">impl </span>Hash <span class="kw">for </span>TraitType {
@@ -576,7 +582,11 @@
         }
     }
 
-    <span class="kw">pub fn </span>register_default_trait_method(<span class="kw-2">&amp;mut </span><span class="self">self</span>, name: String, native_fn: FunctionId) {
+    <span class="kw">pub fn </span>register_default_trait_method(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        name: Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;,
+        native_fn: FunctionId,
+    ) {
         <span class="self">self</span>.default_trait_methods.insert(name, native_fn);
     }
 

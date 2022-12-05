@@ -1229,6 +1229,21 @@
 <span id="1229">1229</span>
 <span id="1230">1230</span>
 <span id="1231">1231</span>
+<span id="1232">1232</span>
+<span id="1233">1233</span>
+<span id="1234">1234</span>
+<span id="1235">1235</span>
+<span id="1236">1236</span>
+<span id="1237">1237</span>
+<span id="1238">1238</span>
+<span id="1239">1239</span>
+<span id="1240">1240</span>
+<span id="1241">1241</span>
+<span id="1242">1242</span>
+<span id="1243">1243</span>
+<span id="1244">1244</span>
+<span id="1245">1245</span>
+<span id="1246">1246</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -1258,6 +1273,7 @@
     id::{BackendJobId, FunctionId, TraitTypeId},
     id_factory::IdFactory,
     raw_vc::{CellId, RawVc},
+    registry,
     task_input::{SharedReference, TaskInput},
     timed_future::{<span class="self">self</span>, TimedFuture},
     trace::TraceRawVcs,
@@ -1575,10 +1591,24 @@
     </span><span class="kw">pub fn </span>trait_call(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         trait_type: TraitTypeId,
-        trait_fn_name: Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;,
+        <span class="kw-2">mut </span>trait_fn_name: Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;,
         inputs: Vec&lt;TaskInput&gt;,
     ) -&gt; RawVc {
-        RawVc::TaskOutput(<span class="self">self</span>.backend.get_or_create_persistent_task(
+        <span class="comment">// avoid creating a wrapper task if self is already resolved
+        // for resolved cells we already know the value type so we can lookup the
+        // function
+        </span><span class="kw">let </span>first_input = inputs.first().expect(<span class="string">&quot;trait call without self argument&quot;</span>);
+        <span class="kw">if let </span><span class="kw-2">&amp;</span>TaskInput::TaskCell(<span class="kw">_</span>, CellId { type_id, .. }) = first_input {
+            <span class="kw">let </span>value_type = registry::get_value_type(type_id);
+            <span class="kw">let </span>key = (trait_type, trait_fn_name);
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(native_fn) = value_type.get_trait_method(<span class="kw-2">&amp;</span>key) {
+                <span class="kw">return </span><span class="self">self</span>.dynamic_call(<span class="kw-2">*</span>native_fn, inputs);
+            }
+            trait_fn_name = key.<span class="number">1</span>;
+        }
+
+        <span class="comment">// create a wrapper task to resolve all inputs
+        </span>RawVc::TaskOutput(<span class="self">self</span>.backend.get_or_create_persistent_task(
             PersistentTaskType::ResolveTrait(trait_type, trait_fn_name, inputs),
             current_task(<span class="string">&quot;turbo_function calls&quot;</span>),
             <span class="self">self</span>,

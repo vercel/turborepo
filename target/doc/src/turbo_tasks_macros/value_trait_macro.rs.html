@@ -443,7 +443,7 @@
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(block) = default.take() {
                 default_method_registers.push(<span class="macro">quote! </span>{
-                    trait_type.register_default_trait_method(<span class="macro">stringify!</span>(#method_ident).to_string(), <span class="kw-2">*</span>#function_id_ident);
+                    trait_type.register_default_trait_method(<span class="macro">stringify!</span>(#method_ident).into(), <span class="kw-2">*</span>#function_id_ident);
                 });
                 native_functions.push(<span class="macro">quote! </span>{
                     <span class="kw">impl </span>#ref_ident {
