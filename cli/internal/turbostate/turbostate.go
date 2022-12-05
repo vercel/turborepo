@@ -39,15 +39,20 @@ type PrunePayload struct {
 
 // RunPayload is the extra flags passed for the `run` subcommand
 type RunPayload struct {
-	CacheDir            string   `json:"cache_dir"`
-	CacheWorkers        int      `json:"cache_workers"`
-	Concurrency         string   `json:"concurrency"`
-	ContinueExecution   bool     `json:"continue_execution"`
-	DryRun              string   `json:"dry_run"`
-	Filter              []string `json:"filter"`
-	Force               bool     `json:"force"`
-	GlobalDeps          []string `json:"global_deps"`
-	Graph               string   `json:"graph"`
+	CacheDir          string   `json:"cache_dir"`
+	CacheWorkers      int      `json:"cache_workers"`
+	Concurrency       string   `json:"concurrency"`
+	ContinueExecution bool     `json:"continue_execution"`
+	DryRun            string   `json:"dry_run"`
+	Filter            []string `json:"filter"`
+	Force             bool     `json:"force"`
+	GlobalDeps        []string `json:"global_deps"`
+	// NOTE: Graph has three effective states that is modeled using a *string:
+	//   nil -> no flag passed
+	//   ""  -> flag passed but no file name attached: print to stdout
+	//   "foo" -> flag passed and file name attached: emit to file
+	// The mirror for this in Rust is `Option<Option<String>>`
+	Graph               *string  `json:"graph"`
 	Ignore              []string `json:"ignore"`
 	IncludeDependencies bool     `json:"include_dependencies"`
 	NoCache             bool     `json:"no_cache"`

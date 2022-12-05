@@ -29,9 +29,10 @@ impl Default for OutputLogsMode {
     }
 }
 
+// NOTE: These *must* be kept in sync with the `_dryRunJSONValue`
+// and `_dryRunTextValue` constants in run.go.
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum DryRunMode {
-    Stdout,
     Text,
     Json,
 }
@@ -200,7 +201,7 @@ pub struct RunArgs {
     /// exit code. The default behavior is to bail
     #[clap(long = "continue")]
     pub continue_execution: bool,
-    #[clap(alias = "dry", long = "dry-run", num_args = 0..=1, default_missing_value = "stdout")]
+    #[clap(alias = "dry", long = "dry-run", num_args = 0..=1, default_missing_value = "text")]
     pub dry_run: Option<DryRunMode>,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
@@ -218,8 +219,8 @@ pub struct RunArgs {
     /// Generate a graph of the task execution and output to a file when a
     /// filename is specified (.svg, .png, .jpg, .pdf, .json,
     /// .html). Outputs dot graph to stdout when if no filename is provided
-    #[clap(long, num_args = 0..=1, default_missing_value = "stdout")]
-    pub graph: Option<String>,
+    #[clap(long, num_args = 0..=1)]
+    pub graph: Option<Option<String>>,
     /// Files to ignore when calculating changed files (i.e. --since).
     /// Supports globs.
     #[clap(long)]

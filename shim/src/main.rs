@@ -300,6 +300,9 @@ fn main() -> Result<()> {
     };
 
     clap_args.cwd = Some(current_dir.to_string_lossy().to_string());
+    if clap_args.test_run {
+        println!("{:#?}", clap_args);
+    }
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
     if clap_args.command.is_none() {

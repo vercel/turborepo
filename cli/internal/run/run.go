@@ -43,6 +43,7 @@ Arguments passed after '--' will be passed through to the named tasks.
 
 // ExecuteRun executes the run command
 func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.CLIExecutionStateFromRust) error {
+	fmt.Printf("%+v\n", executionState.ParsedArgs)
 	args := executionState.ParsedArgs
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
@@ -57,8 +58,6 @@ func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *si
 	if err != nil {
 		return err
 	}
-
-	opts.runOpts.singlePackage = executionState.RepoState.Mode == "SinglePackage"
 
 	opts.runOpts.passThroughArgs = passThroughArgs
 	run := configureRun(base, opts, signalWatcher)
@@ -104,17 +103,23 @@ func optsFromExecutionState(executionState *turbostate.CLIExecutionStateFromRust
 	opts.runOpts.noDaemon = runPayload.NoDaemon
 	opts.runOpts.singlePackage = runPayload.SinglePackage || (executionState.RepoState.Mode == "SinglePackage")
 
-	if runPayload.Graph == _graphNoValue || runPayload.Graph == _graphTextValue {
-		opts.runOpts.graphDot = true
-	} else {
-		opts.runOpts.graphDot = false
-		opts.runOpts.graphFile = runPayload.Graph
+	// See comment on Graph in turbostate.go for an explanation on Graph's representation.
+	// If flag is passed...
+	if runPayload.Graph != nil {
+		// If no value is attached, we print to stdout
+		if *runPayload.Graph == "" {
+			opts.runOpts.graphDot = true
+		} else {
+			// Otherwise, we emit to the file name attached as value
+			opts.runOpts.graphDot = false
+			opts.runOpts.graphFile = *runPayload.Graph
+		}
 	}
 
 	if runPayload.DryRun != "" {
 		opts.runOpts.dryRunJSON = runPayload.DryRun == _dryRunJSONValue
 
-		if runPayload.DryRun == _dryRunTextValue || runPayload.DryRun == _dryRunJSONValue || runPayload.DryRun == _dryRunNoValue {
+		if runPayload.DryRun == _dryRunTextValue || runPayload.DryRun == _dryRunJSONValue {
 			opts.runOpts.dryRun = true
 		} else {
 			return nil, fmt.Errorf("invalid dry-run mode: %v", runPayload.DryRun)
@@ -422,15 +427,11 @@ func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, er
 	return engine, nil
 }
 
-const (
-	_graphNoValue   = "stdout"
-	_graphTextValue = "true"
-)
-
 // dry run custom flag
+// NOTE: These *must* be kept in sync with the corresponding Rust
+// enum definitions in shim/src/commands/mod.rs
 const (
 	_dryRunJSONValue = "Json"
-	_dryRunNoValue   = "Stdout"
 	_dryRunTextValue = "Text"
 )
 
