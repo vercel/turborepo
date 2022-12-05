@@ -630,7 +630,7 @@ import React from &quot;react&quot;;
 let EFFECT_PROPS = {};
 &quot;#</span>};
 <span class="kw">const </span>SETUP_EVAL: <span class="kw-2">&amp;</span>str = <span class="macro">indoc! </span>{<span class="string">r#&quot;
-/* @turbopack-bench:eval-start */ 
+/* @turbopack-bench:eval-start */
 /* @turbopack-bench:eval-end */
 &quot;#</span>};
 <span class="kw">const </span>USE_EFFECT: <span class="kw-2">&amp;</span>str = <span class="macro">indoc! </span>{<span class="string">r#&quot;
@@ -663,7 +663,7 @@ React.useEffect(() =&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>remaining_directories = <span class="self">self</span>.directories_count;
         <span class="kw">let </span><span class="kw-2">mut </span>remaining_dynamic_imports = <span class="self">self</span>.dynamic_import_count;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::with_capacity(<span class="number">32</span>);
         queue.push_back((src.join(<span class="string">&quot;triangle.jsx&quot;</span>), <span class="number">0</span>));
         remaining_modules -= <span class="number">1</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>is_root = <span class="bool-val">true</span>;

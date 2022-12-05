@@ -1604,10 +1604,18 @@
 <span id="1604">1604</span>
 <span id="1605">1605</span>
 <span id="1606">1606</span>
+<span id="1607">1607</span>
+<span id="1608">1608</span>
+<span id="1609">1609</span>
+<span id="1610">1610</span>
+<span id="1611">1611</span>
+<span id="1612">1612</span>
+<span id="1613">1613</span>
+<span id="1614">1614</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
-    cmp::Ordering,
+    cmp::{max, Ordering},
     collections::VecDeque,
     fmt::{<span class="self">self</span>, Debug, Display, Formatter, Write},
     future::Future,
@@ -2349,6 +2357,9 @@
                     }
                 }
 
+                <span class="kw">if </span>queue.capacity() == <span class="number">0 </span>{
+                    queue.reserve(max(children.len(), SPLIT_OFF_QUEUE_AT * <span class="number">2</span>));
+                }
                 queue.extend(children.iter().copied().map(|child| (child, depth + <span class="number">1</span>)));
 
                 <span class="comment">// add to dirty list of the scope (potentially schedule)
@@ -2370,7 +2381,8 @@
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) {
-        <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::new();
+        <span class="comment">// VecDeque::new() would allocate with 7 items capacity. We don&#39;t want that.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::with_capacity(<span class="number">0</span>);
         <span class="self">self</span>.add_to_scope_internal_shallow(
             id,
             is_optimization_scope,
@@ -2514,6 +2526,9 @@
             TaskScopes::Inner(<span class="kw-2">ref mut </span>set, <span class="kw">_</span>) =&gt; {
                 <span class="kw">if </span>set.remove(id) {
                     <span class="self">self</span>.remove_self_from_scope(<span class="kw-2">&amp;mut </span>state, id, backend, turbo_tasks);
+                    <span class="kw">if </span>queue.capacity() == <span class="number">0 </span>{
+                        queue.reserve(max(state.children.len(), SPLIT_OFF_QUEUE_AT * <span class="number">2</span>));
+                    }
                     queue.extend(state.children.iter().copied());
                     drop(state);
                 }
@@ -2527,7 +2542,8 @@
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) {
-        <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::new();
+        <span class="comment">// VecDeque::new() would allocate with 7 items capacity. We don&#39;t want that.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::with_capacity(<span class="number">0</span>);
         <span class="self">self</span>.remove_from_scope_internal_shallow(id, backend, turbo_tasks, <span class="kw-2">&amp;mut </span>queue);
         run_remove_from_scope_queue(queue, id, backend, turbo_tasks);
     }
@@ -3146,8 +3162,8 @@
                 <span class="kw-2">&amp;mut </span>queue,
             );
         });
-        <span class="kw">if </span>queue.len() &gt; SPLIT_OFF_QUEUE_AT {
-            <span class="kw">let </span>split_off_queue = queue.split_off(SPLIT_OFF_QUEUE_AT);
+        <span class="kw">while </span>queue.len() &gt; SPLIT_OFF_QUEUE_AT {
+            <span class="kw">let </span>split_off_queue = queue.split_off(queue.len() - SPLIT_OFF_QUEUE_AT);
             turbo_tasks.schedule_backend_foreground_job(backend.create_backend_job(
                 Job::AddToScopeQueue(split_off_queue, id, is_optimization_scope),
             ));
@@ -3166,8 +3182,8 @@
         backend.with_task(child, |child| {
             child.remove_from_scope_internal_shallow(id, backend, turbo_tasks, <span class="kw-2">&amp;mut </span>queue);
         });
-        <span class="kw">if </span>queue.len() &gt; SPLIT_OFF_QUEUE_AT {
-            <span class="kw">let </span>split_off_queue = queue.split_off(SPLIT_OFF_QUEUE_AT);
+        <span class="kw">while </span>queue.len() &gt; SPLIT_OFF_QUEUE_AT {
+            <span class="kw">let </span>split_off_queue = queue.split_off(queue.len() - SPLIT_OFF_QUEUE_AT);
 
             turbo_tasks.schedule_backend_foreground_job(
                 backend.create_backend_job(Job::RemoveFromScopeQueue(split_off_queue, id)),

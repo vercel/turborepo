@@ -300,7 +300,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>map = HashMap::new();
         <span class="kw">let </span>root_path = this.root_path.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>assets = Vec::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::with_capacity(<span class="number">32</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>assets_set = HashSet::new();
         <span class="kw">let </span>root_assets = this.root_assets.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(state) = <span class="kw-2">&amp;</span>this.state {

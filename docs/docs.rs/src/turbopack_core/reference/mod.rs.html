@@ -252,7 +252,7 @@
 </span><span class="kw">pub async fn </span>all_referenced_assets(asset: AssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsVc&gt; {
     <span class="kw">let </span>references_set = asset.references().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>assets = Vec::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::with_capacity(<span class="number">32</span>);
     <span class="kw">for </span>reference <span class="kw">in </span>references_set.iter() {
         queue.push_back(reference.resolve_reference());
     }
@@ -295,7 +295,7 @@
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>all_assets(asset: AssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsVc&gt; {
     <span class="comment">// TODO need to track import path here
-    </span><span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::new();
+    </span><span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::with_capacity(<span class="number">32</span>);
     queue.push_back((asset, all_referenced_assets(asset)));
     <span class="kw">let </span><span class="kw-2">mut </span>assets = HashSet::new();
     assets.insert(asset);

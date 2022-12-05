@@ -860,7 +860,7 @@
     <span class="kw">let </span><span class="kw-2">mut </span>chunks = Vec::new();
     <span class="kw">let </span><span class="kw-2">mut </span>async_chunk_groups = Vec::new();
     <span class="kw">let </span><span class="kw-2">mut </span>external_asset_references = Vec::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>queue = VecDeque::with_capacity(<span class="number">32</span>);
 
     <span class="kw">let </span>chunk_item = I::from_asset(context, entry).<span class="kw">await</span><span class="question-mark">?</span>.unwrap();
     queue.push_back(ChunkContentWorkItem::AssetReferences(
