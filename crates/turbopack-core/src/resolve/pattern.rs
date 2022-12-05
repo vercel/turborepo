@@ -1,6 +1,7 @@
 use std::{collections::HashSet, fmt::Display, mem::take};
 
 use anyhow::Result;
+use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -10,6 +11,17 @@ use turbo_tasks::{
 use turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathVc, LinkContent, LinkType,
 };
+
+#[turbo_tasks::value(transparent)]
+pub struct QueryMap(#[turbo_tasks(trace_ignore)] Option<IndexMap<String, String>>);
+
+#[turbo_tasks::value_impl]
+impl QueryMapVc {
+    #[turbo_tasks::function]
+    pub fn none() -> Self {
+        Self::cell(None)
+    }
+}
 
 #[turbo_tasks::value(shared, serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Clone, Debug)]
@@ -665,6 +677,7 @@ pub async fn read_matches(
                         } else {
                             context.try_join(str).await?
                         } {
+                            let fs_path = fs_path.resolve().await?;
                             // This explicit deref of `context` is necessary
                             #[allow(clippy::explicit_auto_deref)]
                             let should_match =
@@ -675,10 +688,9 @@ pub async fn read_matches(
                                 prefix.push_str(str);
                                 match *fs_path.get_type().await? {
                                     FileSystemEntryType::File => results
-                                        .push(PatternMatch::File(prefix.to_string(), *fs_path)),
-                                    FileSystemEntryType::Directory => results.push(
-                                        PatternMatch::Directory(prefix.to_string(), *fs_path),
-                                    ),
+                                        .push(PatternMatch::File(prefix.to_string(), fs_path)),
+                                    FileSystemEntryType::Directory => results
+                                        .push(PatternMatch::Directory(prefix.to_string(), fs_path)),
                                     FileSystemEntryType::Symlink => {
                                         if let LinkContent::Link { link_type, .. } =
                                             &*fs_path.read_link().await?
@@ -686,12 +698,12 @@ pub async fn read_matches(
                                             if link_type.contains(LinkType::DIRECTORY) {
                                                 results.push(PatternMatch::Directory(
                                                     prefix.clone(),
-                                                    *fs_path,
+                                                    fs_path,
                                                 ));
                                             } else {
                                                 results.push(PatternMatch::File(
                                                     prefix.clone(),
-                                                    *fs_path,
+                                                    fs_path,
                                                 ))
                                             }
                                         }
@@ -710,10 +722,11 @@ pub async fn read_matches(
                         } else {
                             context.try_join(subpath).await?
                         } {
+                            let fs_path = fs_path.resolve().await?;
                             let len = prefix.len();
                             prefix.push_str(subpath);
                             nested.push(read_matches(
-                                *fs_path,
+                                fs_path,
                                 prefix.to_string(),
                                 force_in_context,
                                 pattern,

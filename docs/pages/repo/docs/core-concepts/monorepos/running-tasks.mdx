@@ -10,7 +10,7 @@ import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
 Every monorepo has two main building blocks: **workspaces** and **tasks**. Let's imagine you have a monorepo containing **three workspaces**, each with **three tasks**:
 
-![](../../../../../public/images/docs/your-monorepo-excalidraw.png)
+![](/images/docs/your-monorepo-excalidraw.png)
 
 Here, both `apps/web` and `apps/doc` use code from `packages/shared`. In fact, when they're built (via `build`) **they need `packages/shared` to be built _first_**.
 
@@ -26,7 +26,7 @@ yarn workspaces run build
 
 This would mean the tasks run like this:
 
-![](../../../../../public/images/docs/yarn-workspaces-excalidraw.png)
+![](/images/docs/yarn-workspaces-excalidraw.png)
 
 As you can see, `lint` gets run in all the workspaces. Then, `build` gets run - with `shared` going first. Finally, `test` gets run.
 
@@ -68,7 +68,7 @@ Next, we can replace our `yarn workspaces` script with this:
 
 When we run it, Turborepo will **multitask as many tasks as possible over all available CPU's**, meaning our tasks run like this:
 
-![](../../../../../public/images/docs/turborepo-excalidraw.png)
+![](/images/docs/turborepo-excalidraw.png)
 
 Both `lint` and `test` run immediately, because they have no `dependsOn` specified in `turbo.json`.
 
@@ -297,7 +297,7 @@ To accomplish this, we can set up a pipeline like so:
  }
 ```
 
-![](../../../../../public/images/docs/task-graph-with-dummy-task.png)
+![](/images/docs/task-graph-with-dummy-task.png)
 
 In this pipeline, we create an intermediary dummy `topo` task. Since we don't have a `topo` command in our workspaces, the pipeline will go straight to running `test` scripts in parallel, meeting our first requirement. The second requirement will also be taken care of, falling back on Turborepo's default behavior of creating hashes for a workspace task and it's dependencies as a tree.
 
