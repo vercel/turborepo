@@ -494,7 +494,7 @@ mod test {
             Args {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
-                    dry_run: Some(DryRunMode::Stdout),
+                    dry_run: Some(DryRunMode::Text),
                     ..get_default_run_args()
                 })),
                 ..Args::default()
@@ -584,7 +584,7 @@ mod test {
             Args {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
-                    graph: Some("stdout".to_string()),
+                    graph: Some(None),
                     ..get_default_run_args()
                 })),
                 ..Args::default()
@@ -596,7 +596,7 @@ mod test {
             Args {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
-                    graph: Some("out.html".to_string()),
+                    graph: Some(Some("out.html".to_string())),
                     ..get_default_run_args()
                 })),
                 ..Args::default()
