@@ -1,6 +1,10 @@
 //! # Three-shaking
 //!
-//! ## Goals
+//! ## Summary
+//!
+//! Add support for tree shaking in Turbopack.
+//!
+//! ## Motivation
 //!
 //! We want Turbopack's tree shaking to be more granular than that of Webpack.
 //! While Webpack will eliminate unused exports across the whole compilation
@@ -211,6 +215,28 @@
 //! If we know which exports are used together, we can merge sets more
 //! agressively. However, this might not be needed, as modules will be merged
 //! together after chunking.
+//!
+//! ## Drawbacks
+//!
+//! This will make the build process slower and more complex in a few ways:
+//!
+//! 1. The analyzer pass will slow down the *first* processing of each module.
+//!    However, in most cases, this pass will only happen in production builds.
+//! 2. ES modules can now be split into multiple, interdependent modules. This
+//!    will significantly increases the total number of modules in the
+//!    compilation.
+//! 3. Tree shaking doesn't play well with side effects, and errors in the
+//!    implementation can have introduce subtle bugs. For instance, if a
+//!    module is imported by a module that is not used, but the module has
+//!    side effects, the side effects will not be executed.
+//!
+//! ## Prior art
+//!
+//! 1. [Rollup](https://rollupjs.org/guide/en/#tree-shaking)
+//! 2. [Webpack](https://webpack.js.org/guides/tree-shaking/)
+//! 3. [SWC DCE transform] which is used for bundling/minifying.
+//!
+//! [SWC DCE transform]: https://github.com/swc-project/swc/blob/main/crates/swc_ecma_transforms_optimization/src/simplify/dce/mod.rs
 
 /// A predicate that can match any number of exports.
 ///
