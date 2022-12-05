@@ -36,7 +36,7 @@ dependencies = [
  "getrandom",
  "once_cell",
  "serde",
- "version_check 0.9.4",
+ "version_check",
 ]
 
 [[package]]
@@ -83,16 +83,6 @@ checksum = "220044e6a1bb31ddee4e3db724d29767f352de47445a6cd75e1a173142136c83"
 dependencies = [
  "nom",
  "vte",
-]
-
-[[package]]
-name = "any_key"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d21bb2cdab8087ed9d69411dd99c608dbede1df847c255b4d609f0399a3cb452"
-dependencies = [
- "debugit",
- "mopa",
 ]
 
 [[package]]
@@ -1246,15 +1236,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "debugit"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63c2f7e3034df2b09f750327e23c1adfe33301e6b7388f05bb4fcc0fa46825e3"
-dependencies = [
- "version_check 0.1.5",
-]
-
-[[package]]
 name = "diff"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1800,7 +1781,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bff49e947297f3312447abdca79f45f4738097cc82b06e72054d2223f601f1b9"
 dependencies = [
  "typenum",
- "version_check 0.9.4",
+ "version_check",
 ]
 
 [[package]]
@@ -1854,19 +1835,6 @@ name = "glob"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
-
-[[package]]
-name = "globset"
-version = "0.4.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a1e17342619edbc21a964c2afbeb6c820c6a2560032872f397bb97ea127bd0a"
-dependencies = [
- "aho-corasick",
- "bstr 0.2.17",
- "fnv",
- "log",
- "regex",
-]
 
 [[package]]
 name = "h2"
@@ -2910,15 +2878,12 @@ dependencies = [
  "anyhow",
  "indexmap",
  "mime",
- "rand",
  "serde",
  "serde_json",
- "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-env",
  "turbo-tasks-fs",
- "turbo-tasks-hash",
  "turbopack",
  "turbopack-core",
  "turbopack-dev-server",
@@ -2945,11 +2910,9 @@ dependencies = [
  "once_cell",
  "owo-colors",
  "parking_lot",
- "portpicker",
  "rand",
  "regex",
  "serde",
- "serde_json",
  "tempfile",
  "test-generator",
  "tokio",
@@ -2960,12 +2923,10 @@ dependencies = [
  "turbo-tasks-fs",
  "turbo-tasks-memory",
  "turbo-tasks-testing",
- "turbopack",
  "turbopack-cli-utils",
  "turbopack-core",
  "turbopack-create-test-app",
  "turbopack-dev-server",
- "url",
  "vergen",
  "webbrowser",
 ]
@@ -3001,7 +2962,6 @@ dependencies = [
  "anyhow",
  "clap 4.0.18",
  "console-subscriber",
- "owo-colors",
  "serde",
  "serde_json",
  "tokio",
@@ -3539,15 +3499,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "portpicker"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
-dependencies = [
- "rand",
-]
-
-[[package]]
 name = "ppv-lite86"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3639,7 +3590,7 @@ dependencies = [
  "proc-macro2 1.0.43",
  "quote 1.0.21",
  "syn 1.0.99",
- "version_check 0.9.4",
+ "version_check",
 ]
 
 [[package]]
@@ -3650,7 +3601,7 @@ checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
 dependencies = [
  "proc-macro2 1.0.43",
  "quote 1.0.21",
- "version_check 0.9.4",
+ "version_check",
 ]
 
 [[package]]
@@ -4433,7 +4384,7 @@ version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e113fb6f3de07a243d434a56ec6f186dfd51cb08448239fe7bcae73f87ff28ff"
 dependencies = [
- "version_check 0.9.4",
+ "version_check",
 ]
 
 [[package]]
@@ -5898,7 +5849,7 @@ dependencies = [
  "standback",
  "stdweb",
  "time-macros",
- "version_check 0.9.4",
+ "version_check",
  "winapi 0.3.9",
 ]
 
@@ -6265,13 +6216,11 @@ dependencies = [
  "bindgen",
  "build-target",
  "clap 3.2.23",
- "globset",
  "itertools",
  "predicates",
  "serde",
  "serde_json",
  "serde_yaml",
- "walkdir",
 ]
 
 [[package]]
@@ -6285,10 +6234,8 @@ dependencies = [
 name = "turbo-tasks"
 version = "0.1.0"
 dependencies = [
- "any_key",
  "anyhow",
  "auto-hash-map",
- "bitflags",
  "concurrent-queue",
  "dashmap",
  "erased-serde",
@@ -6309,7 +6256,6 @@ dependencies = [
  "turbo-tasks-build",
  "turbo-tasks-hash",
  "turbo-tasks-macros",
- "weak-table",
 ]
 
 [[package]]
@@ -6319,11 +6265,7 @@ dependencies = [
  "anyhow",
  "cargo-lock",
  "glob",
- "pmutil",
- "quote 1.0.21",
- "serde",
  "syn 1.0.99",
- "toml",
  "turbo-tasks-macros-shared",
 ]
 
@@ -6335,8 +6277,6 @@ dependencies = [
  "dotenvy",
  "indexmap",
  "serde",
- "serde_json",
- "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
@@ -6356,7 +6296,6 @@ dependencies = [
  "futures-retry",
  "include_dir",
  "jsonc-parser",
- "lazy_static",
  "mime",
  "notify",
  "rstest",
@@ -6388,7 +6327,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "convert_case",
- "pmutil",
  "proc-macro-error",
  "proc-macro2 1.0.43",
  "quote 1.0.21",
@@ -6400,7 +6338,6 @@ dependencies = [
 name = "turbo-tasks-macros-shared"
 version = "0.1.0"
 dependencies = [
- "proc-macro-error",
  "proc-macro2 1.0.43",
  "quote 1.0.21",
  "syn 1.0.99",
@@ -6415,7 +6352,6 @@ dependencies = [
  "concurrent-queue",
  "criterion",
  "dashmap",
- "lazy_static",
  "nohash-hasher",
  "num_cpus",
  "parking_lot",
@@ -6448,21 +6384,16 @@ dependencies = [
  "difference",
  "futures",
  "lazy_static",
- "num-bigint",
- "rand",
  "regex",
  "rstest",
  "rstest_reuse",
  "serde",
  "serde_json",
- "serde_regex",
- "swc_core",
  "test-generator",
  "tokio",
  "turbo-malloc",
  "turbo-tasks",
  "turbo-tasks-build",
- "turbo-tasks-env",
  "turbo-tasks-fs",
  "turbo-tasks-memory",
  "turbopack-core",
@@ -6471,7 +6402,6 @@ dependencies = [
  "turbopack-env",
  "turbopack-json",
  "turbopack-static",
- "url",
 ]
 
 [[package]]
@@ -6481,15 +6411,11 @@ dependencies = [
  "anyhow",
  "clap 4.0.18",
  "crossterm",
- "lazy_static",
  "owo-colors",
  "serde",
- "serde_json",
- "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
- "turbo-tasks-hash",
  "turbopack-core",
 ]
 
@@ -6506,21 +6432,17 @@ dependencies = [
  "lazy_static",
  "patricia_tree",
  "qstring",
- "rand",
  "regex",
  "rstest",
  "serde",
  "serde_json",
- "serde_regex",
  "sourcemap",
  "swc_core",
- "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-env",
  "turbo-tasks-fs",
  "turbo-tasks-hash",
- "url",
 ]
 
 [[package]]
@@ -6542,7 +6464,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "indexmap",
- "once_cell",
  "serde",
  "swc_core",
  "turbo-tasks",
@@ -6560,11 +6481,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures",
- "httparse",
  "hyper",
  "hyper-tungstenite",
  "indexmap",
- "lazy_static",
  "mime",
  "mime_guess",
  "parking_lot",
@@ -6599,12 +6518,10 @@ dependencies = [
  "num-bigint",
  "once_cell",
  "pin-project-lite",
- "rand",
  "regex",
  "rstest",
  "serde",
  "serde_json",
- "serde_regex",
  "styled_components",
  "styled_jsx",
  "swc_core",
@@ -6627,8 +6544,6 @@ name = "turbopack-env"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "dotenvy",
- "indexmap",
  "serde",
  "turbo-tasks",
  "turbo-tasks-build",
@@ -6680,8 +6595,6 @@ name = "turbopack-static"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
- "md4",
  "serde",
  "turbo-tasks",
  "turbo-tasks-build",
@@ -6696,12 +6609,9 @@ dependencies = [
 name = "turbopack-swc-utils"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "async-trait",
  "swc_core",
  "turbo-tasks",
  "turbo-tasks-build",
- "turbo-tasks-fs",
  "turbopack-core",
 ]
 
@@ -6763,7 +6673,7 @@ version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50f37be617794602aabbeee0be4f259dc1778fabe05e2d67ee8f79326d5cb4f6"
 dependencies = [
- "version_check 0.9.4",
+ "version_check",
 ]
 
 [[package]]
@@ -6875,12 +6785,6 @@ dependencies = [
  "thiserror",
  "time 0.3.13",
 ]
-
-[[package]]
-name = "version_check"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "914b1a6776c4c929a602fafd8bc742e06365d4bcbe48c30f9cca5824f70dc9dd"
 
 [[package]]
 name = "version_check"
@@ -7338,12 +7242,6 @@ checksum = "584aaf7a1ecf4d383bbe1a25eeab0cbb8ff96acc6796707ff65cde48f4632f15"
 dependencies = [
  "wast",
 ]
-
-[[package]]
-name = "weak-table"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "323f4da9523e9a669e1eaf9c6e763892769b1d38c623913647bfdc1532fe4549"
 
 [[package]]
 name = "web-sys"
