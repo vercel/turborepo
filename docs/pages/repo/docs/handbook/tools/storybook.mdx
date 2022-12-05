@@ -13,7 +13,7 @@ This guide shows you how to:
 2. Create your first story
 3. Ensure Storybook works with the rest of your tasks
 
-### 1. Create your Monorepo
+### 1. Create your monorepo
 
 If you don't have an existing project, use our [quickstart](/repo/docs/getting-started/create-new) to create a new monorepo.
 
@@ -54,17 +54,21 @@ Next, we need to scaffold Storybook:
   <Tab>
     ```shell
     cd workshop
-    npx sb init --builder @storybook/builder-vite
+    npx sb init -s            # Set up files
+    npm i -D @storybook/cli   # Manually install deps and CLI
     ```
+
+    <Callout type="info">You may be prompted to enable the `--legacy-peer-deps` flag. This flag is required for Storybook to work in a monorepo.</Callout>
+
   </Tab>
   <Tab>
     ```shell
     cd workshop
-    yarn sb init --builder @storybook/builder-vite
+    npx storybook init
     ```
   </Tab>
   <Tab>
-      <p className="nx-mt-6 nx-leading-7">If you're using `pnpm`, you'll need to add a `.npmrc` at the root of your monorepo:</p>
+      <p className="nx-mt-6 nx-leading-7">If you're using `pnpm`, you'll need to add an `.npmrc` at the root of your monorepo:</p>
       ```txt filename=".npmrc"
       auto-install-peers=true
       legacy-peer-deps=true
@@ -74,7 +78,7 @@ Next, we need to scaffold Storybook:
 
       ```shell
       cd workshop
-      pnpx sb init -s            # Only setup files
+      pnpx sb init -s            # Set up files
       pnpm i -D @storybook/cli   # Manually install deps and CLI
       ```
 
@@ -85,7 +89,7 @@ Next, we need to scaffold Storybook:
 
 The Storybook scaffold creates some stories and React components in the `/src/stories` directory. To create a story for the button from your `ui` package, we will replace the import in `Button.stories.tsx` with our own.
 
-First, update the Button in your `ui` package to match the story's specifications.
+1. Update the Button in your `ui` package to match the story's specifications.
 
 ```jsx filename="packages/ui/Button.tsx"
 interface Props {
@@ -114,6 +118,40 @@ export const Button = ({
 
 2. Add your `ui` package to the `workshop` app:
 
+<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+  <Tab>
+```json filename="apps/workshop/package.json"
+{
+  // ...
+  {
+    "dependencies": {
+      "ui": "*",
+      // ...
+    }
+  }
+}
+```
+
+And `npm install` one more time to make sure that your `ui` package is installed in the `workshop` app.
+
+  </Tab>
+  <Tab>
+```json filename="apps/workshop/package.json"
+{
+  // ...
+  {
+    "dependencies": {
+      "ui": "*",
+      // ...
+    }
+  }
+}
+```
+
+And `yarn install` to make sure that your `ui` package is installed in the `workshop` app.
+
+  </Tab>
+  <Tab>
 ```json filename="apps/workshop/package.json"
 {
   // ...
@@ -125,8 +163,9 @@ export const Button = ({
   }
 }
 ```
-
-And `pnpm i` one more time to make sure that your `ui` package is installed in the `workshop` app.
+And `pnpm install` one more time to make sure that your `ui` package is installed in the `workshop` app.
+  </Tab>
+</Tabs>
 
 3. Replace the `Button` import in the `Button.stories.tsx` so that it comes from your `ui` package:
 
@@ -138,7 +177,7 @@ import { Button } from 'ui'
 
 The last thing that we need to do is make sure that Storybook is lined up with the rest of your tasks:
 
-```json filename="/apps/workshop/package.json"
+```json filename="apps/workshop/package.json"
 {
   // ...
   "scripts": {
@@ -150,4 +189,4 @@ The last thing that we need to do is make sure that Storybook is lined up with t
 
 To ensure build caching, you'll also need to add `storybook-static` to your `.gitignore`.
 
-You can now develop your Storybook alongside your applications and enjoy cached builds with the rest of your applications.
+Your `dev` and `build` tasks will now include Storybook, allowing you to develop your Storybook alongside your applications and enjoy cached builds with the rest of your applications.
