@@ -34,7 +34,7 @@ custom_allocator = ["turbo-malloc/custom_allocator"]
 anyhow = "1.0.47"
 clap = { version = "4.0.18", features = ["derive", "env"] }
 console-subscriber = { version = "0.1.8", optional = true }
-futures = "0.3.21"
+futures = "0.3.25"
 mime = "0.3.16"
 next-core = { path = "../next-core" }
 owo-colors = "3"
@@ -54,7 +54,7 @@ url = "2.3.0"
 webbrowser = "0.7.1"
 
 [dev-dependencies]
-chromiumoxide = { version = "0.3.5", features = [
+chromiumoxide = { version = "0.4.0", features = [
   "tokio-runtime",
 ], default-features = false }
 criterion = { version = "0.3.5", features = ["async_tokio"] }
