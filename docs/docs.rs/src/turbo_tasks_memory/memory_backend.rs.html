@@ -529,30 +529,6 @@
 <span id="529">529</span>
 <span id="530">530</span>
 <span id="531">531</span>
-<span id="532">532</span>
-<span id="533">533</span>
-<span id="534">534</span>
-<span id="535">535</span>
-<span id="536">536</span>
-<span id="537">537</span>
-<span id="538">538</span>
-<span id="539">539</span>
-<span id="540">540</span>
-<span id="541">541</span>
-<span id="542">542</span>
-<span id="543">543</span>
-<span id="544">544</span>
-<span id="545">545</span>
-<span id="546">546</span>
-<span id="547">547</span>
-<span id="548">548</span>
-<span id="549">549</span>
-<span id="550">550</span>
-<span id="551">551</span>
-<span id="552">552</span>
-<span id="553">553</span>
-<span id="554">554</span>
-<span id="555">555</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -560,6 +536,7 @@
     future::Future,
     hash::BuildHasherDefault,
     pin::Pin,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -594,7 +571,7 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) initial_scope: TaskScopeId,
     backend_jobs: NoMoveVec&lt;Job&gt;,
     backend_job_id_factory: IdFactory&lt;BackendJobId&gt;,
-    task_cache: DashMap&lt;PersistentTaskType, TaskId, BuildHasherDefault&lt;FxHasher&gt;&gt;,
+    task_cache: DashMap&lt;Arc&lt;PersistentTaskType&gt;, TaskId, BuildHasherDefault&lt;FxHasher&gt;&gt;,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>MemoryBackend {
@@ -774,15 +751,7 @@
         task: TaskId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TaskExecutionSpec&gt; {
-        <span class="self">self</span>.with_task(task, |task| {
-            <span class="kw">if </span>task.execution_started(<span class="self">self</span>, turbo_tasks) {
-                <span class="prelude-val">Some</span>(TaskExecutionSpec {
-                    future: task.execute(turbo_tasks),
-                })
-            } <span class="kw">else </span>{
-                <span class="prelude-val">None
-            </span>}
-        })
+        <span class="self">self</span>.with_task(task, |task| task.execute(<span class="self">self</span>, turbo_tasks))
     }
 
     <span class="kw">fn </span>task_execution_result(
@@ -991,27 +960,10 @@
             <span class="comment">// It&#39;s important to avoid overallocating memory as this will go into the task
             // cache and stay there forever. We can to be as small as possible.
             </span>task_type.shrink_to_fit();
+            <span class="kw">let </span>task_type = Arc::new(task_type);
             <span class="comment">// slow pass with key lock
             </span><span class="kw">let </span>id = turbo_tasks.get_fresh_task_id();
-            <span class="kw">let </span>task = <span class="kw">match </span><span class="kw-2">&amp;</span>task_type {
-                PersistentTaskType::Native(fn_id, inputs) =&gt; {
-                    <span class="comment">// TODO inputs doesn&#39;t need to be cloned when are would be able to get a
-                    // reference to the task type stored inside of the task
-                    </span>Task::new_native(id, inputs.clone(), <span class="kw-2">*</span>fn_id, turbo_tasks.stats_type())
-                }
-                PersistentTaskType::ResolveNative(fn_id, inputs) =&gt; {
-                    Task::new_resolve_native(id, inputs.clone(), <span class="kw-2">*</span>fn_id, turbo_tasks.stats_type())
-                }
-                PersistentTaskType::ResolveTrait(trait_type, trait_fn_name, inputs) =&gt; {
-                    Task::new_resolve_trait(
-                        id,
-                        <span class="kw-2">*</span>trait_type,
-                        trait_fn_name.clone(),
-                        inputs.clone(),
-                        turbo_tasks.stats_type(),
-                    )
-                }
-            };
+            <span class="kw">let </span>task = Task::new_persistent(id, task_type.clone(), turbo_tasks.stats_type());
             <span class="comment">// Safety: We have a fresh task id that nobody knows about yet
             </span><span class="kw">unsafe </span>{
                 <span class="self">self</span>.memory_tasks.insert(<span class="kw-2">*</span>id, task);

@@ -1608,10 +1608,6 @@
 <span id="1608">1608</span>
 <span id="1609">1609</span>
 <span id="1610">1610</span>
-<span id="1611">1611</span>
-<span id="1612">1612</span>
-<span id="1613">1613</span>
-<span id="1614">1614</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -1622,6 +1618,7 @@
     hash::Hash,
     mem::{replace, take},
     pin::Pin,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -1630,10 +1627,10 @@
 <span class="kw">use </span>parking_lot::{Mutex, RwLock, RwLockWriteGuard};
 <span class="kw">use </span>tokio::task_local;
 <span class="kw">use </span>turbo_tasks::{
-    backend::PersistentTaskType,
+    backend::{PersistentTaskType, TaskExecutionSpec},
     event::{Event, EventListener},
-    get_invalidator, registry, CellId, FunctionId, Invalidator, RawVc, StatsType, TaskId,
-    TaskInput, TraitTypeId, TurboTasksBackendApi, ValueTypeId,
+    get_invalidator, registry, CellId, Invalidator, RawVc, StatsType, TaskId, TraitTypeId,
+    TurboTasksBackendApi, ValueTypeId,
 };
 <span class="kw">pub type </span>NativeTaskFuture = Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;RawVc&gt;&gt; + Send&gt;&gt;;
 <span class="kw">pub type </span>NativeTaskFn = Box&lt;<span class="kw">dyn </span>Fn() -&gt; NativeTaskFuture + Send + Sync&gt;;
@@ -1676,18 +1673,8 @@
     /// applied.
     </span>Once(OnceTaskFn),
 
-    <span class="doccomment">/// A normal task execution a native (rust) function
-    </span>Native(FunctionId, NativeTaskFn),
-
-    <span class="doccomment">/// A resolve task, which resolves arguments and calls the function with
-    /// resolve arguments. The inner function call will do a cache lookup.
-    </span>ResolveNative(FunctionId),
-
-    <span class="doccomment">/// A trait method resolve task. It resolves the first (`self`) argument and
-    /// looks up the trait method on that value. Then it calls that method.
-    /// The method call will do a cache lookup and might resolve arguments
-    /// before.
-    </span>ResolveTrait(TraitTypeId, Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;),
+    <span class="doccomment">/// A normal persistent task
+    </span>Persistent(Arc&lt;PersistentTaskType&gt;),
 }
 
 <span class="kw">impl </span>Debug <span class="kw">for </span>TaskType {
@@ -1695,21 +1682,16 @@
         <span class="kw">match </span><span class="self">self </span>{
             <span class="self">Self</span>::Root(..) =&gt; f.debug_tuple(<span class="string">&quot;Root&quot;</span>).finish(),
             <span class="self">Self</span>::Once(..) =&gt; f.debug_tuple(<span class="string">&quot;Once&quot;</span>).finish(),
-            <span class="self">Self</span>::Native(native_fn, <span class="kw">_</span>) =&gt; f
-                .debug_tuple(<span class="string">&quot;Native&quot;</span>)
-                .field(<span class="kw-2">&amp;</span>registry::get_function(<span class="kw-2">*</span>native_fn).name)
-                .finish(),
-            <span class="self">Self</span>::ResolveNative(native_fn) =&gt; f
-                .debug_tuple(<span class="string">&quot;ResolveNative&quot;</span>)
-                .field(<span class="kw-2">&amp;</span>registry::get_function(<span class="kw-2">*</span>native_fn).name)
-                .finish(),
-            <span class="self">Self</span>::ResolveTrait(trait_type, name) =&gt; f
-                .debug_tuple(<span class="string">&quot;ResolveTrait&quot;</span>)
-                .field(<span class="kw-2">&amp;</span>registry::get_trait(<span class="kw-2">*</span>trait_type).name)
-                .field(name)
-                .finish(),
+            <span class="self">Self</span>::Persistent(ty) =&gt; ty.fmt(f),
         }
     }
+}
+
+<span class="attr">#[derive(Default)]
+</span><span class="kw">enum </span>PrepareTaskType {
+    <span class="attr">#[default]
+    </span><span class="prelude-val">None</span>,
+    Native(NativeTaskFn),
 }
 
 <span class="doccomment">/// A Task is an instantiation of an Function with some arguments.
@@ -1717,11 +1699,6 @@
 /// Task instance.
 </span><span class="kw">pub struct </span>Task {
     id: TaskId,
-    <span class="comment">// TODO move that into TaskType where needed
-    // TODO we currently only use that for visualization
-    // TODO this can be removed
-    </span><span class="doccomment">/// The arguments of the Task
-    </span>inputs: Vec&lt;TaskInput&gt;,
     <span class="doccomment">/// The type of the task
     </span>ty: TaskType,
     <span class="doccomment">/// The mutable state of the task
@@ -1754,6 +1731,10 @@
     <span class="doccomment">/// Collectibles are only modified from execution
     </span>collectibles: MaybeCollectibles,
 
+    <span class="doccomment">/// Preparations done for the task type with the bound arguments, e. g.
+    /// argument validation
+    </span>prepared_type: PrepareTaskType,
+
     output: Output,
     cells: AutoMap&lt;ValueTypeId, Vec&lt;Cell&gt;&gt;,
 
@@ -1771,6 +1752,7 @@
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
+            prepared_type: PrepareTaskType::None,
             cells: Default::default(),
             stats: TaskStats::new(stats_type),
             <span class="attr">#[cfg(feature = <span class="string">&quot;track_wait_dependencies&quot;</span>)]
@@ -1787,6 +1769,7 @@
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
+            prepared_type: PrepareTaskType::None,
             cells: Default::default(),
             stats: TaskStats::new(stats_type),
             <span class="attr">#[cfg(feature = <span class="string">&quot;track_wait_dependencies&quot;</span>)]
@@ -1892,46 +1875,14 @@
 };
 
 <span class="kw">impl </span>Task {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new_native(
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new_persistent(
         id: TaskId,
-        inputs: Vec&lt;TaskInput&gt;,
-        native_fn: FunctionId,
-        stats_type: StatsType,
-    ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>bound_fn = registry::get_function(native_fn).bind(<span class="kw-2">&amp;</span>inputs);
-        <span class="self">Self </span>{
-            id,
-            inputs,
-            ty: TaskType::Native(native_fn, bound_fn),
-            state: RwLock::new(TaskState::new(id, stats_type)),
-        }
-    }
-
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new_resolve_native(
-        id: TaskId,
-        inputs: Vec&lt;TaskInput&gt;,
-        native_fn: FunctionId,
+        task_type: Arc&lt;PersistentTaskType&gt;,
         stats_type: StatsType,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             id,
-            inputs,
-            ty: TaskType::ResolveNative(native_fn),
-            state: RwLock::new(TaskState::new(id, stats_type)),
-        }
-    }
-
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new_resolve_trait(
-        id: TaskId,
-        trait_type: TraitTypeId,
-        trait_fn_name: Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;,
-        inputs: Vec&lt;TaskInput&gt;,
-        stats_type: StatsType,
-    ) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            id,
-            inputs,
-            ty: TaskType::ResolveTrait(trait_type, trait_fn_name),
+            ty: TaskType::Persistent(task_type),
             state: RwLock::new(TaskState::new(id, stats_type)),
         }
     }
@@ -1944,7 +1895,6 @@
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             id,
-            inputs: Vec::new(),
             ty: TaskType::Root(Box::new(functor)),
             state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope, stats_type)),
         }
@@ -1958,7 +1908,6 @@
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             id,
-            inputs: Vec::new(),
             ty: TaskType::Once(Mutex::new(<span class="prelude-val">Some</span>(Box::pin(functor)))),
             state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope, stats_type)),
         }
@@ -1968,24 +1917,26 @@
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.ty {
             TaskType::Root(..) =&gt; <span class="macro">format!</span>(<span class="string">&quot;[{}] root&quot;</span>, <span class="self">self</span>.id),
             TaskType::Once(..) =&gt; <span class="macro">format!</span>(<span class="string">&quot;[{}] once&quot;</span>, <span class="self">self</span>.id),
-            TaskType::Native(native_fn, <span class="kw">_</span>) =&gt; {
-                <span class="macro">format!</span>(<span class="string">&quot;[{}] {}&quot;</span>, <span class="self">self</span>.id, registry::get_function(<span class="kw-2">*</span>native_fn).name)
-            }
-            TaskType::ResolveNative(native_fn) =&gt; {
-                <span class="macro">format!</span>(
-                    <span class="string">&quot;[{}] [resolve] {}&quot;</span>,
-                    <span class="self">self</span>.id,
-                    registry::get_function(<span class="kw-2">*</span>native_fn).name
-                )
-            }
-            TaskType::ResolveTrait(trait_type, fn_name) =&gt; {
-                <span class="macro">format!</span>(
-                    <span class="string">&quot;[{}] [resolve trait] {} in trait {}&quot;</span>,
-                    <span class="self">self</span>.id,
-                    fn_name,
-                    registry::get_trait(<span class="kw-2">*</span>trait_type).name
-                )
-            }
+            TaskType::Persistent(ty) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>ty {
+                PersistentTaskType::Native(native_fn, <span class="kw">_</span>) =&gt; {
+                    <span class="macro">format!</span>(<span class="string">&quot;[{}] {}&quot;</span>, <span class="self">self</span>.id, registry::get_function(<span class="kw-2">*</span>native_fn).name)
+                }
+                PersistentTaskType::ResolveNative(native_fn, <span class="kw">_</span>) =&gt; {
+                    <span class="macro">format!</span>(
+                        <span class="string">&quot;[{}] [resolve] {}&quot;</span>,
+                        <span class="self">self</span>.id,
+                        registry::get_function(<span class="kw-2">*</span>native_fn).name
+                    )
+                }
+                PersistentTaskType::ResolveTrait(trait_type, fn_name, <span class="kw">_</span>) =&gt; {
+                    <span class="macro">format!</span>(
+                        <span class="string">&quot;[{}] [resolve trait] {} in trait {}&quot;</span>,
+                        <span class="self">self</span>.id,
+                        fn_name,
+                        registry::get_trait(<span class="kw-2">*</span>trait_type).name
+                    )
+                }
+            },
         }
     }
 
@@ -2046,12 +1997,27 @@
         }
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>execution_started(
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>execute(
         <span class="self">self</span>: <span class="kw-2">&amp;</span>Task,
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    ) -&gt; bool {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;TaskExecutionSpec&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write();
+        <span class="kw">if </span>!<span class="self">self</span>.try_start_execution(<span class="kw-2">&amp;mut </span>state, turbo_tasks, backend) {
+            <span class="kw">return </span><span class="prelude-val">None</span>;
+        }
+        <span class="kw">let </span>future = <span class="self">self</span>.make_execution_future(state, turbo_tasks);
+        <span class="prelude-val">Some</span>(TaskExecutionSpec { future })
+    }
+
+    <span class="doccomment">/// Tries to change the state to InProgress and returns true if it was
+    /// possible.
+    </span><span class="kw">fn </span>try_start_execution(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        state: <span class="kw-2">&amp;mut </span>RwLockWriteGuard&lt;TaskState&gt;,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        backend: <span class="kw-2">&amp;</span>MemoryBackend,
+    ) -&gt; bool {
         <span class="kw">match </span>state.state_type {
             Done { .. } | InProgress { .. } | InProgressDirty { .. } =&gt; {
                 <span class="comment">// should not start in this state
@@ -2114,8 +2080,7 @@
                 }
             }
             Dirty { .. } =&gt; {
-                <span class="kw">let </span>state_type = Task::state_string(<span class="kw-2">&amp;</span>state);
-                drop(state);
+                <span class="kw">let </span>state_type = Task::state_string(<span class="kw-2">&amp;*</span>state);
                 <span class="macro">panic!</span>(
                     <span class="string">&quot;{:?} execution started in unexpected state {}&quot;</span>,
                     <span class="self">self</span>, state_type
@@ -2124,6 +2089,52 @@
         };
         <span class="bool-val">true
     </span>}
+
+    <span class="doccomment">/// Prepares task execution and returns a future that will execute the task.
+    </span><span class="kw">fn </span>make_execution_future(
+        <span class="self">self</span>: <span class="kw-2">&amp;</span>Task,
+        <span class="kw-2">mut </span>state: RwLockWriteGuard&lt;TaskState&gt;,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+    ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;RawVc&gt;&gt; + Send&gt;&gt; {
+        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.ty {
+            TaskType::Root(bound_fn) =&gt; bound_fn(),
+            TaskType::Once(mutex) =&gt; mutex.lock().take().expect(<span class="string">&quot;Task can only be executed once&quot;</span>),
+            TaskType::Persistent(ty) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>ty {
+                PersistentTaskType::Native(native_fn, inputs) =&gt; {
+                    <span class="kw">if let </span>PrepareTaskType::Native(bound_fn) = <span class="kw-2">&amp;</span>state.prepared_type {
+                        bound_fn()
+                    } <span class="kw">else </span>{
+                        <span class="kw">let </span>bound_fn = registry::get_function(<span class="kw-2">*</span>native_fn).bind(inputs);
+                        <span class="kw">let </span>future = bound_fn();
+                        state.prepared_type = PrepareTaskType::Native(bound_fn);
+                        future
+                    }
+                }
+                PersistentTaskType::ResolveNative(<span class="kw-2">ref </span>native_fn, inputs) =&gt; {
+                    <span class="kw">let </span>native_fn = <span class="kw-2">*</span>native_fn;
+                    <span class="kw">let </span>inputs = inputs.clone();
+                    <span class="kw">let </span>turbo_tasks = turbo_tasks.pin();
+                    Box::pin(PersistentTaskType::run_resolve_native(
+                        native_fn,
+                        inputs,
+                        turbo_tasks,
+                    ))
+                }
+                PersistentTaskType::ResolveTrait(trait_type, name, inputs) =&gt; {
+                    <span class="kw">let </span>trait_type = <span class="kw-2">*</span>trait_type;
+                    <span class="kw">let </span>name = name.clone();
+                    <span class="kw">let </span>inputs = inputs.clone();
+                    <span class="kw">let </span>turbo_tasks = turbo_tasks.pin();
+                    Box::pin(PersistentTaskType::run_resolve_trait(
+                        trait_type,
+                        name,
+                        inputs,
+                        turbo_tasks,
+                    ))
+                }
+            },
+        }
+    }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>execution_result(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -2744,35 +2755,6 @@
         })
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>execute(<span class="kw-2">&amp;</span><span class="self">self</span>, tt: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) -&gt; NativeTaskFuture {
-        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.ty {
-            TaskType::Root(bound_fn) =&gt; bound_fn(),
-            TaskType::Once(mutex) =&gt; {
-                <span class="kw">let </span>future = mutex.lock().take().expect(<span class="string">&quot;Task can only be executed once&quot;</span>);
-                <span class="comment">// let task = self.clone();
-                </span>Box::pin(future)
-            }
-            TaskType::Native(<span class="kw">_</span>, bound_fn) =&gt; bound_fn(),
-            TaskType::ResolveNative(<span class="kw-2">ref </span>native_fn) =&gt; {
-                <span class="kw">let </span>native_fn = <span class="kw-2">*</span>native_fn;
-                <span class="kw">let </span>inputs = <span class="self">self</span>.inputs.clone();
-                <span class="kw">let </span>tt = tt.pin();
-                Box::pin(PersistentTaskType::run_resolve_native(
-                    native_fn, inputs, tt,
-                ))
-            }
-            TaskType::ResolveTrait(trait_type, name) =&gt; {
-                <span class="kw">let </span>trait_type = <span class="kw-2">*</span>trait_type;
-                <span class="kw">let </span>name = name.clone();
-                <span class="kw">let </span>inputs = <span class="self">self</span>.inputs.clone();
-                <span class="kw">let </span>tt = tt.pin();
-                Box::pin(PersistentTaskType::run_resolve_trait(
-                    trait_type, name, inputs, tt,
-                ))
-            }
-        }
-    }
-
     <span class="doccomment">/// Get an [Invalidator] that can be used to invalidate the current [Task]
     /// based on external events.
     </span><span class="kw">pub fn </span>get_invalidator() -&gt; Invalidator {
@@ -2865,9 +2847,13 @@
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.ty {
             TaskType::Root(<span class="kw">_</span>) =&gt; stats::TaskType::Root(<span class="self">self</span>.id),
             TaskType::Once(<span class="kw">_</span>) =&gt; stats::TaskType::Once(<span class="self">self</span>.id),
-            TaskType::Native(f, <span class="kw">_</span>) =&gt; stats::TaskType::Native(<span class="kw-2">*</span>f),
-            TaskType::ResolveNative(f) =&gt; stats::TaskType::ResolveNative(<span class="kw-2">*</span>f),
-            TaskType::ResolveTrait(t, n) =&gt; stats::TaskType::ResolveTrait(<span class="kw-2">*</span>t, n.to_string()),
+            TaskType::Persistent(ty) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>ty {
+                PersistentTaskType::Native(f, <span class="kw">_</span>) =&gt; stats::TaskType::Native(<span class="kw-2">*</span>f),
+                PersistentTaskType::ResolveNative(f, <span class="kw">_</span>) =&gt; stats::TaskType::ResolveNative(<span class="kw-2">*</span>f),
+                PersistentTaskType::ResolveTrait(t, n, <span class="kw">_</span>) =&gt; {
+                    stats::TaskType::ResolveTrait(<span class="kw-2">*</span>t, n.to_string())
+                }
+            },
         }
     }
 
@@ -2893,10 +2879,16 @@
                 }
             }
         }
-        {
-            <span class="kw">for </span>input <span class="kw">in </span><span class="self">self</span>.inputs.iter() {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(task) = input.get_task_id() {
-                    refs.push((stats::ReferenceType::Input, task));
+        <span class="kw">if let </span>TaskType::Persistent(ty) = <span class="kw-2">&amp;</span><span class="self">self</span>.ty {
+            <span class="kw">match </span><span class="kw-2">&amp;**</span>ty {
+                PersistentTaskType::Native(<span class="kw">_</span>, inputs)
+                | PersistentTaskType::ResolveNative(<span class="kw">_</span>, inputs)
+                | PersistentTaskType::ResolveTrait(<span class="kw">_</span>, <span class="kw">_</span>, inputs) =&gt; {
+                    <span class="kw">for </span>input <span class="kw">in </span>inputs.iter() {
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(task) = input.get_task_id() {
+                            refs.push((stats::ReferenceType::Input, task));
+                        }
+                    }
                 }
             }
         }
