@@ -2,7 +2,9 @@
 
 ## Summary
 
-Add support for tree shaking in Turbopack.
+We’d like to get some preliminary form of DCE/tree shaking in Turbopack for the
+purpose of SSR/SSG HMR. This RFC also details a more long term vision for tree
+shaking in Turbopack.
 
 ## Motivation
 
