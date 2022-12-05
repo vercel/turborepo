@@ -1,11 +1,8 @@
 mod counter;
 
-use std::{
-    alloc::{GlobalAlloc, Layout},
-    sync::atomic::Ordering,
-};
+use std::alloc::{GlobalAlloc, Layout};
 
-use self::counter::{add, remove, thread_stop, ALLOCATED};
+use self::counter::{add, flush, get, remove};
 
 /// Turbo's preferred global allocator. This is a new type instead of a type
 /// alias because you can't use type aliases to instantiate unit types (E0423).
@@ -13,11 +10,11 @@ pub struct TurboMalloc;
 
 impl TurboMalloc {
     pub fn memory_usage() -> usize {
-        ALLOCATED.load(Ordering::Relaxed)
+        get()
     }
 
     pub fn thread_stop() {
-        thread_stop();
+        flush();
     }
 }
 
