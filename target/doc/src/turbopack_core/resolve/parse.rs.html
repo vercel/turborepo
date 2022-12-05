@@ -267,12 +267,30 @@
 <span id="267">267</span>
 <span id="268">268</span>
 <span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>regex::Regex;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
 
-<span class="kw">use </span><span class="kw">super</span>::pattern::Pattern;
+<span class="kw">use </span><span class="kw">super</span>::pattern::{Pattern, QueryMapVc};
 
 <span class="attr">#[turbo_tasks::value]
 #[derive(Hash, Clone, Debug)]
@@ -288,6 +306,7 @@
     Module {
         module: String,
         path: Pattern,
+        query: QueryMapVc,
     },
     ServerRelative {
         path: Pattern,
@@ -326,6 +345,7 @@
             Request::Module {
                 module,
                 path: Pattern::Constant(path),
+                query: <span class="kw">_</span>,
             } =&gt; <span class="macro">format!</span>(<span class="string">&quot;{module}{path}&quot;</span>),
             Request::ServerRelative {
                 path: Pattern::Constant(path),
@@ -370,7 +390,7 @@
                             Regex::new(<span class="string">r&quot;^([A-Za-z]:\\|\\\\)&quot;</span>).unwrap();
                         <span class="kw">static </span><span class="kw-2">ref </span>URI_PATH: Regex = Regex::new(<span class="string">r&quot;^([^/\\]+:)(.+)&quot;</span>).unwrap();
                         <span class="kw">static </span><span class="kw-2">ref </span>MODULE_PATH: Regex =
-                            Regex::new(<span class="string">r&quot;^((?:@[^/]+/)?[^/]+)(.*)&quot;</span>).unwrap();
+                            Regex::new(<span class="string">r&quot;^((?:@[^/]+/)?[^/]+)([^?]*)(.*)&quot;</span>).unwrap();
                     }
                     <span class="kw">if </span>WINDOWS_PATH.is_match(r) {
                         <span class="kw">return </span>Request::Windows { path: request };
@@ -385,10 +405,15 @@
                         }
                     }
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(caps) = MODULE_PATH.captures(r) {
-                        <span class="kw">if let </span>(<span class="prelude-val">Some</span>(module), <span class="prelude-val">Some</span>(path)) = (caps.get(<span class="number">1</span>), caps.get(<span class="number">2</span>)) {
+                        <span class="kw">if let </span>(<span class="prelude-val">Some</span>(module), <span class="prelude-val">Some</span>(path), query) =
+                            (caps.get(<span class="number">1</span>), caps.get(<span class="number">2</span>), caps.get(<span class="number">3</span>))
+                        {
                             <span class="kw">return </span>Request::Module {
                                 module: module.as_str().to_string(),
                                 path: path.as_str().to_string().into(),
+                                query: QueryMapVc::cell(query.map(|q| {
+                                    IndexMap::from_iter(qstring::QString::from(q.as_str()))
+                                })),
                             };
                         }
                     }
@@ -406,7 +431,11 @@
                         Request::Relative { path, .. } =&gt; {
                             path.extend(iter);
                         }
-                        Request::Module { module: <span class="kw">_</span>, path } =&gt; {
+                        Request::Module {
+                            module: <span class="kw">_</span>,
+                            path,
+                            query: <span class="kw">_</span>,
+                        } =&gt; {
                             path.extend(iter);
                         }
                         Request::ServerRelative { path } =&gt; {
@@ -474,10 +503,11 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>module(module: String, path: Value&lt;Pattern&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>module(module: String, path: Value&lt;Pattern&gt;, query: QueryMapVc) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(Request::Module {
             module,
             path: path.into_value(),
+            query,
         })
     }
 }
@@ -507,7 +537,11 @@
                     <span class="macro">format!</span>(<span class="string">&quot;relative {path}&quot;</span>)
                 }
             }
-            Request::Module { module, path } =&gt; {
+            Request::Module {
+                module,
+                path,
+                query: <span class="kw">_</span>,
+            } =&gt; {
                 <span class="kw">if </span>path.could_match_others(<span class="string">&quot;&quot;</span>) {
                     <span class="macro">format!</span>(<span class="string">&quot;module \&quot;{module}\&quot; with subpath {path}&quot;</span>)
                 } <span class="kw">else </span>{

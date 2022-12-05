@@ -562,6 +562,11 @@
 <span id="562">562</span>
 <span id="563">563</span>
 <span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(trivial_bounds)]
@@ -1085,7 +1090,12 @@
     request: RequestVc,
     origin_path: FileSystemPathVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="kw">if let </span>Request::Module { module, path } = <span class="kw-2">&amp;*</span>request.<span class="kw">await</span><span class="question-mark">? </span>{
+    <span class="kw">if let </span>Request::Module {
+        module,
+        path,
+        query: <span class="kw">_</span>,
+    } = <span class="kw-2">&amp;*</span>request.<span class="kw">await</span><span class="question-mark">?
+    </span>{
         <span class="comment">// Warn if the package is known not to be supported by Turbopack at the moment.
         </span><span class="kw">if </span>UNSUPPORTED_PACKAGES.contains(module) {
             UnsupportedModuleIssue {

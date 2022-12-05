@@ -258,6 +258,13 @@
 <span id="258">258</span>
 <span id="259">259</span>
 <span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
 </pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::{ValueToString, ValueToStringVc};
 <span class="kw">pub mod </span>resolve;
 
@@ -268,7 +275,10 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResult, ResolveResultVc},
+    resolve::{
+        origin::ResolveOriginVc, parse::RequestVc, pattern::QueryMapVc, ResolveResult,
+        ResolveResultVc,
+    },
 };
 
 <span class="kw">use </span><span class="self">self</span>::resolve::{read_from_tsconfigs, read_tsconfigs, type_resolve};
@@ -374,7 +384,11 @@
                 references.push(
                     TsConfigTypesReferenceVc::new(
                         <span class="self">self</span>.origin,
-                        RequestVc::module(name, Value::new(<span class="string">&quot;&quot;</span>.to_string().into())),
+                        RequestVc::module(
+                            name,
+                            Value::new(<span class="string">&quot;&quot;</span>.to_string().into()),
+                            QueryMapVc::none(),
+                        ),
                     )
                     .into(),
                 );

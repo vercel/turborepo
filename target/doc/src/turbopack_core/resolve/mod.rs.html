@@ -1154,6 +1154,10 @@
 <span id="1154">1154</span>
 <span id="1155">1155</span>
 <span id="1156">1156</span>
+<span id="1157">1157</span>
+<span id="1158">1158</span>
+<span id="1159">1159</span>
+<span id="1160">1160</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -1183,6 +1187,7 @@
     },
     origin::ResolveOriginVc,
     parse::{Request, RequestVc},
+    pattern::QueryMapVc,
 };
 <span class="kw">use crate</span>::{
     asset::{AssetVc, AssetsVc},
@@ -1805,9 +1810,11 @@
                 options,
             )
         }
-        Request::Module { module, path } =&gt; {
-            resolve_module_request(context, options, options_value, module, path).<span class="kw">await</span><span class="question-mark">?
-        </span>}
+        Request::Module {
+            module,
+            path,
+            query,
+        } =&gt; resolve_module_request(context, options, options_value, module, path, query).<span class="kw">await</span><span class="question-mark">?</span>,
         Request::ServerRelative { path } =&gt; {
             <span class="kw">let </span><span class="kw-2">mut </span>new_pat = path.clone();
             new_pat.push_front(<span class="string">&quot;.&quot;</span>.to_string().into());
@@ -1959,6 +1966,7 @@
     options_value: <span class="kw-2">&amp;</span>ResolveOptions,
     module: <span class="kw-2">&amp;</span>str,
     path: <span class="kw-2">&amp;</span>Pattern,
+    <span class="kw">_</span>: <span class="kw-2">&amp;</span>QueryMapVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
     <span class="kw">let </span>result = find_package(
         context,

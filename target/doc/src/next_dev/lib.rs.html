@@ -513,6 +513,9 @@
 <span id="513">513</span>
 <span id="514">514</span>
 <span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -544,7 +547,10 @@
 <span class="kw">use </span>turbo_tasks_fs::{DiskFileSystemVc, FileSystemVc};
 <span class="kw">use </span>turbo_tasks_memory::MemoryBackend;
 <span class="kw">use </span>turbopack_cli_utils::issue::{ConsoleUi, ConsoleUiVc, LogOptions};
-<span class="kw">use </span>turbopack_core::{issue::IssueSeverity, resolve::parse::RequestVc};
+<span class="kw">use </span>turbopack_core::{
+    issue::IssueSeverity,
+    resolve::{parse::RequestVc, pattern::QueryMapVc},
+};
 <span class="kw">use </span>turbopack_dev_server::{
     fs::DevServerFileSystemVc,
     introspect::IntrospectionSource,
@@ -806,7 +812,7 @@
         .map(|r| <span class="kw">match </span>r {
             EntryRequest::Relative(p) =&gt; RequestVc::relative(Value::new(p.clone().into()), <span class="bool-val">false</span>),
             EntryRequest::Module(m, p) =&gt; {
-                RequestVc::module(m.clone(), Value::new(p.clone().into()))
+                RequestVc::module(m.clone(), Value::new(p.clone().into()), QueryMapVc::none())
             }
         })
         .collect();

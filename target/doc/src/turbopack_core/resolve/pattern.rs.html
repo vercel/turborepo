@@ -1015,9 +1015,22 @@
 <span id="1015">1015</span>
 <span id="1016">1016</span>
 <span id="1017">1017</span>
+<span id="1018">1018</span>
+<span id="1019">1019</span>
+<span id="1020">1020</span>
+<span id="1021">1021</span>
+<span id="1022">1022</span>
+<span id="1023">1023</span>
+<span id="1024">1024</span>
+<span id="1025">1025</span>
+<span id="1026">1026</span>
+<span id="1027">1027</span>
+<span id="1028">1028</span>
+<span id="1029">1029</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashSet, fmt::Display, mem::take};
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>regex::Regex;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1027,6 +1040,17 @@
 <span class="kw">use </span>turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathVc, LinkContent, LinkType,
 };
+
+<span class="attr">#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>QueryMap(<span class="attr">#[turbo_tasks(trace_ignore)] </span><span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, String&gt;&gt;);
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>QueryMapVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>none() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::cell(<span class="prelude-val">None</span>)
+    }
+}
 
 <span class="attr">#[turbo_tasks::value(shared, serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
 #[derive(PartialOrd, Ord, Hash, Clone, Debug)]

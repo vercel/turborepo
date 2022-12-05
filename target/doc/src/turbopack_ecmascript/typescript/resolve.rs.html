@@ -358,6 +358,13 @@
 <span id="358">358</span>
 <span id="359">359</span>
 <span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -376,6 +383,7 @@
         },
         origin::ResolveOriginVc,
         parse::{Request, RequestVc},
+        pattern::QueryMapVc,
         resolve, AliasPattern, ResolveResult, ResolveResultVc,
     },
     source_asset::SourceAssetVc,
@@ -595,7 +603,12 @@
     <span class="kw">let </span>context_path = origin.origin_path().parent();
     <span class="kw">let </span>options = origin.resolve_options();
     <span class="kw">let </span>options = apply_typescript_types_options(options);
-    <span class="kw">let </span>types_request = <span class="kw">if let </span>Request::Module { module: m, path: p } = <span class="kw-2">&amp;*</span>request.<span class="kw">await</span><span class="question-mark">? </span>{
+    <span class="kw">let </span>types_request = <span class="kw">if let </span>Request::Module {
+        module: m,
+        path: p,
+        query: <span class="kw">_</span>,
+    } = <span class="kw-2">&amp;*</span>request.<span class="kw">await</span><span class="question-mark">?
+    </span>{
         <span class="kw">let </span>m = <span class="kw">if let </span><span class="prelude-val">Some</span>(stripped) = m.strip_prefix(<span class="string">&#39;@&#39;</span>) {
             stripped.replace(<span class="string">&#39;/&#39;</span>, <span class="string">&quot;__&quot;</span>)
         } <span class="kw">else </span>{
@@ -604,6 +617,7 @@
         <span class="prelude-val">Some</span>(RequestVc::module(
             <span class="macro">format!</span>(<span class="string">&quot;@types/{m}&quot;</span>),
             Value::new(p.clone()),
+            QueryMapVc::none(),
         ))
     } <span class="kw">else </span>{
         <span class="prelude-val">None
