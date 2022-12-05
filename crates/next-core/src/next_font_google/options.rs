@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use indexmap::{indexset, IndexMap, IndexSet};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use turbo_tasks::trace::TraceRawVcs;
 
 use super::request::{NextFontRequest, OneOrManyStrings};
 
@@ -8,7 +9,7 @@ const ALLOWED_DISPLAY_VALUES: &[&str] = &["auto", "block", "swap", "fallback", "
 
 pub type FontData = IndexMap<String, FontDataEntry>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 pub struct NextFontGoogleOptions {
     pub font_family: String,
     pub weights: FontWeights,
@@ -22,7 +23,7 @@ pub struct NextFontGoogleOptions {
     pub subsets: Option<Vec<String>>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 pub enum FontWeights {
     Variable,
     Fixed(IndexSet<String>),

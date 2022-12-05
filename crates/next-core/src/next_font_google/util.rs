@@ -7,7 +7,6 @@ use regex::Regex;
 
 use super::options::{FontData, FontWeights};
 
-const GOOGLE_FONTS_STYLESHEET_URL: &str = "https://fonts.googleapis.com/css2";
 static SINGLE_LINE_BLOCK_COMMENT_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"/\* (.+?) \*/").unwrap());
 static GOOGLE_FONT_FILE_URL_RE: Lazy<Regex> =
@@ -112,6 +111,7 @@ pub(crate) fn get_font_axes(
 
 // Derived from https://github.com/vercel/next.js/blob/9e098da0915a2a4581bebe2270953a1216be1ba4/packages/font/src/google/utils.ts#L128
 pub(crate) fn get_stylesheet_url(
+    root_url: &str,
     font_family: &str,
     axes: &FontAxes,
     display: &str,
@@ -208,7 +208,7 @@ pub(crate) fn get_stylesheet_url(
 
     Ok(format!(
         "{}?family={}:{}@{}&display={}",
-        GOOGLE_FONTS_STYLESHEET_URL,
+        root_url,
         font_family.replace(' ', "+"),
         variant_keys_str,
         variant_values_str,
@@ -290,6 +290,7 @@ mod tests {
     use crate::next_font_google::{
         options::{FontData, FontWeights},
         util::{get_stylesheet_url, ExtractedFonts, FontAxes, FontItal},
+        GOOGLE_FONTS_STYLESHEET_URL,
     };
 
     #[test]
@@ -440,6 +441,7 @@ mod tests {
     fn test_stylesheet_url_no_axes() -> Result<()> {
         assert_eq!(
             get_stylesheet_url(
+                GOOGLE_FONTS_STYLESHEET_URL,
                 "Roboto Mono",
                 &FontAxes {
                     wght: indexset! {"500".to_owned()},
@@ -458,6 +460,7 @@ mod tests {
     fn test_stylesheet_url_sorts_axes() -> Result<()> {
         assert_eq!(
             get_stylesheet_url(
+                GOOGLE_FONTS_STYLESHEET_URL,
                 "Roboto Serif",
                 &FontAxes {
                     wght: indexset! {"500".to_owned()},
@@ -480,6 +483,7 @@ mod tests {
     fn test_stylesheet_url_encodes_all_weight_ital_combinations() -> Result<()> {
         assert_eq!(
             get_stylesheet_url(
+                GOOGLE_FONTS_STYLESHEET_URL,
                 "Roboto Serif",
                 &FontAxes {
                     wght: indexset! {"500".to_owned(), "300".to_owned()},
@@ -503,6 +507,7 @@ mod tests {
     fn test_variable_font_without_wgth_axis() -> Result<()> {
         assert_eq!(
             get_stylesheet_url(
+                GOOGLE_FONTS_STYLESHEET_URL,
                 "Nabla",
                 &FontAxes {
                     wght: indexset! {},
