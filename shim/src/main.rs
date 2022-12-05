@@ -456,15 +456,14 @@ fn main() -> Result<()> {
     );
 
     // check for updates
-    check_for_updates(
+    let _ = check_for_updates(
         "turbo",
         "https://github.com/vercel/turbo",
         Some(&footer),
         get_version(),
         None,
         None,
-    )
-    .ok();
+    );
 
     let clap_args = Args::parse();
     // --help doesn't work with ignore_errors in clap.

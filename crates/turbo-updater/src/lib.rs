@@ -26,7 +26,10 @@ struct NPMRegistry;
 impl Registry for NPMRegistry {
     const NAME: &'static str = "npm_registry";
     fn get_latest_version(pkg: &Package, _timeout: Duration) -> UpdateResult<Option<String>> {
-        let url = format!("https://registry.npmjs.org/{}/latest", pkg);
+        let url = format!(
+            "https://turbo.build/api/binaries/version?name={name}",
+            name = pkg
+        );
         let resp = ureq::get(&url).timeout(_timeout).call()?;
         let result = resp.into_json::<NpmVersionData>().unwrap();
         Ok(Some(result.version))
@@ -46,7 +49,7 @@ pub fn check_for_updates(
     let informer = update_informer::new(NPMRegistry, package_name, current_version)
         .timeout(timeout)
         .interval(interval);
-    if let Some(version) = informer.check_version().ok().flatten() {
+    if let Ok(Some(version)) = informer.check_version() {
         let latest_version = version.to_string();
         let msg = format!(
             "
