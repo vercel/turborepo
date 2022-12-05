@@ -1,4 +1,4 @@
-import Image from "next/future/image";
+import Image from "next/image";
 import type { ReactNode } from "react";
 
 export function FeatureBox({
