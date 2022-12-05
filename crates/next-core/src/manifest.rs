@@ -5,13 +5,14 @@ use turbo_tasks::primitives::StringsVc;
 use turbo_tasks_fs::File;
 use turbopack_core::asset::AssetContentVc;
 use turbopack_dev_server::source::{
-    combined::CombinedContentSourceVc, conditional::ConditionalContentSourceVc, ContentSource,
-    ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
 };
 use turbopack_node::{
     node_api_source::NodeApiContentSourceVc, node_rendered_source::NodeRenderContentSourceVc,
 };
 
+/// A content source which creates the next.js `_devPagesManifest.json` and
+/// `_devMiddlewareManifest.json` which are used for client side navigation.
 #[turbo_tasks::value(shared)]
 pub struct DevManifestContentSource {
     pub page_roots: Vec<ContentSourceVc>,
@@ -26,23 +27,7 @@ impl DevManifestContentSourceVc {
         let mut routes = IndexSet::new();
 
         while let Some(content_source) = queue.pop() {
-            if let Some(combined_source) =
-                CombinedContentSourceVc::resolve_from(content_source).await?
-            {
-                queue.extend(combined_source.await?.sources.iter().copied());
-
-                continue;
-            }
-
-            if let Some(conditional_source) =
-                ConditionalContentSourceVc::resolve_from(content_source).await?
-            {
-                let conditional_source = &*conditional_source.await?;
-                queue.push(conditional_source.activator);
-                queue.push(conditional_source.action);
-
-                continue;
-            }
+            queue.extend(content_source.get_children().await?.iter());
 
             if let Some(api_source) = NodeApiContentSourceVc::resolve_from(content_source).await? {
                 routes.insert(format!("/{}", api_source.get_pathname().await?));
@@ -57,8 +42,6 @@ impl DevManifestContentSourceVc {
 
                 continue;
             }
-
-            // ignore anything else
         }
 
         routes.sort();
@@ -75,26 +58,22 @@ impl ContentSource for DevManifestContentSource {
         path: &str,
         _data: turbo_tasks::Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
-        let requested_manifest = match path.rsplit_once('/') {
-            Some(("_next/static/development", file))
-                if file == "_devPagesManifest.json" || file == "_devMiddlewareManifest.json" =>
-            {
-                file
+        let manifest_content = match path {
+            "_next/static/development/_devPagesManifest.json" => {
+                let pages = &*self_vc.find_routes().await?;
+
+                serde_json::to_string(&serde_json::json!({
+                    "pages": pages,
+                }))?
+            }
+            "_next/static/development/_devMiddlewareManifest.json" => {
+                // empty middleware manifest
+                "[]".to_string()
             }
             _ => return Ok(ContentSourceResultVc::not_found()),
         };
 
-        let content = if requested_manifest == "_devPagesManifest.json" {
-            let pages = &*self_vc.find_routes().await?;
-
-            serde_json::to_string(&serde_json::json!({
-                "pages": pages,
-            }))?
-        } else {
-            // empty middleware manifest
-            "[]".to_string()
-        };
-        let file = File::from(content).with_content_type(APPLICATION_JSON);
+        let file = File::from(manifest_content).with_content_type(APPLICATION_JSON);
 
         Ok(ContentSourceResultVc::exact(
             ContentSourceContent::Static(AssetContentVc::from(file).into()).cell(),
