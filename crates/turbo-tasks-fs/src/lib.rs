@@ -13,19 +13,15 @@ mod read_glob;
 mod retry;
 pub mod rope;
 pub mod util;
+mod watcher;
 
 use std::{
-    collections::{HashMap, HashSet},
     fmt::{self, Debug, Display, Formatter},
     fs::FileType,
     io::{self, ErrorKind},
     mem::take,
     path::{Path, PathBuf, MAIN_SEPARATOR},
-    sync::{
-        mpsc::{channel, RecvError, TryRecvError},
-        Arc, Mutex,
-    },
-    time::Duration,
+    sync::{Arc, Mutex},
 };
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -35,7 +31,7 @@ use glob::GlobVc;
 use invalidator_map::InvalidatorMap;
 use jsonc_parser::{parse_to_serde_value, ParseOptions};
 use mime::Mime;
-use notify::{watcher, DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::RecommendedWatcher;
 use read_glob::read_glob;
 pub use read_glob::{ReadGlobResult, ReadGlobResultVc};
 use serde::{Deserialize, Serialize};
@@ -43,9 +39,8 @@ use serde_json::Value;
 use tokio::{fs, io::AsyncReadExt};
 use turbo_tasks::{
     primitives::{BoolVc, StringReadRef, StringVc},
-    spawn_thread,
     trace::TraceRawVcs,
-    CompletionVc, Invalidator, ValueToString, ValueToStringVc,
+    CompletionVc, ValueToString, ValueToStringVc,
 };
 use turbo_tasks_hash::hash_xxh3_hash64;
 use util::{join_path, normalize_path, sys_to_unix, unix_to_sys};
@@ -55,6 +50,7 @@ use crate::util::is_windows_raw_path;
 use crate::{
     retry::{retry_blocking, retry_future},
     rope::{Rope, RopeReadRef, RopeReader},
+    watcher::start_watching,
 };
 
 #[turbo_tasks::value_trait]
@@ -113,140 +109,12 @@ impl DiskFileSystem {
         }
         let invalidator_map = self.invalidator_map.clone();
         let dir_invalidator_map = self.dir_invalidator_map.clone();
-        let root = self.root.clone();
-        // Create a channel to receive the events.
-        let (tx, rx) = channel();
-        // Create a watcher object, delivering debounced events.
-        // The notification back-end is selected based on the platform.
-        let mut watcher = watcher(tx, Duration::from_millis(1))?;
-        // Add a path to be watched. All files and directories at that path and
-        // below will be monitored for changes.
-        watcher.watch(&root, RecursiveMode::Recursive)?;
+        let root = PathBuf::from(&self.root);
 
-        // We need to invalidate all reads that happened before watching
-        // Best is to start_watching before starting to read
-        for (_, invalidators) in take(&mut *invalidator_map.lock().unwrap()).into_iter() {
-            invalidators.into_iter().for_each(|i| i.invalidate());
-        }
-        for (_, invalidators) in take(&mut *dir_invalidator_map.lock().unwrap()).into_iter() {
-            invalidators.into_iter().for_each(|i| i.invalidate());
-        }
+        let watcher = start_watching(root, invalidator_map, dir_invalidator_map)?;
 
         watcher_guard.replace(watcher);
 
-        spawn_thread(move || {
-            let mut batched_invalidate_path = HashSet::new();
-            let mut batched_invalidate_path_dir = HashSet::new();
-            let mut batched_invalidate_path_and_children = HashSet::new();
-            let mut batched_invalidate_path_and_children_dir = HashSet::new();
-
-            'outer: loop {
-                let mut event = rx.recv().map_err(|e| match e {
-                    RecvError => TryRecvError::Disconnected,
-                });
-                loop {
-                    match event {
-                        Ok(DebouncedEvent::Write(path)) => {
-                            batched_invalidate_path.insert(path);
-                        }
-                        Ok(DebouncedEvent::Create(path)) | Ok(DebouncedEvent::Remove(path)) => {
-                            batched_invalidate_path_and_children.insert(path.clone());
-                            batched_invalidate_path_and_children_dir.insert(path.clone());
-                            if let Some(parent) = path.parent() {
-                                batched_invalidate_path_dir.insert(PathBuf::from(parent));
-                            }
-                        }
-                        Ok(DebouncedEvent::Rename(source, destination)) => {
-                            batched_invalidate_path_and_children.insert(source.clone());
-                            if let Some(parent) = source.parent() {
-                                batched_invalidate_path_dir.insert(PathBuf::from(parent));
-                            }
-                            batched_invalidate_path_and_children.insert(destination.clone());
-                            if let Some(parent) = destination.parent() {
-                                batched_invalidate_path_dir.insert(PathBuf::from(parent));
-                            }
-                        }
-                        Ok(DebouncedEvent::Rescan) => {
-                            batched_invalidate_path_and_children.insert(PathBuf::from(&root));
-                            batched_invalidate_path_and_children_dir.insert(PathBuf::from(&root));
-                        }
-                        Ok(DebouncedEvent::Error(err, path)) => {
-                            println!("watch error ({:?}): {:?} ", path, err);
-                            match path {
-                                Some(path) => {
-                                    batched_invalidate_path_and_children.insert(path.clone());
-                                    batched_invalidate_path_and_children_dir.insert(path);
-                                }
-                                None => {
-                                    batched_invalidate_path_and_children
-                                        .insert(PathBuf::from(&root));
-                                    batched_invalidate_path_and_children_dir
-                                        .insert(PathBuf::from(&root));
-                                }
-                            }
-                        }
-                        Ok(DebouncedEvent::Chmod(_))
-                        | Ok(DebouncedEvent::NoticeRemove(_))
-                        | Ok(DebouncedEvent::NoticeWrite(_)) => {
-                            // ignored
-                        }
-                        Err(TryRecvError::Disconnected) => {
-                            // Sender has been disconnected
-                            // which means DiskFileSystem has been dropped
-                            // exit thread
-                            break 'outer;
-                        }
-                        Err(TryRecvError::Empty) => {
-                            break;
-                        }
-                    }
-                    event = rx.try_recv();
-                }
-                fn invalidate_path(
-                    invalidator_map: &mut HashMap<String, HashSet<Invalidator>>,
-                    paths: impl Iterator<Item = PathBuf>,
-                ) {
-                    for path in paths {
-                        let key = path_to_key(path);
-                        if let Some(invalidators) = invalidator_map.remove(&key) {
-                            invalidators.into_iter().for_each(|i| i.invalidate());
-                        }
-                    }
-                }
-                fn invalidate_path_and_children_execute(
-                    invalidator_map: &mut HashMap<String, HashSet<Invalidator>>,
-                    paths: &mut HashSet<PathBuf>,
-                ) {
-                    for (_, invalidators) in invalidator_map.drain_filter(|key, _| {
-                        paths
-                            .iter()
-                            .any(|path_key| key.starts_with(&path_to_key(path_key)))
-                    }) {
-                        invalidators.into_iter().for_each(|i| i.invalidate());
-                    }
-                    paths.clear()
-                }
-                {
-                    let mut invalidator_map = invalidator_map.lock().unwrap();
-                    invalidate_path(&mut invalidator_map, batched_invalidate_path.drain());
-                    invalidate_path_and_children_execute(
-                        &mut invalidator_map,
-                        &mut batched_invalidate_path_and_children,
-                    );
-                }
-                {
-                    let mut dir_invalidator_map = dir_invalidator_map.lock().unwrap();
-                    invalidate_path(
-                        &mut dir_invalidator_map,
-                        batched_invalidate_path_dir.drain(),
-                    );
-                    invalidate_path_and_children_execute(
-                        &mut dir_invalidator_map,
-                        &mut batched_invalidate_path_and_children_dir,
-                    );
-                }
-            }
-        });
         Ok(())
     }
 
