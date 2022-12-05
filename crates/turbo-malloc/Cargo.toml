@@ -16,5 +16,5 @@ mimalloc = { version = "0.1.32", features = [], optional = true }
 mimalloc = { version = "0.1.32", features = ["local_dynamic_tls"], optional = true }
 
 [features]
-default = ["custom_allocator"]
 custom_allocator = ["dep:mimalloc"]
+default = ["custom_allocator"]
