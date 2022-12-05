@@ -4258,6 +4258,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "priority-queue"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7685ca4cc0b3ad748c22ce6803e23b55b9206ef7715b965ebeaf41639238fdc"
+dependencies = [
+ "autocfg",
+ "indexmap",
+]
+
+[[package]]
 name = "proc-macro-crate"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7255,6 +7265,7 @@ dependencies = [
  "num_cpus",
  "once_cell",
  "parking_lot",
+ "priority-queue",
  "rustc-hash",
  "serde",
  "tokio",
