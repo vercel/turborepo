@@ -37,6 +37,7 @@ use turbopack_node::{
 
 use crate::{
     embed_js::{next_js_file, wrap_with_next_js_fs},
+    env::env_for_js,
     fallback::get_fallback_page,
     next_client::{
         context::{
@@ -50,7 +51,7 @@ use crate::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
     },
-    util::regular_expression_for_path,
+    util::{pathname_for_path, regular_expression_for_path},
 };
 
 /// Create a content source serving the `pages` or `src/pages` directory as
@@ -110,8 +111,8 @@ pub async fn create_server_rendered_source(
     )
     .into();
 
-    let server_runtime_entries =
-        vec![ProcessEnvAssetVc::new(project_path, env).as_ecmascript_chunk_placeable()];
+    let server_runtime_entries = vec![ProcessEnvAssetVc::new(project_path, env_for_js(env, false))
+        .as_ecmascript_chunk_placeable()];
 
     let fallback_page = get_fallback_page(project_path, server_root, env, browserslist_query);
 
@@ -165,11 +166,14 @@ async fn create_server_rendered_source_for_file(
     )
     .build();
 
+    let pathname = pathname_for_path(server_root, server_path, true);
+    let path_regex = regular_expression_for_path(server_root, server_path, true);
+
     Ok(if *is_api_path.await? {
         create_node_api_source(
             specificity,
             server_root,
-            regular_expression_for_path(server_root, server_path, true),
+            path_regex,
             SsrEntry {
                 context,
                 entry_asset,
@@ -185,7 +189,8 @@ async fn create_server_rendered_source_for_file(
         create_node_rendered_source(
             specificity,
             server_root,
-            regular_expression_for_path(server_root, server_path, true),
+            pathname,
+            path_regex,
             SsrEntry {
                 context,
                 entry_asset,
