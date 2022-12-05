@@ -304,9 +304,7 @@ fn main() -> Result<()> {
             .context("--cwd is not valid Unicode")?
             .to_string(),
     );
-    if clap_args.test_run {
-        println!("{:#?}", clap_args);
-    }
+
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
     if clap_args.command.is_none() {
@@ -584,7 +582,7 @@ mod test {
             Args {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
-                    graph: Some(None),
+                    graph: Some("".to_string()),
                     ..get_default_run_args()
                 })),
                 ..Args::default()
@@ -596,7 +594,7 @@ mod test {
             Args {
                 command: Some(Command::Run(RunArgs {
                     tasks: vec!["build".to_string()],
-                    graph: Some(Some("out.html".to_string())),
+                    graph: Some("out.html".to_string()),
                     ..get_default_run_args()
                 })),
                 ..Args::default()

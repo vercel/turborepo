@@ -51,7 +51,8 @@ type RunPayload struct {
 	//   nil -> no flag passed
 	//   ""  -> flag passed but no file name attached: print to stdout
 	//   "foo" -> flag passed and file name attached: emit to file
-	// The mirror for this in Rust is `Option<Option<String>>`
+	// The mirror for this in Rust is `Option<String>` with the default value
+	// for the flag being `Some("")`.
 	Graph               *string  `json:"graph"`
 	Ignore              []string `json:"ignore"`
 	IncludeDependencies bool     `json:"include_dependencies"`

@@ -225,8 +225,8 @@ pub struct RunArgs {
     /// Generate a graph of the task execution and output to a file when a
     /// filename is specified (.svg, .png, .jpg, .pdf, .json,
     /// .html). Outputs dot graph to stdout when if no filename is provided
-    #[clap(long, num_args = 0..=1)]
-    pub graph: Option<Option<String>>,
+    #[clap(long, num_args = 0..=1, default_missing_value = "")]
+    pub graph: Option<String>,
     /// Files to ignore when calculating changed files (i.e. --since).
     /// Supports globs.
     #[clap(long)]
