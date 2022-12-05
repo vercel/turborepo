@@ -12,7 +12,7 @@ Turborepo's [task cache](/repo/docs/core-concepts/caching) can save a lot of tim
 
 But there's an issue - the **cache is local to your machine**. When you're working with a CI, this can result in a lot of duplicated work:
 
-![](../../../../public/images/docs/local-caching.png)
+![](/images/docs/local-caching.png)
 
 Since Turborepo only caches to the local filesystem by default, the same task (`turbo run build`) must be **re-executed on each machine** (by you, by your teammates, by your CI, by your PaaS, etc.) even when all of the task inputs are identical — which **wastes time and resources**.
 
@@ -20,7 +20,7 @@ Since Turborepo only caches to the local filesystem by default, the same task (`
 
 What if you could share a single Turborepo cache across your entire team (and even your CI)?
 
-![](../../../../public/images/docs/remote-caching.png)
+![](/images/docs/remote-caching.png)
 
 By working with providers like [Vercel](#vercel), Turborepo can securely communicate with a remote cache - a cloud server that stores the results of your tasks.
 
