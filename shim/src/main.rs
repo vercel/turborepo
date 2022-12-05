@@ -6,8 +6,7 @@ use std::{
     env,
     env::current_exe,
     ffi::CString,
-    fs, io,
-    mem::take,
+    fs, io, mem,
     path::{Path, PathBuf},
     process,
     process::Stdio,
@@ -76,14 +75,14 @@ impl TurboState {
                 commands::bin::run()?;
                 Ok(0)
             }
+            Some(Command::Completion { .. }) => {
+                unreachable!("shell completion should be handled by clap_complete")
+            }
             Some(Command::Link { .. })
             | Some(Command::Login { .. })
             | Some(Command::Logout { .. })
             | Some(Command::Unlink { .. })
-            | Some(Command::Completion { .. }) => {
-                unreachable!()
-            }
-            Some(Command::Daemon { .. })
+            | Some(Command::Daemon { .. })
             | Some(Command::Run(_))
             | Some(Command::Prune { .. })
             | None => self.native_run(),
@@ -311,7 +310,7 @@ fn main() -> Result<()> {
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
     if clap_args.command.is_none() {
-        if let Some(run_args) = take(&mut clap_args.run_args) {
+        if let Some(run_args) = mem::take(&mut clap_args.run_args) {
             clap_args.command = Some(Command::Run(run_args));
         } else {
             return Err(anyhow!("No command specified"));
@@ -329,13 +328,19 @@ fn main() -> Result<()> {
         Some(Command::Login { .. })
         | Some(Command::Link { .. })
         | Some(Command::Logout { .. })
-        | Some(Command::Unlink { .. }) => turbo_state.native_run()?,
+        | Some(Command::Unlink { .. }) => turbo_state.run_current_turbo()?,
         Some(Command::Completion { shell }) => {
             generate(shell, &mut Args::command(), "turbo", &mut io::stdout());
 
             0
         }
         _ => {
+            // When the `TURBO_BINARY_PATH` variable is set, the user is effectively saying
+            // that the `turbo` package should run a specific binary. Because
+            // this code is running, and the `TURBO_BINARY_PATH` variable is
+            // set, we can deduce that this code is in the binary that the user
+            // wishes to run. Therefore, we will not find local turbo
+            // and execute it, because that would go against the user's wishes.
             if is_turbo_binary_path_set() {
                 let repo_state = RepoState::infer(&current_dir)?;
                 turbo_state.repo_state = Some(repo_state);

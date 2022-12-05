@@ -72,7 +72,7 @@ fn build_debug_libturbo() -> String {
             .join("deps");
         // workaround to make increment build works
         for ext in ["pdb", "exe", "d", "lib"].iter() {
-            std::fs::remove_file(output_deps.join(&format!("turbo.{ext}"))).unwrap_or(());
+            std::fs::remove_file(output_deps.join(format!("turbo.{ext}"))).unwrap_or(());
         }
 
         cmd.env("CGO_ENABLED", "1")
