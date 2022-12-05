@@ -1599,6 +1599,11 @@
 <span id="1599">1599</span>
 <span id="1600">1600</span>
 <span id="1601">1601</span>
+<span id="1602">1602</span>
+<span id="1603">1603</span>
+<span id="1604">1604</span>
+<span id="1605">1605</span>
+<span id="1606">1606</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -2156,9 +2161,14 @@
             <span class="kw">match </span>state.state_type {
                 InProgress { <span class="kw-2">ref mut </span>event } =&gt; {
                     <span class="kw">let </span>event = event.take();
-                    state.state_type = Done {
-                        dependencies: take(<span class="kw-2">&amp;mut </span>dependencies),
-                    };
+                    <span class="kw">let </span><span class="kw-2">mut </span>dependencies = take(<span class="kw-2">&amp;mut </span>dependencies);
+                    <span class="comment">// This will stay here for longer, so make sure to not consume too much memory
+                    </span>dependencies.shrink_to_fit();
+                    <span class="kw">for </span>cells <span class="kw">in </span>state.cells.values_mut() {
+                        cells.shrink_to_fit();
+                    }
+                    state.cells.shrink_to_fit();
+                    state.state_type = Done { dependencies };
                     <span class="kw">for </span>scope <span class="kw">in </span>state.scopes.iter() {
                         backend.with_scope(scope, |scope| {
                             scope.decrement_unfinished_tasks(backend);

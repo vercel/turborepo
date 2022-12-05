@@ -228,6 +228,11 @@
 <span id="228">228</span>
 <span id="229">229</span>
 <span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::hash_map::RandomState,
     fmt::Debug,
@@ -304,6 +309,11 @@
     <span class="doccomment">/// see [HashSet::extend](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.extend)
     </span><span class="kw">pub fn </span>extend(<span class="kw-2">&amp;mut </span><span class="self">self</span>, iter: <span class="kw">impl </span>IntoIterator&lt;Item = K&gt;) {
         <span class="self">self</span>.map.extend(iter.into_iter().map(|item| (item, ())))
+    }
+
+    <span class="doccomment">/// see [HashSet::shrink_to_fit](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.shrink_to_fit)
+    </span><span class="kw">pub fn </span>shrink_to_fit(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.map.shrink_to_fit();
     }
 
     <span class="doccomment">/// see [HashSet::contains](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.contains)

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["AutoMap",""],["Entry",""],["IntoIter",""],["Iter",""],["OccupiedEntry",""],["VacantEntry",""],["Values",""],["ValuesMut",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["AutoMap",""],["Entry",""],["IntoIter",""],["Iter",""],["IterMut",""],["OccupiedEntry",""],["VacantEntry",""],["Values",""],["ValuesMut",""]]};

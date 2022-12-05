@@ -597,6 +597,37 @@
 <span id="597">597</span>
 <span id="598">598</span>
 <span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
+<span id="630">630</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Borrow,
     collections::{hash_map::RandomState, HashMap},
@@ -778,6 +809,14 @@
             },
         }
     }
+
+    <span class="doccomment">/// see [HashMap::shrink_to_fit](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.shrink_to_fit)
+    </span><span class="kw">pub fn </span>shrink_to_fit(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">match </span><span class="self">self </span>{
+            AutoMap::List(list) =&gt; list.shrink_to_fit(),
+            AutoMap::Map(map) =&gt; map.shrink_to_fit(),
+        }
+    }
 }
 
 <span class="kw">impl</span>&lt;K: Eq + Hash, V, H: BuildHasher&gt; AutoMap&lt;K, V, H&gt; {
@@ -822,6 +861,13 @@
         <span class="kw">match </span><span class="self">self </span>{
             AutoMap::List(list) =&gt; Iter::List(list.iter()),
             AutoMap::Map(map) =&gt; Iter::Map(map.iter()),
+        }
+    }
+    <span class="doccomment">/// see [HashMap::iter_mut](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.iter_mut)
+    </span><span class="kw">pub fn </span>iter_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; IterMut&lt;<span class="lifetime">&#39;_</span>, K, V&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            AutoMap::List(list) =&gt; IterMut::List(list.iter_mut()),
+            AutoMap::Map(map) =&gt; IterMut::Map(map.iter_mut()),
         }
     }
 
@@ -891,6 +937,22 @@
         <span class="kw">match </span><span class="self">self </span>{
             Iter::List(iter) =&gt; iter.next().map(|(k, v)| (k, v)),
             Iter::Map(iter) =&gt; iter.next().map(|(k, v)| (k, v)),
+        }
+    }
+}
+
+<span class="kw">pub enum </span>IterMut&lt;<span class="lifetime">&#39;a</span>, K, V&gt; {
+    List(std::slice::IterMut&lt;<span class="lifetime">&#39;a</span>, (K, V)&gt;),
+    Map(std::collections::hash_map::IterMut&lt;<span class="lifetime">&#39;a</span>, K, V&gt;),
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, K, V&gt; Iterator <span class="kw">for </span>IterMut&lt;<span class="lifetime">&#39;a</span>, K, V&gt; {
+    <span class="kw">type </span>Item = (<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>K, <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>V);
+
+    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            IterMut::List(iter) =&gt; iter.next().map(|(k, v)| (<span class="kw-2">&amp;*</span>k, v)),
+            IterMut::Map(iter) =&gt; iter.next().map(|(k, v)| (k, v)),
         }
     }
 }

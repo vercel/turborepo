@@ -390,6 +390,14 @@
 <span id="390">390</span>
 <span id="391">391</span>
 <span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+<span id="398">398</span>
+<span id="399">399</span>
+<span id="400">400</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Any,
     borrow::Cow,
@@ -468,6 +476,14 @@
 }
 
 <span class="kw">impl </span>PersistentTaskType {
+    <span class="kw">pub fn </span>shrink_to_fit(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">match </span><span class="self">self </span>{
+            <span class="self">Self</span>::Native(<span class="kw">_</span>, inputs) =&gt; inputs.shrink_to_fit(),
+            <span class="self">Self</span>::ResolveNative(<span class="kw">_</span>, inputs) =&gt; inputs.shrink_to_fit(),
+            <span class="self">Self</span>::ResolveTrait(<span class="kw">_</span>, <span class="kw">_</span>, inputs) =&gt; inputs.shrink_to_fit(),
+        }
+    }
+
     <span class="kw">pub fn </span>len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="kw">match </span><span class="self">self </span>{
             PersistentTaskType::Native(<span class="kw">_</span>, v)
