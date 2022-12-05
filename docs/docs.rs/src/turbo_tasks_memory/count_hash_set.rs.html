@@ -168,6 +168,15 @@
 <span id="168">168</span>
 <span id="169">169</span>
 <span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::hash_map::RandomState,
     fmt::{Debug, Formatter},
@@ -221,13 +230,22 @@
 }
 
 <span class="kw">impl</span>&lt;T, H&gt; CountHashSet&lt;T, H&gt; {
-    <span class="kw">pub fn </span>len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+    <span class="doccomment">/// Get the number of positive entries
+    </span><span class="kw">pub fn </span>len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.inner.len() - <span class="self">self</span>.negative_entries
     }
 
-    <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+    <span class="doccomment">/// Checks if the set looks empty from outside. It might still have negative
+    /// entries, but they should be treated as not existing.
+    </span><span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="self">self</span>.len() == <span class="number">0
     </span>}
+
+    <span class="doccomment">/// Checks if this set is equal to a fresh created set, meaning it has no
+    /// positive but also no negative entries.
+    </span><span class="kw">pub fn </span>is_unset(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.inner.is_empty()
+    }
 }
 
 <span class="kw">impl</span>&lt;T: Eq + Hash, H: BuildHasher + Default&gt; CountHashSet&lt;T, H&gt; {
