@@ -6,7 +6,7 @@ import {
   useAnimation,
   AnimationPlaybackControls,
 } from "framer-motion";
-import Image from "next/future/image";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import benchmarkData from "./benchmark-data/data.json";
 import { Gradient } from "../home-shared/Gradient";

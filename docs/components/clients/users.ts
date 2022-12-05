@@ -52,6 +52,15 @@ export const users: Array<TurboUser> = [
     pinned: true,
   },
   {
+    caption: "Github",
+    image: "/images/logos/github.svg",
+    infoLink: "https://www.github.com/",
+    pinned: true,
+    style: {
+      width: 110,
+    },
+  },
+  {
     caption: "Alibaba",
     image: "/images/logos/alibaba.svg",
     infoLink: "https://www.alibaba.com/",
