@@ -167,7 +167,7 @@ const nextConfig = withNextra({
       {
         source: "/repo/docs/handbook/prisma",
         permanent: true,
-        destination: "/repo/docs/handbook/tools/storybook",
+        destination: "/repo/docs/handbook/tools/prisma",
       },
       {
         // Accidentally created, eventually removable. See below.
