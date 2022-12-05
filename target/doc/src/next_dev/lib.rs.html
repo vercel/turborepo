@@ -502,6 +502,17 @@
 <span id="502">502</span>
 <span id="503">503</span>
 <span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -522,7 +533,8 @@
 <span class="kw">use </span>devserver_options::DevServerOptions;
 <span class="kw">use </span>next_core::{
     create_app_source, create_server_rendered_source, create_web_entry_source, env::load_env,
-    next_image::NextImageContentSourceVc, source_map::NextSourceMapTraceContentSourceVc,
+    manifest::DevManifestContentSource, next_image::NextImageContentSourceVc,
+    source_map::NextSourceMapTraceContentSourceVc,
 };
 <span class="kw">use </span>owo_colors::OwoColorize;
 <span class="kw">use </span>turbo_tasks::{
@@ -829,8 +841,18 @@
     .into();
     <span class="kw">let </span>static_source =
         StaticAssetsContentSourceVc::new(String::new(), project_path.join(<span class="string">&quot;public&quot;</span>)).into();
-    <span class="kw">let </span>main_source =
-        CombinedContentSourceVc::new(<span class="macro">vec!</span>[static_source, app_source, rendered_source, web_source]);
+    <span class="kw">let </span>manifest_source = DevManifestContentSource {
+        page_roots: <span class="macro">vec!</span>[app_source, rendered_source],
+    }
+    .cell()
+    .into();
+    <span class="kw">let </span>main_source = CombinedContentSourceVc::new(<span class="macro">vec!</span>[
+        manifest_source,
+        static_source,
+        app_source,
+        rendered_source,
+        web_source,
+    ]);
     <span class="kw">let </span>introspect = IntrospectionSource {
         roots: HashSet::from([main_source.into()]),
     }

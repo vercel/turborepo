@@ -66,11 +66,23 @@
 <span id="66">66</span>
 <span id="67">67</span>
 <span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
 <span class="kw">use </span>turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 
 <span class="kw">use super</span>::{ContentSource, ContentSourceData, ContentSourceResultVc, ContentSourceVc};
+<span class="kw">use </span><span class="kw">crate</span>::source::ContentSourcesVc;
 
 <span class="doccomment">/// Binds different ContentSources to different subpaths. A fallback
 /// ContentSource will serve all other subpaths.
@@ -98,6 +110,16 @@
     </span><span class="kw">fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>str, data: Value&lt;ContentSourceData&gt;) -&gt; ContentSourceResultVc {
         <span class="kw">let </span>(source, path) = <span class="self">self</span>.get_source(path);
         source.get(path, data)
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>get_children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourcesVc {
+        <span class="kw">let </span><span class="kw-2">mut </span>sources = Vec::with_capacity(<span class="self">self</span>.routes.len() + <span class="number">1</span>);
+
+        sources.extend(<span class="self">self</span>.routes.iter().map(|r| r.<span class="number">1</span>));
+        sources.push(<span class="self">self</span>.fallback);
+
+        ContentSourcesVc::cell(sources)
     }
 }
 

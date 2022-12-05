@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["DevManifestContentSource","A content source which creates the next.js `_devPagesManifest.json` and `_devMiddlewareManifest.json` which are used for client side navigation."],["DevManifestContentSourceVc","Vc for [`DevManifestContentSource`]"]],"type":[["DevManifestContentSourceReadRef","see [turbo_tasks::ReadRef]"]]};

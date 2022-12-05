@@ -327,6 +327,22 @@
 <span id="327">327</span>
 <span id="328">328</span>
 <span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset_graph;
 <span class="kw">pub mod </span>combined;
 <span class="kw">pub mod </span>conditional;
@@ -635,6 +651,22 @@
     /// arguments, so we want to make the arguments contain as little
     /// information as possible to increase cache hit ratio.
     </span><span class="kw">fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>str, data: Value&lt;ContentSourceData&gt;) -&gt; ContentSourceResultVc;
+
+    <span class="doccomment">/// Gets any content sources wrapped in this content source.
+    </span><span class="kw">fn </span>get_children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourcesVc {
+        ContentSourcesVc::empty()
+    }
+}
+
+<span class="attr">#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>ContentSources(Vec&lt;ContentSourceVc&gt;);
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ContentSourcesVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>empty() -&gt; <span class="self">Self </span>{
+        ContentSourcesVc::cell(Vec::new())
+    }
 }
 
 <span class="doccomment">/// An empty ContentSource implementation that responds with NotFound for every

@@ -112,6 +112,12 @@
 <span id="112">112</span>
 <span id="113">113</span>
 <span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
 <span class="kw">use </span>turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
@@ -120,6 +126,7 @@
     specificity::SpecificityReadRef, ContentSource, ContentSourceData, ContentSourceResultVc,
     ContentSourceVc,
 };
+<span class="kw">use </span><span class="kw">crate</span>::source::ContentSourcesVc;
 
 <span class="doccomment">/// Combines multiple [ContentSource]s by trying all content sources in order.
 /// First [ContentSource] that responds with something other than NotFound will
@@ -163,6 +170,11 @@
         } <span class="kw">else </span>{
             <span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found())
         }
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>get_children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourcesVc {
+        ContentSourcesVc::cell(<span class="self">self</span>.sources.clone())
     }
 }
 

@@ -149,6 +149,12 @@
 <span id="149">149</span>
 <span id="150">150</span>
 <span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashSet, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -159,6 +165,7 @@
 <span class="kw">use super</span>::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
 };
+<span class="kw">use </span><span class="kw">crate</span>::source::ContentSourcesVc;
 
 <span class="doccomment">/// Combines two [ContentSource]s like the [CombinedContentSource], but only
 /// allows to serve from the second source when the first source has
@@ -249,6 +256,11 @@
         } <span class="kw">else </span>{
             <span class="prelude-val">Ok</span>(second)
         }
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>get_children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourcesVc {
+        ContentSourcesVc::cell(<span class="macro">vec!</span>[<span class="self">self</span>.activator, <span class="self">self</span>.action])
     }
 }
 
