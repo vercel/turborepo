@@ -10,5 +10,5 @@ disallowed-methods = [
   "std::hash::Hasher::hash",
   # We forbid the use of VecDeque::new as it allocates, which is kind of unexpected
   # Instead use VecDeque::with_capacity to make it explicit or opt-out of that.
-  "std::collections::VecDeque::new"
+  "std::collections::VecDeque::new",
 ]
