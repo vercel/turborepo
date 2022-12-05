@@ -43,7 +43,6 @@ Arguments passed after '--' will be passed through to the named tasks.
 
 // ExecuteRun executes the run command
 func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.CLIExecutionStateFromRust) error {
-	fmt.Printf("%+v\n", executionState.ParsedArgs)
 	args := executionState.ParsedArgs
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
