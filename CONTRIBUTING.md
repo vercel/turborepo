@@ -90,11 +90,7 @@ To manually run a release:
 
 Turbopack uses [Cargo workspaces][workspaces] in the Turbo monorepo. You'll find
 several workspaces inside the `crates/` directory. In order to run a particular
-crate, you can use the `cargo run -p [CRATE_NAME]` command. For example, to test the Next.js development server, run `cargo run -p next-dev`.
-
-### Turbopack Architecture
-
-A high-level introduction to Turbopack's architecture, workspace crates, and Turbo engine (the turbo-tasks crates) is available at [crates/turbopack/architecture.md](crates/turbopack/architecture.md).
+crate, you can use the `cargo run -p [CRATE_NAME]` command.
 
 ### Testing Turbopack
 
