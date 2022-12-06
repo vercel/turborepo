@@ -3,8 +3,8 @@ import type { NextRequest } from "next/server";
 const REGISTRY = "https://registry.npmjs.org";
 const DEFAULT_TAG = "latest";
 const SUPPORTED_PACKAGES = ["turbo"];
-const SUPPORTED_METHODS = ["POST"];
-const [DEFAULT_PACKAGE] = SUPPORTED_PACKAGES;
+const SUPPORTED_METHODS = ["GET"];
+const [DEFAULT_NAME] = SUPPORTED_PACKAGES;
 
 async function fetchDistTags({ name }: { name: string }) {
   const result = await fetch(`${REGISTRY}/${name}`);
@@ -32,27 +32,6 @@ function errorResponse({
 /*
 This API is called via the turbo rust binary to check for version updates.
 
-We use a POST here instead of a GET because we may want to eventually have more
-granular control over when the notifications for new releases are presented to
-users. A POST allows a simpler way to send arbitrary data to the API in a
-more backwards compatible way, which we can then use to decide when to
-display the notification.
-
-Request Schema:
-{
-    "type": "object",
-    "properties": {
-        "name": {
-            "type": "string",
-            "default": "turbo"
-        },
-        "tag": {
-            "type": "string",
-            "default": "latest"
-        }
-    }
-}
-
 Response Schema (200):
 {
     "type": "object",
@@ -61,6 +40,9 @@ Response Schema (200):
             "type": "string",
         },
         "version": {
+            "type": "string",
+        },
+        "tag": {
             "type": "string",
         }
     }
@@ -86,8 +68,10 @@ export default async function handler(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const { name = DEFAULT_PACKAGE, tag = DEFAULT_TAG } = body;
+    const { searchParams } = new URL(req.url);
+    const name = searchParams.get("name") || DEFAULT_NAME;
+    const tag = searchParams.get("tag") || DEFAULT_TAG;
+
     if (!SUPPORTED_PACKAGES.includes(name)) {
       return errorResponse({
         status: 400,
@@ -105,14 +89,16 @@ export default async function handler(req: NextRequest) {
 
     return new Response(
       JSON.stringify({
+        name,
         version: versions[tag],
         tag,
-        name,
       }),
       {
         status: 200,
         headers: {
           "content-type": "application/json",
+          // cache for 15 minutes, and allow stale responses for 5 minutes
+          "cache-control": "public, s-maxage=900, stale-while-revalidate=300",
         },
       }
     );
