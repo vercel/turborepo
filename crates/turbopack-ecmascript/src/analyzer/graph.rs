@@ -219,6 +219,7 @@ impl EvalContext {
                         "__filename" => JsValue::FreeVar(FreeVarKind::Filename),
                         "process" => JsValue::FreeVar(FreeVarKind::NodeProcess),
                         "Object" => JsValue::FreeVar(FreeVarKind::Object),
+                        "URL" => JsValue::FreeVar(FreeVarKind::Url),
                         _ => JsValue::FreeVar(FreeVarKind::Other(i.sym.clone())),
                     }
                 } else {
@@ -293,7 +294,22 @@ impl EvalContext {
                 format!("*arrow function {}*", expr.span.lo.0).into(),
                 SyntaxContext::empty(),
             )),
-            Expr::New(..) => JsValue::Unknown(None, "new expression are not supported"),
+
+            Expr::New(NewExpr { callee, args, .. }) if matches!(callee, box Expr::Ident(..)) => {
+                let args = args.clone().unwrap_or_default();
+
+                // We currently do not handle spreads.
+                if args.iter().any(|arg| arg.spread.is_some()) {
+                    return JsValue::Unknown(None, "spread in new calls is not supported");
+                }
+
+                let args = args.iter().map(|arg| self.eval(&arg.expr)).collect();
+                let callee = box self.eval(callee);
+
+                JsValue::new_call(callee, args)
+            }
+
+            Expr::New(..) => JsValue::Unknown(None, "unknown new expression"),
 
             Expr::Seq(e) => {
                 if let Some(e) = e.exprs.last() {

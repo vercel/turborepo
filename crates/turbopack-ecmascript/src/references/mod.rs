@@ -65,8 +65,8 @@ use super::{
         graph::{create_graph, Effect},
         linker::{link, LinkCache},
         well_known::replace_well_known,
-        ConstantValue, FreeVarKind, JsValue, ObjectPart, WellKnownFunctionKind,
-        WellKnownObjectKind,
+        ConstantValue, FreeVarKind, JsValue, ObjectPart, WellKnownConstructorKind,
+        WellKnownFunctionKind, WellKnownObjectKind,
     },
     errors,
     parse::{parse, ParseResult},
@@ -1430,6 +1430,9 @@ async fn value_visitor_inner(
             }
             JsValue::FreeVar(FreeVarKind::Object) => {
                 JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject)
+            }
+            JsValue::FreeVar(FreeVarKind::Url) => {
+                JsValue::WellKnownConstructor(WellKnownConstructorKind::Url)
             }
             JsValue::FreeVar(_) => JsValue::Unknown(Some(Arc::new(v)), "unknown global"),
             JsValue::Module(ModuleValue {

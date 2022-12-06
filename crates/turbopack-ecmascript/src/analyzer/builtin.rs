@@ -120,11 +120,13 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                         JsValue::FreeVar(_)
                         | JsValue::Variable(_)
                         | JsValue::Call(..)
+                        | JsValue::NewCall(..)
                         | JsValue::MemberCall(..)
                         | JsValue::Member(..)
                         | JsValue::WellKnownObject(_)
                         | JsValue::Argument(_)
                         | JsValue::WellKnownFunction(_)
+                        | JsValue::WellKnownConstructor(_)
                         | JsValue::Module(..) => {
                             // keep the member infact since it might be handled later
                             return false;
@@ -223,11 +225,13 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                         JsValue::FreeVar(_)
                         | JsValue::Variable(_)
                         | JsValue::Call(..)
+                        | JsValue::NewCall(..)
                         | JsValue::MemberCall(..)
                         | JsValue::Member(..)
                         | JsValue::WellKnownObject(_)
                         | JsValue::Argument(_)
                         | JsValue::WellKnownFunction(_)
+                        | JsValue::WellKnownConstructor(_)
                         | JsValue::Module(..) => {
                             // keep the member intact since it might be handled later
                             debug_assert!(prop.has_placeholder());
@@ -238,11 +242,13 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 JsValue::FreeVar(_)
                 | JsValue::Variable(_)
                 | JsValue::Call(..)
+                | JsValue::NewCall(..)
                 | JsValue::MemberCall(..)
                 | JsValue::Member(..)
                 | JsValue::WellKnownObject(_)
                 | JsValue::Argument(_)
                 | JsValue::WellKnownFunction(_)
+                | JsValue::WellKnownConstructor(_)
                 | JsValue::Module(..) => {
                     // keep the member intact since it might be handled later
                     debug_assert!(obj.has_placeholder());
@@ -266,6 +272,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                                             | JsValue::Add(..)
                                             | JsValue::WellKnownObject(_)
                                             | JsValue::WellKnownFunction(_)
+                                            | JsValue::WellKnownConstructor(_)
                                             | JsValue::Function(..)
                                     )
                                 }) {
@@ -280,6 +287,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                                             | JsValue::Add(..)
                                             | JsValue::WellKnownObject(_)
                                             | JsValue::WellKnownFunction(_)
+                                            | JsValue::WellKnownConstructor(_)
                                             | JsValue::Function(..) => {
                                                 items.push(take(arg));
                                             }
@@ -438,11 +446,13 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 JsValue::FreeVar(_)
                 | JsValue::Variable(_)
                 | JsValue::Call(..)
+                | JsValue::NewCall(..)
                 | JsValue::MemberCall(..)
                 | JsValue::Member(..)
                 | JsValue::WellKnownObject(_)
                 | JsValue::Argument(_)
                 | JsValue::WellKnownFunction(_)
+                | JsValue::WellKnownConstructor(_)
                 | JsValue::Module(..) => {
                     // keep the call infact since it might be handled later
                     debug_assert!(callee.has_placeholder());
