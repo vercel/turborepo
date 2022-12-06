@@ -200,6 +200,15 @@
 <span id="200">200</span>
 <span id="201">201</span>
 <span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 
 <span class="kw">use </span>std::{path::Path, sync::Arc};
@@ -236,7 +245,8 @@
     /// well as any imports that are only used by those exports.
     ///
     /// It also provides diagnostics for improper use of `getServerSideProps`.
-    </span>NextJs,
+    </span>NextJsPageSsr,
+    NextJsFont,
     PresetEnv(EnvironmentVc),
     React {
         <span class="attr">#[serde(default)]
@@ -374,13 +384,21 @@
                     program.visit_mut_with(<span class="kw-2">&amp;mut </span>resolver(unresolved_mark, top_level_mark, <span class="bool-val">false</span>));
                 }
             }
-            EcmascriptInputTransform::NextJs =&gt; {
+            EcmascriptInputTransform::NextJsPageSsr =&gt; {
                 <span class="kw">use </span>next_ssg::next_ssg;
                 <span class="kw">let </span>eliminated_packages = Default::default();
 
                 <span class="kw">let </span>module_program = unwrap_module_program(program);
 
                 <span class="kw-2">*</span>program = module_program.fold_with(<span class="kw-2">&amp;mut </span>next_ssg(eliminated_packages));
+            }
+            EcmascriptInputTransform::NextJsFont =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>next_font = next_font::next_font_loaders(next_font::Config {
+                    font_loaders: <span class="macro">vec!</span>[<span class="string">&quot;@next/font/google&quot;</span>.into(), <span class="string">&quot;@next/font/local&quot;</span>.into()],
+                    relative_file_path_from_root: file_name_str.into(),
+                });
+
+                program.visit_mut_with(<span class="kw-2">&amp;mut </span>next_font);
             }
             EcmascriptInputTransform::Custom =&gt; <span class="macro">todo!</span>(),
         }

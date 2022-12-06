@@ -99,6 +99,10 @@
 <span id="99">99</span>
 <span id="100">100</span>
 <span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
 </pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::{
     primitives::{StringVc, StringsVc},
     Value,
@@ -114,7 +118,9 @@
 };
 <span class="kw">use </span>turbopack_ecmascript::EcmascriptInputTransform;
 
-<span class="kw">use </span><span class="kw">crate</span>::next_import_map::get_next_server_import_map;
+<span class="kw">use crate</span>::{
+    next_client::context::add_next_font_transform, next_import_map::get_next_server_import_map,
+};
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord)]
@@ -179,7 +185,7 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub fn </span>get_server_module_options_context(ty: Value&lt;ServerContextType&gt;) -&gt; ModuleOptionsContextVc {
-    <span class="kw">match </span>ty.into_value() {
+    <span class="kw">let </span>module_options_context = <span class="kw">match </span>ty.into_value() {
         ServerContextType::Pages { .. } =&gt; ModuleOptionsContext {
             enable_typescript_transform: <span class="bool-val">true</span>,
             enable_styled_jsx: <span class="bool-val">true</span>,
@@ -198,7 +204,9 @@
             ..Default::default()
         },
     }
-    .cell()
+    .cell();
+
+    add_next_font_transform(module_options_context)
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="next_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>
