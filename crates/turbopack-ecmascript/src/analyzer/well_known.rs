@@ -5,8 +5,8 @@ use turbopack_core::environment::EnvironmentVc;
 use url::Url;
 
 use super::{
-    imports::ImportAnnotations, ConstantValue, JsValue, ModuleValue, WellKnownFunctionKind,
-    WellKnownObjectKind,
+    imports::ImportAnnotations, ConstantValue, JsValue, ModuleValue, WellKnownConstructorKind,
+    WellKnownFunctionKind, WellKnownObjectKind,
 };
 
 pub async fn replace_well_known(
@@ -32,6 +32,9 @@ pub async fn replace_well_known(
                 }
             }
             (JsValue::Call(usize, callee, args), false)
+        }
+        JsValue::NewCall(_, box JsValue::WellKnownConstructor(kind), args) => {
+            (well_known_new_call(kind, args, environment).await?, true)
         }
         JsValue::Member(_, box JsValue::WellKnownObject(kind), box prop) => (
             well_known_object_member(kind, prop, environment).await?,
@@ -102,6 +105,16 @@ pub async fn well_known_function_call(
             ))),
             "unsupported function",
         ),
+    })
+}
+
+pub async fn well_known_new_call(
+    kind: WellKnownConstructorKind,
+    args: Vec<JsValue>,
+    _environment: EnvironmentVc,
+) -> Result<JsValue> {
+    Ok(match kind {
+        WellKnownConstructorKind::Url => new_url(args),
     })
 }
 
@@ -591,5 +604,12 @@ fn protobuf_loader(prop: JsValue) -> JsValue {
             ))),
             "unsupported property on require('@grpc/proto-loader') object",
         ),
+    }
+}
+
+fn new_url(args: Vec<JsValue>) -> JsValue {
+    match args.as_slice() {
+        [input, ImportMetaUrl] => {}
+        _ => JsValue::Unknown(None, "new URL is not statically analyzeable"),
     }
 }

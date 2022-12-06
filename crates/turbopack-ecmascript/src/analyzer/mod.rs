@@ -175,11 +175,14 @@ pub enum JsValue {
     /// is string.
     Add(usize, Vec<JsValue>),
 
-    /// `(callee, args)`
+    /// `callee(args)`
     Call(usize, Box<JsValue>, Vec<JsValue>),
 
-    /// `(obj, prop, args)`
+    /// `obj.prop(args)`
     MemberCall(usize, Box<JsValue>, Box<JsValue>, Vec<JsValue>),
+
+    /// `new callee(args)`
+    NewCall(usize, Box<JsValue>, Vec<JsValue>),
 
     /// `obj[prop]`
     Member(usize, Box<JsValue>, Box<JsValue>),
@@ -193,6 +196,9 @@ pub enum JsValue {
 
     /// Some kind of well known function
     WellKnownFunction(WellKnownFunctionKind),
+
+    /// Some kind of well known constructor function
+    WellKnownConstructor(WellKnownConstructorKind),
 
     /// Not analyzable.
     Unknown(Option<Arc<JsValue>>, &'static str),
@@ -326,6 +332,15 @@ impl Display for JsValue {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            JsValue::NewCall(_, callee, list) => write!(
+                f,
+                "new {}({})",
+                callee,
+                list.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             JsValue::MemberCall(_, obj, prop, list) => write!(
                 f,
                 "{}[{}]({})",
@@ -346,6 +361,7 @@ impl Display for JsValue {
             JsValue::Unknown(..) => write!(f, "???"),
             JsValue::WellKnownObject(obj) => write!(f, "WellKnownObject({:?})", obj),
             JsValue::WellKnownFunction(func) => write!(f, "WellKnownFunction({:?})", func),
+            JsValue::WellKnownConstructor(func) => write!(f, "WellKnownConstructor({:?})", func),
             JsValue::Function(_, return_value) => {
                 write!(f, "Function(return = {:?})", return_value)
             }
@@ -443,6 +459,10 @@ impl JsValue {
         Self::Call(1 + f.total_nodes() + total_nodes(&args), f, args)
     }
 
+    pub fn new_call(f: Box<JsValue>, args: Vec<JsValue>) -> Self {
+        Self::NewCall(1 + f.total_nodes() + total_nodes(&args), f, args)
+    }
+
     pub fn member_call(o: Box<JsValue>, p: Box<JsValue>, args: Vec<JsValue>) -> Self {
         Self::MemberCall(
             1 + o.total_nodes() + p.total_nodes() + total_nodes(&args),
@@ -464,6 +484,7 @@ impl JsValue {
             | JsValue::Module(..)
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_)
+            | JsValue::WellKnownConstructor(_)
             | JsValue::Unknown(_, _)
             | JsValue::Argument(_) => 1,
 
@@ -473,6 +494,7 @@ impl JsValue {
             | JsValue::Concat(c, _)
             | JsValue::Add(c, _)
             | JsValue::Call(c, _, _)
+            | JsValue::NewCall(c, _, _)
             | JsValue::MemberCall(c, _, _, _)
             | JsValue::Member(c, _, _)
             | JsValue::Function(c, _) => *c,
@@ -488,6 +510,7 @@ impl JsValue {
             | JsValue::Module(..)
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_)
+            | JsValue::WellKnownConstructor(_)
             | JsValue::Unknown(_, _)
             | JsValue::Argument(_) => {}
 
@@ -507,7 +530,7 @@ impl JsValue {
                     })
                     .sum::<usize>();
             }
-            JsValue::Call(c, f, list) => {
+            JsValue::Call(c, f, list) | JsValue::NewCall(c, f, list) => {
                 *c = 1 + f.total_nodes() + total_nodes(list);
             }
             JsValue::MemberCall(c, o, m, list) => {
@@ -540,6 +563,7 @@ impl JsValue {
                 | JsValue::Module(..)
                 | JsValue::WellKnownObject(_)
                 | JsValue::WellKnownFunction(_)
+                | JsValue::WellKnownConstructor(_)
                 | JsValue::Unknown(_, _)
                 | JsValue::Argument(_) => self.make_unknown_without_content("node limit reached"),
 
@@ -558,7 +582,7 @@ impl JsValue {
                     }));
                     self.update_total_nodes();
                 }
-                JsValue::Call(_, f, args) => {
+                JsValue::Call(_, f, args) | JsValue::NewCall(_, f, args) => {
                     make_max_unknown([&mut **f].into_iter().chain(args.iter_mut()));
                     self.update_total_nodes();
                 }
@@ -756,6 +780,27 @@ impl JsValue {
             JsValue::Call(_, callee, list) => {
                 format!(
                     "{}({})",
+                    callee.explain_internal_inner(hints, indent_depth, depth, unknown_depth),
+                    pretty_join(
+                        &list
+                            .iter()
+                            .map(|v| v.explain_internal_inner(
+                                hints,
+                                indent_depth + 1,
+                                depth,
+                                unknown_depth
+                            ))
+                            .collect::<Vec<_>>(),
+                        indent_depth,
+                        ", ",
+                        ",",
+                        ""
+                    )
+                )
+            }
+            JsValue::NewCall(_, callee, list) => {
+                format!(
+                    "new {}({})",
                     callee.explain_internal_inner(hints, indent_depth, depth, unknown_depth),
                     pretty_join(
                         &list
@@ -990,6 +1035,18 @@ impl JsValue {
                     name
                 }
             }
+            JsValue::WellKnownConstructor(func) => {
+                let (name, explainer) = match func {
+                    WellKnownConstructorKind::Url => ("URL".to_string(), "The URL constructor"),
+                };
+                if depth > 0 {
+                    let i = hints.len();
+                    hints.push(format!("- *{i}* {name}: {explainer}"));
+                    format!("{name}*{i}*")
+                } else {
+                    name
+                }
+            }
             JsValue::Function(_, return_value) => {
                 if depth > 0 {
                     format!(
@@ -1024,12 +1081,16 @@ impl JsValue {
             | JsValue::Url(_)
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_)
+            | JsValue::WellKnownConstructor(_)
             | JsValue::Unknown(_, _)
             | JsValue::Function(..) => false,
 
             // These must be optimized reduced if they don't contain placeholders
             // So when we see them, they contain placeholders
-            JsValue::Call(..) | JsValue::MemberCall(..) | JsValue::Member(..) => true,
+            JsValue::Call(..)
+            | JsValue::NewCall(..)
+            | JsValue::MemberCall(..)
+            | JsValue::Member(..) => true,
 
             // These are nested structures, where we look into children
             // to see placeholders
@@ -1101,7 +1162,7 @@ macro_rules! for_each_children_async {
                 $value.update_total_nodes();
                 ($value, modified)
             }
-            JsValue::Call(_, box callee, list) => {
+            JsValue::Call(_, box callee, list) | JsValue::NewCall(_, box callee, list) => {
                 let (new_callee, mut modified) = $visit_fn(take(callee), $($args),+).await?;
                 *callee = new_callee;
                 for item in list.iter_mut() {
@@ -1153,6 +1214,7 @@ macro_rules! for_each_children_async {
             | JsValue::Url(_)
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_)
+            | JsValue::WellKnownConstructor(_)
             | JsValue::Unknown(..)
             | JsValue::Argument(..) => ($value, false),
         })
@@ -1326,7 +1388,7 @@ impl JsValue {
                 self.update_total_nodes();
                 modified
             }
-            JsValue::Call(_, callee, list) => {
+            JsValue::Call(_, callee, list) | JsValue::NewCall(_, callee, list) => {
                 let mut modified = visitor(callee);
                 for item in list.iter_mut() {
                     if visitor(item) {
@@ -1367,6 +1429,7 @@ impl JsValue {
             | JsValue::Url(_)
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_)
+            | JsValue::WellKnownConstructor(_)
             | JsValue::Unknown(..)
             | JsValue::Argument(..) => false,
         }
@@ -1400,7 +1463,7 @@ impl JsValue {
                     }
                 }
             }
-            JsValue::Call(_, callee, list) => {
+            JsValue::Call(_, callee, list) | JsValue::NewCall(_, callee, list) => {
                 visitor(callee);
                 for item in list.iter() {
                     visitor(item);
@@ -1427,6 +1490,7 @@ impl JsValue {
             | JsValue::Url(_)
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_)
+            | JsValue::WellKnownConstructor(_)
             | JsValue::Unknown(..)
             | JsValue::Argument(..) => {}
         }
@@ -1451,7 +1515,8 @@ impl JsValue {
                 | FreeVarKind::Require
                 | FreeVarKind::Define
                 | FreeVarKind::Import
-                | FreeVarKind::NodeProcess,
+                | FreeVarKind::NodeProcess
+                | FreeVarKind::Url,
             ) => false,
             JsValue::FreeVar(FreeVarKind::Other(_)) => false,
 
@@ -1466,8 +1531,13 @@ impl JsValue {
                 box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
                 _,
             ) => true,
-            JsValue::Call(..) | JsValue::MemberCall(..) | JsValue::Member(..) => false,
-            JsValue::WellKnownObject(_) | JsValue::WellKnownFunction(_) => false,
+            JsValue::Call(..)
+            | JsValue::NewCall(..)
+            | JsValue::MemberCall(..)
+            | JsValue::Member(..) => false,
+            JsValue::WellKnownObject(_)
+            | JsValue::WellKnownFunction(_)
+            | JsValue::WellKnownConstructor(..) => false,
         }
     }
 
@@ -1789,7 +1859,7 @@ impl JsValue {
             JsValue::Variable(v) => Hash::hash(v, state),
             JsValue::Concat(_, v) => all_similar_hash(v, state, depth - 1),
             JsValue::Add(_, v) => all_similar_hash(v, state, depth - 1),
-            JsValue::Call(_, a, b) => {
+            JsValue::Call(_, a, b) | JsValue::NewCall(_, a, b) => {
                 a.similar_hash(state, depth - 1);
                 all_similar_hash(b, state, depth - 1);
             }
@@ -1811,6 +1881,7 @@ impl JsValue {
             }
             JsValue::WellKnownObject(v) => Hash::hash(v, state),
             JsValue::WellKnownFunction(v) => Hash::hash(v, state),
+            JsValue::WellKnownConstructor(v) => Hash::hash(v, state),
             JsValue::Unknown(_, v) => Hash::hash(v, state),
             JsValue::Function(_, v) => v.similar_hash(state, depth - 1),
             JsValue::Argument(v) => Hash::hash(v, state),
@@ -1856,6 +1927,9 @@ pub enum FreeVarKind {
 
     /// Node.js process
     NodeProcess,
+
+    /// new URL(...)
+    Url,
 
     /// `abc` `some_global`
     Other(JsWord),
@@ -1910,6 +1984,11 @@ pub enum WellKnownFunctionKind {
     NodeStrongGlobalizeSetRootDir,
     NodeResolveFrom,
     NodeProtobufLoad,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum WellKnownConstructorKind {
+    Url,
 }
 
 fn is_unresolved(i: &Ident, unresolved_mark: Mark) -> bool {
