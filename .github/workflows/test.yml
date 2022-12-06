@@ -271,6 +271,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v2
         with:
+          enable-corepack: false
           node-version: 16
           cache: ${{ matrix.manager }}
           cache-dependency-path: package.json
