@@ -268,6 +268,10 @@ jobs:
         run: |
           mkdir -p `pnpm store path`
 
+      - name: Disable corepack
+        shell: bash
+        run: corepack disable
+
       - name: Setup Node.js
         uses: actions/setup-node@v2
         with:
