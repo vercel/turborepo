@@ -116,34 +116,24 @@ impl CssChunkContentVc {
         let this = self.await?;
         let chunk_name = this.chunk_path.to_string();
 
-        let mut external_imports = Vec::new();
-        let mut codes = Vec::new();
+        let mut body = CodeBuilder::default();
+        let mut external_imports = IndexSet::new();
         for entry in this.main_entries.await?.iter() {
             let entry_placeable = CssChunkPlaceableVc::cast_from(entry);
             let entry_item = entry_placeable.as_chunk_item(this.context);
-            let expanded = expand_imports(entry_item).await?;
 
-            external_imports.extend(expanded.external_imports.iter().copied());
-            for code in &expanded.codes {
-                codes.push(*code);
+            for external_import in expand_imports(&mut body, entry_item).await? {
+                external_imports.insert(external_import.await?.to_owned());
             }
         }
 
         let mut code = CodeBuilder::default();
         writeln!(code, "/* chunk {} */", chunk_name.await?)?;
-        // Remove duplicate imports
-        let external_imports = external_imports
-            .iter()
-            .try_join()
-            .await?
-            .into_iter()
-            .collect::<IndexSet<_>>();
         for external_import in external_imports {
             writeln!(code, "@import {};", stringify_str(&external_import))?;
         }
-        for prebuilt in codes {
-            code.push_code(&*prebuilt.await?);
-        }
+
+        code.push_code(&body.build());
 
         if code.has_source_map() {
             let chunk_path = this.chunk_path.await?;

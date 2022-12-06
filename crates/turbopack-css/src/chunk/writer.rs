@@ -2,29 +2,21 @@ use std::{collections::VecDeque, io::Write};
 
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, ValueToString};
-use turbopack_core::code_builder::{CodeBuilder, CodeVc};
+use turbopack_core::code_builder::CodeBuilder;
 
 use super::{CssChunkItemVc, CssImport};
 
-#[turbo_tasks::value]
-#[derive(Default)]
-pub struct ExpandImportsResult {
-    pub external_imports: Vec<StringVc>,
-    pub codes: Vec<CodeVc>,
-}
-
-#[turbo_tasks::function]
-pub async fn expand_imports(chunk_item: CssChunkItemVc) -> Result<ExpandImportsResultVc> {
+pub async fn expand_imports(
+    code: &mut CodeBuilder,
+    chunk_item: CssChunkItemVc,
+) -> Result<Vec<StringVc>> {
     let content = chunk_item.content().await?;
     let mut stack = vec![(
         chunk_item,
         content.imports.iter().cloned().collect::<VecDeque<_>>(),
         "".to_string(),
     )];
-    let mut result = ExpandImportsResult {
-        external_imports: vec![],
-        codes: vec![],
-    };
+    let mut external_imports = vec![];
 
     while let Some((chunk_item, imports, close)) = stack.last_mut() {
         match imports.pop_front() {
@@ -32,10 +24,8 @@ pub async fn expand_imports(chunk_item: CssChunkItemVc) -> Result<ExpandImportsR
                 let (open, close) = import.await?.attributes.await?.print_block()?;
 
                 let id = &*imported_chunk_item.to_string().await?;
-                let mut code = CodeBuilder::default();
                 writeln!(code, "/* import({}) */", id)?;
                 writeln!(code, "{}", open)?;
-                result.codes.push(code.build().cell());
 
                 let imported_content_vc = imported_chunk_item.content();
                 let imported_content = &*imported_content_vc.await?;
@@ -46,10 +36,9 @@ pub async fn expand_imports(chunk_item: CssChunkItemVc) -> Result<ExpandImportsR
                 ));
             }
             Some(CssImport::External(url_vc)) => {
-                result.external_imports.push(url_vc);
+                external_imports.push(url_vc);
             }
             None => {
-                let mut code = CodeBuilder::default();
                 let id = &*chunk_item.to_string().await?;
                 writeln!(code, "/* {} */", id)?;
 
@@ -60,11 +49,10 @@ pub async fn expand_imports(chunk_item: CssChunkItemVc) -> Result<ExpandImportsR
                 );
                 writeln!(code, "\n{}", close)?;
 
-                result.codes.push(code.build().cell());
                 stack.pop();
             }
         }
     }
 
-    Ok(result.cell())
+    Ok(external_imports)
 }
