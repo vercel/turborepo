@@ -196,9 +196,9 @@ impl TaskState {
 
 struct PartialTaskState {
     stats_type: StatsType,
+    // TODO remove that and switch to full state instead
     event: Event,
     scopes: TaskScopes,
-    // TODO remove that and switch to full state instead
 }
 
 impl PartialTaskState {
@@ -659,7 +659,7 @@ impl Task {
                 }
                 InProgressDirty { ref mut event } => {
                     let event = event.take();
-                    let active = self.scopes_dirty_or_active::<true, false>(&state.scopes, backend);
+                    let active = self.scopes_dirty_or_active(false, &state.scopes, backend);
                     if active {
                         state.state_type = Scheduled { event };
                         schedule_task = true;
@@ -686,74 +686,49 @@ impl Task {
         schedule_task
     }
 
-    fn scopes_dirty_or_active<const LIKELY_ACTIVE: bool, const INCREMENT_UNFINISHED: bool>(
+    /// When any scope is active it returns true. When no scope is active it
+    /// returns false and adds the tasks to all scopes as dirty task.
+    /// When `increment_unfinished` is true it will also increment the
+    /// unfinished tasks for all scopes, independent of activeness.
+    fn scopes_dirty_or_active(
         &self,
+        increment_unfinished: bool,
         scopes: &TaskScopes,
         backend: &MemoryBackend,
     ) -> bool {
-        if !LIKELY_ACTIVE && INCREMENT_UNFINISHED {
+        if increment_unfinished {
+            // We need to walk all scopes at least once to increment unfinished tasks.
+            // While doing that we check if any scope is active.
             let mut active = false;
-            let mut processed_scopes = 0;
             for scope in scopes.iter() {
                 backend.with_scope(scope, |scope| {
                     scope.increment_unfinished_tasks(backend);
-                    log_scope_update!("add unfinished task: {} -> {}", *scope.id, *self.id);
-                    if !active {
-                        processed_scopes += 1;
-                        let mut state = scope.state.lock();
-                        if state.is_active() {
-                            active = true;
-                        } else {
-                            state.add_dirty_task(self.id);
-                        }
-                    }
+                    active = active || scope.state.lock().is_active();
                 })
             }
             if active {
-                for scope in scopes.iter().take(processed_scopes) {
-                    backend.with_scope(scope, |scope| {
-                        let mut state = scope.state.lock();
-                        if !state.is_active() {
-                            state.remove_dirty_task(self.id);
-                        }
-                    })
-                }
+                return true;
             }
-            return active;
-        }
-        if LIKELY_ACTIVE {
-            if INCREMENT_UNFINISHED {
-                let mut active = false;
-                for scope in scopes.iter() {
-                    backend.with_scope(scope, |scope| {
-                        scope.increment_unfinished_tasks(backend);
-                        active = active || scope.state.lock().is_active();
-                    })
-                }
-                if active {
-                    return true;
-                }
-            } else {
-                if scopes
-                    .iter()
-                    .any(|scope| backend.with_scope(scope, |scope| scope.state.lock().is_active()))
-                {
-                    return true;
-                }
+        } else {
+            // Without the need to increment unfinished for all scopes we can exit early
+            if scopes
+                .iter()
+                .any(|scope| backend.with_scope(scope, |scope| scope.state.lock().is_active()))
+            {
+                return true;
             }
         }
-        let mut processed_scopes = 0;
-        for scope in scopes.iter() {
+        for (i, scope) in scopes.iter().enumerate() {
             if backend.with_scope(scope, |scope| {
                 let mut state = scope.state.lock();
-                if state.is_active() {
-                    true
-                } else {
+                let is_active = state.is_active();
+                if !is_active {
                     state.add_dirty_task(self.id);
-                    false
                 }
+                is_active
             }) {
-                for scope in scopes.iter().take(processed_scopes) {
+                // A scope is active, revert dirty task changes and return true
+                for scope in scopes.iter().take(i + 1) {
                     backend.with_scope(scope, |scope| {
                         let mut state = scope.state.lock();
                         state.remove_dirty_task(self.id);
@@ -761,8 +736,8 @@ impl Task {
                 }
                 return true;
             }
-            processed_scopes += 1;
         }
+        // No scope is active. Task has been added as dirty task to all scopes
         return false;
     }
 
@@ -786,7 +761,7 @@ impl Task {
                 } => {
                     clear_dependencies = take(dependencies);
                     // add to dirty lists and potentially schedule
-                    let active = self.scopes_dirty_or_active::<true, true>(&state.scopes, backend);
+                    let active = self.scopes_dirty_or_active(true, &state.scopes, backend);
                     if active {
                         state.state_type = Scheduled {
                             event: Event::new(move || format!("TaskState({id})::event")),
@@ -1163,7 +1138,7 @@ impl Task {
                         backend,
                         turbo_tasks,
                     );
-                    // state ends here
+                    // state ends here, as it was passed into `remove_self_from_scope`
 
                     if !children.is_empty() {
                         run_remove_from_scope_queue(children, initial, backend, turbo_tasks);
