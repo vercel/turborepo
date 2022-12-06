@@ -12,6 +12,8 @@ runs:
   steps:
     - name: "Setup Node"
       uses: ./.github/actions/setup-node
+      with:
+        enable-corepack: false
     - name: "Setup Go"
       uses: ./.github/actions/setup-go
       with:
