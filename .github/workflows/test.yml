@@ -167,7 +167,7 @@ jobs:
     name: Go Unit Tests
     needs: determine_jobs
     if: needs.determine_jobs.outputs.go == 'true'
-    timeout-minutes: 15
+    timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
