@@ -1,6 +1,8 @@
+mod cli;
 mod commands;
 mod ffi;
 mod package_manager;
+mod shim;
 
 use std::{
     env,
