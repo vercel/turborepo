@@ -12,7 +12,7 @@ fn main() {
     println!("cargo:rustc-link-lib=turbo");
 
     let bindings = bindgen::Builder::default()
-        .header("../cli/libturbo.h")
+        .header("../../cli/libturbo.h")
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
