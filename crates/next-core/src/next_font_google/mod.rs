@@ -1,10 +1,12 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{bail, Context, Result};
 use auto_hash_map::AutoMap;
 use indexmap::IndexMap;
+use once_cell::sync::Lazy;
 use turbo_tasks::{
     primitives::{OptionStringVc, StringVc},
     TryJoinIterExt,
 };
+use turbo_tasks_env::{CommandLineProcessEnvVc, ProcessEnv};
 use turbo_tasks_fetch::fetch;
 use turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
 use turbo_tasks_hash::hash_xxh3_hash64;
@@ -23,15 +25,19 @@ use turbopack_core::{
 use crate::{
     embed_js::attached_next_js_package_path,
     next_font_google::{
-        options::{options_from_request, FontDataEntry},
+        options::FontDataEntry,
         request::NextFontRequest,
         util::{extract_font_urls, get_font_axes, get_stylesheet_url},
     },
 };
 
-mod options;
+pub(crate) mod options;
 pub(crate) mod request;
 mod util;
+
+pub const GOOGLE_FONTS_STYLESHEET_URL: &str = "https://fonts.googleapis.com/css2";
+static FONT_DATA: Lazy<FontData> =
+    Lazy::new(|| serde_json::from_str(include_str!("font-data.json")).unwrap());
 
 type FontData = IndexMap<String, FontDataEntry>;
 
@@ -141,30 +147,25 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
                 bail!("Expected one entry");
             };
 
-            let request: NextFontRequest = serde_json::from_str(&json)?;
-            let font_data: FontData = serde_json::from_str(include_str!("font-data.json"))?;
-            let options = options_from_request(&request, &font_data)?;
-            let url = get_stylesheet_url(
-                &options.font_family,
-                &get_font_axes(
-                    &font_data,
-                    &options.font_family,
-                    &options.weights,
-                    &options.styles,
-                    &options.selected_variable_axes,
-                )?,
-                &options.display,
-            )?;
-
+            let request: StringVc = StringVc::cell(json);
+            let stylesheet_url = get_stylesheet_url_from_request(request);
+            // TODO: Handle this failing (e.g. connection issues). This should be an Issue.
             let stylesheet_res = fetch(
-                StringVc::cell(url),
+                stylesheet_url,
                 OptionStringVc::cell(Some(
                     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, \
                      like Gecko) Chrome/104.0.0.0 Safari/537.36"
                         .to_owned(),
                 )),
-            );
-            let stylesheet = &*stylesheet_res.await?.body.to_string().await?;
+            )
+            .await?;
+
+            if stylesheet_res.status >= 400 {
+                bail!("Expected a successful response for Google fonts stylesheet");
+            }
+
+            let stylesheet = &*stylesheet_res.body.to_string().await?;
+            let options = options_from_request(request).await?;
             let fonts = extract_font_urls(stylesheet, options.subsets.as_ref(), options.preload)?;
 
             let mut requests = vec![];
@@ -178,11 +179,18 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
 
             let mut url_to_filename = AutoMap::new();
             let fonts_dir = self.project_path.join(".next/static/media");
-            for (url, response) in fonts
-                .all_urls
-                .iter()
-                .zip(requests.iter().try_join().await?.iter())
-            {
+            let responses = requests.iter().try_join().await?;
+            for (url, response) in fonts.all_urls.iter().zip(responses.iter()) {
+                if response.status >= 400 {
+                    bail!(
+                        "Expected a successful response for font at url {}. Received status {}",
+                        url,
+                        response.status
+                    );
+                }
+            }
+
+            for (url, response) in fonts.all_urls.iter().zip(responses.iter()) {
                 let should_preload = fonts.preload_urls.contains(url);
                 let url_file_extension = url
                     .rsplit('.')
@@ -234,4 +242,40 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
 
         Ok(ImportMapResult::NoEntry.into())
     }
+}
+
+#[turbo_tasks::function]
+async fn get_stylesheet_url_from_request(request_json: StringVc) -> Result<StringVc> {
+    let options = options_from_request(request_json).await?;
+
+    let url = CommandLineProcessEnvVc::new()
+        .read("TURBOPACK_TEST_ONLY_GOOGLE_FONTS_STYLESHEET_URL")
+        .await?;
+    let url = url
+        .as_ref()
+        .map(|s| s.as_str())
+        .unwrap_or(GOOGLE_FONTS_STYLESHEET_URL);
+
+    Ok(StringVc::cell(get_stylesheet_url(
+        url,
+        &options.font_family,
+        &get_font_axes(
+            &FONT_DATA,
+            &options.font_family,
+            &options.weights,
+            &options.styles,
+            &options.selected_variable_axes,
+        )?,
+        &options.display,
+    )?))
+}
+
+#[turbo_tasks::value(transparent)]
+struct NextFontGoogleOptions(self::options::NextFontGoogleOptions);
+
+#[turbo_tasks::function]
+async fn options_from_request(request: StringVc) -> Result<NextFontGoogleOptionsVc> {
+    let request: NextFontRequest = serde_json::from_str(&request.await?)?;
+
+    self::options::options_from_request(&request, &FONT_DATA).map(NextFontGoogleOptionsVc::cell)
 }
