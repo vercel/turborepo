@@ -132,7 +132,7 @@ impl Debug for Task {
     }
 }
 
-/// The state of a [Task]
+/// The full state of a [Task], it includes all information.
 struct TaskState {
     scopes: TaskScopes,
 
@@ -194,18 +194,23 @@ impl TaskState {
     }
 }
 
+/// The partial task state. It's equal to a full TaskState with state = Dirty
+/// and all other fields empty. It looks like a dirty task that has not been
+/// executed yet. The task might still be in some task scopes.
+/// A Task can get into this state when it is unloaded by garbage collection,
+/// but is still attached to scopes.
 struct PartialTaskState {
     stats_type: StatsType,
-    // TODO remove that and switch to full state instead
-    event: Event,
     scopes: TaskScopes,
 }
 
 impl PartialTaskState {
-    fn into_full(self) -> TaskState {
+    fn into_full(self, id: TaskId) -> TaskState {
         TaskState {
             scopes: self.scopes,
-            state_type: Dirty { event: self.event },
+            state_type: Dirty {
+                event: Event::new(move || format!("TaskState({id})::event")),
+            },
             children: Default::default(),
             collectibles: Default::default(),
             prepared_type: PrepareTaskType::None,
@@ -216,16 +221,18 @@ impl PartialTaskState {
     }
 }
 
+/// A fully unloaded task state. It's equal to a partial task state without
+/// being attached to any scopes. This state is stored inlined instead of in a
+/// [Box] to reduce the memory consumption. Make sure to not add more fields
+/// than the size of a [Box].
 struct UnloadedTaskState {
     stats_type: StatsType,
 }
 
-impl Default for UnloadedTaskState {
-    fn default() -> Self {
-        Self {
-            stats_type: StatsType::Essential,
-        }
-    }
+#[cfg(test)]
+#[test]
+fn test_unloaded_task_state_size() {
+    assert!(std::mem::size_of::<UnloadedTaskState>() <= std::mem::size_of::<Box<()>>());
 }
 
 impl UnloadedTaskState {
@@ -244,9 +251,8 @@ impl UnloadedTaskState {
         }
     }
 
-    fn into_partial(self, id: TaskId) -> PartialTaskState {
+    fn into_partial(self) -> PartialTaskState {
         PartialTaskState {
-            event: Event::new(move || format!("TaskState({id})::event")),
             scopes: TaskScopes::Inner(CountHashSet::new(), 0),
             stats_type: self.stats_type,
         }
@@ -487,7 +493,7 @@ impl Task {
 
     #[allow(dead_code, reason = "We need this in future")]
     fn partial_state_mut(&self) -> TaskMetaStateWriteGuard<'_> {
-        TaskMetaStateWriteGuard::partial_from(self.state.write(), self)
+        TaskMetaStateWriteGuard::partial_from(self.state.write())
     }
 
     pub(crate) fn execute(
