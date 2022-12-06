@@ -1,6 +1,9 @@
 name: Update Google font-data.json
 
 on:
+  push:
+    branches:
+      - '*'
   schedule:
     - cron: "15 0 * * *" # Run every day at 00:15
   workflow_dispatch:
