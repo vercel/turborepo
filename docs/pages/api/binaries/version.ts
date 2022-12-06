@@ -1,42 +1,27 @@
 import type { NextRequest } from "next/server";
 
 const REGISTRY = "https://registry.npmjs.org";
+const DEFAULT_TAG = "latest";
 const SUPPORTED_PACKAGES = ["turbo"];
 const SUPPORTED_METHODS = ["POST"];
 const [DEFAULT_PACKAGE] = SUPPORTED_PACKAGES;
 
-const ERROR_TYPES = {
-  FourOhFour: "FourOhFour",
-  FourHundred: "FourHundred",
-  FiveHundred: "FiveHundred",
-};
-
-const ERRORS = {
-  [ERROR_TYPES.FourOhFour]: {
-    status: 404,
-    error: "Not Found",
-  },
-  [ERROR_TYPES.FourHundred]: {
-    status: 400,
-    error: "Unexpected input",
-  },
-  [ERROR_TYPES.FiveHundred]: {
-    status: 500,
-    error: "Internal Server Error",
-  },
-};
-
-async function fetchVersion({ name }: { name: string }) {
-  const result = await fetch(`${REGISTRY}/${name}/latest`);
+async function fetchDistTags({ name }: { name: string }) {
+  const result = await fetch(`${REGISTRY}/${name}`);
   const json = await result.json();
-  return json.version;
+  return json["dist-tags"];
 }
 
-function errorResponse(type: keyof typeof ERRORS) {
-  const { status, error } = ERRORS[type];
+function errorResponse({
+  status,
+  message,
+}: {
+  status: 400 | 404 | 500;
+  message: string;
+}) {
   return new Response(
     JSON.stringify({
-      error,
+      error: message,
     }),
     {
       status,
@@ -48,7 +33,7 @@ function errorResponse(type: keyof typeof ERRORS) {
 This API is called via the turbo rust binary to check for version updates.
 
 We use a POST here instead of a GET because we may want to eventually have more
-granular control over when the notifications for rollouts is presented to
+granular control over when the notifications for new releases are presented to
 users. A POST allows a simpler way to send arbitrary data to the API in a
 more backwards compatible way, which we can then use to decide when to
 display the notification.
@@ -60,6 +45,10 @@ Request Schema:
         "name": {
             "type": "string",
             "default": "turbo"
+        },
+        "tag": {
+            "type": "string",
+            "default": "latest"
         }
     }
 }
@@ -90,20 +79,34 @@ Errors (400 | 404 | 500):
 */
 export default async function handler(req: NextRequest) {
   if (!SUPPORTED_METHODS.includes(req.method)) {
-    return errorResponse(ERROR_TYPES.FourOhFour);
+    return errorResponse({
+      status: 404,
+      message: `unsupported method - ${req.method}`,
+    });
   }
 
   try {
     const body = await req.json();
-    const { name = DEFAULT_PACKAGE } = body;
+    const { name = DEFAULT_PACKAGE, tag = DEFAULT_TAG } = body;
     if (!SUPPORTED_PACKAGES.includes(name)) {
-      return errorResponse(ERROR_TYPES.FourHundred);
+      return errorResponse({
+        status: 400,
+        message: `unsupported package - ${name}`,
+      });
     }
 
-    const version = await fetchVersion({ name });
+    const versions = await fetchDistTags({ name });
+    if (!versions || !versions[tag]) {
+      return errorResponse({
+        status: 404,
+        message: `unsupported tag - ${tag}`,
+      });
+    }
+
     return new Response(
       JSON.stringify({
-        version,
+        version: versions[tag],
+        tag,
         name,
       }),
       {
@@ -115,7 +118,7 @@ export default async function handler(req: NextRequest) {
     );
   } catch (e) {
     console.error(e);
-    return errorResponse(ERROR_TYPES.FiveHundred);
+    return errorResponse({ status: 500, message: e.message });
   }
 }
 
