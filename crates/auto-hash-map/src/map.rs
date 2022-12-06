@@ -72,9 +72,7 @@ impl<K, V, H: BuildHasher> AutoMap<K, V, H> {
     pub fn clear(&mut self) {
         match self {
             AutoMap::List(list) => list.clear(),
-            AutoMap::Map(_) => {
-                *self = AutoMap::List(Vec::new());
-            }
+            AutoMap::Map(map) => map.clear(),
         }
     }
 }
@@ -196,7 +194,15 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
     pub fn shrink_to_fit(&mut self) {
         match self {
             AutoMap::List(list) => list.shrink_to_fit(),
-            AutoMap::Map(map) => map.shrink_to_fit(),
+            AutoMap::Map(map) => {
+                if map.len() <= MAX_LIST_SIZE {
+                    let mut list = Vec::with_capacity(map.len());
+                    list.extend(map.drain());
+                    *self = AutoMap::List(list);
+                } else {
+                    map.shrink_to_fit();
+                }
+            }
         }
     }
 }

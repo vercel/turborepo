@@ -251,7 +251,7 @@ impl Cell {
                 if content != *old_content {
                     if !dependent_tasks.is_empty() {
                         turbo_tasks.schedule_notify_tasks_set(&dependent_tasks);
-                        dependent_tasks.clear();
+                        *dependent_tasks = AutoSet::new();
                     }
                     *self = Cell::Full(box FullCell::UpdatedValue {
                         content,
@@ -268,7 +268,7 @@ impl Cell {
                 if content != *cell_content {
                     if !dependent_tasks.is_empty() {
                         turbo_tasks.schedule_notify_tasks_set(&dependent_tasks);
-                        dependent_tasks.clear();
+                        *dependent_tasks = AutoSet::new()
                     }
                     *updates += 1;
                     *cell_content = content;
