@@ -38,4 +38,5 @@ jobs:
           target: ${{ matrix.os.name }}
 
       - name: E2E Tests
-        run: pnpm -- turbo run e2e --filter=cli
+        # Turbo has already been built in previous step, no need to rebuild
+        run: pnpm -- turbo-prebuilt run e2e-prebuilt --filter=cli
