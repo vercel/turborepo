@@ -17,27 +17,21 @@ on:
 
 jobs:
   test:
-    timeout-minutes: 15
-    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-node
-      - uses: ./.github/actions/setup-go
+      - uses: ./.github/actions/build-debug-turborepo
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Setup rust
-        uses: actions-rs/toolchain@v1
-
-      - name: Setup rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          key: test
+          target: ${{ matrix.os.name }}
 
       - name: Cache Prysk
         id: cache-prysk

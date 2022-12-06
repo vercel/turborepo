@@ -17,19 +17,26 @@ on:
 
 jobs:
   test:
-    timeout-minutes: 15
-    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
 
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-node
-      - uses: ./.github/actions/setup-go
+      - uses: ./.github/actions/build-debug-turborepo
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          target: ${{ matrix.os.name }}
 
       - name: E2E Tests
-        run: pnpm -- turbo run e2e --filter=cli
+        # Turbo has already been built in previous step, no need to rebuild
+        run: pnpm -- turbo-prebuilt run e2e-prebuilt --filter=cli

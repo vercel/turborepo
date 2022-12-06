@@ -70,6 +70,16 @@
         "shim/**/*.rs"
       ]
     },
+    "cli#e2e-prebuilt": {
+      "outputs": [],
+      "inputs": [
+        "cli/**/*.go",
+        "cli/go.mod",
+        "cli/go.sum",
+        "cli/scripts/e2e/e2e.ts",
+        "shim/**/*.rs"
+      ]
+    },
     "cli#integration-tests": {
       "outputs": []
     },
