@@ -34,6 +34,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - uses: ./.github/actions/build-debug-turborepo
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          target: ${{ matrix.os.name }}
       - name: checkout
         # We want to fetch all of the commits in PR and the commit it's based on
         # If this isn't a PR, then this is a push and we check against the previous commit
@@ -45,10 +49,6 @@ jobs:
           else
             git fetch --no-tags --prune --progress --depth=2
           fi
-      - uses: ./.github/actions/build-debug-turborepo
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          target: ${{ matrix.os.name }}
 
       # Note this runs nothing on push since event is push and not pull_request and ...[] matches nothing?
       # For push we should just do ..[HEAD^]
