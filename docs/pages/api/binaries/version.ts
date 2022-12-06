@@ -44,6 +44,50 @@ function errorResponse(type: keyof typeof ERRORS) {
   );
 }
 
+/*
+This API is called via the turbo rust binary to check for version updates.
+
+We use a POST here instead of a GET because we may want to eventually have more
+granular control over when the notifications for rollouts is presented to
+users. A POST allows a simpler way to send arbitrary data to the API in a
+more backwards compatible way, which we can then use to decide when to
+display the notification.
+
+Request Schema:
+{
+    "type": "object",
+    "properties": {
+        "name": {
+            "type": "string",
+            "default": "turbo"
+        }
+    }
+}
+
+Response Schema (200):
+{
+    "type": "object",
+    "properties": {
+        "name": {
+            "type": "string",
+        },
+        "version": {
+            "type": "string",
+        }
+    }
+}
+
+Errors (400 | 404 | 500):
+{
+    "type": "object",
+    "properties": {
+        "error": {
+            "type": "string",
+        }
+    }
+}
+
+*/
 export default async function handler(req: NextRequest) {
   if (!SUPPORTED_METHODS.includes(req.method)) {
     return errorResponse(ERROR_TYPES.FourOhFour);
