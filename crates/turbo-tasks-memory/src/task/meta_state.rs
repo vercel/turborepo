@@ -24,56 +24,56 @@ impl Default for TaskMetaState {
 }
 
 impl TaskMetaState {
-    fn into_partial(self) -> Option<PartialTaskState> {
+    pub(super) fn into_partial(self) -> Option<PartialTaskState> {
         match self {
             Self::Partial(state) => Some(*state),
             _ => None,
         }
     }
 
-    fn into_unloaded(self) -> Option<UnloadedTaskState> {
+    pub(super) fn into_unloaded(self) -> Option<UnloadedTaskState> {
         match self {
             Self::Unloaded(state) => Some(state),
             _ => None,
         }
     }
 
-    fn as_full(&self) -> Option<&TaskState> {
+    pub(super) fn as_full(&self) -> Option<&TaskState> {
         match self {
             Self::Full(state) => Some(state),
             _ => None,
         }
     }
 
-    fn as_partial(&self) -> Option<&PartialTaskState> {
+    pub(super) fn as_partial(&self) -> Option<&PartialTaskState> {
         match self {
             Self::Partial(state) => Some(state),
             _ => None,
         }
     }
 
-    fn as_unloaded(&self) -> Option<&UnloadedTaskState> {
+    pub(super) fn as_unloaded(&self) -> Option<&UnloadedTaskState> {
         match self {
             Self::Unloaded(state) => Some(state),
             _ => None,
         }
     }
 
-    fn as_full_mut(&mut self) -> Option<&mut TaskState> {
+    pub(super) fn as_full_mut(&mut self) -> Option<&mut TaskState> {
         match self {
             Self::Full(state) => Some(state),
             _ => None,
         }
     }
 
-    fn as_partial_mut(&mut self) -> Option<&mut PartialTaskState> {
+    pub(super) fn as_partial_mut(&mut self) -> Option<&mut PartialTaskState> {
         match self {
             Self::Partial(state) => Some(state),
             _ => None,
         }
     }
 
-    fn as_unloaded_mut(&mut self) -> Option<&mut UnloadedTaskState> {
+    pub(super) fn as_unloaded_mut(&mut self) -> Option<&mut UnloadedTaskState> {
         match self {
             Self::Unloaded(state) => Some(state),
             _ => None,
@@ -159,6 +159,15 @@ impl<'a> From<RwLockWriteGuard<'a, TaskMetaState>> for TaskMetaStateWriteGuard<'
     }
 }
 
+impl<'a> TaskMetaStateReadGuard<'a> {
+    pub(super) fn as_full(&mut self) -> Option<&TaskState> {
+        match self {
+            TaskMetaStateReadGuard::Full(state) => Some(&**state),
+            _ => None,
+        }
+    }
+}
+
 impl<'a> TaskMetaStateWriteGuard<'a> {
     pub(super) fn full_from(
         mut guard: RwLockWriteGuard<'a, TaskMetaState>,
@@ -225,6 +234,13 @@ impl<'a> TaskMetaStateWriteGuard<'a> {
                 "TaskMetaStateWriteGuard::scopes_and_children must be called with at least a \
                  partial state"
             ),
+        }
+    }
+
+    pub(super) fn as_full_mut(&mut self) -> Option<&mut TaskState> {
+        match self {
+            TaskMetaStateWriteGuard::Full(state) => Some(&mut **state),
+            _ => None,
         }
     }
 }

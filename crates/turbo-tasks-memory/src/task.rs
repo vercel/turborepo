@@ -1344,26 +1344,24 @@ impl Task {
         index: CellId,
         func: impl FnOnce(&mut Cell) -> T,
     ) -> Option<T> {
-        if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
-            if let Some(list) = state.cells.get_mut(&index.type_id) {
-                if let Some(cell) = list.get_mut(index.index as usize) {
-                    return Some(func(cell));
-                }
-            }
-        }
-        None
+        self.state_mut()
+            .as_full_mut()
+            .and_then(|state| state.cells.get_mut(&index.type_id))
+            .and_then(|list| list.get_mut(index.index as usize).map(|cell| func(cell)))
     }
 
     /// Access to a cell.
     pub(crate) fn with_cell<T>(&self, index: CellId, func: impl FnOnce(&Cell) -> T) -> T {
-        if let TaskMetaStateReadGuard::Full(state) = self.state() {
-            if let Some(list) = state.cells.get(&index.type_id) {
-                if let Some(cell) = list.get(index.index as usize) {
-                    return func(cell);
-                }
-            }
+        if let Some(cell) = self
+            .state()
+            .as_full()
+            .and_then(|state| state.cells.get(&index.type_id))
+            .and_then(|list| list.get(index.index as usize))
+        {
+            func(cell)
+        } else {
+            func(&Default::default())
         }
-        func(&Default::default())
     }
 
     /// For testing purposes
@@ -1691,8 +1689,7 @@ impl Task {
     ) {
         let mut state = self.full_state_mut();
         if state.collectibles.emit(trait_type, collectible) {
-            let mut tasks = AutoSet::new();
-            state
+            let tasks = state
                 .scopes
                 .iter()
                 .flat_map(|id| {
@@ -1701,7 +1698,8 @@ impl Task {
                         state.add_collectible(trait_type, collectible)
                     })
                 })
-                .for_each(|e| tasks.extend(e.notify));
+                .flat_map(|e| e.notify)
+                .collect::<AutoSet<_>>();
             drop(state);
             turbo_tasks.schedule_notify_tasks_set(&tasks);
         }
