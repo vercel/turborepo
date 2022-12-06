@@ -37,7 +37,7 @@ mod util;
 
 pub const GOOGLE_FONTS_STYLESHEET_URL: &str = "https://fonts.googleapis.com/css2";
 static FONT_DATA: Lazy<FontData> =
-    Lazy::new(|| serde_json::from_str(include_str!("font-data.json")).unwrap());
+    Lazy::new(|| serde_json::from_str(include_str!("__generated__/font-data.json")).unwrap());
 
 type FontData = IndexMap<String, FontDataEntry>;
 
