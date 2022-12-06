@@ -75,25 +75,6 @@ impl ParseResultSourceMap {
             mappings,
         }
     }
-
-    pub fn with_indent(origin: &ParseResultSourceMap, n: u32) -> Self {
-        ParseResultSourceMap {
-            source_map: origin.source_map.clone(),
-            mappings: origin
-                .mappings
-                .iter()
-                .map(|(pos, line_col)| {
-                    (
-                        *pos,
-                        LineCol {
-                            line: line_col.line,
-                            col: line_col.col + n,
-                        },
-                    )
-                })
-                .collect(),
-        }
-    }
 }
 
 #[turbo_tasks::value_impl]

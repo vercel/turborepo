@@ -1,12 +1,10 @@
-use std::{collections::VecDeque, fmt::Write};
+use std::{collections::VecDeque, io::Write};
 
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, ValueToString};
-use turbo_tasks_fs::rope::Rope;
-use turbopack_core::code_builder::{Code, CodeBuilder, CodeVc};
+use turbopack_core::code_builder::{CodeBuilder, CodeVc};
 
 use super::{CssChunkItemVc, CssImport};
-use crate::parse::{ParseResultSourceMap, ParseResultSourceMapVc};
 
 #[turbo_tasks::value]
 #[derive(Default)]
@@ -21,47 +19,46 @@ pub async fn expand_imports(chunk_item: CssChunkItemVc) -> Result<ExpandImportsR
     let mut stack = vec![(
         chunk_item,
         content.imports.iter().cloned().collect::<VecDeque<_>>(),
-        (0, "".to_string()),
+        "".to_string(),
     )];
     let mut result = ExpandImportsResult {
         external_imports: vec![],
         codes: vec![],
     };
-    let mut indenter = Indent::default();
 
-    while let Some((chunk_item, imports, (indent, close))) = stack.last_mut() {
+    while let Some((chunk_item, imports, close)) = stack.last_mut() {
         match imports.pop_front() {
             Some(CssImport::Internal(import, imported_chunk_item)) => {
-                let (open, inner_indent, close) = import.await?.attributes.await?.print_block()?;
+                let (open, close) = import.await?.attributes.await?.print_block()?;
 
                 let id = &*imported_chunk_item.to_string().await?;
-                let mut code = CodeBuilderWithIndent::default();
-                code.push_str(&format!("/* import({}) */\n", id), &indenter)?;
-                code.push_str(&format!("{}\n", open), &indenter)?;
+                let mut code = CodeBuilder::default();
+                writeln!(code, "/* import({}) */", id)?;
+                writeln!(code, "{}", open)?;
                 result.codes.push(code.build().cell());
 
                 let imported_content_vc = imported_chunk_item.content();
                 let imported_content = &*imported_content_vc.await?;
-                indenter.push(inner_indent);
                 stack.push((
                     imported_chunk_item,
                     imported_content.imports.iter().cloned().collect(),
-                    (inner_indent, close),
+                    close,
                 ));
             }
             Some(CssImport::External(url_vc)) => {
                 result.external_imports.push(url_vc);
             }
             None => {
-                let mut code = CodeBuilderWithIndent::default();
+                let mut code = CodeBuilder::default();
                 let id = &*chunk_item.to_string().await?;
-                code.push_str(&format!("/* {} */\n", id), &indenter)?;
+                writeln!(code, "/* {} */", id)?;
 
                 let content = chunk_item.content().await?;
-                code.push_source(&content.inner_code, content.source_map, &indenter)
-                    .await?;
-                indenter.pop(*indent);
-                code.push_str(&format!("\n{}\n", close), &indenter)?;
+                code.push_source(
+                    &content.inner_code,
+                    content.source_map.map(|sm| sm.as_generate_source_map()),
+                );
+                writeln!(code, "\n{}", close)?;
 
                 result.codes.push(code.build().cell());
                 stack.pop();
@@ -70,66 +67,4 @@ pub async fn expand_imports(chunk_item: CssChunkItemVc) -> Result<ExpandImportsR
     }
 
     Ok(result.cell())
-}
-
-#[derive(Default)]
-struct CodeBuilderWithIndent {
-    code: CodeBuilder,
-}
-
-#[derive(Default)]
-struct Indent(String);
-
-impl Indent {
-    pub fn push(&mut self, n: usize) {
-        self.0 += &" ".repeat(n);
-    }
-
-    pub fn pop(&mut self, n: usize) {
-        self.0 = " ".repeat(self.0.len().saturating_sub(n));
-    }
-
-    pub fn to_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl CodeBuilderWithIndent {
-    pub async fn push_source(
-        &mut self,
-        code: &Rope,
-        map: Option<ParseResultSourceMapVc>,
-        indent: &Indent,
-    ) -> Result<()> {
-        let indented = self.wrap_indent(&code.to_str()?, indent)?.into();
-        let indented_map = if let Some(map) = map {
-            Some(
-                ParseResultSourceMap::with_indent(&*map.await?, indent.to_str().len() as u32)
-                    .cell()
-                    .as_generate_source_map(),
-            )
-        } else {
-            None
-        };
-        self.code.push_source(&indented, indented_map);
-        Ok(())
-    }
-
-    pub fn push_str(&mut self, code: &str, indent: &Indent) -> Result<()> {
-        let indented = self.wrap_indent(code, indent)?.into();
-        self.code.push_source(&indented, None);
-        Ok(())
-    }
-
-    fn wrap_indent(&mut self, code: &str, indent: &Indent) -> Result<String> {
-        let mut indented = String::new();
-        for line in code.split_inclusive('\n') {
-            write!(indented, "{}{}", indent.to_str(), line)?;
-        }
-        Ok(indented)
-    }
-
-    pub fn build(self) -> Code {
-        self.code.build()
-    }
 }
