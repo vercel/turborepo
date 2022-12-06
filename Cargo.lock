@@ -2971,6 +2971,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "next-font"
+version = "0.1.0"
+dependencies = [
+ "fxhash",
+ "serde",
+ "serde_json",
+ "swc_core",
+]
+
+[[package]]
 name = "nix"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6585,6 +6595,7 @@ dependencies = [
  "fxhash",
  "indexmap",
  "lazy_static",
+ "next-font",
  "num-bigint",
  "once_cell",
  "pin-project-lite",
@@ -6699,6 +6710,7 @@ name = "turbopack-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "next-core",
  "once_cell",
  "serde",
  "serde_json",
