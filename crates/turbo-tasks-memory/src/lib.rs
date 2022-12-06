@@ -15,7 +15,6 @@ mod output;
 pub mod scope;
 pub mod stats;
 mod task;
-mod task_stats;
 pub mod viz;
 
 pub use memory_backend::MemoryBackend;

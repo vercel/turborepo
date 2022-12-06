@@ -359,7 +359,6 @@ impl Backend for MemoryBackend {
             }) {
                 Ok(content) => Ok(Ok(content)),
                 Err(RecomputingCell { listener, schedule }) => {
-                    println!("recomputing cell {task_id} {index} untracked");
                     if schedule {
                         task.invalidate(self, turbo_tasks);
                     }

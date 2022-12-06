@@ -105,14 +105,8 @@ impl Cell {
                     schedule: true,
                 })
             }
-            Cell::Recomputing { event, .. } => {
-                let listener = event.listen_with_note(note);
-                Err(RecomputingCell {
-                    listener,
-                    schedule: false,
-                })
-            }
-            Cell::Full(box FullCell::Recomputing { event, .. }) => {
+            Cell::Recomputing { event, .. }
+            | Cell::Full(box FullCell::Recomputing { event, .. }) => {
                 let listener = event.listen_with_note(note);
                 Err(RecomputingCell {
                     listener,
@@ -150,14 +144,8 @@ impl Cell {
                     schedule: true,
                 })
             }
-            Cell::Recomputing { event, .. } => {
-                let listener = event.listen_with_note(note);
-                Err(RecomputingCell {
-                    listener,
-                    schedule: false,
-                })
-            }
-            Cell::Full(box FullCell::Recomputing { event, .. }) => {
+            Cell::Recomputing { event, .. }
+            | Cell::Full(box FullCell::Recomputing { event, .. }) => {
                 let listener = event.listen_with_note(note);
                 Err(RecomputingCell {
                     listener,

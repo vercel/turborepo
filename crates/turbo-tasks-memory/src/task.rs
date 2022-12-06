@@ -1,3 +1,6 @@
+mod meta_state;
+mod stats;
+
 use std::{
     borrow::Cow,
     cell::RefCell,
@@ -15,27 +18,25 @@ use std::{
 use anyhow::Result;
 use auto_hash_map::{AutoMap, AutoSet};
 use parking_lot::{Mutex, RwLock};
+use stats::TaskStats;
 use tokio::task_local;
 use turbo_tasks::{
     backend::{PersistentTaskType, TaskExecutionSpec},
     event::{Event, EventListener},
-    get_invalidator,
-    macro_helpers::Lazy,
-    registry, CellId, Invalidator, RawVc, StatsType, TaskId, TraitTypeId, TurboTasksBackendApi,
-    ValueTypeId,
+    get_invalidator, registry, CellId, Invalidator, RawVc, StatsType, TaskId, TraitTypeId,
+    TurboTasksBackendApi, ValueTypeId,
 };
 
 use crate::{
     cell::Cell,
     count_hash_set::CountHashSet,
-    map_guard::{ReadGuard, WriteGuard},
     memory_backend::Job,
     output::Output,
     scope::{ScopeChildChangeEffect, TaskScopeId, TaskScopes},
-    stats::{self, StatsReferences},
-    task_stats::TaskStats,
+    stats::{ReferenceType, StatsReferences, StatsTaskType},
     MemoryBackend,
 };
+
 pub type NativeTaskFuture = Pin<Box<dyn Future<Output = Result<RawVc>> + Send>>;
 pub type NativeTaskFn = Box<dyn Fn() -> NativeTaskFuture + Send + Sync>;
 
@@ -108,140 +109,6 @@ pub struct Task {
     /// The mutable state of the task
     /// Unset state is equal to a Dirty task that has not been executed yet
     state: RwLock<TaskMetaState>,
-}
-
-enum TaskMetaState {
-    Full(Box<TaskState>),
-    Partial(Box<PartialTaskState>),
-    Unloaded(UnloadedTaskState),
-}
-
-impl Default for TaskMetaState {
-    fn default() -> Self {
-        Self::Unloaded(UnloadedTaskState::default())
-    }
-}
-
-impl TaskMetaState {
-    fn into_unwrap_partial(self) -> PartialTaskState {
-        match self {
-            Self::Partial(state) => *state,
-            _ => panic!("TaskMetaState is not partial"),
-        }
-    }
-
-    fn into_unwrap_unloaded(self) -> UnloadedTaskState {
-        match self {
-            Self::Unloaded(state) => state,
-            _ => panic!("TaskMetaState is not none"),
-        }
-    }
-
-    fn unwrap_full(&self) -> &TaskState {
-        match self {
-            Self::Full(state) => state,
-            _ => panic!("TaskMetaState is not full"),
-        }
-    }
-
-    fn unwrap_partial(&self) -> &PartialTaskState {
-        match self {
-            Self::Partial(state) => state,
-            _ => panic!("TaskMetaState is not partial"),
-        }
-    }
-
-    fn unwrap_unloaded(&self) -> &UnloadedTaskState {
-        match self {
-            Self::Unloaded(state) => state,
-            _ => panic!("TaskMetaState is not none"),
-        }
-    }
-
-    fn unwrap_full_mut(&mut self) -> &mut TaskState {
-        match self {
-            Self::Full(state) => state,
-            _ => panic!("TaskMetaState is not full"),
-        }
-    }
-
-    fn unwrap_partial_mut(&mut self) -> &mut PartialTaskState {
-        match self {
-            Self::Partial(state) => state,
-            _ => panic!("TaskMetaState is not partial"),
-        }
-    }
-
-    fn unwrap_unloaded_mut(&mut self) -> &mut UnloadedTaskState {
-        match self {
-            Self::Unloaded(state) => state,
-            _ => panic!("TaskMetaState is not none"),
-        }
-    }
-}
-
-// These need to be impl types since there is no way to reference the zero-sized
-// function item type
-type TaskMetaStateUnwrapFull = impl Fn(&TaskMetaState) -> &TaskState;
-type TaskMetaStateUnwrapPartial = impl Fn(&TaskMetaState) -> &PartialTaskState;
-type TaskMetaStateUnwrapUnloaded = impl Fn(&TaskMetaState) -> &UnloadedTaskState;
-type TaskMetaStateUnwrapFullMut = impl Fn(&mut TaskMetaState) -> &mut TaskState;
-type TaskMetaStateUnwrapPartialMut = impl Fn(&mut TaskMetaState) -> &mut PartialTaskState;
-type TaskMetaStateUnwrapUnloadedMut = impl Fn(&mut TaskMetaState) -> &mut UnloadedTaskState;
-
-enum TaskMetaStateReadGuard<'a> {
-    Full(ReadGuard<'a, TaskMetaState, TaskState, TaskMetaStateUnwrapFull>),
-    Partial(ReadGuard<'a, TaskMetaState, PartialTaskState, TaskMetaStateUnwrapPartial>),
-    Unloaded(ReadGuard<'a, TaskMetaState, UnloadedTaskState, TaskMetaStateUnwrapUnloaded>),
-}
-
-type FullTaskWriteGuard<'a> =
-    WriteGuard<'a, TaskMetaState, TaskState, TaskMetaStateUnwrapFull, TaskMetaStateUnwrapFullMut>;
-
-enum TaskMetaStateWriteGuard<'a> {
-    Full(FullTaskWriteGuard<'a>),
-    Partial(
-        WriteGuard<
-            'a,
-            TaskMetaState,
-            PartialTaskState,
-            TaskMetaStateUnwrapPartial,
-            TaskMetaStateUnwrapPartialMut,
-        >,
-    ),
-    Unloaded(
-        WriteGuard<
-            'a,
-            TaskMetaState,
-            UnloadedTaskState,
-            TaskMetaStateUnwrapUnloaded,
-            TaskMetaStateUnwrapUnloadedMut,
-        >,
-    ),
-}
-
-impl<'a> TaskMetaStateWriteGuard<'a> {
-    fn scopes_and_children(&mut self) -> (&mut TaskScopes, &AutoSet<TaskId>) {
-        match self {
-            TaskMetaStateWriteGuard::Full(state) => {
-                let TaskState {
-                    ref mut scopes,
-                    ref children,
-                    ..
-                } = **state;
-                (scopes, children)
-            }
-            TaskMetaStateWriteGuard::Partial(state) => {
-                let PartialTaskState { ref mut scopes, .. } = **state;
-                static EMPTY: Lazy<AutoSet<TaskId>> = Lazy::new(|| AutoSet::new());
-                (scopes, &*EMPTY)
-            }
-            TaskMetaStateWriteGuard::Unloaded(_) => unreachable!(
-                "TaskMetaStateWriteGuard::scopes_and_children must be called with at least a \
-                 partial state"
-            ),
-        }
-    }
 }
 
 impl Debug for Task {
@@ -471,6 +338,10 @@ enum TaskStateType {
 
 use TaskStateType::*;
 
+use self::meta_state::{
+    FullTaskWriteGuard, TaskMetaState, TaskMetaStateReadGuard, TaskMetaStateWriteGuard,
+};
+
 impl Task {
     pub(crate) fn new_persistent(
         id: TaskId,
@@ -599,107 +470,24 @@ impl Task {
     }
 
     fn state(&self) -> TaskMetaStateReadGuard<'_> {
-        let guard = self.state.read();
-        match &*guard {
-            TaskMetaState::Full(_) => {
-                TaskMetaStateReadGuard::Full(ReadGuard::new(guard, TaskMetaState::unwrap_full))
-            }
-            TaskMetaState::Partial(_) => TaskMetaStateReadGuard::Partial(ReadGuard::new(
-                guard,
-                TaskMetaState::unwrap_partial,
-            )),
-            TaskMetaState::Unloaded(_) => TaskMetaStateReadGuard::Unloaded(ReadGuard::new(
-                guard,
-                TaskMetaState::unwrap_unloaded,
-            )),
-        }
+        self.state.read().into()
     }
 
     fn try_state(&self) -> Option<TaskMetaStateReadGuard<'_>> {
-        if let Some(guard) = self.state.try_read() {
-            Some(match &*guard {
-                TaskMetaState::Full(_) => {
-                    TaskMetaStateReadGuard::Full(ReadGuard::new(guard, TaskMetaState::unwrap_full))
-                }
-                TaskMetaState::Partial(_) => TaskMetaStateReadGuard::Partial(ReadGuard::new(
-                    guard,
-                    TaskMetaState::unwrap_partial,
-                )),
-                TaskMetaState::Unloaded(_) => TaskMetaStateReadGuard::Unloaded(ReadGuard::new(
-                    guard,
-                    TaskMetaState::unwrap_unloaded,
-                )),
-            })
-        } else {
-            None
-        }
+        self.state.try_read().map(|guard| guard.into())
     }
 
     fn state_mut(&self) -> TaskMetaStateWriteGuard<'_> {
-        let guard = self.state.write();
-        match &*guard {
-            TaskMetaState::Full(_) => TaskMetaStateWriteGuard::Full(WriteGuard::new(
-                guard,
-                TaskMetaState::unwrap_full,
-                TaskMetaState::unwrap_full_mut,
-            )),
-            TaskMetaState::Partial(_) => TaskMetaStateWriteGuard::Partial(WriteGuard::new(
-                guard,
-                TaskMetaState::unwrap_partial,
-                TaskMetaState::unwrap_partial_mut,
-            )),
-            TaskMetaState::Unloaded(_) => TaskMetaStateWriteGuard::Unloaded(WriteGuard::new(
-                guard,
-                TaskMetaState::unwrap_unloaded,
-                TaskMetaState::unwrap_unloaded_mut,
-            )),
-        }
+        self.state.write().into()
     }
 
     fn full_state_mut(&self) -> FullTaskWriteGuard<'_> {
-        let mut guard = self.state.write();
-        match &*guard {
-            TaskMetaState::Full(_) => {}
-            TaskMetaState::Partial(_) => {
-                let partial = take(&mut *guard).into_unwrap_partial();
-                *guard = TaskMetaState::Full(box partial.into_full());
-            }
-            TaskMetaState::Unloaded(_) => {
-                let unloaded = take(&mut *guard).into_unwrap_unloaded();
-                *guard = TaskMetaState::Full(box unloaded.into_full(self.id));
-            }
-        }
-        WriteGuard::new(
-            guard,
-            TaskMetaState::unwrap_full,
-            TaskMetaState::unwrap_full_mut,
-        )
+        TaskMetaStateWriteGuard::full_from(self.state.write(), self)
     }
 
     #[allow(dead_code, reason = "We need this in future")]
     fn partial_state_mut(&self) -> TaskMetaStateWriteGuard<'_> {
-        let mut guard = self.state.write();
-        match &*guard {
-            TaskMetaState::Full(_) => TaskMetaStateWriteGuard::Full(WriteGuard::new(
-                guard,
-                TaskMetaState::unwrap_full,
-                TaskMetaState::unwrap_full_mut,
-            )),
-            TaskMetaState::Partial(_) => TaskMetaStateWriteGuard::Partial(WriteGuard::new(
-                guard,
-                TaskMetaState::unwrap_partial,
-                TaskMetaState::unwrap_partial_mut,
-            )),
-            TaskMetaState::Unloaded(_) => {
-                let unloaded = take(&mut *guard).into_unwrap_unloaded();
-                *guard = TaskMetaState::Partial(box unloaded.into_partial(self.id));
-                TaskMetaStateWriteGuard::Partial(WriteGuard::new(
-                    guard,
-                    TaskMetaState::unwrap_partial,
-                    TaskMetaState::unwrap_partial_mut,
-                ))
-            }
-        }
+        TaskMetaStateWriteGuard::partial_from(self.state.write(), self)
     }
 
     pub(crate) fn execute(
@@ -1673,15 +1461,15 @@ impl Task {
         }
     }
 
-    pub fn get_stats_type(self: &Task) -> stats::TaskType {
+    pub fn get_stats_type(self: &Task) -> StatsTaskType {
         match &self.ty {
-            TaskType::Root(_) => stats::TaskType::Root(self.id),
-            TaskType::Once(_) => stats::TaskType::Once(self.id),
+            TaskType::Root(_) => StatsTaskType::Root(self.id),
+            TaskType::Once(_) => StatsTaskType::Once(self.id),
             TaskType::Persistent(ty) => match &**ty {
-                PersistentTaskType::Native(f, _) => stats::TaskType::Native(*f),
-                PersistentTaskType::ResolveNative(f, _) => stats::TaskType::ResolveNative(*f),
+                PersistentTaskType::Native(f, _) => StatsTaskType::Native(*f),
+                PersistentTaskType::ResolveNative(f, _) => StatsTaskType::ResolveNative(*f),
                 PersistentTaskType::ResolveTrait(t, n, _) => {
-                    stats::TaskType::ResolveTrait(*t, n.to_string())
+                    StatsTaskType::ResolveTrait(*t, n.to_string())
                 }
             },
         }
@@ -1692,17 +1480,17 @@ impl Task {
         let mut scope_refs = Vec::new();
         if let TaskMetaStateReadGuard::Full(state) = self.state() {
             for child in state.children.iter() {
-                refs.push((stats::ReferenceType::Child, *child));
+                refs.push((ReferenceType::Child, *child));
             }
             if let Done { ref dependencies } = state.state_type {
                 for dep in dependencies.iter() {
                     match dep {
                         TaskDependency::TaskOutput(task) | TaskDependency::TaskCell(task, _) => {
-                            refs.push((stats::ReferenceType::Dependency, *task))
+                            refs.push((ReferenceType::Dependency, *task))
                         }
                         TaskDependency::ScopeChildren(scope)
                         | TaskDependency::ScopeCollectibles(scope, _) => {
-                            scope_refs.push((stats::ReferenceType::Dependency, *scope))
+                            scope_refs.push((ReferenceType::Dependency, *scope))
                         }
                     }
                 }
@@ -1715,7 +1503,7 @@ impl Task {
                 | PersistentTaskType::ResolveTrait(_, _, inputs) => {
                     for input in inputs.iter() {
                         if let Some(task) = input.get_task_id() {
-                            refs.push((stats::ReferenceType::Input, task));
+                            refs.push((ReferenceType::Input, task));
                         }
                     }
                 }
