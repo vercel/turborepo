@@ -59,10 +59,6 @@ impl Output {
         }
     }
 
-    pub fn track_read(&mut self, reader: TaskId) {
-        self.dependent_tasks.insert(reader);
-    }
-
     pub fn link(&mut self, target: RawVc, turbo_tasks: &dyn TurboTasksBackendApi) {
         let change;
         let mut _type_change = false;

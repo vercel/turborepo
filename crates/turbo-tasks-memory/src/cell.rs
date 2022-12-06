@@ -172,33 +172,6 @@ impl Cell {
         }
     }
 
-    pub fn track_read(&mut self, reader: TaskId) {
-        match self {
-            Cell::Empty => {}
-            &mut Cell::Recomputing {
-                ref mut event,
-                updates,
-            } => {
-                *self = Cell::Full(box FullCell::Recomputing {
-                    event: event.take(),
-                    updates,
-                    dependent_tasks: AutoSet::from([reader]),
-                });
-            }
-            Cell::Full(box FullCell::Recomputing {
-                dependent_tasks, ..
-            })
-            | Cell::InitialValue {
-                dependent_tasks, ..
-            }
-            | Cell::Full(box FullCell::UpdatedValue {
-                dependent_tasks, ..
-            }) => {
-                dependent_tasks.insert(reader);
-            }
-        }
-    }
-
     pub fn assign(&mut self, content: CellContent, turbo_tasks: &dyn TurboTasksBackendApi) {
         match self {
             Cell::Empty => {

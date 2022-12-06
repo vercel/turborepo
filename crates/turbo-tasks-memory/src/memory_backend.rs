@@ -284,22 +284,6 @@ impl Backend for MemoryBackend {
         )
     }
 
-    fn track_read_task_output(
-        &self,
-        task: TaskId,
-        reader: TaskId,
-        _turbo_tasks: &dyn TurboTasksBackendApi,
-    ) {
-        if task != reader {
-            self.with_task(task, |t| {
-                t.with_output_mut(|output| {
-                    Task::add_dependency_to_current(TaskDependency::TaskOutput(task));
-                    output.track_read(reader);
-                })
-            })
-        }
-    }
-
     fn try_read_task_cell(
         &self,
         task_id: TaskId,
@@ -366,21 +350,6 @@ impl Backend for MemoryBackend {
                 }
             }
         })
-    }
-
-    fn track_read_task_cell(
-        &self,
-        task: TaskId,
-        index: CellId,
-        reader: TaskId,
-        _turbo_tasks: &dyn TurboTasksBackendApi,
-    ) {
-        if task != reader {
-            Task::add_dependency_to_current(TaskDependency::TaskCell(task, index));
-            self.with_task(task, |task| {
-                task.with_cell_mut(index, |cell| cell.track_read(reader))
-            });
-        }
     }
 
     fn try_read_task_collectibles(

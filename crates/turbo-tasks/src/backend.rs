@@ -227,13 +227,6 @@ pub trait Backend: Sync + Send {
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> Result<Result<RawVc, EventListener>>;
 
-    fn track_read_task_output(
-        &self,
-        task: TaskId,
-        reader: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
-    );
-
     fn try_read_task_cell(
         &self,
         task: TaskId,
@@ -264,14 +257,6 @@ pub trait Backend: Sync + Send {
             Err(_) => Ok(CellContent(None)),
         }
     }
-
-    fn track_read_task_cell(
-        &self,
-        task: TaskId,
-        index: CellId,
-        reader: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
-    );
 
     fn try_read_task_collectibles(
         &self,
