@@ -1316,12 +1316,6 @@ impl Task {
     }
 
     /// Access to the output cell.
-    pub(crate) fn with_output_mut<T>(&self, func: impl FnOnce(&mut Output) -> T) -> T {
-        let mut state = self.full_state_mut();
-        func(&mut state.output)
-    }
-
-    /// Access to the output cell.
     pub(crate) fn with_output_mut_if_available<T>(
         &self,
         func: impl FnOnce(&mut Output) -> T,
