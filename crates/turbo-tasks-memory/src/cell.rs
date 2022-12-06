@@ -56,15 +56,18 @@ pub struct RecomputingCell {
 impl Cell {
     pub fn remove_dependent_task(&mut self, task: TaskId) {
         match self {
-            Cell::Empty
-            | Cell::Recomputing { .. }
-            | Cell::Full(box FullCell::Recomputing { .. }) => {}
+            Cell::Empty | Cell::Recomputing { .. } => {}
             Cell::InitialValue {
                 dependent_tasks, ..
             }
-            | Cell::Full(box FullCell::UpdatedValue {
-                dependent_tasks, ..
-            }) => {
+            | Cell::Full(
+                box (FullCell::Recomputing {
+                    dependent_tasks, ..
+                }
+                | FullCell::UpdatedValue {
+                    dependent_tasks, ..
+                }),
+            ) => {
                 dependent_tasks.remove(&task);
             }
         }
@@ -251,7 +254,7 @@ impl Cell {
                 if content != *old_content {
                     if !dependent_tasks.is_empty() {
                         turbo_tasks.schedule_notify_tasks_set(&dependent_tasks);
-                        *dependent_tasks = AutoSet::new();
+                        dependent_tasks.clear();
                     }
                     *self = Cell::Full(box FullCell::UpdatedValue {
                         content,
@@ -268,7 +271,7 @@ impl Cell {
                 if content != *cell_content {
                     if !dependent_tasks.is_empty() {
                         turbo_tasks.schedule_notify_tasks_set(&dependent_tasks);
-                        *dependent_tasks = AutoSet::new()
+                        dependent_tasks.clear();
                     }
                     *updates += 1;
                     *cell_content = content;
