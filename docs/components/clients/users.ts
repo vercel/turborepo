@@ -511,4 +511,10 @@ export const users: Array<TurboUser> = [
       width: 175,
     },
   },
+  {
+    caption: "Nhost",
+    image: "/images/logos/nhost.svg",
+    infoLink: "https://nhost.io/",
+    pinned: true,
+  },
 ];
