@@ -10,10 +10,12 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests
 "[project]/crates/turbopack-tests/tests/snapshot/import-meta/url/input/mod.mjs (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
 
 const __TURBOPACK__import$2e$meta__ = {
-    url: new URL("/crates/turbopack-tests/tests/snapshot/import-meta/url/input/mod.mjs", location.href).href
+    url: "file:///ROOT/crates/turbopack-tests/tests/snapshot/import-meta/url/input/mod.mjs"
 };
 "__TURBOPACK__ecmascript__hoisting__location__";
-console.log(new URL('foo', __TURBOPACK__import$2e$meta__.url));
+const assetUrl = new URL('./asset.txt', __TURBOPACK__import$2e$meta__.url);
+console.log(assetUrl);
+fetch(assetUrl).then((res)=>res.text()).then(console.log);
 
 }.call(this) }),
 }, ({ loadedChunks, instantiateRuntimeModule }) => {
