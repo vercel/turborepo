@@ -568,7 +568,7 @@ mod test {
     #[test]
     fn test_windows_path_normalization() -> Result<()> {
         let cwd = current_dir()?;
-        let normalized = fs_canonicalize(&cwd)?;
+        let normalized = fs_canonicalize(cwd)?;
         // Just make sure it isn't a UNC path
         assert!(!normalized.starts_with("\\\\?"));
         Ok(())

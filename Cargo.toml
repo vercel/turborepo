@@ -7,11 +7,13 @@ members = [
   "crates/next-core",
   "crates/next-dev",
   "crates/next-dev-tests",
+  "crates/next-font",
   "crates/next-transform-dynamic",
   "crates/next-transform-strip-page-exports",
   "crates/node-file-trace",
   "crates/swc-ast-explorer",
   "crates/turbo-malloc",
+  "crates/turbo-tasks",
   "crates/turbo-tasks-build",
   "crates/turbo-tasks-env",
   "crates/turbo-tasks-fetch",
@@ -21,7 +23,8 @@ members = [
   "crates/turbo-tasks-macros-shared",
   "crates/turbo-tasks-memory",
   "crates/turbo-tasks-testing",
-  "crates/turbo-tasks",
+  "crates/turbo-updater",
+  "crates/turbopack",
   "crates/turbopack-cli-utils",
   "crates/turbopack-core",
   "crates/turbopack-create-test-app",
@@ -29,17 +32,15 @@ members = [
   "crates/turbopack-dev-server",
   "crates/turbopack-ecmascript",
   "crates/turbopack-env",
+  "crates/turbopack-json",
   "crates/turbopack-mdx",
   "crates/turbopack-node",
-  "crates/turbopack-json",
   "crates/turbopack-static",
   "crates/turbopack-swc-utils",
-  "crates/turbopack",
   "crates/turbopack-tests",
   "crates/turborepo",
   "crates/turborepo-ffi",
   "crates/turborepo-lib",
-  "crates/turbo-updater",
   "xtask",
 ]
 
@@ -48,12 +49,14 @@ default-members = [
   "crates/next-binding",
   "crates/next-core",
   "crates/next-dev",
-  "crates/next-transform-dynamic",
   "crates/next-dev-tests",
+  "crates/next-font",
+  "crates/next-transform-dynamic",
   "crates/next-transform-strip-page-exports",
   "crates/node-file-trace",
   "crates/swc-ast-explorer",
   "crates/turbo-malloc",
+  "crates/turbo-tasks",
   "crates/turbo-tasks-build",
   "crates/turbo-tasks-env",
   "crates/turbo-tasks-fetch",
@@ -63,7 +66,7 @@ default-members = [
   "crates/turbo-tasks-macros-shared",
   "crates/turbo-tasks-memory",
   "crates/turbo-tasks-testing",
-  "crates/turbo-tasks",
+  "crates/turbopack",
   "crates/turbopack-cli-utils",
   "crates/turbopack-core",
   "crates/turbopack-create-test-app",
@@ -71,12 +74,11 @@ default-members = [
   "crates/turbopack-dev-server",
   "crates/turbopack-ecmascript",
   "crates/turbopack-env",
+  "crates/turbopack-json",
   "crates/turbopack-mdx",
   "crates/turbopack-node",
-  "crates/turbopack-json",
   "crates/turbopack-static",
   "crates/turbopack-swc-utils",
-  "crates/turbopack",
   "crates/turbopack-tests",
   "xtask",
 ]
@@ -91,8 +93,6 @@ opt-level = 3
 # Declare dependencies used across workspace packages requires single version bump.
 # ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
 [workspace.dependencies]
-indexmap = { version = "1.9.2" }
-indoc = "1.0"
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.12.2" }
 swc_core = { version = "0.59.26" }
@@ -102,10 +102,112 @@ styled_jsx = { version = "0.30.4" }
 styled_components = { version = "0.53.4" }
 modularize_imports = { version = "0.26.4" }
 mdxjs = { version = "0.1.6" }
-next-dev = { path = "crates/next-dev", version = "0.1.0" }
-node-file-trace = { path = "crates/node-file-trace", version = "0.1.0" }
+
+auto-hash-map = { path = "crates/auto-hash-map" }
+next-binding = { path = "crates/next-binding" }
+next-core = { path = "crates/next-core" }
+next-dev = { path = "crates/next-dev" }
+next-dev-tests = { path = "crates/next-dev-tests" }
+next-font = { path = "crates/next-font" }
+next-transform-dynamic = { path = "crates/next-transform-dynamic" }
+next-transform-strip-page-exports = { path = "crates/next-transform-strip-page-exports" }
+node-file-trace = { path = "crates/node-file-trace" }
+swc-ast-explorer = { path = "crates/swc-ast-explorer" }
+turbo-malloc = { path = "crates/turbo-malloc", default-features = false }
+turbo-tasks = { path = "crates/turbo-tasks" }
+turbo-tasks-build = { path = "crates/turbo-tasks-build" }
+turbo-tasks-env = { path = "crates/turbo-tasks-env" }
+turbo-tasks-fetch = { path = "crates/turbo-tasks-fetch" }
+turbo-tasks-fs = { path = "crates/turbo-tasks-fs" }
+turbo-tasks-hash = { path = "crates/turbo-tasks-hash" }
+turbo-tasks-macros = { path = "crates/turbo-tasks-macros" }
+turbo-tasks-macros-shared = { path = "crates/turbo-tasks-macros-shared" }
+turbo-tasks-memory = { path = "crates/turbo-tasks-memory" }
+turbo-tasks-testing = { path = "crates/turbo-tasks-testing" }
+turbo-updater = { path = "crates/turbo-updater" }
+turbopack = { path = "crates/turbopack" }
+turbopack-cli-utils = { path = "crates/turbopack-cli-utils" }
+turbopack-core = { path = "crates/turbopack-core" }
+turbopack-create-test-app = { path = "crates/turbopack-create-test-app" }
+turbopack-css = { path = "crates/turbopack-css" }
+turbopack-dev-server = { path = "crates/turbopack-dev-server" }
+turbopack-ecmascript = { path = "crates/turbopack-ecmascript" }
+turbopack-env = { path = "crates/turbopack-env" }
+turbopack-json = { path = "crates/turbopack-json" }
+turbopack-mdx = { path = "crates/turbopack-mdx" }
+turbopack-node = { path = "crates/turbopack-node" }
+turbopack-static = { path = "crates/turbopack-static" }
+turbopack-swc-utils = { path = "crates/turbopack-swc-utils" }
+turbopack-tests = { path = "crates/turbopack-tests" }
+turborepo = { path = "crates/turborepo" }
+turborepo-ffi = { path = "crates/turborepo-ffi" }
+turborepo-lib = { path = "crates/turborepo-lib" }
+#next-transform-dynamic = { path = "crates/next-transform-dynamic" }
+#next-transform-strip-page-exports = { path = "crates/next-transform-strip-page-exports" }
+
 # Be careful when selecting tls backend, including change default tls backend.
 # If you changed, must verify with ALL build targets with next-swc to ensure
 # it works. next-swc have various platforms, some doesn't support native (using openssl-sys)
 # and some aren't buildable with rustls.
-reqwest = { version = "0.11.13", default-features = false }
+reqwest = { version = "0.11.14", default-features = false }
+
+chromiumoxide = { version = "0.4.0", features = [
+  "tokio-runtime",
+], default-features = false }
+# For matching on errors from chromiumoxide. Keep in
+# sync with chromiumoxide's tungstenite requirement.
+tungstenite = "0.17.3"
+
+anyhow = "1.0.69"
+assert_cmd = "2.0.8"
+async-trait = "0.1.64"
+atty = "0.2.14"
+chrono = "0.4.23"
+clap = "4.1.6"
+clap_complete = "4.1.2"
+concurrent-queue = "2.1.0"
+console = "0.15.5"
+console-subscriber = "0.1.8"
+criterion = "0.4.0"
+dashmap = "5.4.0"
+dialoguer = "0.10.3"
+dunce = "1.0.3"
+futures = "0.3.26"
+futures-retry = "0.6.0"
+httpmock = "0.6.7"
+indexmap = "1.9.2"
+indicatif = "0.17.3"
+indoc = "2.0.0"
+itertools = "0.10.5"
+lazy_static = "1.4.0"
+log = "0.4.17"
+mime = "0.3.16"
+nohash-hasher = "0.2.0"
+once_cell = "1.17.1"
+owo-colors = "3.5.0"
+parking_lot = "0.12.1"
+pathdiff = "0.2.1"
+pin-project-lite = "0.2.9"
+pretty_assertions = "1.3.0"
+proc-macro2 = "1.0.51"
+predicates = "2.1.5"
+qstring = "0.7.2"
+quote = "1.0.23"
+rand = "0.8.5"
+regex = "1.7.0"
+rstest = "0.16.0"
+rustc-hash = "1.1.0"
+semver = "1.0.16"
+serde = "1.0.152"
+serde_json = "1.0.93"
+serde_qs = "0.11.0"
+serde_yaml = "0.9.17"
+syn = "1.0.107"
+tempfile = "3.3.0"
+test-generator = "0.3.1"
+thiserror = "1.0.38"
+tokio = "1.25.0"
+tracing = "0.1.37"
+url = "2.2.2"
+webbrowser = "0.8.7"
+tiny-gradient = "0.1.0"

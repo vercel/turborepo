@@ -265,6 +265,7 @@ impl APIClient {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(20))
             .build()?;
+        rustc_version_runtime::version();
 
         Ok(APIClient {
             client,
