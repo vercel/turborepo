@@ -272,7 +272,7 @@ async fn parse_content(
                 transform.apply(&mut parsed_program, &context).await?;
             }
 
-            let eval_context = EvalContext::new(source.path(), &parsed_program, unresolved_mark);
+            let eval_context = EvalContext::new(&parsed_program, unresolved_mark);
 
             Ok::<ParseResult, anyhow::Error>(ParseResult::Ok {
                 program: parsed_program,
