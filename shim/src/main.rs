@@ -16,6 +16,8 @@ use std::{
 use anyhow::{anyhow, Result};
 use clap::{CommandFactory, Parser, Subcommand};
 use serde::Serialize;
+use tiny_gradient::{GradientStr, RGB};
+use turbo_updater::check_for_updates;
 
 use crate::{
     ffi::{nativeRunWithArgs, nativeRunWithTurboState, GoString},
@@ -446,6 +448,23 @@ fn get_version() -> &'static str {
 }
 
 fn main() -> Result<()> {
+    // custom footer for update message
+    let footer = format!(
+        "Follow {username} for updates: {url}",
+        username = "@turborepo".gradient([RGB::new(0, 153, 247), RGB::new(241, 23, 18)]),
+        url = "https://twitter.com/turborepo"
+    );
+
+    // check for updates
+    let _ = check_for_updates(
+        "turbo",
+        "https://github.com/vercel/turbo",
+        Some(&footer),
+        get_version(),
+        None,
+        None,
+    );
+
     let clap_args = Args::parse();
     // --help doesn't work with ignore_errors in clap.
     if clap_args.help {
