@@ -1546,15 +1546,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dirs"
-version = "4.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca3aa72a6f96ea37bbc5aa912f6788242832f75369bdfdadcb0e38423f100059"
-dependencies = [
- "dirs-sys",
-]
-
-[[package]]
 name = "dirs-next"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1562,6 +1553,17 @@ checksum = "b98cf8ebf19c3d1b223e151f99a4f9f0690dca41414773390fc824184ac833e1"
 dependencies = [
  "cfg-if 1.0.0",
  "dirs-sys-next",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b1d1d91c932ef41c0f2663aa8b0ca0342d444d842c06914aa0a7e352d0bada6"
+dependencies = [
+ "libc",
+ "redox_users",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -3064,7 +3066,7 @@ dependencies = [
  "supports-hyperlinks",
  "supports-unicode",
  "terminal_size 0.1.17",
- "textwrap 0.15.0",
+ "textwrap 0.15.2",
  "thiserror",
  "unicode-width",
 ]
@@ -4575,20 +4577,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa0f585226d2e68097d4f95d113b15b83a82e819ab25717ec0590d9584ef366"
 dependencies = [
  "semver 1.0.14",
-]
-
-[[package]]
-name = "rustix"
-version = "0.36.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3807b5d10909833d3e9acd1eb5fb988f79376ff10fce42937de71a449c4c588"
-dependencies = [
- "bitflags",
- "errno",
- "io-lifetimes",
- "libc",
- "linux-raw-sys",
- "windows-sys 0.42.0",
 ]
 
 [[package]]
@@ -7548,7 +7536,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f154aee470c0882ea0f3b1cc2a46c5f4d24f282655f7b0cec065614fe24c447f"
 dependencies = [
  "directories",
- "semver 1.0.13",
+ "semver 1.0.14",
  "serde",
  "serde_json",
  "ureq",
@@ -7560,7 +7548,7 @@ version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b97acb4c28a254fd7a4aeec976c46a7fa404eac4d7c134b30c75144846d7cb8f"
 dependencies = [
- "base64 0.13.0",
+ "base64",
  "chunked_transfer",
  "flate2",
  "log",
