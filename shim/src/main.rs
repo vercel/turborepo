@@ -16,6 +16,8 @@ use anyhow::{anyhow, Context, Result};
 use clap::CommandFactory;
 use clap_complete::generate;
 use serde::Serialize;
+use tiny_gradient::{GradientStr, RGB};
+use turbo_updater::check_for_updates;
 
 use crate::{
     commands::{Args, Command, RunArgs},
@@ -290,7 +292,24 @@ fn is_turbo_binary_path_set() -> bool {
 }
 
 fn main() -> Result<()> {
-    let mut clap_args = Args::new()?;
+    // custom footer for update message
+    let footer = format!(
+        "Follow {username} for updates: {url}",
+        username = "@turborepo".gradient([RGB::new(0, 153, 247), RGB::new(241, 23, 18)]),
+        url = "https://twitter.com/turborepo"
+    );
+
+    // check for updates
+    let _ = check_for_updates(
+        "turbo",
+        "https://github.com/vercel/turbo",
+        Some(&footer),
+        get_version(),
+        None,
+        None,
+    );
+
+    let mut clap_args = Args::parse();
 
     let current_dir = if let Some(cwd) = &clap_args.cwd {
         fs::canonicalize::<PathBuf>(cwd.into())?
