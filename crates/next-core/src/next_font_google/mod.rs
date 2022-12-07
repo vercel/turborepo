@@ -134,11 +134,9 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
             .as_ref()
             .context("@next/font/google queries must exist")?;
 
-        assert_eq!(
-            query_map.len(),
-            1,
-            "@next/font/google queries must only have one entry"
-        );
+        if query_map.len() != 1 {
+            bail!("@next/font/google queries must only have one entry");
+        }
 
         let Some((json, _)) = query_map.iter().next() else {
             bail!("Expected one entry");
