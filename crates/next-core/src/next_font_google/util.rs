@@ -5,8 +5,6 @@ use indexmap::{indexset, IndexSet};
 
 use super::options::{FontData, FontWeights};
 
-const GOOGLE_FONTS_STYLESHEET_URL: &str = "https://fonts.googleapis.com/css2";
-
 #[derive(Debug, PartialEq)]
 pub(crate) struct FontAxes {
     pub(crate) wght: IndexSet<String>,

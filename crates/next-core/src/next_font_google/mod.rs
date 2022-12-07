@@ -1,15 +1,10 @@
 use anyhow::{bail, Context, Result};
-use auto_hash_map::AutoMap;
 use indexmap::IndexMap;
 use indoc::formatdoc;
 use once_cell::sync::Lazy;
-use turbo_tasks::{
-    primitives::{OptionStringVc, StringVc},
-    TryJoinIterExt,
-};
+use turbo_tasks::primitives::{OptionStringVc, StringVc};
 use turbo_tasks_fetch::fetch;
-use turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
-use turbo_tasks_hash::hash_xxh3_hash64;
+use turbo_tasks_fs::{FileContent, FileSystemPathVc};
 use turbopack_core::{
     resolve::{
         options::{
@@ -27,7 +22,7 @@ use crate::{
     next_font_google::{
         options::FontDataEntry,
         request::NextFontRequest,
-        util::{extract_font_urls, get_font_axes, get_stylesheet_url},
+        util::{get_font_axes, get_stylesheet_url},
     },
 };
 
@@ -164,64 +159,6 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
 
         let stylesheet = &*stylesheet_res.body.to_string().await?;
         let options = options_from_request(request).await?;
-        let fonts = extract_font_urls(stylesheet, options.subsets.as_ref(), options.preload)?;
-
-        let requests: Vec<_> = fonts
-            .all_urls
-            .iter()
-            .map(|font_url| {
-                // TODO(WEB-274): Handle this failing (e.g. connection issues). This should be
-                // an Issue.
-                fetch(
-                    StringVc::cell(font_url.to_owned()),
-                    OptionStringVc::cell(None),
-                )
-            })
-            .collect();
-
-        let mut url_to_filename = AutoMap::new();
-        let fonts_dir = self.project_path.join(".next/static/media");
-        let responses = requests.iter().try_join().await?;
-        for (url, response) in fonts.all_urls.iter().zip(responses.iter()) {
-            // TODO(WEB-274): Emit an issue instead
-            if response.status >= 400 {
-                bail!(
-                    "Expected a successful response for font at url {}. Received status {}",
-                    url,
-                    response.status
-                );
-            }
-        }
-
-        for (url, response) in fonts.all_urls.iter().zip(responses.iter()) {
-            let (_, url_file_extension) = url
-                .rsplit_once('.')
-                .context("font url must have file extension")?;
-
-            let filename = format!(
-                "{:x}{}.{}",
-                hash_xxh3_hash64(url),
-                if fonts.preload_urls.contains(url) {
-                    ".p"
-                } else {
-                    ""
-                },
-                url_file_extension
-            );
-            url_to_filename.insert(url, filename.to_owned());
-
-            let body = &*response.body.await?;
-            fonts_dir
-                .join(&filename)
-                .write(FileContent::Content(File::from(body.0.clone())).into());
-        }
-
-        let mut updated_stylesheet = stylesheet.to_owned();
-        for (url, filename) in url_to_filename {
-            // TODO(WEB-275): Reduce string allocations when updating
-            updated_stylesheet =
-                updated_stylesheet.replace(url, &format!("/_next/static/media/{}", filename));
-        }
 
         let css_asset = VirtualAssetVc::new(
             attached_next_js_package_path(self.project_path)
@@ -235,7 +172,7 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
                             font-family: "{}";
                         }}
                         "#,
-                    updated_stylesheet,
+                    stylesheet,
                     options.font_family
                 )
                 .into(),
