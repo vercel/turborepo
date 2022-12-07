@@ -65,8 +65,8 @@ use super::{
         graph::{create_graph, Effect},
         linker::{link, LinkCache},
         well_known::replace_well_known,
-        ConstantValue, FreeVarKind, JsValue, ObjectPart, WellKnownConstructorKind,
-        WellKnownFunctionKind, WellKnownObjectKind,
+        ConstantValue, FreeVarKind, JsValue, ObjectPart, WellKnownFunctionKind,
+        WellKnownObjectKind,
     },
     errors,
     parse::{parse, ParseResult},
@@ -1172,13 +1172,31 @@ pub(crate) async fn analyze_ecmascript_module(
                             }
                         }
                     }
-                    Effect::ImportMeta { span: _, ast_path } => {
+                    Effect::ImportMeta { ast_path, span: _ } => {
                         if first_import_meta {
                             first_import_meta = false;
                             analysis.add_code_gen(ImportMetaBindingVc::new(source.path()));
                         }
 
                         analysis.add_code_gen(ImportMetaRefVc::new(AstPathVc::cell(ast_path)));
+                    }
+                    Effect::Url {
+                        input,
+                        ast_path: _,
+                        span,
+                    } => {
+                        let pat = js_value_to_pattern(&input);
+                        if !pat.has_constant_parts() {
+                            handler.span_warn_with_code(
+                                span,
+                                &format!("new URL({input}, import.meta.url) is very dynamic"),
+                                DiagnosticId::Lint(
+                                    errors::failed_to_analyse::ecmascript::NEW_URL_IMPORT_META
+                                        .to_string(),
+                                ),
+                            )
+                        }
+                        analysis.add_reference(SourceAssetReferenceVc::new(source, pat.cell()));
                     }
                 }
             }
@@ -1430,9 +1448,6 @@ async fn value_visitor_inner(
             }
             JsValue::FreeVar(FreeVarKind::Object) => {
                 JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject)
-            }
-            JsValue::FreeVar(FreeVarKind::Url) => {
-                JsValue::WellKnownConstructor(WellKnownConstructorKind::Url)
             }
             JsValue::FreeVar(_) => JsValue::Unknown(Some(Arc::new(v)), "unknown global"),
             JsValue::Module(ModuleValue {

@@ -17,6 +17,7 @@ use swc_core::{
         atoms::{Atom, JsWord},
     },
 };
+use turbo_tasks_fs::FileSystemPathVc;
 use url::Url;
 
 use self::imports::ImportAnnotations;
@@ -197,9 +198,6 @@ pub enum JsValue {
     /// Some kind of well known function
     WellKnownFunction(WellKnownFunctionKind),
 
-    /// Some kind of well known constructor function
-    WellKnownConstructor(WellKnownConstructorKind),
-
     /// Not analyzable.
     Unknown(Option<Arc<JsValue>>, &'static str),
 
@@ -361,7 +359,6 @@ impl Display for JsValue {
             JsValue::Unknown(..) => write!(f, "???"),
             JsValue::WellKnownObject(obj) => write!(f, "WellKnownObject({:?})", obj),
             JsValue::WellKnownFunction(func) => write!(f, "WellKnownFunction({:?})", func),
-            JsValue::WellKnownConstructor(func) => write!(f, "WellKnownConstructor({:?})", func),
             JsValue::Function(_, return_value) => {
                 write!(f, "Function(return = {:?})", return_value)
             }
@@ -484,7 +481,6 @@ impl JsValue {
             | JsValue::Module(..)
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_)
-            | JsValue::WellKnownConstructor(_)
             | JsValue::Unknown(_, _)
             | JsValue::Argument(_) => 1,
 
@@ -510,7 +506,6 @@ impl JsValue {
             | JsValue::Module(..)
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_)
-            | JsValue::WellKnownConstructor(_)
             | JsValue::Unknown(_, _)
             | JsValue::Argument(_) => {}
 
@@ -563,7 +558,6 @@ impl JsValue {
                 | JsValue::Module(..)
                 | JsValue::WellKnownObject(_)
                 | JsValue::WellKnownFunction(_)
-                | JsValue::WellKnownConstructor(_)
                 | JsValue::Unknown(_, _)
                 | JsValue::Argument(_) => self.make_unknown_without_content("node limit reached"),
 
@@ -924,6 +918,10 @@ impl JsValue {
                         "require.cache",
                         "The CommonJS require.cache object: https://nodejs.org/api/modules.html#requirecache"
                     ),
+                    WellKnownObjectKind::ImportMeta(..) => (
+                        "import.meta",
+                        "The ESM import.meta object: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import.meta"
+                    ),
                 };
                 if depth > 0 {
                     let i = hints.len();
@@ -1035,18 +1033,6 @@ impl JsValue {
                     name
                 }
             }
-            JsValue::WellKnownConstructor(func) => {
-                let (name, explainer) = match func {
-                    WellKnownConstructorKind::Url => ("URL".to_string(), "The URL constructor"),
-                };
-                if depth > 0 {
-                    let i = hints.len();
-                    hints.push(format!("- *{i}* {name}: {explainer}"));
-                    format!("{name}*{i}*")
-                } else {
-                    name
-                }
-            }
             JsValue::Function(_, return_value) => {
                 if depth > 0 {
                     format!(
@@ -1075,13 +1061,13 @@ impl JsValue {
 
     pub fn has_placeholder(&self) -> bool {
         match self {
-            JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject) => true,
+            JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject)
+            /* | JsValue::WellKnownObject(WellKnownObjectKind::ImportMeta(..)) */ => true,
             // These are leafs and not placeholders
             JsValue::Constant(_)
             | JsValue::Url(_)
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_)
-            | JsValue::WellKnownConstructor(_)
             | JsValue::Unknown(_, _)
             | JsValue::Function(..) => false,
 
@@ -1214,7 +1200,6 @@ macro_rules! for_each_children_async {
             | JsValue::Url(_)
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_)
-            | JsValue::WellKnownConstructor(_)
             | JsValue::Unknown(..)
             | JsValue::Argument(..) => ($value, false),
         })
@@ -1429,7 +1414,6 @@ impl JsValue {
             | JsValue::Url(_)
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_)
-            | JsValue::WellKnownConstructor(_)
             | JsValue::Unknown(..)
             | JsValue::Argument(..) => false,
         }
@@ -1490,7 +1474,6 @@ impl JsValue {
             | JsValue::Url(_)
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_)
-            | JsValue::WellKnownConstructor(_)
             | JsValue::Unknown(..)
             | JsValue::Argument(..) => {}
         }
@@ -1535,9 +1518,7 @@ impl JsValue {
             | JsValue::NewCall(..)
             | JsValue::MemberCall(..)
             | JsValue::Member(..) => false,
-            JsValue::WellKnownObject(_)
-            | JsValue::WellKnownFunction(_)
-            | JsValue::WellKnownConstructor(..) => false,
+            JsValue::WellKnownObject(_) | JsValue::WellKnownFunction(_) => false,
         }
     }
 
@@ -1881,7 +1862,6 @@ impl JsValue {
             }
             JsValue::WellKnownObject(v) => Hash::hash(v, state),
             JsValue::WellKnownFunction(v) => Hash::hash(v, state),
-            JsValue::WellKnownConstructor(v) => Hash::hash(v, state),
             JsValue::Unknown(_, v) => Hash::hash(v, state),
             JsValue::Function(_, v) => v.similar_hash(state, depth - 1),
             JsValue::Argument(v) => Hash::hash(v, state),
@@ -1954,6 +1934,7 @@ pub enum WellKnownObjectKind {
     NodeExpressApp,
     NodeProtobufLoader,
     RequireCache,
+    ImportMeta(FileSystemPathVc),
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -1962,6 +1943,7 @@ pub enum WellKnownFunctionKind {
     PathJoin,
     PathDirname,
     /// `0` is the current working directory.
+    // TODO: How does this work?
     PathResolve(Box<JsValue>),
     Import,
     Require,
@@ -1984,11 +1966,6 @@ pub enum WellKnownFunctionKind {
     NodeStrongGlobalizeSetRootDir,
     NodeResolveFrom,
     NodeProtobufLoad,
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum WellKnownConstructorKind {
-    Url,
 }
 
 fn is_unresolved(i: &Ident, unresolved_mark: Mark) -> bool {
@@ -2066,6 +2043,7 @@ mod tests {
         testing::{fixture, run_test, NormalizedOutput},
     };
     use turbo_tasks::{util::FormatDuration, Value};
+    use turbo_tasks_fs::{FileSystem, NullFileSystem};
     use turbopack_core::{
         environment::{
             EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment,
@@ -2085,6 +2063,7 @@ mod tests {
         let graph_snapshot_path = input.with_file_name("graph.snapshot");
         let graph_explained_snapshot_path = input.with_file_name("graph-explained.snapshot");
         let resolved_explained_snapshot_path = input.with_file_name("resolved-explained.snapshot");
+        let file = NullFileSystem.cell().root().join(&input.to_string_lossy());
 
         run_test(false, |cm, handler| {
             let r = tokio::runtime::Builder::new_current_thread()
@@ -2106,7 +2085,7 @@ mod tests {
                 let top_level_mark = Mark::new();
                 m.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
 
-                let eval_context = EvalContext::new(&m, unresolved_mark);
+                let eval_context = EvalContext::new(file, &m, unresolved_mark);
 
                 let var_graph = create_graph(&m, &eval_context);
 
