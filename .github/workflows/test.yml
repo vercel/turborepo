@@ -485,6 +485,8 @@ jobs:
           pnpx node-gyp install
           choco install protoc -y
           echo 'node-linker = "hoisted"' > crates/turbopack/tests/node-file-trace/.npmrc
+          rustup set default-host x86_64-pc-windows-gnu
+          rustup show
         if: matrix.os.name == 'windows'
 
       - name: Install tests dependencies
