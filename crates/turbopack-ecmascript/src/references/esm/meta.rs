@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use swc_core::{
     common::DUMMY_SP,
     ecma::ast::{Expr, Ident},
@@ -38,14 +38,14 @@ impl ImportMetaBindingVc {
 impl CodeGenerateable for ImportMetaBinding {
     #[turbo_tasks::function]
     async fn code_generation(&self, _context: ChunkingContextVc) -> Result<CodeGenerationVc> {
-        let path = import_meta_url(self.path).await.map_or_else(
-            |_| {
+        let path = as_abs_path(self.path).await?.as_str().map_or_else(
+            || {
                 quote!(
                     "(() => { throw new Error('could not convert import.meta.url to filepath') })()"
                         as Expr
                 )
             },
-            |path| path.into(),
+            |path| format!("file://{}", encode_path(path)).into(),
         );
 
         let visitor = create_visitor!(visit_mut_program(program: &mut Program) {
@@ -97,19 +97,6 @@ impl CodeGenerateable for ImportMetaRef {
         }
         .into())
     }
-}
-
-pub async fn import_meta_url(path: FileSystemPathVc) -> Result<String> {
-    as_abs_path(path)
-        .await?
-        .as_str()
-        .map(|path| format!("file://{}", encode_path(path)))
-        .ok_or_else(|| {
-            anyhow!(
-                "failed to
-                convert path to url"
-            )
-        })
 }
 
 /// URL encodes special chars that would appear in the "pathname" portion.
