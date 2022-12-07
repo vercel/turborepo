@@ -405,7 +405,6 @@ pub async fn well_known_object_member(
         WellKnownObjectKind::NodePreGyp => node_pre_gyp(prop),
         WellKnownObjectKind::NodeExpressApp => express(prop),
         WellKnownObjectKind::NodeProtobufLoader => protobuf_loader(prop),
-        // WellKnownObjectKind::ImportMeta(file) => import_meta(file, prop).await?,
         #[allow(unreachable_patterns)]
         _ => JsValue::Unknown(
             Some(Arc::new(JsValue::member(
@@ -416,22 +415,6 @@ pub async fn well_known_object_member(
         ),
     })
 }
-
-// async fn import_meta(file: FileSystemPathVc, prop: JsValue) ->
-// Result<JsValue> { Ok(match prop.as_str() {
-// // Some("url") => {
-// // let url = Url::parse()?;
-// // JsValue::Url(url)
-// // }
-// _ => JsValue::Unknown(
-// Some(Arc::new(JsValue::member(
-// box JsValue::WellKnownObject(WellKnownObjectKind::ImportMeta(file)),
-// box prop,
-// ))),
-// "unsupported propery on import.meta",
-// ),
-// })
-// }
 
 fn global_object(prop: JsValue) -> JsValue {
     match prop.as_str() {

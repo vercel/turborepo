@@ -175,14 +175,11 @@ pub enum JsValue {
     /// is string.
     Add(usize, Vec<JsValue>),
 
-    /// `callee(args)`
+    /// `(callee, args)`
     Call(usize, Box<JsValue>, Vec<JsValue>),
 
-    /// `obj.prop(args)`
+    /// `(obj, prop, args)`
     MemberCall(usize, Box<JsValue>, Box<JsValue>, Vec<JsValue>),
-
-    /// `new callee(args)`
-    NewCall(usize, Box<JsValue>, Vec<JsValue>),
 
     /// `obj[prop]`
     Member(usize, Box<JsValue>, Box<JsValue>),
@@ -329,15 +326,6 @@ impl Display for JsValue {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            JsValue::NewCall(_, callee, list) => write!(
-                f,
-                "new {}({})",
-                callee,
-                list.iter()
-                    .map(|v| v.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
             JsValue::MemberCall(_, obj, prop, list) => write!(
                 f,
                 "{}[{}]({})",
@@ -455,10 +443,6 @@ impl JsValue {
         Self::Call(1 + f.total_nodes() + total_nodes(&args), f, args)
     }
 
-    pub fn new_call(f: Box<JsValue>, args: Vec<JsValue>) -> Self {
-        Self::NewCall(1 + f.total_nodes() + total_nodes(&args), f, args)
-    }
-
     pub fn member_call(o: Box<JsValue>, p: Box<JsValue>, args: Vec<JsValue>) -> Self {
         Self::MemberCall(
             1 + o.total_nodes() + p.total_nodes() + total_nodes(&args),
@@ -489,7 +473,6 @@ impl JsValue {
             | JsValue::Concat(c, _)
             | JsValue::Add(c, _)
             | JsValue::Call(c, _, _)
-            | JsValue::NewCall(c, _, _)
             | JsValue::MemberCall(c, _, _, _)
             | JsValue::Member(c, _, _)
             | JsValue::Function(c, _) => *c,
@@ -524,7 +507,7 @@ impl JsValue {
                     })
                     .sum::<usize>();
             }
-            JsValue::Call(c, f, list) | JsValue::NewCall(c, f, list) => {
+            JsValue::Call(c, f, list) => {
                 *c = 1 + f.total_nodes() + total_nodes(list);
             }
             JsValue::MemberCall(c, o, m, list) => {
@@ -575,7 +558,7 @@ impl JsValue {
                     }));
                     self.update_total_nodes();
                 }
-                JsValue::Call(_, f, args) | JsValue::NewCall(_, f, args) => {
+                JsValue::Call(_, f, args) => {
                     make_max_unknown([&mut **f].into_iter().chain(args.iter_mut()));
                     self.update_total_nodes();
                 }
@@ -773,27 +756,6 @@ impl JsValue {
             JsValue::Call(_, callee, list) => {
                 format!(
                     "{}({})",
-                    callee.explain_internal_inner(hints, indent_depth, depth, unknown_depth),
-                    pretty_join(
-                        &list
-                            .iter()
-                            .map(|v| v.explain_internal_inner(
-                                hints,
-                                indent_depth + 1,
-                                depth,
-                                unknown_depth
-                            ))
-                            .collect::<Vec<_>>(),
-                        indent_depth,
-                        ", ",
-                        ",",
-                        ""
-                    )
-                )
-            }
-            JsValue::NewCall(_, callee, list) => {
-                format!(
-                    "new {}({})",
                     callee.explain_internal_inner(hints, indent_depth, depth, unknown_depth),
                     pretty_join(
                         &list
@@ -1056,8 +1018,7 @@ impl JsValue {
 
     pub fn has_placeholder(&self) -> bool {
         match self {
-            JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject)
-            /* | JsValue::WellKnownObject(WellKnownObjectKind::ImportMeta(..)) */ => true,
+            JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject) => true,
             // These are leafs and not placeholders
             JsValue::Constant(_)
             | JsValue::Url(_)
@@ -1068,10 +1029,7 @@ impl JsValue {
 
             // These must be optimized reduced if they don't contain placeholders
             // So when we see them, they contain placeholders
-            JsValue::Call(..)
-            | JsValue::NewCall(..)
-            | JsValue::MemberCall(..)
-            | JsValue::Member(..) => true,
+            JsValue::Call(..) | JsValue::MemberCall(..) | JsValue::Member(..) => true,
 
             // These are nested structures, where we look into children
             // to see placeholders
@@ -1143,7 +1101,7 @@ macro_rules! for_each_children_async {
                 $value.update_total_nodes();
                 ($value, modified)
             }
-            JsValue::Call(_, box callee, list) | JsValue::NewCall(_, box callee, list) => {
+            JsValue::Call(_, box callee, list) => {
                 let (new_callee, mut modified) = $visit_fn(take(callee), $($args),+).await?;
                 *callee = new_callee;
                 for item in list.iter_mut() {
@@ -1368,7 +1326,7 @@ impl JsValue {
                 self.update_total_nodes();
                 modified
             }
-            JsValue::Call(_, callee, list) | JsValue::NewCall(_, callee, list) => {
+            JsValue::Call(_, callee, list) => {
                 let mut modified = visitor(callee);
                 for item in list.iter_mut() {
                     if visitor(item) {
@@ -1442,7 +1400,7 @@ impl JsValue {
                     }
                 }
             }
-            JsValue::Call(_, callee, list) | JsValue::NewCall(_, callee, list) => {
+            JsValue::Call(_, callee, list) => {
                 visitor(callee);
                 for item in list.iter() {
                     visitor(item);
@@ -1493,8 +1451,7 @@ impl JsValue {
                 | FreeVarKind::Require
                 | FreeVarKind::Define
                 | FreeVarKind::Import
-                | FreeVarKind::NodeProcess
-                | FreeVarKind::Url,
+                | FreeVarKind::NodeProcess,
             ) => false,
             JsValue::FreeVar(FreeVarKind::Other(_)) => false,
 
@@ -1509,10 +1466,7 @@ impl JsValue {
                 box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
                 _,
             ) => true,
-            JsValue::Call(..)
-            | JsValue::NewCall(..)
-            | JsValue::MemberCall(..)
-            | JsValue::Member(..) => false,
+            JsValue::Call(..) | JsValue::MemberCall(..) | JsValue::Member(..) => false,
             JsValue::WellKnownObject(_) | JsValue::WellKnownFunction(_) => false,
         }
     }
@@ -1835,7 +1789,7 @@ impl JsValue {
             JsValue::Variable(v) => Hash::hash(v, state),
             JsValue::Concat(_, v) => all_similar_hash(v, state, depth - 1),
             JsValue::Add(_, v) => all_similar_hash(v, state, depth - 1),
-            JsValue::Call(_, a, b) | JsValue::NewCall(_, a, b) => {
+            JsValue::Call(_, a, b) => {
                 a.similar_hash(state, depth - 1);
                 all_similar_hash(b, state, depth - 1);
             }
@@ -1903,9 +1857,6 @@ pub enum FreeVarKind {
     /// Node.js process
     NodeProcess,
 
-    /// new URL(...)
-    Url,
-
     /// `abc` `some_global`
     Other(JsWord),
 }
@@ -1937,7 +1888,6 @@ pub enum WellKnownFunctionKind {
     PathJoin,
     PathDirname,
     /// `0` is the current working directory.
-    // TODO: How does this work?
     PathResolve(Box<JsValue>),
     Import,
     Require,
