@@ -54,20 +54,20 @@ e.g. for the given JS code:
 const dog = "dog";
 const cat = "cat";
 
-export const dog = dog;
-export const chimera = cat + dog;
+export const DOG = dog;
+export const CHIMERA = cat + dog;
 ```
 
 The graph would look like this:
 
 ```text
 ╔═══════╗   ┌───┐
-║chimera║──▶│cat│
+║CHIMERA║──▶│cat│
 ╚═══════╝   └───┘
     │
     ▼
   ┌───┐     ╔═══╗
-  │dog│◀────║dog║
+  │dog│◀────║DOG║
   └───┘     ╚═══╝
 
 ── Local
@@ -88,16 +88,16 @@ exports B and C, it will go into the set (B, C). However, if the declaration
 itself is another export, then stop there.
 
 ```text
- ┌ ─ ─chimera─ ─ ┐
+ ┌ ─ ─CHIMERA─ ─ ┐
   ╔═══════╗ ┌───┐
- │║chimera║ │cat││
+ │║CHIMERA║ │cat││
   ╚═══════╝ └───┘
  └ ─ ─ ─ ─ ─ ─ ─ ┘
              │
              ▼
- ┌ dog ┐  ┌(dog)┐
+ ┌ DOG ┐  ┌ dog ┐
   ╔═══╗    ┌───┐
- │║dog║│─▶││dog││
+ │║DOG║│─▶││dog││
   ╚═══╝    └───┘
  └ ─ ─ ┘  └ ─ ─ ┘
 
@@ -143,7 +143,7 @@ Consider the following module:
 let dog = "dog";
 
 function getDog() {
-    return dog;
+   return dog;
 }
 
 function setDog(newDog) {
@@ -151,9 +151,9 @@ function setDog(newDog) {
 }
 
 export const dogRef = {
-    initial: dog
-    get: getDog,
-    set: setDog,
+   initial: dog
+   get: getDog,
+   set: setDog,
 };
 
 export let cat = "cat";
@@ -161,7 +161,7 @@ export let cat = "cat";
 export const initialCat = cat;
 
 export function getChimera() {
-    return cat + dog;
+   return cat + dog;
 }
 ```
 
