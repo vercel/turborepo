@@ -3,7 +3,7 @@ import Callout from '../../../../../components/Callout'
 
 # Using Storybook with Turborepo
 
-[Storybook](https://storybook.js.org/) is a popular way to build UI components in an isolated environment. By putting Storybook into your Turborepo, you can easily develop your design system right alongside your applications.
+[Storybook](https://storybook.js.org/) is a popular way to build UI components in an isolated environment. By putting Storybook into your Turborepo, you can easily develop your design system right alongside your applications. If you'd rather use a template, this guide is walking through how to build [this Storybook/Turborepo template](https://vercel.com/templates/react/turborepo-design-system) on Vercel.
 
 ## Guide
 
@@ -54,8 +54,8 @@ Next, we need to scaffold Storybook:
   <Tab>
     ```shell
     cd workshop
-    npx sb init -s            # Set up files
-    npm i -D @storybook/cli   # Manually install deps and CLI
+    npx sb init --skip-install
+    npm install --save-dev @storybook/cli   # Manually install deps and CLI
     ```
 
     <Callout type="info">You may be prompted to enable the `--legacy-peer-deps` flag. This flag is required for Storybook to work in a monorepo.</Callout>
@@ -78,8 +78,8 @@ Next, we need to scaffold Storybook:
 
       ```shell
       cd workshop
-      pnpx sb init -s            # Set up files
-      pnpm i -D @storybook/cli   # Manually install deps and CLI
+      pnpx sb init -skip-install
+      pnpm install --save-dev @storybook/cli   # Manually install deps and CLI
       ```
 
   </Tab>
@@ -173,7 +173,7 @@ And `pnpm install` one more time to make sure that your `ui` package is installe
 import { Button } from 'ui'
 ```
 
-### 3. Align tasks
+### 4. Align tasks
 
 The last thing that we need to do is make sure that Storybook is lined up with the rest of your tasks:
 
@@ -187,6 +187,37 @@ The last thing that we need to do is make sure that Storybook is lined up with t
 }
 ```
 
-To ensure build caching, you'll also need to add `storybook-static` to your `.gitignore`.
+To ensure build caching, you'll first need to add `storybook-static` to your `.gitignore`. Then, add `storybook-static` to the outputs of your `turbo.json` build task:
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": [
+        "dist/**",
++       "storybook-static/**"
+      ]
+    }
+  }
+}
+```
 
 Your `dev` and `build` tasks will now include Storybook, allowing you to develop your Storybook alongside your applications and enjoy cached builds with the rest of your applications.
+
+## Deploy on Vercel
+
+Let's deploy your Storybook project.
+
+In the "Build and Development Settings" on the General tab of your project settings, change your "Output Directory" to `storybook-static`.
+
+Additionally, at the time of this writing, Storybook cannot be ran on Node 18, the Vercel default. In the `package.json` of your `workshop` app, add an `engines` field to make sure that this project runs on Node 16:
+
+```json filename="apps/workshop/package.json"
+{
+  // ...
+  "engines": {
+    "node": "16"
+  }
+}
+
+```
