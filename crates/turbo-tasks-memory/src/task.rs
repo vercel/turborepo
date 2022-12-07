@@ -725,14 +725,15 @@ impl Task {
             }
         }
         for (i, scope) in scopes.iter().enumerate() {
-            if backend.with_scope(scope, |scope| {
+            let any_scope_was_active = backend.with_scope(scope, |scope| {
                 let mut state = scope.state.lock();
                 let is_active = state.is_active();
                 if !is_active {
                     state.add_dirty_task(self.id);
                 }
                 is_active
-            }) {
+            });
+            if any_scope_was_active {
                 // A scope is active, revert dirty task changes and return true
                 for scope in scopes.iter().take(i + 1) {
                     backend.with_scope(scope, |scope| {
