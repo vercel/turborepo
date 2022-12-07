@@ -16,7 +16,6 @@ use swc_core::{
     },
 };
 use turbo_tasks::Value;
-use turbo_tasks_fs::{FileSystem, NullFileSystem};
 use turbo_tasks_testing::VcStorage;
 use turbopack_core::{
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
@@ -44,8 +43,6 @@ pub fn benchmark(c: &mut Criterion) {
             let name = entry.file_name().into_string().unwrap();
             let input = entry.path().join("input.js");
 
-            let file = NullFileSystem.cell().root().join(&input.to_string_lossy());
-
             let cm = Arc::new(SourceMap::new(FilePathMapping::empty()));
             let fm = cm.load_file(&input).unwrap();
             GLOBALS.set(&swc_core::common::Globals::new(), || {
@@ -62,7 +59,7 @@ pub fn benchmark(c: &mut Criterion) {
                 let top_level_mark = Mark::new();
                 program.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
 
-                let eval_context = EvalContext::new(file, &program, unresolved_mark);
+                let eval_context = EvalContext::new(&program, unresolved_mark);
                 let var_graph = create_graph(&program, &eval_context);
 
                 let input = BenchInput {

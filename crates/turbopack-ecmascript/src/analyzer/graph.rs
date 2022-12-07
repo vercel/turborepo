@@ -8,12 +8,8 @@ use swc_core::{
         visit::{fields::*, VisitAstPath, VisitWithPath, *},
     },
 };
-use turbo_tasks_fs::FileSystemPathVc;
 
-use super::{
-    ConstantNumber, ConstantValue, ImportMap, JsValue, ObjectPart, WellKnownFunctionKind,
-    WellKnownObjectKind,
-};
+use super::{ConstantNumber, ConstantValue, ImportMap, JsValue, ObjectPart, WellKnownFunctionKind};
 use crate::{
     analyzer::{is_unresolved, FreeVarKind},
     utils::unparen,
@@ -157,15 +153,13 @@ pub fn create_graph(m: &Program, eval_context: &EvalContext) -> VarGraph {
 }
 
 pub struct EvalContext {
-    pub(crate) file: FileSystemPathVc,
     pub(crate) unresolved_mark: Mark,
     pub(crate) imports: ImportMap,
 }
 
 impl EvalContext {
-    pub fn new(file: FileSystemPathVc, module: &Program, unresolved_mark: Mark) -> Self {
+    pub fn new(module: &Program, unresolved_mark: Mark) -> Self {
         Self {
-            file,
             unresolved_mark,
             imports: ImportMap::analyze(module),
         }
@@ -447,11 +441,6 @@ impl EvalContext {
                         .collect(),
                 )
             }
-
-            Expr::MetaProp(MetaPropExpr {
-                kind: MetaPropKind::ImportMeta,
-                ..
-            }) => JsValue::WellKnownObject(WellKnownObjectKind::ImportMeta(self.file)),
 
             _ => JsValue::Unknown(None, "unsupported expression"),
         }

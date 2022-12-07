@@ -17,7 +17,6 @@ use swc_core::{
         atoms::{Atom, JsWord},
     },
 };
-use turbo_tasks_fs::FileSystemPathVc;
 use url::Url;
 
 use self::imports::ImportAnnotations;
@@ -917,10 +916,6 @@ impl JsValue {
                     WellKnownObjectKind::RequireCache => (
                         "require.cache",
                         "The CommonJS require.cache object: https://nodejs.org/api/modules.html#requirecache"
-                    ),
-                    WellKnownObjectKind::ImportMeta(..) => (
-                        "import.meta",
-                        "The ESM import.meta object: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import.meta"
                     ),
                 };
                 if depth > 0 {
@@ -1934,7 +1929,6 @@ pub enum WellKnownObjectKind {
     NodeExpressApp,
     NodeProtobufLoader,
     RequireCache,
-    ImportMeta(FileSystemPathVc),
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -2043,7 +2037,6 @@ mod tests {
         testing::{fixture, run_test, NormalizedOutput},
     };
     use turbo_tasks::{util::FormatDuration, Value};
-    use turbo_tasks_fs::{FileSystem, NullFileSystem};
     use turbopack_core::{
         environment::{
             EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment,
@@ -2063,7 +2056,6 @@ mod tests {
         let graph_snapshot_path = input.with_file_name("graph.snapshot");
         let graph_explained_snapshot_path = input.with_file_name("graph-explained.snapshot");
         let resolved_explained_snapshot_path = input.with_file_name("resolved-explained.snapshot");
-        let file = NullFileSystem.cell().root().join(&input.to_string_lossy());
 
         run_test(false, |cm, handler| {
             let r = tokio::runtime::Builder::new_current_thread()
@@ -2085,7 +2077,7 @@ mod tests {
                 let top_level_mark = Mark::new();
                 m.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
 
-                let eval_context = EvalContext::new(file, &m, unresolved_mark);
+                let eval_context = EvalContext::new(&m, unresolved_mark);
 
                 let var_graph = create_graph(&m, &eval_context);
 

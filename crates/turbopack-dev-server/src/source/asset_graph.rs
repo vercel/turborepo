@@ -140,7 +140,6 @@ impl ContentSource for AssetGraphContentSource {
         _data: Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
         let assets = self_vc.all_assets_map().strongly_consistent().await?;
-        // dbg!(&assets);
 
         if let Some(asset) = assets.get(path) {
             {
