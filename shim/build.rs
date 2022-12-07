@@ -76,8 +76,8 @@ fn build_debug_libturbo() -> String {
         }
 
         cmd.env("CGO_ENABLED", "1")
-            .env("CC", "clang")
-            .env("CXX", "clang++")
+            .env("CC", "gcc")
+            .env("CXX", "g++")
             .arg("turbo.lib");
     } else {
         cmd.arg("libturbo.a");
