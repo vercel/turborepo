@@ -309,7 +309,7 @@ fn main() -> Result<()> {
         None,
     );
 
-    let mut clap_args = Args::parse();
+    let mut clap_args = Args::new()?;
 
     let current_dir = if let Some(cwd) = &clap_args.cwd {
         fs::canonicalize::<PathBuf>(cwd.into())?
