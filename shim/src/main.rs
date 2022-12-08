@@ -461,6 +461,7 @@ fn main() -> Result<()> {
         "https://github.com/vercel/turbo",
         Some(&footer),
         get_version(),
+        // use defaults for timeout and refresh interval (800ms and 1 day respectively)
         None,
         None,
     );
