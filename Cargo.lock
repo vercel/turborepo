@@ -3015,7 +3015,7 @@ checksum = "0c4bbd566f0dd80e0701ef5ca305e4404805eb37b95a6246ac1605acb71a6e9b"
 dependencies = [
  "markdown",
  "serde",
- "swc_core 0.44.4",
+ "swc_core 0.44.6",
 ]
 
 [[package]]
@@ -5439,6 +5439,7 @@ dependencies = [
  "swc_css_compat",
  "swc_css_modules",
  "swc_css_parser",
+ "swc_css_prefixer",
  "swc_css_utils",
  "swc_css_visit",
  "swc_ecma_ast",
@@ -5460,35 +5461,11 @@ dependencies = [
  "swc_nodejs_common",
  "swc_plugin_proxy",
  "swc_plugin_runner",
+ "swc_trace_macro",
  "testing",
  "vergen",
  "wasmer",
  "wasmer-wasi",
-]
-
-[[package]]
-name = "swc_core"
-version = "0.45.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8186ca543f4b0137bd63077933dd8a37b207b7d71c21f12d297e321b2f9093dd"
-dependencies = [
- "swc_atoms",
- "swc_cached",
- "swc_common",
- "swc_css_ast",
- "swc_css_codegen",
- "swc_css_parser",
- "swc_css_prefixer",
- "swc_css_visit",
- "swc_ecma_ast",
- "swc_ecma_codegen",
- "swc_ecma_minifier",
- "swc_ecma_parser",
- "swc_ecma_transforms_base",
- "swc_ecma_utils",
- "swc_ecma_visit",
- "swc_trace_macro",
- "vergen",
 ]
 
 [[package]]
