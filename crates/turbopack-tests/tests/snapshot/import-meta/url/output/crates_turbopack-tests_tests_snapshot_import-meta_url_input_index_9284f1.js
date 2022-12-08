@@ -1,4 +1,4 @@
-(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_import-meta_url_input_index_94525c.js", {
+(self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_import-meta_url_input_index_9284f1.js", {
 
 "[project]/crates/turbopack-tests/tests/snapshot/import-meta/url/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
 
@@ -13,13 +13,13 @@ const __TURBOPACK__import$2e$meta__ = {
     url: "file:///ROOT/crates/turbopack-tests/tests/snapshot/import-meta/url/input/mod.mjs"
 };
 "__TURBOPACK__ecmascript__hoisting__location__";
-const assetUrl = new URL('./asset.txt', __TURBOPACK__import$2e$meta__.url);
+const assetUrl = new URL(__turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/import-meta/url/input/asset.txt/url-asset.js"), __TURBOPACK__import$2e$meta__.url);
 console.log(assetUrl);
 fetch(assetUrl).then((res)=>res.text()).then(console.log);
 
 }.call(this) }),
 }, ({ loadedChunks, instantiateRuntimeModule }) => {
-    if(!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_import-meta_url_input_index_13badd.js"))) return true;
+    if(!(true && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_import-meta_url_input_index_303606.js") && loadedChunks.has("output/crates_turbopack-tests_tests_snapshot_import-meta_url_input_asset.txt.js"))) return true;
     instantiateRuntimeModule("[project]/crates/turbopack-tests/tests/snapshot/import-meta/url/input/index.js (ecmascript)");
 }]);
 (() => {
@@ -1029,4 +1029,4 @@ fetch(assetUrl).then((res)=>res.text()).then(console.log);
 })();
 
 
-//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_import-meta_url_input_index_94525c.js.map
+//# sourceMappingURL=crates_turbopack-tests_tests_snapshot_import-meta_url_input_index_9284f1.js.map
