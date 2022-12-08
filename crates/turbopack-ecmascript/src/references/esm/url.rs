@@ -228,6 +228,24 @@ impl UrlAssetChunkVc {
     fn new(asset: AssetVc, context: ChunkingContextVc) -> Self {
         UrlAssetChunk { asset, context }.cell()
     }
+
+    #[turbo_tasks::function]
+    async fn path(self) -> Result<FileSystemPathVc> {
+        let this = self.await?;
+        let content = this.asset.content();
+
+        let AssetContent::File(file) = &*content.await? else {
+            bail!("UrlAssetChunk::path: unsupported file content");
+        };
+        let FileContent::Content(file) = &*file.await? else {
+            bail!("UrlAssetChunk::path: not found");
+        };
+
+        let content_hash = encode_hex(hash_xxh3_hash64(file.content()));
+        let source_path = this.asset.path().await?;
+        let ext = source_path.extension().unwrap_or("bin");
+        Ok(this.context.asset_path(&content_hash, ext))
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -239,42 +257,13 @@ impl ValueToString for UrlAssetChunk {
 }
 
 #[turbo_tasks::value_impl]
-impl Asset for UrlAssetChunk {
-    #[turbo_tasks::function]
-    async fn path(&self) -> Result<FileSystemPathVc> {
-        let source_path = self.asset.path().await?;
-
-        let content = self.asset.content();
-        let AssetContent::File(file) = &*content.await? else {
-            bail!("UrlAssetChunk::path: unsupported file content");
-        };
-        let FileContent::Content(file) = &*file.await? else {
-            bail!("UrlAssetChunk::path: not found");
-        };
-
-        let content_hash = encode_hex(hash_xxh3_hash64(file.content()));
-        let ext = source_path.extension().unwrap_or("bin");
-        Ok(self.context.asset_path(&content_hash, ext))
-    }
-
-    #[turbo_tasks::function]
-    fn content(&self) -> AssetContentVc {
-        self.asset.content()
-    }
-
-    #[turbo_tasks::function]
-    fn references(&self) -> AssetReferencesVc {
-        AssetReferencesVc::empty()
-    }
-}
-
-#[turbo_tasks::value_impl]
 impl ChunkItem for UrlAssetChunk {
     #[turbo_tasks::function]
     async fn references(self_vc: UrlAssetChunkVc) -> Result<AssetReferencesVc> {
         let path = self_vc.path();
+        let content = self_vc.await?.asset.content();
         let asset_ref = SingleAssetReferenceVc::new(
-            VirtualAssetVc::new(path, self_vc.as_asset().content()).into(),
+            VirtualAssetVc::new(path, content).into(),
             StringVc::cell(format!("static(url) {}", path.await?)),
         );
         Ok(AssetReferencesVc::cell(vec![asset_ref.into()]))
@@ -293,7 +282,7 @@ impl EcmascriptChunkItem for UrlAssetChunk {
         Ok(EcmascriptChunkItemContent {
             inner_code: format!(
                 "__turbopack_export_value__({path});",
-                path = stringify_str(&format!("/{}", &*self_vc.as_asset().path().await?))
+                path = stringify_str(&format!("/{}", &*self_vc.path().await?))
             )
             .into(),
             ..Default::default()
