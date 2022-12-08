@@ -20,7 +20,7 @@ use turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsSetVc},
     chunk::{ChunkGroupVc, ChunkingContextVc},
-    source_map::GenerateSourceMapVc,
+    source_map::{GenerateSourceMapVc, SourceMapVc},
     virtual_asset::VirtualAssetVc,
 };
 use turbopack_dev_server::{
@@ -43,6 +43,7 @@ pub mod node_entry;
 pub mod node_rendered_source;
 pub mod path_regex;
 pub mod pool;
+pub mod read_config;
 pub mod source_map;
 
 #[turbo_tasks::function]
@@ -418,44 +419,7 @@ async fn trace_stack(
         .flatten()
         .collect::<HashMap<_, _>>();
 
-    let mut message = String::new();
-
-    macro_rules! write_frame {
-        ($f:ident, $path:expr) => {
-            match $f.get_pos() {
-                Some((l, c)) => match &$f.name {
-                    Some(n) => writeln!(message, "  at {} ({}:{}:{})", n, $path, l, c),
-                    None => writeln!(message, "  at {}:{}:{}", $path, l, c),
-                },
-                None => writeln!(message, "  at {}", $path),
-            }
-        };
-    }
-
-    writeln!(message, "{}: {}", error.name, error.message)?;
-
-    for frame in &error.stack {
-        if let Some((line, column)) = frame.get_pos() {
-            if let Some(path) = frame.file.strip_prefix(&root) {
-                if let Some(map) = assets.get(path) {
-                    let trace = SourceMapTraceVc::new(*map, line, column, frame.name.clone())
-                        .trace()
-                        .await?;
-                    if let TraceResult::Found(f) = &*trace {
-                        write_frame!(f, f.file)?;
-                        continue;
-                    }
-                }
-
-                write_frame!(frame, path)?;
-                continue;
-            }
-        }
-
-        write_frame!(frame, frame.file)?;
-    }
-
-    Ok(message)
+    error.print(assets, Some(root)).await
 }
 
 #[turbo_tasks::value(shared)]
@@ -480,11 +444,70 @@ enum RenderProxyIncomingMessage {
     Error(StructuredError),
 }
 
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum EvalJavaScriptOutgoingMessage {
+    LoadNextConfig { path: String },
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum EvalJavaScriptIncomingMessage {
+    JavaScriptValue { data: Vec<u8> },
+    Error(StructuredError),
+}
+
 #[turbo_tasks::value(shared)]
 struct StructuredError {
     name: String,
     message: String,
     stack: Vec<StackFrame>,
+}
+
+impl StructuredError {
+    async fn print(
+        &self,
+        assets: HashMap<String, SourceMapVc>,
+        root: Option<String>,
+    ) -> Result<String> {
+        let mut message = String::new();
+
+        macro_rules! write_frame {
+            ($f:ident, $path:expr) => {
+                match $f.get_pos() {
+                    Some((l, c)) => match &$f.name {
+                        Some(n) => writeln!(message, "  at {} ({}:{}:{})", n, $path, l, c),
+                        None => writeln!(message, "  at {}:{}:{}", $path, l, c),
+                    },
+                    None => writeln!(message, "  at {}", $path),
+                }
+            };
+        }
+
+        writeln!(message, "{}: {}", self.name, self.message)?;
+
+        for frame in &self.stack {
+            if let Some((line, column)) = frame.get_pos() {
+                if let Some(path) = root.as_ref().and_then(|r| frame.file.strip_prefix(r)) {
+                    if let Some(map) = assets.get(path) {
+                        let trace = SourceMapTraceVc::new(*map, line, column, frame.name.clone())
+                            .trace()
+                            .await?;
+                        if let TraceResult::Found(f) = &*trace {
+                            write_frame!(f, f.file)?;
+                            continue;
+                        }
+                    }
+
+                    write_frame!(frame, path)?;
+                    continue;
+                }
+            }
+
+            write_frame!(frame, frame.file)?;
+        }
+        Ok(message)
+    }
 }
 
 /// Renders a module as static HTML in a node.js process.
@@ -621,6 +644,19 @@ async fn proxy_error(
         body: body.into(),
     }
     .cell())
+}
+
+async fn eval_js_operation(
+    operation: &mut NodeJsOperation,
+    content: EvalJavaScriptOutgoingMessage,
+) -> Result<Vec<u8>> {
+    operation.send(content).await?;
+    match operation.recv().await? {
+        EvalJavaScriptIncomingMessage::Error(err) => {
+            bail!(err.print(Default::default(), None).await?);
+        }
+        EvalJavaScriptIncomingMessage::JavaScriptValue { data } => Ok(data),
+    }
 }
 
 pub fn register() {
