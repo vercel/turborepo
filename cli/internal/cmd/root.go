@@ -8,13 +8,9 @@ import (
 	"runtime/pprof"
 	"runtime/trace"
 
-	"github.com/vercel/turbo/cli/internal/config"
-
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/cmd/auth"
-	"github.com/vercel/turbo/cli/internal/cmd/info"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/daemon"
 	"github.com/vercel/turbo/cli/internal/login"
@@ -39,45 +35,6 @@ func (eo *execOpts) addFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&eo.heapFile, "heap", "", "Specify a file to save a pprof heap profile")
 	flags.StringVar(&eo.cpuProfileFile, "cpuprofile", "", "Specify a file to save a cpu profile")
 	flags.StringVar(&eo.traceFile, "trace", "", "Specify a file to save a pprof trace")
-}
-
-// RunWithArgs runs turbo with the specified arguments. The arguments should not
-// include the binary being invoked (e.g. "turbo").
-func RunWithArgs(args []string, turboVersion string) int {
-	util.InitPrintf()
-	// TODO: replace this with a context
-	signalWatcher := signals.NewWatcher()
-	helper := cmdutil.NewHelper(turboVersion)
-	root := getCmd(helper, signalWatcher)
-	resolvedArgs := resolveArgs(root, args)
-	flags := config.FlagSet{FlagSet: root.Flags()}
-	defer helper.Cleanup(flags)
-	root.SetArgs(resolvedArgs)
-
-	doneCh := make(chan struct{})
-	var execErr error
-	go func() {
-		execErr = root.Execute()
-		close(doneCh)
-	}()
-
-	// Wait for either our command to finish, in which case we need to clean up,
-	// or to receive a signal, in which case the signal handler above does the cleanup
-	select {
-	case <-doneCh:
-		// We finished whatever task we were running
-		signalWatcher.Close()
-		exitErr := &process.ChildExit{}
-		if errors.As(execErr, &exitErr) {
-			return exitErr.ExitCode
-		} else if execErr != nil {
-			return 1
-		}
-		return 0
-	case <-signalWatcher.Done():
-		// We caught a signal, which already called the close handlers
-		return 1
-	}
 }
 
 func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs turbostate.ParsedArgsFromRust) error {
@@ -126,16 +83,23 @@ func RunWithTurboState(state turbostate.CLIExecutionStateFromRust, turboVersion 
 	go func() {
 		command := state.ParsedArgs.Command
 		if command.Link != nil {
-			execErr = login.RunLink(helper, &state.ParsedArgs)
+			execErr = login.ExecuteLink(helper, &state.ParsedArgs)
 		} else if command.Login != nil {
-			execErr = login.RunLogin(ctx, helper, &state.ParsedArgs)
+			execErr = login.ExecuteLogin(ctx, helper, &state.ParsedArgs)
 		} else if command.Logout != nil {
-			execErr = auth.RunLogout(helper, &state.ParsedArgs)
+			execErr = auth.ExecuteLogout(helper, &state.ParsedArgs)
 		} else if command.Unlink != nil {
-			execErr = auth.RunUnlink(helper, &state.ParsedArgs)
+			execErr = auth.ExecuteUnlink(helper, &state.ParsedArgs)
+		} else if command.Daemon != nil {
+			execErr = daemon.ExecuteDaemon(ctx, helper, signalWatcher, &state.ParsedArgs)
+		} else if command.Prune != nil {
+			execErr = prune.ExecutePrune(helper, &state.ParsedArgs)
+		} else if command.Run != nil {
+			execErr = run.ExecuteRun(ctx, helper, signalWatcher, &state)
 		} else {
 			execErr = fmt.Errorf("unknown command: %v", command)
 		}
+
 		close(doneCh)
 	}()
 
@@ -156,74 +120,6 @@ func RunWithTurboState(state turbostate.CLIExecutionStateFromRust, turboVersion 
 		// We caught a signal, which already called the close handlers
 		return 1
 	}
-}
-
-const _defaultCmd string = "run"
-
-// resolveArgs adds a default command to the supplied arguments if none exists.
-func resolveArgs(root *cobra.Command, args []string) []string {
-	for _, arg := range args {
-		if arg == "--help" || arg == "-h" || arg == "--version" || arg == "completion" {
-			return args
-		}
-	}
-	cmd, _, err := root.Traverse(args)
-	if err != nil {
-		// The command is going to error, but defer to cobra
-		// to handle it
-		return args
-	} else if cmd.Name() == root.Name() {
-		// We resolved to the root, and this is not help or version,
-		// so prepend our default command
-		return append([]string{_defaultCmd}, args...)
-	}
-	// We resolved to something other than the root command, no need for a default
-	return args
-}
-
-// getCmd returns the root cobra command
-func getCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
-	execOpts := &execOpts{}
-
-	cmd := &cobra.Command{
-		Use:              "turbo",
-		Short:            "The build system that makes ship happen",
-		TraverseChildren: true,
-		Version:          helper.TurboVersion,
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if execOpts.traceFile != "" {
-				cleanup, err := createTraceFile(execOpts.traceFile)
-				if err != nil {
-					return err
-				}
-				helper.RegisterCleanup(cleanup)
-			}
-			if execOpts.heapFile != "" {
-				cleanup, err := createHeapFile(execOpts.heapFile)
-				if err != nil {
-					return err
-				}
-				helper.RegisterCleanup(cleanup)
-			}
-			if execOpts.cpuProfileFile != "" {
-				cleanup, err := createCpuprofileFile(execOpts.cpuProfileFile)
-				if err != nil {
-					return err
-				}
-				helper.RegisterCleanup(cleanup)
-			}
-			return nil
-		},
-	}
-	cmd.SetVersionTemplate("{{.Version}}\n")
-	flags := cmd.PersistentFlags()
-	helper.AddFlags(flags)
-	execOpts.addFlags(flags)
-	cmd.AddCommand(info.BinCmd(helper))
-	cmd.AddCommand(daemon.GetCmd(helper, signalWatcher))
-	cmd.AddCommand(prune.GetCmd(helper))
-	cmd.AddCommand(run.GetCmd(helper, signalWatcher))
-	return cmd
 }
 
 type profileCleanup func() error

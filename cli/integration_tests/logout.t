@@ -3,10 +3,10 @@ Setup
   $ . ${TESTDIR}/logged_in.sh
 
 Logout while logged in
-  $ ${SHIM} logout
+  $ ${TURBO} logout
   >>> Logged out
 
 Logout while logged out
-  $ ${SHIM} logout
+  $ ${TURBO} logout
   >>> Logged out
 

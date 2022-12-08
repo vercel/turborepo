@@ -5,14 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/vercel/turbo/cli/internal/config"
-
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/context"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/ui"
 
 	"github.com/fatih/color"
@@ -27,50 +24,25 @@ type opts struct {
 	outputDir string
 }
 
-func addPruneFlags(opts *opts, flags *pflag.FlagSet) {
-	flags.StringArrayVar(&opts.scope, "scope", nil, "Specify package(s) to act as entry points for pruned monorepo (required).")
-	flags.BoolVar(&opts.docker, "docker", false, "Output pruned workspace into 'full' and 'json' directories optimized for Docker layer caching.")
-	flags.StringVar(&opts.outputDir, "out-dir", "out", "Set the root directory for files output by this command")
-	// No-op the cwd flag while the root level command is not yet cobra
-	_ = flags.String("cwd", "", "")
-	if err := flags.MarkHidden("cwd"); err != nil {
-		// Fail fast if we have misconfigured our flags
-		panic(err)
+// ExecutePrune executes the `prune` command.
+func ExecutePrune(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
+	base, err := helper.GetCmdBase(args)
+	if err != nil {
+		return err
 	}
-}
-
-// GetCmd returns the prune subcommand for use with cobra
-func GetCmd(helper *cmdutil.Helper) *cobra.Command {
-	opts := &opts{}
-	cmd := &cobra.Command{
-		Use:                   "prune --scope=<package name> [<flags>]",
-		Short:                 "Prepare a subset of your monorepo.",
-		SilenceUsage:          true,
-		SilenceErrors:         true,
-		DisableFlagsInUseLine: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			flags := config.FlagSet{FlagSet: cmd.Flags()}
-			base, err := helper.GetCmdBase(flags)
-			if err != nil {
-				return err
-			}
-			if len(opts.scope) == 0 {
-				err := errors.New("at least one target must be specified")
-				base.LogError(err.Error())
-				return err
-			}
-			p := &prune{
-				base,
-			}
-			if err := p.prune(opts); err != nil {
-				logError(p.base.Logger, p.base.UI, err)
-				return err
-			}
-			return nil
-		},
+	if len(args.Command.Prune.Scope) == 0 {
+		err := errors.New("at least one target must be specified")
+		base.LogError(err.Error())
+		return err
 	}
-	addPruneFlags(opts, cmd.Flags())
-	return cmd
+	p := &prune{
+		base,
+	}
+	if err := p.prune(args.Command.Prune); err != nil {
+		logError(p.base.Logger, p.base.UI, err)
+		return err
+	}
+	return nil
 }
 
 func logError(logger hclog.Logger, ui cli.Ui, err error) {
@@ -84,7 +56,7 @@ type prune struct {
 }
 
 // Prune creates a smaller monorepo with only the required workspaces
-func (p *prune) prune(opts *opts) error {
+func (p *prune) prune(opts *turbostate.PrunePayload) error {
 	rootPackageJSONPath := p.base.RepoRoot.UntypedJoin("package.json")
 	rootPackageJSON, err := fs.ReadPackageJSON(rootPackageJSONPath)
 	if err != nil {
@@ -94,17 +66,17 @@ func (p *prune) prune(opts *opts) error {
 	if err != nil {
 		return errors.Wrap(err, "could not construct graph")
 	}
-	outDir := p.base.RepoRoot.UntypedJoin(opts.outputDir)
+	outDir := p.base.RepoRoot.UntypedJoin(opts.OutputDir)
 	fullDir := outDir
-	if opts.docker {
+	if opts.Docker {
 		fullDir = fullDir.UntypedJoin("full")
 	}
 
-	p.base.Logger.Trace("scope", "value", strings.Join(opts.scope, ", "))
-	p.base.Logger.Trace("docker", "value", opts.docker)
+	p.base.Logger.Trace("scope", "value", strings.Join(opts.Scope, ", "))
+	p.base.Logger.Trace("docker", "value", opts.Docker)
 	p.base.Logger.Trace("out dir", "value", outDir.ToString())
 
-	for _, scope := range opts.scope {
+	for _, scope := range opts.Scope {
 		p.base.Logger.Trace("scope", "value", scope)
 		target, scopeIsValid := ctx.WorkspaceInfos[scope]
 		if !scopeIsValid {
@@ -127,7 +99,7 @@ func (p *prune) prune(opts *opts) error {
 		return errors.New("Cannot prune without parsed lockfile")
 	}
 
-	p.base.UI.Output(fmt.Sprintf("Generating pruned monorepo for %v in %v", ui.Bold(strings.Join(opts.scope, ", ")), ui.Bold(outDir.ToString())))
+	p.base.UI.Output(fmt.Sprintf("Generating pruned monorepo for %v in %v", ui.Bold(strings.Join(opts.Scope, ", ")), ui.Bold(outDir.ToString())))
 
 	packageJSONPath := outDir.UntypedJoin("package.json")
 	if err := packageJSONPath.EnsureDir(); err != nil {
@@ -141,14 +113,14 @@ func (p *prune) prune(opts *opts) error {
 		if err := fs.CopyFile(&workspaceFile, fullDir.UntypedJoin(ctx.PackageManager.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
 			return errors.Wrapf(err, "could not copy %s", ctx.PackageManager.WorkspaceConfigurationPath)
 		}
-		if opts.docker {
+		if opts.Docker {
 			if err := fs.CopyFile(&workspaceFile, outDir.UntypedJoin("json", ctx.PackageManager.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
 				return errors.Wrapf(err, "could not copy %s", ctx.PackageManager.WorkspaceConfigurationPath)
 			}
 		}
 	}
 	workspaces := []turbopath.AnchoredSystemPath{}
-	targets, err := ctx.InternalDependencies(opts.scope)
+	targets, err := ctx.InternalDependencies(opts.Scope)
 	if err != nil {
 		return errors.Wrap(err, "could not traverse the dependency graph to find topological dependencies")
 	}
@@ -176,7 +148,7 @@ func (p *prune) prune(opts *opts) error {
 		if err := fs.RecursiveCopy(ctx.WorkspaceInfos[internalDep].Dir.ToStringDuringMigration(), targetDir.ToStringDuringMigration()); err != nil {
 			return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
 		}
-		if opts.docker {
+		if opts.Docker {
 			jsonDir := outDir.UntypedJoin("json", ctx.WorkspaceInfos[internalDep].PackageJSONPath.ToStringDuringMigration())
 			if err := jsonDir.EnsureDir(); err != nil {
 				return errors.Wrapf(err, "failed to create folder %v for %v", jsonDir, internalDep)
@@ -273,7 +245,7 @@ func (p *prune) prune(opts *opts) error {
 		}
 	}
 
-	if opts.docker {
+	if opts.Docker {
 		// Copy from the package.json in the full directory so we get the pruned version if needed
 		if err := fs.CopyFile(
 			&fs.LstatCachedFile{Path: newPackageJSONPath},

@@ -6,8 +6,8 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
-// RunUnlink executes the `unlink` command directly instead of via cobra.
-func RunUnlink(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
+// ExecuteUnlink executes the `unlink` command directly instead of via cobra.
+func ExecuteUnlink(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
 		return err
