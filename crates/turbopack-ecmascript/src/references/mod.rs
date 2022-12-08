@@ -51,7 +51,7 @@ use self::{
     cjs::CjsAssetReferenceVc,
     esm::{
         export::EsmExport, EsmAssetReferenceVc, EsmAsyncAssetReferenceVc, EsmExports,
-        EsmModuleItemVc, ImportMetaBindingVc, ImportMetaRefVc,
+        EsmModuleItemVc, ImportMetaBindingVc, ImportMetaRefVc, UrlAssetReferenceVc,
     },
     node::{DirAssetReferenceVc, PackageJsonReferenceVc},
     raw::SourceAssetReferenceVc,
@@ -1182,7 +1182,7 @@ pub(crate) async fn analyze_ecmascript_module(
                     }
                     Effect::Url {
                         input,
-                        ast_path: _,
+                        ast_path,
                         span,
                     } => {
                         let pat = js_value_to_pattern(&input);
@@ -1196,7 +1196,11 @@ pub(crate) async fn analyze_ecmascript_module(
                                 ),
                             )
                         }
-                        analysis.add_reference(SourceAssetReferenceVc::new(source, pat.cell()));
+                        analysis.add_reference(UrlAssetReferenceVc::new(
+                            source,
+                            pat.cell(),
+                            AstPathVc::cell(ast_path),
+                        ));
                     }
                 }
             }
