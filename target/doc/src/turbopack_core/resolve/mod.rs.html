@@ -2185,7 +2185,7 @@
         }
     }
     <span class="kw">if let </span><span class="prelude-val">Some</span>(resolved_map) = resolved_map {
-        <span class="kw">let </span>result = resolved_map.lookup(<span class="kw-2">*</span>path).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>result = resolved_map.lookup(<span class="kw-2">*</span>path, original_request).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!<span class="macro">matches!</span>(<span class="kw-2">&amp;*</span>result, ImportMapResult::NoEntry) {
             <span class="kw">return </span>resolve_import_map_result(
                 <span class="kw-2">&amp;</span>result,

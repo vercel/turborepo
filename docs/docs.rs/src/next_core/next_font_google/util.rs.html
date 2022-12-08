@@ -451,14 +451,14 @@
 <span id="451">451</span>
 <span id="452">452</span>
 <span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::{indexset, IndexSet};
 
 <span class="kw">use </span><span class="kw">super</span>::options::{FontData, FontWeights};
-
-<span class="kw">const </span>GOOGLE_FONTS_STYLESHEET_URL: <span class="kw-2">&amp;</span>str = <span class="string">&quot;https://fonts.googleapis.com/css2&quot;</span>;
 
 <span class="attr">#[derive(Debug, PartialEq)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>FontAxes {
@@ -474,7 +474,6 @@
 }
 
 <span class="comment">// Derived from https://github.com/vercel/next.js/blob/9e098da0915a2a4581bebe2270953a1216be1ba4/packages/font/src/google/utils.ts#L232
-</span><span class="attr">#[allow(dead_code)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_font_axes(
     font_data: <span class="kw-2">&amp;</span>FontData,
     font_family: <span class="kw-2">&amp;</span>str,
@@ -559,8 +558,8 @@
 }
 
 <span class="comment">// Derived from https://github.com/vercel/next.js/blob/9e098da0915a2a4581bebe2270953a1216be1ba4/packages/font/src/google/utils.ts#L128
-</span><span class="attr">#[allow(dead_code)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_stylesheet_url(
+    root_url: <span class="kw-2">&amp;</span>str,
     font_family: <span class="kw-2">&amp;</span>str,
     axes: <span class="kw-2">&amp;</span>FontAxes,
     display: <span class="kw-2">&amp;</span>str,
@@ -657,7 +656,7 @@
 
     <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(
         <span class="string">&quot;{}?family={}:{}@{}&amp;display={}&quot;</span>,
-        GOOGLE_FONTS_STYLESHEET_URL,
+        root_url,
         font_family.replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;+&quot;</span>),
         variant_keys_str,
         variant_values_str,
@@ -674,6 +673,7 @@
     <span class="kw">use </span><span class="kw">crate</span>::next_font_google::{
         options::{FontData, FontWeights},
         util::{get_stylesheet_url, FontAxes, FontItal},
+        GOOGLE_FONTS_STYLESHEET_URL,
     };
 
     <span class="attr">#[test]
@@ -824,6 +824,7 @@
     </span><span class="kw">fn </span>test_stylesheet_url_no_axes() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">assert_eq!</span>(
             get_stylesheet_url(
+                GOOGLE_FONTS_STYLESHEET_URL,
                 <span class="string">&quot;Roboto Mono&quot;</span>,
                 <span class="kw-2">&amp;</span>FontAxes {
                     wght: <span class="macro">indexset! </span>{<span class="string">&quot;500&quot;</span>.to_owned()},
@@ -842,6 +843,7 @@
     </span><span class="kw">fn </span>test_stylesheet_url_sorts_axes() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">assert_eq!</span>(
             get_stylesheet_url(
+                GOOGLE_FONTS_STYLESHEET_URL,
                 <span class="string">&quot;Roboto Serif&quot;</span>,
                 <span class="kw-2">&amp;</span>FontAxes {
                     wght: <span class="macro">indexset! </span>{<span class="string">&quot;500&quot;</span>.to_owned()},
@@ -864,6 +866,7 @@
     </span><span class="kw">fn </span>test_stylesheet_url_encodes_all_weight_ital_combinations() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">assert_eq!</span>(
             get_stylesheet_url(
+                GOOGLE_FONTS_STYLESHEET_URL,
                 <span class="string">&quot;Roboto Serif&quot;</span>,
                 <span class="kw-2">&amp;</span>FontAxes {
                     wght: <span class="macro">indexset! </span>{<span class="string">&quot;500&quot;</span>.to_owned(), <span class="string">&quot;300&quot;</span>.to_owned()},
@@ -887,6 +890,7 @@
     </span><span class="kw">fn </span>test_variable_font_without_wgth_axis() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">assert_eq!</span>(
             get_stylesheet_url(
+                GOOGLE_FONTS_STYLESHEET_URL,
                 <span class="string">&quot;Nabla&quot;</span>,
                 <span class="kw-2">&amp;</span>FontAxes {
                     wght: <span class="macro">indexset! </span>{},

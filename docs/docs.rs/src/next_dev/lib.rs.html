@@ -537,6 +537,12 @@
 <span id="537">537</span>
 <span id="538">538</span>
 <span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -870,6 +876,11 @@
     .into();
     <span class="kw">let </span>static_source =
         StaticAssetsContentSourceVc::new(String::new(), project_path.join(<span class="string">&quot;public&quot;</span>)).into();
+    <span class="kw">let </span>next_static_source = StaticAssetsContentSourceVc::new(
+        <span class="string">&quot;_next/static/&quot;</span>.to_owned(),
+        project_path.join(<span class="string">&quot;.next/static&quot;</span>),
+    )
+    .into();
     <span class="kw">let </span>manifest_source = DevManifestContentSource {
         page_roots: <span class="macro">vec!</span>[app_source, rendered_source],
     }
@@ -877,6 +888,7 @@
     .into();
     <span class="kw">let </span>main_source = CombinedContentSourceVc::new(<span class="macro">vec!</span>[
         manifest_source,
+        next_static_source,
         static_source,
         app_source,
         rendered_source,

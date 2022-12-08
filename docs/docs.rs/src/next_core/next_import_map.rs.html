@@ -259,16 +259,31 @@
 <span id="259">259</span>
 <span id="260">260</span>
 <span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringsVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
-<span class="kw">use </span>turbopack_core::resolve::options::{
-    ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap, ResolvedMapVc,
+<span class="kw">use </span>turbopack_core::resolve::{
+    options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap, ResolvedMapVc},
+    AliasPattern,
 };
 
 <span class="kw">use crate</span>::{
     embed_js::{attached_next_js_package_path, VIRTUAL_PACKAGE_NAME},
     next_client::context::ContextType,
+    next_font_google::{NextFontGoogleCssModuleReplacerVc, NextFontGoogleReplacerVc},
     next_server::ServerContextType,
 };
 
@@ -279,9 +294,8 @@
     ty: Value&lt;ContextType&gt;,
 ) -&gt; ImportMapVc {
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();
-    <span class="kw">let </span>package_root = attached_next_js_package_path(project_path);
 
-    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, package_root);
+    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path);
 
     <span class="kw">match </span>ty.into_value() {
         ContextType::Pages { pages_dir } =&gt; {
@@ -363,9 +377,8 @@
     externals: StringsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();
-    <span class="kw">let </span>package_root = attached_next_js_package_path(project_path);
 
-    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, package_root);
+    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path);
 
     <span class="kw">match </span>ty.into_value() {
         ServerContextType::Pages { pages_dir } =&gt; {
@@ -477,7 +490,9 @@
     (<span class="string">&quot;setImmediate&quot;</span>, <span class="string">&quot;next/dist/compiled/setimmediate&quot;</span>),
 ];
 
-<span class="kw">pub fn </span>insert_next_shared_aliases(import_map: <span class="kw-2">&amp;mut </span>ImportMap, package_root: FileSystemPathVc) {
+<span class="kw">pub fn </span>insert_next_shared_aliases(import_map: <span class="kw-2">&amp;mut </span>ImportMap, project_path: FileSystemPathVc) {
+    <span class="kw">let </span>package_root = attached_next_js_package_path(project_path);
+
     <span class="comment">// we use the next.js hydration code, so we replace the error overlay with our
     // own
     </span>import_map.insert_exact_alias(
@@ -489,6 +504,17 @@
         import_map,
         <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{VIRTUAL_PACKAGE_NAME}/&quot;</span>),
         package_root,
+    );
+
+    import_map.insert_alias(
+        <span class="comment">// Request path from js via next-font swc transform
+        </span>AliasPattern::exact(<span class="string">&quot;@next/font/google/target.css&quot;</span>),
+        ImportMapping::Dynamic(NextFontGoogleReplacerVc::new(project_path).into()).into(),
+    );
+
+    import_map.insert_alias(
+        AliasPattern::exact(<span class="string">&quot;@vercel/turbopack-next/internal/font/google/cssmodule.module.css&quot;</span>),
+        ImportMapping::Dynamic(NextFontGoogleCssModuleReplacerVc::new(project_path).into()).into(),
     );
 }
 

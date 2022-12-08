@@ -32,6 +32,7 @@
 <span id="32">32</span>
 <span id="33">33</span>
 <span id="34">34</span>
+<span id="35">35</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 
@@ -61,6 +62,7 @@
 <span class="kw">pub fn </span>register() {
     turbo_tasks::register();
     turbo_tasks_fs::register();
+    turbo_tasks_fetch::register();
     turbopack_dev_server::register();
     turbopack::register();
     turbopack_node::register();

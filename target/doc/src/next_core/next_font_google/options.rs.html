@@ -551,20 +551,18 @@
 <span id="551">551</span>
 <span id="552">552</span>
 <span id="553">553</span>
-<span id="554">554</span>
-<span id="555">555</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::{indexset, IndexMap, IndexSet};
-<span class="kw">use </span>serde::Deserialize;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
 
 <span class="kw">use </span><span class="kw">super</span>::request::{NextFontRequest, OneOrManyStrings};
 
-<span class="attr">#[allow(dead_code)]
-</span><span class="kw">const </span>ALLOWED_DISPLAY_VALUES: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str] = <span class="kw-2">&amp;</span>[<span class="string">&quot;auto&quot;</span>, <span class="string">&quot;block&quot;</span>, <span class="string">&quot;swap&quot;</span>, <span class="string">&quot;fallback&quot;</span>, <span class="string">&quot;optional&quot;</span>];
+<span class="kw">const </span>ALLOWED_DISPLAY_VALUES: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str] = <span class="kw-2">&amp;</span>[<span class="string">&quot;auto&quot;</span>, <span class="string">&quot;block&quot;</span>, <span class="string">&quot;swap&quot;</span>, <span class="string">&quot;fallback&quot;</span>, <span class="string">&quot;optional&quot;</span>];
 
 <span class="kw">pub type </span>FontData = IndexMap&lt;String, FontDataEntry&gt;;
 
-<span class="attr">#[derive(Debug, PartialEq)]
+<span class="attr">#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 </span><span class="kw">pub struct </span>NextFontGoogleOptions {
     <span class="kw">pub </span>font_family: String,
     <span class="kw">pub </span>weights: FontWeights,
@@ -578,8 +576,7 @@
     <span class="kw">pub </span>subsets: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
 }
 
-<span class="attr">#[derive(Debug, PartialEq)]
-#[allow(dead_code)]
+<span class="attr">#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 </span><span class="kw">pub enum </span>FontWeights {
     Variable,
     Fixed(IndexSet&lt;String&gt;),
@@ -604,7 +601,6 @@
 <span class="comment">// Transforms the request fields to a struct suitable for making requests to
 // Google Fonts. Similar to @next/font/google&#39;s validateData:
 // https://github.com/vercel/next.js/blob/28454c6ddbc310419467e5415aee26e48d079b46/packages/font/src/google/utils.ts#L22
-</span><span class="attr">#[allow(dead_code)]
 </span><span class="kw">pub fn </span>options_from_request(
     request: <span class="kw-2">&amp;</span>NextFontRequest,
     data: <span class="kw-2">&amp;</span>IndexMap&lt;String, FontDataEntry&gt;,
