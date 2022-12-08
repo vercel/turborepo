@@ -34,11 +34,11 @@ use crate::{
 };
 
 /// URL Asset References are injected during code analysis when we find a
-/// (staticly analyzable) `new URL("path", )` import.meta.url)`.
+/// (staticly analyzable) `new URL("path", import.meta.url)`.
 ///
-/// It's responsible for InertUrlAsset (which isn't itself useful), and
-/// rewriting the `URL` constructor's arguments to allow the referenced file to
-/// be imported/fetched/etc.
+/// It's responsible for resolving a reference to InertUrlAsset (which isn't
+/// itself useful), and rewriting the `URL` constructor's arguments to allow the
+/// referenced file to be imported/fetched/etc.
 #[turbo_tasks::value]
 pub struct UrlAssetReference {
     pub source: AssetVc,
