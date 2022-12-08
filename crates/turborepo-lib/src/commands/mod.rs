@@ -1,3 +1,5 @@
+pub(crate) mod bin;
+
 use std::{env, process};
 
 use anyhow::Result;

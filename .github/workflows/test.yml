@@ -167,18 +167,24 @@ jobs:
     name: Go Unit Tests
     needs: determine_jobs
     if: needs.determine_jobs.outputs.go == 'true'
-    timeout-minutes: 15
-    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
 
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-node
-      - uses: ./.github/actions/setup-go
+      - uses: ./.github/actions/build-debug-turborepo
         with:
+          target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: pnpm -- turbo run test --filter=cli --color
@@ -187,35 +193,51 @@ jobs:
     name: Go Cli Examples
     needs: determine_jobs
     if: needs.determine_jobs.outputs.examples == 'true'
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
         manager: [yarn, npm]
         example: [with-yarn, with-npm, non-monorepo]
         include:
-          - os: ubuntu-latest
+          - os:
+              name: ubuntu
+              runner: ubuntu-latest
             manager: pnpm
             example: basic
-          - os: macos-latest
+          - os:
+              name: macos
+              runner: macos-latest
             manager: pnpm
             example: basic
-          - os: ubuntu-latest
+          - os:
+              name: ubuntu
+              runner: ubuntu-latest
             manager: pnpm
             example: kitchen-sink
-          - os: macos-latest
+          - os:
+              name: macos
+              runner: macos-latest
             manager: pnpm
             example: kitchen-sink
-          - os: ubuntu-latest
+          - os:
+              name: ubuntu
+              runner: ubuntu-latest
             manager: pnpm
             example: with-svelte
-          - os: macos-latest
+          - os:
+              name: macos
+              runner: macos-latest
             manager: pnpm
             example: with-svelte
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os.runner }}
     steps:
       # Used by scripts/check-examples.sh
       - name: Install Sponge
@@ -230,9 +252,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
+      - name: Build Turborepo
+        uses: ./.github/actions/build-debug-turborepo
         with:
+          target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Pnpm
@@ -244,6 +267,10 @@ jobs:
         shell: bash
         run: |
           mkdir -p `pnpm store path`
+
+      - name: Disable corepack
+        shell: bash
+        run: corepack disable
 
       - name: Setup Node.js
         uses: actions/setup-node@v2
@@ -432,11 +459,6 @@ jobs:
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
 
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
 
@@ -456,7 +478,6 @@ jobs:
       - name: Prepare toolchain on Windows
         run: |
           pnpx node-gyp install
-          choco install protoc -y
           echo 'node-linker = "hoisted"' > crates/turbopack/tests/node-file-trace/.npmrc
         if: matrix.os.name == 'windows'
 
@@ -484,7 +505,8 @@ jobs:
         timeout-minutes: 120
         with:
           command: nextest
-          args: run --workspace --release --no-fail-fast
+          # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
+          args: run --workspace --release --no-fail-fast --exclude turbo
 
   rust_test_bench:
     needs: [determine_jobs, rust_prepare]
@@ -579,6 +601,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           target: ${{ matrix.os.target }}
+          default: true
 
       - name: Install musl tools
         run: |
@@ -895,10 +918,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - uses: ./.github/actions/setup-node
-
-      - uses: ./.github/actions/setup-go
+      - uses: ./.github/actions/build-debug-turborepo
         with:
+          target: ubuntu
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Format check

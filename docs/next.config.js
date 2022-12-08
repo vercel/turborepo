@@ -165,6 +165,11 @@ const nextConfig = withNextra({
         destination: "/repo/docs/ci",
       },
       {
+        source: "/repo/docs/handbook/prisma",
+        permanent: true,
+        destination: "/repo/docs/handbook/tools/prisma",
+      },
+      {
         // Accidentally created, eventually removable. See below.
         source: "/repo/docs/core-concepts/running-tasks",
         destination: "/repo/docs/core-concepts/monorepos/running-tasks",

@@ -11,8 +11,9 @@ fn main() {
     println!("cargo:rustc-link-search={}", lib_search_path);
     println!("cargo:rustc-link-lib=turbo");
 
+    let target = build_target::target().unwrap();
     let bindings = bindgen::Builder::default()
-        .header("../../cli/libturbo.h")
+        .header(header_path(&target.os))
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
@@ -24,7 +25,6 @@ fn main() {
     bindings
         .write_to_file("src/ffi.rs")
         .expect("Couldn't write bindings!");
-    let target = build_target::target().unwrap();
     if target.os == build_target::Os::MacOs {
         println!("cargo:rustc-link-lib=framework=cocoa");
         println!("cargo:rustc-link-lib=framework=security");
@@ -76,8 +76,8 @@ fn build_debug_libturbo() -> String {
         }
 
         cmd.env("CGO_ENABLED", "1")
-            .env("CC", "clang")
-            .env("CXX", "clang++")
+            .env("CC", "gcc")
+            .env("CXX", "g++")
             .arg("turbo.lib");
     } else {
         cmd.arg("libturbo.a");
@@ -90,4 +90,11 @@ fn build_debug_libturbo() -> String {
         "failed to build turbo static library"
     );
     cli_path.to_string_lossy().to_string()
+}
+
+fn header_path(target: &build_target::Os) -> &'static str {
+    match target {
+        build_target::Os::Windows => "../../cli/turbo.h",
+        _ => "../../cli/libturbo.h",
+    }
 }

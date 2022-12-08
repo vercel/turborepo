@@ -109,7 +109,7 @@ mod tests {
     fn test_get_workspace_globs() {
         let package_manager = PackageManager::Npm;
         let globs = package_manager
-            .get_workspace_globs(Path::new("../examples/with-yarn"))
+            .get_workspace_globs(Path::new("../../examples/with-yarn"))
             .unwrap();
 
         assert_eq!(

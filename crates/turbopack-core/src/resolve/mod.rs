@@ -27,6 +27,7 @@ use self::{
     },
     origin::ResolveOriginVc,
     parse::{Request, RequestVc},
+    pattern::QueryMapVc,
 };
 use crate::{
     asset::{AssetVc, AssetsVc},
@@ -649,9 +650,11 @@ pub async fn resolve(
                 options,
             )
         }
-        Request::Module { module, path } => {
-            resolve_module_request(context, options, options_value, module, path).await?
-        }
+        Request::Module {
+            module,
+            path,
+            query,
+        } => resolve_module_request(context, options, options_value, module, path, query).await?,
         Request::ServerRelative { path } => {
             let mut new_pat = path.clone();
             new_pat.push_front(".".to_string().into());
@@ -803,6 +806,7 @@ async fn resolve_module_request(
     options_value: &ResolveOptions,
     module: &str,
     path: &Pattern,
+    _: &QueryMapVc,
 ) -> Result<ResolveResultVc> {
     let result = find_package(
         context,
@@ -1021,7 +1025,7 @@ async fn resolved(
         }
     }
     if let Some(resolved_map) = resolved_map {
-        let result = resolved_map.lookup(*path).await?;
+        let result = resolved_map.lookup(*path, original_request).await?;
         if !matches!(&*result, ImportMapResult::NoEntry) {
             return resolve_import_map_result(
                 &result,

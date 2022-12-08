@@ -22,14 +22,19 @@ use next_core::{
     source_map::NextSourceMapTraceContentSourceVc,
 };
 use owo_colors::OwoColorize;
+use turbo_malloc::TurboMalloc;
 use turbo_tasks::{
-    primitives::StringsVc, util::FormatDuration, RawVc, StatsType, TransientInstance,
-    TransientValue, TurboTasks, TurboTasksBackendApi, Value,
+    primitives::StringsVc,
+    util::{FormatBytes, FormatDuration},
+    RawVc, StatsType, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack_cli_utils::issue::{ConsoleUi, ConsoleUiVc, LogOptions};
-use turbopack_core::{issue::IssueSeverity, resolve::parse::RequestVc};
+use turbopack_core::{
+    issue::IssueSeverity,
+    resolve::{parse::RequestVc, pattern::QueryMapVc},
+};
 use turbopack_dev_server::{
     fs::DevServerFileSystemVc,
     introspect::IntrospectionSource,
@@ -291,7 +296,7 @@ async fn source(
         .map(|r| match r {
             EntryRequest::Relative(p) => RequestVc::relative(Value::new(p.clone().into()), false),
             EntryRequest::Module(m, p) => {
-                RequestVc::module(m.clone(), Value::new(p.clone().into()))
+                RequestVc::module(m.clone(), Value::new(p.clone().into()), QueryMapVc::none())
             }
         })
         .collect();
@@ -326,6 +331,11 @@ async fn source(
     .into();
     let static_source =
         StaticAssetsContentSourceVc::new(String::new(), project_path.join("public")).into();
+    let next_static_source = StaticAssetsContentSourceVc::new(
+        "_next/static/".to_owned(),
+        project_path.join(".next/static"),
+    )
+    .into();
     let manifest_source = DevManifestContentSource {
         page_roots: vec![app_source, rendered_source],
     }
@@ -333,6 +343,7 @@ async fn source(
     .into();
     let main_source = CombinedContentSourceVc::new(vec![
         manifest_source,
+        next_static_source,
         static_source,
         app_source,
         rendered_source,
@@ -459,11 +470,20 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
     }
 
     let stats_future = async move {
-        println!(
-            "{event_type} - initial compilation {start}",
-            event_type = "event".purple(),
-            start = FormatDuration(start.elapsed()),
-        );
+        if options.log_detail {
+            println!(
+                "{event_type} - initial compilation {start} ({memory})",
+                event_type = "event".purple(),
+                start = FormatDuration(start.elapsed()),
+                memory = FormatBytes(TurboMalloc::memory_usage())
+            );
+        } else {
+            println!(
+                "{event_type} - initial compilation {start}",
+                event_type = "event".purple(),
+                start = FormatDuration(start.elapsed()),
+            );
+        }
 
         loop {
             let update_future = profile_timeout(
@@ -471,12 +491,22 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
                 tt_clone.get_or_wait_update_info(Duration::from_millis(100)),
             );
 
-            let (elapsed, _count) = update_future.await;
-            println!(
-                "{event_type} - updated in {elapsed}",
-                event_type = "event".purple(),
-                elapsed = FormatDuration(elapsed),
-            );
+            let (elapsed, count) = update_future.await;
+            if options.log_detail {
+                println!(
+                    "{event_type} - updated in {elapsed} ({tasks} tasks, {memory})",
+                    event_type = "event".purple(),
+                    elapsed = FormatDuration(elapsed),
+                    tasks = count,
+                    memory = FormatBytes(TurboMalloc::memory_usage())
+                );
+            } else {
+                println!(
+                    "{event_type} - updated in {elapsed}",
+                    event_type = "event".purple(),
+                    elapsed = FormatDuration(elapsed),
+                );
+            }
         }
     };
 
