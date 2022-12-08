@@ -1,9 +1,12 @@
 use anyhow::{bail, Result};
 use swc_core::{
-    ecma::ast::{Expr, NewExpr},
+    ecma::ast::{Expr, ExprOrSpread, NewExpr},
     quote,
 };
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::{
+    primitives::{BoolVc, StringVc},
+    ValueToString, ValueToStringVc,
+};
 use turbo_tasks_fs::{FileContent, FileSystemPathVc};
 use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
 use turbopack_core::{
@@ -41,9 +44,10 @@ use crate::{
 /// referenced file to be imported/fetched/etc.
 #[turbo_tasks::value]
 pub struct UrlAssetReference {
-    pub source: AssetVc,
-    pub pattern: PatternVc,
-    pub ast_path: AstPathVc,
+    source: AssetVc,
+    pattern: PatternVc,
+    is_browser: BoolVc,
+    ast_path: AstPathVc,
 }
 
 /// Inert URL Assets are used to have a EcmascriptChunkPlaceable impl, so that
@@ -72,10 +76,16 @@ struct UrlAssetChunk {
 #[turbo_tasks::value_impl]
 impl UrlAssetReferenceVc {
     #[turbo_tasks::function]
-    pub fn new(source: AssetVc, pattern: PatternVc, ast_path: AstPathVc) -> Self {
+    pub fn new(
+        source: AssetVc,
+        pattern: PatternVc,
+        is_browser: BoolVc,
+        ast_path: AstPathVc,
+    ) -> Self {
         UrlAssetReference {
             source,
             pattern,
+            is_browser,
             ast_path,
         }
         .cell()
@@ -148,15 +158,30 @@ impl CodeGenerateable for UrlAssetReference {
             // item, which exports the static asset path to the linked file.
             let id = chunk_item.id().await?;
 
+            // In Browser environments, we rewrite the `import.meta.url` to be a
+            // location.origin because it allows us to access files from the
+            // root of the dev server. In node env, the `import.meta.url` already be the correct `file://` URL to load files.
+            let is_browser = *this.is_browser.await?;
+
             let ast_path = this.ast_path.await?;
-            visitors.push(create_visitor!(ast_path, visit_mut_expr(expr: &mut Expr) {
-                if let Expr::New(NewExpr { args: Some(args), .. }) = expr {
-                    args[0].expr = box quote!(
-                        "__turbopack_require__($id)" as Expr,
-                        id: Expr = module_id_to_lit(&id),
-                    );
-                }
-            }));
+            visitors.push(
+                create_visitor!(ast_path, visit_mut_expr(new_expr: &mut Expr) {
+                    if let Expr::New(NewExpr { args: Some(args), .. }) = new_expr {
+                        if let Some(ExprOrSpread { box expr, spread: None }) = args.get_mut(0) {
+                            *expr = quote!(
+                                "__turbopack_require__($id)" as Expr,
+                                id: Expr = module_id_to_lit(&id),
+                            );
+                        }
+
+                        if is_browser {
+                            if let Some(ExprOrSpread { box expr, spread: None }) = args.get_mut(1) {
+                                *expr = quote!("location.href" as Expr);
+                            }
+                        }
+                    }
+                }),
+            );
         }
 
         Ok(CodeGeneration { visitors }.into())
@@ -289,7 +314,8 @@ impl EcmascriptChunkItem for UrlAssetChunk {
         Ok(EcmascriptChunkItemContent {
             inner_code: format!(
                 "__turbopack_export_value__({path});",
-                path = stringify_str(&format!("/{}", &*self_vc.static_path().await?))
+                // This is a relative path, not an absolute like a StaticAsset
+                path = stringify_str(&format!("{}", &*self_vc.static_path().await?))
             )
             .into(),
             ..Default::default()
