@@ -194,7 +194,10 @@ impl Asset for InertUrlAsset {
 impl ValueToString for InertUrlAsset {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!("URL Asset {}", self.source.await?,)))
+        Ok(StringVc::cell(format!(
+            "Inert URL Asset {}",
+            self.source.await?,
+        )))
     }
 }
 
@@ -202,7 +205,7 @@ impl ValueToString for InertUrlAsset {
 impl ChunkableAsset for InertUrlAsset {
     #[turbo_tasks::function]
     fn as_chunk(self_vc: InertUrlAssetVc, context: ChunkingContextVc) -> ChunkVc {
-        EcmascriptChunkVc::new(context, self_vc.into()).into()
+        EcmascriptChunkVc::new(context, self_vc.as_ecmascript_chunk_placeable()).into()
     }
 }
 
@@ -230,7 +233,7 @@ impl UrlAssetChunkVc {
     }
 
     #[turbo_tasks::function]
-    async fn path(self) -> Result<FileSystemPathVc> {
+    async fn static_path(self) -> Result<FileSystemPathVc> {
         let this = self.await?;
         let content = this.asset.content();
 
@@ -260,8 +263,9 @@ impl ValueToString for UrlAssetChunk {
 impl ChunkItem for UrlAssetChunk {
     #[turbo_tasks::function]
     async fn references(self_vc: UrlAssetChunkVc) -> Result<AssetReferencesVc> {
-        let path = self_vc.path();
+        let path = self_vc.static_path();
         let content = self_vc.await?.asset.content();
+        // Generating this asset references allows the real file to be accessed.
         let asset_ref = SingleAssetReferenceVc::new(
             VirtualAssetVc::new(path, content).into(),
             StringVc::cell(format!("static(url) {}", path.await?)),
@@ -279,10 +283,11 @@ impl EcmascriptChunkItem for UrlAssetChunk {
 
     #[turbo_tasks::function]
     async fn content(self_vc: UrlAssetChunkVc) -> Result<EcmascriptChunkItemContentVc> {
+        // Exports the path to where the real file can be accessed.
         Ok(EcmascriptChunkItemContent {
             inner_code: format!(
                 "__turbopack_export_value__({path});",
-                path = stringify_str(&format!("/{}", &*self_vc.path().await?))
+                path = stringify_str(&format!("/{}", &*self_vc.static_path().await?))
             )
             .into(),
             ..Default::default()
