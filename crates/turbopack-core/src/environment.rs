@@ -167,6 +167,15 @@ impl EnvironmentVc {
             _ => OptionStringVc::cell(None),
         })
     }
+
+    #[turbo_tasks::function]
+    pub async fn is_browser(self) -> Result<BoolVc> {
+        let env = self.await?;
+        Ok(BoolVc::cell(matches!(
+            env.execution,
+            ExecutionEnvironment::Browser(_)
+        )))
+    }
 }
 
 pub enum NodeEnvironmentType {
