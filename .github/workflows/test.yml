@@ -193,7 +193,7 @@ jobs:
     name: Go Cli Examples
     needs: determine_jobs
     if: needs.determine_jobs.outputs.examples == 'true'
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
