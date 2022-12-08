@@ -11,6 +11,12 @@ pub fn register() {
     include!(concat!(env!("OUT_DIR"), "/register.rs"));
 }
 
+#[turbo_tasks::value]
+pub enum FetchResult {
+    Ok(HttpResponseVc),
+    Err(FetchErrorVc),
+}
+
 #[turbo_tasks::value(shared)]
 #[derive(Debug)]
 pub struct HttpResponse {
@@ -32,11 +38,7 @@ impl HttpResponseBodyVc {
 }
 
 #[turbo_tasks::function]
-pub async fn fetch(
-    url: StringVc,
-    user_agent: OptionStringVc,
-    context: FileSystemPathVc,
-) -> Result<HttpResponseVc> {
+pub async fn fetch(url: StringVc, user_agent: OptionStringVc) -> Result<FetchResultVc> {
     let url = url.await?.clone();
     let user_agent = &*user_agent.await?;
     let client = reqwest::Client::new();
@@ -46,30 +48,28 @@ pub async fn fetch(
         builder = builder.header("User-Agent", user_agent);
     }
 
-    let response = builder.send().await;
+    let response = builder.send().await.and_then(|r| r.error_for_status());
     match response {
         Ok(response) => {
             let status = response.status().as_u16();
             let body = response.bytes().await?.to_vec();
 
-            Ok(HttpResponse {
-                status,
-                body: HttpResponseBodyVc::cell(HttpResponseBody(body)),
-            }
-            .into())
+            Ok(FetchResultVc::cell(FetchResult::Ok(HttpResponseVc::cell(
+                HttpResponse {
+                    status,
+                    body: HttpResponseBodyVc::cell(HttpResponseBody(body)),
+                },
+            ))))
         }
-        Err(err) => {
-            FetchIssue::from_reqwest_error(&err, &url, context)
-                .cell()
-                .as_issue()
-                .emit();
-            Err(err.into())
-        }
+        Err(err) => Ok(FetchResultVc::cell(FetchResult::Err(FetchErrorVc::cell(
+            FetchError::from_reqwest_error(&err, &url),
+        )))),
     }
 }
 
+#[derive(Debug)]
 #[turbo_tasks::value(shared)]
-enum FetchIssueKind {
+pub enum FetchErrorKind {
     Connect,
     Timeout,
     Status(u16),
@@ -77,19 +77,14 @@ enum FetchIssueKind {
 }
 
 #[turbo_tasks::value(shared)]
-struct FetchIssue {
-    pub context: FileSystemPathVc,
+pub struct FetchError {
     pub url: StringVc,
     pub kind: FetchErrorKindVc,
     pub detail: StringVc,
 }
 
-impl FetchIssue {
-    fn from_reqwest_error(
-        error: &reqwest::Error,
-        url: &str,
-        issue_context: FileSystemPathVc,
-    ) -> FetchIssue {
+impl FetchError {
+    fn from_reqwest_error(error: &reqwest::Error, url: &str) -> FetchError {
         let kind = if error.is_connect() {
             FetchErrorKind::Connect
         } else if error.is_timeout() {
@@ -100,13 +95,41 @@ impl FetchIssue {
             FetchErrorKind::Other
         };
 
-        FetchIssue {
-            context: issue_context,
+        FetchError {
             detail: StringVc::cell(error.to_string()),
             url: StringVc::cell(url.to_owned()),
             kind: kind.into(),
         }
     }
+}
+
+#[turbo_tasks::value_impl]
+impl FetchErrorVc {
+    #[turbo_tasks::function]
+    pub async fn to_issue(
+        self,
+        severity: IssueSeverityVc,
+        context: FileSystemPathVc,
+    ) -> Result<FetchIssueVc> {
+        let this = &*self.await?;
+        Ok(FetchIssue {
+            context,
+            severity,
+            url: this.url,
+            kind: this.kind,
+            detail: this.detail,
+        }
+        .into())
+    }
+}
+
+#[turbo_tasks::value(shared)]
+pub struct FetchIssue {
+    pub context: FileSystemPathVc,
+    pub severity: IssueSeverityVc,
+    pub url: StringVc,
+    pub kind: FetchErrorKindVc,
+    pub detail: StringVc,
 }
 
 #[turbo_tasks::value_impl]

@@ -146,8 +146,7 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
         let css_virtual_path = attached_next_js_package_path(self.project_path)
             .join("internal/font/google/cssmodule.module.css");
 
-        // TODO(WEB-274): Handle this failing (e.g. connection issues). This should be
-        // an Issue.
+        // TODO(WEB-283): Use fallback in dev if this fails
         let stylesheet_res = fetch(
             stylesheet_url,
             OptionStringVc::cell(Some(
@@ -158,11 +157,6 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
             css_virtual_path,
         )
         .await?;
-
-        // TODO(WEB-274): Emit an issue instead
-        if stylesheet_res.status >= 400 {
-            bail!("Expected a successful response for Google fonts stylesheet");
-        }
 
         let stylesheet = &*stylesheet_res.body.to_string().await?;
         let properties = get_font_css_properties(options).await?;

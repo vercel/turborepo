@@ -1,8 +1,10 @@
 #![cfg(test)]
+
 use turbo_tasks::primitives::{OptionStringVc, StringVc};
-use turbo_tasks_fetch::{fetch, register};
+use turbo_tasks_fetch::{fetch, register, FetchErrorKind, FetchResult};
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystemPathVc, FileSystemVc};
 use turbo_tasks_testing::{register, run};
+use turbopack_core::issue::{Issue, IssueSeverity};
 
 register!();
 
@@ -19,10 +21,17 @@ async fn basic_get() {
         });
 
 
-        let response = &*fetch(StringVc::cell(server.url("/foo.woff")), OptionStringVc::cell(None), get_issue_context()).await?;
+        let result = &*fetch(StringVc::cell(server.url("/foo.woff")), OptionStringVc::cell(None)).await?;
         resource_mock.assert();
-        assert_eq!(response.status, 200);
-        assert_eq!(*response.body.to_string().await?, "responsebody");
+
+        match result {
+            FetchResult::Err(_) => panic!(),
+            FetchResult::Ok(response) => {
+                let response = response.await?;
+                assert_eq!(response.status, 200);
+                assert_eq!(*response.body.to_string().await?, "responsebody");
+            }
+        }
     }
 }
 
@@ -38,8 +47,14 @@ async fn sends_user_agent() {
                 .body("responsebody");
         });
 
-        let response = fetch(StringVc::cell(server.url("/foo.woff")), OptionStringVc::cell(Some("foo".to_owned())), get_issue_context()).await?;
+        let result = &*fetch(StringVc::cell(server.url("/foo.woff")), OptionStringVc::cell(Some("foo".to_owned()))).await?;
         resource_mock.assert();
+
+        let FetchResult::Ok(response) = result else {
+            panic!()
+        };
+
+        let response = response.await?;
         assert_eq!(response.status, 200);
         assert_eq!(*response.body.to_string().await?, "responsebody");
     }
@@ -58,19 +73,71 @@ async fn invalidation_does_not_invalidate() {
             then.status(200)
                 .body("responsebody");
         });
-        let issue_context = get_issue_context();
 
         let url = StringVc::cell(server.url("/foo.woff"));
         let user_agent = OptionStringVc::cell(Some("foo".to_owned()));
-        let response = fetch(url, user_agent, issue_context).await?;
+        let result = &*fetch(url, user_agent).await?;
         resource_mock.assert();
+
+        let FetchResult::Ok(response_vc) = result else {
+            panic!()
+        };
+        let response = response_vc.await?;
         assert_eq!(response.status, 200);
         assert_eq!(*response.body.to_string().await?, "responsebody");
 
-        let second_response = fetch(url, user_agent, issue_context).await?;
+        let second_result = &*fetch(url, user_agent).await?;
+        let FetchResult::Ok(second_response_vc) = second_result else {
+            panic!()
+        };
+        let second_response = second_response_vc.await?;
+
         // Assert that a second request is never sent -- the result is cached via turbo tasks
         resource_mock.assert_hits(1);
         assert_eq!(response, second_response);
+    }
+}
+
+#[tokio::test]
+async fn errors_on_failed_connection() {
+    run! {
+        register();
+
+        let url = "https://doesnotexist/foo.woff";
+        let result = &*fetch(StringVc::cell(url.to_owned()), OptionStringVc::cell(None)).await?;
+        let FetchResult::Err(err_vc) = result else {
+            panic!()
+        };
+        let err = &*err_vc.await?;
+        assert_eq!(*err.kind.await?, FetchErrorKind::Connect);
+        assert_eq!(*err.url.await?, url);
+
+        let issue = err_vc.to_issue(IssueSeverity::Error.into(), get_issue_context());
+        assert_eq!(*issue.severity().await?, IssueSeverity::Error);
+        assert_eq!(*issue.category().await?, "fetch");
+        assert_eq!(*issue.description().await?, "There was an issue establishing a connection while requesting https://doesnotexist/foo.woff.");
+    }
+}
+
+#[tokio::test]
+async fn errors_on_404() {
+    run! {
+        register();
+
+        let server = httpmock::MockServer::start();
+        let resource_url = server.url("/");
+        let result = &*fetch(StringVc::cell(resource_url.clone()), OptionStringVc::cell(None)).await?;
+        let FetchResult::Err(err_vc) = result else {
+            panic!()
+        };
+        let err = &*err_vc.await?;
+        assert!(matches!(*err.kind.await?, FetchErrorKind::Status(404)));
+        assert_eq!(*err.url.await?, resource_url);
+
+        let issue = err_vc.to_issue(IssueSeverity::Error.into(), get_issue_context());
+        assert_eq!(*issue.severity().await?, IssueSeverity::Error);
+        assert_eq!(*issue.category().await?, "fetch");
+        assert_eq!(*issue.description().await?, format!("Received response with status 404 when requesting {}", &resource_url));
     }
 }
 
