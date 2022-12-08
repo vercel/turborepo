@@ -459,11 +459,6 @@ jobs:
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
 
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
 
@@ -483,10 +478,7 @@ jobs:
       - name: Prepare toolchain on Windows
         run: |
           pnpx node-gyp install
-          choco install protoc -y
           echo 'node-linker = "hoisted"' > crates/turbopack/tests/node-file-trace/.npmrc
-          rustup set default-host x86_64-pc-windows-gnu
-          rustup show
         if: matrix.os.name == 'windows'
 
       - name: Install tests dependencies
@@ -513,7 +505,8 @@ jobs:
         timeout-minutes: 120
         with:
           command: nextest
-          args: run --workspace --release --no-fail-fast
+          # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
+          args: run --workspace --release --no-fail-fast --exclude turbo
 
   rust_test_bench:
     needs: [determine_jobs, rust_prepare]
