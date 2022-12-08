@@ -28,6 +28,8 @@ fn native_run(state: TurboState) -> Result<i32> {
     Ok(exit_code.try_into()?)
 }
 
+// This function should not expanded. Please add any logic to
+// `turborepo_lib::main` instead
 fn main() -> Result<()> {
     let exit_code = match turborepo_lib::main()? {
         Payload::Rust(res) => res.unwrap_or(2),
