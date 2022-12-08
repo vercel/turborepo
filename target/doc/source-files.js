@@ -13,7 +13,7 @@ var sourcesIndex = JSON.parse('{\
 "turbo_tasks_hash":["",[],["base16.rs","deterministic_hash.rs","hex.rs","lib.rs","md4.rs","xxh3_hash64.rs"]],\
 "turbo_tasks_macros":["",[["derive",[],["deterministic_hash_macro.rs","mod.rs","trace_raw_vcs_macro.rs","value_debug_format_macro.rs","value_debug_macro.rs"]]],["func.rs","function_macro.rs","lib.rs","util.rs","value_impl_macro.rs","value_macro.rs","value_trait_macro.rs"]],\
 "turbo_tasks_macros_shared":["",[],["expand.rs","ident.rs","lib.rs","value_trait_arguments.rs"]],\
-"turbo_tasks_memory":["",[["viz",[],["graph.rs","mod.rs","table.rs"]]],["cell.rs","count_hash_set.rs","lib.rs","memory_backend.rs","memory_backend_with_pg.rs","output.rs","scope.rs","stats.rs","task.rs","task_stats.rs"]],\
+"turbo_tasks_memory":["",[["task",[],["meta_state.rs","stats.rs"]],["viz",[],["graph.rs","mod.rs","table.rs"]]],["cell.rs","count_hash_set.rs","lib.rs","map_guard.rs","memory_backend.rs","memory_backend_with_pg.rs","output.rs","scope.rs","stats.rs","task.rs"]],\
 "turbo_tasks_testing":["",[],["lib.rs","macros.rs","retry.rs"]],\
 "turbopack":["",[["graph",[],["mod.rs"]],["module_options",[],["mod.rs","module_options_context.rs","module_rule.rs"]],["rebase",[],["mod.rs"]],["transition",[],["mod.rs"]]],["lib.rs","resolve.rs","resolve_options_context.rs"]],\
 "turbopack_cli_utils":["",[],["issue.rs","lib.rs"]],\

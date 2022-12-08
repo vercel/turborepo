@@ -339,6 +339,9 @@
 <span id="339">339</span>
 <span id="340">340</span>
 <span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::{<span class="self">self</span>, max},
     collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
@@ -361,7 +364,7 @@
 }
 
 <span class="attr">#[derive(PartialEq, Eq, Hash, Clone, Debug)]
-</span><span class="kw">pub enum </span>TaskType {
+</span><span class="kw">pub enum </span>StatsTaskType {
     Root(TaskId),
     Once(TaskId),
     Native(FunctionId),
@@ -369,16 +372,16 @@
     ResolveTrait(TraitTypeId, String),
 }
 
-<span class="kw">impl </span>Display <span class="kw">for </span>TaskType {
+<span class="kw">impl </span>Display <span class="kw">for </span>StatsTaskType {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
         <span class="kw">match </span><span class="self">self </span>{
-            TaskType::Root(<span class="kw">_</span>) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;root&quot;</span>),
-            TaskType::Once(<span class="kw">_</span>) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;once&quot;</span>),
-            TaskType::Native(nf) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, registry::get_function(<span class="kw-2">*</span>nf).name),
-            TaskType::ResolveNative(nf) =&gt; {
+            StatsTaskType::Root(<span class="kw">_</span>) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;root&quot;</span>),
+            StatsTaskType::Once(<span class="kw">_</span>) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;once&quot;</span>),
+            StatsTaskType::Native(nf) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, registry::get_function(<span class="kw-2">*</span>nf).name),
+            StatsTaskType::ResolveNative(nf) =&gt; {
                 <span class="macro">write!</span>(f, <span class="string">&quot;resolve {}&quot;</span>, registry::get_function(<span class="kw-2">*</span>nf).name)
             }
-            TaskType::ResolveTrait(t, n) =&gt; {
+            StatsTaskType::ResolveTrait(t, n) =&gt; {
                 <span class="macro">write!</span>(f, <span class="string">&quot;resolve trait {}::{}&quot;</span>, registry::get_trait(<span class="kw-2">*</span>t).name, n)
             }
         }
@@ -408,7 +411,7 @@
     <span class="kw">pub </span>total_current_duration: Duration,
     <span class="kw">pub </span>total_update_duration: Duration,
     <span class="kw">pub </span>max_duration: Duration,
-    <span class="kw">pub </span>references: HashMap&lt;(ReferenceType, TaskType), ReferenceStats&gt;,
+    <span class="kw">pub </span>references: HashMap&lt;(ReferenceType, StatsTaskType), ReferenceStats&gt;,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>ExportedTaskStats {
@@ -429,7 +432,7 @@
 }
 
 <span class="kw">pub struct </span>Stats {
-    tasks: HashMap&lt;TaskType, ExportedTaskStats&gt;,
+    tasks: HashMap&lt;StatsTaskType, ExportedTaskStats&gt;,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>Stats {
@@ -457,7 +460,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
         task: <span class="kw-2">&amp;</span>Task,
-        condition: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span>TaskType, <span class="kw-2">&amp;</span>TaskStatsInfo) -&gt; bool,
+        condition: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span>StatsTaskType, <span class="kw-2">&amp;</span>TaskStatsInfo) -&gt; bool,
     ) {
         <span class="kw">let </span>info = task.get_stats_info(backend);
         <span class="kw">let </span>ty = task.get_stats_type();
@@ -514,7 +517,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         backend: <span class="kw-2">&amp;</span>MemoryBackend,
         id: TaskId,
-        condition: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span>TaskType, <span class="kw-2">&amp;</span>TaskStatsInfo) -&gt; bool,
+        condition: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span>StatsTaskType, <span class="kw-2">&amp;</span>TaskStatsInfo) -&gt; bool,
     ) {
         backend.with_task(id, |task| {
             <span class="self">self</span>.add_conditional(backend, task, condition);
@@ -523,12 +526,12 @@
 
     <span class="kw">pub fn </span>merge_resolve(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.merge(|ty, _stats| <span class="kw">match </span>ty {
-            TaskType::Root(<span class="kw">_</span>) | TaskType::Once(<span class="kw">_</span>) | TaskType::Native(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
-            TaskType::ResolveNative(<span class="kw">_</span>) | TaskType::ResolveTrait(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+            StatsTaskType::Root(<span class="kw">_</span>) | StatsTaskType::Once(<span class="kw">_</span>) | StatsTaskType::Native(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
+            StatsTaskType::ResolveNative(<span class="kw">_</span>) | StatsTaskType::ResolveTrait(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
         })
     }
 
-    <span class="kw">pub fn </span>merge(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw-2">mut </span>select: <span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>TaskType, <span class="kw-2">&amp;</span>ExportedTaskStats) -&gt; bool) {
+    <span class="kw">pub fn </span>merge(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw-2">mut </span>select: <span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>StatsTaskType, <span class="kw-2">&amp;</span>ExportedTaskStats) -&gt; bool) {
         <span class="kw">let </span>merged: HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = <span class="self">self
             </span>.tasks
             .drain_filter(|ty, stats| select(ty, stats))
@@ -536,9 +539,9 @@
 
         <span class="kw">for </span>stats <span class="kw">in </span><span class="self">self</span>.tasks.values_mut() {
             <span class="kw">fn </span>merge_refs(
-                refs: HashMap&lt;(ReferenceType, TaskType), ReferenceStats&gt;,
-                merged: <span class="kw-2">&amp;</span>HashMap&lt;TaskType, ExportedTaskStats&gt;,
-            ) -&gt; HashMap&lt;(ReferenceType, TaskType), ReferenceStats&gt; {
+                refs: HashMap&lt;(ReferenceType, StatsTaskType), ReferenceStats&gt;,
+                merged: <span class="kw-2">&amp;</span>HashMap&lt;StatsTaskType, ExportedTaskStats&gt;,
+            ) -&gt; HashMap&lt;(ReferenceType, StatsTaskType), ReferenceStats&gt; {
                 refs.into_iter()
                     .flat_map(|((ref_ty, ty), stats)| {
                         <span class="kw">if let </span><span class="prelude-val">Some</span>(merged_stats) = merged.get(<span class="kw-2">&amp;</span>ty) {
@@ -576,11 +579,11 @@
         <span class="kw">let </span><span class="kw-2">mut </span>root_queue = incoming_references_count.into_iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         root_queue.sort_by_key(|(<span class="kw">_</span>, c)| <span class="kw-2">*</span>c);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>task_placement: HashMap&lt;<span class="kw-2">&amp;</span>TaskType, <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>TaskType&gt;&gt; = HashMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>task_placement: HashMap&lt;<span class="kw-2">&amp;</span>StatsTaskType, <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>StatsTaskType&gt;&gt; = HashMap::new();
         <span class="kw">fn </span>get_path&lt;<span class="lifetime">&#39;a</span>&gt;(
-            ty: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType&gt;,
-            task_placement: <span class="kw-2">&amp;</span>HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType, <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType&gt;&gt;,
-        ) -&gt; Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType&gt; {
+            ty: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>StatsTaskType&gt;,
+            task_placement: <span class="kw-2">&amp;</span>HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>StatsTaskType, <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>StatsTaskType&gt;&gt;,
+        ) -&gt; Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>StatsTaskType&gt; {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>ty) = ty {
                 <span class="kw">let </span><span class="kw-2">mut </span>path = <span class="macro">vec!</span>[ty];
                 <span class="kw">while let </span><span class="prelude-val">Some</span>(parent) = task_placement[ty] {
@@ -593,7 +596,10 @@
                 Vec::new()
             }
         }
-        <span class="kw">fn </span>find_common&lt;<span class="lifetime">&#39;a</span>&gt;(p1: Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType&gt;, p2: Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType&gt; {
+        <span class="kw">fn </span>find_common&lt;<span class="lifetime">&#39;a</span>&gt;(
+            p1: Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>StatsTaskType&gt;,
+            p2: Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>StatsTaskType&gt;,
+        ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>StatsTaskType&gt; {
             <span class="kw">let </span><span class="kw-2">mut </span>i = cmp::min(p1.len(), p2.len());
             <span class="kw">loop </span>{
                 <span class="kw">if </span>i == <span class="number">0 </span>{
@@ -609,7 +615,7 @@
             <span class="kw">if </span>task_placement.contains_key(root) {
                 <span class="kw">continue</span>;
             }
-            <span class="kw">let </span><span class="kw-2">mut </span>queue: VecDeque&lt;(<span class="kw-2">&amp;</span>TaskType, <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>TaskType&gt;)&gt; =
+            <span class="kw">let </span><span class="kw-2">mut </span>queue: VecDeque&lt;(<span class="kw-2">&amp;</span>StatsTaskType, <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>StatsTaskType&gt;)&gt; =
                 [(root, <span class="prelude-val">None</span>)].into_iter().collect();
 
             <span class="kw">while let </span><span class="prelude-val">Some</span>((ty, placement)) = queue.pop_front() {
@@ -639,15 +645,15 @@
             }
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>children: HashMap&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>TaskType&gt;, Vec&lt;<span class="kw-2">&amp;</span>TaskType&gt;&gt; = HashMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>children: HashMap&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>StatsTaskType&gt;, Vec&lt;<span class="kw-2">&amp;</span>StatsTaskType&gt;&gt; = HashMap::new();
         <span class="kw">for </span>(child, parent) <span class="kw">in </span>task_placement {
             children.entry(parent).or_default().push(child);
         }
 
         <span class="kw">fn </span>into_group&lt;<span class="lifetime">&#39;a</span>&gt;(
-            tasks: <span class="kw-2">&amp;</span>HashMap&lt;TaskType, ExportedTaskStats&gt;,
-            children: <span class="kw-2">&amp;</span>HashMap&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType&gt;, Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType&gt;&gt;,
-            ty: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType&gt;,
+            tasks: <span class="kw-2">&amp;</span>HashMap&lt;StatsTaskType, ExportedTaskStats&gt;,
+            children: <span class="kw-2">&amp;</span>HashMap&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>StatsTaskType&gt;, Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>StatsTaskType&gt;&gt;,
+            ty: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>StatsTaskType&gt;,
         ) -&gt; GroupTree {
             <span class="kw">let </span>inner = <span class="kw-2">&amp;</span>children[<span class="kw-2">&amp;</span>ty];
             <span class="kw">let </span>inner_with_children = inner.iter().filter(|c| children.contains_key(<span class="kw-2">&amp;</span><span class="prelude-val">Some</span>(<span class="kw-2">*</span>c)));
@@ -676,9 +682,9 @@
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>GroupTree {
-    <span class="kw">pub </span>primary: <span class="prelude-ty">Option</span>&lt;(TaskType, ExportedTaskStats)&gt;,
+    <span class="kw">pub </span>primary: <span class="prelude-ty">Option</span>&lt;(StatsTaskType, ExportedTaskStats)&gt;,
     <span class="kw">pub </span>children: Vec&lt;GroupTree&gt;,
-    <span class="kw">pub </span>task_types: Vec&lt;(TaskType, ExportedTaskStats)&gt;,
+    <span class="kw">pub </span>task_types: Vec&lt;(StatsTaskType, ExportedTaskStats)&gt;,
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="turbo_tasks_memory" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

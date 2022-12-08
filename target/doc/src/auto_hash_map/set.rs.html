@@ -233,6 +233,21 @@
 <span id="233">233</span>
 <span id="234">234</span>
 <span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::hash_map::RandomState,
     fmt::Debug,
@@ -292,6 +307,11 @@
         <span class="self">Self </span>{
             map: AutoMap::with_capacity_and_hasher(capacity, hasher),
         }
+    }
+
+    <span class="doccomment">/// see [HashSet::clear](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.clear)
+    </span><span class="kw">pub fn </span>clear(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.map.clear();
     }
 }
 
@@ -443,6 +463,16 @@
         <span class="self">Self </span>{
             map: AutoMap::from_iter(iter.into_iter().map(|item| (item, ()))),
         }
+    }
+}
+
+<span class="kw">impl</span>&lt;K, H, <span class="kw">const </span>N: usize&gt; From&lt;[K; N]&gt; <span class="kw">for </span>AutoSet&lt;K, H&gt;
+<span class="kw">where
+    </span>K: Hash + Eq,
+    H: BuildHasher + Default,
+{
+    <span class="kw">fn </span>from(array: [K; N]) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::from_iter(array)
     }
 }
 

@@ -1250,6 +1250,7 @@
 <span id="1250">1250</span>
 <span id="1251">1251</span>
 <span id="1252">1252</span>
+<span id="1253">1253</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -1284,7 +1285,7 @@
     timed_future::{<span class="self">self</span>, TimedFuture},
     trace::TraceRawVcs,
     util::FormatDuration,
-    Nothing, NothingVc, TaskId, ValueTraitVc, ValueTypeId,
+    Completion, CompletionVc, TaskId, ValueTraitVc, ValueTypeId,
 };
 
 <span class="kw">pub trait </span>TurboTasksCallApi: Sync + Send {
@@ -1559,12 +1560,13 @@
             <span class="kw">let </span>result = future.<span class="kw">await</span><span class="question-mark">?</span>;
             tx.send(result)
                 .map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">&quot;unable to send result&quot;</span>))<span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(NothingVc::new().into())
+            <span class="prelude-val">Ok</span>(CompletionVc::new().into())
         });
         <span class="comment">// INVALIDATION: A Once task will never invalidate, therefore we don&#39;t need to
         // track a dependency
         </span><span class="kw">let </span>raw_result = read_task_output_untracked(<span class="self">self</span>, task_id, <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        raw_result.into_read_untracked::&lt;Nothing&gt;(<span class="self">self</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        raw_result.into_read_untracked::&lt;Completion&gt;(<span class="self">self</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="prelude-val">Ok</span>(rx.<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
@@ -1922,7 +1924,7 @@
     ) -&gt; TaskId {
         <span class="self">self</span>.spawn_once_task(<span class="kw">async move </span>{
             future.<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(NothingVc::new().into())
+            <span class="prelude-val">Ok</span>(CompletionVc::new().into())
         })
     }
 
@@ -1936,7 +1938,7 @@
             this.finish_primary_job();
             future.<span class="kw">await</span><span class="question-mark">?</span>;
             this.begin_primary_job();
-            <span class="prelude-val">Ok</span>(NothingVc::new().into())
+            <span class="prelude-val">Ok</span>(CompletionVc::new().into())
         })
     }
 }
@@ -2260,7 +2262,7 @@
     <span class="comment">// INVALIDATION: A Once task will never invalidate, therefore we don&#39;t need to
     // track a dependency
     </span><span class="kw">let </span>raw_result = read_task_output_untracked(<span class="kw-2">&amp;*</span>tt, task_id, <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-    raw_result.into_read_untracked::&lt;Nothing&gt;(<span class="kw-2">&amp;*</span>tt).<span class="kw">await</span><span class="question-mark">?</span>;
+    raw_result.into_read_untracked::&lt;Completion&gt;(<span class="kw-2">&amp;*</span>tt).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(rx.<span class="kw">await</span><span class="question-mark">?</span>)
 }

@@ -298,8 +298,8 @@ document.addEventListener(&quot;click&quot;,function(b){try{var p=function(a){re
         out: <span class="kw-2">&amp;mut </span>String,
         max_values: <span class="kw-2">&amp;</span>MaxValues,
         depth: u32,
-        parent: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>(TaskType, ExportedTaskStats)&gt;,
-        (ty, stats): <span class="kw-2">&amp;</span>(TaskType, ExportedTaskStats),
+        parent: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>(StatsTaskType, ExportedTaskStats)&gt;,
+        (ty, stats): <span class="kw-2">&amp;</span>(StatsTaskType, ExportedTaskStats),
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::fmt::Error&gt; {
         <span class="kw-2">*</span>out += <span class="string">r#&quot;&lt;tr&gt;&quot;#</span>;
         <span class="kw">let </span>name = ty.to_string();

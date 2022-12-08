@@ -240,7 +240,7 @@
 
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 
-<span class="kw">use </span><span class="kw">crate</span>::stats::{ExportedTaskStats, GroupTree, ReferenceStats, ReferenceType, TaskType};
+<span class="kw">use </span><span class="kw">crate</span>::stats::{ExportedTaskStats, GroupTree, ReferenceStats, ReferenceType, StatsTaskType};
 
 <span class="kw">fn </span>escape_in_template_str(s: <span class="kw-2">&amp;</span>str) -&gt; String {
     s.replace(<span class="string">&#39;\\&#39;</span>, <span class="string">&quot;\\\\&quot;</span>)
@@ -252,7 +252,7 @@
     s.replace(<span class="string">&#39;&gt;&#39;</span>, <span class="string">&quot;&amp;gt;&quot;</span>).replace(<span class="string">&#39;&lt;&#39;</span>, <span class="string">&quot;&amp;lt;&quot;</span>)
 }
 
-<span class="kw">fn </span>get_id&lt;<span class="lifetime">&#39;a</span>&gt;(ty: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType, ids: <span class="kw-2">&amp;mut </span>HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType, usize&gt;) -&gt; usize {
+<span class="kw">fn </span>get_id&lt;<span class="lifetime">&#39;a</span>&gt;(ty: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>StatsTaskType, ids: <span class="kw-2">&amp;mut </span>HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>StatsTaskType, usize&gt;) -&gt; usize {
     <span class="kw">let </span>len = ids.len();
     <span class="kw-2">*</span>ids.entry(ty).or_insert(len)
 }
@@ -386,7 +386,7 @@
 <span class="kw">fn </span>compute_depths&lt;<span class="lifetime">&#39;a</span>&gt;(
     node: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>GroupTree,
     depth: usize,
-    output: <span class="kw-2">&amp;mut </span>HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskType, usize&gt;,
+    output: <span class="kw-2">&amp;mut </span>HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>StatsTaskType, usize&gt;,
 ) {
     <span class="kw">if let </span><span class="prelude-val">Some</span>((ty, <span class="kw">_</span>)) = <span class="kw-2">&amp;</span>node.primary {
         output.insert(ty, depth);

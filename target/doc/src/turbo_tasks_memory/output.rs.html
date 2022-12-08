@@ -119,12 +119,10 @@
 <span id="119">119</span>
 <span id="120">120</span>
 <span id="121">121</span>
-<span id="122">122</span>
-<span id="123">123</span>
-<span id="124">124</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     fmt::{Debug, Display},
+    mem::take,
 };
 
 <span class="kw">use </span>anyhow::{anyhow, Error, <span class="prelude-ty">Result</span>};
@@ -182,10 +180,6 @@
         }
     }
 
-    <span class="kw">pub fn </span>track_read(<span class="kw-2">&amp;mut </span><span class="self">self</span>, reader: TaskId) {
-        <span class="self">self</span>.dependent_tasks.insert(reader);
-    }
-
     <span class="kw">pub fn </span>link(<span class="kw-2">&amp;mut </span><span class="self">self</span>, target: RawVc, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
         <span class="kw">let </span>change;
         <span class="kw">let </span><span class="kw-2">mut </span>_type_change = <span class="bool-val">false</span>;
@@ -220,7 +214,7 @@
         <span class="self">self</span>.updates += <span class="number">1</span>;
         <span class="comment">// notify
         </span><span class="kw">if </span>!<span class="self">self</span>.dependent_tasks.is_empty() {
-            turbo_tasks.schedule_notify_tasks_set(<span class="kw-2">&amp;</span><span class="self">self</span>.dependent_tasks);
+            turbo_tasks.schedule_notify_tasks_set(<span class="kw-2">&amp;</span>take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.dependent_tasks));
         }
     }
 
@@ -233,7 +227,7 @@
         <span class="self">self</span>.updates += <span class="number">1</span>;
         <span class="comment">// notify
         </span><span class="kw">if </span>!<span class="self">self</span>.dependent_tasks.is_empty() {
-            turbo_tasks.schedule_notify_tasks_set(<span class="kw-2">&amp;</span><span class="self">self</span>.dependent_tasks);
+            turbo_tasks.schedule_notify_tasks_set(<span class="kw-2">&amp;</span>take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.dependent_tasks));
         }
     }
 
@@ -242,7 +236,7 @@
         <span class="self">self</span>.updates += <span class="number">1</span>;
         <span class="comment">// notify
         </span><span class="kw">if </span>!<span class="self">self</span>.dependent_tasks.is_empty() {
-            turbo_tasks.schedule_notify_tasks_set(<span class="kw-2">&amp;</span><span class="self">self</span>.dependent_tasks);
+            turbo_tasks.schedule_notify_tasks_set(<span class="kw-2">&amp;</span>take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.dependent_tasks));
         }
     }
 }

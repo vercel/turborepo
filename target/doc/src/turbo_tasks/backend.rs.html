@@ -383,21 +383,6 @@
 <span id="383">383</span>
 <span id="384">384</span>
 <span id="385">385</span>
-<span id="386">386</span>
-<span id="387">387</span>
-<span id="388">388</span>
-<span id="389">389</span>
-<span id="390">390</span>
-<span id="391">391</span>
-<span id="392">392</span>
-<span id="393">393</span>
-<span id="394">394</span>
-<span id="395">395</span>
-<span id="396">396</span>
-<span id="397">397</span>
-<span id="398">398</span>
-<span id="399">399</span>
-<span id="400">400</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Any,
     borrow::Cow,
@@ -519,7 +504,7 @@
 
 <span class="comment">// TODO technically CellContent is already indexed by the ValueTypeId, so we
 // don&#39;t need to store it here
-</span><span class="attr">#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+</span><span class="attr">#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>CellContent(<span class="kw">pub </span><span class="prelude-ty">Option</span>&lt;SharedReference&gt;);
 
 <span class="kw">impl </span>Display <span class="kw">for </span>CellContent {
@@ -627,13 +612,6 @@
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc, EventListener&gt;&gt;;
 
-    <span class="kw">fn </span>track_read_task_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        task: TaskId,
-        reader: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    );
-
     <span class="kw">fn </span>try_read_task_cell(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
@@ -664,14 +642,6 @@
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(CellContent(<span class="prelude-val">None</span>)),
         }
     }
-
-    <span class="kw">fn </span>track_read_task_cell(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        task: TaskId,
-        index: CellId,
-        reader: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    );
 
     <span class="kw">fn </span>try_read_task_collectibles(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

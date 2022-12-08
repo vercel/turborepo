@@ -628,6 +628,48 @@
 <span id="628">628</span>
 <span id="629">629</span>
 <span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
+<span id="648">648</span>
+<span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
+<span id="668">668</span>
+<span id="669">669</span>
+<span id="670">670</span>
+<span id="671">671</span>
+<span id="672">672</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Borrow,
     collections::{hash_map::RandomState, HashMap},
@@ -682,17 +724,27 @@
 }
 
 <span class="kw">impl</span>&lt;K, V, H: BuildHasher&gt; AutoMap&lt;K, V, H&gt; {
-    <span class="kw">pub fn </span>with_hasher() -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// see [HashMap::with_hasher](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html#method.with_hasher)
+    </span><span class="kw">pub fn </span>with_hasher() -&gt; <span class="self">Self </span>{
         AutoMap::List(Vec::new())
     }
 
-    <span class="kw">pub fn </span>with_capacity_and_hasher(capacity: usize, hasher: H) -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// see [HashMap::with_capacity_and_hasher](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html#method.with_capacity_and_hasher)
+    </span><span class="kw">pub fn </span>with_capacity_and_hasher(capacity: usize, hasher: H) -&gt; <span class="self">Self </span>{
         <span class="kw">if </span>capacity &lt;= MAX_LIST_SIZE {
             AutoMap::List(Vec::with_capacity(capacity))
         } <span class="kw">else </span>{
             AutoMap::Map(Box::new(HashMap::with_capacity_and_hasher(
                 capacity, hasher,
             )))
+        }
+    }
+
+    <span class="doccomment">/// see [HashMap::clear](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html#method.clear)
+    </span><span class="kw">pub fn </span>clear(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">match </span><span class="self">self </span>{
+            AutoMap::List(list) =&gt; list.clear(),
+            AutoMap::Map(map) =&gt; map.clear(),
         }
     }
 }
@@ -814,7 +866,15 @@
     </span><span class="kw">pub fn </span>shrink_to_fit(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">match </span><span class="self">self </span>{
             AutoMap::List(list) =&gt; list.shrink_to_fit(),
-            AutoMap::Map(map) =&gt; map.shrink_to_fit(),
+            AutoMap::Map(map) =&gt; {
+                <span class="kw">if </span>map.len() &lt;= MAX_LIST_SIZE {
+                    <span class="kw">let </span><span class="kw-2">mut </span>list = Vec::with_capacity(map.len());
+                    list.extend(map.drain());
+                    <span class="kw-2">*</span><span class="self">self </span>= AutoMap::List(list);
+                } <span class="kw">else </span>{
+                    map.shrink_to_fit();
+                }
+            }
         }
     }
 }
@@ -900,6 +960,14 @@
         <span class="kw">match </span><span class="self">self </span>{
             AutoMap::List(list) =&gt; Values::List(list.iter()),
             AutoMap::Map(map) =&gt; Values::Map(map.values()),
+        }
+    }
+
+    <span class="doccomment">/// see [HashMap::into_values](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.into_values)
+    </span><span class="kw">pub fn </span>into_values(<span class="self">self</span>) -&gt; IntoValues&lt;K, V&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            AutoMap::List(list) =&gt; IntoValues::List(list.into_iter()),
+            AutoMap::Map(map) =&gt; IntoValues::Map(map.into_values()),
         }
     }
 }
@@ -1001,6 +1069,22 @@
         <span class="kw">match </span><span class="self">self </span>{
             ValuesMut::List(iter) =&gt; iter.next().map(|(<span class="kw">_</span>, v)| v),
             ValuesMut::Map(iter) =&gt; iter.next(),
+        }
+    }
+}
+
+<span class="kw">pub enum </span>IntoValues&lt;K, V&gt; {
+    List(std::vec::IntoIter&lt;(K, V)&gt;),
+    Map(std::collections::hash_map::IntoValues&lt;K, V&gt;),
+}
+
+<span class="kw">impl</span>&lt;K, V&gt; Iterator <span class="kw">for </span>IntoValues&lt;K, V&gt; {
+    <span class="kw">type </span>Item = V;
+
+    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            IntoValues::List(iter) =&gt; iter.next().map(|(<span class="kw">_</span>, v)| v),
+            IntoValues::Map(iter) =&gt; iter.next(),
         }
     }
 }

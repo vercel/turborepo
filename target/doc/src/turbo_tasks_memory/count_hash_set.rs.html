@@ -177,6 +177,10 @@
 <span id="177">177</span>
 <span id="178">178</span>
 <span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::hash_map::RandomState,
     fmt::{Debug, Formatter},
@@ -331,6 +335,10 @@
 
     <span class="kw">pub fn </span>into_counts(<span class="self">self</span>) -&gt; IntoIter&lt;T, isize&gt; {
         <span class="self">self</span>.inner.into_iter()
+    }
+
+    <span class="kw">pub fn </span>counts(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Iter&lt;<span class="lifetime">&#39;_</span>, T, isize&gt; {
+        <span class="self">self</span>.inner.iter()
     }
 }
 

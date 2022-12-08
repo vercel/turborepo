@@ -1842,43 +1842,6 @@
 <span id="1842">1842</span>
 <span id="1843">1843</span>
 <span id="1844">1844</span>
-<span id="1845">1845</span>
-<span id="1846">1846</span>
-<span id="1847">1847</span>
-<span id="1848">1848</span>
-<span id="1849">1849</span>
-<span id="1850">1850</span>
-<span id="1851">1851</span>
-<span id="1852">1852</span>
-<span id="1853">1853</span>
-<span id="1854">1854</span>
-<span id="1855">1855</span>
-<span id="1856">1856</span>
-<span id="1857">1857</span>
-<span id="1858">1858</span>
-<span id="1859">1859</span>
-<span id="1860">1860</span>
-<span id="1861">1861</span>
-<span id="1862">1862</span>
-<span id="1863">1863</span>
-<span id="1864">1864</span>
-<span id="1865">1865</span>
-<span id="1866">1866</span>
-<span id="1867">1867</span>
-<span id="1868">1868</span>
-<span id="1869">1869</span>
-<span id="1870">1870</span>
-<span id="1871">1871</span>
-<span id="1872">1872</span>
-<span id="1873">1873</span>
-<span id="1874">1874</span>
-<span id="1875">1875</span>
-<span id="1876">1876</span>
-<span id="1877">1877</span>
-<span id="1878">1878</span>
-<span id="1879">1879</span>
-<span id="1880">1880</span>
-<span id="1881">1881</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BinaryHeap, HashMap},
@@ -3153,23 +3116,6 @@
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(mem_state.output.as_ref().unwrap().clone()<span class="question-mark">?</span>))
     }
 
-    <span class="kw">fn </span>track_read_task_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        task: TaskId,
-        reader: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    ) {
-        <span class="kw">let </span>(<span class="kw-2">mut </span>state, <span class="kw">_</span>) = <span class="self">self</span>.mem_state_mut(task, turbo_tasks);
-        <span class="kw">let </span>mem_state = state.memory.as_mut().unwrap();
-        <span class="kw">let </span>need_dependency = mem_state.output_dependent.insert(reader);
-        drop(state);
-        <span class="kw">if </span>need_dependency {
-            <span class="kw">let </span>(<span class="kw-2">mut </span>state, <span class="kw">_</span>) = <span class="self">self</span>.mem_state_mut(reader, turbo_tasks);
-            <span class="kw">let </span>mem_state = state.memory.as_mut().unwrap();
-            mem_state.dependencies.insert(RawVc::TaskOutput(task));
-        }
-    }
-
     <span class="kw">fn </span>try_read_task_cell(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         task: TaskId,
@@ -3289,26 +3235,6 @@
             }
         } <span class="kw">else </span>{
             <span class="prelude-val">Ok</span>(CellContent(<span class="prelude-val">None</span>))
-        }
-    }
-
-    <span class="kw">fn </span>track_read_task_cell(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        task: TaskId,
-        index: CellId,
-        reader: TaskId,
-        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    ) {
-        <span class="kw">let </span>(<span class="kw-2">mut </span>state, <span class="kw">_</span>) = <span class="self">self</span>.mem_state_mut(task, turbo_tasks);
-        <span class="kw">let </span>mem_state = state.memory.as_mut().unwrap();
-        <span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, dependent)) = mem_state.cells.get_mut(<span class="kw-2">&amp;</span>index) {
-            <span class="kw">let </span>need_dependency = dependent.insert(reader);
-            drop(state);
-            <span class="kw">if </span>need_dependency {
-                <span class="kw">let </span>(<span class="kw-2">mut </span>state, <span class="kw">_</span>) = <span class="self">self</span>.mem_state_mut(reader, turbo_tasks);
-                <span class="kw">let </span>mem_state = state.memory.as_mut().unwrap();
-                mem_state.dependencies.insert(RawVc::TaskCell(task, index));
-            }
         }
     }
 

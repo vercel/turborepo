@@ -529,6 +529,14 @@
 <span id="529">529</span>
 <span id="530">530</span>
 <span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -556,6 +564,7 @@
 };
 
 <span class="kw">use crate</span>::{
+    cell::RecomputingCell,
     output::Output,
     scope::{TaskScope, TaskScopeId},
     task::{
@@ -665,7 +674,7 @@
                 scope.state.lock().increment_active(<span class="kw-2">&amp;mut </span>queue)
             }) {
                 turbo_tasks.schedule_backend_foreground_job(
-                    <span class="self">self</span>.create_backend_job(Job::ScheduleWhenDirty(tasks)),
+                    <span class="self">self</span>.create_backend_job(Job::ScheduleWhenDirtyFromScope(tasks)),
                 );
             }
         }
@@ -689,9 +698,9 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(tasks) = <span class="self">self</span>.with_scope(scope, |scope| {
             scope.state.lock().increment_active_by(count, <span class="kw-2">&amp;mut </span>queue)
         }) {
-            <span class="kw">for </span>task <span class="kw">in </span>tasks.into_iter() {
-                turbo_tasks.schedule(task);
-            }
+            turbo_tasks.schedule_backend_foreground_job(
+                <span class="self">self</span>.create_backend_job(Job::ScheduleWhenDirtyFromScope(tasks)),
+            );
         }
         <span class="self">self</span>.increase_scope_active_queue(queue, turbo_tasks);
     }
@@ -814,65 +823,72 @@
         )
     }
 
-    <span class="kw">fn </span>track_read_task_output(
+    <span class="kw">fn </span>try_read_task_cell(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        task: TaskId,
+        task_id: TaskId,
+        index: CellId,
         reader: TaskId,
-        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    ) {
-        <span class="kw">if </span>task != reader {
-            <span class="self">self</span>.with_task(task, |t| {
-                t.with_output_mut(|output| {
-                    Task::add_dependency_to_current(TaskDependency::TaskOutput(task));
-                    output.track_read(reader);
-                })
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt; {
+        <span class="kw">if </span>task_id == reader {
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(<span class="self">self</span>.with_task(task_id, |task| {
+                task.with_cell(index, |cell| cell.read_own_content_untracked())
+            })))
+        } <span class="kw">else </span>{
+            Task::add_dependency_to_current(TaskDependency::TaskCell(task_id, index));
+            <span class="self">self</span>.with_task(task_id, |task| {
+                <span class="kw">match </span>task.with_cell_mut(index, |cell| {
+                    cell.read_content(
+                        reader,
+                        <span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">&quot;{task_id} {index}&quot;</span>),
+                        <span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">&quot;reading {} {} from {}&quot;</span>, task_id, index, reader),
+                    )
+                }) {
+                    <span class="prelude-val">Ok</span>(content) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(content)),
+                    <span class="prelude-val">Err</span>(RecomputingCell { listener, schedule }) =&gt; {
+                        <span class="kw">if </span>schedule {
+                            task.invalidate(<span class="self">self</span>, turbo_tasks);
+                        }
+                        <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(listener))
+                    }
+                }
             })
         }
     }
 
-    <span class="kw">fn </span>try_read_task_cell(
+    <span class="kw">fn </span>try_read_own_task_cell_untracked(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        task: TaskId,
+        current_task: TaskId,
         index: CellId,
-        reader: TaskId,
         _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt; {
-        <span class="kw">if </span>task == reader {
-            <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(<span class="self">self</span>.with_task(task, |task| {
-                task.with_cell_mut(index, |cell| cell.read_content_untracked())
-            })))
-        } <span class="kw">else </span>{
-            Task::add_dependency_to_current(TaskDependency::TaskCell(task, index));
-            <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(<span class="self">self</span>.with_task(task, |task| {
-                task.with_cell_mut(index, |cell| cell.read_content(reader))
-            })))
-        }
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.with_task(current_task, |task| {
+            task.with_cell(index, |cell| cell.read_own_content_untracked())
+        }))
     }
 
     <span class="kw">fn </span>try_read_task_cell_untracked(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        task: TaskId,
+        task_id: TaskId,
         index: CellId,
-        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
+        turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;CellContent, EventListener&gt;&gt; {
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(<span class="self">self</span>.with_task(task, |task| {
-            task.with_cell(index, |cell| cell.read_content_untracked())
-        })))
-    }
-
-    <span class="kw">fn </span>track_read_task_cell(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        task: TaskId,
-        index: CellId,
-        reader: TaskId,
-        _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
-    ) {
-        <span class="kw">if </span>task != reader {
-            Task::add_dependency_to_current(TaskDependency::TaskCell(task, index));
-            <span class="self">self</span>.with_task(task, |task| {
-                task.with_cell_mut(index, |cell| cell.track_read(reader))
-            });
-        }
+        <span class="self">self</span>.with_task(task_id, |task| {
+            <span class="kw">match </span>task.with_cell_mut(index, |cell| {
+                cell.read_content_untracked(
+                    <span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">&quot;{task_id}&quot;</span>),
+                    <span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">&quot;reading {} {} untracked&quot;</span>, task_id, index),
+                )
+            }) {
+                <span class="prelude-val">Ok</span>(content) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(content)),
+                <span class="prelude-val">Err</span>(RecomputingCell { listener, schedule }) =&gt; {
+                    <span class="kw">if </span>schedule {
+                        task.invalidate(<span class="self">self</span>, turbo_tasks);
+                    }
+                    <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(listener))
+                }
+            }
+        })
     }
 
     <span class="kw">fn </span>try_read_task_collectibles(
@@ -1018,7 +1034,7 @@
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Job {
     RemoveFromScopes(AutoSet&lt;TaskId&gt;, Vec&lt;TaskScopeId&gt;),
     RemoveFromScope(AutoSet&lt;TaskId&gt;, TaskScopeId),
-    ScheduleWhenDirty(Vec&lt;TaskId&gt;),
+    ScheduleWhenDirtyFromScope(AutoSet&lt;TaskId&gt;),
     <span class="doccomment">/// Add tasks from a scope. Scheduled by `run_add_from_scope_queue` to
     /// split off work.
     </span>AddToScopeQueue(VecDeque&lt;(TaskId, usize)&gt;, TaskScopeId, bool),
@@ -1044,10 +1060,10 @@
                     });
                 }
             }
-            Job::ScheduleWhenDirty(tasks) =&gt; {
+            Job::ScheduleWhenDirtyFromScope(tasks) =&gt; {
                 <span class="kw">for </span>task <span class="kw">in </span>tasks.into_iter() {
                     backend.with_task(task, |task| {
-                        task.schedule_when_dirty(turbo_tasks);
+                        task.schedule_when_dirty_from_scope(backend, turbo_tasks);
                     })
                 }
             }

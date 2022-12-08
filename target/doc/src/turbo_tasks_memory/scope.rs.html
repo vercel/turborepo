@@ -620,6 +620,32 @@
 <span id="620">620</span>
 <span id="621">621</span>
 <span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
+<span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
+<span id="648">648</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     fmt::{Debug, Display},
@@ -734,7 +760,8 @@
     }
 }
 
-<span class="kw">pub struct </span>TaskScope {
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>TaskScope {
     <span class="attr">#[cfg(feature = <span class="string">&quot;print_scope_updates&quot;</span>)]
     </span><span class="kw">pub </span>id: TaskScopeId,
     <span class="doccomment">/// Total number of tasks
@@ -751,7 +778,8 @@
     </span><span class="kw">pub </span>state: Mutex&lt;TaskScopeState&gt;,
 }
 
-<span class="kw">pub struct </span>TaskScopeState {
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>TaskScopeState {
     <span class="attr">#[cfg(feature = <span class="string">&quot;print_scope_updates&quot;</span>)]
     </span><span class="kw">pub </span>id: TaskScopeId,
     <span class="doccomment">/// Number of active parents or tasks. Non-zero value means the scope is
@@ -769,7 +797,7 @@
     /// done
     </span>event: Event,
     <span class="doccomment">/// All parent scopes
-    </span>parents: CountHashSet&lt;TaskScopeId, BuildNoHashHasher&lt;TaskScopeId&gt;&gt;,
+    </span><span class="kw">pub </span>parents: CountHashSet&lt;TaskScopeId, BuildNoHashHasher&lt;TaskScopeId&gt;&gt;,
     <span class="doccomment">/// Tasks that have read children
     /// When they change these tasks are invalidated
     </span>dependent_tasks: AutoSet&lt;TaskId&gt;,
@@ -888,12 +916,15 @@
         });
     }
 
-    <span class="kw">pub fn </span>remove_parent(<span class="kw-2">&amp;</span><span class="self">self</span>, parent: TaskScopeId, backend: <span class="kw-2">&amp;</span>MemoryBackend) {
-        {
+    <span class="doccomment">/// Removes a parent from this scope, returns true if the scope parents are
+    /// now empty and unset
+    </span><span class="kw">pub fn </span>remove_parent(<span class="kw-2">&amp;</span><span class="self">self</span>, parent: TaskScopeId, backend: <span class="kw-2">&amp;</span>MemoryBackend) -&gt; bool {
+        <span class="kw">let </span>result = {
             <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock();
             <span class="kw">if </span>!state.parents.remove(parent) || !state.has_unfinished_tasks {
-                <span class="kw">return</span>;
+                <span class="kw">return </span>state.parents.is_unset();
             }
+            state.parents.is_unset()
         };
         <span class="comment">// As we removed a parent while having unfinished tasks we need to decrement the
         // unfinished task count and potentially update the state
@@ -904,6 +935,7 @@
                 parent.update_unfinished_state(backend);
             }
         });
+        result
     }
 
     <span class="kw">fn </span>update_unfinished_state(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;</span>MemoryBackend) {
@@ -1038,7 +1070,10 @@
     /// scheduled and list of child scope that need to be incremented after
     /// releasing the scope lock
     </span><span class="attr">#[must_use]
-    </span><span class="kw">pub fn </span>increment_active(<span class="kw-2">&amp;mut </span><span class="self">self</span>, more_jobs: <span class="kw-2">&amp;mut </span>Vec&lt;TaskScopeId&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;TaskId&gt;&gt; {
+    </span><span class="kw">pub fn </span>increment_active(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        more_jobs: <span class="kw-2">&amp;mut </span>Vec&lt;TaskScopeId&gt;,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;AutoSet&lt;TaskId&gt;&gt; {
         <span class="self">self</span>.increment_active_by(<span class="number">1</span>, more_jobs)
     }
     <span class="doccomment">/// increments the active counter, returns list of tasks that need to be
@@ -1049,12 +1084,12 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         count: usize,
         more_jobs: <span class="kw-2">&amp;mut </span>Vec&lt;TaskScopeId&gt;,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;TaskId&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;AutoSet&lt;TaskId&gt;&gt; {
         <span class="kw">let </span>was_zero = <span class="self">self</span>.active &lt;= <span class="number">0</span>;
         <span class="self">self</span>.active += count <span class="kw">as </span>isize;
         <span class="kw">if </span><span class="self">self</span>.active &gt; <span class="number">0 </span>&amp;&amp; was_zero {
             more_jobs.extend(<span class="self">self</span>.children.iter().copied());
-            <span class="prelude-val">Some</span>(<span class="self">self</span>.dirty_tasks.iter().copied().collect())
+            <span class="prelude-val">Some</span>(take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.dirty_tasks))
         } <span class="kw">else </span>{
             <span class="prelude-val">None
         </span>}
@@ -1136,6 +1171,23 @@
     <span class="kw">pub fn </span>remove_dirty_task(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id: TaskId) {
         <span class="self">self</span>.dirty_tasks.remove(<span class="kw-2">&amp;</span>id);
         <span class="macro">log_scope_update!</span>(<span class="string">&quot;remove_dirty_task {} -&gt; {}&quot;</span>, <span class="kw-2">*</span><span class="self">self</span>.id, <span class="kw-2">*</span>id);
+    }
+
+    <span class="doccomment">/// Takes all children or collectibles dependent tasks and returns them for
+    /// notification.
+    </span><span class="kw">pub fn </span>take_all_dependent_tasks(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; AutoSet&lt;TaskId&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>set = <span class="self">self</span>.take_dependent_tasks();
+        <span class="self">self</span>.collectibles = take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.collectibles)
+            .into_iter()
+            .map(|(key, (collectibles, <span class="kw-2">mut </span>dependent_tasks))| {
+                set.extend(take(<span class="kw-2">&amp;mut </span>dependent_tasks));
+                (key, (collectibles, dependent_tasks))
+            })
+            .filter(|(<span class="kw">_</span>, (collectibles, dependent_tasks))| {
+                !collectibles.is_unset() || !dependent_tasks.is_empty()
+            })
+            .collect();
+        set
     }
 
     <span class="doccomment">/// Adds a colletible to the scope.
