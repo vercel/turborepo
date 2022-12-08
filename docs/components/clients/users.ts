@@ -517,4 +517,13 @@ export const users: Array<TurboUser> = [
     infoLink: "https://nhost.io/",
     pinned: true,
   },
+  {
+    caption: "LG U+",
+    image: "/images/logos/lguplus.svg",
+    infoLink: "https://www.lguplus.com/about/en",
+    pinned: true,
+    style: {
+      width: 150,
+    }
+  },
 ];
