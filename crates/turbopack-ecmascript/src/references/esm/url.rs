@@ -5,8 +5,9 @@ use swc_core::{
 };
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::{FileContent, FileSystemPathVc};
+use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
 use turbopack_core::{
-    asset::{Asset, AssetContent, AssetContentVc, AssetOptionVc, AssetVc},
+    asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     chunk::{
         ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetReference,
         ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContextVc, ChunkingType,
@@ -81,12 +82,12 @@ impl UrlAssetReferenceVc {
     }
 
     #[turbo_tasks::function]
-    async fn inner_asset(self) -> Result<AssetOptionVc> {
+    async fn inner_asset(self) -> Result<OptionInertUrlAssetVc> {
         let this = self.await?;
-        Ok(AssetOptionVc::cell(match &*this.pattern.await? {
+        Ok(OptionInertUrlAssetVc::cell(match &*this.pattern.await? {
             Pattern::Constant(path) => {
                 let path = this.source.path().parent().join(path);
-                Some(InertUrlAssetVc::new(path).into())
+                Some(InertUrlAssetVc::new(path))
             }
             _ => None,
         }))
@@ -99,7 +100,7 @@ impl AssetReference for UrlAssetReference {
     async fn resolve_reference(self_vc: UrlAssetReferenceVc) -> Result<ResolveResultVc> {
         let asset = self_vc.inner_asset().await?;
         Ok(match &*asset {
-            Some(a) => ResolveResult::Single(*a, vec![]).into(),
+            Some(a) => ResolveResult::Single(a.as_asset(), vec![]).into(),
             None => ResolveResult::Unresolveable(vec![]).cell(),
         })
     }
@@ -121,6 +122,7 @@ impl ValueToString for UrlAssetReference {
 impl ChunkableAssetReference for UrlAssetReference {
     #[turbo_tasks::function]
     fn chunking_type(&self, _context: ChunkingContextVc) -> ChunkingTypeOptionVc {
+        // TODO: Can this be PlacedOrParallel?
         ChunkingTypeOptionVc::cell(Some(ChunkingType::Parallel))
     }
 }
@@ -138,13 +140,13 @@ impl CodeGenerateable for UrlAssetReference {
         let inner_asset = self_vc.inner_asset().await?;
 
         if let Some(inner) = &*inner_asset {
-            let Some(placeable) = EcmascriptChunkPlaceableVc::resolve_from(inner).await? else {
-                bail!("failed to retrieve placeable from InertUrlAsset");
-            };
-            let chunk_item = placeable.as_chunk_item(context);
+            let chunk_item = inner.as_chunk_item(context);
+
+            // We rewrite the first `new URL()` arguments to be a require() of the chunk
+            // item, which exports the static asset path to the linked file.
             let id = chunk_item.id().await?;
 
-            let ast_path = &this.ast_path.await?;
+            let ast_path = this.ast_path.await?;
             visitors.push(create_visitor!(ast_path, visit_mut_expr(expr: &mut Expr) {
                 if let Expr::New(NewExpr { args: Some(args), .. }) = expr {
                     args[0].expr = box quote!(
@@ -158,6 +160,9 @@ impl CodeGenerateable for UrlAssetReference {
         Ok(CodeGeneration { visitors }.into())
     }
 }
+
+#[turbo_tasks::value(transparent)]
+struct OptionInertUrlAsset(Option<InertUrlAssetVc>);
 
 #[turbo_tasks::value_impl]
 impl InertUrlAssetVc {
@@ -240,20 +245,16 @@ impl Asset for UrlAssetChunk {
         let source_path = self.asset.path().await?;
 
         let content = self.asset.content();
-        let content_hash = if let AssetContent::File(file) = &*content.await? {
-            if let FileContent::Content(file) = &*file.await? {
-                turbo_tasks_hash::hash_xxh3_hash64(file.content())
-            } else {
-                bail!("StaticAsset::path: not found");
-            }
-        } else {
-            bail!("StaticAsset::path: unsupported file content");
+        let AssetContent::File(file) = &*content.await? else {
+            bail!("UrlAssetChunk::path: unsupported file content");
         };
-        let content_hash = turbo_tasks_hash::encode_hex(content_hash);
+        let FileContent::Content(file) = &*file.await? else {
+            bail!("UrlAssetChunk::path: not found");
+        };
 
+        let content_hash = encode_hex(hash_xxh3_hash64(file.content()));
         let ext = source_path.extension().unwrap_or("bin");
-        let asset_path = self.context.asset_path(&content_hash, ext);
-        Ok(asset_path)
+        Ok(self.context.asset_path(&content_hash, ext))
     }
 
     #[turbo_tasks::function]
