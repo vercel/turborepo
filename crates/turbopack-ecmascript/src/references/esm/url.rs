@@ -32,20 +32,49 @@ use crate::{
     utils::{module_id_to_lit, stringify_str},
 };
 
+/// URL Asset References are injected during code analysis when we find a
+/// (staticly analyzable) `new URL("path", )` import.meta.url)`.
+///
+/// It's responsible for InertUrlAsset (which isn't itself useful), and
+/// rewriting the `URL` constructor's arguments to allow the referenced file to
+/// be imported/fetched/etc.
 #[turbo_tasks::value]
 pub struct UrlAssetReference {
     pub source: AssetVc,
-    pub path: PatternVc,
+    pub pattern: PatternVc,
     pub ast_path: AstPathVc,
+}
+
+/// Inert URL Assets are used to have a EcmascriptChunkPlaceable impl, so that
+/// we can generate a real UrlAssetChunk item (with an appropriate path). That's
+/// it, the inert asset doesn't really do anything, besides act as a holder for
+/// the referenced file path as we wait for a call to create a
+/// EcmascriptChunkItemVc via EcmascriptChunkPlaceable trait.
+#[turbo_tasks::value]
+struct InertUrlAsset {
+    source: FileSystemPathVc,
+}
+
+/// UrlAssetChunk is the real URL Asset. It generates a devserver-addressable
+/// file path, links to a virtual file of the referenced URL's contents, and
+/// generates a module exporting the file path.
+///
+/// This is differentiated from a regular StaticAsset/StaticModuleAsset because
+/// the generated module's export is usable to construct a `new URL` in both
+/// server and node environments.
+#[turbo_tasks::value]
+struct UrlAssetChunk {
+    asset: AssetVc,
+    context: ChunkingContextVc,
 }
 
 #[turbo_tasks::value_impl]
 impl UrlAssetReferenceVc {
     #[turbo_tasks::function]
-    pub fn new(source: AssetVc, path: PatternVc, ast_path: AstPathVc) -> Self {
+    pub fn new(source: AssetVc, pattern: PatternVc, ast_path: AstPathVc) -> Self {
         UrlAssetReference {
             source,
-            path,
+            pattern,
             ast_path,
         }
         .cell()
@@ -54,10 +83,10 @@ impl UrlAssetReferenceVc {
     #[turbo_tasks::function]
     async fn inner_asset(self) -> Result<AssetOptionVc> {
         let this = self.await?;
-        Ok(AssetOptionVc::cell(match &*this.path.await? {
+        Ok(AssetOptionVc::cell(match &*this.pattern.await? {
             Pattern::Constant(path) => {
                 let path = this.source.path().parent().join(path);
-                Some(UrlAssetVc::new(path).into())
+                Some(InertUrlAssetVc::new(path).into())
             }
             _ => None,
         }))
@@ -83,7 +112,7 @@ impl ValueToString for UrlAssetReference {
         Ok(StringVc::cell(format!(
             "URL Reference {} -> {}",
             self.source.path().to_string().await?,
-            self.path.await?,
+            self.pattern.await?,
         )))
     }
 }
@@ -110,7 +139,7 @@ impl CodeGenerateable for UrlAssetReference {
 
         if let Some(inner) = &*inner_asset {
             let Some(placeable) = EcmascriptChunkPlaceableVc::resolve_from(inner).await? else {
-                bail!("failed to retrieve placeable from UrlAsset");
+                bail!("failed to retrieve placeable from InertUrlAsset");
             };
             let chunk_item = placeable.as_chunk_item(context);
             let id = chunk_item.id().await?;
@@ -130,21 +159,16 @@ impl CodeGenerateable for UrlAssetReference {
     }
 }
 
-#[turbo_tasks::value]
-pub struct UrlAsset {
-    source: FileSystemPathVc,
-}
-
 #[turbo_tasks::value_impl]
-impl UrlAssetVc {
+impl InertUrlAssetVc {
     #[turbo_tasks::function]
     fn new(source: FileSystemPathVc) -> Self {
-        UrlAsset { source }.cell()
+        InertUrlAsset { source }.cell()
     }
 }
 
 #[turbo_tasks::value_impl]
-impl Asset for UrlAsset {
+impl Asset for InertUrlAsset {
     #[turbo_tasks::function]
     fn path(&self) -> FileSystemPathVc {
         self.source
@@ -162,7 +186,7 @@ impl Asset for UrlAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl ValueToString for UrlAsset {
+impl ValueToString for InertUrlAsset {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!("URL Asset {}", self.source.await?,)))
@@ -170,17 +194,20 @@ impl ValueToString for UrlAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAsset for UrlAsset {
+impl ChunkableAsset for InertUrlAsset {
     #[turbo_tasks::function]
-    fn as_chunk(self_vc: UrlAssetVc, context: ChunkingContextVc) -> ChunkVc {
+    fn as_chunk(self_vc: InertUrlAssetVc, context: ChunkingContextVc) -> ChunkVc {
         EcmascriptChunkVc::new(context, self_vc.into()).into()
     }
 }
 
 #[turbo_tasks::value_impl]
-impl EcmascriptChunkPlaceable for UrlAsset {
+impl EcmascriptChunkPlaceable for InertUrlAsset {
     #[turbo_tasks::function]
-    fn as_chunk_item(self_vc: UrlAssetVc, context: ChunkingContextVc) -> EcmascriptChunkItemVc {
+    fn as_chunk_item(
+        self_vc: InertUrlAssetVc,
+        context: ChunkingContextVc,
+    ) -> EcmascriptChunkItemVc {
         UrlAssetChunkVc::new(self_vc.into(), context).into()
     }
 
@@ -188,12 +215,6 @@ impl EcmascriptChunkPlaceable for UrlAsset {
     fn get_exports(&self) -> EcmascriptExportsVc {
         EcmascriptExports::Value.into()
     }
-}
-
-#[turbo_tasks::value]
-struct UrlAssetChunk {
-    asset: AssetVc,
-    context: ChunkingContextVc,
 }
 
 #[turbo_tasks::value_impl]
