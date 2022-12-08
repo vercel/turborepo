@@ -13,7 +13,7 @@ const __TURBOPACK__import$2e$meta__ = {
     url: "file:///ROOT/crates/turbopack-tests/tests/snapshot/import-meta/url/input/mod.mjs"
 };
 "__TURBOPACK__ecmascript__hoisting__location__";
-const assetUrl = new URL(__turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/import-meta/url/input/asset.txt/url-asset.js"), __TURBOPACK__import$2e$meta__.url);
+const assetUrl = new URL(__turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/import-meta/url/input/asset.txt/url-asset.js"), location.href);
 console.log(assetUrl);
 fetch(assetUrl).then((res)=>res.text()).then(console.log);
 
