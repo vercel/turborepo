@@ -143,6 +143,8 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
 
         let options = font_options_from_query_map(*query);
         let stylesheet_url = get_stylesheet_url_from_options(options);
+        let css_virtual_path = attached_next_js_package_path(self.project_path)
+            .join("internal/font/google/cssmodule.module.css");
 
         // TODO(WEB-274): Handle this failing (e.g. connection issues). This should be
         // an Issue.
@@ -153,6 +155,7 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
                  Gecko) Chrome/104.0.0.0 Safari/537.36"
                     .to_owned(),
             )),
+            css_virtual_path,
         )
         .await?;
 
@@ -165,8 +168,7 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
         let properties = get_font_css_properties(options).await?;
 
         let css_asset = VirtualAssetVc::new(
-            attached_next_js_package_path(self.project_path)
-                .join("internal/font/google/cssmodule.module.css"),
+            css_virtual_path,
             FileContent::Content(
                 formatdoc!(
                     r#"
