@@ -33,7 +33,7 @@ fn native_run(state: TurboState) -> Result<i32> {
 fn main() -> Result<()> {
     let exit_code = match turborepo_lib::main()? {
         Payload::Rust(res) => res.unwrap_or(2),
-        Payload::Go(state) => native_run(state)?,
+        Payload::Go(state) => native_run(*state)?,
     };
 
     process::exit(exit_code)

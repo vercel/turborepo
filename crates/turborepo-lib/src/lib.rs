@@ -47,7 +47,7 @@ pub struct TurboState {
 }
 pub enum Payload {
     Rust(Result<i32>),
-    Go(TurboState),
+    Go(Box<TurboState>),
 }
 
 impl TurboState {
@@ -74,7 +74,7 @@ impl TurboState {
             | Some(Command::Daemon { .. })
             | Some(Command::Run(_))
             | Some(Command::Prune { .. })
-            | None => Payload::Go(self),
+            | None => Payload::Go(Box::new(self)),
         }
     }
 
@@ -345,7 +345,7 @@ pub fn main() -> Result<Payload> {
             if is_turbo_binary_path_set() {
                 let repo_state = RepoState::infer(&current_dir)?;
                 turbo_state.repo_state = Some(repo_state);
-                Payload::Go(turbo_state)
+                Payload::Go(Box::new(turbo_state))
             } else {
                 turbo_state.run_correct_turbo(&current_dir)?
             }
