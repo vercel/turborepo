@@ -551,6 +551,8 @@
 <span id="551">551</span>
 <span id="552">552</span>
 <span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::{indexset, IndexMap, IndexSet};
 <span class="kw">use </span>serde::Deserialize;
@@ -559,6 +561,8 @@
 
 <span class="attr">#[allow(dead_code)]
 </span><span class="kw">const </span>ALLOWED_DISPLAY_VALUES: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str] = <span class="kw-2">&amp;</span>[<span class="string">&quot;auto&quot;</span>, <span class="string">&quot;block&quot;</span>, <span class="string">&quot;swap&quot;</span>, <span class="string">&quot;fallback&quot;</span>, <span class="string">&quot;optional&quot;</span>];
+
+<span class="kw">pub type </span>FontData = IndexMap&lt;String, FontDataEntry&gt;;
 
 <span class="attr">#[derive(Debug, PartialEq)]
 </span><span class="kw">pub struct </span>NextFontGoogleOptions {
