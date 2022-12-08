@@ -122,7 +122,9 @@ impl ValueToString for UrlAssetReference {
 impl ChunkableAssetReference for UrlAssetReference {
     #[turbo_tasks::function]
     fn chunking_type(&self, _context: ChunkingContextVc) -> ChunkingTypeOptionVc {
-        // TODO: Can this be PlacedOrParallel?
+        // This cannot be Placed, I think because a Placed chunk item will use
+        // the Asset's references instead of the ChunkItems? I'm not
+        // fully sure, but I couldn't get this to wor work.
         ChunkingTypeOptionVc::cell(Some(ChunkingType::Parallel))
     }
 }
