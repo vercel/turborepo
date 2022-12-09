@@ -227,7 +227,6 @@
 <span id="227">227</span>
 <span id="228">228</span>
 <span id="229">229</span>
-<span id="230">230</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>mime_guess::mime::TEXT_HTML_UTF_8;
 <span class="kw">use </span>turbo_tasks::{debug::ValueDebug, primitives::StringVc};
@@ -264,10 +263,9 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>references(self_vc: DevHtmlAssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
-        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+    </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
-        <span class="kw">for </span>chunk_group <span class="kw">in </span><span class="kw-2">&amp;</span>this.chunk_groups {
+        <span class="kw">for </span>chunk_group <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.chunk_groups {
             <span class="kw">let </span>chunks = chunk_group.chunks().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">for </span>chunk <span class="kw">in </span>chunks.iter() {
                 references.push(ChunkReferenceVc::new(<span class="kw-2">*</span>chunk).into());

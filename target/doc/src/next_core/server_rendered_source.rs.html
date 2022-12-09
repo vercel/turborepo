@@ -361,6 +361,35 @@
 <span id="361">361</span>
 <span id="362">362</span>
 <span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -414,6 +443,7 @@
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
     },
+    page_loader::create_page_loader,
     util::{pathname_for_path, regular_expression_for_path},
 };
 
@@ -449,6 +479,13 @@
     <span class="kw">let </span>client_module_options_context =
         add_next_transforms_to_pages(client_module_options_context, pages_dir);
     <span class="kw">let </span>client_resolve_options_context = get_client_resolve_options_context(project_path, ty);
+    <span class="kw">let </span>client_context: AssetContextVc = ModuleAssetContextVc::new(
+        TransitionsByNameVc::cell(HashMap::new()),
+        client_environment,
+        client_module_options_context,
+        client_resolve_options_context,
+    )
+    .into();
 
     <span class="kw">let </span>client_runtime_entries = get_client_runtime_entries(project_path, env, ty);
 
@@ -482,6 +519,7 @@
     <span class="kw">let </span>server_rendered_source = create_server_rendered_source_for_directory(
         project_path,
         context,
+        client_context,
         pages_dir,
         SpecificityVc::exact(),
         <span class="number">0</span>,
@@ -508,6 +546,7 @@
 </span><span class="kw">async fn </span>create_server_rendered_source_for_file(
     context_path: FileSystemPathVc,
     context: AssetContextVc,
+    client_context: AssetContextVc,
     pages_dir: FileSystemPathVc,
     specificity: SpecificityVc,
     page_file: FileSystemPathVc,
@@ -528,6 +567,12 @@
         get_client_assets_path(server_root, Value::new(ContextType::Pages { pages_dir })),
     )
     .build();
+
+    <span class="kw">let </span>client_chunking_context = get_client_chunking_context(
+        context_path,
+        server_root,
+        Value::new(ContextType::Pages { pages_dir }),
+    );
 
     <span class="kw">let </span>pathname = pathname_for_path(server_root, server_path, <span class="bool-val">true</span>);
     <span class="kw">let </span>path_regex = regular_expression_for_path(server_root, server_path, <span class="bool-val">true</span>);
@@ -550,23 +595,33 @@
             runtime_entries,
         )
     } <span class="kw">else </span>{
-        create_node_rendered_source(
-            specificity,
-            server_root,
-            pathname,
-            path_regex,
-            SsrEntry {
-                context,
+        CombinedContentSourceVc::new(<span class="macro">vec!</span>[
+            create_node_rendered_source(
+                specificity,
+                server_root,
+                pathname,
+                path_regex,
+                SsrEntry {
+                    context,
+                    entry_asset,
+                    is_api_path,
+                    chunking_context,
+                    intermediate_output_path,
+                }
+                .cell()
+                .into(),
+                runtime_entries,
+                fallback_page,
+            ),
+            create_page_loader(
+                server_root,
+                client_context,
+                client_chunking_context,
                 entry_asset,
-                is_api_path,
-                chunking_context,
-                intermediate_output_path,
-            }
-            .cell()
-            .into(),
-            runtime_entries,
-            fallback_page,
-        )
+                pathname,
+            ),
+        ])
+        .into()
     })
 }
 
@@ -577,6 +632,7 @@
 </span><span class="kw">async fn </span>create_server_rendered_source_for_directory(
     context_path: FileSystemPathVc,
     context: AssetContextVc,
+    client_context: AssetContextVc,
     pages_dir: FileSystemPathVc,
     specificity: SpecificityVc,
     position: u32,
@@ -631,6 +687,7 @@
                                     create_server_rendered_source_for_file(
                                         context_path,
                                         context,
+                                        client_context,
                                         pages_dir,
                                         specificity,
                                         <span class="kw-2">*</span>file,
@@ -653,6 +710,7 @@
                         create_server_rendered_source_for_directory(
                             context_path,
                             context,
+                            client_context,
                             pages_dir,
                             specificity,
                             position + <span class="number">1</span>,
