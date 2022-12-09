@@ -210,7 +210,7 @@ impl RepoState {
             .ok_or_else(|| anyhow!("Root directory path is invalid unicode"))?
             .to_string();
 
-        let mut raw_args: Vec<_> = vec!["--skip-infer".to_string(), "--cwd".to_string(), cwd];
+        let mut raw_args: Vec<_> = vec!["--skip-infer".to_string()];
         let has_single_package_flag = shim_args.single_package;
 
         if self.mode == RepoMode::SinglePackage && !has_single_package_flag {
@@ -223,6 +223,7 @@ impl RepoState {
         // that we've found in node_modules/.bin/turbo.
         let mut command = process::Command::new(local_turbo_path)
             .args(&raw_args)
+            .current_dir(cwd)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()
