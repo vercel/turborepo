@@ -1,258 +1,21 @@
+mod cli;
 mod commands;
 mod package_manager;
+mod shim;
 
-use std::{
-    env,
-    env::current_exe,
-    fs, io, mem,
-    path::{Path, PathBuf},
-    process,
-    process::Stdio,
-};
-
-use anyhow::{anyhow, Context, Result};
-use clap::CommandFactory;
-use clap_complete::generate;
-use serde::Serialize;
+use anyhow::Result;
 use tiny_gradient::{GradientStr, RGB};
 use turbo_updater::check_for_updates;
 
-pub use crate::commands::Args;
-use crate::{
-    commands::{Command, RunArgs},
-    package_manager::PackageManager,
-};
+pub use crate::cli::Args;
+use crate::package_manager::PackageManager;
 
-static TURBO_JSON: &str = "turbo.json";
-
-#[derive(Debug, Clone, Serialize)]
-pub struct RepoState {
-    root: PathBuf,
-    mode: RepoMode,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub enum RepoMode {
-    SinglePackage,
-    MultiPackage,
-}
-
-/// The entire state of the execution, including args, repo state, etc.
-#[derive(Debug, Serialize)]
-pub struct TurboState {
-    /// The repo_state is not required for the `link`, `unlink`, `login`,
-    /// `logout` commands
-    repo_state: Option<RepoState>,
-    parsed_args: Args,
-}
+/// The payload from running main, if the program can complete without using Go
+/// the Rust variant will be returned. If Go is needed then the turbostate that
+/// should be passed to Go will be returned.
 pub enum Payload {
     Rust(Result<i32>),
-    Go(Box<TurboState>),
-}
-
-impl TurboState {
-    /// Runs the Go code linked in current binary.
-    ///
-    /// # Arguments
-    ///
-    /// * `args`: Arguments for turbo
-    ///
-    /// returns: Result<i32, Error>
-    fn run_current_turbo(self) -> Payload {
-        match self.parsed_args.command {
-            Some(Command::Bin { .. }) => {
-                let res = commands::bin::run().map(|_| 0);
-                Payload::Rust(res)
-            }
-            Some(Command::Completion { .. }) => {
-                unreachable!("shell completion should be handled by clap_complete")
-            }
-            Some(Command::Link { .. })
-            | Some(Command::Login { .. })
-            | Some(Command::Logout { .. })
-            | Some(Command::Unlink { .. })
-            | Some(Command::Daemon { .. })
-            | Some(Command::Run(_))
-            | Some(Command::Prune { .. })
-            | None => Payload::Go(Box::new(self)),
-        }
-    }
-
-    /// Attempts to run correct turbo by finding nearest package.json,
-    /// then finding local turbo installation. If the current binary is the
-    /// local turbo installation, then we run current turbo. Otherwise we
-    /// kick over to the local turbo installation.
-    ///
-    /// # Arguments
-    ///
-    /// * `turbo_state`: state for current execution
-    ///
-    /// returns: Result<i32, Error>
-    fn run_correct_turbo(mut self, current_dir: &Path) -> Result<Payload> {
-        let repo_state = RepoState::infer(current_dir)?;
-        let local_turbo_path = repo_state.root.join("node_modules").join(".bin").join({
-            #[cfg(windows)]
-            {
-                "turbo.cmd"
-            }
-            #[cfg(not(windows))]
-            {
-                "turbo"
-            }
-        });
-
-        self.repo_state = Some(repo_state);
-        let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
-        // If the local turbo path doesn't exist or if we are local turbo, then we go
-        // ahead and run the Go code linked in the current binary.
-        if current_turbo_is_local_turbo || !local_turbo_path.try_exists()? {
-            Ok(self.run_current_turbo())
-        } else {
-            // Otherwise we spawn the local turbo process.
-            Ok(Payload::Rust(self.spawn_local_turbo(&local_turbo_path)))
-        }
-    }
-
-    fn spawn_local_turbo(&self, local_turbo_path: &Path) -> Result<i32> {
-        let mut raw_args: Vec<_> = env::args().skip(1).collect();
-        let has_single_package_flag = self
-            .parsed_args
-            .run_args
-            .as_ref()
-            .map_or(false, |run_args| run_args.single_package)
-            || matches!(
-                self.parsed_args.command,
-                Some(Command::Run(RunArgs {
-                    single_package: true,
-                    ..
-                }))
-            );
-
-        if matches!(
-            self.repo_state,
-            Some(RepoState {
-                mode: RepoMode::SinglePackage,
-                ..
-            })
-        ) && self.parsed_args.is_run_command()
-            && !has_single_package_flag
-        {
-            raw_args.push("--single-package".to_string());
-        }
-
-        // Otherwise, we spawn a process that executes the local turbo
-        // that we've found in node_modules/.bin/turbo.
-        let mut command = process::Command::new(local_turbo_path)
-            .args(&raw_args)
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .expect("Failed to execute turbo.");
-
-        Ok(command.wait()?.code().unwrap_or(2))
-    }
-}
-
-impl RepoState {
-    /// Infers `RepoState` from current directory.
-    ///
-    /// # Arguments
-    ///
-    /// * `current_dir`: Current working directory
-    ///
-    /// returns: Result<RepoState, Error>
-    pub fn infer(current_dir: &Path) -> Result<Self> {
-        // First we look for a `turbo.json`. This iterator returns the first ancestor
-        // that contains a `turbo.json` file.
-        let root_path = current_dir
-            .ancestors()
-            .find(|p| fs::metadata(p.join(TURBO_JSON)).is_ok());
-
-        // If that directory exists, then we figure out if there are workspaces defined
-        // in it NOTE: This may change with multiple `turbo.json` files
-        if let Some(root_path) = root_path {
-            let pnpm = PackageManager::Pnpm;
-            let npm = PackageManager::Npm;
-            let is_workspace = pnpm.get_workspace_globs(root_path).is_ok()
-                || npm.get_workspace_globs(root_path).is_ok();
-
-            let mode = if is_workspace {
-                RepoMode::MultiPackage
-            } else {
-                RepoMode::SinglePackage
-            };
-
-            return Ok(Self {
-                root: root_path.to_path_buf(),
-                mode,
-            });
-        }
-
-        // What we look for next is a directory that contains a `package.json`.
-        let potential_roots = current_dir
-            .ancestors()
-            .filter(|path| fs::metadata(path.join("package.json")).is_ok());
-
-        let mut first_package_json_dir = None;
-        // We loop through these directories and see if there are workspaces defined in
-        // them, either in the `package.json` or `pnm-workspaces.yml`
-        for dir in potential_roots {
-            if first_package_json_dir.is_none() {
-                first_package_json_dir = Some(dir)
-            }
-
-            let pnpm = PackageManager::Pnpm;
-            let npm = PackageManager::Npm;
-            let is_workspace =
-                pnpm.get_workspace_globs(dir).is_ok() || npm.get_workspace_globs(dir).is_ok();
-
-            if is_workspace {
-                return Ok(Self {
-                    root: dir.to_path_buf(),
-                    mode: RepoMode::MultiPackage,
-                });
-            }
-        }
-
-        // Finally, if we don't detect any workspaces, go to the first `package.json`
-        // and use that in single package mode.
-        let root = first_package_json_dir
-            .ok_or_else(|| {
-                anyhow!(
-                    "Unable to find `{}` or `package.json` in current path",
-                    TURBO_JSON
-                )
-            })?
-            .to_path_buf();
-
-        Ok(Self {
-            root,
-            mode: RepoMode::SinglePackage,
-        })
-    }
-}
-
-impl Args {
-    /// Checks if either we have an explicit run command, i.e. `turbo run build`
-    /// or an implicit run, i.e. `turbo build`, where the command after `turbo`
-    /// is not one of the reserved commands like `link`, `login`, `bin`,
-    /// etc.
-    ///
-    /// # Arguments
-    ///
-    /// * `clap_args`:
-    ///
-    /// returns: bool
-    fn is_run_command(&self) -> bool {
-        let is_explicit_run = matches!(self.command, Some(Command::Run { .. }));
-        let is_implicit_run = self.command.is_none()
-            && self
-                .run_args
-                .as_ref()
-                .map_or(false, |args| !args.tasks.is_empty());
-
-        is_explicit_run || is_implicit_run
-    }
+    Go(Box<Args>),
 }
 
 fn get_version() -> &'static str {
@@ -262,19 +25,6 @@ fn get_version() -> &'static str {
         .0
 }
 
-/// Checks for `TURBO_BINARY_PATH` variable. If it is set,
-/// we do not do any inference, we simply run the command as
-/// the current binary. This is due to legacy behavior of `TURBO_BINARY_PATH`
-/// that lets users dynamically set the path of the turbo binary. Because
-/// inference involves finding a local turbo installation and executing that
-/// binary, these two features are fundamentally incompatible.
-fn is_turbo_binary_path_set() -> bool {
-    env::var("TURBO_BINARY_PATH").is_ok()
-}
-
-//// The payload from running main, if the program can complete without using Go
-/// the Rust variant will be returned. If Go is needed then the turbostate that
-/// should be passed to Go will be returned.
 pub fn main() -> Result<Payload> {
     // custom footer for update message
     let footer = format!(
@@ -294,65 +44,7 @@ pub fn main() -> Result<Payload> {
         None,
     );
 
-    let mut clap_args = Args::new()?;
-
-    let current_dir = if let Some(cwd) = &clap_args.cwd {
-        fs::canonicalize::<PathBuf>(cwd.into())?
-    } else {
-        env::current_dir()?
-    };
-
-    clap_args.cwd = Some(
-        current_dir
-            .to_str()
-            .context("--cwd is not valid Unicode")?
-            .to_string(),
-    );
-
-    // If there is no command, we set the command to `Command::Run` with
-    // `self.parsed_args.run_args` as arguments.
-    if clap_args.command.is_none() {
-        if let Some(run_args) = mem::take(&mut clap_args.run_args) {
-            clap_args.command = Some(Command::Run(run_args));
-        } else {
-            return Err(anyhow!("No command specified"));
-        }
-    }
-
-    let mut turbo_state = TurboState {
-        repo_state: None,
-        parsed_args: clap_args,
-    };
-
-    // We run this *before* doing any inference because login/logout/link/unlink
-    // should work regardless of whether or not we're in a monorepo.
-    let payload = match turbo_state.parsed_args.command {
-        Some(Command::Login { .. })
-        | Some(Command::Link { .. })
-        | Some(Command::Logout { .. })
-        | Some(Command::Unlink { .. }) => turbo_state.run_current_turbo(),
-        Some(Command::Completion { shell }) => {
-            generate(shell, &mut Args::command(), "turbo", &mut io::stdout());
-
-            Payload::Rust(Ok(0))
-        }
-        _ => {
-            // When the `TURBO_BINARY_PATH` variable is set, the user is effectively saying
-            // that the `turbo` package should run a specific binary. Because
-            // this code is running, and the `TURBO_BINARY_PATH` variable is
-            // set, we can deduce that this code is in the binary that the user
-            // wishes to run. Therefore, we will not find local turbo
-            // and execute it, because that would go against the user's wishes.
-            if is_turbo_binary_path_set() {
-                let repo_state = RepoState::infer(&current_dir)?;
-                turbo_state.repo_state = Some(repo_state);
-                Payload::Go(Box::new(turbo_state))
-            } else {
-                turbo_state.run_correct_turbo(&current_dir)?
-            }
-        }
-    };
-    Ok(payload)
+    shim::run()
 }
 
 #[cfg(test)]

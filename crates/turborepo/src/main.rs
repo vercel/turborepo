@@ -3,11 +3,11 @@ mod ffi;
 use std::{ffi::CString, process};
 
 use anyhow::Result;
-use turborepo_lib::{Payload, TurboState};
+use turborepo_lib::{Args, Payload};
 
-use crate::ffi::{nativeRunWithTurboState, GoString};
+use crate::ffi::{nativeRunWithArgs, GoString};
 
-impl TryInto<GoString> for TurboState {
+impl TryInto<GoString> for Args {
     type Error = anyhow::Error;
 
     fn try_into(self) -> std::result::Result<GoString, Self::Error> {
@@ -22,9 +22,9 @@ impl TryInto<GoString> for TurboState {
     }
 }
 
-fn native_run(state: TurboState) -> Result<i32> {
-    let serialized_state = state.try_into()?;
-    let exit_code = unsafe { nativeRunWithTurboState(serialized_state) };
+fn native_run(args: Args) -> Result<i32> {
+    let serialized_args = args.try_into()?;
+    let exit_code = unsafe { nativeRunWithArgs(serialized_args) };
     Ok(exit_code.try_into()?)
 }
 

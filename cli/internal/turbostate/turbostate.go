@@ -67,7 +67,6 @@ type RunPayload struct {
 	RemoteOnly          bool     `json:"remote_only"`
 	Scope               []string `json:"scope"`
 	Since               string   `json:"since"`
-	SinglePackage       bool     `json:"single_package"`
 	Tasks               []string `json:"tasks"`
 }
 
@@ -86,20 +85,21 @@ type Command struct {
 // ParsedArgsFromRust are the parsed command line arguments passed
 // from the Rust shim
 type ParsedArgsFromRust struct {
-	API        string  `json:"api"`
-	Color      bool    `json:"color"`
-	CPUProfile string  `json:"cpu_profile"`
-	CWD        string  `json:"cwd"`
-	Heap       string  `json:"heap"`
-	Login      string  `json:"login"`
-	NoColor    bool    `json:"no_color"`
-	Preflight  bool    `json:"preflight"`
-	Team       string  `json:"team"`
-	Token      string  `json:"token"`
-	Trace      string  `json:"trace"`
-	Verbosity  uint8   `json:"verbosity"`
-	TestRun    bool    `json:"test_run"`
-	Command    Command `json:"command"`
+	API           string  `json:"api"`
+	Color         bool    `json:"color"`
+	CPUProfile    string  `json:"cpu_profile"`
+	CWD           string  `json:"cwd"`
+	Heap          string  `json:"heap"`
+	Login         string  `json:"login"`
+	NoColor       bool    `json:"no_color"`
+	Preflight     bool    `json:"preflight"`
+	SinglePackage bool    `json:"single_package"`
+	Team          string  `json:"team"`
+	Token         string  `json:"token"`
+	Trace         string  `json:"trace"`
+	Verbosity     uint8   `json:"verbosity"`
+	TestRun       bool    `json:"test_run"`
+	Command       Command `json:"command"`
 }
 
 var _ config.CLIConfigProvider = (*ParsedArgsFromRust)(nil)
