@@ -94,7 +94,7 @@ impl ResolveResult {
         }
     }
 
-    fn get_references(&self) -> &Vec<AssetReferenceVc> {
+    pub fn get_references(&self) -> &Vec<AssetReferenceVc> {
         match self {
             ResolveResult::Single(_, list)
             | ResolveResult::Keyed(_, list)

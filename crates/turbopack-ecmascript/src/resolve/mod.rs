@@ -6,7 +6,7 @@ use turbopack_core::resolve::{
     options::{ConditionValue, ResolveIntoPackage, ResolveOptions, ResolveOptionsVc},
     origin::ResolveOriginVc,
     parse::RequestVc,
-    ResolveResultVc,
+    resolve, ResolveResultVc,
 };
 
 #[turbo_tasks::function]
@@ -49,6 +49,25 @@ pub async fn esm_resolve(origin: ResolveOriginVc, request: RequestVc) -> Result<
 pub async fn cjs_resolve(origin: ResolveOriginVc, request: RequestVc) -> Result<ResolveResultVc> {
     let options = apply_cjs_specific_options(origin.resolve_options());
     specific_resolve(origin, request, options, "commonjs request").await
+}
+
+#[turbo_tasks::function]
+pub async fn relative_asset_resolve(
+    origin: ResolveOriginVc,
+    request: RequestVc,
+) -> Result<ResolveResultVc> {
+    let resolve_options = origin.resolve_options();
+    let rel_request = request.as_relative();
+    let rel_result = resolve(origin.origin_path().parent(), rel_request, resolve_options);
+    let result = if *rel_result.is_unresolveable().await? && rel_request.resolve().await? != request
+    {
+        resolve(origin.origin_path().parent(), request, resolve_options)
+            .add_references(rel_result.await?.get_references().clone())
+    } else {
+        rel_result
+    };
+    handle_resolve_error(result, "asset", origin, request, resolve_options).await?;
+    Ok(origin.context().process_resolve_result(result))
 }
 
 async fn specific_resolve(
