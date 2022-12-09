@@ -17,6 +17,7 @@ static TURBO_JSON: &str = "turbo.json";
 #[derive(Debug)]
 struct ShimArgs {
     cwd: PathBuf,
+    has_help_flag: bool,
     skip_infer: bool,
     single_package: bool,
     remaining_args: Vec<String>,
@@ -28,14 +29,17 @@ impl ShimArgs {
         let mut cwd: Option<PathBuf> = None;
         let mut skip_infer = false;
         // We check for --single-package so that we don't add it twice
-        let mut single_package = true;
+        let mut single_package = false;
         let mut remaining_args = Vec::new();
         let mut is_forwarded_args = false;
+        let mut has_help_flag = false;
         let args = env::args().skip(1);
         for arg in args {
             // We've seen a `--` and therefore we do no parsing
             if is_forwarded_args {
                 remaining_args.push(arg);
+            } else if arg == "--help" || arg == "-h" {
+                has_help_flag = true;
             } else if arg == "--skip-infer" {
                 skip_infer = true;
             } else if arg == "--single-package" {
@@ -70,6 +74,7 @@ impl ShimArgs {
 
             Ok(ShimArgs {
                 cwd,
+                has_help_flag,
                 skip_infer,
                 single_package,
                 remaining_args,
@@ -245,7 +250,7 @@ fn is_turbo_binary_path_set() -> bool {
 pub fn run() -> Result<Payload> {
     let args = ShimArgs::parse()?;
 
-    if args.skip_infer || is_turbo_binary_path_set() {
+    if args.skip_infer || args.has_help_flag || is_turbo_binary_path_set() {
         return cli::run();
     }
 

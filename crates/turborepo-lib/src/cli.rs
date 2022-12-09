@@ -69,7 +69,7 @@ pub struct Args {
     #[clap(long, global = true)]
     pub preflight: bool,
     /// Run turbo in single-package mode
-    #[clap(long)]
+    #[clap(long, global = true)]
     pub single_package: bool,
     /// Set the team slug for API calls
     #[clap(long, global = true, value_parser)]
