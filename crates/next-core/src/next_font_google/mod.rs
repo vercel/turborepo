@@ -3,9 +3,10 @@ use indexmap::IndexMap;
 use indoc::formatdoc;
 use once_cell::sync::Lazy;
 use turbo_tasks::primitives::{OptionStringVc, OptionU16Vc, StringVc};
-use turbo_tasks_fetch::fetch;
+use turbo_tasks_fetch::{fetch, FetchResult};
 use turbo_tasks_fs::{FileContent, FileSystemPathVc};
 use turbopack_core::{
+    issue::IssueSeverity,
     resolve::{
         options::{
             ImportMapResult, ImportMapResultVc, ImportMapping, ImportMappingReplacement,
@@ -146,7 +147,6 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
         let css_virtual_path = attached_next_js_package_path(self.project_path)
             .join("internal/font/google/cssmodule.module.css");
 
-        // TODO(WEB-283): Use fallback in dev if this fails
         let stylesheet_res = fetch(
             stylesheet_url,
             OptionStringVc::cell(Some(
@@ -154,11 +154,27 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
                  Gecko) Chrome/104.0.0.0 Safari/537.36"
                     .to_owned(),
             )),
-            css_virtual_path,
         )
         .await?;
 
-        let stylesheet = &*stylesheet_res.body.to_string().await?;
+        let stylesheet = match &*stylesheet_res {
+            FetchResult::Ok(r) => Some(r.await?.body.to_string().await?.clone()),
+            FetchResult::Err(err) => {
+                // Inform the user of the failure to retreive the stylesheet, but don't
+                // propagate this error. We don't want e.g. offline connections to prevent page
+                // renders during development. During production builds, however, this error
+                // should propagate.
+                //
+                // TODO(WEB-283): Use fallback in dev in this case
+                // TODO(WEB-293): Fail production builds (not dev) in this case
+                err.to_issue(IssueSeverity::Warning.into(), css_virtual_path)
+                    .as_issue()
+                    .emit();
+
+                None
+            }
+        };
+
         let properties = get_font_css_properties(options).await?;
 
         let css_asset = VirtualAssetVc::new(
@@ -173,7 +189,7 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
                             {}{}
                         }}
                         "#,
-                    stylesheet,
+                    stylesheet.unwrap_or_else(|| "".to_owned()),
                     properties.font_family.await?,
                     properties
                         .weight
