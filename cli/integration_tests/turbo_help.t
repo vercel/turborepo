@@ -3,6 +3,8 @@ Setup
 
 Test help flag
   $ ${TURBO} -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   The build system that makes ship happen
   
   Usage: turbo [OPTIONS] [COMMAND]
@@ -28,6 +30,7 @@ Test help flag
         --login <LOGIN>              Override the login endpoint
         --no-color                   Suppress color usage in the terminal
         --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --single-package             Run turbo in single-package mode
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
@@ -55,7 +58,6 @@ Test help flag
         --remote-only                    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
-        --single-package                 Run turbo in single-package mode
 
 
 
@@ -63,6 +65,8 @@ Test help flag
 
 
   $ ${TURBO} --help
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   The build system that makes ship happen
   
   Usage: turbo [OPTIONS] [COMMAND]
@@ -88,6 +92,7 @@ Test help flag
         --login <LOGIN>              Override the login endpoint
         --no-color                   Suppress color usage in the terminal
         --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --single-package             Run turbo in single-package mode
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
@@ -115,10 +120,11 @@ Test help flag
         --remote-only                    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
-        --single-package                 Run turbo in single-package mode
 
 Test help flag for link command
   $ ${TURBO} link -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   Link your local directory to a Vercel organization and enable remote caching
   
   Usage: turbo link [OPTIONS]
@@ -134,6 +140,7 @@ Test help flag for link command
         --login <LOGIN>              Override the login endpoint
         --no-color                   Suppress color usage in the terminal
         --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --single-package             Run turbo in single-package mode
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
@@ -142,6 +149,8 @@ Test help flag for link command
 
 Test help flag for unlink command
   $ ${TURBO} unlink -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Usage: turbo unlink [OPTIONS]
@@ -156,6 +165,7 @@ Test help flag for unlink command
         --login <LOGIN>              Override the login endpoint
         --no-color                   Suppress color usage in the terminal
         --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --single-package             Run turbo in single-package mode
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
@@ -164,6 +174,8 @@ Test help flag for unlink command
 
 Test help flag for login command
   $ ${TURBO} login -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   Login to your Vercel account
   
   Usage: turbo login [OPTIONS]
@@ -179,6 +191,7 @@ Test help flag for login command
         --login <LOGIN>              Override the login endpoint
         --no-color                   Suppress color usage in the terminal
         --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --single-package             Run turbo in single-package mode
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
@@ -187,6 +200,8 @@ Test help flag for login command
 
 Test help flag for logout command
   $ ${TURBO} logout -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   Logout to your Vercel account
   
   Usage: turbo logout [OPTIONS]
@@ -201,6 +216,7 @@ Test help flag for logout command
         --login <LOGIN>              Override the login endpoint
         --no-color                   Suppress color usage in the terminal
         --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --single-package             Run turbo in single-package mode
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace

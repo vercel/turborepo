@@ -17,7 +17,6 @@ static TURBO_JSON: &str = "turbo.json";
 #[derive(Debug)]
 struct ShimArgs {
     cwd: PathBuf,
-    has_help_flag: bool,
     skip_infer: bool,
     single_package: bool,
     remaining_args: Vec<String>,
@@ -32,14 +31,11 @@ impl ShimArgs {
         let mut single_package = false;
         let mut remaining_args = Vec::new();
         let mut is_forwarded_args = false;
-        let mut has_help_flag = false;
         let args = env::args().skip(1);
         for arg in args {
             // We've seen a `--` and therefore we do no parsing
             if is_forwarded_args {
                 remaining_args.push(arg);
-            } else if arg == "--help" || arg == "-h" {
-                has_help_flag = true;
             } else if arg == "--skip-infer" {
                 skip_infer = true;
             } else if arg == "--single-package" {
@@ -74,7 +70,6 @@ impl ShimArgs {
 
             Ok(ShimArgs {
                 cwd,
-                has_help_flag,
                 skip_infer,
                 single_package,
                 remaining_args,
@@ -254,9 +249,14 @@ pub fn run() -> Result<Payload> {
         return cli::run();
     }
 
-    if let Ok(repo_state) = RepoState::infer(&args.cwd) {
-        repo_state.run_correct_turbo(args)
+    match RepoState::infer(&args.cwd) {
+        Ok(repo_state) => repo_state.run_correct_turbo(args),
+        Err(err) => {
+            // If we cannot infer, we still run global turbo. This allows for global
+            // commands like login/logout/link/unlink to still work
+            eprintln!("Repository inference failed: {}", err);
+            eprintln!("Running command as global turbo");
+            cli::run()
+        }
     }
-
-    cli::run()
 }
