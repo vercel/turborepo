@@ -261,6 +261,21 @@
 <span id="261">261</span>
 <span id="262">262</span>
 <span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::{Globals, GLOBALS},
@@ -286,7 +301,7 @@
         CssChunkPlaceable, CssChunkPlaceableVc, CssChunkVc, CssImport,
     },
     code_gen::CodeGenerateableVc,
-    parse::{parse, ParseResult, ParseResultVc},
+    parse::{parse, ParseResult, ParseResultSourceMap, ParseResultVc},
     path_visitor::ApplyVisitors,
     references::{analyze_css_stylesheet, import::ImportAssetReferenceVc},
     transform::CssInputTransformsVc,
@@ -470,7 +485,12 @@
 
         <span class="kw">let </span>parsed = <span class="self">self</span>.module.parse().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">if let </span>ParseResult::Ok { stylesheet, .. } = <span class="kw-2">&amp;*</span>parsed {
+        <span class="kw">if let </span>ParseResult::Ok {
+            stylesheet,
+            source_map,
+            ..
+        } = <span class="kw-2">&amp;*</span>parsed
+        {
             <span class="kw">let </span><span class="kw-2">mut </span>stylesheet = stylesheet.clone();
 
             <span class="kw">let </span>globals = Globals::new();
@@ -497,19 +517,22 @@
                 )
             });
 
-            <span class="kw">let </span><span class="kw-2">mut </span>code_string = <span class="macro">format!</span>(<span class="string">&quot;/* {} */\n&quot;</span>, <span class="self">self</span>.module.path().to_string().<span class="kw">await</span><span class="question-mark">?</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>code_string = String::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>srcmap = <span class="macro">vec!</span>[];
 
-            <span class="comment">// TODO: pass sourcemap somehow (second param in the css writer)?
-            </span><span class="kw">let </span><span class="kw-2">mut </span>code_gen = CodeGenerator::new(
-                BasicCssWriter::new(<span class="kw-2">&amp;mut </span>code_string, <span class="prelude-val">None</span>, Default::default()),
+            <span class="kw">let </span><span class="kw-2">mut </span>code_gen = CodeGenerator::new(
+                BasicCssWriter::new(<span class="kw-2">&amp;mut </span>code_string, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;mut </span>srcmap), Default::default()),
                 Default::default(),
             );
 
             code_gen.emit(<span class="kw-2">&amp;</span>stylesheet)<span class="question-mark">?</span>;
 
+            <span class="kw">let </span>srcmap = ParseResultSourceMap::new(source_map.clone(), srcmap).cell();
+
             <span class="prelude-val">Ok</span>(CssChunkItemContent {
-                inner_code: code_string,
+                inner_code: code_string.into(),
                 imports,
+                source_map: <span class="prelude-val">Some</span>(srcmap),
             }
             .into())
         } <span class="kw">else </span>{
@@ -517,11 +540,18 @@
                 inner_code: <span class="macro">format!</span>(
                     <span class="string">&quot;/* unparseable {} */&quot;</span>,
                     <span class="self">self</span>.module.path().to_string().<span class="kw">await</span><span class="question-mark">?
-                </span>),
+                </span>)
+                .into(),
                 imports: <span class="macro">vec!</span>[],
+                source_map: <span class="prelude-val">None</span>,
             }
             .into())
         }
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
+        <span class="self">self</span>.context
     }
 }
 </code></pre></div>

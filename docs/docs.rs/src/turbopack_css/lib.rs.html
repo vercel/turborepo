@@ -58,7 +58,7 @@
 <span class="kw">pub use </span>module_asset::ModuleCssModuleAssetVc;
 <span class="kw">pub use </span>transform::{CssInputTransform, CssInputTransformsVc};
 
-<span class="kw">use crate</span>::{chunk::CssChunkItemContentVc, references::import::ImportAssetReferenceVc};
+<span class="kw">use </span><span class="kw">crate</span>::references::import::ImportAssetReferenceVc;
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]

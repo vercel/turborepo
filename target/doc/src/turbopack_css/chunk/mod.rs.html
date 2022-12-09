@@ -311,15 +311,96 @@
 <span id="311">311</span>
 <span id="312">312</span>
 <span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
-<span class="kw">mod </span>writer;
+<span class="kw">pub mod </span>source_map;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>writer;
 
-<span class="kw">use </span>std::fmt::Write;
+<span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString, ValueToStringVc};
-<span class="kw">use </span>turbo_tasks_fs::{File, FileSystemPathOptionVc, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_fs::{rope::Rope, File, FileSystemPathOptionVc, FileSystemPathVc};
 <span class="kw">use </span>turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
@@ -329,13 +410,18 @@
         Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem, ChunkItemVc,
         ChunkReferenceVc, ChunkVc, ChunkableAssetVc, ChunkingContextVc, FromChunkableAsset,
     },
+    code_builder::{CodeBuilder, CodeVc},
     reference::{AssetReferenceVc, AssetReferencesVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
 };
 <span class="kw">use </span>turbopack_ecmascript::utils::FormatIter;
-<span class="kw">use </span>writer::{expand_imports, WriterWithIndent};
+<span class="kw">use </span>writer::expand_imports;
 
-<span class="kw">use </span><span class="self">self</span>::optimize::CssChunkOptimizerVc;
-<span class="kw">use crate</span>::{embed::CssEmbeddableVc, util::stringify_str, ImportAssetReferenceVc};
+<span class="kw">use </span><span class="self">self</span>::{optimize::CssChunkOptimizerVc, source_map::CssChunkSourceMapAssetReferenceVc};
+<span class="kw">use crate</span>::{
+    embed::CssEmbeddableVc, parse::ParseResultSourceMapVc, util::stringify_str,
+    ImportAssetReferenceVc,
+};
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>CssChunk {
@@ -381,6 +467,92 @@
             }
         }
         <span class="prelude-val">Ok</span>(FileSystemPathOptionVc::cell(<span class="prelude-val">Some</span>(current)))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>chunk_content(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;CssChunkContentVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunk_path = <span class="self">self</span>.path();
+        <span class="prelude-val">Ok</span>(CssChunkContentVc::new(
+            this.main_entries,
+            this.context,
+            chunk_path,
+        ))
+    }
+}
+
+<span class="attr">#[turbo_tasks::value]
+</span><span class="kw">struct </span>CssChunkContent {
+    main_entries: CssChunkPlaceablesVc,
+    context: ChunkingContextVc,
+    chunk_path: FileSystemPathVc,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>CssChunkContentVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>new(
+        main_entries: CssChunkPlaceablesVc,
+        context: ChunkingContextVc,
+        chunk_path: FileSystemPathVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="prelude-val">Ok</span>(CssChunkContent {
+            main_entries,
+            context,
+            chunk_path,
+        }
+        .cell())
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>code(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;CodeVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunk_name = this.chunk_path.to_string();
+
+        <span class="kw">let </span><span class="kw-2">mut </span>body = CodeBuilder::default();
+        <span class="kw">let </span><span class="kw-2">mut </span>external_imports = IndexSet::new();
+        <span class="kw">for </span>entry <span class="kw">in </span>this.main_entries.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+            <span class="kw">let </span>entry_placeable = CssChunkPlaceableVc::cast_from(entry);
+            <span class="kw">let </span>entry_item = entry_placeable.as_chunk_item(this.context);
+
+            <span class="kw">for </span>external_import <span class="kw">in </span>expand_imports(<span class="kw-2">&amp;mut </span>body, entry_item).<span class="kw">await</span><span class="question-mark">? </span>{
+                external_imports.insert(external_import.<span class="kw">await</span><span class="question-mark">?</span>.to_owned());
+            }
+        }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>code = CodeBuilder::default();
+        <span class="macro">writeln!</span>(code, <span class="string">&quot;/* chunk {} */&quot;</span>, chunk_name.<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
+        <span class="kw">for </span>external_import <span class="kw">in </span>external_imports {
+            <span class="macro">writeln!</span>(code, <span class="string">&quot;@import {};&quot;</span>, stringify_str(<span class="kw-2">&amp;</span>external_import))<span class="question-mark">?</span>;
+        }
+
+        code.push_code(<span class="kw-2">&amp;</span>body.build());
+
+        <span class="kw">if </span>code.has_source_map() {
+            <span class="kw">let </span>chunk_path = this.chunk_path.<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="macro">write!</span>(
+                code,
+                <span class="string">&quot;\n/*# sourceMappingURL={}.map*/&quot;</span>,
+                chunk_path.file_name()
+            )<span class="question-mark">?</span>;
+        }
+
+        <span class="kw">let </span>c = code.build().cell();
+        <span class="prelude-val">Ok</span>(c)
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>content(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetContentVc&gt; {
+        <span class="kw">let </span>code = <span class="self">self</span>.code().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(File::from(code.source_code().clone()).into())
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>GenerateSourceMap <span class="kw">for </span>CssChunkContent {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>generate_source_map(self_vc: CssChunkContentVc) -&gt; SourceMapVc {
+        self_vc.code().generate_source_map()
     }
 }
 
@@ -517,44 +689,21 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>content(self_vc: CssChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetContentVc&gt; {
-        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>path = self_vc.path();
-        <span class="kw">let </span>chunk_name = path.to_string();
-
-        <span class="kw">let </span><span class="kw-2">mut </span>body = <span class="string">&quot;&quot;</span>.to_owned();
-        <span class="kw">let </span><span class="kw-2">mut </span>writer = WriterWithIndent::new(<span class="kw-2">&amp;mut </span>body);
-        <span class="kw">let </span><span class="kw-2">mut </span>external_imports = IndexSet::new();
-        <span class="kw">for </span>entry <span class="kw">in </span>this.main_entries.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-            <span class="kw">let </span>entry_placeable = CssChunkPlaceableVc::cast_from(entry);
-            <span class="kw">let </span>entry_content = entry_placeable.as_chunk_item(this.context).content();
-
-            <span class="kw">for </span>external_import <span class="kw">in </span>expand_imports(<span class="kw-2">&amp;mut </span>writer, entry_content).<span class="kw">await</span><span class="question-mark">? </span>{
-                external_imports.insert(external_import.<span class="kw">await</span><span class="question-mark">?</span>.to_owned());
-            }
-        }
-
-        <span class="kw">let </span><span class="kw-2">mut </span>code = <span class="macro">format!</span>(<span class="string">&quot;/* chunk {} */\n&quot;</span>, chunk_name.<span class="kw">await</span><span class="question-mark">?</span>);
-        <span class="kw">for </span>external_import <span class="kw">in </span>external_imports {
-            <span class="macro">writeln!</span>(code, <span class="string">&quot;@import {};&quot;</span>, stringify_str(<span class="kw-2">&amp;</span>external_import))<span class="question-mark">?</span>;
-        }
-
-        code += <span class="kw-2">&amp;</span>body;
-
-        <span class="prelude-val">Ok</span>(File::from(code).into())
+    </span><span class="kw">fn </span>content(self_vc: CssChunkVc) -&gt; AssetContentVc {
+        self_vc.chunk_content().content()
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
-        <span class="kw">let </span>content = css_chunk_content(<span class="self">self</span>.context, <span class="self">self</span>.main_entries).<span class="kw">await</span><span class="question-mark">?</span>;
+    </span><span class="kw">async fn </span>references(self_vc: CssChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
+        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>content = css_chunk_content(this.context, this.main_entries).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
         <span class="kw">for </span>r <span class="kw">in </span>content.external_asset_references.iter() {
             references.push(<span class="kw-2">*</span>r);
             <span class="kw">let </span>assets = r.resolve_reference().primary_assets();
             <span class="kw">for </span>asset <span class="kw">in </span>assets.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(embeddable) = CssEmbeddableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                    <span class="kw">let </span>embed = embeddable.as_css_embed(<span class="self">self</span>.context);
+                    <span class="kw">let </span>embed = embeddable.as_css_embed(this.context);
                     references.extend(embed.references().<span class="kw">await</span><span class="question-mark">?</span>.iter());
                 }
             }
@@ -565,19 +714,29 @@
         <span class="kw">for </span>chunk_group <span class="kw">in </span>content.async_chunk_groups.iter() {
             references.push(ChunkGroupReferenceVc::new(<span class="kw-2">*</span>chunk_group).into());
         }
+        references.push(CssChunkSourceMapAssetReferenceVc::new(self_vc).into());
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(references))
     }
 }
 
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>GenerateSourceMap <span class="kw">for </span>CssChunk {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>generate_source_map(self_vc: CssChunkVc) -&gt; SourceMapVc {
+        self_vc.chunk_content().generate_source_map()
+    }
+}
+
 <span class="attr">#[turbo_tasks::value]
-</span><span class="kw">pub struct </span>CssChunkContext {}
+</span><span class="kw">pub struct </span>CssChunkContext {
+    context: ChunkingContextVc,
+}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CssChunkContextVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>of(_context: ChunkingContextVc) -&gt; CssChunkContextVc {
-        <span class="comment">// TODO in future we will use something from the chunking context
-        </span>CssChunkContext {}.cell()
+    </span><span class="kw">pub fn </span>of(context: ChunkingContextVc) -&gt; CssChunkContextVc {
+        CssChunkContext { context }.cell()
     }
 }
 
@@ -598,14 +757,15 @@
 
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>CssChunkItemContent {
-    <span class="kw">pub </span>inner_code: String,
+    <span class="kw">pub </span>inner_code: Rope,
     <span class="kw">pub </span>imports: Vec&lt;CssImport&gt;,
+    <span class="kw">pub </span>source_map: <span class="prelude-ty">Option</span>&lt;ParseResultSourceMapVc&gt;,
 }
 
 <span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>CssChunkItem: ChunkItem + ValueToString {
-    <span class="comment">// TODO handle Source Maps
-    </span><span class="kw">fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CssChunkItemContentVc;
+    <span class="kw">fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CssChunkItemContentVc;
+    <span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc;
 }
 
 <span class="attr">#[async_trait::async_trait]

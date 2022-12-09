@@ -176,12 +176,77 @@
 <span id="176">176</span>
 <span id="177">177</span>
 <span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>swc_core::{
-    common::{errors::Handler, FileName, SourceMap},
+    common::{
+        errors::Handler, source_map::SourceMapGenConfig, BytePos, FileName, LineCol, SourceMap,
+    },
     css::{
         ast::Stylesheet,
         modules::{CssClassName, TransformConfig},
@@ -191,7 +256,10 @@
 };
 <span class="kw">use </span>turbo_tasks::{Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPath};
-<span class="kw">use </span>turbopack_core::asset::{AssetContent, AssetVc};
+<span class="kw">use </span>turbopack_core::{
+    asset::{AssetContent, AssetVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
+};
 <span class="kw">use </span>turbopack_swc_utils::emitter::IssueEmitter;
 
 <span class="kw">use crate</span>::{
@@ -222,6 +290,64 @@
             <span class="kw">_ </span>=&gt; core::mem::discriminant(<span class="self">self</span>) == core::mem::discriminant(other),
         }
     }
+}
+
+<span class="attr">#[turbo_tasks::value(shared, serialization = <span class="string">&quot;none&quot;</span>, eq = <span class="string">&quot;manual&quot;</span>)]
+</span><span class="kw">pub struct </span>ParseResultSourceMap {
+    <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
+    </span>source_map: Arc&lt;SourceMap&gt;,
+
+    <span class="doccomment">/// The position mappings that can generate a real source map given a (SWC)
+    /// SourceMap.
+    </span><span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
+    </span>mappings: Vec&lt;(BytePos, LineCol)&gt;,
+}
+
+<span class="kw">impl </span>PartialEq <span class="kw">for </span>ParseResultSourceMap {
+    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
+        Arc::ptr_eq(<span class="kw-2">&amp;</span><span class="self">self</span>.source_map, <span class="kw-2">&amp;</span>other.source_map) &amp;&amp; <span class="self">self</span>.mappings == other.mappings
+    }
+}
+
+<span class="kw">impl </span>ParseResultSourceMap {
+    <span class="kw">pub fn </span>new(source_map: Arc&lt;SourceMap&gt;, mappings: Vec&lt;(BytePos, LineCol)&gt;) -&gt; <span class="self">Self </span>{
+        ParseResultSourceMap {
+            source_map,
+            mappings,
+        }
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>GenerateSourceMap <span class="kw">for </span>ParseResultSourceMap {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>generate_source_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SourceMapVc {
+        <span class="kw">let </span>map = <span class="self">self</span>.source_map.build_source_map_with_config(
+            <span class="kw-2">&amp;</span><span class="self">self</span>.mappings,
+            <span class="prelude-val">None</span>,
+            InlineSourcesContentConfig {},
+        );
+        SourceMapVc::new_regular(map)
+    }
+}
+
+<span class="doccomment">/// A config to generate a source map which includes the source content of every
+/// source file. SWC doesn&#39;t inline sources content by default when generating a
+/// sourcemap, so we need to provide a custom config to do it.
+</span><span class="kw">struct </span>InlineSourcesContentConfig {}
+
+<span class="kw">impl </span>SourceMapGenConfig <span class="kw">for </span>InlineSourcesContentConfig {
+    <span class="kw">fn </span>file_name_to_source(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;</span>FileName) -&gt; String {
+        <span class="kw">match </span>f {
+            <span class="comment">// The Custom filename surrounds the name with &lt;&gt;.
+            </span>FileName::Custom(s) =&gt; <span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, s),
+            <span class="kw">_ </span>=&gt; f.to_string(),
+        }
+    }
+
+    <span class="kw">fn </span>inline_sources_content(<span class="kw-2">&amp;</span><span class="self">self</span>, _f: <span class="kw-2">&amp;</span>FileName) -&gt; bool {
+        <span class="bool-val">true
+    </span>}
 }
 
 <span class="attr">#[turbo_tasks::function]
@@ -276,7 +402,7 @@
         },
     );
 
-    <span class="kw">let </span>fm = source_map.new_source_file(FileName::Custom(fs_path_str.to_string()), string);
+    <span class="kw">let </span>fm = source_map.new_source_file(FileName::Custom(fs_path.path.clone()), string);
 
     <span class="kw">let </span>config = ParserConfig {
         css_modules: <span class="macro">matches!</span>(ty, CssModuleAssetType::Module),

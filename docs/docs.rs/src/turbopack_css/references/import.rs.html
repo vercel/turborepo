@@ -246,10 +246,6 @@
 <span id="246">246</span>
 <span id="247">247</span>
 <span id="248">248</span>
-<span id="249">249</span>
-<span id="250">250</span>
-<span id="251">251</span>
-<span id="252">252</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
@@ -348,7 +344,7 @@
         }
     }
 
-    <span class="kw">pub fn </span>print_block(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(String, usize, String)&gt; {
+    <span class="kw">pub fn </span>print_block(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(String, String)&gt; {
         <span class="kw">fn </span>token(token: Token) -&gt; TokenAndSpan {
             TokenAndSpan {
                 span: DUMMY_SP,
@@ -364,7 +360,6 @@
                 raw: <span class="string">r#&quot;&quot;&quot;&quot;__turbopack_placeholder__&quot;&quot;&quot;&quot;#</span>.into(),
             }))],
         });
-        <span class="kw">let </span><span class="kw-2">mut </span>indent = <span class="number">0</span>;
 
         <span class="kw">fn </span>at_rule(name: <span class="kw-2">&amp;</span>str, prelude: AtRulePrelude, inner_rule: Rule) -&gt; Rule {
             Rule::AtRule(<span class="kw">box </span>AtRule {
@@ -392,7 +387,6 @@
                 }),
                 rule,
             );
-            indent += <span class="number">2</span>;
         }
         <span class="kw">if let </span><span class="prelude-val">Some</span>(supports) = <span class="kw-2">&amp;</span><span class="self">self</span>.supports {
             rule = at_rule(
@@ -400,7 +394,6 @@
                 AtRulePrelude::SupportsPrelude(supports.clone()),
                 rule,
             );
-            indent += <span class="number">2</span>;
         }
         <span class="kw">if let </span><span class="prelude-val">Some</span>(layer_name) = <span class="kw-2">&amp;</span><span class="self">self</span>.layer_name {
             rule = at_rule(
@@ -408,7 +401,6 @@
                 AtRulePrelude::LayerPrelude(LayerPrelude::Name(layer_name.clone())),
                 rule,
             );
-            indent += <span class="number">2</span>;
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>output = String::new();
@@ -422,7 +414,7 @@
             .split_once(<span class="string">r#&quot;&quot;&quot;&quot;__turbopack_placeholder__&quot;&quot;&quot;&quot;#</span>)
             .unwrap();
 
-        <span class="prelude-val">Ok</span>((open.trim().into(), indent, close.trim().into()))
+        <span class="prelude-val">Ok</span>((open.trim().into(), close.trim().into()))
     }
 }
 
