@@ -94,26 +94,27 @@ impl NextConfigLoaderVc {
         context: AssetContextVc,
         chunking_context: ChunkingContextVc,
         project_root: FileSystemPathVc,
-        output_root: FileSystemPathVc,
+        intermediate_output_path: FileSystemPathVc,
     ) -> Self {
+        let entry_module = EcmascriptModuleAssetVc::new(
+            VirtualAssetVc::new(
+                intermediate_output_path.join("next.js"),
+                next_js_file("entry/config/next.ts").into(),
+            )
+            .into(),
+            context,
+            Value::new(EcmascriptModuleAssetType::Typescript),
+            EcmascriptInputTransformsVc::cell(vec![
+                EcmascriptInputTransform::React { refresh: false },
+                EcmascriptInputTransform::TypeScript,
+            ]),
+            context.environment(),
+        );
         NextConfigLoader {
             path: project_root,
-            entry_module: EcmascriptModuleAssetVc::new(
-                VirtualAssetVc::new(
-                    output_root.join("next.js"),
-                    next_js_file("read-config/next.ts").into(),
-                )
-                .into(),
-                context,
-                Value::new(EcmascriptModuleAssetType::Typescript),
-                EcmascriptInputTransformsVc::cell(vec![
-                    EcmascriptInputTransform::React { refresh: false },
-                    EcmascriptInputTransform::TypeScript,
-                ]),
-                context.environment(),
-            ),
+            entry_module,
             chunking_context,
-            intermediate_output_path: output_root,
+            intermediate_output_path,
         }
         .cell()
     }

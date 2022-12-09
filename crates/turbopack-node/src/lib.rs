@@ -646,19 +646,6 @@ async fn proxy_error(
     .cell())
 }
 
-async fn eval_js_operation(
-    operation: &mut NodeJsOperation,
-    content: EvalJavaScriptOutgoingMessage,
-) -> Result<Vec<u8>> {
-    operation.send(content).await?;
-    match operation.recv().await? {
-        EvalJavaScriptIncomingMessage::Error(err) => {
-            bail!(err.print(Default::default(), None).await?);
-        }
-        EvalJavaScriptIncomingMessage::JavaScriptValue { data } => Ok(data),
-    }
-}
-
 pub fn register() {
     turbo_tasks::register();
     turbo_tasks_fs::register();
