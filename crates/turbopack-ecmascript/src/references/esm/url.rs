@@ -6,7 +6,7 @@ use swc_core::{
 };
 use turbo_tasks::{
     primitives::{BoolVc, StringVc},
-    ValueToString, ValueToStringVc,
+    Value, ValueToString, ValueToStringVc,
 };
 use turbopack_core::{
     chunk::{
@@ -14,6 +14,7 @@ use turbopack_core::{
         ChunkingTypeOptionVc,
     },
     reference::{AssetReference, AssetReferenceVc},
+    reference_type::UrlReferenceSubType,
     resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
 };
 
@@ -22,7 +23,7 @@ use crate::{
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::AstPathVc,
-    resolve::relative_asset_resolve,
+    resolve::url_resolve,
     utils::module_id_to_lit,
 };
 
@@ -61,7 +62,11 @@ impl UrlAssetReferenceVc {
     pub(super) async fn get_referenced_asset(self) -> Result<ReferencedAssetVc> {
         let this = self.await?;
         Ok(ReferencedAssetVc::from_resolve_result(
-            relative_asset_resolve(this.origin, this.request),
+            url_resolve(
+                this.origin,
+                this.request,
+                Value::new(UrlReferenceSubType::EcmaScriptNewUrl),
+            ),
             this.request,
         ))
     }
@@ -71,7 +76,11 @@ impl UrlAssetReferenceVc {
 impl AssetReference for UrlAssetReference {
     #[turbo_tasks::function]
     async fn resolve_reference(&self) -> ResolveResultVc {
-        relative_asset_resolve(self.origin, self.request)
+        url_resolve(
+            self.origin,
+            self.request,
+            Value::new(UrlReferenceSubType::EcmaScriptNewUrl),
+        )
     }
 }
 

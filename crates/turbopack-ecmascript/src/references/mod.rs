@@ -36,6 +36,7 @@ use turbopack_core::{
     asset::AssetVc,
     environment::EnvironmentVc,
     reference::{AssetReferenceVc, AssetReferencesVc, SourceMapVc},
+    reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
         find_context_file, origin::ResolveOriginVc, parse::RequestVc, pattern::Pattern, resolve,
         FindContextFileResult, ResolveResult,
@@ -1911,7 +1912,8 @@ async fn resolve_as_webpack_runtime(
     request: RequestVc,
     transforms: EcmascriptInputTransformsVc,
 ) -> Result<WebpackRuntimeVc> {
-    let options = origin.resolve_options();
+    let ty = Value::new(ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined));
+    let options = origin.resolve_options(ty.clone());
 
     let options = apply_cjs_specific_options(options);
 
