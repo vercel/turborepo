@@ -250,11 +250,13 @@ fn is_turbo_binary_path_set() -> bool {
 pub fn run() -> Result<Payload> {
     let args = ShimArgs::parse()?;
 
-    if args.skip_infer || args.has_help_flag || is_turbo_binary_path_set() {
+    if args.skip_infer || is_turbo_binary_path_set() {
         return cli::run();
     }
 
-    let repo_state = RepoState::infer(&args.cwd)?;
+    if let Ok(repo_state) = RepoState::infer(&args.cwd) {
+        repo_state.run_correct_turbo(args)
+    }
 
-    repo_state.run_correct_turbo(args)
+    cli::run()
 }
