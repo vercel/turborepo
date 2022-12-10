@@ -92,9 +92,6 @@
 <span id="92">92</span>
 <span id="93">93</span>
 <span id="94">94</span>
-<span id="95">95</span>
-<span id="96">96</span>
-<span id="97">97</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -136,12 +133,8 @@
 <span class="doccomment">/// Converts a filename within the server root into a regular expression with
 /// named capture groups for every dynamic segment.
 </span><span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub async fn </span>regular_expression_for_path(
-    server_root: FileSystemPathVc,
-    server_path: FileSystemPathVc,
-    has_extension: bool,
-) -&gt; <span class="prelude-ty">Result</span>&lt;PathRegexVc&gt; {
-    <span class="kw">let </span>path = pathname_for_path(server_root, server_path, has_extension).<span class="kw">await</span><span class="question-mark">?</span>;
+</span><span class="kw">pub async fn </span>regular_expression_for_path(pathname: StringVc) -&gt; <span class="prelude-ty">Result</span>&lt;PathRegexVc&gt; {
+    <span class="kw">let </span>path = pathname.<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span><span class="kw-2">mut </span>path_regex = PathRegexBuilder::new();
     <span class="kw">for </span>segment <span class="kw">in </span>path.split(<span class="string">&#39;/&#39;</span>) {
@@ -179,6 +172,7 @@
             path_regex.push_static_segment(segment);
         }
     }
+
     <span class="prelude-val">Ok</span>(PathRegexVc::cell(path_regex.build()<span class="question-mark">?</span>))
 }
 

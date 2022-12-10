@@ -390,11 +390,28 @@
 <span id="390">390</span>
 <span id="391">391</span>
 <span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+<span id="398">398</span>
+<span id="399">399</span>
+<span id="400">400</span>
+<span id="401">401</span>
+<span id="402">402</span>
+<span id="403">403</span>
+<span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{
-    primitives::{BoolVc, StringsVc},
+    primitives::{BoolVc, StringVc, StringsVc},
     Value,
 };
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
@@ -444,7 +461,7 @@
         get_server_resolve_options_context, ServerContextType,
     },
     page_loader::create_page_loader,
-    util::{pathname_for_path, regular_expression_for_path},
+    util::{get_asset_path_from_route, pathname_for_path, regular_expression_for_path},
 };
 
 <span class="doccomment">/// Create a content source serving the `pages` or `src/pages` directory as
@@ -575,7 +592,7 @@
     );
 
     <span class="kw">let </span>pathname = pathname_for_path(server_root, server_path, <span class="bool-val">true</span>);
-    <span class="kw">let </span>path_regex = regular_expression_for_path(server_root, server_path, <span class="bool-val">true</span>);
+    <span class="kw">let </span>path_regex = regular_expression_for_path(pathname);
 
     <span class="prelude-val">Ok</span>(<span class="kw">if </span><span class="kw-2">*</span>is_api_path.<span class="kw">await</span><span class="question-mark">? </span>{
         create_node_api_source(
@@ -595,21 +612,38 @@
             runtime_entries,
         )
     } <span class="kw">else </span>{
+        <span class="kw">let </span>data_pathname = <span class="macro">format!</span>(
+            <span class="string">&quot;_next/data/development/{}&quot;</span>,
+            get_asset_path_from_route(<span class="kw-2">&amp;*</span>pathname.<span class="kw">await</span><span class="question-mark">?</span>, <span class="string">&quot;.json&quot;</span>)
+        );
+        <span class="kw">let </span>data_path_regex = regular_expression_for_path(StringVc::cell(data_pathname));
+
+        <span class="kw">let </span>ssr_entry = SsrEntry {
+            context,
+            entry_asset,
+            is_api_path,
+            chunking_context,
+            intermediate_output_path,
+        }
+        .cell()
+        .into();
+
         CombinedContentSourceVc::new(<span class="macro">vec!</span>[
             create_node_rendered_source(
                 specificity,
                 server_root,
                 pathname,
                 path_regex,
-                SsrEntry {
-                    context,
-                    entry_asset,
-                    is_api_path,
-                    chunking_context,
-                    intermediate_output_path,
-                }
-                .cell()
-                .into(),
+                ssr_entry,
+                runtime_entries,
+                fallback_page,
+            ),
+            create_node_rendered_source(
+                specificity,
+                server_root,
+                pathname,
+                data_path_regex,
+                ssr_entry,
                 runtime_entries,
                 fallback_page,
             ),

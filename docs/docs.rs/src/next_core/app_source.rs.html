@@ -984,7 +984,7 @@
         layouts = LayoutSegmentsVc::cell(list);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(page_path) = page {
             <span class="kw">let </span>pathname = pathname_for_path(server_root, target, <span class="bool-val">false</span>);
-            <span class="kw">let </span>path_regex = regular_expression_for_path(server_root, target, <span class="bool-val">false</span>);
+            <span class="kw">let </span>path_regex = regular_expression_for_path(pathname);
 
             sources.push(create_node_rendered_source(
                 specificity,
