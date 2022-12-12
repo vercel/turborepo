@@ -281,7 +281,7 @@ pub fn run() -> Result<Payload> {
         let repo_state = RepoState::infer(&args.cwd)?;
         return cli::run(Some(repo_state));
     }
-    println!("INFER");
+
     match RepoState::infer(&args.cwd) {
         Ok(repo_state) => repo_state.run_correct_turbo(args),
         Err(err) => {
