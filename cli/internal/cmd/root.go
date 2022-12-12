@@ -9,7 +9,6 @@ import (
 	"runtime/trace"
 
 	"github.com/pkg/errors"
-	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/cmd/auth"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/daemon"
@@ -26,15 +25,6 @@ type execOpts struct {
 	heapFile       string
 	cpuProfileFile string
 	traceFile      string
-}
-
-func (eo *execOpts) addFlags(flags *pflag.FlagSet) {
-	// Note that these are relative to the actual CWD, and do not respect the --cwd flag.
-	// This is because a user likely wants to inspect them after execution, and may not immediately
-	// know the repo root, depending on how turbo was invoked.
-	flags.StringVar(&eo.heapFile, "heap", "", "Specify a file to save a pprof heap profile")
-	flags.StringVar(&eo.cpuProfileFile, "cpuprofile", "", "Specify a file to save a cpu profile")
-	flags.StringVar(&eo.traceFile, "trace", "", "Specify a file to save a pprof trace")
 }
 
 func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs turbostate.ParsedArgsFromRust) error {
@@ -68,7 +58,7 @@ func RunWithArgs(args turbostate.ParsedArgsFromRust, turboVersion string) int {
 	util.InitPrintf()
 	// TODO: replace this with a context
 	signalWatcher := signals.NewWatcher()
-	helper := cmdutil.NewHelper(turboVersion)
+	helper := cmdutil.NewHelper(turboVersion, args)
 	ctx := context.Background()
 
 	err := initializeOutputFiles(helper, args)
