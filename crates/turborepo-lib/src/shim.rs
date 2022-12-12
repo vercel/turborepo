@@ -238,19 +238,28 @@ impl RepoState {
 }
 
 /// Checks for `TURBO_BINARY_PATH` variable. If it is set,
-/// we do not do any inference, we simply run the command as
+/// we do not try to find local turbo, we simply run the command as
 /// the current binary. This is due to legacy behavior of `TURBO_BINARY_PATH`
 /// that lets users dynamically set the path of the turbo binary. Because
-/// inference involves finding a local turbo installation and executing that
-/// binary, these two features are fundamentally incompatible.
+/// that conflicts with finding a local turbo installation and
+/// executing that binary, these two features are fundamentally incompatible.
 fn is_turbo_binary_path_set() -> bool {
     env::var("TURBO_BINARY_PATH").is_ok()
 }
 
 pub fn run() -> Result<Payload> {
     let args = ShimArgs::parse()?;
+    // If skip_infer is passed, we're probably running local turbo with
+    // global turbo having handled the inference. We can run without any
+    // concerns.
+    if args.skip_infer {
+        return cli::run(None);
+    }
 
-    if args.skip_infer || is_turbo_binary_path_set() {
+    // If the TURBO_BINARY_PATH is set, we do inference but we do not use
+    // it to execute local turbo. We simply use it to set the `--single-package`
+    // and `--cwd` flags.
+    if is_turbo_binary_path_set() {
         let repo_state = RepoState::infer(&args.cwd)?;
         return cli::run(Some(repo_state));
     }
