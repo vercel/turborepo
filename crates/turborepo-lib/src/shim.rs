@@ -261,10 +261,7 @@ pub fn run() -> Result<Payload> {
     }
 
     match RepoState::infer(&args.cwd) {
-        Ok(repo_state) => {
-            println!("{:?}", repo_state);
-            repo_state.run_correct_turbo(args)
-        }
+        Ok(repo_state) => repo_state.run_correct_turbo(args),
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global
             // commands like login/logout/link/unlink to still work
