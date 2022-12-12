@@ -405,7 +405,7 @@ impl Cell {
                 let dependent_tasks = take(dependent_tasks);
                 let Cell::Full(box FullCell::UpdatedValue{ content, .. }) = replace(self, Cell::TrackedValueless {
                     dependent_tasks,
-                    updates: 1,
+                    updates,
                 }) else { unreachable!() };
                 Some(content)
             }
