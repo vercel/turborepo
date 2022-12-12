@@ -387,6 +387,8 @@ impl Visit for Analyzer<'_> {
                     self.within_removed_item(!retain, |this| {
                         decl.visit_with(this);
                     });
+                } else {
+                    s.visit_children_with(self);
                 }
             }
             _ => s.visit_children_with(self),
