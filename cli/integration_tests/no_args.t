@@ -30,7 +30,6 @@ Make sure exit code is 2 when no args are passed
         --login <LOGIN>              Override the login endpoint
         --no-color                   Suppress color usage in the terminal
         --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --single-package             Run turbo in single-package mode
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
@@ -43,6 +42,7 @@ Make sure exit code is 2 when no args are passed
         --concurrency <CONCURRENCY>      Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
         --continue                       Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]            [possible values: text, json]
+        --single-package                 Run turbo in single-package mode
         --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
         --force                          Ignore the existing cache (to force execution)
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files

@@ -99,7 +99,7 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	opts.runOpts.continueOnError = runPayload.ContinueExecution
 	opts.runOpts.only = runPayload.Only
 	opts.runOpts.noDaemon = runPayload.NoDaemon
-	opts.runOpts.singlePackage = args.SinglePackage
+	opts.runOpts.singlePackage = args.Command.Run.SinglePackage
 
 	// See comment on Graph in turbostate.go for an explanation on Graph's representation.
 	// If flag is passed...
