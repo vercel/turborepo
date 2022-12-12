@@ -182,21 +182,16 @@ impl RepoState {
     ///
     /// returns: Result<i32, Error>
     fn run_correct_turbo(self, shim_args: ShimArgs) -> Result<Payload> {
-        let local_turbo_path = self
-            .root
-            .join("node_modules")
-            .join(".bin")
-            .join({
-                #[cfg(windows)]
-                {
-                    "turbo.cmd"
-                }
-                #[cfg(not(windows))]
-                {
-                    "turbo"
-                }
-            })
-            .canonicalize()?;
+        let local_turbo_path = self.root.join("node_modules").join(".bin").join({
+            #[cfg(windows)]
+            {
+                "turbo.cmd"
+            }
+            #[cfg(not(windows))]
+            {
+                "turbo"
+            }
+        });
 
         let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
         // If the local turbo path doesn't exist or if we are local turbo, then we go
@@ -204,9 +199,10 @@ impl RepoState {
         if current_turbo_is_local_turbo || !local_turbo_path.try_exists()? {
             cli::run(Some(self))
         } else {
+            let canonical_local_turbo = local_turbo_path.canonicalize()?;
             // Otherwise we spawn the local turbo process.
             Ok(Payload::Rust(
-                self.spawn_local_turbo(&local_turbo_path, shim_args),
+                self.spawn_local_turbo(&canonical_local_turbo, shim_args),
             ))
         }
     }
@@ -285,7 +281,7 @@ pub fn run() -> Result<Payload> {
         let repo_state = RepoState::infer(&args.cwd)?;
         return cli::run(Some(repo_state));
     }
-
+    println!("INFER");
     match RepoState::infer(&args.cwd) {
         Ok(repo_state) => repo_state.run_correct_turbo(args),
         Err(err) => {

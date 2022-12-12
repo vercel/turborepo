@@ -21,12 +21,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
-type execOpts struct {
-	heapFile       string
-	cpuProfileFile string
-	traceFile      string
-}
-
 func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs turbostate.ParsedArgsFromRust) error {
 	if parsedArgs.Trace != "" {
 		cleanup, err := createTraceFile(parsedArgs.Trace)
