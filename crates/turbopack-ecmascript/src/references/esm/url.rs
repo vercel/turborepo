@@ -138,7 +138,7 @@ impl CodeGenerateable for UrlAssetReference {
 
                             if is_browser {
                                 if let Some(ExprOrSpread { box expr, spread: None }) = args.get_mut(1) {
-                                    *expr = quote!("location.href" as Expr);
+                                    *expr = quote!("location.origin" as Expr);
                                 }
                             }
                         }
@@ -159,16 +159,12 @@ impl CodeGenerateable for UrlAssetReference {
                     create_visitor!(ast_path, visit_mut_expr(new_expr: &mut Expr) {
                         if let Expr::New(NewExpr { args: Some(args), .. }) = new_expr {
                             if let Some(ExprOrSpread { box expr, spread: None }) = args.get_mut(0) {
-                                *expr = Expr::Lit(Lit::Str(Str {
-                                    span: DUMMY_SP,
-                                    value: request.as_str().into(),
-                                    raw: None
-                                }))
+                                *expr = request.as_str().into()
                             }
 
                             if is_browser {
                                 if let Some(ExprOrSpread { box expr, spread: None }) = args.get_mut(1) {
-                                    *expr = quote!("location.href" as Expr);
+                                    *expr = quote!("location.origin" as Expr);
                                 }
                             }
                         }
