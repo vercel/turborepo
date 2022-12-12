@@ -340,6 +340,8 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
 #[cfg(test)]
 mod test {
+    use std::path::PathBuf;
+
     use clap::Parser;
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
@@ -789,7 +791,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Bin {}),
-                cwd: Some("../examples/with-yarn".to_string()),
+                cwd: Some(PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -812,7 +814,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Login { sso_team: None }),
-                cwd: Some("../examples/with-yarn".to_string()),
+                cwd: Some(PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -826,7 +828,7 @@ mod test {
                 command: Some(Command::Login {
                     sso_team: Some("my-team".to_string()),
                 }),
-                cwd: Some("../examples/with-yarn".to_string()),
+                cwd: Some(PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -849,7 +851,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Logout {}),
-                cwd: Some("../examples/with-yarn".to_string()),
+                cwd: Some(PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -872,7 +874,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Unlink {}),
-                cwd: Some("../examples/with-yarn".to_string()),
+                cwd: Some(PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -901,7 +903,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(default_prune),
-                cwd: Some("../examples/with-yarn".to_string()),
+                cwd: Some(PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -968,7 +970,7 @@ mod test {
                     docker: true,
                     output_dir: "dist".to_string(),
                 }),
-                cwd: Some("../examples/with-yarn".to_string()),
+                cwd: Some(PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
