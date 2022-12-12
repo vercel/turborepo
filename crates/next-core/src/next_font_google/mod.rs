@@ -2,9 +2,10 @@ use anyhow::{bail, Context, Result};
 use indexmap::IndexMap;
 use indoc::formatdoc;
 use once_cell::sync::Lazy;
-use turbo_tasks::primitives::{OptionStringVc, OptionU16Vc, StringVc};
+use turbo_tasks::primitives::{OptionStringVc, OptionU16Vc, StringVc, U64Vc};
 use turbo_tasks_fetch::fetch;
 use turbo_tasks_fs::{FileContent, FileSystemPathVc};
+use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
     issue::IssueSeverity,
     resolve::{
@@ -72,9 +73,10 @@ impl ImportMappingReplacement for NextFontGoogleReplacer {
         let query = &*query_vc.await?;
         let options = font_options_from_query_map(*query_vc);
         let properties = get_font_css_properties(options).await?;
+        let request_id = *get_request_id(*query_vc).await?.await?;
         let js_asset = VirtualAssetVc::new(
                 attached_next_js_package_path(self.project_path)
-                    .join("internal/font/google/inter.js"),
+                    .join(&format!("internal/font/google/{:x?}.js", request_id)),
                 FileContent::Content(
                     formatdoc!(
                         r#"
@@ -137,15 +139,19 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
         let Request::Module {
             module: _,
             path: _,
-            query,
+            query: query_vc,
         } = request else {
             return Ok(ImportMapResult::NoEntry.into());
         };
+        request.request();
 
-        let options = font_options_from_query_map(*query);
+        let options = font_options_from_query_map(*query_vc);
         let stylesheet_url = get_stylesheet_url_from_options(options);
-        let css_virtual_path = attached_next_js_package_path(self.project_path)
-            .join("internal/font/google/cssmodule.module.css");
+        let request_id = *get_request_id(*query_vc).await?.await?;
+        let css_virtual_path = attached_next_js_package_path(self.project_path).join(&format!(
+            "internal/font/google/{:x?}.module.css",
+            request_id
+        ));
 
         let stylesheet_res = fetch(
             stylesheet_url,
@@ -210,6 +216,18 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
 
         Ok(ImportMapResult::Result(ResolveResult::Single(css_asset.into(), vec![]).into()).into())
     }
+}
+
+async fn get_request_id(query_vc: QueryMapVc) -> Result<U64Vc> {
+    let query = &*query_vc.await?;
+    let query = query.as_ref().context("Query map must be present")?;
+    let mut to_hash = vec!["@next/font/google"];
+    for (k, v) in query {
+        to_hash.push(k);
+        to_hash.push(v);
+    }
+
+    Ok(U64Vc::cell(hash_xxh3_hash64(to_hash)))
 }
 
 #[turbo_tasks::function]
