@@ -1,13 +1,11 @@
-use std::{collections::HashSet, sync::Arc};
-
 use anyhow::Result;
-use parking_lot::Mutex;
-use turbo_tasks::{get_invalidator, primitives::StringVc, Invalidator};
+use turbo_tasks::{primitives::StringVc, State};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 
 use super::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
 };
+use crate::source::ContentSourcesVc;
 
 /// Combines two [ContentSource]s like the [CombinedContentSource], but only
 /// allows to serve from the second source when the first source has
@@ -23,8 +21,7 @@ use super::{
 pub struct ConditionalContentSource {
     activator: ContentSourceVc,
     action: ContentSourceVc,
-    #[turbo_tasks(debug_ignore, trace_ignore)]
-    state: Arc<Mutex<State>>,
+    activated: State<bool>,
 }
 
 #[turbo_tasks::value_impl]
@@ -34,44 +31,9 @@ impl ConditionalContentSourceVc {
         ConditionalContentSource {
             activator,
             action,
-            state: Arc::new(Mutex::new(State::Idle)),
+            activated: State::new(false),
         }
         .cell()
-    }
-}
-
-enum State {
-    Idle,
-    Activated,
-    Waiting(HashSet<Invalidator>),
-}
-
-impl ConditionalContentSource {
-    fn is_activated(&self) -> bool {
-        let mut state = self.state.lock();
-        match &mut *state {
-            State::Idle => {
-                *state = State::Waiting([get_invalidator()].into());
-                false
-            }
-            State::Activated => true,
-            State::Waiting(set) => {
-                set.insert(get_invalidator());
-                false
-            }
-        }
-    }
-
-    fn activate(&self) {
-        let mut state = self.state.lock();
-        match std::mem::replace(&mut *state, State::Activated) {
-            State::Idle | State::Activated => {}
-            State::Waiting(set) => {
-                for invalidator in set {
-                    invalidator.invalidate()
-                }
-            }
-        }
     }
 }
 
@@ -85,11 +47,11 @@ impl ContentSource for ConditionalContentSource {
     ) -> Result<ContentSourceResultVc> {
         let first = self.activator.get(path, data.clone());
         if let ContentSourceContent::NotFound = &*first.await?.content.await? {
-            if !self.is_activated() {
+            if !*self.activated.get() {
                 return Ok(first);
             }
         }
-        self.activate();
+        self.activated.set(true);
         let second = self.action.get(path, data);
         let first_specificity = first.await?.specificity.await?;
         let second_specificity = second.await?.specificity.await?;
@@ -98,6 +60,11 @@ impl ContentSource for ConditionalContentSource {
         } else {
             Ok(second)
         }
+    }
+
+    #[turbo_tasks::function]
+    fn get_children(&self) -> ContentSourcesVc {
+        ContentSourcesVc::cell(vec![self.activator, self.action])
     }
 }
 

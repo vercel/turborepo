@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use indexmap::{IndexMap, IndexSet};
 use turbo_tasks::{primitives::StringVc, ValueToString};
 use turbo_tasks_fs::FileSystemPathVc;
@@ -67,7 +67,7 @@ pub fn create_node_rendered_source(
 
 /// see [create_node_rendered_source]
 #[turbo_tasks::value]
-struct NodeRenderContentSource {
+pub struct NodeRenderContentSource {
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
     pathname: StringVc,
@@ -77,23 +77,23 @@ struct NodeRenderContentSource {
     fallback_page: DevHtmlAssetVc,
 }
 
+#[turbo_tasks::value_impl]
+impl NodeRenderContentSourceVc {
+    #[turbo_tasks::function]
+    pub async fn get_pathname(self) -> Result<StringVc> {
+        Ok(self.await?.pathname)
+    }
+}
+
 impl NodeRenderContentSource {
     /// Checks if a path matches the regular expression
     async fn is_matching_path(&self, path: &str) -> Result<bool> {
-        // TODO(alexkirsz) This should probably not happen here.
-        if path.starts_with('_') {
-            return Ok(false);
-        }
         Ok(self.path_regex.await?.is_match(path))
     }
 
     /// Matches a path with the regular expression and returns a JSON object
     /// with the named captures
     async fn get_matches(&self, path: &str) -> Result<Option<IndexMap<String, String>>> {
-        // TODO(alexkirsz) This should probably not happen here.
-        if path.starts_with('_') {
-            return Ok(None);
-        }
         Ok(self.path_regex.await?.get_matches(path))
     }
 }
@@ -148,10 +148,13 @@ impl ContentSource for NodeRenderContentSource {
         let this = self_vc.await?;
         if this.is_matching_path(path).await? {
             if let Some(params) = this.get_matches(path).await? {
-                let content = if data.method.is_some()
-                    && data.url.is_some()
-                    && data.headers.is_some()
-                    && data.query.is_some()
+                let content = if let ContentSourceData {
+                    method: Some(method),
+                    url: Some(url),
+                    headers: Some(headers),
+                    query: Some(query),
+                    ..
+                } = &*data
                 {
                     let entry = this.entry.entry(data.clone()).await?;
                     let asset = render_static(
@@ -163,22 +166,10 @@ impl ContentSource for NodeRenderContentSource {
                         entry.intermediate_output_path,
                         RenderData {
                             params,
-                            method: data
-                                .method
-                                .clone()
-                                .ok_or_else(|| anyhow!("method needs to be provided"))?,
-                            url: data
-                                .url
-                                .clone()
-                                .ok_or_else(|| anyhow!("url needs to be provided"))?,
-                            query: data
-                                .query
-                                .clone()
-                                .ok_or_else(|| anyhow!("query needs to be provided"))?,
-                            headers: data
-                                .headers
-                                .clone()
-                                .ok_or_else(|| anyhow!("headers needs to be provided"))?,
+                            method: method.clone(),
+                            url: url.clone(),
+                            query: query.clone(),
+                            headers: headers.clone(),
                             path: format!("/{}", this.pathname.await?),
                         }
                         .cell(),

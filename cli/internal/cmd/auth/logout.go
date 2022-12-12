@@ -8,8 +8,8 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
-// RunLogout executes the `logout` command directly instead of via cobra.
-func RunLogout(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
+// ExecuteLogout executes the `logout` command directly instead of via cobra.
+func ExecuteLogout(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
 		return err

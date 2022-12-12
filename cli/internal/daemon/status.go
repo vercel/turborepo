@@ -6,40 +6,27 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/vercel/turbo/cli/internal/config"
-
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/daemon/connector"
 	"github.com/vercel/turbo/cli/internal/daemonclient"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 )
 
-func addStatusCmd(root *cobra.Command, helper *cmdutil.Helper) {
-	var outputJSON bool
-	cmd := &cobra.Command{
-		Use:           "status",
-		Short:         "Reports the status of the turbo daemon",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			flags := config.FlagSet{FlagSet: cmd.Flags()}
-			base, err := helper.GetCmdBase(flags)
-			if err != nil {
-				return err
-			}
-			l := &lifecycle{
-				base,
-			}
-			if err := l.status(cmd.Context(), outputJSON); err != nil {
-				l.logError(err)
-				return err
-			}
-			return nil
-		},
+// RunStatus executes the `daemon status` command.
+func RunStatus(ctx context.Context, helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
+	base, err := helper.GetCmdBase(args)
+	if err != nil {
+		return err
 	}
-	cmd.Flags().BoolVar(&outputJSON, "json", false, "Pass --json to report status in JSON format")
-	root.AddCommand(cmd)
+	l := &lifecycle{
+		base,
+	}
+	if err := l.status(ctx, args.Command.Daemon.JSON); err != nil {
+		l.logError(err)
+		return err
+	}
+	return nil
 }
 
 func (l *lifecycle) status(ctx context.Context, outputJSON bool) error {

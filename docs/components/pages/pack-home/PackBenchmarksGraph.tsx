@@ -6,7 +6,7 @@ import {
   useAnimation,
   AnimationPlaybackControls,
 } from "framer-motion";
-import Image from "next/future/image";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import benchmarkData from "./benchmark-data/data.json";
 import { Gradient } from "../home-shared/Gradient";
@@ -226,7 +226,7 @@ const GraphTimer = ({
   return (
     <div className={`flex flex-row gap-2 w-24 justify-end items-center z-10`}>
       {turbo && (
-        <div className="relative flex w-8 h-8 ">
+        <div className="relative flex w-6 h-6">
           <Image
             alt="Turbopack"
             src="/images/docs/pack/turbo-benchmark-icon-light.svg"

@@ -5,6 +5,7 @@ use std::{
     future::Future,
     hash::BuildHasherDefault,
     pin::Pin,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -24,6 +25,7 @@ use turbo_tasks::{
 };
 
 use crate::{
+    cell::RecomputingCell,
     output::Output,
     scope::{TaskScope, TaskScopeId},
     task::{
@@ -39,7 +41,7 @@ pub struct MemoryBackend {
     pub(crate) initial_scope: TaskScopeId,
     backend_jobs: NoMoveVec<Job>,
     backend_job_id_factory: IdFactory<BackendJobId>,
-    task_cache: DashMap<PersistentTaskType, TaskId, BuildHasherDefault<FxHasher>>,
+    task_cache: DashMap<Arc<PersistentTaskType>, TaskId, BuildHasherDefault<FxHasher>>,
 }
 
 impl Default for MemoryBackend {
@@ -133,7 +135,7 @@ impl MemoryBackend {
                 scope.state.lock().increment_active(&mut queue)
             }) {
                 turbo_tasks.schedule_backend_foreground_job(
-                    self.create_backend_job(Job::ScheduleWhenDirty(tasks)),
+                    self.create_backend_job(Job::ScheduleWhenDirtyFromScope(tasks)),
                 );
             }
         }
@@ -157,9 +159,9 @@ impl MemoryBackend {
         if let Some(tasks) = self.with_scope(scope, |scope| {
             scope.state.lock().increment_active_by(count, &mut queue)
         }) {
-            for task in tasks.into_iter() {
-                turbo_tasks.schedule(task);
-            }
+            turbo_tasks.schedule_backend_foreground_job(
+                self.create_backend_job(Job::ScheduleWhenDirtyFromScope(tasks)),
+            );
         }
         self.increase_scope_active_queue(queue, turbo_tasks);
     }
@@ -219,15 +221,7 @@ impl Backend for MemoryBackend {
         task: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> Option<TaskExecutionSpec> {
-        self.with_task(task, |task| {
-            if task.execution_started(self, turbo_tasks) {
-                Some(TaskExecutionSpec {
-                    future: task.execute(turbo_tasks),
-                })
-            } else {
-                None
-            }
-        })
+        self.with_task(task, |task| task.execute(self, turbo_tasks))
     }
 
     fn task_execution_result(
@@ -290,65 +284,72 @@ impl Backend for MemoryBackend {
         )
     }
 
-    fn track_read_task_output(
+    fn try_read_task_cell(
         &self,
-        task: TaskId,
+        task_id: TaskId,
+        index: CellId,
         reader: TaskId,
-        _turbo_tasks: &dyn TurboTasksBackendApi,
-    ) {
-        if task != reader {
-            self.with_task(task, |t| {
-                t.with_output_mut(|output| {
-                    Task::add_dependency_to_current(TaskDependency::TaskOutput(task));
-                    output.track_read(reader);
-                })
+        turbo_tasks: &dyn TurboTasksBackendApi,
+    ) -> Result<Result<CellContent, EventListener>> {
+        if task_id == reader {
+            Ok(Ok(self.with_task(task_id, |task| {
+                task.with_cell(index, |cell| cell.read_own_content_untracked())
+            })))
+        } else {
+            Task::add_dependency_to_current(TaskDependency::TaskCell(task_id, index));
+            self.with_task(task_id, |task| {
+                match task.with_cell_mut(index, |cell| {
+                    cell.read_content(
+                        reader,
+                        move || format!("{task_id} {index}"),
+                        move || format!("reading {} {} from {}", task_id, index, reader),
+                    )
+                }) {
+                    Ok(content) => Ok(Ok(content)),
+                    Err(RecomputingCell { listener, schedule }) => {
+                        if schedule {
+                            task.invalidate(self, turbo_tasks);
+                        }
+                        Ok(Err(listener))
+                    }
+                }
             })
         }
     }
 
-    fn try_read_task_cell(
+    fn try_read_own_task_cell_untracked(
         &self,
-        task: TaskId,
+        current_task: TaskId,
         index: CellId,
-        reader: TaskId,
         _turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> Result<Result<CellContent, EventListener>> {
-        if task == reader {
-            Ok(Ok(self.with_task(task, |task| {
-                task.with_cell_mut(index, |cell| cell.read_content_untracked())
-            })))
-        } else {
-            Task::add_dependency_to_current(TaskDependency::TaskCell(task, index));
-            Ok(Ok(self.with_task(task, |task| {
-                task.with_cell_mut(index, |cell| cell.read_content(reader))
-            })))
-        }
+    ) -> Result<CellContent> {
+        Ok(self.with_task(current_task, |task| {
+            task.with_cell(index, |cell| cell.read_own_content_untracked())
+        }))
     }
 
     fn try_read_task_cell_untracked(
         &self,
-        task: TaskId,
+        task_id: TaskId,
         index: CellId,
-        _turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> Result<Result<CellContent, EventListener>> {
-        Ok(Ok(self.with_task(task, |task| {
-            task.with_cell(index, |cell| cell.read_content_untracked())
-        })))
-    }
-
-    fn track_read_task_cell(
-        &self,
-        task: TaskId,
-        index: CellId,
-        reader: TaskId,
-        _turbo_tasks: &dyn TurboTasksBackendApi,
-    ) {
-        if task != reader {
-            Task::add_dependency_to_current(TaskDependency::TaskCell(task, index));
-            self.with_task(task, |task| {
-                task.with_cell_mut(index, |cell| cell.track_read(reader))
-            });
-        }
+        self.with_task(task_id, |task| {
+            match task.with_cell_mut(index, |cell| {
+                cell.read_content_untracked(
+                    move || format!("{task_id}"),
+                    move || format!("reading {} {} untracked", task_id, index),
+                )
+            }) {
+                Ok(content) => Ok(Ok(content)),
+                Err(RecomputingCell { listener, schedule }) => {
+                    if schedule {
+                        task.invalidate(self, turbo_tasks);
+                    }
+                    Ok(Err(listener))
+                }
+            }
+        })
     }
 
     fn try_read_task_collectibles(
@@ -421,7 +422,7 @@ impl Backend for MemoryBackend {
 
     fn get_or_create_persistent_task(
         &self,
-        task_type: PersistentTaskType,
+        mut task_type: PersistentTaskType,
         parent_task: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> TaskId {
@@ -433,27 +434,13 @@ impl Backend for MemoryBackend {
             // "in progress" until they become active
             task
         } else {
+            // It's important to avoid overallocating memory as this will go into the task
+            // cache and stay there forever. We can to be as small as possible.
+            task_type.shrink_to_fit();
+            let task_type = Arc::new(task_type);
             // slow pass with key lock
             let id = turbo_tasks.get_fresh_task_id();
-            let task = match &task_type {
-                PersistentTaskType::Native(fn_id, inputs) => {
-                    // TODO inputs doesn't need to be cloned when are would be able to get a
-                    // reference to the task type stored inside of the task
-                    Task::new_native(id, inputs.clone(), *fn_id, turbo_tasks.stats_type())
-                }
-                PersistentTaskType::ResolveNative(fn_id, inputs) => {
-                    Task::new_resolve_native(id, inputs.clone(), *fn_id, turbo_tasks.stats_type())
-                }
-                PersistentTaskType::ResolveTrait(trait_type, trait_fn_name, inputs) => {
-                    Task::new_resolve_trait(
-                        id,
-                        *trait_type,
-                        trait_fn_name.clone(),
-                        inputs.clone(),
-                        turbo_tasks.stats_type(),
-                    )
-                }
-            };
+            let task = Task::new_persistent(id, task_type.clone(), turbo_tasks.stats_type());
             // Safety: We have a fresh task id that nobody knows about yet
             unsafe {
                 self.memory_tasks.insert(*id, task);
@@ -508,7 +495,7 @@ impl Backend for MemoryBackend {
 pub(crate) enum Job {
     RemoveFromScopes(AutoSet<TaskId>, Vec<TaskScopeId>),
     RemoveFromScope(AutoSet<TaskId>, TaskScopeId),
-    ScheduleWhenDirty(Vec<TaskId>),
+    ScheduleWhenDirtyFromScope(AutoSet<TaskId>),
     /// Add tasks from a scope. Scheduled by `run_add_from_scope_queue` to
     /// split off work.
     AddToScopeQueue(VecDeque<(TaskId, usize)>, TaskScopeId, bool),
@@ -534,10 +521,10 @@ impl Job {
                     });
                 }
             }
-            Job::ScheduleWhenDirty(tasks) => {
+            Job::ScheduleWhenDirtyFromScope(tasks) => {
                 for task in tasks.into_iter() {
                     backend.with_task(task, |task| {
-                        task.schedule_when_dirty(turbo_tasks);
+                        task.schedule_when_dirty_from_scope(backend, turbo_tasks);
                     })
                 }
             }

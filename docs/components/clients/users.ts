@@ -502,4 +502,28 @@ export const users: Array<TurboUser> = [
     infoLink: "https://solana.fm/",
     pinned: true,
   },
+  {
+    caption: "Authdog",
+    image: "/images/logos/authdog.svg",
+    infoLink: "https://www.authdog.com/",
+    pinned: true,
+    style: {
+      width: 175,
+    },
+  },
+  {
+    caption: "Nhost",
+    image: "/images/logos/nhost.svg",
+    infoLink: "https://nhost.io/",
+    pinned: true,
+  },
+  {
+    caption: "LG U+",
+    image: "/images/logos/lguplus.svg",
+    infoLink: "https://www.lguplus.com/about/en",
+    pinned: true,
+    style: {
+      width: 150,
+    }
+  },
 ];

@@ -1,26 +1,42 @@
+mod meta_state;
+mod stats;
+
 use std::{
     borrow::Cow,
     cell::RefCell,
-    cmp::Ordering,
+    cmp::{max, Ordering},
     collections::VecDeque,
     fmt::{self, Debug, Display, Formatter, Write},
     future::Future,
     hash::Hash,
     mem::{replace, take},
     pin::Pin,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
 use anyhow::Result;
 use auto_hash_map::{AutoMap, AutoSet};
-use parking_lot::{Mutex, RwLock, RwLockWriteGuard};
+use parking_lot::{Mutex, RwLock};
+use stats::TaskStats;
 use tokio::task_local;
 use turbo_tasks::{
-    backend::PersistentTaskType,
+    backend::{PersistentTaskType, TaskExecutionSpec},
     event::{Event, EventListener},
-    get_invalidator, registry, CellId, FunctionId, Invalidator, RawVc, StatsType, TaskId,
-    TaskInput, TraitTypeId, TurboTasksBackendApi, ValueTypeId,
+    get_invalidator, registry, CellId, Invalidator, RawVc, StatsType, TaskId, TraitTypeId,
+    TurboTasksBackendApi, ValueTypeId,
 };
+
+use crate::{
+    cell::Cell,
+    count_hash_set::CountHashSet,
+    memory_backend::Job,
+    output::Output,
+    scope::{ScopeChildChangeEffect, TaskScopeId, TaskScopes},
+    stats::{ReferenceType, StatsReferences, StatsTaskType},
+    MemoryBackend,
+};
+
 pub type NativeTaskFuture = Pin<Box<dyn Future<Output = Result<RawVc>> + Send>>;
 pub type NativeTaskFn = Box<dyn Fn() -> NativeTaskFuture + Send + Sync>;
 
@@ -62,18 +78,8 @@ enum TaskType {
     /// applied.
     Once(OnceTaskFn),
 
-    /// A normal task execution a native (rust) function
-    Native(FunctionId, NativeTaskFn),
-
-    /// A resolve task, which resolves arguments and calls the function with
-    /// resolve arguments. The inner function call will do a cache lookup.
-    ResolveNative(FunctionId),
-
-    /// A trait method resolve task. It resolves the first (`self`) argument and
-    /// looks up the trait method on that value. Then it calls that method.
-    /// The method call will do a cache lookup and might resolve arguments
-    /// before.
-    ResolveTrait(TraitTypeId, Cow<'static, str>),
+    /// A normal persistent task
+    Persistent(Arc<PersistentTaskType>),
 }
 
 impl Debug for TaskType {
@@ -81,21 +87,16 @@ impl Debug for TaskType {
         match self {
             Self::Root(..) => f.debug_tuple("Root").finish(),
             Self::Once(..) => f.debug_tuple("Once").finish(),
-            Self::Native(native_fn, _) => f
-                .debug_tuple("Native")
-                .field(&registry::get_function(*native_fn).name)
-                .finish(),
-            Self::ResolveNative(native_fn) => f
-                .debug_tuple("ResolveNative")
-                .field(&registry::get_function(*native_fn).name)
-                .finish(),
-            Self::ResolveTrait(trait_type, name) => f
-                .debug_tuple("ResolveTrait")
-                .field(&registry::get_trait(*trait_type).name)
-                .field(name)
-                .finish(),
+            Self::Persistent(ty) => ty.fmt(f),
         }
     }
+}
+
+#[derive(Default)]
+enum PrepareTaskType {
+    #[default]
+    None,
+    Native(NativeTaskFn),
 }
 
 /// A Task is an instantiation of an Function with some arguments.
@@ -103,29 +104,35 @@ impl Debug for TaskType {
 /// Task instance.
 pub struct Task {
     id: TaskId,
-    // TODO move that into TaskType where needed
-    // TODO we currently only use that for visualization
-    // TODO this can be removed
-    /// The arguments of the Task
-    inputs: Vec<TaskInput>,
     /// The type of the task
     ty: TaskType,
     /// The mutable state of the task
-    state: RwLock<TaskState>,
+    /// Unset state is equal to a Dirty task that has not been executed yet
+    state: RwLock<TaskMetaState>,
 }
 
 impl Debug for Task {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut result = f.debug_struct("Task");
         result.field("type", &self.ty);
-        if let Some(state) = self.state.try_read() {
-            result.field("state", &Task::state_string(&state));
+        if let Some(state) = self.try_state() {
+            match state {
+                TaskMetaStateReadGuard::Full(state) => {
+                    result.field("state", &Task::state_string(&state));
+                }
+                TaskMetaStateReadGuard::Partial(_) => {
+                    result.field("state", &"partial");
+                }
+                TaskMetaStateReadGuard::Unloaded(_) => {
+                    result.field("state", &"unloaded");
+                }
+            }
         }
         result.finish()
     }
 }
 
-/// The state of a [Task]
+/// The full state of a [Task], it includes all information.
 struct TaskState {
     scopes: TaskScopes,
 
@@ -139,6 +146,10 @@ struct TaskState {
 
     /// Collectibles are only modified from execution
     collectibles: MaybeCollectibles,
+
+    /// Preparations done for the task type with the bound arguments, e. g.
+    /// argument validation
+    prepared_type: PrepareTaskType,
 
     output: Output,
     cells: AutoMap<ValueTypeId, Vec<Cell>>,
@@ -157,6 +168,7 @@ impl TaskState {
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
+            prepared_type: PrepareTaskType::None,
             cells: Default::default(),
             stats: TaskStats::new(stats_type),
             #[cfg(feature = "track_wait_dependencies")]
@@ -173,10 +185,76 @@ impl TaskState {
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
+            prepared_type: PrepareTaskType::None,
             cells: Default::default(),
             stats: TaskStats::new(stats_type),
             #[cfg(feature = "track_wait_dependencies")]
             last_waiting_task: Default::default(),
+        }
+    }
+}
+
+/// The partial task state. It's equal to a full TaskState with state = Dirty
+/// and all other fields empty. It looks like a dirty task that has not been
+/// executed yet. The task might still be in some task scopes.
+/// A Task can get into this state when it is unloaded by garbage collection,
+/// but is still attached to scopes.
+struct PartialTaskState {
+    stats_type: StatsType,
+    scopes: TaskScopes,
+}
+
+impl PartialTaskState {
+    fn into_full(self, id: TaskId) -> TaskState {
+        TaskState {
+            scopes: self.scopes,
+            state_type: Dirty {
+                event: Event::new(move || format!("TaskState({id})::event")),
+            },
+            children: Default::default(),
+            collectibles: Default::default(),
+            prepared_type: PrepareTaskType::None,
+            output: Default::default(),
+            cells: Default::default(),
+            stats: TaskStats::new(self.stats_type),
+        }
+    }
+}
+
+/// A fully unloaded task state. It's equal to a partial task state without
+/// being attached to any scopes. This state is stored inlined instead of in a
+/// [Box] to reduce the memory consumption. Make sure to not add more fields
+/// than the size of a [Box].
+struct UnloadedTaskState {
+    stats_type: StatsType,
+}
+
+#[cfg(test)]
+#[test]
+fn test_unloaded_task_state_size() {
+    assert!(std::mem::size_of::<UnloadedTaskState>() <= std::mem::size_of::<Box<()>>());
+}
+
+impl UnloadedTaskState {
+    fn into_full(self, id: TaskId) -> TaskState {
+        TaskState {
+            scopes: Default::default(),
+            state_type: Dirty {
+                event: Event::new(move || format!("TaskState({id})::event")),
+            },
+            children: Default::default(),
+            collectibles: Default::default(),
+            prepared_type: PrepareTaskType::None,
+            output: Default::default(),
+            cells: Default::default(),
+            stats: TaskStats::new(self.stats_type),
+        }
+    }
+
+    fn into_partial(self) -> PartialTaskState {
+        PartialTaskState {
+            scopes: TaskScopes::Inner(CountHashSet::new(), 0),
+            stats_type: self.stats_type,
         }
     }
 }
@@ -266,59 +344,20 @@ enum TaskStateType {
 
 use TaskStateType::*;
 
-use crate::{
-    cell::Cell,
-    count_hash_set::CountHashSet,
-    memory_backend::Job,
-    output::Output,
-    scope::{ScopeChildChangeEffect, TaskScopeId, TaskScopes},
-    stats::{self, StatsReferences},
-    task_stats::TaskStats,
-    MemoryBackend,
+use self::meta_state::{
+    FullTaskWriteGuard, TaskMetaState, TaskMetaStateReadGuard, TaskMetaStateWriteGuard,
 };
 
 impl Task {
-    pub(crate) fn new_native(
+    pub(crate) fn new_persistent(
         id: TaskId,
-        inputs: Vec<TaskInput>,
-        native_fn: FunctionId,
-        stats_type: StatsType,
-    ) -> Self {
-        let bound_fn = registry::get_function(native_fn).bind(&inputs);
-        Self {
-            id,
-            inputs,
-            ty: TaskType::Native(native_fn, bound_fn),
-            state: RwLock::new(TaskState::new(id, stats_type)),
-        }
-    }
-
-    pub(crate) fn new_resolve_native(
-        id: TaskId,
-        inputs: Vec<TaskInput>,
-        native_fn: FunctionId,
+        task_type: Arc<PersistentTaskType>,
         stats_type: StatsType,
     ) -> Self {
         Self {
             id,
-            inputs,
-            ty: TaskType::ResolveNative(native_fn),
-            state: RwLock::new(TaskState::new(id, stats_type)),
-        }
-    }
-
-    pub(crate) fn new_resolve_trait(
-        id: TaskId,
-        trait_type: TraitTypeId,
-        trait_fn_name: Cow<'static, str>,
-        inputs: Vec<TaskInput>,
-        stats_type: StatsType,
-    ) -> Self {
-        Self {
-            id,
-            inputs,
-            ty: TaskType::ResolveTrait(trait_type, trait_fn_name),
-            state: RwLock::new(TaskState::new(id, stats_type)),
+            ty: TaskType::Persistent(task_type),
+            state: RwLock::new(TaskMetaState::Full(box TaskState::new(id, stats_type))),
         }
     }
 
@@ -330,9 +369,10 @@ impl Task {
     ) -> Self {
         Self {
             id,
-            inputs: Vec::new(),
             ty: TaskType::Root(Box::new(functor)),
-            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope, stats_type)),
+            state: RwLock::new(TaskMetaState::Full(box TaskState::new_scheduled_in_scope(
+                id, scope, stats_type,
+            ))),
         }
     }
 
@@ -344,9 +384,10 @@ impl Task {
     ) -> Self {
         Self {
             id,
-            inputs: Vec::new(),
             ty: TaskType::Once(Mutex::new(Some(Box::pin(functor)))),
-            state: RwLock::new(TaskState::new_scheduled_in_scope(id, scope, stats_type)),
+            state: RwLock::new(TaskMetaState::Full(box TaskState::new_scheduled_in_scope(
+                id, scope, stats_type,
+            ))),
         }
     }
 
@@ -354,24 +395,26 @@ impl Task {
         match &self.ty {
             TaskType::Root(..) => format!("[{}] root", self.id),
             TaskType::Once(..) => format!("[{}] once", self.id),
-            TaskType::Native(native_fn, _) => {
-                format!("[{}] {}", self.id, registry::get_function(*native_fn).name)
-            }
-            TaskType::ResolveNative(native_fn) => {
-                format!(
-                    "[{}] [resolve] {}",
-                    self.id,
-                    registry::get_function(*native_fn).name
-                )
-            }
-            TaskType::ResolveTrait(trait_type, fn_name) => {
-                format!(
-                    "[{}] [resolve trait] {} in trait {}",
-                    self.id,
-                    fn_name,
-                    registry::get_trait(*trait_type).name
-                )
-            }
+            TaskType::Persistent(ty) => match &**ty {
+                PersistentTaskType::Native(native_fn, _) => {
+                    format!("[{}] {}", self.id, registry::get_function(*native_fn).name)
+                }
+                PersistentTaskType::ResolveNative(native_fn, _) => {
+                    format!(
+                        "[{}] [resolve] {}",
+                        self.id,
+                        registry::get_function(*native_fn).name
+                    )
+                }
+                PersistentTaskType::ResolveTrait(trait_type, fn_name, _) => {
+                    format!(
+                        "[{}] [resolve trait] {} in trait {}",
+                        self.id,
+                        fn_name,
+                        registry::get_trait(*trait_type).name
+                    )
+                }
+            },
         }
     }
 
@@ -379,15 +422,15 @@ impl Task {
         match dep {
             TaskDependency::TaskOutput(task) => {
                 backend.with_task(task, |task| {
-                    task.with_output_mut(|output| {
+                    task.with_output_mut_if_available(|output| {
                         output.dependent_tasks.remove(&reader);
                     });
                 });
             }
             TaskDependency::TaskCell(task, index) => {
                 backend.with_task(task, |task| {
-                    task.with_cell_mut(index, |cell| {
-                        cell.dependent_tasks.remove(&reader);
+                    task.with_cell_mut_if_available(index, |cell| {
+                        cell.remove_dependent_task(reader);
                     });
                 });
             }
@@ -432,12 +475,48 @@ impl Task {
         }
     }
 
-    pub(crate) fn execution_started(
+    fn state(&self) -> TaskMetaStateReadGuard<'_> {
+        self.state.read().into()
+    }
+
+    fn try_state(&self) -> Option<TaskMetaStateReadGuard<'_>> {
+        self.state.try_read().map(|guard| guard.into())
+    }
+
+    fn state_mut(&self) -> TaskMetaStateWriteGuard<'_> {
+        self.state.write().into()
+    }
+
+    fn full_state_mut(&self) -> FullTaskWriteGuard<'_> {
+        TaskMetaStateWriteGuard::full_from(self.state.write(), self)
+    }
+
+    #[allow(dead_code, reason = "We need this in future")]
+    fn partial_state_mut(&self) -> TaskMetaStateWriteGuard<'_> {
+        TaskMetaStateWriteGuard::partial_from(self.state.write())
+    }
+
+    pub(crate) fn execute(
         self: &Task,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
+    ) -> Option<TaskExecutionSpec> {
+        let mut state = self.full_state_mut();
+        if !self.try_start_execution(&mut state, turbo_tasks, backend) {
+            return None;
+        }
+        let future = self.make_execution_future(&mut state, turbo_tasks);
+        Some(TaskExecutionSpec { future })
+    }
+
+    /// Tries to change the state to InProgress and returns true if it was
+    /// possible.
+    fn try_start_execution(
+        &self,
+        state: &mut TaskState,
+        turbo_tasks: &dyn TurboTasksBackendApi,
+        backend: &MemoryBackend,
     ) -> bool {
-        let mut state = self.state.write();
         match state.state_type {
             Done { .. } | InProgress { .. } | InProgressDirty { .. } => {
                 // should not start in this state
@@ -455,53 +534,20 @@ impl Task {
                 // finished.
                 if !state.children.is_empty() {
                     let set = take(&mut state.children);
-                    let state_scopes = &state.scopes;
-                    match state_scopes {
-                        TaskScopes::Root(scope) => {
-                            turbo_tasks.schedule_backend_foreground_job(
-                                backend.create_backend_job(Job::RemoveFromScope(set, *scope)),
-                            );
-                        }
-                        TaskScopes::Inner(ref scopes, _) => {
-                            turbo_tasks.schedule_backend_foreground_job(
-                                backend.create_backend_job(Job::RemoveFromScopes(
-                                    set,
-                                    scopes.iter().copied().collect(),
-                                )),
-                            );
-                        }
-                    }
+                    remove_from_scopes(set, &state.scopes, backend, turbo_tasks);
                 }
                 if let Some(collectibles) = state.collectibles.take() {
-                    let emitted = collectibles.emitted;
-                    let unemitted = collectibles.unemitted;
-                    state.scopes.iter().for_each(|id| {
-                        backend.with_scope(id, |scope| {
-                            let mut tasks = AutoSet::new();
-                            {
-                                let mut state = scope.state.lock();
-                                emitted
-                                    .iter()
-                                    .filter_map(|(trait_id, collectible)| {
-                                        state.remove_collectible(*trait_id, *collectible)
-                                    })
-                                    .for_each(|e| tasks.extend(e.notify));
-
-                                unemitted
-                                    .iter()
-                                    .filter_map(|(trait_id, collectible)| {
-                                        state.add_collectible(*trait_id, *collectible)
-                                    })
-                                    .for_each(|e| tasks.extend(e.notify));
-                            };
-                            turbo_tasks.schedule_notify_tasks_set(&tasks);
-                        })
-                    })
+                    remove_collectible_from_scopes(
+                        collectibles.emitted,
+                        collectibles.unemitted,
+                        &state.scopes,
+                        backend,
+                        turbo_tasks,
+                    );
                 }
             }
             Dirty { .. } => {
-                let state_type = Task::state_string(&state);
-                drop(state);
+                let state_type = Task::state_string(&*state);
                 panic!(
                     "{:?} execution started in unexpected state {}",
                     self, state_type
@@ -511,12 +557,58 @@ impl Task {
         true
     }
 
+    /// Prepares task execution and returns a future that will execute the task.
+    fn make_execution_future(
+        self: &Task,
+        mut state: &mut TaskState,
+        turbo_tasks: &dyn TurboTasksBackendApi,
+    ) -> Pin<Box<dyn Future<Output = Result<RawVc>> + Send>> {
+        match &self.ty {
+            TaskType::Root(bound_fn) => bound_fn(),
+            TaskType::Once(mutex) => mutex.lock().take().expect("Task can only be executed once"),
+            TaskType::Persistent(ty) => match &**ty {
+                PersistentTaskType::Native(native_fn, inputs) => {
+                    if let PrepareTaskType::Native(bound_fn) = &state.prepared_type {
+                        bound_fn()
+                    } else {
+                        let bound_fn = registry::get_function(*native_fn).bind(inputs);
+                        let future = bound_fn();
+                        state.prepared_type = PrepareTaskType::Native(bound_fn);
+                        future
+                    }
+                }
+                PersistentTaskType::ResolveNative(ref native_fn, inputs) => {
+                    let native_fn = *native_fn;
+                    let inputs = inputs.clone();
+                    let turbo_tasks = turbo_tasks.pin();
+                    Box::pin(PersistentTaskType::run_resolve_native(
+                        native_fn,
+                        inputs,
+                        turbo_tasks,
+                    ))
+                }
+                PersistentTaskType::ResolveTrait(trait_type, name, inputs) => {
+                    let trait_type = *trait_type;
+                    let name = name.clone();
+                    let inputs = inputs.clone();
+                    let turbo_tasks = turbo_tasks.pin();
+                    Box::pin(PersistentTaskType::run_resolve_trait(
+                        trait_type,
+                        name,
+                        inputs,
+                        turbo_tasks,
+                    ))
+                }
+            },
+        }
+    }
+
     pub(crate) fn execution_result(
         &self,
         result: Result<Result<RawVc>, Option<Cow<'static, str>>>,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
-        let mut state = self.state.write();
+        let mut state = self.full_state_mut();
         match state.state_type {
             InProgress { .. } => match result {
                 Ok(Ok(result)) => state.output.link(result, turbo_tasks),
@@ -548,16 +640,22 @@ impl Task {
         let mut schedule_task = false;
         let mut dependencies = DEPENDENCIES_TO_TRACK.with(|deps| deps.take());
         {
-            let mut state = self.state.write();
+            let mut state = self.full_state_mut();
+
             state
                 .stats
                 .register_execution(duration, turbo_tasks.program_duration_until(instant));
             match state.state_type {
                 InProgress { ref mut event } => {
                     let event = event.take();
-                    state.state_type = Done {
-                        dependencies: take(&mut dependencies),
-                    };
+                    let mut dependencies = take(&mut dependencies);
+                    // This will stay here for longer, so make sure to not consume too much memory
+                    dependencies.shrink_to_fit();
+                    for cells in state.cells.values_mut() {
+                        cells.shrink_to_fit();
+                    }
+                    state.cells.shrink_to_fit();
+                    state.state_type = Done { dependencies };
                     for scope in state.scopes.iter() {
                         backend.with_scope(scope, |scope| {
                             scope.decrement_unfinished_tasks(backend);
@@ -567,13 +665,7 @@ impl Task {
                 }
                 InProgressDirty { ref mut event } => {
                     let event = event.take();
-                    let mut active = false;
-                    for scope in state.scopes.iter() {
-                        if backend.with_scope(scope, |scope| scope.state.lock().is_active()) {
-                            active = true;
-                            break;
-                        }
-                    }
+                    let active = self.scopes_dirty_or_active(false, &state.scopes, backend);
                     if active {
                         state.state_type = Scheduled { event };
                         schedule_task = true;
@@ -600,16 +692,72 @@ impl Task {
         schedule_task
     }
 
+    /// When any scope is active it returns true. When no scope is active it
+    /// returns false and adds the tasks to all scopes as dirty task.
+    /// When `increment_unfinished` is true it will also increment the
+    /// unfinished tasks for all scopes, independent of activeness.
+    fn scopes_dirty_or_active(
+        &self,
+        increment_unfinished: bool,
+        scopes: &TaskScopes,
+        backend: &MemoryBackend,
+    ) -> bool {
+        if increment_unfinished {
+            // We need to walk all scopes at least once to increment unfinished tasks.
+            // While doing that we check if any scope is active.
+            let mut active = false;
+            for scope in scopes.iter() {
+                backend.with_scope(scope, |scope| {
+                    scope.increment_unfinished_tasks(backend);
+                    active = active || scope.state.lock().is_active();
+                })
+            }
+            if active {
+                return true;
+            }
+        } else {
+            // Without the need to increment unfinished for all scopes we can exit early
+            if scopes
+                .iter()
+                .any(|scope| backend.with_scope(scope, |scope| scope.state.lock().is_active()))
+            {
+                return true;
+            }
+        }
+        for (i, scope) in scopes.iter().enumerate() {
+            let any_scope_was_active = backend.with_scope(scope, |scope| {
+                let mut state = scope.state.lock();
+                let is_active = state.is_active();
+                if !is_active {
+                    state.add_dirty_task(self.id);
+                }
+                is_active
+            });
+            if any_scope_was_active {
+                // A scope is active, revert dirty task changes and return true
+                for scope in scopes.iter().take(i + 1) {
+                    backend.with_scope(scope, |scope| {
+                        let mut state = scope.state.lock();
+                        state.remove_dirty_task(self.id);
+                    })
+                }
+                return true;
+            }
+        }
+        // No scope is active. Task has been added as dirty task to all scopes
+        return false;
+    }
+
     fn make_dirty(&self, backend: &MemoryBackend, turbo_tasks: &dyn TurboTasksBackendApi) {
         if let TaskType::Once(_) = self.ty {
             // once task won't become dirty
             return;
         }
 
-        let id = self.id;
-        let mut clear_dependencies = AutoSet::new();
-        {
-            let mut state = self.state.write();
+        if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
+            let id = self.id;
+            let mut clear_dependencies = AutoSet::new();
+
             match state.state_type {
                 Dirty { .. } | Scheduled { .. } | InProgressDirty { .. } => {
                     // already dirty
@@ -620,19 +768,7 @@ impl Task {
                 } => {
                     clear_dependencies = take(dependencies);
                     // add to dirty lists and potentially schedule
-                    let mut active = false;
-                    for scope in state.scopes.iter() {
-                        backend.with_scope(scope, |scope| {
-                            scope.increment_unfinished_tasks(backend);
-                            log_scope_update!("add unfinished task: {} -> {}", *scope.id, *self.id);
-                            let mut scope = scope.state.lock();
-                            if scope.is_active() {
-                                active = true;
-                            } else {
-                                scope.add_dirty_task(self.id);
-                            }
-                        });
-                    }
+                    let active = self.scopes_dirty_or_active(true, &state.scopes, backend);
                     if active {
                         state.state_type = Scheduled {
                             event: Event::new(move || format!("TaskState({id})::event")),
@@ -653,19 +789,28 @@ impl Task {
                     drop(state);
                 }
             }
-        }
 
-        if !clear_dependencies.is_empty() {
-            self.clear_dependencies(clear_dependencies, backend);
+            if !clear_dependencies.is_empty() {
+                self.clear_dependencies(clear_dependencies, backend);
+            }
         }
     }
 
-    pub(crate) fn schedule_when_dirty(&self, turbo_tasks: &dyn TurboTasksBackendApi) {
-        let mut state = self.state.write();
+    pub(crate) fn schedule_when_dirty_from_scope(
+        &self,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi,
+    ) {
+        let mut state = self.full_state_mut();
         if let TaskStateType::Dirty { ref mut event } = state.state_type {
             state.state_type = Scheduled {
                 event: event.take(),
             };
+            for scope in state.scopes.iter() {
+                backend.with_scope(scope, |scope| {
+                    scope.state.lock().remove_dirty_task(self.id);
+                })
+            }
             drop(state);
             turbo_tasks.schedule(self.id);
         }
@@ -680,10 +825,12 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi,
         queue: &mut VecDeque<(TaskId, usize)>,
     ) {
-        let mut state = self.state.write();
+        let mut state = self.full_state_mut();
         let TaskState {
-            scopes, children, ..
-        } = &mut *state;
+            ref mut scopes,
+            ref children,
+            ..
+        } = *state;
         match *scopes {
             TaskScopes::Root(root) => {
                 if root == id {
@@ -725,7 +872,7 @@ impl Task {
                         *optimization_counter += children.len() >> depth;
                         if *optimization_counter >= 0x10000 {
                             list.remove(id);
-                            self.make_root_scoped_internal(state, backend, turbo_tasks);
+                            drop(self.make_root_scoped_internal(state, backend, turbo_tasks));
                             return self.add_to_scope_internal_shallow(
                                 id,
                                 is_optimization_scope,
@@ -738,6 +885,9 @@ impl Task {
                     }
                 }
 
+                if queue.capacity() == 0 {
+                    queue.reserve(max(children.len(), SPLIT_OFF_QUEUE_AT * 2));
+                }
                 queue.extend(children.iter().copied().map(|child| (child, depth + 1)));
 
                 // add to dirty list of the scope (potentially schedule)
@@ -759,7 +909,8 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
-        let mut queue = VecDeque::new();
+        // VecDeque::new() would allocate with 7 items capacity. We don't want that.
+        let mut queue = VecDeque::with_capacity(0);
         self.add_to_scope_internal_shallow(
             id,
             is_optimization_scope,
@@ -774,7 +925,7 @@ impl Task {
 
     fn add_self_to_new_scope(
         &self,
-        state: &mut RwLockWriteGuard<TaskState>,
+        state: &mut FullTaskWriteGuard<'_>,
         id: TaskScopeId,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
@@ -825,7 +976,30 @@ impl Task {
 
     fn remove_self_from_scope(
         &self,
-        state: &mut RwLockWriteGuard<TaskState>,
+        state: &mut TaskMetaStateWriteGuard<'_>,
+        id: TaskScopeId,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi,
+    ) {
+        match state {
+            TaskMetaStateWriteGuard::Full(state) => {
+                self.remove_self_from_scope_full(state, id, backend, turbo_tasks);
+            }
+            TaskMetaStateWriteGuard::Partial(_) => backend.with_scope(id, |scope| {
+                scope.decrement_tasks();
+                scope.decrement_unfinished_tasks(backend);
+                let mut scope = scope.state.lock();
+                scope.remove_dirty_task(self.id);
+            }),
+            TaskMetaStateWriteGuard::Unloaded(_) => {
+                unreachable!("remove_self_from_scope must be called with at least a partial state");
+            }
+        }
+    }
+
+    fn remove_self_from_scope_full(
+        &self,
+        state: &mut FullTaskWriteGuard<'_>,
         id: TaskScopeId,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
@@ -875,9 +1049,10 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi,
         queue: &mut VecDeque<TaskId>,
     ) {
-        let mut state = self.state.write();
-        match state.scopes {
-            TaskScopes::Root(root) => {
+        let mut state = self.partial_state_mut();
+        let (scopes, children) = state.scopes_and_children();
+        match scopes {
+            &mut TaskScopes::Root(root) => {
                 if root != id {
                     if let Some(ScopeChildChangeEffect {
                         notify,
@@ -895,16 +1070,18 @@ impl Task {
                         if parent {
                             backend.with_scope(root, |child| {
                                 child.remove_parent(id, backend);
-                            })
+                            });
                         }
                     }
                 }
             }
-            TaskScopes::Inner(ref mut set, _) => {
+            TaskScopes::Inner(set, _) => {
                 if set.remove(id) {
+                    if queue.capacity() == 0 {
+                        queue.reserve(max(children.len(), SPLIT_OFF_QUEUE_AT * 2));
+                    }
+                    queue.extend(children.iter().copied());
                     self.remove_self_from_scope(&mut state, id, backend, turbo_tasks);
-                    queue.extend(state.children.iter().copied());
-                    drop(state);
                 }
             }
         }
@@ -916,7 +1093,8 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
-        let mut queue = VecDeque::new();
+        // VecDeque::new() would allocate with 7 items capacity. We don't want that.
+        let mut queue = VecDeque::with_capacity(0);
         self.remove_from_scope_internal_shallow(id, backend, turbo_tasks, &mut queue);
         run_remove_from_scope_queue(queue, id, backend, turbo_tasks);
     }
@@ -946,7 +1124,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
-        let mut state = self.state.write();
+        let mut state = self.full_state_mut();
         match state.scopes {
             TaskScopes::Root(root) => {
                 log_scope_update!("removing root scope {root}");
@@ -960,9 +1138,14 @@ impl Task {
                 log_scope_update!("removing initial scope");
                 let initial = backend.initial_scope;
                 if set.remove(initial) {
-                    self.remove_self_from_scope(&mut state, initial, backend, turbo_tasks);
                     let children = state.children.iter().copied().collect::<VecDeque<_>>();
-                    drop(state);
+                    self.remove_self_from_scope(
+                        &mut TaskMetaStateWriteGuard::Full(state),
+                        initial,
+                        backend,
+                        turbo_tasks,
+                    );
+                    // state ends here, as it was passed into `remove_self_from_scope`
 
                     if !children.is_empty() {
                         run_remove_from_scope_queue(children, initial, backend, turbo_tasks);
@@ -974,10 +1157,10 @@ impl Task {
 
     fn make_root_scoped_internal<'a>(
         &self,
-        mut state: RwLockWriteGuard<'a, TaskState>,
+        mut state: FullTaskWriteGuard<'a>,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> Option<RwLockWriteGuard<'a, TaskState>> {
+    ) -> Option<FullTaskWriteGuard<'a>> {
         if matches!(state.scopes, TaskScopes::Root(_)) {
             return Some(state);
         }
@@ -1074,7 +1257,7 @@ impl Task {
             // remove self from old scopes
             for (scope, count) in scopes.iter() {
                 if *count > 0 {
-                    self.remove_self_from_scope(&mut state, *scope, backend, turbo_tasks);
+                    self.remove_self_from_scope_full(&mut state, *scope, backend, turbo_tasks);
                 }
             }
 
@@ -1117,35 +1300,6 @@ impl Task {
         })
     }
 
-    pub(crate) fn execute(&self, tt: &dyn TurboTasksBackendApi) -> NativeTaskFuture {
-        match &self.ty {
-            TaskType::Root(bound_fn) => bound_fn(),
-            TaskType::Once(mutex) => {
-                let future = mutex.lock().take().expect("Task can only be executed once");
-                // let task = self.clone();
-                Box::pin(future)
-            }
-            TaskType::Native(_, bound_fn) => bound_fn(),
-            TaskType::ResolveNative(ref native_fn) => {
-                let native_fn = *native_fn;
-                let inputs = self.inputs.clone();
-                let tt = tt.pin();
-                Box::pin(PersistentTaskType::run_resolve_native(
-                    native_fn, inputs, tt,
-                ))
-            }
-            TaskType::ResolveTrait(trait_type, name) => {
-                let trait_type = *trait_type;
-                let name = name.clone();
-                let inputs = self.inputs.clone();
-                let tt = tt.pin();
-                Box::pin(PersistentTaskType::run_resolve_trait(
-                    trait_type, name, inputs, tt,
-                ))
-            }
-        }
-    }
-
     /// Get an [Invalidator] that can be used to invalidate the current [Task]
     /// based on external events.
     pub fn get_invalidator() -> Invalidator {
@@ -1163,14 +1317,20 @@ impl Task {
     }
 
     /// Access to the output cell.
-    pub(crate) fn with_output_mut<T>(&self, func: impl FnOnce(&mut Output) -> T) -> T {
-        let mut state = self.state.write();
-        func(&mut state.output)
+    pub(crate) fn with_output_mut_if_available<T>(
+        &self,
+        func: impl FnOnce(&mut Output) -> T,
+    ) -> Option<T> {
+        if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
+            Some(func(&mut state.output))
+        } else {
+            None
+        }
     }
 
     /// Access to a cell.
     pub(crate) fn with_cell_mut<T>(&self, index: CellId, func: impl FnOnce(&mut Cell) -> T) -> T {
-        let mut state = self.state.write();
+        let mut state = self.full_state_mut();
         let list = state.cells.entry(index.type_id).or_default();
         let i = index.index as usize;
         if list.len() <= i {
@@ -1180,96 +1340,146 @@ impl Task {
     }
 
     /// Access to a cell.
+    pub(crate) fn with_cell_mut_if_available<T>(
+        &self,
+        index: CellId,
+        func: impl FnOnce(&mut Cell) -> T,
+    ) -> Option<T> {
+        self.state_mut()
+            .as_full_mut()
+            .and_then(|state| state.cells.get_mut(&index.type_id))
+            .and_then(|list| list.get_mut(index.index as usize).map(|cell| func(cell)))
+    }
+
+    /// Access to a cell.
     pub(crate) fn with_cell<T>(&self, index: CellId, func: impl FnOnce(&Cell) -> T) -> T {
-        let state = self.state.read();
-        if let Some(list) = state.cells.get(&index.type_id) {
-            if let Some(cell) = list.get(index.index as usize) {
-                return func(cell);
-            }
+        if let Some(cell) = self
+            .state()
+            .as_full()
+            .and_then(|state| state.cells.get(&index.type_id))
+            .and_then(|list| list.get(index.index as usize))
+        {
+            func(cell)
+        } else {
+            func(&Default::default())
         }
-        func(&Default::default())
     }
 
     /// For testing purposes
     pub fn reset_executions(&self) {
-        let mut state = self.state.write();
-        state.stats.reset_executions()
-    }
-
-    pub fn is_pending(&self) -> bool {
-        let state = self.state.read();
-        !matches!(state.state_type, TaskStateType::Done { .. })
-    }
-
-    pub fn reset_stats(&self) {
-        let mut state = self.state.write();
-        state.stats.reset();
-    }
-
-    pub fn get_stats_info(&self, backend: &MemoryBackend) -> TaskStatsInfo {
-        let state = self.state.read();
-
-        let (total_duration, last_duration, executions) = match &state.stats {
-            TaskStats::Essential(stats) => (None, stats.last_duration(), None),
-            TaskStats::Full(stats) => (
-                Some(stats.total_duration()),
-                stats.last_duration(),
-                Some(stats.executions()),
-            ),
-        };
-
-        TaskStatsInfo {
-            total_duration,
-            last_duration,
-            executions,
-            root_scoped: matches!(state.scopes, TaskScopes::Root(_)),
-            child_scopes: match state.scopes {
-                TaskScopes::Root(_) => 1,
-                TaskScopes::Inner(ref list, _) => list.len(),
-            },
-            active: state
-                .scopes
-                .iter()
-                .any(|scope| backend.with_scope(scope, |scope| scope.state.lock().is_active())),
+        if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
+            state.stats.reset_executions()
         }
     }
 
-    pub fn get_stats_type(self: &Task) -> stats::TaskType {
+    pub fn is_pending(&self) -> bool {
+        if let TaskMetaStateReadGuard::Full(state) = self.state() {
+            !matches!(state.state_type, TaskStateType::Done { .. })
+        } else {
+            true
+        }
+    }
+
+    pub fn reset_stats(&self) {
+        if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
+            state.stats.reset();
+        }
+    }
+
+    pub fn get_stats_info(&self, backend: &MemoryBackend) -> TaskStatsInfo {
+        match self.state() {
+            TaskMetaStateReadGuard::Full(state) => {
+                let (total_duration, last_duration, executions) = match &state.stats {
+                    TaskStats::Essential(stats) => (None, stats.last_duration(), None),
+                    TaskStats::Full(stats) => (
+                        Some(stats.total_duration()),
+                        stats.last_duration(),
+                        Some(stats.executions()),
+                    ),
+                };
+
+                TaskStatsInfo {
+                    total_duration,
+                    last_duration,
+                    executions,
+                    root_scoped: matches!(state.scopes, TaskScopes::Root(_)),
+                    child_scopes: match state.scopes {
+                        TaskScopes::Root(_) => 1,
+                        TaskScopes::Inner(ref list, _) => list.len(),
+                    },
+                    active: state.scopes.iter().any(|scope| {
+                        backend.with_scope(scope, |scope| scope.state.lock().is_active())
+                    }),
+                }
+            }
+            TaskMetaStateReadGuard::Partial(state) => TaskStatsInfo {
+                total_duration: None,
+                last_duration: Duration::ZERO,
+                executions: None,
+                root_scoped: false,
+                child_scopes: if let TaskScopes::Inner(ref set, _) = state.scopes {
+                    set.len()
+                } else {
+                    0
+                },
+                active: false,
+            },
+            TaskMetaStateReadGuard::Unloaded(_) => TaskStatsInfo {
+                total_duration: None,
+                last_duration: Duration::ZERO,
+                executions: None,
+                root_scoped: false,
+                child_scopes: 0,
+                active: false,
+            },
+        }
+    }
+
+    pub fn get_stats_type(self: &Task) -> StatsTaskType {
         match &self.ty {
-            TaskType::Root(_) => stats::TaskType::Root(self.id),
-            TaskType::Once(_) => stats::TaskType::Once(self.id),
-            TaskType::Native(f, _) => stats::TaskType::Native(*f),
-            TaskType::ResolveNative(f) => stats::TaskType::ResolveNative(*f),
-            TaskType::ResolveTrait(t, n) => stats::TaskType::ResolveTrait(*t, n.to_string()),
+            TaskType::Root(_) => StatsTaskType::Root(self.id),
+            TaskType::Once(_) => StatsTaskType::Once(self.id),
+            TaskType::Persistent(ty) => match &**ty {
+                PersistentTaskType::Native(f, _) => StatsTaskType::Native(*f),
+                PersistentTaskType::ResolveNative(f, _) => StatsTaskType::ResolveNative(*f),
+                PersistentTaskType::ResolveTrait(t, n, _) => {
+                    StatsTaskType::ResolveTrait(*t, n.to_string())
+                }
+            },
         }
     }
 
     pub fn get_stats_references(&self) -> StatsReferences {
         let mut refs = Vec::new();
         let mut scope_refs = Vec::new();
-        {
-            let state = self.state.read();
+        if let TaskMetaStateReadGuard::Full(state) = self.state() {
             for child in state.children.iter() {
-                refs.push((stats::ReferenceType::Child, *child));
+                refs.push((ReferenceType::Child, *child));
             }
             if let Done { ref dependencies } = state.state_type {
                 for dep in dependencies.iter() {
                     match dep {
                         TaskDependency::TaskOutput(task) | TaskDependency::TaskCell(task, _) => {
-                            refs.push((stats::ReferenceType::Dependency, *task))
+                            refs.push((ReferenceType::Dependency, *task))
                         }
                         TaskDependency::ScopeChildren(scope)
                         | TaskDependency::ScopeCollectibles(scope, _) => {
-                            scope_refs.push((stats::ReferenceType::Dependency, *scope))
+                            scope_refs.push((ReferenceType::Dependency, *scope))
                         }
                     }
                 }
             }
         }
-        {
-            for input in self.inputs.iter() {
-                if let Some(task) = input.get_task_id() {
-                    refs.push((stats::ReferenceType::Input, task));
+        if let TaskType::Persistent(ty) = &self.ty {
+            match &**ty {
+                PersistentTaskType::Native(_, inputs)
+                | PersistentTaskType::ResolveNative(_, inputs)
+                | PersistentTaskType::ResolveTrait(_, _, inputs) => {
+                    for input in inputs.iter() {
+                        if let Some(task) = input.get_task_id() {
+                            refs.push((ReferenceType::Input, task));
+                        }
+                    }
                 }
             }
         }
@@ -1313,7 +1523,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
-        let mut state = self.state.write();
+        let mut state = self.full_state_mut();
         if state.children.insert(child_id) {
             let scopes = state.scopes.clone();
             drop(state);
@@ -1348,10 +1558,10 @@ impl Task {
 
     fn ensure_root_scoped<'a>(
         &'a self,
-        mut state: RwLockWriteGuard<'a, TaskState>,
+        mut state: FullTaskWriteGuard<'a>,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> RwLockWriteGuard<'a, TaskState> {
+    ) -> FullTaskWriteGuard<'a> {
         while !state.scopes.is_root() {
             #[cfg(not(feature = "report_expensive"))]
             let result = self.make_root_scoped_internal(state, backend, turbo_tasks);
@@ -1378,7 +1588,7 @@ impl Task {
                 break;
             } else {
                 // We need to acquire a new lock and everything might have changed in between
-                state = self.state.write();
+                state = self.full_state_mut();
                 continue;
             }
         }
@@ -1393,7 +1603,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> Result<Result<T, EventListener>> {
-        let mut state = self.state.write();
+        let mut state = self.full_state_mut();
         if strongly_consistent {
             state = self.ensure_root_scoped(state, backend, turbo_tasks);
             // We need to wait for all foreground jobs to be finished as there could be
@@ -1422,10 +1632,20 @@ impl Task {
 
                 Ok(Ok(result))
             }
-            Dirty { ref event }
-            | Scheduled { ref event }
-            | InProgress { ref event }
-            | InProgressDirty { ref event } => {
+            Dirty { ref mut event } => {
+                turbo_tasks.schedule(self.id);
+                let event = event.take();
+                let listener = event.listen_with_note(note);
+                state.state_type = Scheduled { event };
+                for scope in state.scopes.iter() {
+                    backend.with_scope(scope, |scope| {
+                        scope.state.lock().remove_dirty_task(self.id);
+                    })
+                }
+                drop(state);
+                Ok(Err(listener))
+            }
+            Scheduled { ref event } | InProgress { ref event } | InProgressDirty { ref event } => {
                 let listener = event.listen_with_note(note);
                 drop(state);
                 Ok(Err(listener))
@@ -1440,7 +1660,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> Result<Result<AutoSet<RawVc>, EventListener>> {
-        let mut state = self.state.write();
+        let mut state = self.full_state_mut();
         state = self.ensure_root_scoped(state, backend, turbo_tasks);
         // We need to wait for all foreground jobs to be finished as there could be
         // ongoing add_to_scope jobs that need to be finished before reading
@@ -1468,10 +1688,9 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
-        let mut state = self.state.write();
+        let mut state = self.full_state_mut();
         if state.collectibles.emit(trait_type, collectible) {
-            let mut tasks = AutoSet::new();
-            state
+            let tasks = state
                 .scopes
                 .iter()
                 .flat_map(|id| {
@@ -1480,7 +1699,8 @@ impl Task {
                         state.add_collectible(trait_type, collectible)
                     })
                 })
-                .for_each(|e| tasks.extend(e.notify));
+                .flat_map(|e| e.notify)
+                .collect::<AutoSet<_>>();
             drop(state);
             turbo_tasks.schedule_notify_tasks_set(&tasks);
         }
@@ -1493,7 +1713,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) {
-        let mut state = self.state.write();
+        let mut state = self.full_state_mut();
         if state.collectibles.unemit(trait_type, collectible) {
             let mut tasks = AutoSet::new();
             state
@@ -1508,6 +1728,57 @@ impl Task {
                 .for_each(|e| tasks.extend(e.notify));
             drop(state);
             turbo_tasks.schedule_notify_tasks_set(&tasks);
+        }
+    }
+}
+
+fn remove_collectible_from_scopes(
+    emitted: AutoSet<(TraitTypeId, RawVc)>,
+    unemitted: AutoSet<(TraitTypeId, RawVc)>,
+    task_scopes: &TaskScopes,
+    backend: &MemoryBackend,
+    turbo_tasks: &dyn TurboTasksBackendApi,
+) {
+    task_scopes.iter().for_each(|id| {
+        backend.with_scope(id, |scope| {
+            let mut tasks = AutoSet::new();
+            {
+                let mut state = scope.state.lock();
+                emitted
+                    .iter()
+                    .filter_map(|(trait_id, collectible)| {
+                        state.remove_collectible(*trait_id, *collectible)
+                    })
+                    .for_each(|e| tasks.extend(e.notify));
+
+                unemitted
+                    .iter()
+                    .filter_map(|(trait_id, collectible)| {
+                        state.add_collectible(*trait_id, *collectible)
+                    })
+                    .for_each(|e| tasks.extend(e.notify));
+            };
+            turbo_tasks.schedule_notify_tasks_set(&tasks);
+        })
+    })
+}
+
+fn remove_from_scopes(
+    tasks: AutoSet<TaskId>,
+    task_scopes: &TaskScopes,
+    backend: &MemoryBackend,
+    turbo_tasks: &dyn TurboTasksBackendApi,
+) {
+    match task_scopes {
+        TaskScopes::Root(scope) => {
+            turbo_tasks.schedule_backend_foreground_job(
+                backend.create_backend_job(Job::RemoveFromScope(tasks, *scope)),
+            );
+        }
+        TaskScopes::Inner(ref scopes, _) => {
+            turbo_tasks.schedule_backend_foreground_job(backend.create_backend_job(
+                Job::RemoveFromScopes(tasks, scopes.iter().copied().collect()),
+            ));
         }
     }
 }
@@ -1535,8 +1806,8 @@ pub fn run_add_to_scope_queue(
                 &mut queue,
             );
         });
-        if queue.len() > SPLIT_OFF_QUEUE_AT {
-            let split_off_queue = queue.split_off(SPLIT_OFF_QUEUE_AT);
+        while queue.len() > SPLIT_OFF_QUEUE_AT {
+            let split_off_queue = queue.split_off(queue.len() - SPLIT_OFF_QUEUE_AT);
             turbo_tasks.schedule_backend_foreground_job(backend.create_backend_job(
                 Job::AddToScopeQueue(split_off_queue, id, is_optimization_scope),
             ));
@@ -1555,8 +1826,8 @@ pub fn run_remove_from_scope_queue(
         backend.with_task(child, |child| {
             child.remove_from_scope_internal_shallow(id, backend, turbo_tasks, &mut queue);
         });
-        if queue.len() > SPLIT_OFF_QUEUE_AT {
-            let split_off_queue = queue.split_off(SPLIT_OFF_QUEUE_AT);
+        while queue.len() > SPLIT_OFF_QUEUE_AT {
+            let split_off_queue = queue.split_off(queue.len() - SPLIT_OFF_QUEUE_AT);
 
             turbo_tasks.schedule_backend_foreground_job(
                 backend.create_backend_job(Job::RemoveFromScopeQueue(split_off_queue, id)),
@@ -1567,13 +1838,16 @@ pub fn run_remove_from_scope_queue(
 
 impl Display for Task {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let state = self.state.read();
-        write!(
-            f,
-            "Task({}, {})",
-            self.get_description(),
-            Task::state_string(&state)
-        )
+        if let TaskMetaStateReadGuard::Full(state) = self.state() {
+            write!(
+                f,
+                "Task({}, {})",
+                self.get_description(),
+                Task::state_string(&state)
+            )
+        } else {
+            write!(f, "Task({}, unloaded)", self.get_description())
+        }
     }
 }
 

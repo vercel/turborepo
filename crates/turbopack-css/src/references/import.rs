@@ -3,7 +3,10 @@ use swc_core::{
     common::DUMMY_SP,
     css::{
         ast::*,
-        codegen::{writer::basic::BasicCssWriter, CodeGenerator, Emit},
+        codegen::{
+            writer::basic::{BasicCssWriter, BasicCssWriterConfig},
+            CodeGenerator, Emit,
+        },
     },
 };
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
@@ -96,7 +99,7 @@ impl ImportAttributes {
         }
     }
 
-    pub fn print_block(&self) -> Result<(String, usize, String)> {
+    pub fn print_block(&self) -> Result<(String, String)> {
         fn token(token: Token) -> TokenAndSpan {
             TokenAndSpan {
                 span: DUMMY_SP,
@@ -112,7 +115,6 @@ impl ImportAttributes {
                 raw: r#""""__turbopack_placeholder__""""#.into(),
             }))],
         });
-        let mut indent = 0;
 
         fn at_rule(name: &str, prelude: AtRulePrelude, inner_rule: Rule) -> Rule {
             Rule::AtRule(box AtRule {
@@ -140,7 +142,6 @@ impl ImportAttributes {
                 }),
                 rule,
             );
-            indent += 2;
         }
         if let Some(supports) = &self.supports {
             rule = at_rule(
@@ -148,7 +149,6 @@ impl ImportAttributes {
                 AtRulePrelude::SupportsPrelude(supports.clone()),
                 rule,
             );
-            indent += 2;
         }
         if let Some(layer_name) = &self.layer_name {
             rule = at_rule(
@@ -156,12 +156,18 @@ impl ImportAttributes {
                 AtRulePrelude::LayerPrelude(LayerPrelude::Name(layer_name.clone())),
                 rule,
             );
-            indent += 2;
         }
 
         let mut output = String::new();
         let mut code_gen = CodeGenerator::new(
-            BasicCssWriter::new(&mut output, None, Default::default()),
+            BasicCssWriter::new(
+                &mut output,
+                None,
+                BasicCssWriterConfig {
+                    indent_width: 0,
+                    ..Default::default()
+                },
+            ),
             Default::default(),
         );
         code_gen.emit(&rule)?;
@@ -170,7 +176,7 @@ impl ImportAttributes {
             .split_once(r#""""__turbopack_placeholder__""""#)
             .unwrap();
 
-        Ok((open.trim().into(), indent, close.trim().into()))
+        Ok((open.trim().into(), close.trim().into()))
     }
 }
 

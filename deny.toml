@@ -23,4 +23,14 @@ allow = [
   "Unicode-DFS-2016",
   # portpicker
   "Unlicense",
+  "OpenSSL",
 ]
+[[licenses.clarify]]
+name = "ring"
+expression = "ISC AND MIT AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+[[licenses.clarify]]
+name = "webpki"
+expression = "ISC AND MIT AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0x001c7e6c }]

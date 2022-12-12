@@ -27,11 +27,12 @@ use crate::{
     id::{BackendJobId, FunctionId, TraitTypeId},
     id_factory::IdFactory,
     raw_vc::{CellId, RawVc},
+    registry,
     task_input::{SharedReference, TaskInput},
     timed_future::{self, TimedFuture},
     trace::TraceRawVcs,
     util::FormatDuration,
-    Nothing, NothingVc, TaskId, ValueTraitVc, ValueTypeId,
+    Completion, CompletionVc, TaskId, ValueTraitVc, ValueTypeId,
 };
 
 pub trait TurboTasksCallApi: Sync + Send {
@@ -306,12 +307,13 @@ impl<B: Backend> TurboTasks<B> {
             let result = future.await?;
             tx.send(result)
                 .map_err(|_| anyhow!("unable to send result"))?;
-            Ok(NothingVc::new().into())
+            Ok(CompletionVc::new().into())
         });
         // INVALIDATION: A Once task will never invalidate, therefore we don't need to
         // track a dependency
         let raw_result = read_task_output_untracked(self, task_id, false).await?;
-        raw_result.into_read_untracked::<Nothing>(self).await?;
+        raw_result.into_read_untracked::<Completion>(self).await?;
+
         Ok(rx.await?)
     }
 
@@ -344,9 +346,23 @@ impl<B: Backend> TurboTasks<B> {
     pub fn trait_call(
         &self,
         trait_type: TraitTypeId,
-        trait_fn_name: Cow<'static, str>,
+        mut trait_fn_name: Cow<'static, str>,
         inputs: Vec<TaskInput>,
     ) -> RawVc {
+        // avoid creating a wrapper task if self is already resolved
+        // for resolved cells we already know the value type so we can lookup the
+        // function
+        let first_input = inputs.first().expect("trait call without self argument");
+        if let &TaskInput::TaskCell(_, CellId { type_id, .. }) = first_input {
+            let value_type = registry::get_value_type(type_id);
+            let key = (trait_type, trait_fn_name);
+            if let Some(native_fn) = value_type.get_trait_method(&key) {
+                return self.dynamic_call(*native_fn, inputs);
+            }
+            trait_fn_name = key.1;
+        }
+
+        // create a wrapper task to resolve all inputs
         RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
             PersistentTaskType::ResolveTrait(trait_type, trait_fn_name, inputs),
             current_task("turbo_function calls"),
@@ -655,7 +671,7 @@ impl<B: Backend> TurboTasksCallApi for TurboTasks<B> {
     ) -> TaskId {
         self.spawn_once_task(async move {
             future.await?;
-            Ok(NothingVc::new().into())
+            Ok(CompletionVc::new().into())
         })
     }
 
@@ -669,7 +685,7 @@ impl<B: Backend> TurboTasksCallApi for TurboTasks<B> {
             this.finish_primary_job();
             future.await?;
             this.begin_primary_job();
-            Ok(NothingVc::new().into())
+            Ok(CompletionVc::new().into())
         })
     }
 }
@@ -993,7 +1009,7 @@ pub async fn run_once<T: Send + 'static>(
     // INVALIDATION: A Once task will never invalidate, therefore we don't need to
     // track a dependency
     let raw_result = read_task_output_untracked(&*tt, task_id, false).await?;
-    raw_result.into_read_untracked::<Nothing>(&*tt).await?;
+    raw_result.into_read_untracked::<Completion>(&*tt).await?;
 
     Ok(rx.await?)
 }
@@ -1048,6 +1064,12 @@ pub fn get_invalidator() -> Invalidator {
         turbo_tasks: weak_turbo_tasks(),
         handle,
     }
+}
+
+/// Marks the current task as stateful. This prevents the tasks from being
+/// dropped without persisting the state.
+pub fn mark_stateful() {
+    // TODO pass this to the backend
 }
 
 pub fn emit<T: ValueTraitVc>(collectible: T) {

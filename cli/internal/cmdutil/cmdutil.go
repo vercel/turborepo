@@ -155,7 +155,13 @@ func (h *Helper) GetCmdBase(cliConfig config.CLIConfigProvider) (*CmdBase, error
 	if err != nil {
 		return nil, err
 	}
-	cwd, err := fs.GetCwd()
+
+	cwdRaw, err := cliConfig.GetCwd()
+	if err != nil {
+		return nil, err
+	}
+
+	cwd, err := fs.GetCwd(cwdRaw)
 	if err != nil {
 		return nil, err
 	}

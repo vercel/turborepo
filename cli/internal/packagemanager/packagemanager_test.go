@@ -102,7 +102,9 @@ func TestParsePackageManagerString(t *testing.T) {
 }
 
 func TestGetPackageManager(t *testing.T) {
-	cwd, err := fs.GetCwd()
+	cwdRaw, err := os.Getwd()
+	assert.NilError(t, err, "os.Getwd")
+	cwd, err := fs.GetCwd(cwdRaw)
 	assert.NilError(t, err, "GetCwd")
 	tests := []struct {
 		name             string
@@ -224,7 +226,7 @@ func Test_GetWorkspaces(t *testing.T) {
 
 	cwd, _ := os.Getwd()
 
-	repoRoot, err := fs.GetCwd()
+	repoRoot, err := fs.GetCwd(cwd)
 	assert.NilError(t, err, "GetCwd")
 	rootPath := map[string]turbopath.AbsoluteSystemPath{
 		"nodejs-npm":   repoRoot.UntypedJoin("../../../examples/with-yarn"),
@@ -313,7 +315,9 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 		wantErr  bool
 	}
 
-	cwd, err := fs.GetCwd()
+	cwdRaw, err := os.Getwd()
+	assert.NilError(t, err, "os.Getwd")
+	cwd, err := fs.GetCwd(cwdRaw)
 	assert.NilError(t, err, "GetCwd")
 	want := map[string][]string{
 		"nodejs-npm":   {"**/node_modules/**"},
@@ -368,7 +372,9 @@ func Test_CanPrune(t *testing.T) {
 		wantErr bool
 	}
 
-	cwd, err := fs.GetCwd()
+	cwdRaw, err := os.Getwd()
+	assert.NilError(t, err, "os.Getwd")
+	cwd, err := fs.GetCwd(cwdRaw)
 	assert.NilError(t, err, "GetCwd")
 	wants := map[string]want{
 		"nodejs-npm":   {true, false},

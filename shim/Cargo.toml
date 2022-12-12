@@ -12,15 +12,16 @@ bindgen = "0.61.0"
 [dev-dependencies]
 assert_cmd = "2.0.6"
 itertools = "0.10.5"
+pretty_assertions = "1.3.0"
 
 [dependencies]
+turborepo-lib = { path = "../crates/turborepo-lib" }
 anyhow = { version = "1.0.65", features = ["backtrace"] }
-# Because we use ignore_errors in clap, we have to stick to v3 instead of v4
-# due to issues such as: https://github.com/clap-rs/clap/issues/4391
-clap = { version = "3.2.23", features = ["derive"] }
-globset = "0.4.9"
+clap = { version = "4.0.22", features = ["derive"] }
+clap_complete = "4.0.6"
 predicates = "2.1.1"
 serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.86"
 serde_yaml = "0.8.26"
-walkdir = "2"
+turbo-updater = { path = "../crates/turbo-updater" }
+tiny-gradient      = "0.1"
