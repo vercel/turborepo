@@ -83,8 +83,11 @@ pub struct Args {
     #[clap(long, global = true, value_parser)]
     pub trace: Option<String>,
     /// verbosity
-    #[clap(short, long, global = true, value_parser)]
-    pub verbosity: Option<u8>,
+    #[clap(
+      short = 'v',
+      action = clap::ArgAction::Count,
+      global = true)]
+    pub verbosity: u8,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]

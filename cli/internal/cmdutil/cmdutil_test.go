@@ -1,10 +1,9 @@
 package cmdutil
 
 import (
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"os"
 	"testing"
-
-	"github.com/vercel/turbo/cli/internal/config"
 
 	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -22,8 +21,11 @@ func TestTokenEnvVar(t *testing.T) {
 			t.Cleanup(func() {
 				_ = os.Unsetenv(v)
 			})
+			args := turbostate.ParsedArgsFromRust{
+				CWD: "",
+			}
 			flags := pflag.NewFlagSet("test-flags", pflag.ContinueOnError)
-			h := NewHelper("test-version")
+			h := NewHelper("test-version", args)
 			h.AddFlags(flags)
 			h.UserConfigPath = userConfigPath
 
@@ -33,7 +35,7 @@ func TestTokenEnvVar(t *testing.T) {
 				t.Fatalf("setenv %v", err)
 			}
 
-			base, err := h.GetCmdBase(config.FlagSet{FlagSet: flags})
+			base, err := h.GetCmdBase(args)
 			if err != nil {
 				t.Fatalf("failed to get command base %v", err)
 			}

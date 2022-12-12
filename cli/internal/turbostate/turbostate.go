@@ -97,7 +97,7 @@ type ParsedArgsFromRust struct {
 	Team       string  `json:"team"`
 	Token      string  `json:"token"`
 	Trace      string  `json:"trace"`
-	Verbosity  uint8   `json:"verbosity"`
+	Verbosity  int     `json:"verbosity"`
 	TestRun    bool    `json:"test_run"`
 	Command    Command `json:"command"`
 }
