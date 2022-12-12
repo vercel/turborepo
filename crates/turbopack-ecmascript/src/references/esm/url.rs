@@ -1,7 +1,6 @@
 use anyhow::Result;
 use swc_core::{
-    common::DUMMY_SP,
-    ecma::ast::{Expr, ExprOrSpread, Lit, NewExpr, Str},
+    ecma::ast::{Expr, ExprOrSpread, NewExpr},
     quote,
 };
 use turbo_tasks::{
