@@ -1,3 +1,4 @@
+#[rustfmt::skip]
 mod ffi;
 
 use std::{ffi::CString, process};
