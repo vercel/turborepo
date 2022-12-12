@@ -48,11 +48,12 @@ impl ShimArgs {
                 is_forwarded_args = true;
             } else if found_cwd_flag {
                 // We've seen a `--cwd` and therefore set the cwd to this arg.
-                // NOTE: We purposefully allow multiple --cwd flags and only use
-                // the last one, as this is the Go parser's behavior.
                 cwd = Some(arg.into());
                 found_cwd_flag = false;
             } else if arg == "--cwd" {
+                if cwd.is_some() {
+                    return Err(anyhow!("cannot have multiple `--cwd` flags in command"));
+                }
                 // If we see a `--cwd` we expect the next arg to be a path.
                 found_cwd_flag = true
             } else {
