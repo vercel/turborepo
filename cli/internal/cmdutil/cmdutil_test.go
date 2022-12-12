@@ -1,12 +1,12 @@
 package cmdutil
 
 import (
-	"github.com/vercel/turbo/cli/internal/turbostate"
 	"os"
 	"testing"
 
 	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"gotest.tools/v3/assert"
 )
 
