@@ -73,9 +73,6 @@ pub struct Args {
     /// for authorization
     #[clap(long, global = true)]
     pub preflight: bool,
-    /// Run turbo in single-package mode
-    #[clap(long, global = true)]
-    pub single_package: bool,
     /// Set the team slug for API calls
     #[clap(long, global = true, value_parser)]
     pub team: Option<String>,
@@ -212,6 +209,9 @@ pub struct RunArgs {
     #[clap(long, hide = true)]
     #[serde(skip)]
     pub experimental_use_daemon: bool,
+    /// Run turbo in single-package mode
+    #[clap(long, global = true)]
+    pub single_package: bool,
     #[clap(long, hide = true)]
     #[serde(skip)]
     pub stream: bool,
@@ -300,12 +300,6 @@ pub struct RunArgs {
 /// returns: Result<Payload, Error>
 pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
     let mut clap_args = Args::new()?;
-
-    if let Some(repo_state) = repo_state {
-        clap_args.single_package = matches!(repo_state.mode, RepoMode::SinglePackage);
-        clap_args.cwd = Some(repo_state.root);
-    }
-
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
     if clap_args.command.is_none() {
@@ -315,6 +309,13 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             return Err(anyhow!("No command specified"));
         }
     };
+
+    if let Some(repo_state) = repo_state {
+        if let Some(Command::Run(run_args)) = &mut clap_args.command {
+            run_args.single_package = matches!(repo_state.mode, RepoMode::SinglePackage);
+        }
+        clap_args.cwd = Some(repo_state.root);
+    }
 
     match clap_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {

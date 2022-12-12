@@ -18,7 +18,6 @@ static TURBO_JSON: &str = "turbo.json";
 struct ShimArgs {
     cwd: PathBuf,
     skip_infer: bool,
-    single_package: bool,
     remaining_turbo_args: Vec<String>,
     forwarded_args: Vec<String>,
 }
@@ -28,8 +27,6 @@ impl ShimArgs {
         let mut found_cwd_flag = false;
         let mut cwd: Option<PathBuf> = None;
         let mut skip_infer = false;
-        // We check for --single-package so that we don't add it twice
-        let mut single_package = false;
         let mut remaining_turbo_args = Vec::new();
         let mut forwarded_args = Vec::new();
         let mut is_forwarded_args = false;
@@ -40,9 +37,6 @@ impl ShimArgs {
                 forwarded_args.push(arg);
             } else if arg == "--skip-infer" {
                 skip_infer = true;
-            } else if arg == "--single-package" {
-                remaining_turbo_args.push(arg);
-                single_package = true;
             } else if arg == "--" {
                 // If we've hit `--` we've reached the args forwarded to tasks.
                 is_forwarded_args = true;
@@ -73,7 +67,6 @@ impl ShimArgs {
             Ok(ShimArgs {
                 cwd,
                 skip_infer,
-                single_package,
                 remaining_turbo_args,
                 forwarded_args,
             })
@@ -214,7 +207,9 @@ impl RepoState {
             .to_string();
 
         let mut raw_args: Vec<_> = vec!["--skip-infer".to_string()];
-        let has_single_package_flag = shim_args.single_package;
+        let has_single_package_flag = shim_args
+            .remaining_turbo_args
+            .contains(&"--single-package".to_string());
 
         raw_args.append(&mut shim_args.remaining_turbo_args);
         if self.mode == RepoMode::SinglePackage && !has_single_package_flag {
