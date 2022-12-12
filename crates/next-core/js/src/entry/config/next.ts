@@ -9,7 +9,7 @@ type IpcIncomingMessage = {
 
 type IpcOutgoingMessage = {
   type: "javaScriptValue";
-  data: string;
+  data: number[];
 };
 
 const ipc = IPC as Ipc<IpcIncomingMessage, IpcOutgoingMessage>;
@@ -27,7 +27,7 @@ const ipc = IPC as Ipc<IpcIncomingMessage, IpcOutgoingMessage>;
         nextConfig.redirects = await nextConfig.redirects?.();
         await ipc.send({
           type: "javaScriptValue",
-          data: JSON.stringify(nextConfig),
+          data: Array.from(Buffer.from(JSON.stringify(nextConfig))),
         });
         break;
       }

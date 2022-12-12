@@ -47,7 +47,6 @@ use crate::{
         },
         NextClientTransition,
     },
-    next_config::NextConfigLoaderVc,
     next_server::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
@@ -125,25 +124,6 @@ pub async fn create_server_rendered_source(
 
     let fallback_page = get_fallback_page(project_path, server_root, env, browserslist_query);
 
-    let server_runtime_entries = EcmascriptChunkPlaceablesVc::cell(server_runtime_entries);
-
-    let next_config_loader = NextConfigLoaderVc::new(
-        context,
-        DevChunkingContextVc::builder(
-            project_path,
-            output_path,
-            output_path.join("chunks"),
-            get_client_assets_path(server_root, Value::new(ContextType::Pages { pages_dir })),
-        )
-        .build(),
-        project_root,
-        output_path.parent(),
-    );
-
-    let next_config = next_config_loader.load_value().await?;
-
-    println!("next_config: {:?}", next_config);
-
     let server_rendered_source = create_server_rendered_source_for_directory(
         project_path,
         context,
@@ -152,7 +132,7 @@ pub async fn create_server_rendered_source(
         SpecificityVc::exact(),
         0,
         pages_dir,
-        server_runtime_entries,
+        EcmascriptChunkPlaceablesVc::cell(server_runtime_entries),
         fallback_page,
         server_root,
         server_root,
