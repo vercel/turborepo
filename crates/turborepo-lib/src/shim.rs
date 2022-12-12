@@ -19,7 +19,8 @@ struct ShimArgs {
     cwd: PathBuf,
     skip_infer: bool,
     single_package: bool,
-    remaining_args: Vec<String>,
+    remaining_turbo_args: Vec<String>,
+    forwarded_args: Vec<String>,
 }
 
 impl ShimArgs {
@@ -29,21 +30,21 @@ impl ShimArgs {
         let mut skip_infer = false;
         // We check for --single-package so that we don't add it twice
         let mut single_package = false;
-        let mut remaining_args = Vec::new();
+        let mut remaining_turbo_args = Vec::new();
+        let mut forwarded_args = Vec::new();
         let mut is_forwarded_args = false;
         let args = env::args().skip(1);
         for arg in args {
             // We've seen a `--` and therefore we do no parsing
             if is_forwarded_args {
-                remaining_args.push(arg);
+                forwarded_args.push(arg);
             } else if arg == "--skip-infer" {
                 skip_infer = true;
             } else if arg == "--single-package" {
-                remaining_args.push(arg);
+                remaining_turbo_args.push(arg);
                 single_package = true;
             } else if arg == "--" {
                 // If we've hit `--` we've reached the args forwarded to tasks.
-                remaining_args.push(arg);
                 is_forwarded_args = true;
             } else if found_cwd_flag {
                 // We've seen a `--cwd` and therefore set the cwd to this arg.
@@ -55,7 +56,7 @@ impl ShimArgs {
                 // If we see a `--cwd` we expect the next arg to be a path.
                 found_cwd_flag = true
             } else {
-                remaining_args.push(arg);
+                remaining_turbo_args.push(arg);
             }
         }
 
@@ -72,7 +73,8 @@ impl ShimArgs {
                 cwd,
                 skip_infer,
                 single_package,
-                remaining_args,
+                remaining_turbo_args,
+                forwarded_args,
             })
         }
     }
@@ -86,8 +88,8 @@ pub enum RepoMode {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RepoState {
-    root: PathBuf,
-    mode: RepoMode,
+    pub root: PathBuf,
+    pub mode: RepoMode,
 }
 
 impl RepoState {
@@ -194,7 +196,7 @@ impl RepoState {
         // If the local turbo path doesn't exist or if we are local turbo, then we go
         // ahead and run the Go code linked in the current binary.
         if current_turbo_is_local_turbo || !local_turbo_path.try_exists()? {
-            cli::run()
+            cli::run(Some(self))
         } else {
             // Otherwise we spawn the local turbo process.
             Ok(Payload::Rust(
@@ -213,11 +215,13 @@ impl RepoState {
         let mut raw_args: Vec<_> = vec!["--skip-infer".to_string()];
         let has_single_package_flag = shim_args.single_package;
 
+        raw_args.append(&mut shim_args.remaining_turbo_args);
         if self.mode == RepoMode::SinglePackage && !has_single_package_flag {
             raw_args.push("--single-package".to_string());
         }
 
-        raw_args.append(&mut shim_args.remaining_args);
+        raw_args.push("--".to_string());
+        raw_args.append(&mut shim_args.forwarded_args);
 
         // We spawn a process that executes the local turbo
         // that we've found in node_modules/.bin/turbo.
@@ -247,17 +251,21 @@ pub fn run() -> Result<Payload> {
     let args = ShimArgs::parse()?;
 
     if args.skip_infer || is_turbo_binary_path_set() {
-        return cli::run();
+        let repo_state = RepoState::infer(&args.cwd)?;
+        return cli::run(Some(repo_state));
     }
 
     match RepoState::infer(&args.cwd) {
-        Ok(repo_state) => repo_state.run_correct_turbo(args),
+        Ok(repo_state) => {
+            println!("{:?}", repo_state);
+            repo_state.run_correct_turbo(args)
+        }
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global
             // commands like login/logout/link/unlink to still work
             eprintln!("Repository inference failed: {}", err);
             eprintln!("Running command as global turbo");
-            cli::run()
+            cli::run(None)
         }
     }
 }

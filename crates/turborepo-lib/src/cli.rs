@@ -1,11 +1,16 @@
-use std::{env, io, mem, process};
+use std::{env, io, mem, path::PathBuf, process};
 
 use anyhow::{anyhow, Result};
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use serde::Serialize;
 
-use crate::{commands::bin, get_version, Payload};
+use crate::{
+    commands::bin,
+    get_version,
+    shim::{RepoMode, RepoState},
+    Payload,
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum OutputLogsMode {
@@ -54,7 +59,7 @@ pub struct Args {
     pub cpu_profile: Option<String>,
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
-    pub cwd: Option<String>,
+    pub cwd: Option<PathBuf>,
     /// Specify a file to save a pprof heap profile
     #[clap(long, global = true, value_parser)]
     pub heap: Option<String>,
@@ -283,8 +288,23 @@ pub struct RunArgs {
     pub pass_through_args: Vec<String>,
 }
 
-pub fn run() -> Result<Payload> {
+/// Runs the CLI by parsing arguments with clap, then either calling Rust code
+/// directly or returning a payload for the Go code to use.  
+///
+/// # Arguments
+///
+/// * `repo_state`: If we have done repository inference and NOT executed
+/// local turbo, such as in the case where `TURBO_BINARY_PATH` is set,
+/// we use it here to modify clap's arguments.
+///
+/// returns: Result<Payload, Error>
+pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
     let mut clap_args = Args::new()?;
+
+    if let Some(repo_state) = repo_state {
+        clap_args.single_package = matches!(repo_state.mode, RepoMode::SinglePackage);
+        clap_args.cwd = Some(repo_state.root);
+    }
 
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
