@@ -220,17 +220,24 @@ impl RepoState {
     }
 
     fn spawn_local_turbo(&self, local_turbo_path: &Path, mut shim_args: ShimArgs) -> Result<i32> {
-        let cwd = self
-            .root
-            .to_str()
-            .ok_or_else(|| anyhow!("Root directory path is invalid unicode"))?
-            .to_string();
+        let cwd = self.root.canonicalize()?;
 
         let mut raw_args: Vec<_> = if self.local_turbo_supports_skip_infer()? {
             vec!["--skip-infer".to_string()]
         } else {
             Vec::new()
         };
+
+        // We use the --cwd flag instead of changing the process's current directory
+        // because some Go code distinguishes between the actual execution
+        // directory and the cwd flag. Also the Go code handles the absolute
+        // versus relative paths properly.
+        raw_args.push("--cwd".to_string());
+        raw_args.push(
+            cwd.to_str()
+                .ok_or_else(|| anyhow!("`--cwd` is invalid unicode"))?
+                .to_string(),
+        );
 
         let has_single_package_flag = shim_args
             .remaining_turbo_args
@@ -248,7 +255,6 @@ impl RepoState {
         // that we've found in node_modules/.bin/turbo.
         let mut command = process::Command::new(local_turbo_path)
             .args(&raw_args)
-            .current_dir(cwd)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()
