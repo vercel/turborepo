@@ -3,13 +3,9 @@ use std::collections::HashMap;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, Value};
-use turbo_tasks_fs::{FileContent, FileSystemPath, FileSystemPathVc, FileSystemVc};
+use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
-    asset::{AssetContent, AssetVc},
-    chunk::ChunkingContextVc,
-    context::AssetContextVc,
-    source_asset::SourceAssetVc,
-    virtual_asset::VirtualAssetVc,
+    chunk::ChunkingContextVc, context::AssetContextVc, virtual_asset::VirtualAssetVc,
 };
 use turbopack_ecmascript::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
@@ -21,45 +17,6 @@ use crate::embed_js::next_js_file;
 
 #[turbo_tasks::value(transparent)]
 pub struct NextConfigValue(NextConfig);
-
-#[turbo_tasks::value_impl]
-impl NextConfigValueVc {
-    #[turbo_tasks::function]
-    pub async fn config_asset(self, fs: FileSystemVc, context: AssetContextVc) -> Result<AssetVc> {
-        let this = self.await?;
-        if let Some(config_file) = &this.config_file {
-            let path = FileSystemPath {
-                fs,
-                path: config_file.clone(),
-            };
-            if let Some(relative) = path.get_relative_path_to(&*fs.root().await?) {
-                let next_config_path = fs.root().join(&relative);
-                let is_typescript = relative.ends_with(".ts");
-                let asset_vc = EcmascriptModuleAssetVc::new(
-                    SourceAssetVc::new(next_config_path).into(),
-                    context,
-                    Value::new(if is_typescript {
-                        EcmascriptModuleAssetType::Typescript
-                    } else {
-                        EcmascriptModuleAssetType::Ecmascript
-                    }),
-                    EcmascriptInputTransformsVc::cell(if is_typescript {
-                        vec![EcmascriptInputTransform::TypeScript]
-                    } else {
-                        vec![]
-                    }),
-                    context.environment(),
-                );
-                return Ok(asset_vc.into());
-            }
-        }
-        Ok(VirtualAssetVc::new(
-            fs.root().join("__EMPTY_NEXT_CONFIG__.js"),
-            AssetContent::File(FileContent::NotFound.cell()).cell(),
-        )
-        .into())
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TraceRawVcs)]
 #[serde(rename_all = "camelCase")]

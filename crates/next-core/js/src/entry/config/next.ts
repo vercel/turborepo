@@ -25,6 +25,10 @@ const ipc = IPC as Ipc<IpcIncomingMessage, IpcOutgoingMessage>;
         nextConfig.rewrites = await nextConfig.rewrites?.();
         // @ts-expect-error
         nextConfig.redirects = await nextConfig.redirects?.();
+        if (nextConfig.configFile) {
+          // watch and invalidate the config file
+          await import(nextConfig.configFile);
+        }
         await ipc.send({
           type: "javaScriptValue",
           data: Array.from(Buffer.from(JSON.stringify(nextConfig))),
