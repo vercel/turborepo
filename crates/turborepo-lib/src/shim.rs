@@ -182,16 +182,21 @@ impl RepoState {
     ///
     /// returns: Result<i32, Error>
     fn run_correct_turbo(self, shim_args: ShimArgs) -> Result<Payload> {
-        let local_turbo_path = self.root.join("node_modules").join(".bin").join({
-            #[cfg(windows)]
-            {
-                "turbo.cmd"
-            }
-            #[cfg(not(windows))]
-            {
-                "turbo"
-            }
-        });
+        let local_turbo_path = self
+            .root
+            .join("node_modules")
+            .join(".bin")
+            .join({
+                #[cfg(windows)]
+                {
+                    "turbo.cmd"
+                }
+                #[cfg(not(windows))]
+                {
+                    "turbo"
+                }
+            })
+            .canonicalize()?;
 
         let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
         // If the local turbo path doesn't exist or if we are local turbo, then we go
@@ -228,17 +233,6 @@ impl RepoState {
             Vec::new()
         };
 
-        // We use the --cwd flag instead of changing the process's current directory
-        // because some Go code distinguishes between the actual execution
-        // directory and the cwd flag. Also the Go code handles the absolute
-        // versus relative paths properly.
-        raw_args.push("--cwd".to_string());
-        raw_args.push(
-            cwd.to_str()
-                .ok_or_else(|| anyhow!("`--cwd` is invalid unicode"))?
-                .to_string(),
-        );
-
         let has_single_package_flag = shim_args
             .remaining_turbo_args
             .contains(&"--single-package".to_string());
@@ -255,6 +249,7 @@ impl RepoState {
         // that we've found in node_modules/.bin/turbo.
         let mut command = process::Command::new(local_turbo_path)
             .args(&raw_args)
+            .current_dir(cwd)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()
