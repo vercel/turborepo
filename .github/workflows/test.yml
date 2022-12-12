@@ -837,11 +837,13 @@ jobs:
         node: [16, 18]
         group: [1, 2]
     env:
-      # Enabling backtract will makes snapshot tests fail
+      # Enabling backtrace will makes snapshot tests fail
       RUST_BACKTRACE: 0
       NEXT_TELEMETRY_DISABLED: 1
       NEXT_TEST_JOB: 1
       __INTERNAL_CUSTOM_TURBOPACK_BINARY: ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev
+      # Glob pattern to run specific tests with --turbo.
+      __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH: ""
 
     steps:
       # https://github.com/actions/virtual-environments/issues/1187
@@ -852,7 +854,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: vercel/next.js
-          ref: v13.0.5-canary.5
+          ref: v13.0.6-canary.2
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2.2.4
