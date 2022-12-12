@@ -1,4 +1,7 @@
-use std::{fmt::Debug, mem::take};
+use std::{
+    fmt::Debug,
+    mem::{replace, take},
+};
 
 use auto_hash_map::AutoSet;
 use turbo_tasks::{
@@ -375,29 +378,36 @@ impl Cell {
         }
     }
 
-    pub fn gc_content(&mut self) {
+    /// Takes the content out of the cell. Make sure to drop the content outside
+    /// of the task state lock.
+    #[must_use]
+    pub fn gc_content(&mut self) -> Option<CellContent> {
         match self {
             Cell::Empty
             | Cell::Recomputing { .. }
             | Cell::Full(box FullCell::Recomputing { .. })
-            | Cell::TrackedValueless { .. } => {}
+            | Cell::TrackedValueless { .. } => None,
             Cell::InitialValue {
                 dependent_tasks, ..
             } => {
-                *self = Cell::TrackedValueless {
-                    dependent_tasks: take(dependent_tasks),
+                let dependent_tasks = take(dependent_tasks);
+                let Cell::InitialValue{ content, .. } = replace(self, Cell::TrackedValueless {
+                    dependent_tasks,
                     updates: 1,
-                };
+                }) else { unreachable!() };
+                Some(content)
             }
             &mut Cell::Full(box FullCell::UpdatedValue {
                 ref mut dependent_tasks,
                 updates,
                 ..
             }) => {
-                *self = Cell::TrackedValueless {
-                    dependent_tasks: take(dependent_tasks),
-                    updates,
-                };
+                let dependent_tasks = take(dependent_tasks);
+                let Cell::Full(box FullCell::UpdatedValue{ content, .. }) = replace(self, Cell::TrackedValueless {
+                    dependent_tasks,
+                    updates: 1,
+                }) else { unreachable!() };
+                Some(content)
             }
         }
     }

@@ -1929,6 +1929,7 @@ impl Task {
             stats.no_gc_needed += 1;
             return None;
         }
+        let mut cells_to_drop = Vec::new();
         // We don't want to access other tasks under this task lock, so we aggregate
         // missing information first, gather it and then retry.
         let mut missing_durations = Vec::new();
@@ -2032,7 +2033,7 @@ impl Task {
                                 cells.shrink_to_fit();
                                 for cell in cells.iter_mut() {
                                     if !cell.has_dependent_tasks() {
-                                        cell.gc_content();
+                                        cells_to_drop.extend(cell.gc_content());
                                     }
                                     cell.shrink_to_fit();
                                 }
@@ -2133,7 +2134,7 @@ impl Task {
                                 for cells in cells.into_values() {
                                     for mut cell in cells {
                                         if cell.is_available() {
-                                            cell.gc_content();
+                                            cells_to_drop.extend(cell.gc_content());
                                         }
                                     }
                                 }
@@ -2152,7 +2153,7 @@ impl Task {
                                     cells.shrink_to_fit();
                                     for cell in cells.iter_mut() {
                                         if !cell.has_dependent_tasks() {
-                                            cell.gc_content();
+                                            cells_to_drop.extend(cell.gc_content());
                                         }
                                         cell.shrink_to_fit();
                                     }

@@ -356,8 +356,8 @@ impl Backend for MemoryBackend {
             task.execution_completed(duration, instant, self, turbo_tasks)
         });
         if !reexecute {
-            self.gc_queue.task_executed(task_id, duration);
             self.run_gc(false, turbo_tasks);
+            self.gc_queue.task_executed(task_id, duration);
         }
         reexecute
     }
