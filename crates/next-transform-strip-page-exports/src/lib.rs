@@ -67,6 +67,7 @@ pub fn next_transform_strip_page_exports(
             ..Default::default()
         },
         in_lhs_of_var: false,
+        remove_expression: false,
     })
 }
 
@@ -240,6 +241,17 @@ impl State {
             true
         }
     }
+
+    fn dropping_export(&mut self, export_type: ExportType) -> bool {
+        if !self.should_retain_export_type(export_type) {
+            // If there are any assignments on the exported identifier, they'll
+            // need to be removed as well in the next pass.
+            self.should_run_again = true;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 struct Analyzer<'a> {
@@ -396,6 +408,19 @@ impl Visit for Analyzer<'_> {
     }
 
     fn visit_export_default_decl(&mut self, s: &ExportDefaultDecl) {
+        match &s.decl {
+            DefaultDecl::Class(ClassExpr {
+                ident: Some(ident), ..
+            }) => self
+                .state
+                .encounter_export(ident, Some(ident), ExportType::Default),
+            DefaultDecl::Fn(FnExpr {
+                ident: Some(ident), ..
+            }) => self
+                .state
+                .encounter_export(ident, Some(ident), ExportType::Default),
+            _ => {}
+        }
         self.within_removed_item(
             matches!(self.state.filter, ExportFilter::StripDefaultExport),
             |this| {
@@ -483,12 +508,37 @@ impl Visit for Analyzer<'_> {
             });
         });
     }
+
+    fn visit_member_expr(&mut self, e: &MemberExpr) {
+        let in_removed_item = if let Some(id) = find_member_root_id(e) {
+            !self.state.should_retain_id(&id)
+        } else {
+            false
+        };
+
+        self.within_removed_item(in_removed_item, |this| {
+            e.visit_children_with(this);
+        });
+    }
+
+    fn visit_assign_expr(&mut self, e: &AssignExpr) {
+        self.within_lhs_of_var(true, |this| {
+            e.left.visit_with(this);
+        });
+
+        self.within_lhs_of_var(false, |this| {
+            e.right.visit_with(this);
+        });
+    }
 }
 
 /// Actual implementation of the transform.
 struct NextSsg {
     pub state: State,
     in_lhs_of_var: bool,
+    /// Marker set when a top-level expression item should be removed. This
+    /// occurs when visiting assignments on eliminated identifiers.
+    remove_expression: bool,
 }
 
 impl NextSsg {
@@ -500,9 +550,9 @@ impl NextSsg {
     /// Mark identifiers in `n` as a candidate for elimination.
     fn mark_as_candidate<N>(&mut self, n: &N)
     where
-        N: for<'aa> VisitWith<Analyzer<'aa>>,
+        N: for<'aa> VisitWith<Analyzer<'aa>> + std::fmt::Debug,
     {
-        tracing::debug!("mark_as_candidate");
+        tracing::debug!("mark_as_candidate: {:?}", n);
 
         let mut v = Analyzer {
             state: &mut self.state,
@@ -673,39 +723,37 @@ impl Fold for NextSsg {
 
         let i = i.fold_children_with(self);
 
-        match (self.state.filter, &i) {
-            (_, ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(e))) if e.specifiers.is_empty() => {
+        match &i {
+            ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(e)) if e.specifiers.is_empty() => {
                 return ModuleItem::Stmt(Stmt::Empty(EmptyStmt { span: DUMMY_SP }))
             }
-            (ExportFilter::StripDataExports, ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(e))) => {
-                match &e.decl {
-                    Decl::Fn(f) => {
-                        if let Some(export_type) = self.state.export_type(&f.ident.to_id()) {
-                            if !self.state.should_retain_export_type(export_type) {
-                                tracing::trace!(
-                                    "Dropping an export specifier because it's an SSR/SSG function"
-                                );
-
-                                return ModuleItem::Stmt(Stmt::Empty(EmptyStmt { span: DUMMY_SP }));
-                            }
-                        }
-                    }
-
-                    Decl::Var(d) => {
-                        if d.decls.is_empty() {
+            ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(e)) => match &e.decl {
+                Decl::Fn(f) => {
+                    if let Some(export_type) = self.state.export_type(&f.ident.to_id()) {
+                        if self.state.dropping_export(export_type) {
+                            tracing::trace!(
+                                "Dropping an export specifier because it's an SSR/SSG function"
+                            );
                             return ModuleItem::Stmt(Stmt::Empty(EmptyStmt { span: DUMMY_SP }));
                         }
                     }
-                    _ => {}
                 }
-            }
-            (
-                ExportFilter::StripDefaultExport,
-                ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(_))
-                | ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultExpr(_)),
-            ) => {
-                tracing::trace!("Dropping an export specifier because it's a default export");
-                return ModuleItem::Stmt(Stmt::Empty(EmptyStmt { span: DUMMY_SP }));
+
+                Decl::Var(d) => {
+                    if d.decls.is_empty() {
+                        return ModuleItem::Stmt(Stmt::Empty(EmptyStmt { span: DUMMY_SP }));
+                    }
+                }
+                _ => {}
+            },
+
+            ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(_))
+            | ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultExpr(_)) => {
+                if self.state.dropping_export(ExportType::Default) {
+                    tracing::trace!("Dropping an export specifier because it's a default export");
+
+                    return ModuleItem::Stmt(Stmt::Empty(EmptyStmt { span: DUMMY_SP }));
+                }
             }
             _ => {}
         }
@@ -835,6 +883,25 @@ impl Fold for NextSsg {
                         return Pat::Invalid(Invalid { span: DUMMY_SP });
                     }
                 }
+                Pat::Expr(expr) => match &**expr {
+                    Expr::Member(member_expr) => match find_member_root_id(member_expr) {
+                        Some(id) => {
+                            if self.should_remove(id.clone()) {
+                                self.state.should_run_again = true;
+                                tracing::trace!(
+                                    "Dropping member expression object `{}{:?}` because it should \
+                                     be removed",
+                                    id.0,
+                                    id.1
+                                );
+
+                                return Pat::Invalid(Invalid { span: DUMMY_SP });
+                            }
+                        }
+                        None => {}
+                    },
+                    _ => {}
+                },
                 _ => {}
             }
         }
@@ -864,15 +931,59 @@ impl Fold for NextSsg {
             _ => {}
         }
 
+        self.remove_expression = false;
+
         let s = s.fold_children_with(self);
+
         match s {
             Stmt::Decl(Decl::Var(v)) if v.decls.is_empty() => {
                 return Stmt::Empty(EmptyStmt { span: DUMMY_SP });
+            }
+            Stmt::Expr(_) => {
+                if self.remove_expression {
+                    self.remove_expression = false;
+                    return Stmt::Empty(EmptyStmt { span: DUMMY_SP });
+                }
             }
             _ => {}
         }
 
         s
+    }
+
+    fn fold_expr(&mut self, e: Expr) -> Expr {
+        match e {
+            Expr::Assign(assign_expr) => {
+                let mut retain = true;
+                let left = self.within_lhs_of_var(true, |this| assign_expr.left.fold_with(this));
+
+                let right = self.within_lhs_of_var(false, |this| {
+                    if let PatOrExpr::Pat(pat) = &left {
+                        if pat.is_invalid() {
+                            retain = false;
+                            this.mark_as_candidate(&assign_expr.right);
+                        }
+                    }
+                    assign_expr.right.fold_with(this)
+                });
+
+                if retain {
+                    self.remove_expression = false;
+                    Expr::Assign(AssignExpr {
+                        left,
+                        right,
+                        ..assign_expr
+                    })
+                } else {
+                    self.remove_expression = true;
+                    *right
+                }
+            }
+            _ => {
+                self.remove_expression = false;
+                e.fold_children_with(self)
+            }
+        }
     }
 
     /// This method make `name` of [VarDeclarator] to [Pat::Invalid] if it
@@ -895,5 +1006,16 @@ impl Fold for NextSsg {
         decls.retain(|d| !d.name.is_invalid());
 
         decls
+    }
+}
+
+/// Returns the root identifier of a member expression.
+///
+/// e.g. `a.b.c` => `a`
+fn find_member_root_id(member_expr: &MemberExpr) -> Option<Id> {
+    match &*member_expr.obj {
+        Expr::Member(member) => Some(find_member_root_id(&member)?),
+        Expr::Ident(ident) => Some(ident.to_id()),
+        _ => None,
     }
 }
