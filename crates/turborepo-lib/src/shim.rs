@@ -226,7 +226,12 @@ impl RepoState {
             .ok_or_else(|| anyhow!("Root directory path is invalid unicode"))?
             .to_string();
 
-        let mut raw_args: Vec<_> = Vec::new();
+        let mut raw_args: Vec<_> = if self.local_turbo_supports_skip_infer()? {
+            vec!["--skip-infer".to_string()]
+        } else {
+            Vec::new()
+        };
+
         let has_single_package_flag = shim_args
             .remaining_turbo_args
             .contains(&"--single-package".to_string());
