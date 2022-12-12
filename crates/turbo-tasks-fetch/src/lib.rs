@@ -7,15 +7,13 @@ use turbopack_core::issue::{Issue, IssueSeverityVc, IssueVc};
 
 pub fn register() {
     turbo_tasks::register();
+    turbo_tasks_fs::register();
     turbopack_core::register();
     include!(concat!(env!("OUT_DIR"), "/register.rs"));
 }
 
-#[turbo_tasks::value]
-pub enum FetchResult {
-    Ok(HttpResponseVc),
-    Err(FetchErrorVc),
-}
+#[turbo_tasks::value(transparent)]
+pub struct FetchResult(Result<HttpResponseVc, FetchErrorVc>);
 
 #[turbo_tasks::value(shared)]
 #[derive(Debug)]
@@ -54,16 +52,16 @@ pub async fn fetch(url: StringVc, user_agent: OptionStringVc) -> Result<FetchRes
             let status = response.status().as_u16();
             let body = response.bytes().await?.to_vec();
 
-            Ok(FetchResultVc::cell(FetchResult::Ok(HttpResponseVc::cell(
-                HttpResponse {
-                    status,
-                    body: HttpResponseBodyVc::cell(HttpResponseBody(body)),
-                },
-            ))))
+            Ok(FetchResultVc::cell(Ok(HttpResponse {
+                status,
+                body: HttpResponseBodyVc::cell(HttpResponseBody(body)),
+            }
+            .cell())))
         }
-        Err(err) => Ok(FetchResultVc::cell(FetchResult::Err(FetchErrorVc::cell(
-            FetchError::from_reqwest_error(&err, &url),
-        )))),
+        Err(err) => Ok(FetchResultVc::cell(Err(FetchError::from_reqwest_error(
+            &err, &url,
+        )
+        .cell()))),
     }
 }
 

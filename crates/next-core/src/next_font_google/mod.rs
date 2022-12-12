@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 use indoc::formatdoc;
 use once_cell::sync::Lazy;
 use turbo_tasks::primitives::{OptionStringVc, OptionU16Vc, StringVc};
-use turbo_tasks_fetch::{fetch, FetchResult};
+use turbo_tasks_fetch::fetch;
 use turbo_tasks_fs::{FileContent, FileSystemPathVc};
 use turbopack_core::{
     issue::IssueSeverity,
@@ -158,8 +158,8 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
         .await?;
 
         let stylesheet = match &*stylesheet_res {
-            FetchResult::Ok(r) => Some(r.await?.body.to_string().await?.clone()),
-            FetchResult::Err(err) => {
+            Ok(r) => Some(r.await?.body.to_string().await?.clone()),
+            Err(err) => {
                 // Inform the user of the failure to retreive the stylesheet, but don't
                 // propagate this error. We don't want e.g. offline connections to prevent page
                 // renders during development. During production builds, however, this error

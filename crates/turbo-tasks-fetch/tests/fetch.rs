@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use turbo_tasks::primitives::{OptionStringVc, StringVc};
-use turbo_tasks_fetch::{fetch, register, FetchErrorKind, FetchResult};
+use turbo_tasks_fetch::{fetch, register, FetchErrorKind};
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystemPathVc, FileSystemVc};
 use turbo_tasks_testing::{register, run};
 use turbopack_core::issue::{Issue, IssueSeverity};
@@ -25,8 +25,8 @@ async fn basic_get() {
         resource_mock.assert();
 
         match result {
-            FetchResult::Err(_) => panic!(),
-            FetchResult::Ok(response) => {
+            Err(_) => panic!(),
+            Ok(response) => {
                 let response = response.await?;
                 assert_eq!(response.status, 200);
                 assert_eq!(*response.body.to_string().await?, "responsebody");
@@ -50,7 +50,7 @@ async fn sends_user_agent() {
         let result = &*fetch(StringVc::cell(server.url("/foo.woff")), OptionStringVc::cell(Some("foo".to_owned()))).await?;
         resource_mock.assert();
 
-        let FetchResult::Ok(response) = result else {
+        let Ok(response) = result else {
             panic!()
         };
 
@@ -79,7 +79,7 @@ async fn invalidation_does_not_invalidate() {
         let result = &*fetch(url, user_agent).await?;
         resource_mock.assert();
 
-        let FetchResult::Ok(response_vc) = result else {
+        let Ok(response_vc) = result else {
             panic!()
         };
         let response = response_vc.await?;
@@ -87,7 +87,7 @@ async fn invalidation_does_not_invalidate() {
         assert_eq!(*response.body.to_string().await?, "responsebody");
 
         let second_result = &*fetch(url, user_agent).await?;
-        let FetchResult::Ok(second_response_vc) = second_result else {
+        let Ok(second_response_vc) = second_result else {
             panic!()
         };
         let second_response = second_response_vc.await?;
@@ -105,7 +105,7 @@ async fn errors_on_failed_connection() {
 
         let url = "https://doesnotexist/foo.woff";
         let result = &*fetch(StringVc::cell(url.to_owned()), OptionStringVc::cell(None)).await?;
-        let FetchResult::Err(err_vc) = result else {
+        let Err(err_vc) = result else {
             panic!()
         };
         let err = &*err_vc.await?;
@@ -127,7 +127,7 @@ async fn errors_on_404() {
         let server = httpmock::MockServer::start();
         let resource_url = server.url("/");
         let result = &*fetch(StringVc::cell(resource_url.clone()), OptionStringVc::cell(None)).await?;
-        let FetchResult::Err(err_vc) = result else {
+        let Err(err_vc) = result else {
             panic!()
         };
         let err = &*err_vc.await?;
