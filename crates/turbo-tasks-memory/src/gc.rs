@@ -57,6 +57,7 @@ pub struct GcStats {
     pub priority_updated: usize,
     pub priority_updated_fast: usize,
     pub no_gc_needed: usize,
+    pub no_gc_possible: usize,
 }
 
 #[derive(Debug, Default)]

@@ -350,10 +350,11 @@ impl Backend for MemoryBackend {
         task_id: TaskId,
         duration: Duration,
         instant: Instant,
+        stateful: bool,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool {
         let reexecute = self.with_task(task_id, |task| {
-            task.execution_completed(duration, instant, self, turbo_tasks)
+            task.execution_completed(duration, instant, stateful, self, turbo_tasks)
         });
         if !reexecute {
             self.run_gc(false, turbo_tasks);

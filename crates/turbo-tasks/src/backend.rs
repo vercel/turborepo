@@ -204,6 +204,7 @@ pub trait Backend: Sync + Send {
         task: TaskId,
         duration: Duration,
         instant: Instant,
+        stateful: bool,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool;
 

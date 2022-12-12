@@ -143,6 +143,9 @@ struct TaskState {
     /// dirty, scheduled, in progress
     state_type: TaskStateType,
 
+    /// true, when the task has state and that can't be dropped
+    stateful: bool,
+
     /// Children are only modified from execution
     children: AutoSet<TaskId>,
 
@@ -173,6 +176,7 @@ impl TaskState {
             state_type: Dirty {
                 event: Event::new(move || format!("TaskState({})::event", description())),
             },
+            stateful: false,
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
@@ -195,6 +199,7 @@ impl TaskState {
             state_type: Scheduled {
                 event: Event::new(move || format!("TaskState({})::event", description())),
             },
+            stateful: false,
             children: Default::default(),
             collectibles: Default::default(),
             output: Default::default(),
@@ -225,6 +230,7 @@ impl PartialTaskState {
             state_type: Dirty {
                 event: Event::new(move || format!("TaskState({})::event", description())),
             },
+            stateful: false,
             children: Default::default(),
             collectibles: Default::default(),
             prepared_type: PrepareTaskType::None,
@@ -257,6 +263,7 @@ impl UnloadedTaskState {
             state_type: Dirty {
                 event: Event::new(move || format!("TaskState({})::event", description())),
             },
+            stateful: false,
             children: Default::default(),
             collectibles: Default::default(),
             prepared_type: PrepareTaskType::None,
@@ -715,6 +722,7 @@ impl Task {
         &self,
         duration: Duration,
         instant: Instant,
+        stateful: bool,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool {
@@ -736,6 +744,7 @@ impl Task {
                         cells.shrink_to_fit();
                     }
                     state.cells.shrink_to_fit();
+                    state.stateful = stateful;
                     state.state_type = Done { dependencies };
                     for scope in state.scopes.iter() {
                         backend.with_scope(scope, |scope| {
@@ -1964,6 +1973,10 @@ impl Task {
                         })
                     })
                 }
+                if state.stateful {
+                    stats.no_gc_possible += 1;
+                    return None;
+                }
                 match &mut state.state_type {
                     TaskStateType::Done { dependencies } => {
                         dependencies.shrink_to_fit();
@@ -2283,6 +2296,8 @@ impl Task {
             collectibles,
             scopes,
             stats,
+            // can be dropped as it will be recomputed on next execution
+            stateful: _,
             // can be dropped as it can be recomputed
             prepared_type: _,
             // can be dropped as always Dirty, event has been notified above
