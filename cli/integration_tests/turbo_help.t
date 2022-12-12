@@ -33,7 +33,7 @@ Test help flag
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
+    -v...                            verbosity
     -h, --help                       Print help information
   
   Run Arguments:
@@ -95,7 +95,7 @@ Test help flag
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
+    -v...                            verbosity
     -h, --help                       Print help information
   
   Run Arguments:
@@ -143,7 +143,7 @@ Test help flag for link command
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
+    -v...                            verbosity
     -h, --help                       Print help information
   
   Run Arguments:
@@ -170,7 +170,7 @@ Test help flag for unlink command
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
+    -v...                            verbosity
     -h, --help                       Print help information
   
   Run Arguments:
@@ -198,7 +198,7 @@ Test help flag for login command
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
+    -v...                            verbosity
     -h, --help                       Print help information
   
   Run Arguments:
@@ -225,7 +225,7 @@ Test help flag for logout command
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
+    -v...                            verbosity
     -h, --help                       Print help information
   
   Run Arguments:

@@ -33,7 +33,7 @@ Make sure exit code is 2 when no args are passed
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
+    -v...                            verbosity
     -h, --help                       Print help information
   
   Run Arguments:
