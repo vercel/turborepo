@@ -272,7 +272,7 @@ fn is_turbo_binary_path_set() -> bool {
     env::var("TURBO_BINARY_PATH").is_ok()
 }
 
-//// The payload from running main, if the program can complete without using Go
+/// The payload from running main, if the program can complete without using Go
 /// the Rust variant will be returned. If Go is needed then the turbostate that
 /// should be passed to Go will be returned.
 pub fn main() -> Result<Payload> {
