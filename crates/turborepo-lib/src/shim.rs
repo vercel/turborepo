@@ -1,14 +1,16 @@
 use std::{
     env,
     env::{current_dir, current_exe},
-    fs,
+    fs::{self, File},
     path::{Path, PathBuf},
     process,
     process::Stdio,
+    str::FromStr,
 };
 
 use anyhow::{anyhow, Result};
-use serde::Serialize;
+use semver::{Version, VersionReq};
+use serde::{Deserialize, Serialize};
 
 use crate::{cli, PackageManager, Payload};
 
@@ -78,6 +80,11 @@ impl ShimArgs {
 pub enum RepoMode {
     SinglePackage,
     MultiPackage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PackageJson {
+    version: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -197,6 +204,19 @@ impl RepoState {
                 self.spawn_local_turbo(&local_turbo_path, shim_args),
             ))
         }
+    }
+
+    fn local_turbo_supports_skip_infer(&self) -> Result<bool> {
+        let local_turbo_package_path = self
+            .root
+            .join("node_modules")
+            .join("turbo")
+            .join("package.json");
+        let package_json: PackageJson =
+            serde_json::from_reader(File::open(local_turbo_package_path)?)?;
+        let version = Version::from_str(&package_json.version)?;
+        let skip_infer_versions = VersionReq::parse(">=1.7.0").unwrap();
+        Ok(skip_infer_versions.matches(&version))
     }
 
     fn spawn_local_turbo(&self, local_turbo_path: &Path, mut shim_args: ShimArgs) -> Result<i32> {
