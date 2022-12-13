@@ -253,13 +253,11 @@
 <span id="253">253</span>
 <span id="254">254</span>
 <span id="255">255</span>
-<span id="256">256</span>
-<span id="257">257</span>
 </pre><pre class="rust"><code><span class="kw">use </span>core::{default::Default, result::Result::Ok};
 <span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>turbo_tasks::Value;
+<span class="kw">use </span>turbo_tasks::{primitives::StringsVc, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack::{
@@ -395,29 +393,27 @@
 </span><span class="kw">pub async fn </span>add_next_font_transform(
     module_options_context: ModuleOptionsContextVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleOptionsContextVc&gt; {
-    <span class="attr">#[cfg(not(feature = <span class="string">&quot;next-font&quot;</span>))]
-    </span><span class="kw">return </span><span class="prelude-val">Ok</span>(module_options_context);
+    <span class="attr">#[allow(unused_mut)] </span><span class="comment">// This is mutated when next-font-local is enabled
+    </span><span class="kw">let </span><span class="kw-2">mut </span>font_loaders = <span class="macro">vec!</span>[<span class="string">&quot;@next/font/google&quot;</span>.to_owned()];
+    <span class="attr">#[cfg(feature = <span class="string">&quot;next-font-local&quot;</span>)]
+    </span>font_loaders.push(<span class="string">&quot;@next/font/local&quot;</span>.to_owned());
 
-    <span class="attr">#[cfg(feature = <span class="string">&quot;next-font&quot;</span>)]
-    </span>{
-        <span class="kw">use </span>turbopack::module_options::{ModuleRule, ModuleRuleCondition, ModuleRuleEffect};
-        <span class="kw">use </span>turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
-
-        <span class="kw">let </span><span class="kw-2">mut </span>module_options_context = module_options_context.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
-        module_options_context.custom_rules.push(ModuleRule::new(
-            <span class="comment">// TODO: Only match in pages (not pages/api), app/, etc.
-            </span>ModuleRuleCondition::any(<span class="macro">vec!</span>[
-                ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.js&quot;</span>.to_string()),
-                ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.jsx&quot;</span>.to_string()),
-                ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.ts&quot;</span>.to_string()),
-                ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.tsx&quot;</span>.to_string()),
-            ]),
-            <span class="macro">vec!</span>[ModuleRuleEffect::AddEcmascriptTransforms(
-                EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::NextJsFont]),
-            )],
-        ));
-        <span class="prelude-val">Ok</span>(module_options_context.cell())
-    }
+    <span class="kw">let </span><span class="kw-2">mut </span>module_options_context = module_options_context.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
+    module_options_context.custom_rules.push(ModuleRule::new(
+        <span class="comment">// TODO: Only match in pages (not pages/api), app/, etc.
+        </span>ModuleRuleCondition::any(<span class="macro">vec!</span>[
+            ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.js&quot;</span>.to_string()),
+            ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.jsx&quot;</span>.to_string()),
+            ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.ts&quot;</span>.to_string()),
+            ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.tsx&quot;</span>.to_string()),
+        ]),
+        <span class="macro">vec!</span>[ModuleRuleEffect::AddEcmascriptTransforms(
+            EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::NextJsFont(
+                StringsVc::cell(font_loaders),
+            )]),
+        )],
+    ));
+    <span class="prelude-val">Ok</span>(module_options_context.cell())
 }
 
 <span class="attr">#[turbo_tasks::function]

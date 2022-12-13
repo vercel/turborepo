@@ -209,6 +209,12 @@
 <span id="209">209</span>
 <span id="210">210</span>
 <span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 
 <span class="kw">use </span>std::{path::Path, sync::Arc};
@@ -219,6 +225,7 @@
     common::{chain, util::take::Take, FileName, Mark, SourceMap},
     ecma::{
         ast::{Module, ModuleItem, Program},
+        atoms::JsWord,
         preset_env::{<span class="self">self</span>, Targets},
         transforms::{
             base::{feature::FeatureFlag, helpers::inject_helpers, resolver, Assumptions},
@@ -227,7 +234,7 @@
         visit::{FoldWith, VisitMutWith},
     },
 };
-<span class="kw">use </span>turbo_tasks::primitives::StringVc;
+<span class="kw">use </span>turbo_tasks::primitives::{StringVc, StringsVc};
 <span class="kw">use </span>turbopack_core::environment::EnvironmentVc;
 
 <span class="kw">use </span><span class="self">self</span>::server_to_client_proxy::{create_proxy_module, is_client_module};
@@ -246,7 +253,7 @@
     ///
     /// It also provides diagnostics for improper use of `getServerSideProps`.
     </span>NextJsPageSsr,
-    NextJsFont,
+    NextJsFont(StringsVc),
     PresetEnv(EnvironmentVc),
     React {
         <span class="attr">#[serde(default)]
@@ -392,9 +399,14 @@
 
                 <span class="kw-2">*</span>program = module_program.fold_with(<span class="kw-2">&amp;mut </span>next_ssg(eliminated_packages));
             }
-            EcmascriptInputTransform::NextJsFont =&gt; {
+            EcmascriptInputTransform::NextJsFont(font_loaders_vc) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>font_loaders = <span class="macro">vec!</span>[];
+                <span class="kw">for </span>loader <span class="kw">in </span><span class="kw-2">&amp;</span>(<span class="kw-2">*</span>font_loaders_vc.<span class="kw">await</span><span class="question-mark">?</span>) {
+                    font_loaders.push(std::convert::Into::&lt;JsWord&gt;::into(<span class="kw-2">&amp;**</span>loader));
+                }
+
                 <span class="kw">let </span><span class="kw-2">mut </span>next_font = next_font::next_font_loaders(next_font::Config {
-                    font_loaders: <span class="macro">vec!</span>[<span class="string">&quot;@next/font/google&quot;</span>.into(), <span class="string">&quot;@next/font/local&quot;</span>.into()],
+                    font_loaders,
                     relative_file_path_from_root: file_name_str.into(),
                 });
 

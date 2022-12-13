@@ -632,9 +632,9 @@
 };
 
 <span class="macro">lazy_static! </span>{
-    <span class="kw">static </span><span class="kw-2">ref </span>UNSUPPORTED_PACKAGES: HashSet&lt;String&gt; =
-        [<span class="string">&quot;@vercel/og&quot;</span>.to_owned(), <span class="string">&quot;@next/font&quot;</span>.to_owned()].into();
-    <span class="kw">static </span><span class="kw-2">ref </span>UNSUPPORTED_PACKAGE_PATHS: HashSet&lt;(String, String)&gt; = [].into();
+    <span class="kw">static </span><span class="kw-2">ref </span>UNSUPPORTED_PACKAGES: HashSet&lt;String&gt; = [<span class="string">&quot;@vercel/og&quot;</span>.to_owned()].into();
+    <span class="kw">static </span><span class="kw-2">ref </span>UNSUPPORTED_PACKAGE_PATHS: HashSet&lt;(String, String)&gt; =
+        [(<span class="string">&quot;@next/font&quot;</span>.to_owned(), <span class="string">&quot;/local&quot;</span>.to_owned())].into();
 }
 
 <span class="attr">#[turbo_tasks::value]
