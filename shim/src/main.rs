@@ -1,5 +1,6 @@
-#[rustfmt::skip]
-mod ffi;
+mod ffi {
+    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+}
 
 use std::{ffi::CString, process};
 
