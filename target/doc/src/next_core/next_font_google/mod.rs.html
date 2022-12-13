@@ -285,6 +285,27 @@
 <span id="285">285</span>
 <span id="286">286</span>
 <span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>indoc::formatdoc;
@@ -292,6 +313,7 @@
 <span class="kw">use </span>turbo_tasks::primitives::{OptionStringVc, OptionU16Vc, StringVc};
 <span class="kw">use </span>turbo_tasks_fetch::fetch;
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 <span class="kw">use </span>turbopack_core::{
     issue::IssueSeverity,
     resolve::{
@@ -359,9 +381,10 @@
         <span class="kw">let </span>query = <span class="kw-2">&amp;*</span>query_vc.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>options = font_options_from_query_map(<span class="kw-2">*</span>query_vc);
         <span class="kw">let </span>properties = get_font_css_properties(options).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>request_id = get_request_id(<span class="kw-2">*</span>query_vc).<span class="kw">await</span><span class="question-mark">?</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>js_asset = VirtualAssetVc::new(
                 attached_next_js_package_path(<span class="self">self</span>.project_path)
-                    .join(<span class="string">&quot;internal/font/google/inter.js&quot;</span>),
+                    .join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;internal/font/google/{}.js&quot;</span>, request_id)),
                 FileContent::Content(
                     <span class="macro">formatdoc!</span>(
                         <span class="string">r#&quot;
@@ -424,15 +447,17 @@
         <span class="kw">let </span>Request::Module {
             module: <span class="kw">_</span>,
             path: <span class="kw">_</span>,
-            query,
+            query: query_vc,
         } = request <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(ImportMapResult::NoEntry.into());
         };
+        request.request();
 
-        <span class="kw">let </span>options = font_options_from_query_map(<span class="kw-2">*</span>query);
+        <span class="kw">let </span>options = font_options_from_query_map(<span class="kw-2">*</span>query_vc);
         <span class="kw">let </span>stylesheet_url = get_stylesheet_url_from_options(options);
+        <span class="kw">let </span>request_id = get_request_id(<span class="kw-2">*</span>query_vc).<span class="kw">await</span><span class="question-mark">?</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>css_virtual_path = attached_next_js_package_path(<span class="self">self</span>.project_path)
-            .join(<span class="string">&quot;internal/font/google/cssmodule.module.css&quot;</span>);
+            .join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;internal/font/google/{}.module.css&quot;</span>, request_id));
 
         <span class="kw">let </span>stylesheet_res = fetch(
             stylesheet_url,
@@ -497,6 +522,23 @@
 
         <span class="prelude-val">Ok</span>(ImportMapResult::Result(ResolveResult::Single(css_asset.into(), <span class="macro">vec!</span>[]).into()).into())
     }
+}
+
+<span class="kw">async fn </span>get_request_id(query_vc: QueryMapVc) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+    <span class="kw">let </span>query = <span class="kw-2">&amp;*</span>query_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>query = query.as_ref().context(<span class="string">&quot;Query map must be present&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>to_hash = <span class="macro">vec!</span>[];
+    <span class="kw">for </span>(k, v) <span class="kw">in </span>query {
+        to_hash.push(k);
+        to_hash.push(v);
+    }
+
+    <span class="kw">let </span>options = font_options_from_query_map(query_vc).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
+        <span class="string">&quot;{}_{:x?}&quot;</span>,
+        options.font_family.to_lowercase().replace(<span class="string">&#39; &#39;</span>, <span class="string">&quot;_&quot;</span>),
+        hash_xxh3_hash64(to_hash)
+    )))
 }
 
 <span class="attr">#[turbo_tasks::function]

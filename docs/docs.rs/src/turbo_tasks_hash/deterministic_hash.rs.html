@@ -158,6 +158,13 @@
 <span id="158">158</span>
 <span id="159">159</span>
 <span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem::Discriminant;
 
 <span class="kw">pub use </span>turbo_tasks_macros::DeterministicHash;
@@ -270,6 +277,13 @@
 }
 
 <span class="kw">impl </span>DeterministicHash <span class="kw">for </span>String {
+    <span class="kw">fn </span>deterministic_hash&lt;H: DeterministicHasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
+        state.write_usize(<span class="self">self</span>.len());
+        state.write_bytes(<span class="self">self</span>.as_bytes());
+    }
+}
+
+<span class="kw">impl </span>DeterministicHash <span class="kw">for </span><span class="kw-2">&amp;</span>str {
     <span class="kw">fn </span>deterministic_hash&lt;H: DeterministicHasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
         state.write_usize(<span class="self">self</span>.len());
         state.write_bytes(<span class="self">self</span>.as_bytes());
