@@ -34,7 +34,7 @@ fn native_run(args: Args) -> Result<i32> {
 // `turborepo_lib::main` instead
 fn main() -> Result<()> {
     let exit_code = match turborepo_lib::main()? {
-        Payload::Rust(res) => res.unwrap_or(2),
+        Payload::Rust(res) => res.unwrap_or(1),
         Payload::Go(state) => native_run(*state)?,
     };
 

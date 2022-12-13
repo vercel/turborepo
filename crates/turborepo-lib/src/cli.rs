@@ -115,7 +115,18 @@ pub enum DaemonCommand {
 
 impl Args {
     pub fn new() -> Result<Self> {
-        let mut clap_args = Args::parse();
+        let mut clap_args = match Args::try_parse() {
+            Ok(args) => args,
+            Err(e) if e.use_stderr() => {
+                let _ = e.print();
+                process::exit(1);
+            }
+            // If the clap error shouldn't be printed to stderr it indicates help text
+            Err(e) => {
+                let _ = e.print();
+                process::exit(0);
+            }
+        };
         // --version flag doesn't work with ignore_errors in clap, so we have to handle
         // it manually
         if clap_args.version {
@@ -292,7 +303,7 @@ pub struct RunArgs {
 }
 
 /// Runs the CLI by parsing arguments with clap, then either calling Rust code
-/// directly or returning a payload for the Go code to use.  
+/// directly or returning a payload for the Go code to use.
 ///
 /// # Arguments
 ///
