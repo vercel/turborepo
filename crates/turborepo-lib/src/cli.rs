@@ -97,14 +97,21 @@ pub struct Args {
 #[serde(into = "u8")]
 pub struct Verbosity {
     #[clap(
+        long = "verbosity",
+        global = true,
+        conflicts_with = "v",
+        value_name = "COUNT"
+    )]
+    /// Verbosity level
+    pub verbosity: Option<u8>,
+    #[clap(
         short = 'v',
         action = clap::ArgAction::Count,
         global = true,
+        hide = true,
         conflicts_with = "verbosity"
     )]
     pub v: u8,
-    #[clap(long = "verbosity", global = true, conflicts_with = "v")]
-    pub verbosity: Option<u8>,
 }
 
 impl Into<u8> for Verbosity {
