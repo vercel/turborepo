@@ -43,6 +43,8 @@ struct MaxValues {
     pub scopes: usize,
     /// stored as dependencies * 100
     pub dependencies: usize,
+    /// stored as children * 100
+    pub children: usize,
     pub depth: u32,
 }
 
@@ -55,6 +57,17 @@ pub fn get_avg_dependencies_count_times_100(stats: &ExportedTaskStats) -> usize 
         .references
         .iter()
         .filter(|((ty, _), _)| *ty == ReferenceType::Dependency)
+        .map(|(_, ref_stats)| ref_stats.count)
+        .sum::<usize>()
+        * 100
+        / stats.count
+}
+
+pub fn get_avg_children_count_times_100(stats: &ExportedTaskStats) -> usize {
+    stats
+        .references
+        .iter()
+        .filter(|((ty, _), _)| *ty == ReferenceType::Child)
         .map(|(_, ref_stats)| ref_stats.count)
         .sum::<usize>()
         * 100
@@ -74,6 +87,7 @@ fn get_max_values_internal(depth: u32, node: &GroupTree) -> MaxValues {
     let mut max_roots = 0;
     let mut max_scopes = 0;
     let mut max_dependencies = 0;
+    let mut max_children = 0;
     let mut max_depth = 0;
     for (_, ref s) in node.task_types.iter().chain(node.primary.iter()) {
         if let Some(total_duration) = s.total_duration {
@@ -104,6 +118,7 @@ fn get_max_values_internal(depth: u32, node: &GroupTree) -> MaxValues {
         max_roots = max(max_roots, s.roots);
         max_scopes = max(max_scopes, 100 * s.scopes / s.count);
         max_dependencies = max(max_dependencies, get_avg_dependencies_count_times_100(s));
+        max_children = max(max_children, get_avg_children_count_times_100(s));
     }
     max_depth = max(
         max_depth,
@@ -127,6 +142,7 @@ fn get_max_values_internal(depth: u32, node: &GroupTree) -> MaxValues {
             roots,
             scopes,
             dependencies,
+            children,
             depth: inner_depth,
         } = get_max_values_internal(depth + 1, child);
         max_total_duration = max_total_duration
@@ -143,6 +159,7 @@ fn get_max_values_internal(depth: u32, node: &GroupTree) -> MaxValues {
         max_roots = max(max_roots, roots);
         max_scopes = max(max_scopes, scopes);
         max_dependencies = max(max_dependencies, dependencies);
+        max_children = max(max_children, children);
         max_depth = max(max_depth, inner_depth);
     }
     MaxValues {
@@ -158,6 +175,7 @@ fn get_max_values_internal(depth: u32, node: &GroupTree) -> MaxValues {
         roots: max_roots,
         scopes: max_scopes,
         dependencies: max_dependencies,
+        children: max_children,
         depth: max_depth,
     }
 }

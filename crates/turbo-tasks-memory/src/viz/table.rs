@@ -53,6 +53,7 @@ pub fn create_table(root: GroupTree, stats_type: StatsType) -> String {
     out += r#"<th>root scopes</th>"#;
     out += r#"<th>avg scopes</th>"#;
     out += r#"<th>avg dependencies</th>"#;
+    out += r#"<th>avg children</th>"#;
     out += r#"<th>depth</th>"#;
     out += r#"<th>common parent</th>"#;
     out += r#"</tr></thead>"#;
@@ -213,6 +214,14 @@ pub fn create_table(root: GroupTree, stats_type: StatsType) -> String {
             "<td bgcolor=\"{}\">{}</td>",
             as_frac_color(dependencies, max_values.dependencies),
             (dependencies as f32) / 100.0
+        )?;
+        // avg children
+        let children = get_avg_children_count_times_100(stats);
+        write!(
+            out,
+            "<td bgcolor=\"{}\">{}</td>",
+            as_frac_color(children, max_values.children),
+            (children as f32) / 100.0
         )?;
         // depth
         write!(
