@@ -1,7 +1,7 @@
 Setup
   $ . ${TESTDIR}/setup.sh
 
-Bad flag should print misues text
+Bad flag should print misuse text
   $ ${TURBO} --bad-flag
   Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
   Running command as global turbo
