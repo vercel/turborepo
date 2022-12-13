@@ -85,6 +85,7 @@ pub struct Args {
     /// verbosity
     #[clap(
       short = 'v',
+      long = "verbosity",
       action = clap::ArgAction::Count,
       global = true)]
     pub verbosity: u8,
