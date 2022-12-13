@@ -57,6 +57,7 @@ impl ModuleRuleCondition {
         ModuleRuleCondition::Any(conditions)
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn not(condition: ModuleRuleCondition) -> ModuleRuleCondition {
         ModuleRuleCondition::Not(Box::new(condition))
     }
