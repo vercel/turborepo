@@ -24,9 +24,9 @@ use turbopack_ecmascript::{
 #[turbo_tasks::value]
 #[derive(Clone, Copy)]
 pub struct MdxModuleAsset {
-    pub source: AssetVc,
-    pub context: AssetContextVc,
-    pub transforms: EcmascriptInputTransformsVc,
+    source: AssetVc,
+    context: AssetContextVc,
+    transforms: EcmascriptInputTransformsVc,
 }
 
 /// MDX components should be treated as normal j|tsx components to analyze
@@ -34,36 +34,35 @@ pub struct MdxModuleAsset {
 /// only difference is it is not a valid ecmascript AST we
 /// can't pass it forward directly. Internally creates an jsx from mdx
 /// via mdxrs, then pass it through existing ecmascript analyzer.
-async fn interop_ecma_asset_from_mdx(
+async fn into_ecmascript_module_asset(
     current_context: &MdxModuleAssetVc,
 ) -> Result<EcmascriptModuleAssetVc> {
     let content = current_context.content();
     let this = current_context.await?;
 
-    if let AssetContent::File(file) = &*content.await? {
-        if let FileContent::Content(file) = &*file.await? {
-            let file_conent = file.content().to_str()?;
-            // TODO: upstream mdx currently bubbles error as string
-            let mdx_jdx_component =
-                compile(&file_conent, &Default::default()).map_err(|e| anyhow!("{}", e))?;
+    let AssetContent::File(file) = &*content.await? else {
+        anyhow::bail!("Unexpected mdx asset content");
+    };
 
-            let source = VirtualAssetVc::new(
-                this.source.path(),
-                File::from(Rope::from(mdx_jdx_component)).into(),
-            );
-            Ok(EcmascriptModuleAssetVc::new(
-                source.into(),
-                this.context.into(),
-                Value::new(EcmascriptModuleAssetType::Typescript),
-                this.transforms,
-                this.context.environment(),
-            ))
-        } else {
-            Err(anyhow!("Not able to read mdx file content"))
-        }
-    } else {
-        Err(anyhow!("Unexpected mdx asset content"))
-    }
+    let FileContent::Content(file) = &*file.await? else {
+        anyhow::bail!("Not able to read mdx file content");
+    };
+
+    // TODO: upstream mdx currently bubbles error as string
+    let mdx_jsx_component =
+        compile(&file.content().to_str()?, &Default::default()).map_err(|e| anyhow!("{}", e))?;
+
+    let source = VirtualAssetVc::new(
+        this.source.path(),
+        File::from(Rope::from(mdx_jsx_component)).into(),
+    );
+    Ok(EcmascriptModuleAssetVc::new(
+        source.into(),
+        this.context.into(),
+        Value::new(EcmascriptModuleAssetType::Typescript),
+        this.transforms,
+        this.context.environment(),
+    ))
 }
 
 #[turbo_tasks::value_impl]
@@ -82,8 +81,8 @@ impl MdxModuleAssetVc {
     }
 
     #[turbo_tasks::function]
-    pub async fn analyze(self) -> Result<AnalyzeEcmascriptModuleResultVc> {
-        Ok(interop_ecma_asset_from_mdx(&self).await?.analyze())
+    async fn analyze(self) -> Result<AnalyzeEcmascriptModuleResultVc> {
+        Ok(into_ecmascript_module_asset(&self).await?.analyze())
     }
 }
 
@@ -177,7 +176,7 @@ impl EcmascriptChunkItem for MdxChunkItem {
     /// apply all of the ecma transforms
     #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
-        Ok(interop_ecma_asset_from_mdx(&self.module)
+        Ok(into_ecmascript_module_asset(&self.module)
             .await?
             .as_chunk_item(self.context)
             .content())
@@ -188,5 +187,6 @@ pub fn register() {
     turbo_tasks::register();
     turbo_tasks_fs::register();
     turbopack_core::register();
+    turbopack_ecmascript::register();
     include!(concat!(env!("OUT_DIR"), "/register.rs"));
 }
