@@ -15,14 +15,14 @@ func main() {
 	os.Exit(1)
 }
 
-//export nativeRunWithTurboState
-func nativeRunWithTurboState(turboStateString string) C.uint {
-	var turboState turbostate.CLIExecutionStateFromRust
-	err := json.Unmarshal([]byte(turboStateString), &turboState)
+//export nativeRunWithArgs
+func nativeRunWithArgs(argsString string) C.uint {
+	var args turbostate.ParsedArgsFromRust
+	err := json.Unmarshal([]byte(argsString), &args)
 	if err != nil {
-		fmt.Printf("Error unmarshalling turboState: %v\n Turbo state string: %v\n", err, turboStateString)
+		fmt.Printf("Error unmarshalling CLI args: %v\n Arg string: %v\n", err, argsString)
 		return 1
 	}
-	exitCode := cmd.RunWithTurboState(turboState, turboVersion)
+	exitCode := cmd.RunWithArgs(args, turboVersion)
 	return C.uint(exitCode)
 }

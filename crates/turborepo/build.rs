@@ -21,7 +21,7 @@ fn main() {
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-        .allowlist_function("nativeRunWithTurboState")
+        .allowlist_function("nativeRunWithArgs")
         .allowlist_type("GoString")
         .generate()
         .expect("Unable to generate bindings");
@@ -102,7 +102,7 @@ fn build_debug_libturbo() -> String {
 
 fn header_path(target: &build_target::Os) -> &'static str {
     match target {
-        build_target::Os::Windows => "../cli/turbo.h",
-        _ => "../cli/libturbo.h",
+        build_target::Os::Windows => "../../cli/turbo.h",
+        _ => "../../cli/libturbo.h",
     }
 }

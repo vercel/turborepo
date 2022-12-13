@@ -3,6 +3,8 @@ Setup
 
 Test help flag
   $ ${TURBO} -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   The build system that makes ship happen
   
   Usage: turbo [OPTIONS] [COMMAND]
@@ -31,7 +33,7 @@ Test help flag
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
+    -v...                            verbosity
     -h, --help                       Print help information
   
   Run Arguments:
@@ -40,6 +42,7 @@ Test help flag
         --concurrency <CONCURRENCY>      Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
         --continue                       Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]            [possible values: text, json]
+        --single-package                 Run turbo in single-package mode
         --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
         --force                          Ignore the existing cache (to force execution)
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
@@ -55,7 +58,6 @@ Test help flag
         --remote-only                    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
-        --single-package                 Run turbo in single-package mode
 
 
 
@@ -63,6 +65,8 @@ Test help flag
 
 
   $ ${TURBO} --help
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   The build system that makes ship happen
   
   Usage: turbo [OPTIONS] [COMMAND]
@@ -91,7 +95,7 @@ Test help flag
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
+    -v...                            verbosity
     -h, --help                       Print help information
   
   Run Arguments:
@@ -100,6 +104,7 @@ Test help flag
         --concurrency <CONCURRENCY>      Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
         --continue                       Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]            [possible values: text, json]
+        --single-package                 Run turbo in single-package mode
         --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
         --force                          Ignore the existing cache (to force execution)
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
@@ -115,10 +120,11 @@ Test help flag
         --remote-only                    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
-        --single-package                 Run turbo in single-package mode
 
 Test help flag for link command
   $ ${TURBO} link -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   Link your local directory to a Vercel organization and enable remote caching
   
   Usage: turbo link [OPTIONS]
@@ -137,11 +143,16 @@ Test help flag for link command
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
+    -v...                            verbosity
     -h, --help                       Print help information
+  
+  Run Arguments:
+        --single-package  Run turbo in single-package mode
 
 Test help flag for unlink command
   $ ${TURBO} unlink -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Usage: turbo unlink [OPTIONS]
@@ -159,11 +170,16 @@ Test help flag for unlink command
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
+    -v...                            verbosity
     -h, --help                       Print help information
+  
+  Run Arguments:
+        --single-package  Run turbo in single-package mode
 
 Test help flag for login command
   $ ${TURBO} login -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   Login to your Vercel account
   
   Usage: turbo login [OPTIONS]
@@ -182,11 +198,16 @@ Test help flag for login command
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
+    -v...                            verbosity
     -h, --help                       Print help information
+  
+  Run Arguments:
+        --single-package  Run turbo in single-package mode
 
 Test help flag for logout command
   $ ${TURBO} logout -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   Logout to your Vercel account
   
   Usage: turbo logout [OPTIONS]
@@ -204,5 +225,8 @@ Test help flag for logout command
         --team <TEAM>                Set the team slug for API calls
         --token <TOKEN>              Set the auth token for API calls
         --trace <TRACE>              Specify a file to save a pprof trace
-    -v, --verbosity <VERBOSITY>      verbosity
+    -v...                            verbosity
     -h, --help                       Print help information
+  
+  Run Arguments:
+        --single-package  Run turbo in single-package mode

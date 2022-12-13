@@ -97,18 +97,12 @@ type ParsedArgsFromRust struct {
 	Team       string  `json:"team"`
 	Token      string  `json:"token"`
 	Trace      string  `json:"trace"`
-	Verbosity  uint8   `json:"verbosity"`
+	Verbosity  int     `json:"verbosity"`
 	TestRun    bool    `json:"test_run"`
 	Command    Command `json:"command"`
 }
 
 var _ config.CLIConfigProvider = (*ParsedArgsFromRust)(nil)
-
-// CLIExecutionStateFromRust is the entire state of an execution passed from the Rust side
-type CLIExecutionStateFromRust struct {
-	RepoState  RepoState          `json:"repo_state"`
-	ParsedArgs ParsedArgsFromRust `json:"parsed_args"`
-}
 
 // GetColor returns the value of the `color` flag. Used to implement CLIConfigProvider interface.
 func (a ParsedArgsFromRust) GetColor() bool {
