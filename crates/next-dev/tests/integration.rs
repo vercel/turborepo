@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::Context;
+use anyhow::{anyhow, Context, Result};
 use chromiumoxide::{
     browser::{Browser, BrowserConfig},
     error::CdpError::Ws,
@@ -156,9 +156,7 @@ async fn run_test(resource: &str) -> JestRunResult {
     }
 }
 
-async fn create_browser(
-    is_debugging: bool,
-) -> Result<(Browser, JoinHandle<()>), Box<dyn std::error::Error>> {
+async fn create_browser(is_debugging: bool) -> Result<(Browser, JoinHandle<()>)> {
     let mut config_builder = BrowserConfig::builder();
     if is_debugging {
         config_builder = config_builder
@@ -167,7 +165,7 @@ async fn create_browser(
     }
 
     let (browser, mut handler) = retry_async(
-        config_builder.build()?,
+        config_builder.build().map_err(|s| anyhow!(s))?,
         |c| {
             let c = c.clone();
             Browser::launch(c)
@@ -190,7 +188,7 @@ async fn create_browser(
     Ok((browser, thread_handle))
 }
 
-async fn run_browser(addr: SocketAddr) -> Result<JestRunResult, Box<dyn std::error::Error>> {
+async fn run_browser(addr: SocketAddr) -> Result<JestRunResult> {
     if *DEBUG_BROWSER {
         run_debug_browser(addr).await?;
     }
@@ -198,7 +196,7 @@ async fn run_browser(addr: SocketAddr) -> Result<JestRunResult, Box<dyn std::err
     run_test_browser(addr).await
 }
 
-async fn run_debug_browser(addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
+async fn run_debug_browser(addr: SocketAddr) -> Result<()> {
     let (browser, handle) = create_browser(true).await?;
     let page = browser.new_page(format!("http://{}", addr)).await?;
 
@@ -217,7 +215,7 @@ async fn run_debug_browser(addr: SocketAddr) -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
-async fn run_test_browser(addr: SocketAddr) -> Result<JestRunResult, Box<dyn std::error::Error>> {
+async fn run_test_browser(addr: SocketAddr) -> Result<JestRunResult> {
     let (browser, _) = create_browser(false).await?;
     let page = browser.new_page(format!("http://{}", addr)).await?;
     page.wait_for_navigation().await?;
