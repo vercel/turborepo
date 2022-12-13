@@ -1200,7 +1200,7 @@ pub(crate) async fn analyze_ecmascript_module(
                         analysis.add_reference(UrlAssetReferenceVc::new(
                             origin,
                             RequestVc::parse(Value::new(pat)),
-                            environment.is_browser(),
+                            environment.is_rendering(),
                             AstPathVc::cell(ast_path),
                         ));
                     }

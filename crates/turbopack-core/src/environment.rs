@@ -169,11 +169,14 @@ impl EnvironmentVc {
     }
 
     #[turbo_tasks::function]
-    pub async fn is_browser(self) -> Result<BoolVc> {
+    pub async fn is_rendering(self) -> Result<BoolVc> {
         let env = self.await?;
         Ok(BoolVc::cell(matches!(
-            env.execution,
-            ExecutionEnvironment::Browser(_)
+            env.intention,
+            EnvironmentIntention::Prerendering
+                | EnvironmentIntention::ServerRendering
+                | EnvironmentIntention::StaticRendering
+                | EnvironmentIntention::Client
         )))
     }
 }

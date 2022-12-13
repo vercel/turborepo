@@ -12,6 +12,7 @@ use turbopack_core::{
         ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc, ChunkingType,
         ChunkingTypeOptionVc,
     },
+    issue::{code_gen::CodeGenerationIssue, IssueSeverity},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::UrlReferenceSubType,
     resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
@@ -35,7 +36,7 @@ use crate::{
 pub struct UrlAssetReference {
     origin: ResolveOriginVc,
     request: RequestVc,
-    is_browser: BoolVc,
+    is_rendering: BoolVc,
     ast_path: AstPathVc,
 }
 
@@ -45,13 +46,13 @@ impl UrlAssetReferenceVc {
     pub fn new(
         origin: ResolveOriginVc,
         request: RequestVc,
-        is_browser: BoolVc,
+        is_rendering: BoolVc,
         ast_path: AstPathVc,
     ) -> Self {
         UrlAssetReference {
             origin,
             request,
-            is_browser,
+            is_rendering,
             ast_path,
         }
         .cell()
@@ -119,10 +120,15 @@ impl CodeGenerateable for UrlAssetReference {
                 // We rewrite the first `new URL()` arguments to be a require() of the chunk
                 // item, which exports the static asset path to the linked file.
                 let id = asset.as_chunk_item(context).id().await?;
-                // In Browser environments, we rewrite the `import.meta.url` to be a
-                // location.origin because it allows us to access files from the
-                // root of the dev server. In node env, the `import.meta.url` already be the correct `file://` URL to load files.
-                let is_browser = *this.is_browser.await?;
+
+                // For rendering environments (CSR and SSR), we rewrite the `import.meta.url` to
+                // be a location.origin because it allows us to access files from the root of
+                // the dev server. It's important that this be rewritten for SSR as well, so
+                // that the client's hydration matches exactly.
+                //
+                // In a non-rendering env, the `import.meta.url` is already the correct `file://` URL
+                // to load files.
+                let is_rendering = *this.is_rendering.await?;
 
                 let ast_path = this.ast_path.await?;
                 visitors.push(
@@ -135,7 +141,7 @@ impl CodeGenerateable for UrlAssetReference {
                                 );
                             }
 
-                            if is_browser {
+                            if is_rendering {
                                 if let Some(ExprOrSpread { box expr, spread: None }) = args.get_mut(1) {
                                     *expr = quote!("location.origin" as Expr);
                                 }
@@ -147,10 +153,14 @@ impl CodeGenerateable for UrlAssetReference {
             ReferencedAsset::OriginalReferenceTypeExternal(request) => {
                 // Handle new URL that points to an external URL
 
-                // In Browser environments, we rewrite the `import.meta.url` to be a
-                // location.origin because it allows us to access files from the
-                // root of the dev server. In node env, the `import.meta.url` already be the correct `file://` URL to load files.
-                let is_browser = *this.is_browser.await?;
+                // For rendering environments (CSR and SSR), we rewrite the `import.meta.url` to
+                // be a location.origin because it allows us to access files from the root of
+                // the dev server. It's important that this be rewritten for SSR as well, so
+                // that the client's hydration matches exactly.
+                //
+                // In a non-rendering env, the `import.meta.url` is already the correct `file://` URL
+                // to load files.
+                let is_rendering = *this.is_rendering.await?;
 
                 let request = request.to_string();
                 let ast_path = this.ast_path.await?;
@@ -161,7 +171,7 @@ impl CodeGenerateable for UrlAssetReference {
                                 *expr = request.as_str().into()
                             }
 
-                            if is_browser {
+                            if is_rendering {
                                 if let Some(ExprOrSpread { box expr, spread: None }) = args.get_mut(1) {
                                     *expr = quote!("location.origin" as Expr);
                                 }
