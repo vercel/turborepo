@@ -306,9 +306,5 @@ func GetClient(ctx context.Context, repoRoot turbopath.AbsoluteSystemPath, logge
 		LogPath:      logPath,
 		TurboVersion: turboVersion,
 	}
-	client, err := c.Connect(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
+	return c.Connect(ctx)
 }
