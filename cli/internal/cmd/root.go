@@ -9,7 +9,6 @@ import (
 	"runtime/trace"
 
 	"github.com/pkg/errors"
-	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/cmd/auth"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/daemon"
@@ -21,21 +20,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/util"
 )
-
-type execOpts struct {
-	heapFile       string
-	cpuProfileFile string
-	traceFile      string
-}
-
-func (eo *execOpts) addFlags(flags *pflag.FlagSet) {
-	// Note that these are relative to the actual CWD, and do not respect the --cwd flag.
-	// This is because a user likely wants to inspect them after execution, and may not immediately
-	// know the repo root, depending on how turbo was invoked.
-	flags.StringVar(&eo.heapFile, "heap", "", "Specify a file to save a pprof heap profile")
-	flags.StringVar(&eo.cpuProfileFile, "cpuprofile", "", "Specify a file to save a cpu profile")
-	flags.StringVar(&eo.traceFile, "trace", "", "Specify a file to save a pprof trace")
-}
 
 func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs turbostate.ParsedArgsFromRust) error {
 	if parsedArgs.Trace != "" {
@@ -63,39 +47,39 @@ func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs turbostate.ParsedA
 	return nil
 }
 
-// RunWithTurboState runs turbo with the CLIExecutionStateFromRust that is passed from the Rust side.
-func RunWithTurboState(state turbostate.CLIExecutionStateFromRust, turboVersion string) int {
+// RunWithArgs runs turbo with the ParsedArgsFromRust that is passed from the Rust side.
+func RunWithArgs(args turbostate.ParsedArgsFromRust, turboVersion string) int {
 	util.InitPrintf()
 	// TODO: replace this with a context
 	signalWatcher := signals.NewWatcher()
-	helper := cmdutil.NewHelper(turboVersion)
+	helper := cmdutil.NewHelper(turboVersion, args)
 	ctx := context.Background()
 
-	err := initializeOutputFiles(helper, state.ParsedArgs)
+	err := initializeOutputFiles(helper, args)
 	if err != nil {
 		fmt.Printf("%v", err)
 		return 1
 	}
-	defer helper.Cleanup(&state.ParsedArgs)
+	defer helper.Cleanup(&args)
 
 	doneCh := make(chan struct{})
 	var execErr error
 	go func() {
-		command := state.ParsedArgs.Command
+		command := args.Command
 		if command.Link != nil {
-			execErr = login.ExecuteLink(helper, &state.ParsedArgs)
+			execErr = login.ExecuteLink(helper, &args)
 		} else if command.Login != nil {
-			execErr = login.ExecuteLogin(ctx, helper, &state.ParsedArgs)
+			execErr = login.ExecuteLogin(ctx, helper, &args)
 		} else if command.Logout != nil {
-			execErr = auth.ExecuteLogout(helper, &state.ParsedArgs)
+			execErr = auth.ExecuteLogout(helper, &args)
 		} else if command.Unlink != nil {
-			execErr = auth.ExecuteUnlink(helper, &state.ParsedArgs)
+			execErr = auth.ExecuteUnlink(helper, &args)
 		} else if command.Daemon != nil {
-			execErr = daemon.ExecuteDaemon(ctx, helper, signalWatcher, &state.ParsedArgs)
+			execErr = daemon.ExecuteDaemon(ctx, helper, signalWatcher, &args)
 		} else if command.Prune != nil {
-			execErr = prune.ExecutePrune(helper, &state.ParsedArgs)
+			execErr = prune.ExecutePrune(helper, &args)
 		} else if command.Run != nil {
-			execErr = run.ExecuteRun(ctx, helper, signalWatcher, &state)
+			execErr = run.ExecuteRun(ctx, helper, signalWatcher, &args)
 		} else {
 			execErr = fmt.Errorf("unknown command: %v", command)
 		}

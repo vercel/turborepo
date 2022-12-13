@@ -22,8 +22,9 @@ import (
 
 var (
 	// ErrFailedToStart is returned when the daemon process cannot be started
-	ErrFailedToStart     = errors.New("daemon could not be started")
-	errVersionMismatch   = errors.New("daemon version does not match client version")
+	ErrFailedToStart = errors.New("daemon could not be started")
+	// ErrVersionMismatch is returned when the daemon process was spawned by a different version than the connecting client
+	ErrVersionMismatch   = errors.New("daemon version does not match client version")
 	errConnectionFailure = errors.New("could not connect to daemon")
 	// ErrTooManyAttempts is returned when the client fails to connect too many times
 	ErrTooManyAttempts = errors.New("reached maximum number of attempts contacting daemon")
@@ -38,6 +39,7 @@ var (
 type Opts struct {
 	ServerTimeout time.Duration
 	DontStart     bool // if true, don't attempt to start the daemon
+	DontKill      bool // if true, don't attempt to kill the daemon
 }
 
 // Client represents a connection to the daemon process
@@ -237,13 +239,19 @@ func (c *Connector) connectInternal(ctx context.Context) (*Client, error) {
 		if err := c.sendHello(ctx, client); err == nil {
 			// We connected and negotiated a version, we're all set
 			return client, nil
-		} else if errors.Is(err, errVersionMismatch) {
+		} else if errors.Is(err, ErrVersionMismatch) {
+			// We don't want to knock down a perfectly fine daemon in a status check.
+			if c.Opts.DontKill {
+				return nil, err
+			}
+
 			// We now know we aren't going to return this client,
 			// but killLiveServer still needs it to send the Shutdown request.
 			// killLiveServer will close the client when it is done with it.
 			if err := c.killLiveServer(ctx, client, serverPid); err != nil {
 				return nil, err
 			}
+			// Loops back around and tries again.
 		} else if errors.Is(err, errConnectionFailure) {
 			// close the client, see if we can kill the stale daemon
 			_ = client.Close()
@@ -321,7 +329,7 @@ func (c *Connector) sendHello(ctx context.Context, client turbodprotocol.TurbodC
 	case codes.OK:
 		return nil
 	case codes.FailedPrecondition:
-		return errVersionMismatch
+		return ErrVersionMismatch
 	case codes.Unavailable:
 		return errConnectionFailure
 	default:
