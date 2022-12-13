@@ -551,6 +551,11 @@
 <span id="551">551</span>
 <span id="552">552</span>
 <span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
+<span id="556">556</span>
+<span id="557">557</span>
+<span id="558">558</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::{indexset, IndexMap, IndexSet};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -579,7 +584,7 @@
 <span class="attr">#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 </span><span class="kw">pub enum </span>FontWeights {
     Variable,
-    Fixed(IndexSet&lt;String&gt;),
+    Fixed(IndexSet&lt;u16&gt;),
 }
 
 <span class="attr">#[derive(Debug, Deserialize)]
@@ -617,7 +622,7 @@
     </span><span class="kw">let </span>font_family = request.import.replace(<span class="string">&#39;_&#39;</span>, <span class="string">&quot; &quot;</span>);
     <span class="kw">let </span>font_data = data.get(<span class="kw-2">&amp;</span>font_family).context(<span class="string">&quot;Unknown font&quot;</span>)<span class="question-mark">?</span>;
 
-    <span class="kw">let </span>requested_weights = argument
+    <span class="kw">let </span>requested_weights: IndexSet&lt;String&gt; = argument
         .and_then(|argument| {
             argument.weight.as_ref().map(|w| <span class="kw">match </span>w {
                 OneOrManyStrings::One(one) =&gt; <span class="macro">indexset! </span>{one.to_owned()},
@@ -667,7 +672,12 @@
             }
         }
 
-        FontWeights::Fixed(requested_weights)
+        <span class="kw">let </span><span class="kw-2">mut </span>weights = <span class="macro">indexset! </span>{};
+        <span class="kw">for </span>weight <span class="kw">in </span>requested_weights {
+            weights.insert(weight.parse()<span class="question-mark">?</span>);
+        }
+
+        FontWeights::Fixed(weights)
     };
 
     <span class="kw">if </span>styles.is_empty() {

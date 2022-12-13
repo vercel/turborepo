@@ -453,6 +453,7 @@
 <span id="453">453</span>
 <span id="454">454</span>
 <span id="455">455</span>
+<span id="456">456</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
@@ -549,8 +550,9 @@
                 variable_axes: <span class="prelude-val">Some</span>(variable_axes),
             })
         }
+
         FontWeights::Fixed(weights) =&gt; <span class="prelude-val">Ok</span>(FontAxes {
-            wght: weights.clone(),
+            wght: IndexSet::from_iter(weights.iter().map(|w| w.to_string())),
             ital,
             variable_axes: <span class="prelude-val">None</span>,
         }),

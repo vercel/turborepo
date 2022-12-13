@@ -79,6 +79,9 @@
 <span id="79">79</span>
 <span id="80">80</span>
 <span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ops::Deref;
 
 <span class="kw">use </span>anyhow::Result;
@@ -96,6 +99,9 @@
         <span class="self">Self</span>::cell(<span class="string">&quot;&quot;</span>.to_string())
     }
 }
+
+<span class="attr">#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>OptionU16(<span class="prelude-ty">Option</span>&lt;u16&gt;);
 
 <span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">pub struct </span>U64(u64);
