@@ -114,9 +114,9 @@ pub struct Verbosity {
     pub v: u8,
 }
 
-impl Into<u8> for Verbosity {
-    fn into(self) -> u8 {
-        let Self { verbosity, v } = self;
+impl From<Verbosity> for u8 {
+    fn from(val: Verbosity) -> Self {
+        let Verbosity { verbosity, v } = val;
         verbosity.unwrap_or(v)
     }
 }
