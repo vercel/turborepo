@@ -2221,7 +2221,6 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool {
-        return true;
         let mut clear_dependencies = None;
         let TaskState {
             ref mut state_type,
