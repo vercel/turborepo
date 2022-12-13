@@ -115,6 +115,24 @@ impl CodeGenerateable for UrlAssetReference {
 
         let referenced_asset = self_vc.get_referenced_asset().await?;
 
+        fn warn_unsupported_env(this: &UrlAssetReference) {
+            CodeGenerationIssue {
+                severity: IssueSeverity::Error.into(),
+                title: StringVc::cell(
+                    "new URL(…) not implemented for this environment".to_string(),
+                ),
+                message: StringVc::cell(
+                    "new URL(…) is only currently supported for rendering environments like \
+                     Client-Side or Server-Side Rendering."
+                        .to_string(),
+                ),
+                path: this.origin.origin_path(),
+            }
+            .cell()
+            .as_issue()
+            .emit();
+        }
+
         match &*referenced_asset {
             ReferencedAsset::Some(asset) => {
                 // We rewrite the first `new URL()` arguments to be a require() of the chunk
@@ -131,6 +149,11 @@ impl CodeGenerateable for UrlAssetReference {
                 let is_rendering = *this.is_rendering.await?;
 
                 let ast_path = this.ast_path.await?;
+
+                if !is_rendering {
+                    warn_unsupported_env(&this);
+                }
+
                 visitors.push(
                     create_visitor!(ast_path, visit_mut_expr(new_expr: &mut Expr) {
                         if let Expr::New(NewExpr { args: Some(args), .. }) = new_expr {
@@ -141,6 +164,7 @@ impl CodeGenerateable for UrlAssetReference {
                                 );
                             }
 
+                            // TODO: Fix non-rendering
                             if is_rendering {
                                 if let Some(ExprOrSpread { box expr, spread: None }) = args.get_mut(1) {
                                     *expr = quote!("location.origin" as Expr);
@@ -162,6 +186,10 @@ impl CodeGenerateable for UrlAssetReference {
                 // to load files.
                 let is_rendering = *this.is_rendering.await?;
 
+                if !is_rendering {
+                    warn_unsupported_env(&this);
+                }
+
                 let request = request.to_string();
                 let ast_path = this.ast_path.await?;
                 visitors.push(
@@ -171,6 +199,7 @@ impl CodeGenerateable for UrlAssetReference {
                                 *expr = request.as_str().into()
                             }
 
+                            // TODO: Fix non-rendering
                             if is_rendering {
                                 if let Some(ExprOrSpread { box expr, spread: None }) = args.get_mut(1) {
                                     *expr = quote!("location.origin" as Expr);
