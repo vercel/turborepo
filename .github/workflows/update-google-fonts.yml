@@ -11,7 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: node ./scripts/fetch-google-font-data.js > crates/next-core/src/next_font_google/__generated__/font-data.json
+      - uses: ./.github/actions/setup-node
+      - run: node --experimental-fetch ./scripts/fetch-google-font-data.js > crates/next-core/src/next_font_google/__generated__/font-data.json
       - uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: Update Google font-data.json (${{ github.sha }})

@@ -1,4 +1,8 @@
-use std::{env, path::PathBuf, process::Command};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 fn main() {
     let is_release = matches!(env::var("PROFILE"), Ok(profile) if profile == "release");
@@ -22,9 +26,13 @@ fn main() {
         .generate()
         .expect("Unable to generate bindings");
 
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let out_path = Path::new(&out_dir).join("bindings.rs");
+
     bindings
-        .write_to_file("src/ffi.rs")
+        .write_to_file(out_path)
         .expect("Couldn't write bindings!");
+
     if target.os == build_target::Os::MacOs {
         println!("cargo:rustc-link-lib=framework=cocoa");
         println!("cargo:rustc-link-lib=framework=security");

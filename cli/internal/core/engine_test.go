@@ -356,6 +356,53 @@ func TestDependOnMissingRootTask(t *testing.T) {
 	}
 }
 
+func TestDependOnMultiplePackageTasks(t *testing.T) {
+	graph := &dag.AcyclicGraph{}
+	graph.Add("app1")
+	graph.Add("libA")
+	graph.Connect(dag.BasicEdge("app1", "libA"))
+
+	p := NewEngine(graph)
+	dependOnBuild := make(util.Set)
+	dependOnBuild.Add("build")
+
+	p.AddTask(&Task{
+		Name:     "build",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	p.AddTask(&Task{
+		Name:     "compile",
+		TopoDeps: dependOnBuild,
+		Deps:     make(util.Set),
+	})
+	err := p.AddDep("app1#build", "libA#build")
+	assert.NilError(t, err, "AddDep")
+
+	err = p.AddDep("app1#compile", "libA#build")
+	assert.NilError(t, err, "AddDep")
+
+	err = p.Prepare(&EngineBuildingOptions{
+		Packages:  []string{"app1"},
+		TaskNames: []string{"build"},
+	})
+	assert.NilError(t, err, "Prepare")
+
+	actual := strings.TrimSpace(p.TaskGraph.String())
+	expected := strings.TrimSpace(`
+app1#build
+  libA#build
+app1#compile
+  libA#build
+libA#build
+  app1#build
+  app1#compile`)
+	expected = strings.TrimSpace(expected)
+	if actual != expected {
+		t.Errorf("task graph got:\n%v\nwant:\n%v", actual, expected)
+	}
+}
+
 func TestDependOnUnenabledRootTask(t *testing.T) {
 	graph := &dag.AcyclicGraph{}
 	graph.Add("app1")

@@ -2,8 +2,6 @@
 // Only includes generating the font-data.json, as TypeScript typings are maintained in the `next` npm package in the Next.js repo.
 // This script writes the single file to stdout instead of directly to disk.
 
-const fetch = require("node-fetch");
-
 (async () => {
   const { familyMetadataList } = await fetch(
     "https://fonts.google.com/metadata/fonts"
