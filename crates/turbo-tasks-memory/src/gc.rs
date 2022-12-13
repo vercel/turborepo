@@ -21,11 +21,6 @@ pub enum GcPriority {
     InactiveEmptyUnusedCells {
         compute_duration: SmallDuration<10_000>,
     },
-    /// Unload cells that are currently not read by any task. This might cause
-    /// the task to recompute when these cells are read.
-    EmptyUnusedCells {
-        compute_duration: SmallDuration<10_000>,
-    },
     /// Unload the whole task. Only available for inactive tasks.
     InactiveUnload {
         /// The age of the task. Stored as 2^x seconds to
@@ -34,6 +29,11 @@ pub enum GcPriority {
         /// Aggregated recompute time. Stored as 2^x milliseconds to bucket
         /// tasks and avoid frequent revalidation.
         total_compute_duration: u8,
+    },
+    /// Unload cells that are currently not read by any task. This might cause
+    /// the task to recompute when these cells are read.
+    EmptyUnusedCells {
+        compute_duration: SmallDuration<10_000>,
     },
     /// Unload all cells, and continue tracking them valueless. This might cause
     /// the task and dependent tasks to recompute when these cells are read.
@@ -172,7 +172,7 @@ impl GcQueue {
         factor: u8,
         mut execute: impl FnMut(TaskId, GcPriority, GcPriority) -> Option<GcPriority>,
     ) -> Option<(GcPriority, usize)> {
-        let jobs = self.queue.pop_factor(factor, 100000);
+        let jobs = self.queue.pop_factor(factor, 1000000);
         if jobs.is_empty() {
             return None;
         }
