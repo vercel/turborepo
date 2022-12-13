@@ -1,8 +1,15 @@
-import type { NextPage } from "next";
 import Head from "next/head";
 import Image from "next/image";
+import { useEffect } from "react";
+import { Deferred } from "@turbo/pack-test-harness/deferred";
 
-const Home: NextPage = () => {
+let testResult = new Deferred();
+
+const Home = () => {
+  useEffect(() => {
+    // Only run on client
+    import("@turbo/pack-test-harness").then(runTests);
+  });
   return (
     <div className="flex min-h-screen flex-col items-center justify-center py-2">
       <Head>
@@ -84,3 +91,16 @@ const Home: NextPage = () => {
 };
 
 export default Home;
+
+globalThis.waitForTests = function () {
+  return testResult.promise;
+};
+
+function runTests() {
+  console.log(document.querySelectorAll("footer"));
+  it("it should apply tailwind styles", function () {
+    const footer = document.querySelector("footer");
+    expect(footer.style.justifyItems).toBe("center");
+  });
+  testResult.resolve(__jest__.run());
+}
