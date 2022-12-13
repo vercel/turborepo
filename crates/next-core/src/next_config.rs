@@ -123,7 +123,7 @@ impl NextConfigLoaderVc {
 
     #[turbo_tasks::function]
     pub async fn load_value(self) -> Result<NextConfigValueVc> {
-        let val = self.load().await?;
+        let val = self.load("next.config".to_owned()).await?;
         match &*val {
             JavaScriptValue::Value(val) => {
                 let next_config: NextConfig = serde_json::from_reader(val.read())?;

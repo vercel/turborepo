@@ -447,7 +447,7 @@ enum RenderProxyIncomingMessage {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum EvalJavaScriptOutgoingMessage {
-    LoadNextConfig { path: String },
+    LoadConfig { path: String, config_type: String },
 }
 
 #[derive(Deserialize)]

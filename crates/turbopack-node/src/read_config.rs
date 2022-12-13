@@ -38,7 +38,7 @@ pub trait JavaScriptConfig {
     fn chunking_context(&self) -> ChunkingContextVc;
     fn intermediate_output_path(&self) -> FileSystemPathVc;
 
-    async fn load(&self) -> Result<JavaScriptValueVc> {
+    async fn load(&self, config_type: String) -> Result<JavaScriptValueVc> {
         if let (Some(cwd), Some(entrypoint)) = (
             to_sys_path(self.intermediate_output_path()).await?,
             to_sys_path(self.intermediate_output_path().join("read-config.js")).await?,
@@ -55,11 +55,12 @@ pub trait JavaScriptConfig {
             let mut operation = pool.operation().await?;
             let output = eval_js_operation(
                 &mut operation,
-                EvalJavaScriptOutgoingMessage::LoadNextConfig {
+                EvalJavaScriptOutgoingMessage::LoadConfig {
                     path: to_sys_path(self.path())
                         .await?
                         .and_then(|p| p.to_str().map(|s| s.to_string()))
                         .ok_or_else(|| anyhow!("Invalid config path"))?,
+                    config_type,
                 },
             )
             .await?;
