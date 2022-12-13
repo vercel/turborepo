@@ -273,6 +273,18 @@
 <span id="273">273</span>
 <span id="274">274</span>
 <span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>indoc::formatdoc;
@@ -281,6 +293,7 @@
 <span class="kw">use </span>turbo_tasks_fetch::fetch;
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
+    issue::IssueSeverity,
     resolve::{
         options::{
             ImportMapResult, ImportMapResultVc, ImportMapping, ImportMappingReplacement,
@@ -418,10 +431,10 @@
 
         <span class="kw">let </span>options = font_options_from_query_map(<span class="kw-2">*</span>query);
         <span class="kw">let </span>stylesheet_url = get_stylesheet_url_from_options(options);
+        <span class="kw">let </span>css_virtual_path = attached_next_js_package_path(<span class="self">self</span>.project_path)
+            .join(<span class="string">&quot;internal/font/google/cssmodule.module.css&quot;</span>);
 
-        <span class="comment">// TODO(WEB-274): Handle this failing (e.g. connection issues). This should be
-        // an Issue.
-        </span><span class="kw">let </span>stylesheet_res = fetch(
+        <span class="kw">let </span>stylesheet_res = fetch(
             stylesheet_url,
             OptionStringVc::cell(<span class="prelude-val">Some</span>(
                 <span class="string">&quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like \
@@ -431,17 +444,28 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// TODO(WEB-274): Emit an issue instead
-        </span><span class="kw">if </span>stylesheet_res.status &gt;= <span class="number">400 </span>{
-            <span class="macro">bail!</span>(<span class="string">&quot;Expected a successful response for Google fonts stylesheet&quot;</span>);
-        }
+        <span class="kw">let </span>stylesheet = <span class="kw">match </span><span class="kw-2">&amp;*</span>stylesheet_res {
+            <span class="prelude-val">Ok</span>(r) =&gt; <span class="prelude-val">Some</span>(r.<span class="kw">await</span><span class="question-mark">?</span>.body.to_string().<span class="kw">await</span><span class="question-mark">?</span>.clone()),
+            <span class="prelude-val">Err</span>(err) =&gt; {
+                <span class="comment">// Inform the user of the failure to retreive the stylesheet, but don&#39;t
+                // propagate this error. We don&#39;t want e.g. offline connections to prevent page
+                // renders during development. During production builds, however, this error
+                // should propagate.
+                //
+                // TODO(WEB-283): Use fallback in dev in this case
+                // TODO(WEB-293): Fail production builds (not dev) in this case
+                </span>err.to_issue(IssueSeverity::Warning.into(), css_virtual_path)
+                    .as_issue()
+                    .emit();
 
-        <span class="kw">let </span>stylesheet = <span class="kw-2">&amp;*</span>stylesheet_res.body.to_string().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="prelude-val">None
+            </span>}
+        };
+
         <span class="kw">let </span>properties = get_font_css_properties(options).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>css_asset = VirtualAssetVc::new(
-            attached_next_js_package_path(<span class="self">self</span>.project_path)
-                .join(<span class="string">&quot;internal/font/google/cssmodule.module.css&quot;</span>),
+            css_virtual_path,
             FileContent::Content(
                 <span class="macro">formatdoc!</span>(
                     <span class="string">r#&quot;
@@ -452,7 +476,7 @@
                             {}{}
                         }}
                         &quot;#</span>,
-                    stylesheet,
+                    stylesheet.unwrap_or_else(|| <span class="string">&quot;&quot;</span>.to_owned()),
                     properties.font_family.<span class="kw">await</span><span class="question-mark">?</span>,
                     properties
                         .weight
