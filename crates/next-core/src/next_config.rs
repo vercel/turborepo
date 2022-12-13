@@ -140,21 +140,21 @@ impl NextConfigLoaderVc {
 impl JavaScriptConfig for NextConfigLoader {
     #[turbo_tasks::function]
     fn path(&self) -> FileSystemPathVc {
-        self.path.clone()
+        self.path
     }
 
     #[turbo_tasks::function]
     fn entry(&self) -> EcmascriptModuleAssetVc {
-        self.entry_module.clone()
+        self.entry_module
     }
 
     #[turbo_tasks::function]
     fn chunking_context(&self) -> ChunkingContextVc {
-        self.chunking_context.clone()
+        self.chunking_context
     }
 
     #[turbo_tasks::function]
     fn intermediate_output_path(&self) -> FileSystemPathVc {
-        self.intermediate_output_path.clone()
+        self.intermediate_output_path
     }
 }
