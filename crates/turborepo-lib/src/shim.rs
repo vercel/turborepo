@@ -221,8 +221,12 @@ impl RepoState {
     }
 
     fn spawn_local_turbo(&self, local_turbo_path: &Path, mut shim_args: ShimArgs) -> Result<i32> {
-        let cwd = self.root.canonicalize()?;
+        println!(
+            "Running local turbo binary in {}\n",
+            local_turbo_path.display()
+        );
 
+        let cwd = self.root.canonicalize()?;
         let mut raw_args: Vec<_> = if self.local_turbo_supports_skip_infer()? {
             vec!["--skip-infer".to_string()]
         } else {
