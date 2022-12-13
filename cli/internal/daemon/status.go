@@ -3,10 +3,10 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/daemon/connector"
 	"github.com/vercel/turbo/cli/internal/daemonclient"
@@ -34,6 +34,9 @@ func (l *lifecycle) status(ctx context.Context, outputJSON bool) error {
 		// If the daemon is not running, the status is that it's not running.
 		// We don't want to start it just to check the status.
 		DontStart: true,
+		// If the daemon is a different version simply report that.
+		// Don't attempt to kill the existing daemon.
+		DontKill: true,
 	})
 	if err != nil {
 		return l.reportStatusError(err, outputJSON)
@@ -60,22 +63,27 @@ func (l *lifecycle) status(ctx context.Context, outputJSON bool) error {
 }
 
 func (l *lifecycle) reportStatusError(err error, outputJSON bool) error {
-	var msg string
+	// Determine the unwrapped error message that we want to render.
+	var toRender error
 	if errors.Is(err, connector.ErrDaemonNotRunning) {
-		msg = "the daemon is not running"
+		toRender = connector.ErrDaemonNotRunning
+	} else if errors.Is(err, connector.ErrVersionMismatch) {
+		toRender = connector.ErrVersionMismatch
 	} else {
-		msg = err.Error()
+		toRender = err
 	}
+
+	// Spit it out as plain text or JSON.
 	if outputJSON {
-		rendered, err := json.MarshalIndent(map[string]string{
-			"error": msg,
+		rendered, jsonErr := json.MarshalIndent(map[string]string{
+			"error": toRender.Error(),
 		}, "", "  ")
-		if err != nil {
-			return err
+		if jsonErr != nil {
+			return jsonErr
 		}
 		l.base.UI.Output(string(rendered))
 	} else {
-		l.base.UI.Output(fmt.Sprintf("Failed to contact daemon: %v", msg))
+		l.base.UI.Output(fmt.Sprintf("Failed to contact daemon: %v", toRender.Error()))
 	}
 	return nil
 }
