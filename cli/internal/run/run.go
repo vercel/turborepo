@@ -154,6 +154,7 @@ type run struct {
 func (r *run) run(ctx gocontext.Context, targets []string) error {
 	startAt := time.Now()
 	packageJSONPath := r.base.RepoRoot.UntypedJoin("package.json")
+
 	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath)
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)

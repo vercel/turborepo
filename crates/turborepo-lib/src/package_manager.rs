@@ -16,6 +16,16 @@ struct PackageJsonWorkspaces {
     pub workspaces: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct CargoTomlWorkspace {
+    pub members: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CargoToml {
+    pub workspace: Option<CargoTomlWorkspace>,
+}
+
 pub enum PackageManager {
     #[allow(dead_code)]
     Berry,
@@ -25,6 +35,7 @@ pub enum PackageManager {
     Pnpm6,
     #[allow(dead_code)]
     Yarn,
+    Cargo,
 }
 
 #[derive(Debug)]
@@ -78,6 +89,14 @@ impl PackageManager {
                 } else {
                     package_json.workspaces
                 }
+            }
+            PackageManager::Cargo => {
+                let cargo_toml_text = fs::read_to_string(root_path.join("Cargo.toml"))?;
+                let cargo_toml: CargoToml = toml::from_str(&cargo_toml_text)?;
+
+                cargo_toml
+                    .workspace
+                    .map_or(Vec::new(), |workspace| workspace.members)
             }
         };
 

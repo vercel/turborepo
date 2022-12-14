@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     env,
     env::{current_dir, current_exe},
     fs::{self, File},
@@ -102,9 +103,20 @@ pub enum RepoMode {
     MultiPackage,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct TurboConfig {
+    pub pipeline: HashMap<String, TaskDefinition>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct TaskDefinition {}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct PackageJson {
+pub struct PackageJson {
     version: String,
+    pub scripts: Vec<String>,
+    #[serde(rename = "turbo")]
+    pub legacy_turbo_config: Option<TurboConfig>,
 }
 
 #[derive(Debug, Clone, Serialize)]
