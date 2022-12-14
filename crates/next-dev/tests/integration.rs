@@ -217,11 +217,18 @@ async fn run_debug_browser(addr: SocketAddr) -> Result<()> {
 
 async fn run_test_browser(addr: SocketAddr) -> Result<JestRunResult> {
     let (browser, _) = create_browser(false).await?;
-    let page = browser
-        .new_page(format!("http://{}", addr))
-        .await
-        .context("Failed to create new browser page")?;
-    page.wait_for_navigation().await?;
+
+    // `browser.new_page()` opens a tab, navigates to the destination, and waits for
+    // the page to load. chromiumoxide/Chrome DevTools Protocol has been flakey,
+    // returning `ChannelSendError`s (WEB-259). Retry if necessary.
+    let page = retry_async(
+        (),
+        |_| browser.new_page(format!("http://{}", addr)),
+        5,
+        Duration::from_millis(100),
+    )
+    .await
+    .context("Failed to create new browser page")?;
 
     let value = page.evaluate("globalThis.waitForTests?.() ?? __jest__.run()");
     Ok(value.await?.into_value()?)
