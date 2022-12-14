@@ -79,9 +79,9 @@ impl ShimArgs {
 
     // returns true if any flags result in pure json output to stdout
     pub fn has_json_flags(&self) -> bool {
-        self.remaining_turbo_args
-            .iter()
-            .any(|arg| arg == "--json" || arg == "--dry=json" || arg == "--graph")
+        self.remaining_turbo_args.iter().any(|arg| {
+            ["--json", "json", "--dry=json", "--graph", "--dry-run=json"].contains(&arg.as_str())
+        })
     }
 }
 
