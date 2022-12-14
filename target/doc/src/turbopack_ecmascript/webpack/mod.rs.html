@@ -182,13 +182,16 @@
 <span id="182">182</span>
 <span id="183">183</span>
 <span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::ecma::ast::Lit;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
+    reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{origin::ResolveOriginVc, parse::RequestVc, resolve, ResolveResult, ResolveResultVc},
     source_asset::SourceAssetVc,
 };
@@ -334,7 +337,8 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>WebpackRuntimeAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
-        <span class="kw">let </span>options = <span class="self">self</span>.origin.resolve_options();
+        <span class="kw">let </span>ty = Value::new(ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined));
+        <span class="kw">let </span>options = <span class="self">self</span>.origin.resolve_options(ty.clone());
 
         <span class="kw">let </span>options = apply_cjs_specific_options(options);
 

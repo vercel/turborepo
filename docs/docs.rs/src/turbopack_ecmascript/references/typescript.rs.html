@@ -143,11 +143,16 @@
 <span id="143">143</span>
 <span id="144">144</span>
 <span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     reference::{AssetReference, AssetReferenceVc},
+    reference_type::{ReferenceType, TypeScriptReferenceSubType},
     resolve::{
         origin::ResolveOriginVc, parse::RequestVc, pattern::QueryMapVc, ResolveResult,
         ResolveResultVc,
@@ -224,9 +229,12 @@
                 .<span class="kw">await</span><span class="question-mark">?
             </span>{
                 ResolveResult::Single(
-                    <span class="self">self</span>.origin
-                        .context()
-                        .process(SourceAssetVc::new(<span class="kw-2">*</span>path).into()),
+                    <span class="self">self</span>.origin.context().process(
+                        SourceAssetVc::new(<span class="kw-2">*</span>path).into(),
+                        Value::new(ReferenceType::TypeScript(
+                            TypeScriptReferenceSubType::Undefined,
+                        )),
+                    ),
                     Vec::new(),
                 )
                 .into()

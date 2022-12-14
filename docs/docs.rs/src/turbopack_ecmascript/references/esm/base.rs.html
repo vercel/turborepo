@@ -279,6 +279,19 @@
 <span id="279">279</span>
 <span id="280">280</span>
 <span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>swc_core::{
@@ -333,6 +346,36 @@
     }
 }
 
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ReferencedAssetVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>from_resolve_result(
+        resolve_result: ResolveResultVc,
+        request: RequestVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">match </span><span class="kw-2">&amp;*</span>resolve_result.<span class="kw">await</span><span class="question-mark">? </span>{
+            ResolveResult::Special(SpecialType::OriginalReferenceExternal, <span class="kw">_</span>) =&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(request) = request.<span class="kw">await</span><span class="question-mark">?</span>.request() {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAsset::OriginalReferenceTypeExternal(request).cell());
+                } <span class="kw">else </span>{
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAssetVc::cell(ReferencedAsset::None));
+                }
+            }
+            ResolveResult::Special(SpecialType::OriginalReferenceTypeExternal(request), <span class="kw">_</span>) =&gt; {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAsset::OriginalReferenceTypeExternal(request.clone()).cell());
+            }
+            <span class="kw">_ </span>=&gt; {}
+        }
+        <span class="kw">let </span>assets = resolve_result.primary_assets();
+        <span class="kw">for </span>asset <span class="kw">in </span>assets.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAssetVc::cell(ReferencedAsset::Some(placeable)));
+            }
+        }
+        <span class="prelude-val">Ok</span>(ReferencedAssetVc::cell(ReferencedAsset::None))
+    }
+}
+
 <span class="attr">#[turbo_tasks::value]
 #[derive(Hash, Debug)]
 </span><span class="kw">pub struct </span>EsmAssetReference {
@@ -356,27 +399,10 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>get_referenced_asset(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ReferencedAssetVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>resolve_result = esm_resolve(this.get_origin(), this.request);
-        <span class="kw">match </span><span class="kw-2">&amp;*</span>resolve_result.<span class="kw">await</span><span class="question-mark">? </span>{
-            ResolveResult::Special(SpecialType::OriginalReferenceExternal, <span class="kw">_</span>) =&gt; {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(request) = this.request.<span class="kw">await</span><span class="question-mark">?</span>.request() {
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAsset::OriginalReferenceTypeExternal(request).cell());
-                } <span class="kw">else </span>{
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAssetVc::cell(ReferencedAsset::None));
-                }
-            }
-            ResolveResult::Special(SpecialType::OriginalReferenceTypeExternal(request), <span class="kw">_</span>) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAsset::OriginalReferenceTypeExternal(request.clone()).cell());
-            }
-            <span class="kw">_ </span>=&gt; {}
-        }
-        <span class="kw">let </span>assets = resolve_result.primary_assets();
-        <span class="kw">for </span>asset <span class="kw">in </span>assets.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAssetVc::cell(ReferencedAsset::Some(placeable)));
-            }
-        }
-        <span class="prelude-val">Ok</span>(ReferencedAssetVc::cell(ReferencedAsset::None))
+        <span class="prelude-val">Ok</span>(ReferencedAssetVc::from_resolve_result(
+            esm_resolve(this.get_origin(), this.request),
+            this.request,
+        ))
     }
 
     <span class="attr">#[turbo_tasks::function]

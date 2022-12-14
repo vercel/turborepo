@@ -258,6 +258,11 @@
 <span id="258">258</span>
 <span id="259">259</span>
 <span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
@@ -269,10 +274,11 @@
         },
     },
 };
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc},
     reference::{AssetReference, AssetReferenceVc},
+    reference_type::CssReferenceSubType,
     resolve::{
         origin::ResolveOriginVc,
         parse::{Request, RequestVc},
@@ -473,7 +479,11 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>ImportAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        css_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request)
+        css_resolve(
+            <span class="self">self</span>.origin,
+            <span class="self">self</span>.request,
+            Value::new(CssReferenceSubType::AtImport),
+        )
     }
 }
 

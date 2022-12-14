@@ -262,6 +262,18 @@
 <span id="262">262</span>
 <span id="263">263</span>
 <span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     process::{Command, Stdio},
     str::FromStr,
@@ -430,6 +442,18 @@
             | ExecutionEnvironment::NodeJsLambda(env) =&gt; env.<span class="kw">await</span><span class="question-mark">?</span>.cwd,
             <span class="kw">_ </span>=&gt; OptionStringVc::cell(<span class="prelude-val">None</span>),
         })
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>is_rendering(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;BoolVc&gt; {
+        <span class="kw">let </span>env = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(BoolVc::cell(<span class="macro">matches!</span>(
+            env.intention,
+            EnvironmentIntention::Prerendering
+                | EnvironmentIntention::ServerRendering
+                | EnvironmentIntention::StaticRendering
+                | EnvironmentIntention::Client
+        )))
     }
 }
 

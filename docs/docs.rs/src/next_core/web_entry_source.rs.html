@@ -88,6 +88,8 @@
 <span id="88">88</span>
 <span id="89">89</span>
 <span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{TryJoinIterExt, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
@@ -95,6 +97,7 @@
 <span class="kw">use </span>turbopack::ecmascript::EcmascriptModuleAssetVc;
 <span class="kw">use </span>turbopack_core::{
     chunk::{ChunkGroupVc, ChunkableAssetVc},
+    reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{origin::PlainResolveOriginVc, parse::RequestVc},
 };
 <span class="kw">use </span>turbopack_dev_server::{
@@ -132,8 +135,9 @@
     <span class="kw">let </span>entries = entry_requests
         .into_iter()
         .map(|request| <span class="kw">async move </span>{
+            <span class="kw">let </span>ty = Value::new(ReferenceType::Entry(EntryReferenceSubType::Web));
             <span class="prelude-val">Ok</span>(origin
-                .resolve_asset(request, origin.resolve_options())
+                .resolve_asset(request, origin.resolve_options(ty.clone()), ty)
                 .primary_assets()
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.first()

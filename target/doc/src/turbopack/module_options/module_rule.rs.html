@@ -124,12 +124,29 @@
 <span id="124">124</span>
 <span id="125">125</span>
 <span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{primitives::Regex, trace::TraceRawVcs};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathReadRef;
+<span class="kw">use </span>turbopack_core::reference_type::ReferenceType;
 <span class="kw">use </span>turbopack_css::CssInputTransformsVc;
 <span class="kw">use </span>turbopack_ecmascript::EcmascriptInputTransformsVc;
 
@@ -155,8 +172,8 @@
 }
 
 <span class="kw">impl </span>ModuleRule {
-    <span class="kw">pub fn </span>matches(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>FileSystemPathReadRef) -&gt; bool {
-        <span class="self">self</span>.condition.matches(path)
+    <span class="kw">pub fn </span>matches(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>FileSystemPathReadRef, reference_type: <span class="kw-2">&amp;</span>ReferenceType) -&gt; bool {
+        <span class="self">self</span>.condition.matches(path, reference_type)
     }
 }
 
@@ -164,6 +181,8 @@
 </span><span class="kw">pub enum </span>ModuleRuleCondition {
     All(Vec&lt;ModuleRuleCondition&gt;),
     Any(Vec&lt;ModuleRuleCondition&gt;),
+    Not(Box&lt;ModuleRuleCondition&gt;),
+    ReferenceType(ReferenceType),
     ResourcePathHasNoExtension,
     ResourcePathEndsWith(String),
     ResourcePathInDirectory(String),
@@ -179,13 +198,23 @@
     <span class="kw">pub fn </span>any(conditions: Vec&lt;ModuleRuleCondition&gt;) -&gt; ModuleRuleCondition {
         ModuleRuleCondition::Any(conditions)
     }
+
+    <span class="attr">#[allow(clippy::should_implement_trait)]
+    </span><span class="kw">pub fn </span>not(condition: ModuleRuleCondition) -&gt; ModuleRuleCondition {
+        ModuleRuleCondition::Not(Box::new(condition))
+    }
 }
 
 <span class="kw">impl </span>ModuleRuleCondition {
-    <span class="kw">pub fn </span>matches(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>FileSystemPathReadRef) -&gt; bool {
+    <span class="kw">pub fn </span>matches(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>FileSystemPathReadRef, reference_type: <span class="kw-2">&amp;</span>ReferenceType) -&gt; bool {
         <span class="kw">match </span><span class="self">self </span>{
-            ModuleRuleCondition::All(conditions) =&gt; conditions.iter().all(|c| c.matches(path)),
-            ModuleRuleCondition::Any(conditions) =&gt; conditions.iter().any(|c| c.matches(path)),
+            ModuleRuleCondition::All(conditions) =&gt; {
+                conditions.iter().all(|c| c.matches(path, reference_type))
+            }
+            ModuleRuleCondition::Any(conditions) =&gt; {
+                conditions.iter().any(|c| c.matches(path, reference_type))
+            }
+            ModuleRuleCondition::Not(condition) =&gt; !condition.matches(path, reference_type),
             ModuleRuleCondition::ResourcePathEndsWith(end) =&gt; path.path.ends_with(end),
             ModuleRuleCondition::ResourcePathHasNoExtension =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(i) = path.path.rfind(<span class="string">&#39;.&#39;</span>) {
@@ -203,6 +232,9 @@
             }
             ModuleRuleCondition::ResourcePathInExactDirectory(parent_path) =&gt; {
                 path.is_inside(parent_path)
+            }
+            ModuleRuleCondition::ReferenceType(condition_ty) =&gt; {
+                condition_ty.includes(reference_type)
             }
             <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">&quot;not implemented yet&quot;</span>),
         }

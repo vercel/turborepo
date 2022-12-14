@@ -584,6 +584,12 @@
 <span id="584">584</span>
 <span id="585">585</span>
 <span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>nft_json;
@@ -790,7 +796,10 @@
     <span class="kw">for </span>entry <span class="kw">in </span>result.results.values() {
         <span class="kw">if let </span>DirectoryEntry::File(path) = entry {
             <span class="kw">let </span>source = SourceAssetVc::new(<span class="kw-2">*</span>path).into();
-            list.push(context.process(source));
+            list.push(context.process(
+                source,
+                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+            ));
         }
     }
     <span class="kw">for </span>result <span class="kw">in </span>result.inner.values() {
@@ -858,7 +867,10 @@
     <span class="kw">for </span>input <span class="kw">in </span>input.iter() {
         <span class="kw">if </span>exact {
             <span class="kw">let </span>source = SourceAssetVc::new(root.join(input)).into();
-            list.push(context.process(source));
+            list.push(context.process(
+                source,
+                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+            ));
         } <span class="kw">else </span>{
             <span class="kw">let </span>glob = GlobVc::new(input);
             add_glob_results(context, root.read_glob(glob, <span class="bool-val">false</span>), <span class="kw-2">&amp;mut </span>list).<span class="kw">await</span><span class="question-mark">?</span>;

@@ -407,6 +407,10 @@
 <span id="407">407</span>
 <span id="408">408</span>
 <span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -421,6 +425,7 @@
     asset::AssetVc,
     chunk::{dev::DevChunkingContextVc, ChunkingContextVc},
     context::AssetContextVc,
+    reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
 };
@@ -575,7 +580,10 @@
     intermediate_output_path: FileSystemPathVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceVc&gt; {
     <span class="kw">let </span>source_asset = SourceAssetVc::new(page_file).into();
-    <span class="kw">let </span>entry_asset = context.process(source_asset);
+    <span class="kw">let </span>entry_asset = context.process(
+        source_asset,
+        Value::new(ReferenceType::Entry(EntryReferenceSubType::Page)),
+    );
 
     <span class="kw">let </span>chunking_context = DevChunkingContextVc::builder(
         context_path,

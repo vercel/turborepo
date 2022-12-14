@@ -156,6 +156,12 @@
 <span id="156">156</span>
 <span id="157">157</span>
 <span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::{
@@ -171,6 +177,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::AssetVc,
     reference::{AssetReferenceVc, AssetReferencesVc},
+    reference_type::{CssReferenceSubType, ReferenceType},
     resolve::{handle_resolve_error, origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
 };
 <span class="kw">use </span>turbopack_swc_utils::emitter::IssueEmitter;
@@ -304,11 +311,16 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub async fn </span>css_resolve(origin: ResolveOriginVc, request: RequestVc) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
-    <span class="kw">let </span>options = origin.resolve_options();
-    <span class="kw">let </span>result = origin.resolve_asset(request, options);
+</span><span class="kw">pub async fn </span>css_resolve(
+    origin: ResolveOriginVc,
+    request: RequestVc,
+    ty: Value&lt;CssReferenceSubType&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
+    <span class="kw">let </span>ty = Value::new(ReferenceType::Css(ty.into_value()));
+    <span class="kw">let </span>options = origin.resolve_options(ty.clone());
+    <span class="kw">let </span>result = origin.resolve_asset(request, options, ty.clone());
 
-    handle_resolve_error(result, <span class="string">&quot;css request&quot;</span>, origin, request, options).<span class="kw">await
+    handle_resolve_error(result, ty, origin, request, options).<span class="kw">await
 </span>}
 
 <span class="comment">// TODO enable serialization

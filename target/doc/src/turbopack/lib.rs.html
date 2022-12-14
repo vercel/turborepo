@@ -567,6 +567,30 @@
 <span id="567">567</span>
 <span id="568">568</span>
 <span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
+<span id="572">572</span>
+<span id="573">573</span>
+<span id="574">574</span>
+<span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(trivial_bounds)]
@@ -605,6 +629,7 @@
     environment::EnvironmentVc,
     issue::{unsupported_module::UnsupportedModuleIssue, Issue, IssueVc},
     reference::all_referenced_assets,
+    reference_type::ReferenceType,
     resolve::{
         options::ResolveOptionsVc,
         origin::PlainResolveOriginVc,
@@ -668,10 +693,15 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>get_module_type(path: FileSystemPathVc, options: ModuleOptionsVc) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleTypeVc&gt; {
+</span><span class="kw">async fn </span>get_module_type(
+    path: FileSystemPathVc,
+    options: ModuleOptionsVc,
+    reference_type: Value&lt;ReferenceType&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleTypeVc&gt; {
+    <span class="kw">let </span>reference_type = reference_type.into_value();
     <span class="kw">let </span><span class="kw-2">mut </span>current_module_type = <span class="prelude-val">None</span>;
     <span class="kw">for </span>rule <span class="kw">in </span>options.<span class="kw">await</span><span class="question-mark">?</span>.rules.iter() {
-        <span class="kw">if </span>rule.matches(<span class="kw-2">&amp;</span>path.<span class="kw">await</span><span class="question-mark">?</span>) {
+        <span class="kw">if </span>rule.matches(<span class="kw-2">&amp;</span>path.<span class="kw">await</span><span class="question-mark">?</span>, <span class="kw-2">&amp;</span>reference_type) {
             <span class="kw">for </span>(<span class="kw">_</span>, effect) <span class="kw">in </span>rule.effects() {
                 <span class="kw">match </span>effect {
                     ModuleRuleEffect::ModuleType(module) =&gt; {
@@ -729,11 +759,15 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>module(source: AssetVc, context: ModuleAssetContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
+</span><span class="kw">async fn </span>module(
+    source: AssetVc,
+    context: ModuleAssetContextVc,
+    reference_type: Value&lt;ReferenceType&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
     <span class="kw">let </span>path = source.path();
     <span class="kw">let </span>options = ModuleOptionsVc::new(path.parent(), context.module_options_context());
 
-    <span class="kw">let </span>current_module_type = get_module_type(path, options).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>current_module_type = get_module_type(path, options, reference_type).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>current_module_type {
         ModuleType::Ecmascript(transforms) =&gt; EcmascriptModuleAssetVc::new(
@@ -857,8 +891,13 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>resolve_options(<span class="kw-2">&amp;</span><span class="self">self</span>, origin_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveOptionsVc&gt; {
-        <span class="prelude-val">Ok</span>(resolve_options(
+    </span><span class="kw">async fn </span>resolve_options(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        origin_path: FileSystemPathVc,
+        _reference_type: Value&lt;ReferenceType&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveOptionsVc&gt; {
+        <span class="comment">// TODO move `apply_commonjs/esm_resolve_options` etc. to here
+        </span><span class="prelude-val">Ok</span>(resolve_options(
             origin_path.parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>,
             <span class="self">self</span>.resolve_options_context,
         ))
@@ -870,13 +909,14 @@
         origin_path: FileSystemPathVc,
         request: RequestVc,
         resolve_options: ResolveOptionsVc,
+        reference_type: Value&lt;ReferenceType&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
         warn_on_unsupported_modules(request, origin_path).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>context_path = origin_path.parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>result = resolve(context_path, request, resolve_options);
-        <span class="kw">let </span>result = self_vc.process_resolve_result(result);
+        <span class="kw">let </span>result = self_vc.process_resolve_result(result, reference_type);
 
         <span class="kw">if </span><span class="kw-2">*</span>self_vc.is_typescript_resolving_enabled().<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">let </span>types_reference = TypescriptTypesAssetReferenceVc::new(
@@ -894,16 +934,24 @@
     </span><span class="kw">async fn </span>process_resolve_result(
         self_vc: ModuleAssetContextVc,
         result: ResolveResultVc,
+        reference_type: Value&lt;ReferenceType&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
         <span class="prelude-val">Ok</span>(result
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.map(|a| self_vc.process(a).resolve(), |i| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(i) })
+            </span>.map(
+                |a| self_vc.process(a, reference_type.clone()).resolve(),
+                |i| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(i) },
+            )
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into())
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>process(self_vc: ModuleAssetContextVc, asset: AssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
+    </span><span class="kw">async fn </span>process(
+        self_vc: ModuleAssetContextVc,
+        asset: AssetVc,
+        reference_type: Value&lt;ReferenceType&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(transition) = this.transition {
             <span class="kw">let </span>asset = transition.process_source(asset);
@@ -918,7 +966,7 @@
                 module_options_context,
                 resolve_options_context,
             );
-            <span class="kw">let </span>m = module(asset, context);
+            <span class="kw">let </span>m = module(asset, context, reference_type);
             <span class="prelude-val">Ok</span>(transition.process_module(m, context))
         } <span class="kw">else </span>{
             <span class="kw">let </span>context = ModuleAssetContextVc::new(
@@ -927,7 +975,7 @@
                 this.module_options_context,
                 this.resolve_options_context,
             );
-            <span class="prelude-val">Ok</span>(module(asset, context))
+            <span class="prelude-val">Ok</span>(module(asset, context, reference_type))
         }
     }
 

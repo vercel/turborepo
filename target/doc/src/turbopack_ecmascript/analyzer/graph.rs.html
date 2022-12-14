@@ -1262,6 +1262,54 @@
 <span id="1262">1262</span>
 <span id="1263">1263</span>
 <span id="1264">1264</span>
+<span id="1265">1265</span>
+<span id="1266">1266</span>
+<span id="1267">1267</span>
+<span id="1268">1268</span>
+<span id="1269">1269</span>
+<span id="1270">1270</span>
+<span id="1271">1271</span>
+<span id="1272">1272</span>
+<span id="1273">1273</span>
+<span id="1274">1274</span>
+<span id="1275">1275</span>
+<span id="1276">1276</span>
+<span id="1277">1277</span>
+<span id="1278">1278</span>
+<span id="1279">1279</span>
+<span id="1280">1280</span>
+<span id="1281">1281</span>
+<span id="1282">1282</span>
+<span id="1283">1283</span>
+<span id="1284">1284</span>
+<span id="1285">1285</span>
+<span id="1286">1286</span>
+<span id="1287">1287</span>
+<span id="1288">1288</span>
+<span id="1289">1289</span>
+<span id="1290">1290</span>
+<span id="1291">1291</span>
+<span id="1292">1292</span>
+<span id="1293">1293</span>
+<span id="1294">1294</span>
+<span id="1295">1295</span>
+<span id="1296">1296</span>
+<span id="1297">1297</span>
+<span id="1298">1298</span>
+<span id="1299">1299</span>
+<span id="1300">1300</span>
+<span id="1301">1301</span>
+<span id="1302">1302</span>
+<span id="1303">1303</span>
+<span id="1304">1304</span>
+<span id="1305">1305</span>
+<span id="1306">1306</span>
+<span id="1307">1307</span>
+<span id="1308">1308</span>
+<span id="1309">1309</span>
+<span id="1310">1310</span>
+<span id="1311">1311</span>
+<span id="1312">1312</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, iter, mem::replace, sync::Arc};
 
 <span class="kw">use </span>swc_core::{
@@ -1307,8 +1355,13 @@
         span: Span,
     },
     ImportMeta {
-        span: Span,
         ast_path: Vec&lt;AstParentKind&gt;,
+        span: Span,
+    },
+    Url {
+        input: JsValue,
+        ast_path: Vec&lt;AstParentKind&gt;,
+        span: Span,
     },
 }
 
@@ -1355,9 +1408,16 @@
                 span: <span class="kw">_</span>,
             } =&gt; {}
             Effect::ImportMeta {
-                span: <span class="kw">_</span>,
                 ast_path: <span class="kw">_</span>,
+                span: <span class="kw">_</span>,
             } =&gt; {}
+            Effect::Url {
+                input,
+                ast_path: <span class="kw">_</span>,
+                span: <span class="kw">_</span>,
+            } =&gt; {
+                input.normalize();
+            }
         }
     }
 }
@@ -1557,7 +1617,8 @@
                 <span class="macro">format!</span>(<span class="string">&quot;*arrow function {}*&quot;</span>, expr.span.lo.<span class="number">0</span>).into(),
                 SyntaxContext::empty(),
             )),
-            Expr::New(..) =&gt; JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;new expression are not supported&quot;</span>),
+
+            Expr::New(..) =&gt; JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;unknown new expression&quot;</span>),
 
             Expr::Seq(e) =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(e) = e.exprs.last() {
@@ -2069,6 +2130,41 @@
             <span class="self">self</span>.check_call_expr_for_effects(n, ast_path);
             n.visit_children_with_path(<span class="self">self</span>, ast_path);
         }
+    }
+
+    <span class="kw">fn </span>visit_new_expr&lt;<span class="lifetime">&#39;ast</span>: <span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;r</span>&gt;(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        new_expr: <span class="kw-2">&amp;</span><span class="lifetime">&#39;ast </span>NewExpr,
+        ast_path: <span class="kw-2">&amp;mut </span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;r</span>&gt;&gt;,
+    ) {
+        <span class="comment">// new URL(&quot;path&quot;, import.meta.url)
+        </span><span class="kw">if let box </span>Expr::Ident(<span class="kw-2">ref </span>callee) = <span class="kw-2">&amp;</span>new_expr.callee {
+            <span class="kw">if </span><span class="kw-2">&amp;*</span>callee.sym == <span class="string">&quot;URL&quot; </span>&amp;&amp; is_unresolved(callee, <span class="self">self</span>.eval_context.unresolved_mark) {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(args) = <span class="kw-2">&amp;</span>new_expr.args {
+                    <span class="kw">if </span>args.len() == <span class="number">2 </span>{
+                        <span class="kw">if let </span>Expr::Member(MemberExpr {
+                            obj:
+                                <span class="kw">box </span>Expr::MetaProp(MetaPropExpr {
+                                    kind: MetaPropKind::ImportMeta,
+                                    ..
+                                }),
+                            prop: MemberProp::Ident(prop),
+                            ..
+                        }) = <span class="kw-2">&amp;*</span>args[<span class="number">1</span>].expr
+                        {
+                            <span class="kw">if </span><span class="kw-2">&amp;*</span>prop.sym == <span class="string">&quot;url&quot; </span>{
+                                <span class="self">self</span>.data.effects.push(Effect::Url {
+                                    input: <span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>args[<span class="number">0</span>].expr),
+                                    ast_path: as_parent_path(ast_path),
+                                    span: new_expr.span(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        new_expr.visit_children_with_path(<span class="self">self</span>, ast_path);
     }
 
     <span class="kw">fn </span>visit_member_expr&lt;<span class="lifetime">&#39;ast</span>: <span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;r</span>&gt;(

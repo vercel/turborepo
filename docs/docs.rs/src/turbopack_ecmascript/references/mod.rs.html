@@ -1908,6 +1908,31 @@
 <span id="1908">1908</span>
 <span id="1909">1909</span>
 <span id="1910">1910</span>
+<span id="1911">1911</span>
+<span id="1912">1912</span>
+<span id="1913">1913</span>
+<span id="1914">1914</span>
+<span id="1915">1915</span>
+<span id="1916">1916</span>
+<span id="1917">1917</span>
+<span id="1918">1918</span>
+<span id="1919">1919</span>
+<span id="1920">1920</span>
+<span id="1921">1921</span>
+<span id="1922">1922</span>
+<span id="1923">1923</span>
+<span id="1924">1924</span>
+<span id="1925">1925</span>
+<span id="1926">1926</span>
+<span id="1927">1927</span>
+<span id="1928">1928</span>
+<span id="1929">1929</span>
+<span id="1930">1930</span>
+<span id="1931">1931</span>
+<span id="1932">1932</span>
+<span id="1933">1933</span>
+<span id="1934">1934</span>
+<span id="1935">1935</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>esm;
@@ -1946,6 +1971,7 @@
     asset::AssetVc,
     environment::EnvironmentVc,
     reference::{AssetReferenceVc, AssetReferencesVc, SourceMapVc},
+    reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
         find_context_file, origin::ResolveOriginVc, parse::RequestVc, pattern::Pattern, resolve,
         FindContextFileResult, ResolveResult,
@@ -1961,7 +1987,7 @@
     cjs::CjsAssetReferenceVc,
     esm::{
         export::EsmExport, EsmAssetReferenceVc, EsmAsyncAssetReferenceVc, EsmExports,
-        EsmModuleItemVc, ImportMetaBindingVc, ImportMetaRefVc,
+        EsmModuleItemVc, ImportMetaBindingVc, ImportMetaRefVc, UrlAssetReferenceVc,
     },
     node::{DirAssetReferenceVc, PackageJsonReferenceVc},
     raw::SourceAssetReferenceVc,
@@ -3082,13 +3108,36 @@
                             }
                         }
                     }
-                    Effect::ImportMeta { span: <span class="kw">_</span>, ast_path } =&gt; {
+                    Effect::ImportMeta { ast_path, span: <span class="kw">_ </span>} =&gt; {
                         <span class="kw">if </span>first_import_meta {
                             first_import_meta = <span class="bool-val">false</span>;
                             analysis.add_code_gen(ImportMetaBindingVc::new(source.path()));
                         }
 
                         analysis.add_code_gen(ImportMetaRefVc::new(AstPathVc::cell(ast_path)));
+                    }
+                    Effect::Url {
+                        input,
+                        ast_path,
+                        span,
+                    } =&gt; {
+                        <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>input);
+                        <span class="kw">if </span>!pat.has_constant_parts() {
+                            handler.span_warn_with_code(
+                                span,
+                                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;new URL({input}, import.meta.url) is very dynamic&quot;</span>),
+                                DiagnosticId::Lint(
+                                    errors::failed_to_analyse::ecmascript::NEW_URL_IMPORT_META
+                                        .to_string(),
+                                ),
+                            )
+                        }
+                        analysis.add_reference(UrlAssetReferenceVc::new(
+                            origin,
+                            RequestVc::parse(Value::new(pat)),
+                            environment.is_rendering(),
+                            AstPathVc::cell(ast_path),
+                        ));
                     }
                 }
             }
@@ -3798,7 +3847,8 @@
     request: RequestVc,
     transforms: EcmascriptInputTransformsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;WebpackRuntimeVc&gt; {
-    <span class="kw">let </span>options = origin.resolve_options();
+    <span class="kw">let </span>ty = Value::new(ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined));
+    <span class="kw">let </span>options = origin.resolve_options(ty.clone());
 
     <span class="kw">let </span>options = apply_cjs_specific_options(options);
 

@@ -1158,6 +1158,7 @@
 <span id="1158">1158</span>
 <span id="1159">1159</span>
 <span id="1160">1160</span>
+<span id="1161">1161</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -1196,6 +1197,7 @@
         resolve::{ResolvingIssue, ResolvingIssueVc},
     },
     reference::{AssetReference, AssetReferenceVc},
+    reference_type::ReferenceType,
     resolve::{
         options::{ConditionValue, ResolveOptions},
         pattern::{read_matches, Pattern, PatternMatch, PatternVc},
@@ -1254,7 +1256,7 @@
         }
     }
 
-    <span class="kw">fn </span>get_references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Vec&lt;AssetReferenceVc&gt; {
+    <span class="kw">pub fn </span>get_references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Vec&lt;AssetReferenceVc&gt; {
         <span class="kw">match </span><span class="self">self </span>{
             ResolveResult::Single(<span class="kw">_</span>, list)
             | ResolveResult::Keyed(<span class="kw">_</span>, list)
@@ -2284,7 +2286,7 @@
 
 <span class="kw">pub async fn </span>handle_resolve_error(
     result: ResolveResultVc,
-    request_type: <span class="kw-2">&amp;</span>str,
+    reference_type: Value&lt;ReferenceType&gt;,
     origin: ResolveOriginVc,
     request: RequestVc,
     resolve_options: ResolveOptionsVc,
@@ -2294,7 +2296,7 @@
             <span class="kw">if </span><span class="kw-2">*</span>unresolveable {
                 <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
                     context: origin.origin_path(),
-                    request_type: request_type.to_string(),
+                    request_type: <span class="macro">format!</span>(<span class="string">&quot;{} request&quot;</span>, reference_type.into_value()),
                     request,
                     resolve_options,
                     error_message: <span class="prelude-val">None</span>,
@@ -2307,7 +2309,7 @@
         <span class="prelude-val">Err</span>(err) =&gt; {
             <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
                 context: origin.origin_path(),
-                request_type: request_type.to_string(),
+                request_type: <span class="macro">format!</span>(<span class="string">&quot;{} request&quot;</span>, reference_type.into_value()),
                 request,
                 resolve_options,
                 error_message: <span class="prelude-val">Some</span>(err.to_string()),

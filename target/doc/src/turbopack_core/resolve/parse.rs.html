@@ -284,6 +284,48 @@
 <span id="284">284</span>
 <span id="285">285</span>
 <span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>lazy_static::lazy_static;
@@ -508,6 +550,48 @@
             module,
             path: path.into_value(),
             query,
+        })
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>as_relative(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>this {
+            Request::Empty
+            | Request::Raw { .. }
+            | Request::ServerRelative { .. }
+            | Request::Windows { .. }
+            | Request::Relative { .. }
+            | Request::Uri { .. }
+            | Request::Dynamic =&gt; <span class="self">self</span>,
+            Request::Module {
+                module,
+                path,
+                query: <span class="kw">_</span>,
+            } =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>pat = Pattern::Constant(<span class="macro">format!</span>(<span class="string">&quot;./{module}&quot;</span>));
+                pat.push(path.clone());
+                <span class="comment">// TODO add query
+                </span><span class="self">Self</span>::parse(Value::new(pat))
+            }
+            Request::PackageInternal { path } =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>pat = Pattern::Constant(<span class="string">&quot;./&quot;</span>.to_string());
+                pat.push(path.clone());
+                <span class="self">Self</span>::parse(Value::new(pat))
+            }
+            Request::Unknown { path } =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>pat = Pattern::Constant(<span class="string">&quot;./&quot;</span>.to_string());
+                pat.push(path.clone());
+                <span class="self">Self</span>::parse(Value::new(pat))
+            }
+            Request::Alternatives { requests } =&gt; {
+                <span class="kw">let </span>requests = requests
+                    .iter()
+                    .copied()
+                    .map(RequestVc::as_relative)
+                    .collect();
+                Request::Alternatives { requests }.cell()
+            }
         })
     }
 }

@@ -114,24 +114,32 @@
 <span id="114">114</span>
 <span id="115">115</span>
 <span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
     css::ast::{Str, UrlValue},
 };
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     asset::AssetVc,
     chunk::ChunkingContextVc,
     reference::{AssetReference, AssetReferenceVc},
+    reference_type::UrlReferenceSubType,
     resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
 };
+<span class="kw">use </span>turbopack_ecmascript::resolve::url_resolve;
 
 <span class="kw">use crate</span>::{
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     embed::CssEmbeddableVc,
-    references::{css_resolve, AstPathVc},
+    references::AstPathVc,
 };
 
 <span class="attr">#[turbo_tasks::value(into = <span class="string">&quot;new&quot;</span>)]
@@ -178,7 +186,11 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>UrlAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        css_resolve(<span class="self">self</span>.origin, <span class="self">self</span>.request)
+        url_resolve(
+            <span class="self">self</span>.origin,
+            <span class="self">self</span>.request,
+            Value::new(UrlReferenceSubType::CssUrl),
+        )
     }
 }
 

@@ -101,10 +101,18 @@
 <span id="101">101</span>
 <span id="102">102</span>
 <span id="103">103</span>
-</pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+</pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::Value;
+<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
 <span class="kw">use super</span>::{options::ResolveOptionsVc, parse::RequestVc, ResolveResultVc};
-<span class="kw">use </span><span class="kw">crate</span>::context::AssetContextVc;
+<span class="kw">use crate</span>::{context::AssetContextVc, reference_type::ReferenceType};
 
 <span class="doccomment">/// A location where resolving can occur from. It carries some meta information
 /// that are needed for resolving from here.
@@ -130,15 +138,21 @@
     </span><span class="doccomment">/// Resolve to an asset from that origin. Custom resolve options can be
     /// passed. Otherwise provide `origin.resolve_options()` unmodified.
     </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>resolve_asset(<span class="self">self</span>, request: RequestVc, options: ResolveOptionsVc) -&gt; ResolveResultVc {
+    </span><span class="kw">pub fn </span>resolve_asset(
+        <span class="self">self</span>,
+        request: RequestVc,
+        options: ResolveOptionsVc,
+        reference_type: Value&lt;ReferenceType&gt;,
+    ) -&gt; ResolveResultVc {
         <span class="self">self</span>.context()
-            .resolve_asset(<span class="self">self</span>.origin_path(), request, options)
+            .resolve_asset(<span class="self">self</span>.origin_path(), request, options, reference_type)
     }
 
     <span class="doccomment">/// Get the resolve options that apply for this origin.
     </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>resolve_options(<span class="self">self</span>) -&gt; ResolveOptionsVc {
-        <span class="self">self</span>.context().resolve_options(<span class="self">self</span>.origin_path())
+    </span><span class="kw">pub fn </span>resolve_options(<span class="self">self</span>, reference_type: Value&lt;ReferenceType&gt;) -&gt; ResolveOptionsVc {
+        <span class="self">self</span>.context()
+            .resolve_options(<span class="self">self</span>.origin_path(), reference_type)
     }
 
     <span class="doccomment">/// Adds a transition that is used for resolved assets.
