@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use colored::*;
+use is_terminal::IsTerminal;
 use serde::Deserialize;
 use thiserror::Error as ThisError;
 use update_informer::{Check, Package, Registry, Result as UpdateResult, Version};
@@ -65,6 +66,10 @@ fn should_skip_notification() -> bool {
         .iter()
         .any(|var| std::env::var(var).is_ok())
     {
+        return true;
+    }
+
+    if !std::io::stdout().is_terminal() {
         return true;
     }
 
