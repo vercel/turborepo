@@ -213,7 +213,9 @@ impl RepoState {
             }
         });
 
-        let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
+        let current_turbo_is_local_turbo =
+            local_turbo_path.canonicalize()? == current_exe()?.canonicalize()?;
+
         // If the local turbo path doesn't exist or if we are local turbo, then we go
         // ahead and run the Go code linked in the current binary.
         if current_turbo_is_local_turbo || !local_turbo_path.try_exists()? {
