@@ -92,7 +92,7 @@ impl ShimArgs {
     pub fn has_json_flags(&self) -> bool {
         self.remaining_turbo_args
             .iter()
-            .any(|arg| TURBO_JSON_OUTPUT_ARGS.contains(&arg.as_str()))
+            .any(|arg| TURBO_PURE_OUTPUT_ARGS.contains(&arg.as_str()))
     }
 }
 
