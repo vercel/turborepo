@@ -62,6 +62,7 @@ use crate::{
         server_to_client_transition::NextServerToClientTransition,
         ssr_client_module_transition::NextSSRClientModuleTransition,
     },
+    next_config::load_next_config,
     next_server::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
@@ -222,10 +223,10 @@ pub async fn create_app_source(
     browserslist_query: &str,
     externals: StringsVc,
 ) -> Result<ContentSourceVc> {
-    let project_root = wrap_with_next_js_fs(project_root);
+    let project_path = wrap_with_next_js_fs(project_root);
 
-    let app = project_root.join("app");
-    let src_app = project_root.join("src/app");
+    let app = project_path.join("app");
+    let src_app = project_path.join("src/app");
     let app_dir = if *app.get_type().await? == FileSystemEntryType::Directory {
         app
     } else if *src_app.get_type().await? == FileSystemEntryType::Directory {
@@ -235,7 +236,7 @@ pub async fn create_app_source(
     };
 
     let context_ssr = app_context(
-        project_root,
+        project_path,
         server_root,
         app_dir,
         env,
@@ -244,7 +245,7 @@ pub async fn create_app_source(
         externals,
     );
     let context = app_context(
-        project_root,
+        project_path,
         server_root,
         app_dir,
         env,
@@ -253,15 +254,31 @@ pub async fn create_app_source(
         externals,
     );
 
-    let server_runtime_entries = vec![ProcessEnvAssetVc::new(project_root, env_for_js(env, false))
-        .as_ecmascript_chunk_placeable()];
+    let next_config_value = load_next_config(
+        context,
+        DevChunkingContextVc::builder(
+            project_path,
+            output_path,
+            output_path.join("chunks"),
+            server_root.join("_next/static/assets"),
+        )
+        .build(),
+        project_root,
+        output_path.parent(),
+    );
 
-    let fallback_page = get_fallback_page(project_root, server_root, env, browserslist_query);
+    let server_runtime_entries = vec![ProcessEnvAssetVc::new(
+        project_path,
+        env_for_js(env, false, Some(next_config_value)),
+    )
+    .as_ecmascript_chunk_placeable()];
+
+    let fallback_page = get_fallback_page(project_path, server_root, env, browserslist_query);
 
     Ok(create_app_source_for_directory(
         context_ssr,
         context,
-        project_root,
+        project_path,
         SpecificityVc::exact(),
         0,
         app_dir,

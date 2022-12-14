@@ -47,6 +47,7 @@ use crate::{
         },
         NextClientTransition,
     },
+    next_config::load_next_config,
     next_server::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
@@ -80,7 +81,6 @@ pub async fn create_server_rendered_source(
     let ty = Value::new(ContextType::Pages { pages_dir });
     let server_ty = Value::new(ServerContextType::Pages { pages_dir });
 
-    let client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
     let client_environment = get_client_environment(browserslist_query);
     let client_module_options_context =
         get_client_module_options_context(project_path, client_environment, ty);
@@ -94,6 +94,8 @@ pub async fn create_server_rendered_source(
         client_resolve_options_context,
     )
     .into();
+
+    let client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
 
     let client_runtime_entries = get_client_runtime_entries(project_path, env, ty);
 
@@ -119,8 +121,24 @@ pub async fn create_server_rendered_source(
     )
     .into();
 
-    let server_runtime_entries = vec![ProcessEnvAssetVc::new(project_path, env_for_js(env, false))
-        .as_ecmascript_chunk_placeable()];
+    let next_config_value = load_next_config(
+        context,
+        DevChunkingContextVc::builder(
+            project_path,
+            output_path,
+            output_path.join("chunks"),
+            get_client_assets_path(server_root, Value::new(ContextType::Pages { pages_dir })),
+        )
+        .build(),
+        project_root,
+        output_path.parent(),
+    );
+
+    let server_runtime_entries = vec![ProcessEnvAssetVc::new(
+        project_path,
+        env_for_js(env, false, Some(next_config_value)),
+    )
+    .as_ecmascript_chunk_placeable()];
 
     let fallback_page = get_fallback_page(project_path, server_root, env, browserslist_query);
 
