@@ -217,10 +217,14 @@ async fn run_debug_browser(addr: SocketAddr) -> Result<()> {
 
 async fn run_test_browser(addr: SocketAddr) -> Result<JestRunResult> {
     let (browser, _) = create_browser(false).await?;
-    let page = browser
-        .new_page(format!("http://{}", addr))
-        .await
-        .context("Failed to create new browser page")?;
+    let page = retry_async(
+        (),
+        |_| browser.new_page(format!("http://{}", addr)),
+        5,
+        Duration::from_secs(15),
+    )
+    .await
+    .context("Failed to create new browser page")?;
     page.wait_for_navigation().await?;
 
     let value = page.evaluate("globalThis.waitForTests?.() ?? __jest__.run()");
