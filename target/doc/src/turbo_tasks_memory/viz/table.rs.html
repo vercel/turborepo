@@ -382,8 +382,8 @@ document.addEventListener(&quot;click&quot;,function(b){try{var p=function(a){re
                 .zip(max_values.avg_duration)
             {
                 (
-                    <span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, (total_duration / (executions <span class="kw">as </span>u32)).as_micros()),
-                    FormatDuration(total_duration / (executions <span class="kw">as </span>u32)).to_string(),
+                    <span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, (total_duration / executions).as_micros()),
+                    FormatDuration(total_duration / executions).to_string(),
                     as_frac_color(
                         total_duration.as_micros() / (executions <span class="kw">as </span>u128),
                         max_avg_duration.as_micros(),

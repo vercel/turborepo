@@ -2620,8 +2620,8 @@
             }
         }
         <span class="comment">// No scope is active. Task has been added as dirty task to all scopes
-        </span><span class="kw">return </span><span class="bool-val">false</span>;
-    }
+        </span><span class="bool-val">false
+    </span>}
 
     <span class="kw">fn </span>make_dirty(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;</span>MemoryBackend, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
         <span class="kw">if let </span>TaskType::Once(<span class="kw">_</span>) = <span class="self">self</span>.ty {
@@ -3223,7 +3223,7 @@
         <span class="self">self</span>.state_mut()
             .as_full_mut()
             .and_then(|state| state.cells.get_mut(<span class="kw-2">&amp;</span>index.type_id))
-            .and_then(|list| list.get_mut(index.index <span class="kw">as </span>usize).map(|cell| func(cell)))
+            .and_then(|list| list.get_mut(index.index <span class="kw">as </span>usize).map(func))
     }
 
     <span class="doccomment">/// Access to a cell.

@@ -165,8 +165,8 @@
     </span><span class="kw">pub fn </span>register_execution(<span class="kw-2">&amp;mut </span><span class="self">self</span>, duration: Duration, duration_since_start: Duration) {
         <span class="kw">match </span><span class="self">self </span>{
             <span class="self">Self</span>::Full(stats) =&gt; {
-                stats.total_duration += duration.into();
-                stats.last_duration = duration.into();
+                stats.total_duration += duration;
+                stats.last_duration = duration;
             }
             <span class="self">Self</span>::Essential(stats) =&gt; {
                 stats.last_duration = duration.into();

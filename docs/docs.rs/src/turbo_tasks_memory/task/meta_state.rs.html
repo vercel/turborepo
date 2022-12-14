@@ -503,7 +503,7 @@
             }
             TaskMetaStateWriteGuard::Partial(state) =&gt; {
                 <span class="kw">let </span>PartialTaskState { <span class="kw-2">ref mut </span>scopes, .. } = <span class="kw-2">**</span>state;
-                <span class="kw">static </span>EMPTY: Lazy&lt;AutoSet&lt;TaskId&gt;&gt; = Lazy::new(|| AutoSet::new());
+                <span class="kw">static </span>EMPTY: Lazy&lt;AutoSet&lt;TaskId&gt;&gt; = Lazy::new(AutoSet::new);
                 (scopes, <span class="kw-2">&amp;*</span>EMPTY)
             }
             TaskMetaStateWriteGuard::Unloaded(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(

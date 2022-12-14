@@ -481,7 +481,7 @@
             } =&gt; {
                 <span class="kw">if </span>content != <span class="kw-2">*</span>old_content {
                     <span class="kw">if </span>!dependent_tasks.is_empty() {
-                        turbo_tasks.schedule_notify_tasks_set(<span class="kw-2">&amp;</span>dependent_tasks);
+                        turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
                         dependent_tasks.clear();
                     }
                     <span class="kw-2">*</span><span class="self">self </span>= Cell::Full(<span class="kw">box </span>FullCell::UpdatedValue {
@@ -498,7 +498,7 @@
             }) =&gt; {
                 <span class="kw">if </span>content != <span class="kw-2">*</span>cell_content {
                     <span class="kw">if </span>!dependent_tasks.is_empty() {
-                        turbo_tasks.schedule_notify_tasks_set(<span class="kw-2">&amp;</span>dependent_tasks);
+                        turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
                         dependent_tasks.clear();
                     }
                     <span class="kw-2">*</span>updates += <span class="number">1</span>;
