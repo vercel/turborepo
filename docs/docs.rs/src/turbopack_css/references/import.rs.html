@@ -256,6 +256,8 @@
 <span id="256">256</span>
 <span id="257">257</span>
 <span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
@@ -305,7 +307,7 @@
                 <span class="macro">assert_eq!</span>(f.value.len(), <span class="number">1</span>);
                 <span class="macro">assert!</span>(<span class="macro">matches!</span>(<span class="kw-2">&amp;</span>f.value[<span class="number">0</span>], ComponentValue::LayerName(<span class="kw">_</span>)));
                 <span class="kw">if let </span>ComponentValue::LayerName(layer_name) = <span class="kw-2">&amp;</span>f.value[<span class="number">0</span>] {
-                    layer_name.clone()
+                    <span class="kw-2">*</span>layer_name.clone()
                 } <span class="kw">else </span>{
                     <span class="macro">unreachable!</span>()
                 }
@@ -326,12 +328,12 @@
 
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(supports) = v {
                         <span class="kw">match </span><span class="kw-2">&amp;</span>supports {
-                            ComponentValue::SupportsCondition(s) =&gt; <span class="prelude-val">Some</span>(s.clone()),
+                            ComponentValue::SupportsCondition(s) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>s.clone()),
                             ComponentValue::Declaration(d) =&gt; <span class="prelude-val">Some</span>(SupportsCondition {
                                 span: DUMMY_SP,
                                 conditions: <span class="macro">vec!</span>[SupportsConditionType::SupportsInParens(
                                     SupportsInParens::Feature(SupportsFeature::Declaration(
-                                        Box::new(d.clone()),
+                                        d.clone(),
                                     )),
                                 )],
                             }),
@@ -368,10 +370,12 @@
         <span class="comment">// something random that&#39;s never gonna be in real css
         </span><span class="kw">let </span><span class="kw-2">mut </span>rule = Rule::ListOfComponentValues(<span class="kw">box </span>ListOfComponentValues {
             span: DUMMY_SP,
-            children: <span class="macro">vec!</span>[ComponentValue::PreservedToken(token(Token::String {
-                value: Default::default(),
-                raw: <span class="string">r#&quot;&quot;&quot;&quot;__turbopack_placeholder__&quot;&quot;&quot;&quot;#</span>.into(),
-            }))],
+            children: <span class="macro">vec!</span>[ComponentValue::PreservedToken(Box::new(token(
+                Token::String {
+                    value: Default::default(),
+                    raw: <span class="string">r#&quot;&quot;&quot;&quot;__turbopack_placeholder__&quot;&quot;&quot;&quot;#</span>.into(),
+                },
+            )))],
         });
 
         <span class="kw">fn </span>at_rule(name: <span class="kw-2">&amp;</span>str, prelude: AtRulePrelude, inner_rule: Rule) -&gt; Rule {
@@ -386,7 +390,7 @@
                 block: <span class="prelude-val">Some</span>(SimpleBlock {
                     span: DUMMY_SP,
                     name: token(Token::LBrace),
-                    value: <span class="macro">vec!</span>[ComponentValue::Rule(inner_rule)],
+                    value: <span class="macro">vec!</span>[ComponentValue::from(inner_rule)],
                 }),
             })
         }
