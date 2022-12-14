@@ -17,9 +17,17 @@ use turbo_updater::check_for_updates;
 use crate::{cli, get_version, PackageManager, Payload};
 
 static TURBO_JSON: &str = "turbo.json";
-// all arguments that result in pure json output to stdout
-static TURBO_JSON_OUTPUT_ARGS: [&str; 5] =
-    ["--json", "json", "--dry=json", "--graph", "--dry-run=json"];
+// all arguments that result in a stdout that much be directly parsable and
+// should not be paired with additional output (from the update notifier for
+// example)
+static TURBO_PURE_OUTPUT_ARGS: [&str; 6] = [
+    "--json",
+    "--dry",
+    "--dry-run",
+    "--dry=json",
+    "--graph",
+    "--dry-run=json",
+];
 
 #[derive(Debug)]
 struct ShimArgs {
