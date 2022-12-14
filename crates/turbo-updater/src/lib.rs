@@ -10,8 +10,8 @@ mod ui;
 
 // 800ms
 const DEFAULT_TIMEOUT: Duration = Duration::from_millis(800);
-// 1 day
-const DEFAULT_INTERVAL: Duration = Duration::from_secs(60 * 60 * 24);
+// 6 hours
+const DEFAULT_INTERVAL: Duration = Duration::from_secs(60 * 60 * 6);
 
 const NOTIFIER_DISABLE_VARS: [&str; 2] = ["NO_UPDATE_NOTIFIER", "TURBO_NO_UPDATE_NOTIFIER"];
 const ENVIRONMENTAL_DISABLE_VARS: [&str; 1] = ["CI"];
@@ -33,20 +33,14 @@ impl Registry for NPMRegistry {
     const NAME: &'static str = "npm_registry";
     fn get_latest_version(
         pkg: &Package,
-        version: &Version,
+        _version: &Version,
         timeout: Duration,
     ) -> UpdateResult<Option<String>> {
-        // determine tag to request
-        let tag = match &version.get().pre {
-            t if t.contains("canary") => "canary",
-            t if t.contains("next") => "next",
-            _ => "latest",
-        };
-
+        // TODO: request by tag when update_informer supports storing multiple versions
+        // per package
         let url = format!(
-            "https://turbo.build/api/binaries/version?name={name}&tag={tag}",
-            name = pkg,
-            tag = tag
+            "https://turbo.build/api/binaries/version?name={name}",
+            name = pkg
         );
         let resp = ureq::get(&url).timeout(timeout).call()?;
         let result = resp.into_json::<NpmVersionData>().unwrap();

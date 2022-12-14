@@ -309,7 +309,7 @@ pub fn run() -> Result<Payload> {
             "https://github.com/vercel/turbo",
             Some(&footer),
             get_version(),
-            // use defaults for timeout and refresh interval (800ms and 1 day respectively)
+            // use defaults for timeout and refresh interval (800ms and 6 hours respectively)
             None,
             None,
         );
