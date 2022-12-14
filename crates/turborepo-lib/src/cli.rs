@@ -83,17 +83,42 @@ pub struct Args {
     #[clap(long, global = true, value_parser)]
     pub trace: Option<String>,
     /// verbosity
-    #[clap(
-      short = 'v',
-      action = clap::ArgAction::Count,
-      global = true)]
-    pub verbosity: u8,
+    #[clap(flatten)]
+    pub verbosity: Verbosity,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
     pub run_args: Option<RunArgs>,
     #[clap(subcommand)]
     pub command: Option<Command>,
+}
+
+#[derive(Debug, Parser, Serialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(into = "u8")]
+pub struct Verbosity {
+    #[clap(
+        long = "verbosity",
+        global = true,
+        conflicts_with = "v",
+        value_name = "COUNT"
+    )]
+    /// Verbosity level
+    pub verbosity: Option<u8>,
+    #[clap(
+        short = 'v',
+        action = clap::ArgAction::Count,
+        global = true,
+        hide = true,
+        conflicts_with = "verbosity"
+    )]
+    pub v: u8,
+}
+
+impl From<Verbosity> for u8 {
+    fn from(val: Verbosity) -> Self {
+        let Verbosity { verbosity, v } = val;
+        verbosity.unwrap_or(v)
+    }
 }
 
 #[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
@@ -400,7 +425,7 @@ mod test {
         }
     }
 
-    use crate::cli::{Args, Command, DryRunMode, OutputLogsMode, RunArgs};
+    use crate::cli::{Args, Command, DryRunMode, OutputLogsMode, RunArgs, Verbosity};
 
     #[test]
     fn test_parse_run() {
@@ -1044,5 +1069,31 @@ mod test {
                 ..Args::default()
             }
         );
+    }
+
+    #[test]
+    fn test_verbosity_serialization() -> Result<(), serde_json::Error> {
+        assert_eq!(
+            serde_json::to_string(&Verbosity {
+                verbosity: None,
+                v: 0
+            })?,
+            "0"
+        );
+        assert_eq!(
+            serde_json::to_string(&Verbosity {
+                verbosity: Some(3),
+                v: 0
+            })?,
+            "3"
+        );
+        assert_eq!(
+            serde_json::to_string(&Verbosity {
+                verbosity: None,
+                v: 3
+            })?,
+            "3"
+        );
+        Ok(())
     }
 }
