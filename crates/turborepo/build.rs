@@ -5,19 +5,28 @@ use std::{
 };
 
 fn main() {
-    let is_release = matches!(env::var("PROFILE"), Ok(profile) if profile == "release");
-    let lib_search_path = if is_release && env::var("RELEASE_TURBO_CLI") == Ok("true".to_string()) {
+    let is_ci_release = matches!(env::var("PROFILE"), Ok(profile) if profile == "release")
+        && env::var("RELEASE_TURBO_CLI")
+            .map(|val| val == "true")
+            .unwrap_or(false);
+    let lib_search_path = if is_ci_release {
         expect_release_lib()
     } else {
         build_debug_libturbo()
     };
-    println!("cargo:rerun-if-changed={}", lib_search_path);
-    println!("cargo:rustc-link-search={}", lib_search_path);
+    println!(
+        "cargo:rerun-if-changed={}",
+        lib_search_path.to_string_lossy()
+    );
+    println!(
+        "cargo:rustc-link-search={}",
+        lib_search_path.to_string_lossy()
+    );
     println!("cargo:rustc-link-lib=turbo");
 
     let target = build_target::target().unwrap();
     let bindings = bindgen::Builder::default()
-        .header(header_path(&target.os))
+        .header(lib_search_path.join("libturbo.h").to_string_lossy())
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
@@ -39,7 +48,9 @@ fn main() {
     }
 }
 
-fn expect_release_lib() -> String {
+fn expect_release_lib() -> PathBuf {
+    // We expect all artifacts to be in the cli path
+    let mut dir = cli_path();
     let target = build_target::target().unwrap();
     let platform = match target.os {
         build_target::Os::MacOs => "darwin",
@@ -52,19 +63,16 @@ fn expect_release_lib() -> String {
         build_target::Arch::X86_64 => "amd64_v1",
         _ => panic!("unsupported target {}", target.triple),
     };
-    let mut dir = PathBuf::from("libturbo");
+    dir.push("libturbo");
     // format is ${BUILD_ID}_${OS}_${ARCH}. Build id is, for goreleaser reasons,
     // turbo-${OS}
     dir.push(format!("turbo-{platform}_{platform}_{arch}"));
     dir.push("lib");
-    dir.to_string_lossy().to_string()
+    dir
 }
 
-fn build_debug_libturbo() -> String {
-    let cli_path = env::var_os("CARGO_WORKSPACE_DIR")
-        .map(PathBuf::from)
-        .unwrap()
-        .join("cli");
+fn build_debug_libturbo() -> PathBuf {
+    let cli_path = cli_path();
     let target = build_target::target().unwrap();
     let mut cmd = Command::new("make");
     cmd.current_dir(&cli_path);
@@ -97,12 +105,12 @@ fn build_debug_libturbo() -> String {
             .success(),
         "failed to build turbo static library"
     );
-    cli_path.to_string_lossy().to_string()
+    cli_path
 }
 
-fn header_path(target: &build_target::Os) -> &'static str {
-    match target {
-        build_target::Os::Windows => "../../cli/turbo.h",
-        _ => "../../cli/libturbo.h",
-    }
+fn cli_path() -> PathBuf {
+    env::var_os("CARGO_WORKSPACE_DIR")
+        .map(PathBuf::from)
+        .unwrap()
+        .join("cli")
 }

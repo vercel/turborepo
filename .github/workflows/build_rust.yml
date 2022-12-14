@@ -30,10 +30,11 @@ jobs:
             target: "aarch64-unknown-linux-gnu"
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
             rustflags: 'RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc"'
-            setup: "sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
+            setup: "sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
             target: x86_64-pc-windows-gnu
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
+            setup: "mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.exe cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.a && mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.h cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.h && rustup set default-host x86_64-pc-windows-gnu"
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v3
@@ -82,7 +83,7 @@ jobs:
           # https://github.com/actions/download-artifact#download-all-artifacts
           name: ${{ matrix.settings.lib-cache-key }}
           # Optional, a directory where to extract artifact(s), defaults to the current directory
-          path: shim/libturbo
+          path: cli/libturbo
           # Optional, choose how to exit the action if no artifact is found
           # can be one of:
           #  "fail", "warn", "ignore"
@@ -94,8 +95,9 @@ jobs:
       #   uses: actions/download-artifact@v3
       #   with:
       #     name: ${{ matrix.settings.lib-cache-key }}
-      #     path: shim/libturbo
+      #     path: cli/libturbo
       - name: Build Setup
+        shell: bash
         if: ${{ matrix.settings.setup }}
         run: ${{ matrix.settings.setup }}
 
@@ -110,8 +112,8 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: shim-${{ matrix.settings.target }}
-          path: shim/target/${{ matrix.settings.target }}/release/turbo*
+          name: turbo-${{ matrix.settings.target }}
+          path: target/${{ matrix.settings.target }}/release/turbo*
 
   final-publish:
     name: "Publish To NPM"
@@ -146,37 +148,37 @@ jobs:
       - name: Download Apple ARM64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-aarch64-apple-darwin
+          name: turbo-aarch64-apple-darwin
           path: cli/dist-darwin-arm64
 
       - name: Download Ubuntu ARM64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-aarch64-unknown-linux-gnu
+          name: turbo-aarch64-unknown-linux-gnu
           path: cli/dist-linux-arm64
 
       - name: Download Windows ARM64 (Ships as x86_64) Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-x86_64-pc-windows-gnu
+          name: turbo-x86_64-pc-windows-gnu
           path: cli/dist-windows-arm64
 
       - name: Download Ubuntu x86_64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-x86_64-unknown-linux-gnu
+          name: turbo-x86_64-unknown-linux-gnu
           path: cli/dist-linux-amd64
 
       - name: Download Apple x86_64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-x86_64-apple-darwin
+          name: turbo-x86_64-apple-darwin
           path: cli/dist-darwin-amd64
 
       - name: Download Windows x86_64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-x86_64-pc-windows-gnu
+          name: turbo-x86_64-pc-windows-gnu
           path: cli/dist-windows-amd64
 
       - name: Perform Release
@@ -189,5 +191,5 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: shim-combined
+          name: turbo-combined
           path: cli/dist
