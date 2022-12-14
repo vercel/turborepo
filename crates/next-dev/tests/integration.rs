@@ -48,10 +48,16 @@ lazy_static! {
 #[test_resources("crates/next-dev/tests/integration/*/*/*")]
 #[tokio::main(flavor = "current_thread")]
 async fn test(resource: &str) {
-    if resource.ends_with("__skipped__") {
+    if resource.ends_with("__skipped__") || resource.ends_with("__flakey__") {
         // "Skip" directories named `__skipped__`, which include test directories to
         // skip. These tests are not considered truly skipped by `cargo test`, but they
         // are not run.
+        //
+        // All current `__flakey__` tests need longer timeouts, but the current
+        // build of `jest-circus-browser` does not support configuring this.
+        //
+        // TODO(WEB-319): Update the version of `jest-circus` in `jest-circus-browser`,
+        // which supports configuring this. Or explore an alternative.
         return;
     }
 
