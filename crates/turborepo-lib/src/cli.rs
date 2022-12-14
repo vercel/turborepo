@@ -245,15 +245,9 @@ pub struct RunArgs {
     pub continue_execution: bool,
     #[clap(alias = "dry", long = "dry-run", num_args = 0..=1, default_missing_value = "text")]
     pub dry_run: Option<DryRunMode>,
-    #[clap(long, hide = true)]
-    #[serde(skip)]
-    pub experimental_use_daemon: bool,
     /// Run turbo in single-package mode
     #[clap(long, global = true)]
     pub single_package: bool,
-    #[clap(long, hide = true)]
-    #[serde(skip)]
-    pub stream: bool,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
