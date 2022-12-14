@@ -11,8 +11,10 @@ use std::{
 use anyhow::{anyhow, Result};
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
+use tiny_gradient::{GradientStr, RGB};
+use turbo_updater::check_for_updates;
 
-use crate::{cli, PackageManager, Payload};
+use crate::{cli, get_version, PackageManager, Payload};
 
 static TURBO_JSON: &str = "turbo.json";
 
@@ -73,6 +75,13 @@ impl ShimArgs {
                 forwarded_args,
             })
         }
+    }
+
+    // returns true if any flags result in pure json output to stdout
+    pub fn has_json_flags(&self) -> bool {
+        self.remaining_turbo_args
+            .iter()
+            .any(|arg| arg == "--json" || arg == "--dry=json" || arg == "--graph")
     }
 }
 
@@ -270,6 +279,27 @@ pub fn run() -> Result<Payload> {
     // If skip_infer is passed, we're probably running local turbo with
     // global turbo having handled the inference. We can run without any
     // concerns.
+
+    if !args.has_json_flags() {
+        // custom footer for update message
+        let footer = format!(
+            "Follow {username} for updates: {url}",
+            username = "@turborepo".gradient([RGB::new(0, 153, 247), RGB::new(241, 23, 18)]),
+            url = "https://twitter.com/turborepo"
+        );
+
+        // check for updates
+        let _ = check_for_updates(
+            "turbo",
+            "https://github.com/vercel/turbo",
+            Some(&footer),
+            get_version(),
+            // use defaults for timeout and refresh interval (800ms and 1 day respectively)
+            None,
+            None,
+        );
+    }
+
     if args.skip_infer {
         return cli::run(None);
     }
