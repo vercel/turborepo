@@ -17,6 +17,9 @@ use turbo_updater::check_for_updates;
 use crate::{cli, get_version, PackageManager, Payload};
 
 static TURBO_JSON: &str = "turbo.json";
+// all arguments that result in pure json output to stdout
+static TURBO_JSON_OUTPUT_ARGS: [&str; 5] =
+    ["--json", "json", "--dry=json", "--graph", "--dry-run=json"];
 
 #[derive(Debug)]
 struct ShimArgs {
@@ -79,9 +82,9 @@ impl ShimArgs {
 
     // returns true if any flags result in pure json output to stdout
     pub fn has_json_flags(&self) -> bool {
-        self.remaining_turbo_args.iter().any(|arg| {
-            ["--json", "json", "--dry=json", "--graph", "--dry-run=json"].contains(&arg.as_str())
-        })
+        self.remaining_turbo_args
+            .iter()
+            .any(|arg| TURBO_JSON_OUTPUT_ARGS.contains(&arg.as_str()))
     }
 }
 
