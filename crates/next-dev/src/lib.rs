@@ -136,57 +136,21 @@ impl NextDevServerBuilder {
     }
 
     pub async fn build(self) -> Result<DevServer> {
-        let turbo_tasks = self.turbo_tasks;
-
-        let project_dir = self.project_dir;
-        let root_dir = self.root_dir;
-        let eager_compile = self.eager_compile;
-        let show_all = self.show_all;
-        let log_detail = self.log_detail;
-        let browserslist_query = self.browserslist_query;
-        let log_options = LogOptions {
-            current_dir: current_dir().unwrap(),
-            show_all,
-            log_detail,
-            log_level: self.log_level,
-        };
-        let entry_requests = Arc::new(self.entry_requests.clone());
-        let console_ui = Arc::new(ConsoleUi::new(log_options));
-        let console_ui_to_dev_server = console_ui.clone();
-
         let start_port = self.port.context("port must be set")?;
         let host = self.hostname.context("hostname must be set")?;
 
-        let mut err: Option<anyhow::Error> = None;
-
-        let tasks = turbo_tasks.clone();
-        let source = move || {
-            source(
-                root_dir.clone(),
-                project_dir.clone(),
-                entry_requests.clone().into(),
-                eager_compile,
-                turbo_tasks.clone().into(),
-                console_ui.clone().into(),
-                browserslist_query.clone(),
-            )
-        };
-
         // Retry to listen on the different port if the port is already in use.
+        let mut bound_server = None;
         for retry_count in 0..10 {
             let current_port = start_port + retry_count;
             let addr = SocketAddr::new(host, current_port);
 
-            let listen_result = DevServer::listen(
-                tasks.clone(),
-                source.clone(),
-                addr,
-                console_ui_to_dev_server.clone(),
-            );
+            let listen_result = DevServer::listen(addr);
 
             match listen_result {
                 Ok(server) => {
-                    return Ok(server);
+                    bound_server = Some(Ok(server));
+                    break;
                 }
                 Err(e) => {
                     let should_retry = if self.allow_retry {
@@ -208,23 +172,53 @@ impl NextDevServerBuilder {
                         false
                     };
 
-                    if !should_retry {
-                        return Err(e);
-                    } else {
+                    if should_retry {
                         println!(
                             "{} - Port {} is in use, trying {} instead",
                             "warn ".yellow(),
                             current_port,
                             current_port + 1
                         );
+                    } else {
+                        bound_server = Some(Err(e));
+                        break;
                     }
-
-                    err = Some(e);
                 }
             }
         }
 
-        Err(err.expect("Should have an error if we get here"))
+        let server = bound_server.unwrap()?;
+
+        let turbo_tasks = self.turbo_tasks;
+        let project_dir = self.project_dir;
+        let root_dir = self.root_dir;
+        let eager_compile = self.eager_compile;
+        let show_all = self.show_all;
+        let log_detail = self.log_detail;
+        let browserslist_query = self.browserslist_query;
+        let log_options = LogOptions {
+            current_dir: current_dir().unwrap(),
+            show_all,
+            log_detail,
+            log_level: self.log_level,
+        };
+        let entry_requests = Arc::new(self.entry_requests);
+        let console_ui = Arc::new(ConsoleUi::new(log_options));
+        let console_ui_to_dev_server = console_ui.clone();
+        let tasks = turbo_tasks.clone();
+        let source = move || {
+            source(
+                root_dir.clone(),
+                project_dir.clone(),
+                entry_requests.clone().into(),
+                eager_compile,
+                turbo_tasks.clone().into(),
+                console_ui.clone().into(),
+                browserslist_query.clone(),
+            )
+        };
+
+        Ok(server.serve(tasks, source, console_ui_to_dev_server))
     }
 }
 
@@ -256,6 +250,7 @@ async fn output_fs(project_dir: &str, console_ui: ConsoleUiVc) -> Result<FileSys
     Ok(disk_fs.into())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[turbo_tasks::function]
 async fn source(
     root_dir: String,

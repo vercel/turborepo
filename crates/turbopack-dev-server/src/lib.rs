@@ -25,6 +25,7 @@ use anyhow::{bail, Context, Result};
 use futures::{StreamExt, TryStreamExt};
 use hyper::{
     header::HeaderName,
+    server::{conn::AddrIncoming, Builder},
     service::{make_service_fn, service_fn},
     Request, Response, Server,
 };
@@ -62,6 +63,14 @@ where
     fn get_source(&self) -> ContentSourceVc {
         self()
     }
+}
+
+#[derive(TraceRawVcs)]
+pub struct DevServerBuilder {
+    #[turbo_tasks(trace_ignore)]
+    pub addr: SocketAddr,
+    #[turbo_tasks(trace_ignore)]
+    server: Builder<AddrIncoming>,
 }
 
 #[derive(TraceRawVcs)]
@@ -202,12 +211,20 @@ async fn process_request_with_content_source(
 }
 
 impl DevServer {
-    pub fn listen(
+    pub fn listen(addr: SocketAddr) -> Result<DevServerBuilder, anyhow::Error> {
+        let server = Server::try_bind(&addr).context("Not able to start server")?;
+
+        Ok(DevServerBuilder { addr, server })
+    }
+}
+
+impl DevServerBuilder {
+    pub fn serve(
+        self,
         turbo_tasks: Arc<dyn TurboTasksApi>,
         source_provider: impl SourceProvider + Clone + Send + Sync,
-        addr: SocketAddr,
         console_ui: Arc<ConsoleUi>,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> DevServer {
         let make_svc = make_service_fn(move |_| {
             let tt = turbo_tasks.clone();
             let source_provider = source_provider.clone();
@@ -301,17 +318,15 @@ impl DevServer {
                 anyhow::Ok(service_fn(handler))
             }
         });
-        let server = Server::try_bind(&addr)
-            .context("Not able to start server")?
-            .serve(make_svc);
+        let server = self.server.serve(make_svc);
 
-        Ok(Self {
-            addr: server.local_addr(),
+        DevServer {
+            addr: self.addr,
             future: Box::pin(async move {
                 server.await?;
                 Ok(())
             }),
-        })
+        }
     }
 }
 
