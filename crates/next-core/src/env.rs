@@ -65,6 +65,8 @@ pub async fn env_for_js(
         hostname: "**".to_string(),
         ..Default::default()
     });
+
+    println!("image_config: {:?}", image_config);
     Ok(CustomProcessEnvVc::new(
         env,
         EnvMapVc::cell(indexmap! {

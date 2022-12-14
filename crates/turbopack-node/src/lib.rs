@@ -37,13 +37,13 @@ use self::{
 use crate::source_map::{SourceMapTraceVc, StackFrame, TraceResult};
 
 pub mod bootstrap;
+pub mod evaluate;
 pub mod issue;
 pub mod node_api_source;
 pub mod node_entry;
 pub mod node_rendered_source;
 pub mod path_regex;
 pub mod pool;
-pub mod read_config;
 pub mod source_map;
 
 #[turbo_tasks::function]
@@ -448,7 +448,10 @@ enum RenderProxyIncomingMessage {
 #[serde(tag = "type", rename_all = "camelCase")]
 enum EvalJavaScriptOutgoingMessage {
     #[serde(rename_all = "camelCase")]
-    LoadConfig { path: String, config_type: String },
+    Evaluate {
+        filepath: String,
+        arguments: Vec<String>,
+    },
 }
 
 #[derive(Deserialize)]

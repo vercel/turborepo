@@ -3,18 +3,17 @@ use std::collections::HashMap;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, Value};
-use turbo_tasks_fs::{FileContent, FileSystemPathVc};
+use turbo_tasks_fs::{to_sys_path, FileContent, FileSystemPathVc};
 use turbopack_core::{
     chunk::ChunkingContextVc, context::AssetContextVc, source_asset::SourceAssetVc,
-    virtual_asset::VirtualAssetVc,
 };
 use turbopack_ecmascript::{
-    chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
-    EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
+    chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
+    EcmascriptModuleAssetVc,
 };
-use turbopack_node::read_config::{load_config, JavaScriptValue};
+use turbopack_node::evaluate::{evaluate, JavaScriptValue};
 
-use crate::embed_js::next_js_file;
+use crate::embed_js::next_asset;
 
 #[turbo_tasks::value(transparent)]
 pub struct NextConfigValue(NextConfig);
@@ -164,20 +163,6 @@ pub async fn load_next_config(
     project_root: FileSystemPathVc,
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<NextConfigValueVc> {
-    let entry_module = EcmascriptModuleAssetVc::new(
-        VirtualAssetVc::new(
-            intermediate_output_path.join("next.js"),
-            next_js_file("entry/config/next.ts").into(),
-        )
-        .into(),
-        context,
-        Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(vec![
-            EcmascriptInputTransform::React { refresh: false },
-            EcmascriptInputTransform::TypeScript,
-        ]),
-        context.environment(),
-    );
     let mut chunks = None;
     let next_config_mjs_path = project_root.join("next.config.mjs");
     let next_config_js_path = project_root.join("next.config.js");
@@ -201,12 +186,21 @@ pub async fn load_next_config(
         .as_ecmascript_chunk_placeable();
         chunks = Some(EcmascriptChunkPlaceablesVc::cell(vec![config_chunk]));
     }
-    let config_value = load_config(
-        entry_module,
-        "next.config".to_owned(),
+    let asset_path = intermediate_output_path.join("load-next-config.js");
+    let load_next_config_asset = next_asset(asset_path, "entry/config/next.js");
+    let config_value = evaluate(
+        load_next_config_asset,
+        context,
+        if let Some(p) = to_sys_path(project_root)
+            .await?
+            .and_then(|p| p.to_str().map(|s| s.to_owned()))
+        {
+            vec![p]
+        } else {
+            vec![]
+        },
         intermediate_output_path,
         chunking_context,
-        project_root,
         chunks,
     )
     .await?;

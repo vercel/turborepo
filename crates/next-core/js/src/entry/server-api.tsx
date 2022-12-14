@@ -1,4 +1,7 @@
-import IPC, { Ipc } from "@vercel/turbopack-next/internal/ipc";
+import {
+  IPC,
+  Ipc,
+} from "@vercel/turbopack-next/compiled/@vercel/turbopack-node-ipc";
 
 import type { ClientRequest, IncomingMessage, Server } from "node:http";
 import http, { ServerResponse } from "node:http";

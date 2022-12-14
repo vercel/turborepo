@@ -8,7 +8,10 @@ import RenderResult from "next/dist/server/render-result";
 import type { BuildManifest } from "next/dist/server/get-page-files";
 
 import { ServerResponseShim } from "@vercel/turbopack-next/internal/http";
-import IPC, { Ipc } from "@vercel/turbopack-next/internal/ipc";
+import {
+  IPC,
+  Ipc,
+} from "@vercel/turbopack-next/compiled/@vercel/turbopack-node-ipc";
 import type { RenderData } from "types/turbopack";
 import type { ChunkGroup } from "types/next";
 

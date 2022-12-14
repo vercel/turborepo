@@ -1,6 +1,20 @@
 import net from "node:net";
 
-import { structuredError } from "@vercel/turbopack-next/internal/error";
+import { StackFrame, parse as parseStackTrace } from "stacktrace-parser";
+
+export type StructuredError = {
+  name: string;
+  message: string;
+  stack: StackFrame[];
+};
+
+export function structuredError(e: Error): StructuredError {
+  return {
+    name: e.name,
+    message: e.message,
+    stack: parseStackTrace(e.stack!),
+  };
+}
 
 type State =
   | {
@@ -120,10 +134,8 @@ function createIpc<TIncoming, TOutgoing>(
 
 const PORT = process.argv[2];
 
-const IPC = createIpc<unknown, unknown>(parseInt(PORT, 10));
+export const IPC = createIpc<unknown, unknown>(parseInt(PORT, 10));
 
 process.on("uncaughtException", (err) => {
   IPC.sendError(err);
 });
-
-export default IPC;

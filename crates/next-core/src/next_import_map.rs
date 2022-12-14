@@ -226,6 +226,11 @@ pub fn insert_next_shared_aliases(import_map: &mut ImportMap, project_path: File
         request_to_import_mapping(package_root, "./overlay/client"),
     );
 
+    import_map.insert_exact_alias(
+        "@vercel/turbopack-node-ipc",
+        request_to_import_mapping(package_root, "./compiled/@vercel/turbopack-node-ipc"),
+    );
+
     insert_package_alias(
         import_map,
         &format!("{VIRTUAL_PACKAGE_NAME}/"),

@@ -47,6 +47,10 @@ const packages = [
     name: "strip-ansi",
     type: "module-default",
   },
+  {
+    name: "@vercel/turbopack-node-ipc",
+    type: "module",
+  },
 ];
 const externals = Object.fromEntries(
   packages.map((pkg) => [
