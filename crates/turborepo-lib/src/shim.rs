@@ -17,6 +17,19 @@ use turbo_updater::check_for_updates;
 use crate::{cli, get_version, PackageManager, Payload};
 
 static TURBO_JSON: &str = "turbo.json";
+// all arguments that result in a stdout that much be directly parsable and
+// should not be paired with additional output (from the update notifier for
+// example)
+static TURBO_PURE_OUTPUT_ARGS: [&str; 6] = [
+    "--json",
+    "--dry",
+    "--dry-run",
+    "--dry=json",
+    "--graph",
+    "--dry-run=json",
+];
+
+static SUPPORTS_SKIP_INFER_SEMVER: &str = ">=1.7.0-canary.0";
 
 #[derive(Debug)]
 struct ShimArgs {
@@ -81,7 +94,7 @@ impl ShimArgs {
     pub fn has_json_flags(&self) -> bool {
         self.remaining_turbo_args
             .iter()
-            .any(|arg| arg == "--json" || arg == "--dry=json" || arg == "--graph")
+            .any(|arg| TURBO_PURE_OUTPUT_ARGS.contains(&arg.as_str()))
     }
 }
 
@@ -225,7 +238,7 @@ impl RepoState {
         let package_json: PackageJson =
             serde_json::from_reader(File::open(local_turbo_package_path)?)?;
         let version = Version::from_str(&package_json.version)?;
-        let skip_infer_versions = VersionReq::parse(">=1.7.0").unwrap();
+        let skip_infer_versions = VersionReq::parse(SUPPORTS_SKIP_INFER_SEMVER).unwrap();
         Ok(skip_infer_versions.matches(&version))
     }
 
@@ -325,5 +338,23 @@ pub fn run() -> Result<Payload> {
             eprintln!("Running command as global turbo");
             cli::run(None)
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_skip_infer_version_constraint() {
+        let req = VersionReq::parse(SUPPORTS_SKIP_INFER_SEMVER).unwrap();
+        let canary = Version::parse("1.7.0-canary.0").unwrap();
+        let release = Version::parse("1.7.0").unwrap();
+        let old = Version::parse("1.6.3").unwrap();
+        let new = Version::parse("1.8.0").unwrap();
+        assert!(req.matches(&release));
+        assert!(req.matches(&canary));
+        assert!(req.matches(&new));
+        assert!(!req.matches(&old));
     }
 }

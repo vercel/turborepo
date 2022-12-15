@@ -7,7 +7,7 @@ These are some common issues when starting.
 On Macs, unsigned binaries cannot be run by default. To manually approve this
 app, go to: [Apple menu > System Preferences, click Security & Privacy, under the General tab](x-apple.systempreferences:com.apple.preference.security). You'll see "“cargo-nextest” was blocked from use because it is
 not from an identified developer". Click the "Allow Anyway" button, and
-`cargo-nexttest` can be run on the next invocation.
+`cargo-nextest` can be run on the next invocation.
 
 See also: https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified-developer-mh40616/mac
 
