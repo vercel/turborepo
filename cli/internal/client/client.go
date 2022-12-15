@@ -311,7 +311,7 @@ func (c *ApiClient) ArtifactExists(hash string) (*http.Response, error) {
 	return c.getArtifact(hash, http.MethodHead)
 }
 
-// FetchArtifact attempts to retrieve the build artifact with the given hash from the
+// getArtifact attempts to retrieve the build artifact with the given hash from the
 // Remote Caching server
 func (c *ApiClient) getArtifact(hash string, httpMethod string) (*http.Response, error) {
 
