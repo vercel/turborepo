@@ -12,6 +12,7 @@ use turbopack_core::{
     asset::AssetVc,
     chunk::{dev::DevChunkingContextVc, ChunkingContextVc},
     context::AssetContextVc,
+    environment::ServerAddrVc,
     reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
@@ -67,6 +68,7 @@ pub async fn create_server_rendered_source(
     env: ProcessEnvVc,
     browserslist_query: &str,
     next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
 ) -> Result<ContentSourceVc> {
     let project_path = wrap_with_next_js_fs(project_path);
 
@@ -117,7 +119,7 @@ pub async fn create_server_rendered_source(
     transitions.insert("next-client".to_string(), next_client_transition);
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(transitions),
-        get_server_environment(server_ty, env),
+        get_server_environment(server_ty, env, server_addr),
         get_server_module_options_context(server_ty),
         get_server_resolve_options_context(project_path, server_ty, next_config),
     )

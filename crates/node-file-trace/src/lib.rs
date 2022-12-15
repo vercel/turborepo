@@ -40,7 +40,9 @@ use turbopack_cli_utils::issue::{ConsoleUi, IssueSeverityCliOption, LogOptions};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
     context::AssetContextVc,
-    environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    environment::{
+        EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment, ServerAddrVc,
+    },
     issue::{IssueSeverity, IssueVc},
     reference::all_assets,
     resolve::options::{ImportMapping, ResolvedMap},
