@@ -215,16 +215,14 @@ impl RepoState {
             }
         });
 
-        let should_run_current_turbo = !local_turbo_path.exists();
-
-        if should_run_current_turbo {
-            cli::run(Some(self))
-        } else {
+        if local_turbo_path.exists() {
             let canonical_local_turbo = local_turbo_path.canonicalize()?;
             // Otherwise we spawn the local turbo process.
             Ok(Payload::Rust(
                 self.spawn_local_turbo(&canonical_local_turbo, shim_args),
             ))
+        } else {
+            cli::run(Some(self))
         }
     }
 
