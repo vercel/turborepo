@@ -170,6 +170,16 @@ const nextConfig = withNextra({
         destination: "/repo/docs/handbook/tools/prisma",
       },
       {
+        source: "/pack/docs/comparisons/turbopack-vs-vite",
+        permanent: true,
+        destination: "/pack/docs/comparisons/vite",
+      },
+      {
+        source: "/pack/docs/comparisons/turbopack-vs-webpack",
+        permanent: true,
+        destination: "/pack/docs/comparisons/webpack",
+      },
+      {
         // Accidentally created, eventually removable. See below.
         source: "/repo/docs/core-concepts/running-tasks",
         destination: "/repo/docs/core-concepts/monorepos/running-tasks",
