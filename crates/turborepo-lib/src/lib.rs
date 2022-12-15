@@ -1,5 +1,6 @@
 mod cli;
 mod commands;
+mod opts;
 mod package_manager;
 mod shim;
 

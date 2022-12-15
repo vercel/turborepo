@@ -16,13 +16,13 @@ func main() {
 }
 
 //export nativeRunWithArgs
-func nativeRunWithArgs(argsString string) C.uint {
+func nativeRunWithArgs(argsString string, optsString string) C.uint {
 	var args turbostate.ParsedArgsFromRust
 	err := json.Unmarshal([]byte(argsString), &args)
 	if err != nil {
 		fmt.Printf("Error unmarshalling CLI args: %v\n Arg string: %v\n", err, argsString)
 		return 1
 	}
-	exitCode := cmd.RunWithArgs(args, turboVersion)
+	exitCode := cmd.RunWithArgs(args, optsString, turboVersion)
 	return C.uint(exitCode)
 }
