@@ -328,8 +328,6 @@
 <span id="328">328</span>
 <span id="329">329</span>
 <span id="330">330</span>
-<span id="331">331</span>
-<span id="332">332</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -381,13 +379,11 @@
     resolve::origin::{ResolveOrigin, ResolveOriginVc},
 };
 
-<span class="kw">use </span><span class="self">self</span>::{
-    chunk::{
-        EcmascriptChunkItemContent, EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions,
-        EcmascriptExportsVc,
-    },
-    references::AnalyzeEcmascriptModuleResultVc,
+<span class="kw">use </span><span class="self">self</span>::chunk::{
+    EcmascriptChunkItemContent, EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions,
+    EcmascriptExportsVc,
 };
+<span class="kw">pub use </span><span class="self">self</span>::references::AnalyzeEcmascriptModuleResultVc;
 <span class="kw">use crate</span>::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
     references::analyze_ecmascript_module,

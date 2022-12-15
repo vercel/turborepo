@@ -591,6 +591,11 @@
 <span id="591">591</span>
 <span id="592">592</span>
 <span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(trivial_bounds)]
@@ -649,6 +654,7 @@
 <span class="kw">pub use </span>turbopack_css <span class="kw">as </span>css;
 <span class="kw">pub use </span>turbopack_ecmascript <span class="kw">as </span>ecmascript;
 <span class="kw">use </span>turbopack_json::JsonModuleAssetVc;
+<span class="kw">use </span>turbopack_mdx::MdxModuleAssetVc;
 <span class="kw">use </span>turbopack_static::StaticModuleAssetVc;
 
 <span class="kw">use </span><span class="self">self</span>::{
@@ -803,6 +809,9 @@
             ModuleCssModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms).into()
         }
         ModuleType::Static =&gt; StaticModuleAssetVc::new(source, context.into()).into(),
+        ModuleType::Mdx(transforms) =&gt; {
+            MdxModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms).into()
+        }
         ModuleType::Custom(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
     })
 }
@@ -1180,6 +1189,7 @@
     turbopack_css::register();
     turbopack_ecmascript::register();
     turbopack_env::register();
+    turbopack_mdx::register();
     turbopack_json::register();
     turbopack_static::register();
     <span class="macro">include!</span>(<span class="macro">concat!</span>(<span class="macro">env!</span>(<span class="string">&quot;OUT_DIR&quot;</span>), <span class="string">&quot;/register.rs&quot;</span>));

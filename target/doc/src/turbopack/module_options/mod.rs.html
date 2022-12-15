@@ -201,6 +201,19 @@
 <span id="201">201</span>
 <span id="202">202</span>
 <span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::reference_type::{ReferenceType, UrlReferenceSubType};
@@ -280,11 +293,24 @@
         };
 
         <span class="kw">let </span>css_transforms = CssInputTransformsVc::cell(<span class="macro">vec!</span>[CssInputTransform::Nested]);
+        <span class="kw">let </span>mdx_transforms = EcmascriptInputTransformsVc::cell(
+            <span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript]
+                .iter()
+                .chain(app_transforms.<span class="kw">await</span><span class="question-mark">?</span>.iter())
+                .cloned()
+                .collect(),
+        );
 
         <span class="kw">let </span><span class="kw-2">mut </span>rules = <span class="macro">vec!</span>[
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.json&quot;</span>.to_string()),
                 <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Json)],
+            ),
+            ModuleRule::new(
+                ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.mdx&quot;</span>.to_string()),
+                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Mdx(
+                    mdx_transforms,
+                ))],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.css&quot;</span>.to_string()),
