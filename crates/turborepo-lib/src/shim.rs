@@ -222,7 +222,7 @@ impl RepoState {
         if should_run_current_turbo(&local_turbo_path)? {
             cli::run(Some(self))
         } else {
-            let canonical_local_turbo = local_turbo_path.canonicalize()?;
+            let canonical_local_turbo = fs_canonicalize(&local_turbo_path)?;
             // Otherwise we spawn the local turbo process.
             Ok(Payload::Rust(
                 self.spawn_local_turbo(&canonical_local_turbo, shim_args),
