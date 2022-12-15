@@ -22,6 +22,7 @@ Test help flag
   
   Options:
         --version                    
+        --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
         --api <API>                  Override the endpoint for API calls
         --color                      Force color usage in the terminal
         --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
@@ -84,6 +85,7 @@ Test help flag
   
   Options:
         --version                    
+        --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
         --api <API>                  Override the endpoint for API calls
         --color                      Force color usage in the terminal
         --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
@@ -132,6 +134,7 @@ Test help flag for link command
   Options:
         --no-gitignore               Do not create or modify .gitignore (default false)
         --version                    
+        --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
         --api <API>                  Override the endpoint for API calls
         --color                      Force color usage in the terminal
         --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
@@ -159,6 +162,7 @@ Test help flag for unlink command
   
   Options:
         --version                    
+        --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
         --api <API>                  Override the endpoint for API calls
         --color                      Force color usage in the terminal
         --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
@@ -187,6 +191,7 @@ Test help flag for login command
   Options:
         --sso-team <SSO_TEAM>        
         --version                    
+        --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
         --api <API>                  Override the endpoint for API calls
         --color                      Force color usage in the terminal
         --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
@@ -214,6 +219,7 @@ Test help flag for logout command
   
   Options:
         --version                    
+        --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
         --api <API>                  Override the endpoint for API calls
         --color                      Force color usage in the terminal
         --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile

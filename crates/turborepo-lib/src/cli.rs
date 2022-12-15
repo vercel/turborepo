@@ -48,6 +48,11 @@ pub enum DryRunMode {
 pub struct Args {
     #[clap(long, global = true)]
     pub version: bool,
+    #[clap(long, global = true)]
+    #[serde(skip)]
+    /// Skip any attempts to infer which version of Turbo the project is
+    /// configured to use
+    pub skip_infer: bool,
     /// Override the endpoint for API calls
     #[clap(long, global = true, value_parser)]
     pub api: Option<String>,
