@@ -7281,6 +7281,7 @@ version = "0.1.0"
 dependencies = [
  "colored",
  "is-terminal",
+ "semver 1.0.14",
  "serde",
  "strip-ansi-escapes",
  "terminal_size 0.2.3",
@@ -7315,6 +7316,7 @@ dependencies = [
  "turbopack-ecmascript",
  "turbopack-env",
  "turbopack-json",
+ "turbopack-mdx",
  "turbopack-static",
 ]
 
@@ -7474,6 +7476,20 @@ dependencies = [
  "anyhow",
  "serde",
  "serde_json",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbopack-core",
+ "turbopack-ecmascript",
+]
+
+[[package]]
+name = "turbopack-mdx"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "mdxjs",
+ "serde",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
