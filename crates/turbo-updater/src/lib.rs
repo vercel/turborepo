@@ -117,7 +117,7 @@ pub fn check_for_updates(
     // we have one cached latest version per channel. UpdateInformer does not
     // support this out of the box, so we hack it into the name by overloading
     // owner (in the supported owner/name format) to be channel/name.
-    let parsed_version = SemVerVersion::parse(&current_version)?;
+    let parsed_version = SemVerVersion::parse(current_version)?;
     let tag = get_tag_from_version(&parsed_version.pre);
     let package_name = format!("{}/{}", tag, package_name);
 
