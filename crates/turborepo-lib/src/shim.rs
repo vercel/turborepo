@@ -1,3 +1,5 @@
+#[cfg(not(windows))]
+use std::fs::canonicalize as fs_canonicalize;
 use std::{
     env,
     env::{current_dir, current_exe},
@@ -9,6 +11,8 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+#[cfg(windows)]
+use dunce::canonicalize as fs_canonicalize;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
@@ -245,7 +249,7 @@ impl RepoState {
             local_turbo_path.display()
         );
 
-        let cwd = self.root.canonicalize()?;
+        let cwd = fs_canonicalize(&self.root)?;
         let mut raw_args: Vec<_> = if self.local_turbo_supports_skip_infer()? {
             vec!["--skip-infer".to_string()]
         } else {
@@ -365,5 +369,15 @@ mod test {
         assert!(req.matches(&canary));
         assert!(req.matches(&new));
         assert!(!req.matches(&old));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_windows_path_normalization() -> Result<()> {
+        let cwd = current_dir()?;
+        let normalized = fs_canonicalize(&cwd)?;
+        // Just make sure it isn't a UNC path
+        assert!(!normalized.starts_with("\\\\?"));
+        Ok(())
     }
 }
