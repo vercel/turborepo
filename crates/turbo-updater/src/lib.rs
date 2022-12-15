@@ -34,7 +34,6 @@ struct NpmVersionData {
 enum VersionTag {
     Latest,
     Canary,
-    Next,
 }
 
 impl fmt::Display for VersionTag {
@@ -42,7 +41,6 @@ impl fmt::Display for VersionTag {
         match self {
             VersionTag::Latest => write!(f, "latest"),
             VersionTag::Canary => write!(f, "canary"),
-            VersionTag::Next => write!(f, "next"),
         }
     }
 }
@@ -76,7 +74,6 @@ impl Registry for NPMRegistry {
 fn get_tag_from_version(pre: &semver::Prerelease) -> VersionTag {
     match pre {
         t if t.contains("canary") => VersionTag::Canary,
-        t if t.contains("next") => VersionTag::Next,
         _ => VersionTag::Latest,
     }
 }
