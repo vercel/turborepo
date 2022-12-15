@@ -215,10 +215,7 @@ impl RepoState {
             }
         });
 
-        let current_turbo_is_local_turbo = local_turbo_path == current_exe()?;
-        // If the local turbo path doesn't exist or if we are local turbo, then we go
-        // ahead and run the Go code linked in the current binary.
-        if current_turbo_is_local_turbo || !local_turbo_path.try_exists()? {
+        if should_run_current_turbo(&local_turbo_path)? {
             cli::run(Some(self))
         } else {
             let canonical_local_turbo = local_turbo_path.canonicalize()?;
@@ -279,6 +276,18 @@ impl RepoState {
 
         Ok(command.wait()?.code().unwrap_or(2))
     }
+}
+
+/// If the local turbo path doesn't exist or if we are local turbo, then we go
+/// ahead and run the Go code linked in the current binary.
+fn should_run_current_turbo(local_turbo_path: &Path) -> Result<bool> {
+    // Note we must check if local_turbo_path exists before we
+    // canonicalize the path, otherwise we'll get an error.
+    if !local_turbo_path.exists() {
+        return Ok(true);
+    }
+
+    Ok(local_turbo_path.canonicalize()? == current_exe()?.canonicalize()?)
 }
 
 /// Checks for `TURBO_BINARY_PATH` variable. If it is set,
