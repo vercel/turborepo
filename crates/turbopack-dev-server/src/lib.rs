@@ -12,7 +12,7 @@ use std::{
     borrow::Cow,
     collections::{btree_map::Entry, BTreeMap},
     future::Future,
-    net::SocketAddr,
+    net::{SocketAddr, TcpListener},
     pin::Pin,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -212,8 +212,18 @@ async fn process_request_with_content_source(
 
 impl DevServer {
     pub fn listen(addr: SocketAddr) -> Result<DevServerBuilder, anyhow::Error> {
-        let server = Server::try_bind(&addr).context("Not able to start server")?;
+        // This is annoying. The hyper::Server doesn't allow us to know which port was
+        // bound (until we build it with a request handler) when using the standard
+        // `server::try_bind` approach. This is important when binding the `0` port,
+        // because the OS will remap that to an actual free port, and we need to know
+        // that port before we build the request handler. So we need to construct a
+        // real TCP listener, see if it bound, and get its bound address.
+        let listener = TcpListener::bind(addr).context("not able to bind address")?;
+        let addr = listener
+            .local_addr()
+            .context("not able to get bound address")?;
 
+        let server = Server::from_tcp(listener).context("Not able to start server")?;
         Ok(DevServerBuilder { addr, server })
     }
 }

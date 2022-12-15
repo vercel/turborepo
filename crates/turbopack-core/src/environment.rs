@@ -29,7 +29,8 @@ impl ServerAddr {
         let addr = &self.0.context("expected some server address")?;
         let uri = if addr.ip().is_loopback() || addr.ip().is_unspecified() {
             match addr.port() {
-                80 | 443 => "http://localhost".to_string(),
+                80 => "http://localhost".to_string(),
+                443 => "https://localhost".to_string(),
                 _ => format!("http://localhost:{}", addr.port()),
             }
         } else {
