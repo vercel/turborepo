@@ -1948,14 +1948,14 @@ impl Task {
             // This might be slightly inaccurate as we don't hold the lock for the whole
             // duration So it might be too large when concurrent modificiations
             // happen, but that's fine.
-            let mut cells_compute_duration = Duration::ZERO;
+            let mut dependent_tasks_compute_duration = Duration::ZERO;
             let mut included_tasks = HashSet::with_hasher(BuildNoHashHasher::<TaskId>::default());
             // Fill up missing durations
             for task_id in missing_durations.drain(..) {
                 backend.with_task(task_id, |task| {
                     let duration = task.gc_compute_duration();
                     task_duration_cache.insert(task_id, duration);
-                    cells_compute_duration += duration;
+                    dependent_tasks_compute_duration += duration;
                 })
             }
 
@@ -2095,7 +2095,7 @@ impl Task {
                                             if let Some(duration) =
                                                 task_duration_cache.get(&task_id)
                                             {
-                                                cells_compute_duration += *duration;
+                                                dependent_tasks_compute_duration += *duration;
                                             } else {
                                                 missing_durations.push(task_id);
                                             }
@@ -2106,7 +2106,20 @@ impl Task {
                         }
                     }
 
-                    let total_compute_duration = last_duration + cells_compute_duration;
+                    if !active {
+                        for task_id in state.output.dependent_tasks() {
+                            if included_tasks.insert(task_id) {
+                                if let Some(duration) = task_duration_cache.get(&task_id) {
+                                    dependent_tasks_compute_duration += *duration;
+                                } else {
+                                    missing_durations.push(task_id);
+                                }
+                            }
+                        }
+                    }
+
+                    let total_compute_duration =
+                        max(last_duration, dependent_tasks_compute_duration);
                     let total_compute_duration_u8 =
                         to_exp_u8(total_compute_duration.as_millis() as u64);
 
