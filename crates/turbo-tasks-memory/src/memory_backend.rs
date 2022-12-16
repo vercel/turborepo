@@ -21,7 +21,7 @@ use turbo_tasks::{
         TransientTaskType,
     },
     event::EventListener,
-    util::{FormatDuration, IdFactory, NoMoveVec},
+    util::{IdFactory, NoMoveVec},
     CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi,
 };
 
@@ -29,6 +29,7 @@ use crate::{
     cell::RecomputingCell,
     gc::GcQueue,
     output::Output,
+    priority_pair::PriorityPair,
     scope::{TaskScope, TaskScopeId},
     task::{
         run_add_to_scope_queue, run_remove_from_scope_queue, Task, TaskDependency,
@@ -45,6 +46,7 @@ pub struct MemoryBackend {
     backend_job_id_factory: IdFactory<BackendJobId>,
     task_cache: DashMap<Arc<PersistentTaskType>, TaskId, BuildHasherDefault<FxHasher>>,
     gc_queue: GcQueue,
+    scope_add_remove_priority: PriorityPair,
 }
 
 impl Default for MemoryBackend {
@@ -70,6 +72,7 @@ impl MemoryBackend {
             backend_job_id_factory: IdFactory::new(),
             task_cache: DashMap::default(),
             gc_queue: GcQueue::new(),
+            scope_add_remove_priority: PriorityPair::new(),
         }
     }
 
@@ -85,6 +88,7 @@ impl MemoryBackend {
     }
 
     pub(crate) fn create_backend_job(&self, job: Job) -> BackendJobId {
+        job.before_schedule(self);
         let id = self.backend_job_id_factory.get();
         // SAFETY: This is a fresh id
         unsafe {
@@ -607,6 +611,17 @@ pub(crate) enum Job {
 }
 
 impl Job {
+    fn before_schedule(&self, backend: &MemoryBackend) {
+        match self {
+            Job::RemoveFromScopes(..)
+            | Job::RemoveFromScope(..)
+            | Job::RemoveFromScopeQueue(..) => {
+                backend.scope_add_remove_priority.start_high();
+            }
+            _ => {}
+        }
+    }
+
     async fn run(self, backend: &MemoryBackend, turbo_tasks: &dyn TurboTasksBackendApi) {
         match self {
             Job::RemoveFromScopes(tasks, scopes) => {
@@ -615,6 +630,7 @@ impl Job {
                         task.remove_from_scopes(scopes.iter().cloned(), backend, turbo_tasks)
                     });
                 }
+                backend.scope_add_remove_priority.finish_high();
             }
             Job::RemoveFromScope(tasks, scope) => {
                 for task in tasks {
@@ -622,6 +638,7 @@ impl Job {
                         task.remove_from_scope(scope, backend, turbo_tasks)
                     });
                 }
+                backend.scope_add_remove_priority.finish_high();
             }
             Job::ScheduleWhenDirtyFromScope(tasks) => {
                 for task in tasks.into_iter() {
@@ -631,10 +648,22 @@ impl Job {
                 }
             }
             Job::AddToScopeQueue(queue, id, is_optimization_scope) => {
-                run_add_to_scope_queue(queue, id, is_optimization_scope, backend, turbo_tasks);
+                backend
+                    .scope_add_remove_priority
+                    .run_low(async {
+                        run_add_to_scope_queue(
+                            queue,
+                            id,
+                            is_optimization_scope,
+                            backend,
+                            turbo_tasks,
+                        );
+                    })
+                    .await;
             }
             Job::RemoveFromScopeQueue(queue, id) => {
                 run_remove_from_scope_queue(queue, id, backend, turbo_tasks);
+                backend.scope_add_remove_priority.finish_high();
             }
             Job::UnloadRootScope(id) => {
                 if let Some(future) = turbo_tasks.wait_foreground_done_excluding_own() {
