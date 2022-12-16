@@ -42,7 +42,9 @@ jobs:
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
             setup: "mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.exe cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.a && mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.h cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.h && rustup set default-host x86_64-pc-windows-gnu"
     runs-on: ${{ matrix.settings.host }}
-    container: ${{ matrix.settings.container }}
+    container:
+      image: ${{ matrix.settings.container }}
+      options: ${{ matrix.settings.container-options }}
     steps:
       - uses: actions/checkout@v3
         with:
