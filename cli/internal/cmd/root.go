@@ -48,7 +48,7 @@ func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs turbostate.ParsedA
 }
 
 // RunWithArgs runs turbo with the ParsedArgsFromRust that is passed from the Rust side.
-func RunWithArgs(args turbostate.ParsedArgsFromRust, optsString string, turboVersion string) int {
+func RunWithArgs(args turbostate.ParsedArgsFromRust, turboVersion string) int {
 	util.InitPrintf()
 	// TODO: replace this with a context
 	signalWatcher := signals.NewWatcher()
@@ -79,7 +79,7 @@ func RunWithArgs(args turbostate.ParsedArgsFromRust, optsString string, turboVer
 		} else if command.Prune != nil {
 			execErr = prune.ExecutePrune(helper, &args)
 		} else if command.Run != nil {
-			execErr = run.ExecuteRun(ctx, helper, signalWatcher, &args, optsString)
+			execErr = run.ExecuteRun(ctx, helper, signalWatcher, &args)
 		} else {
 			execErr = fmt.Errorf("unknown command: %v", command)
 		}
