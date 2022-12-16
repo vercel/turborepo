@@ -322,7 +322,8 @@ jobs:
           # next-swc/core
           cargo check -p next-binding --features __swc_core_next_core,__swc_core_binding_napi_plugin,__swc_core_testing_transform,__swc_testing,__swc_transform_styled_components,__swc_transform_styled_jsx,__swc_transform_emotion,__swc_transform_modularize_imports
           # next-swc/napi
-          cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__turbo_next_dev_server,__turbo_node_file_trace,__feature_mdx_rs
+          cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__turbo_next_dev_server,__turbo_node_file_trace,__feature_mdx_rs,__turbo_native_tls
+          cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__turbo_next_dev_server,__turbo_node_file_trace,__feature_mdx_rs,__turbo_rustls_tls
           # next-swc/wasm
           cargo check -p next-binding --features __swc_core_binding_wasm,__swc_core_binding_wasm_plugin,__feature_mdx_rs --target wasm32-unknown-unknown
 
@@ -637,12 +638,19 @@ jobs:
           args: build --release -p node-file-trace -p next-dev --target ${{ matrix.os.target }}
         if: matrix.os.target == 'x86_64-pc-windows-msvc'
 
-      - name: Build next-dev
+      - name: Build next-dev (native-tls)
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --release -p next-dev --target ${{ matrix.os.target }}
-        if: matrix.os.target != 'x86_64-pc-windows-msvc'
+        if: matrix.os.target != 'x86_64-pc-windows-msvc' && matrix.os.target != 'x86_64-unknown-linux-musl'
+
+      - name: Build next-dev (rustls-tls)
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release -p next-dev --target ${{ matrix.os.target }} --no-default-features --features cli,custom_allocator,rustls-tls
+        if: matrix.os.target == 'x86_64-unknown-linux-musl'
 
       - uses: actions/upload-artifact@v3
         with:
@@ -883,7 +891,10 @@ jobs:
           pnpm install
           pnpm run build
 
-      - run: npm i -g playwright-chromium@1.22.2 && npx playwright install-deps
+      - run: |
+          pnpm i -g playwright-chromium@1.29.0
+          pnpx playwright install --with-deps
+          pnpx playwright install-deps
         timeout-minutes: 15
 
       - run: npx @replayio/playwright install chromium
