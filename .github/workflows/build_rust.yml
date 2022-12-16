@@ -19,9 +19,11 @@ jobs:
           - host: macos-latest
             target: "x86_64-apple-darwin"
             lib-cache-key: turbo-lib-darwin-${{ inputs.release_branch }}
+            container-options: "--rm"
           - host: macos-latest
             target: "aarch64-apple-darwin"
             lib-cache-key: turbo-lib-darwin-${{ inputs.release_branch }}
+            container-options: "--rm"
           - host: ubuntu-latest
             container: ubuntu:xenial
             container-options: "--platform=linux/amd64 --rm"
@@ -41,6 +43,7 @@ jobs:
             target: x86_64-pc-windows-gnu
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
             setup: "mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.exe cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.a && mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.h cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.h && rustup set default-host x86_64-pc-windows-gnu"
+            container-options: "--rm"
     runs-on: ${{ matrix.settings.host }}
     container:
       image: ${{ matrix.settings.container }}
