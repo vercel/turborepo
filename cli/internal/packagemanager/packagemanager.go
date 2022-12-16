@@ -73,6 +73,7 @@ var packageManagers = []PackageManager{
 	nodejsNpm,
 	nodejsPnpm,
 	nodejsPnpm6,
+	cargo,
 }
 
 var (
@@ -141,9 +142,9 @@ func (pm PackageManager) GetWorkspaces(rootpath turbopath.AbsoluteSystemPath) ([
 		return nil, err
 	}
 
-	justJsons := make([]string, len(globs))
+	justSpecFiles := make([]string, len(globs))
 	for i, space := range globs {
-		justJsons[i] = filepath.Join(space, "package.json")
+		justSpecFiles[i] = filepath.Join(space, pm.Specfile)
 	}
 
 	ignores, err := pm.getWorkspaceIgnores(pm, rootpath)
@@ -151,7 +152,7 @@ func (pm PackageManager) GetWorkspaces(rootpath turbopath.AbsoluteSystemPath) ([
 		return nil, err
 	}
 
-	f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), justJsons, ignores)
+	f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), justSpecFiles, ignores)
 	if err != nil {
 		return nil, err
 	}

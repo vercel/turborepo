@@ -234,6 +234,7 @@ func Test_GetWorkspaces(t *testing.T) {
 		"nodejs-yarn":  repoRoot.UntypedJoin("../../../examples/with-yarn"),
 		"nodejs-pnpm":  repoRoot.UntypedJoin("../../../examples/basic"),
 		"nodejs-pnpm6": repoRoot.UntypedJoin("../../../examples/basic"),
+		"cargo":        repoRoot.UntypedJoin("../../../examples/with-cargo"),
 	}
 
 	want := map[string][]string{
@@ -271,6 +272,11 @@ func Test_GetWorkspaces(t *testing.T) {
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/eslint-config-custom/package.json")),
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/tsconfig/package.json")),
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/ui/package.json")),
+		},
+		"cargo": {
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-cargo/crates/compiler/Cargo.toml")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-cargo/crates/parser/Cargo.toml")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-cargo/crates/runtime/Cargo.toml")),
 		},
 	}
 
@@ -325,6 +331,7 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 		"nodejs-yarn":  {"apps/*/node_modules/**", "packages/*/node_modules/**"},
 		"nodejs-pnpm":  {"**/node_modules/**", "**/bower_components/**", "packages/skip"},
 		"nodejs-pnpm6": {"**/node_modules/**", "**/bower_components/**", "packages/skip"},
+		"cargo":        {"ignored"},
 	}
 
 	tests := make([]test, len(packageManagers))
