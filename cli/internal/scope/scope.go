@@ -118,7 +118,7 @@ func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, 
 		Graph:                  &ctx.WorkspaceGraph,
 		WorkspaceInfos:         ctx.WorkspaceInfos,
 		Cwd:                    cwd,
-		PackagesChangedInRange: opts.getPackageChangeFunc(scm, cwd, ctx.WorkspaceInfos, ctx.PackageManager),
+		PackagesChangedInRange: opts.getPackageChangeFunc(scm, cwd, ctx.WorkspaceInfos, ctx.PackageManagers.JavaScript),
 	}
 	filterPatterns := opts.FilterPatterns
 	legacyFilterPatterns := opts.LegacyFilter.asFilterPatterns()

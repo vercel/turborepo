@@ -68,7 +68,7 @@ type Context struct {
 
 	// PackageManager is an abstraction for all the info a package manager
 	// can give us about the repo.
-	PackageManager *packagemanager.PackageManager
+	PackageManagers *packagemanager.PackageManagers
 
 	// Used to arbitrate access to the graph. We parallelise most build operations
 	// and Go maps aren't natively threadsafe so this is needed.
@@ -150,11 +150,11 @@ func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *
 		RootNode:       core.ROOT_NODE_NAME,
 	}
 	c.WorkspaceGraph.Connect(dag.BasicEdge(util.RootPkgName, core.ROOT_NODE_NAME))
-	packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON)
+	packageManagers, err := packagemanager.GetPackageManagers(repoRoot, rootPackageJSON)
 	if err != nil {
 		return nil, err
 	}
-	c.PackageManager = packageManager
+	c.PackageManagers = packageManagers
 	return c, nil
 }
 
@@ -167,13 +167,13 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 
 	var warnings Warnings
 
-	packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON)
+	packageManagers, err := packagemanager.GetPackageManagers(repoRoot, rootPackageJSON)
 	if err != nil {
 		return nil, err
 	}
-	c.PackageManager = packageManager
+	c.PackageManagers = packageManagers
 
-	if lockfile, err := c.PackageManager.ReadLockfile(repoRoot); err != nil {
+	if lockfile, err := c.PackageManagers.JavaScript.ReadLockfile(repoRoot); err != nil {
 		warnings.append(err)
 	} else {
 		c.Lockfile = lockfile
@@ -186,7 +186,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 
 	// Get the workspaces from the package manager.
 	// workspaces are absolute paths
-	workspaces, err := c.PackageManager.GetWorkspaces(repoRoot)
+	workspaces, err := c.PackageManagers.JavaScript.GetWorkspaces(repoRoot)
 
 	if err != nil {
 		return nil, fmt.Errorf("workspace configuration error: %w", err)

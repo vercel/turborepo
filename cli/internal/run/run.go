@@ -234,7 +234,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		pipeline,
 		turboJSON.GlobalEnv,
 		turboJSON.GlobalDeps,
-		pkgDepGraph.PackageManager,
+		pkgDepGraph.PackageManagers.JavaScript,
 		pkgDepGraph.Lockfile,
 		r.base.Logger,
 		os.Environ(),
@@ -258,7 +258,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		FilteredPkgs: filteredPkgs,
 		Opts:         r.opts,
 	}
-	packageManager := pkgDepGraph.PackageManager
+	packageManager := pkgDepGraph.PackageManagers.JavaScript
 
 	vertexSet := make(util.Set)
 	for _, v := range g.WorkspaceGraph.Vertices() {

@@ -275,10 +275,10 @@ func TestResolvePackages(t *testing.T) {
 				IgnorePatterns:    []string{tc.ignore},
 				GlobalDepPatterns: tc.globalDeps,
 			}, filepath.FromSlash("/dummy/repo/root"), scm, &context.Context{
-				WorkspaceInfos: workspaceInfos,
-				WorkspaceNames: packageNames,
-				PackageManager: &packagemanager.PackageManager{Lockfile: tc.lockfile},
-				WorkspaceGraph: graph,
+				WorkspaceInfos:  workspaceInfos,
+				WorkspaceNames:  packageNames,
+				PackageManagers: &packagemanager.PackageManagers{JavaScript: &packagemanager.PackageManager{Lockfile: tc.lockfile}},
+				WorkspaceGraph:  graph,
 			}, tui, logger)
 			if err != nil {
 				t.Errorf("expected no error, got %v", err)

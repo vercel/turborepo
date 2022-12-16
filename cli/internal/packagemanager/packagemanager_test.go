@@ -101,7 +101,7 @@ func TestParsePackageManagerString(t *testing.T) {
 	}
 }
 
-func TestGetPackageManager(t *testing.T) {
+func TestGetJavaScriptPackageManager(t *testing.T) {
 	cwdRaw, err := os.Getwd()
 	assert.NilError(t, err, "os.Getwd")
 	cwd, err := fs.GetCwd(cwdRaw)
@@ -151,13 +151,13 @@ func TestGetPackageManager(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotPackageManager, err := GetPackageManager(tt.projectDirectory, tt.pkg)
+			gotPackageManager, err := GetPackageManagers(tt.projectDirectory, tt.pkg)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("GetPackageManager() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetPackageManagers() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if gotPackageManager.Name != tt.want {
-				t.Errorf("GetPackageManager() = %v, want %v", gotPackageManager.Name, tt.want)
+			if gotPackageManager.JavaScript.Name != tt.want {
+				t.Errorf("GetPackageManagers() = %v, want %v", gotPackageManager.JavaScript.Name, tt.want)
 			}
 		})
 	}

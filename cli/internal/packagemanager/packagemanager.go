@@ -18,6 +18,12 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
+// PackageManagers contains the package managers for each language in the repository
+type PackageManagers struct {
+	JavaScript *PackageManager
+	Rust       *PackageManager
+}
+
 // PackageManager is an abstraction across package managers
 type PackageManager struct {
 	// The descriptive name of the Package Manager.
@@ -91,14 +97,30 @@ func ParsePackageManagerString(packageManager string) (manager string, version s
 	return strings.Split(match, "@")[0], strings.Split(match, "@")[1], nil
 }
 
-// GetPackageManager attempts all methods for identifying the package manager in use.
-func GetPackageManager(projectDirectory turbopath.AbsoluteSystemPath, pkg *fs.PackageJSON) (packageManager *PackageManager, err error) {
-	result, _ := readPackageManager(pkg)
-	if result != nil {
-		return result, nil
+// GetPackageManagers attempts all methods for identifying the package manager in use.
+func GetPackageManagers(projectDirectory turbopath.AbsoluteSystemPath, pkg *fs.PackageJSON) (packageManager *PackageManagers, err error) {
+	packageManagers := &PackageManagers{}
+
+	hasCargo, err := cargo.detect(projectDirectory, &cargo)
+	if err != nil {
+		return nil, err
+	}
+	if hasCargo {
+		packageManagers.Rust = &cargo
 	}
 
-	return detectPackageManager(projectDirectory)
+	result, _ := readPackageManager(pkg)
+	if result != nil {
+		packageManagers.JavaScript = result
+	} else {
+		pm, err := detectJavaScriptPackageManager(projectDirectory)
+		if err != nil {
+			return nil, err
+		}
+		packageManagers.JavaScript = pm
+	}
+
+	return packageManagers, nil
 }
 
 // readPackageManager attempts to read the package manager from the package.json.
@@ -120,8 +142,8 @@ func readPackageManager(pkg *fs.PackageJSON) (packageManager *PackageManager, er
 	return nil, errors.New(util.Sprintf("We did not find a package manager specified in your root package.json. Please set the \"packageManager\" property in your root package.json (${UNDERLINE}https://nodejs.org/api/packages.html#packagemanager)${RESET} or run `npx @turbo/codemod add-package-manager` in the root of your monorepo."))
 }
 
-// detectPackageManager attempts to detect the package manager by inspecting the project directory state.
-func detectPackageManager(projectDirectory turbopath.AbsoluteSystemPath) (packageManager *PackageManager, err error) {
+// detectJavaScriptPackageManager attempts to detect the package manager by inspecting the project directory state.
+func detectJavaScriptPackageManager(projectDirectory turbopath.AbsoluteSystemPath) (packageManager *PackageManager, err error) {
 	for _, packageManager := range packageManagers {
 		isResponsible, err := packageManager.detect(projectDirectory, &packageManager)
 		if err != nil {

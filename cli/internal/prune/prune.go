@@ -88,12 +88,12 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 		p.base.Logger.Trace("internal deps", "value", target.InternalDeps)
 	}
 
-	canPrune, err := ctx.PackageManager.CanPrune(p.base.RepoRoot)
+	canPrune, err := ctx.PackageManagers.JavaScript.CanPrune(p.base.RepoRoot)
 	if err != nil {
 		return err
 	}
 	if !canPrune {
-		return errors.Errorf("this command is not yet implemented for %s", ctx.PackageManager.Name)
+		return errors.Errorf("this command is not yet implemented for %s", ctx.PackageManagers.JavaScript.Name)
 	}
 	if ctx.Lockfile == nil {
 		return errors.New("Cannot prune without parsed lockfile")
@@ -105,17 +105,17 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 	if err := packageJSONPath.EnsureDir(); err != nil {
 		return errors.Wrap(err, "could not create output directory")
 	}
-	if workspacePath := ctx.PackageManager.WorkspaceConfigurationPath; workspacePath != "" && p.base.RepoRoot.UntypedJoin(workspacePath).FileExists() {
+	if workspacePath := ctx.PackageManagers.JavaScript.WorkspaceConfigurationPath; workspacePath != "" && p.base.RepoRoot.UntypedJoin(workspacePath).FileExists() {
 		workspaceFile := fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin(workspacePath)}
-		if err := fs.CopyFile(&workspaceFile, outDir.UntypedJoin(ctx.PackageManager.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
-			return errors.Wrapf(err, "could not copy %s", ctx.PackageManager.WorkspaceConfigurationPath)
+		if err := fs.CopyFile(&workspaceFile, outDir.UntypedJoin(ctx.PackageManagers.JavaScript.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
+			return errors.Wrapf(err, "could not copy %s", ctx.PackageManagers.JavaScript.WorkspaceConfigurationPath)
 		}
-		if err := fs.CopyFile(&workspaceFile, fullDir.UntypedJoin(ctx.PackageManager.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
-			return errors.Wrapf(err, "could not copy %s", ctx.PackageManager.WorkspaceConfigurationPath)
+		if err := fs.CopyFile(&workspaceFile, fullDir.UntypedJoin(ctx.PackageManagers.JavaScript.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
+			return errors.Wrapf(err, "could not copy %s", ctx.PackageManagers.JavaScript.WorkspaceConfigurationPath)
 		}
 		if opts.Docker {
-			if err := fs.CopyFile(&workspaceFile, outDir.UntypedJoin("json", ctx.PackageManager.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
-				return errors.Wrapf(err, "could not copy %s", ctx.PackageManager.WorkspaceConfigurationPath)
+			if err := fs.CopyFile(&workspaceFile, outDir.UntypedJoin("json", ctx.PackageManagers.JavaScript.WorkspaceConfigurationPath).ToStringDuringMigration()); err != nil {
+				return errors.Wrapf(err, "could not copy %s", ctx.PackageManagers.JavaScript.WorkspaceConfigurationPath)
 			}
 		}
 	}
@@ -169,7 +169,7 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 		return errors.Wrap(err, "Failed creating pruned lockfile")
 	}
 
-	lockfilePath := outDir.UntypedJoin(ctx.PackageManager.Lockfile)
+	lockfilePath := outDir.UntypedJoin(ctx.PackageManagers.JavaScript.Lockfile)
 	lockfileFile, err := lockfilePath.Create()
 	if err != nil {
 		return errors.Wrap(err, "Failed to create lockfile")
@@ -202,7 +202,7 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 	// include any patches that might have been pruned.
 	if originalPatches := ctx.Lockfile.Patches(); originalPatches != nil {
 		patches := lockfile.Patches()
-		if err := ctx.PackageManager.PrunePatchedPackages(rootPackageJSON, patches); err != nil {
+		if err := ctx.PackageManagers.JavaScript.PrunePatchedPackages(rootPackageJSON, patches); err != nil {
 			return errors.Wrapf(err, "Unable to prune patches section of %s", rootPackageJSONPath)
 		}
 		packageJSONContent, err := fs.MarshalPackageJSON(rootPackageJSON)
