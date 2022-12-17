@@ -205,7 +205,7 @@ impl RopeBuilder {
         self.finish();
         Rope {
             length: self.length,
-            data: self.committed.into(),
+            data: InnerRope::from(self.committed),
         }
     }
 }
@@ -304,6 +304,10 @@ impl From<Bytes> for InnerRope {
 
 impl From<Vec<RopeElem>> for InnerRope {
     fn from(mut els: Vec<RopeElem>) -> Self {
+        // The RopeBuilder likely over-allocated the vec so we could insert more
+        // RopeElems into it. But we're constructing a immutable Rope which may
+        // stay alive forever, so we need to trim any excess capacity to save
+        // memory.
         els.shrink_to_fit();
         InnerRope(Arc::new(els))
     }
@@ -468,6 +472,9 @@ impl BufRead for RopeReader {
             Some(b) => b,
         };
 
+        // This is just so we can get a reference to the asset that is kept alive by the
+        // RopeReader itself. We can then auto-convert that reference into the needed u8
+        // slice reference.
         self.stack.push(StackElem::Local(bytes));
         let Some(StackElem::Local(bytes)) = self.stack.last() else {
              unreachable!()
