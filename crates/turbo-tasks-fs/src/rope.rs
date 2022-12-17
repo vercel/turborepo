@@ -212,7 +212,6 @@ impl From<&'static str> for RopeBuilder {
 impl From<Vec<u8>> for RopeBuilder {
     fn from(bytes: Vec<u8>) -> Self {
         RopeBuilder {
-            length: bytes.len(),
             uncommited: Uncommitted::from(bytes),
             ..Default::default()
         }
