@@ -89,7 +89,7 @@ impl ContentSource for SourceMapContentSource {
         };
 
         let sm = if let Some(id) = id {
-            let section = gen.by_section(StringVc::cell(id.to_string())).await?;
+            let section = gen.by_section(id).await?;
             match &*section {
                 Some(sm) => *sm,
                 None => return Ok(ContentSourceResultVc::not_found()),

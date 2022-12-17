@@ -4,7 +4,7 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sourcemap::SourceMap as CrateMap;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt};
+use turbo_tasks::TryJoinIterExt;
 use turbo_tasks_fs::rope::{Rope, RopeBuilder, RopeVc};
 
 use crate::source_pos::SourcePos;
@@ -16,7 +16,7 @@ pub trait GenerateSourceMap {
     fn generate_source_map(&self) -> SourceMapVc;
 
     /// Returns an individual section of the larger source map, if found.
-    fn by_section(&self, _section: StringVc) -> OptionSourceMapVc {
+    fn by_section(&self, _section: &str) -> OptionSourceMapVc {
         OptionSourceMapVc::cell(None)
     }
 }

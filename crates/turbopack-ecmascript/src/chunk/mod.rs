@@ -741,14 +741,15 @@ impl GenerateSourceMap for EcmascriptChunkContent {
     }
 
     #[turbo_tasks::function]
-    async fn by_section(&self, section: StringVc) -> Result<OptionSourceMapVc> {
-        let section = section.await?;
-        for entry in self.module_factories.iter() {
-            let id = entry.id().to_truncated_hash();
-
-            if id == *section {
-                let sm = entry.code_vc.generate_source_map();
-                return Ok(OptionSourceMapVc::cell(Some(sm)));
+    async fn by_section(&self, section: &str) -> Result<OptionSourceMapVc> {
+        // Weirdly, the ContentSource will have already URL decoded the ModuleId, and we
+        // can't reparse that via serde.
+        if let Ok(id) = ModuleId::parse(section) {
+            for entry in self.module_factories.iter() {
+                if id == *entry.id() {
+                    let sm = entry.code_vc.generate_source_map();
+                    return Ok(OptionSourceMapVc::cell(Some(sm)));
+                }
             }
         }
 
@@ -764,13 +765,18 @@ struct HmrUpdateEntry<'a> {
 
 impl<'a> HmrUpdateEntry<'a> {
     fn new(entry: &'a EcmascriptChunkContentEntry, chunk_path: &str) -> Self {
+        /// serde_qs can't serialize a lone enum when it's [serde::untagged].
+        #[derive(Serialize)]
+        struct Id<'a> {
+            id: &'a ModuleId,
+        }
         HmrUpdateEntry {
             code: entry.source_code(),
             map: entry.code.has_source_map().then(|| {
                 format!(
-                    "/__turbopack_sourcemap__/{}.map?id={}",
+                    "/__turbopack_sourcemap__/{}.map?{}",
                     chunk_path,
-                    entry.id.to_truncated_hash()
+                    serde_qs::to_string(&Id { id: &entry.id }).unwrap()
                 )
             }),
         }
