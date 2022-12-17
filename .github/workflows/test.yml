@@ -835,8 +835,6 @@ jobs:
           commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})
 
   next_js_integration:
-    needs: [determine_jobs, rust_prepare, rust_build_release]
-    if: needs.determine_jobs.outputs.rust == 'true'
     name: Next.js integration test
     runs-on: ubuntu-latest-8-core-oss
     strategy:
@@ -879,11 +877,6 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           path: artifacts
-
-      - name: Validate next-dev binary
-        run: |
-          chmod +x ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev
-          ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev --display-version
 
       - name: Install dependencies
         run: |
