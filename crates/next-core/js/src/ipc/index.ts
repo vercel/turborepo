@@ -1,6 +1,9 @@
 import { createConnection } from "node:net";
 
-import { StackFrame, parse as parseStackTrace } from "@vercel/turbopack-next/compiled/stacktrace-parser";
+import {
+  StackFrame,
+  parse as parseStackTrace,
+} from "@vercel/turbopack-next/compiled/stacktrace-parser";
 
 export type StructuredError = {
   name: string;
