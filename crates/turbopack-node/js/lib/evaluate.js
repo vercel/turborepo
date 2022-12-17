@@ -14,8 +14,8 @@ const ipc = IPC;
         }
         const value = await execute.apply(null, msg.arguments);
         await ipc.send({
-          type: "javaScriptValue",
-          data: Array.from(Buffer.from(JSON.stringify(value))),
+          type: "jsonValue",
+          data: JSON.stringify(value),
         });
         break;
       }

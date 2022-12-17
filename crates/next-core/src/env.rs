@@ -6,7 +6,7 @@ use turbo_tasks_env::{
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_env::{EmbeddableProcessEnvVc, TryDotenvProcessEnvVc};
 
-use crate::next_config::{NextConfigValueVc, RemotePattern};
+use crate::next_config::{NextConfigVc, RemotePattern};
 
 /// Loads a series of dotenv files according to the precedence rules set by
 /// https://nextjs.org/docs/basic-features/environment-variables#environment-variable-load-order
@@ -48,7 +48,7 @@ pub async fn load_env(project_path: FileSystemPathVc) -> Result<ProcessEnvVc> {
 pub async fn env_for_js(
     env: ProcessEnvVc,
     client: bool,
-    next_config: Option<NextConfigValueVc>,
+    next_config: Option<NextConfigVc>,
 ) -> Result<ProcessEnvVc> {
     let env = if client {
         FilterProcessEnvVc::new(env, "NEXT_PUBLIC_".to_string()).into()
@@ -66,7 +66,6 @@ pub async fn env_for_js(
         ..Default::default()
     });
 
-    println!("image_config: {:?}", image_config);
     Ok(CustomProcessEnvVc::new(
         env,
         EnvMapVc::cell(indexmap! {

@@ -7,8 +7,8 @@ type IpcIncomingMessage = {
 };
 
 type IpcOutgoingMessage = {
-  type: "javaScriptValue";
-  data: number[];
+  type: "jsonValue";
+  data: string;
 };
 
 const ipc = IPC as Ipc<IpcIncomingMessage, IpcOutgoingMessage>;
@@ -28,8 +28,8 @@ const ipc = IPC as Ipc<IpcIncomingMessage, IpcOutgoingMessage>;
         }
         const value = await execute.apply(null, msg.arguments);
         await ipc.send({
-          type: "javaScriptValue",
-          data: Array.from(Buffer.from(JSON.stringify(value))),
+          type: "jsonValue",
+          data: JSON.stringify(value),
         });
         break;
       }

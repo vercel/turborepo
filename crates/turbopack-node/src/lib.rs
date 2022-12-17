@@ -457,7 +457,7 @@ enum EvalJavaScriptOutgoingMessage {
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum EvalJavaScriptIncomingMessage {
-    JavaScriptValue { data: Vec<u8> },
+    JsonValue { data: String },
     Error(StructuredError),
 }
 

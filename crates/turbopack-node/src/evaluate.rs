@@ -30,13 +30,13 @@ pub enum JavaScriptValue {
 async fn eval_js_operation(
     operation: &mut NodeJsOperation,
     content: EvalJavaScriptOutgoingMessage,
-) -> Result<Vec<u8>> {
+) -> Result<String> {
     operation.send(content).await?;
     match operation.recv().await? {
         EvalJavaScriptIncomingMessage::Error(err) => {
             bail!(err.print(Default::default(), None).await?);
         }
-        EvalJavaScriptIncomingMessage::JavaScriptValue { data } => Ok(data),
+        EvalJavaScriptIncomingMessage::JsonValue { data } => Ok(data),
     }
 }
 

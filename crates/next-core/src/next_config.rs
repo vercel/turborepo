@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, Value};
-use turbo_tasks_fs::{to_sys_path, FileContent, FileSystemPathVc};
+use turbo_tasks_fs::{to_sys_path, FileSystemEntryType, FileSystemPathVc};
 use turbopack_core::{
     chunk::ChunkingContextVc, context::AssetContextVc, source_asset::SourceAssetVc,
 };
@@ -15,11 +15,9 @@ use turbopack_node::evaluate::{evaluate, JavaScriptValue};
 
 use crate::embed_js::next_asset;
 
-#[turbo_tasks::value(transparent)]
-pub struct NextConfigValue(NextConfig);
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, TraceRawVcs)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[turbo_tasks::value(transparent, serialization = "custom")]
 pub struct NextConfig {
     pub config_file: Option<String>,
     pub config_file_name: String,
@@ -59,6 +57,7 @@ pub struct ImageConfig {
 
 impl Default for ImageConfig {
     fn default() -> Self {
+        // https://github.com/vercel/next.js/blob/327634eb/packages/next/shared/lib/image-config.ts#L100-L114
         Self {
             device_sizes: vec![640, 750, 828, 1080, 1200, 1920, 2048, 3840],
             image_sizes: vec![16, 32, 48, 64, 96, 128, 256, 384],
@@ -162,20 +161,24 @@ pub async fn load_next_config(
     chunking_context: ChunkingContextVc,
     project_root: FileSystemPathVc,
     intermediate_output_path: FileSystemPathVc,
-) -> Result<NextConfigValueVc> {
-    let mut chunks = None;
-    let next_config_mjs_path = project_root.join("next.config.mjs");
-    let next_config_js_path = project_root.join("next.config.js");
-    if let Some(config_asset) = if matches!(
-        &*next_config_mjs_path.read().await?,
-        FileContent::Content(_)
+) -> Result<NextConfigVc> {
+    let next_config_mjs_path = project_root.join("next.config.mjs").realpath();
+    let next_config_js_path = project_root.join("next.config.js").realpath();
+    let config_asset = if matches!(
+        &*next_config_mjs_path.get_type().await?,
+        FileSystemEntryType::File
     ) {
         Some(SourceAssetVc::new(next_config_mjs_path))
-    } else if matches!(&*next_config_js_path.read().await?, FileContent::Content(_)) {
+    } else if matches!(
+        &*next_config_js_path.get_type().await?,
+        FileSystemEntryType::File
+    ) {
         Some(SourceAssetVc::new(next_config_js_path))
     } else {
         None
-    } {
+    };
+
+    let chunks = config_asset.map(|config_asset| {
         let config_chunk = EcmascriptModuleAssetVc::new(
             config_asset.into(),
             context,
@@ -184,8 +187,8 @@ pub async fn load_next_config(
             context.environment(),
         )
         .as_ecmascript_chunk_placeable();
-        chunks = Some(EcmascriptChunkPlaceablesVc::cell(vec![config_chunk]));
-    }
+        EcmascriptChunkPlaceablesVc::cell(vec![config_chunk])
+    });
     let asset_path = intermediate_output_path.join("load-next-config.js");
     let load_next_config_asset = next_asset(asset_path, "entry/config/next.js");
     let config_value = evaluate(
@@ -207,7 +210,7 @@ pub async fn load_next_config(
     match &*config_value {
         JavaScriptValue::Value(val) => {
             let next_config: NextConfig = serde_json::from_reader(val.read())?;
-            Ok(NextConfigValue(next_config).cell())
+            Ok(next_config.cell())
         }
         JavaScriptValue::Stream(_) => {
             unimplemented!("Stream not supported now");
