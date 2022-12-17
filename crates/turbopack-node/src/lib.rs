@@ -474,18 +474,6 @@ impl StructuredError {
     ) -> Result<String> {
         let mut message = String::new();
 
-        macro_rules! write_frame {
-            ($f:ident, $path:expr) => {
-                match $f.get_pos() {
-                    Some((l, c)) => match &$f.name {
-                        Some(n) => writeln!(message, "  at {} ({}:{}:{})", n, $path, l, c),
-                        None => writeln!(message, "  at {}:{}:{}", $path, l, c),
-                    },
-                    None => writeln!(message, "  at {}", $path),
-                }
-            };
-        }
-
         writeln!(message, "{}: {}", self.name, self.message)?;
 
         for frame in &self.stack {
@@ -496,17 +484,17 @@ impl StructuredError {
                             .trace()
                             .await?;
                         if let TraceResult::Found(f) = &*trace {
-                            write_frame!(f, f.file)?;
+                            writeln!(message, "  at {} [{}]", f, frame.with_path(path))?;
                             continue;
                         }
                     }
 
-                    write_frame!(frame, path)?;
+                    writeln!(message, "  at {}", frame.with_path(path))?;
                     continue;
                 }
             }
 
-            write_frame!(frame, frame.file)?;
+            writeln!(message, "  at {}", frame)?;
         }
         Ok(message)
     }
