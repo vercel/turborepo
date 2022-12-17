@@ -26,7 +26,3 @@ declare module "@vercel/turbopack-next/compiled/strip-ansi" {
   import m from "strip-ansi";
   export default m;
 }
-
-declare module "@vercel/turbopack-next/compiled/@vercel/turbopack-node-ipc" {
-  export * from "@vercel/turbopack-node-ipc";
-}

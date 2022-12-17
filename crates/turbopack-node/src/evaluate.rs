@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, bail, Result};
 use turbo_tasks::Value;
-use turbo_tasks_fs::{embed_file, rope::Rope, to_sys_path, FileSystemPathVc};
+use turbo_tasks_fs::{rope::Rope, to_sys_path, File, FileSystemPathVc};
 use turbopack_core::{
     asset::AssetVc,
     chunk::{ChunkGroupVc, ChunkingContextVc},
@@ -52,10 +52,11 @@ pub async fn evaluate(
     chunking_context: ChunkingContextVc,
     runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
 ) -> Result<JavaScriptValueVc> {
+    let path = intermediate_output_path.join("evaluate.js");
     let entry_module = EcmascriptModuleAssetVc::new(
         VirtualAssetVc::new(
-            intermediate_output_path.join("evaluate.js"),
-            embed_file!("js/src/evaluate.ts").into(),
+            path,
+            File::from("require('@vercel/turbopack-next/ipc/evaluate')").into(),
         )
         .into(),
         context,
@@ -63,12 +64,13 @@ pub async fn evaluate(
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
         context.environment(),
     );
+
     if let (Some(cwd), Some(entrypoint)) = (
         to_sys_path(intermediate_output_path).await?,
-        to_sys_path(intermediate_output_path.join("evaluate.js")).await?,
+        to_sys_path(path).await?,
     ) {
         let bootstrap = NodeJsBootstrapAsset {
-            path: intermediate_output_path.join("evaluate.js"),
+            path,
             chunk_group: ChunkGroupVc::from_chunk(
                 entry_module.as_evaluated_chunk(chunking_context, runtime_entries),
             ),

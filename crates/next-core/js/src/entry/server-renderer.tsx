@@ -11,7 +11,7 @@ import { ServerResponseShim } from "@vercel/turbopack-next/internal/http";
 import {
   IPC,
   Ipc,
-} from "@vercel/turbopack-next/compiled/@vercel/turbopack-node-ipc";
+} from "@vercel/turbopack-next/ipc/index";
 import type { RenderData } from "types/turbopack";
 import type { ChunkGroup } from "types/next";
 

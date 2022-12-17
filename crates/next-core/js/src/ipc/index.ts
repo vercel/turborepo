@@ -1,6 +1,6 @@
-import net from "node:net";
+import { createConnection } from "node:net";
 
-import { StackFrame, parse as parseStackTrace } from "stacktrace-parser";
+import { StackFrame, parse as parseStackTrace } from "@vercel/turbopack-next/compiled/stacktrace-parser";
 
 export type StructuredError = {
   name: string;
@@ -34,7 +34,7 @@ export type Ipc<TIncoming, TOutgoing> = {
 function createIpc<TIncoming, TOutgoing>(
   port: number
 ): Ipc<TIncoming, TOutgoing> {
-  const socket = net.createConnection(port, "127.0.0.1");
+  const socket = createConnection(port, "127.0.0.1");
   const packetQueue: Buffer[] = [];
   const recvPromiseResolveQueue: Array<(message: TIncoming) => void> = [];
 

@@ -522,9 +522,8 @@ impl NodeEntry for AppRenderer {
             .into_iter()
             .try_join()
             .await?;
-        let mut result = RopeBuilder::from(
-            "import IPC, { Ipc } from \"@vercel/turbopack-next/internal/ipc\";\n",
-        );
+        let mut result =
+            RopeBuilder::from("import IPC, { Ipc } from \"@vercel/turbopack-next/ipc/index\";\n");
 
         for (_, imports) in segments.iter() {
             for (p, identifier, chunks_identifier) in imports.values() {

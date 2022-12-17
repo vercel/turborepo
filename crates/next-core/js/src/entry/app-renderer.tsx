@@ -1,4 +1,4 @@
-import type { Ipc } from "@vercel/turbopack-next/compiled/@vercel/turbopack-node-ipc";
+import type { Ipc } from "@vercel/turbopack-next/ipc/index";
 
 // Provided by the rust generate code
 type FileType =

@@ -83,7 +83,6 @@ importers:
       '@types/react': ^18.0.26
       '@types/react-dom': ^18.0.9
       '@vercel/ncc': ^0.36.0
-      '@vercel/turbopack-node-ipc': latest
       '@vercel/turbopack-runtime': latest
       anser: ^2.1.1
       css.escape: ^1.5.1
@@ -96,7 +95,6 @@ importers:
       stacktrace-parser: ^0.1.10
       strip-ansi: ^7.0.1
     dependencies:
-      '@vercel/turbopack-node-ipc': link:../../turbopack-node/js
       '@vercel/turbopack-runtime': link:../../turbopack-ecmascript/js
       anser: 2.1.1
       css.escape: 1.5.1
@@ -147,23 +145,6 @@ importers:
       '@next/react-refresh-utils': 13.0.6_react-refresh@0.12.0
     devDependencies:
       '@types/node': 18.11.11
-
-  crates/turbopack-node/js:
-    specifiers:
-      '@types/node': ^18.11.5
-      '@vercel/ncc': ^0.36.0
-      find-up: ^6.3.0
-      next: latest
-      stacktrace-parser: ^0.1.10
-      typescript: ^4.9.4
-    dependencies:
-      next: 13.0.6_biqbaboplfbrettd7655fr4n2y
-      stacktrace-parser: 0.1.10
-    devDependencies:
-      '@types/node': 18.11.11
-      '@vercel/ncc': 0.36.0
-      find-up: 6.3.0
-      typescript: 4.9.4
 
   docs:
     specifiers:
@@ -2137,7 +2118,7 @@ packages:
   /@swc/helpers/0.4.11:
     resolution: {integrity: sha512-rEUrBSGIoSFuYxwBYtlUFMlE2CwGhmW+w9355/5oduSw8e5h2+Tj4UrAGNNgP9915++wj5vkQo0UuOBqOAq4nw==}
     dependencies:
-      tslib: 2.4.0
+      tslib: 2.4.1
 
   /@swc/helpers/0.4.14:
     resolution: {integrity: sha512-4C7nX/dvpzB7za4Ql9K81xK3HPxCpHMgwTZVyf+9JQ6VUbn9jjZVN7/Nkdz/Ugzs2CSjqnL/UPXroiVBVHUWUw==}
@@ -11055,6 +11036,7 @@ packages:
 
   /tslib/2.4.0:
     resolution: {integrity: sha512-d6xOpEDfsi2CZVlPQzGeux8XMwLT9hssAsaPYExaQMuYskwb+x1x7J371tWlbBdWHroy99KnVB6qIkUbs5X3UQ==}
+    dev: false
 
   /tslib/2.4.1:
     resolution: {integrity: sha512-tGyy4dAjRIEwI7BzsB0lynWgOpfqjUdq91XXAlIWD2OwKBH7oCl/GZG/HT4BOHrTlPMOASlMQ7veyTqpmRcrNA==}
