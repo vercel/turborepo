@@ -19,31 +19,46 @@ jobs:
           - host: macos-latest
             target: "x86_64-apple-darwin"
             lib-cache-key: turbo-lib-darwin-${{ inputs.release_branch }}
+            container-options: "--rm"
           - host: macos-latest
             target: "aarch64-apple-darwin"
             lib-cache-key: turbo-lib-darwin-${{ inputs.release_branch }}
+            container-options: "--rm"
           - host: ubuntu-latest
+            container: ubuntu:xenial
+            container-options: "--platform=linux/amd64 --rm"
+            container-setup: "apt-get update && apt-get install -y curl"
             target: "x86_64-unknown-linux-gnu"
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
-            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
+            setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev"
           - host: ubuntu-latest
+            container: ubuntu:xenial
+            container-options: "--rm"
+            container-setup: "apt-get update && apt-get install -y curl"
             target: "aarch64-unknown-linux-gnu"
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
             rustflags: 'RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc"'
-            setup: "sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
+            setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
             target: x86_64-pc-windows-gnu
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
             setup: "mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.exe cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.a && mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.h cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.h && rustup set default-host x86_64-pc-windows-gnu"
+            container-options: "--rm"
     runs-on: ${{ matrix.settings.host }}
+    container:
+      image: ${{ matrix.settings.container }}
+      options: ${{ matrix.settings.container-options }}
     steps:
       - uses: actions/checkout@v3
         with:
           ref: "${{ inputs.release_branch }}"
 
+      - name: Setup Container
+        if: ${{ matrix.settings.container-setup }}
+        run: ${{ matrix.settings.container-setup }}
+
       - name: Install
         uses: actions-rs/toolchain@v1
-        if: ${{ !matrix.settings.docker }}
         with:
           profile: minimal
           override: true
@@ -102,11 +117,6 @@ jobs:
         run: ${{ matrix.settings.setup }}
 
       - name: Build
-        if: ${{ !matrix.settings.docker }}
-        run: ${{ matrix.settings.rustflags }} cargo build --release -p turbo --target ${{ matrix.settings.target }}
-
-      - name: Build in Docker
-        if: ${{ matrix.settings.docker }}
         run: ${{ matrix.settings.rustflags }} cargo build --release -p turbo --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
