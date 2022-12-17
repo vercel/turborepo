@@ -299,6 +299,7 @@ async fn source(
         env,
         eager_compile,
         &browserslist_query,
+        next_config,
     );
     let rendered_source = create_server_rendered_source(
         project_path,

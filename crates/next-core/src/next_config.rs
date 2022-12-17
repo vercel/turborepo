@@ -47,7 +47,8 @@ pub struct TypeScriptConfig {
     pub ts_config_path: Option<String>,
 }
 
-#[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
+#[turbo_tasks::value]
+#[derive(Clone, Debug, Ord, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageConfig {
     pub device_sizes: Vec<u16>,
@@ -191,6 +192,17 @@ impl NextConfigVc {
                 .cloned()
                 .unwrap_or_default(),
         ))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn image_config(self) -> Result<ImageConfigVc> {
+        let mut image_config = self.await?.images.clone();
+        // TODO is this the right place to do this?
+        image_config.remote_patterns.push(RemotePattern {
+            hostname: "**".to_string(),
+            ..Default::default()
+        });
+        Ok(image_config.cell())
     }
 }
 

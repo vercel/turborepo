@@ -98,13 +98,14 @@ async fn next_client_transition(
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
+    next_config: NextConfigVc,
 ) -> Result<TransitionVc> {
     let ty = Value::new(ContextType::App { app_dir });
     let client_chunking_context = get_client_chunking_context(project_root, server_root, ty);
     let client_environment = get_client_environment(browserslist_query);
     let client_module_options_context =
         get_client_module_options_context(project_root, client_environment, ty);
-    let client_runtime_entries = get_client_runtime_entries(project_root, env, ty);
+    let client_runtime_entries = get_client_runtime_entries(project_root, env, ty, next_config);
     let client_resolve_options_context = get_client_resolve_options_context(project_root, ty);
 
     Ok(NextClientTransition {
@@ -188,7 +189,14 @@ fn app_context(
     );
     transitions.insert(
         "next-client".to_string(),
-        next_client_transition(project_root, server_root, app_dir, env, browserslist_query),
+        next_client_transition(
+            project_root,
+            server_root,
+            app_dir,
+            env,
+            browserslist_query,
+            next_config,
+        ),
     );
     transitions.insert(
         "next-client-chunks".to_string(),
@@ -257,11 +265,17 @@ pub async fn create_app_source(
 
     let server_runtime_entries =
         vec![
-            ProcessEnvAssetVc::new(project_path, env_for_js(env, false, Some(next_config)))
+            ProcessEnvAssetVc::new(project_path, env_for_js(env, false, next_config))
                 .as_ecmascript_chunk_placeable(),
         ];
 
-    let fallback_page = get_fallback_page(project_path, server_root, env, browserslist_query);
+    let fallback_page = get_fallback_page(
+        project_path,
+        server_root,
+        env,
+        browserslist_query,
+        next_config,
+    );
 
     Ok(create_app_source_for_directory(
         context_ssr,

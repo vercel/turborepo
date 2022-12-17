@@ -99,7 +99,7 @@ pub async fn create_server_rendered_source(
 
     let client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
 
-    let client_runtime_entries = get_client_runtime_entries(project_path, env, ty);
+    let client_runtime_entries = get_client_runtime_entries(project_path, env, ty, next_config);
 
     let next_client_transition = NextClientTransition {
         is_app: false,
@@ -125,11 +125,17 @@ pub async fn create_server_rendered_source(
 
     let server_runtime_entries =
         vec![
-            ProcessEnvAssetVc::new(project_path, env_for_js(env, false, Some(next_config)))
+            ProcessEnvAssetVc::new(project_path, env_for_js(env, false, next_config))
                 .as_ecmascript_chunk_placeable(),
         ];
 
-    let fallback_page = get_fallback_page(project_path, server_root, env, browserslist_query);
+    let fallback_page = get_fallback_page(
+        project_path,
+        server_root,
+        env,
+        browserslist_query,
+        next_config,
+    );
 
     let server_rendered_source = create_server_rendered_source_for_directory(
         project_path,
