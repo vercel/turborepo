@@ -37,6 +37,7 @@ use self::{
 use crate::source_map::{SourceMapTraceVc, StackFrame, TraceResult};
 
 pub mod bootstrap;
+mod embed_js;
 pub mod evaluate;
 pub mod issue;
 pub mod node_api_source;
@@ -448,10 +449,7 @@ enum RenderProxyIncomingMessage {
 #[serde(tag = "type", rename_all = "camelCase")]
 enum EvalJavaScriptOutgoingMessage {
     #[serde(rename_all = "camelCase")]
-    Evaluate {
-        filepath: String,
-        arguments: Vec<String>,
-    },
+    Evaluate,
 }
 
 #[derive(Deserialize)]

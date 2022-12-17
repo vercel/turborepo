@@ -11,8 +11,9 @@ use turbopack_core::environment::{
 use turbopack_ecmascript::EcmascriptInputTransform;
 
 use crate::{
-    next_client::context::add_next_font_transform, next_config::NextConfigVc,
-    next_import_map::get_next_server_import_map,
+    next_client::context::add_next_font_transform,
+    next_config::NextConfigVc,
+    next_import_map::{get_next_build_import_map, get_next_server_import_map},
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
@@ -104,13 +105,16 @@ pub fn get_server_module_options_context(ty: Value<ServerContextType>) -> Module
 
 #[turbo_tasks::function]
 pub fn get_build_resolve_options_context(
-    _project_path: FileSystemPathVc,
+    project_path: FileSystemPathVc,
 ) -> ResolveOptionsContextVc {
+    let next_build_import_map = get_next_build_import_map(project_path);
     ResolveOptionsContext {
+        enable_typescript: true,
         enable_node_modules: true,
         enable_node_externals: true,
         enable_node_native_modules: true,
         custom_conditions: vec!["development".to_string()],
+        import_map: Some(next_build_import_map),
         ..Default::default()
     }
     .cell()
@@ -119,6 +123,7 @@ pub fn get_build_resolve_options_context(
 #[turbo_tasks::function]
 pub fn get_build_module_options_context() -> ModuleOptionsContextVc {
     ModuleOptionsContext {
+        enable_typescript_transform: true,
         ..Default::default()
     }
     .cell()

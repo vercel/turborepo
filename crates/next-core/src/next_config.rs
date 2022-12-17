@@ -7,11 +7,12 @@ use turbo_tasks::{
     trace::TraceRawVcs,
     Value,
 };
-use turbo_tasks_fs::{to_sys_path, FileSystemEntryType, FileSystemPathVc};
+use turbo_tasks_fs::{FileSystemEntryType, FileSystemPathVc};
 use turbopack::{transition::TransitionsByNameVc, ModuleAssetContextVc};
 use turbopack_core::{
-    chunk::dev::DevChunkingContextVc,
+    asset::Asset,
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
 };
 use turbopack_ecmascript::{
@@ -195,7 +196,7 @@ impl NextConfigVc {
 
 #[turbo_tasks::function]
 pub async fn load_next_config(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<NextConfigVc> {
     let context = ModuleAssetContextVc::new(
@@ -207,18 +208,11 @@ pub async fn load_next_config(
             Value::new(EnvironmentIntention::Build),
         ),
         get_build_module_options_context(),
-        get_build_resolve_options_context(project_root),
+        get_build_resolve_options_context(project_path),
     )
     .as_asset_context();
-    let chunking_context = DevChunkingContextVc::builder(
-        project_root,
-        intermediate_output_path,
-        intermediate_output_path.join("chunks"),
-        intermediate_output_path.join("assets"),
-    )
-    .build();
-    let next_config_mjs_path = project_root.join("next.config.mjs").realpath();
-    let next_config_js_path = project_root.join("next.config.js").realpath();
+    let next_config_mjs_path = project_path.join("next.config.mjs").realpath();
+    let next_config_js_path = project_path.join("next.config.js").realpath();
     let config_asset = if matches!(
         &*next_config_mjs_path.get_type().await?,
         FileSystemEntryType::File
@@ -245,21 +239,19 @@ pub async fn load_next_config(
         .as_ecmascript_chunk_placeable();
         EcmascriptChunkPlaceablesVc::cell(vec![config_chunk])
     });
-    let asset_path = intermediate_output_path.join("load-next-config.js");
-    let load_next_config_asset = next_asset(asset_path, "entry/config/next.js");
+    let asset_path = config_asset
+        .map_or(project_path, |a| a.path())
+        .join("load-next-config.js");
+    let load_next_config_asset = context.process(
+        next_asset(asset_path, "entry/config/next.js"),
+        Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
+    );
     let config_value = evaluate(
+        project_path,
         load_next_config_asset,
+        project_path,
         context,
-        if let Some(p) = to_sys_path(project_root)
-            .await?
-            .and_then(|p| p.to_str().map(|s| s.to_owned()))
-        {
-            vec![p]
-        } else {
-            vec![]
-        },
         intermediate_output_path,
-        chunking_context,
         runtime_entries,
     )
     .await?;

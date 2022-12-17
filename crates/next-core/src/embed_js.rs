@@ -17,6 +17,11 @@ pub(crate) fn next_js_file(path: &str) -> FileContentVc {
 }
 
 #[turbo_tasks::function]
+pub(crate) fn next_js_file_path(path: &str) -> FileSystemPathVc {
+    next_js_fs().root().join(path)
+}
+
+#[turbo_tasks::function]
 pub(crate) async fn attached_next_js_package_path(
     project_path: FileSystemPathVc,
 ) -> FileSystemPathVc {
@@ -33,6 +38,6 @@ pub(crate) async fn wrap_with_next_js_fs(
 }
 
 #[turbo_tasks::function]
-pub(crate) fn next_asset(output_path: FileSystemPathVc, path: &str) -> AssetVc {
-    VirtualAssetVc::new(output_path, next_js_file(path).into()).into()
+pub(crate) fn next_asset(asset_path: FileSystemPathVc, path: &str) -> AssetVc {
+    VirtualAssetVc::new(asset_path, next_js_file(path).into()).into()
 }

@@ -61,14 +61,14 @@ use crate::{
 /// Next.js pages folder.
 #[turbo_tasks::function]
 pub async fn create_server_rendered_source(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
     next_config: NextConfigVc,
 ) -> Result<ContentSourceVc> {
-    let project_path = wrap_with_next_js_fs(project_root);
+    let project_path = wrap_with_next_js_fs(project_path);
 
     let pages = project_path.join("pages");
     let src_pages = project_path.join("src/pages");

@@ -67,6 +67,25 @@ pub fn get_next_client_import_map(
     import_map.cell()
 }
 
+/// Computes the Next-specific client import map.
+#[turbo_tasks::function]
+pub fn get_next_build_import_map(project_path: FileSystemPathVc) -> ImportMapVc {
+    let mut import_map = ImportMap::empty();
+
+    let package_root = attached_next_js_package_path(project_path);
+
+    insert_package_alias(
+        &mut import_map,
+        &format!("{VIRTUAL_PACKAGE_NAME}/"),
+        package_root,
+    );
+
+    import_map.insert_exact_alias("next", ImportMapping::External(None).into());
+    import_map.insert_wildcard_alias("next/", ImportMapping::External(None).into());
+
+    import_map.cell()
+}
+
 /// Computes the Next-specific client fallback import map, which provides
 /// polyfills to Node.js externals.
 #[turbo_tasks::function]

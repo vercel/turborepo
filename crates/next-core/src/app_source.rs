@@ -213,14 +213,14 @@ fn app_context(
 /// Next.js app folder.
 #[turbo_tasks::function]
 pub async fn create_app_source(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
     next_config: NextConfigVc,
 ) -> Result<ContentSourceVc> {
-    let project_path = wrap_with_next_js_fs(project_root);
+    let project_path = wrap_with_next_js_fs(project_path);
 
     if !*next_config.app_dir().await? {
         return Ok(NoContentSourceVc::new().into());
