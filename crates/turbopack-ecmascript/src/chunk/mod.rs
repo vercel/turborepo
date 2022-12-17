@@ -768,7 +768,7 @@ impl<'a> HmrUpdateEntry<'a> {
             code: entry.source_code(),
             map: entry.code.has_source_map().then(|| {
                 format!(
-                    "/__turbopack_sourcemap__/{}[{}].map",
+                    "/__turbopack_sourcemap__/{}.map?id={}",
                     chunk_path,
                     entry.id.to_truncated_hash()
                 )

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_fs::File;
 use turbopack_core::{
@@ -10,7 +10,8 @@ use turbopack_core::{
 };
 
 use super::{
-    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
+    query::QueryValue, ContentSource, ContentSourceContent, ContentSourceData,
+    ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
 };
 
 /// SourceMapContentSource allows us to serve full source maps, and individual
@@ -21,7 +22,7 @@ use super::{
 /// used to fetch from our wrapped ContentSource. Any found asset should
 /// implement the [GenerateSourceMap] trait to generate full maps.
 ///
-/// Optionally, if the path ends with `[{ID}].map`, we will instead fetch
+/// Optionally, if an `?id={ID}` query param is present, we will instead fetch
 /// an individual section from the asset via [GenerateSourceMap::by_section].
 #[turbo_tasks::value(shared)]
 pub struct SourceMapContentSource {
@@ -37,31 +38,43 @@ impl SourceMapContentSourceVc {
     }
 }
 
-/// Extracts the contents between a `[` and `]` suffix.
-fn extract_module_id(path: &str) -> (&str, Option<&str>) {
-    if let Some(path) = path.strip_suffix(']') {
-        if let Some((path, id)) = path.rsplit_once('[') {
-            return (path, Some(id));
-        }
-    }
-
-    (path, None)
-}
-
 #[turbo_tasks::value_impl]
 impl ContentSource for SourceMapContentSource {
     #[turbo_tasks::function]
     async fn get(
-        &self,
+        self_vc: SourceMapContentSourceVc,
         path: &str,
-        _data: Value<ContentSourceData>,
+        data: Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
-        let path = path
-            .strip_suffix(".map")
-            .context("expected path to end with .map")?;
-        let (pathname, id) = extract_module_id(path);
+        let pathname = match path.strip_suffix(".map") {
+            Some(p) => p,
+            _ => return Ok(ContentSourceResultVc::not_found()),
+        };
 
-        let result = self
+        let query = match &data.query {
+            Some(q) => q,
+            None => {
+                return Ok(ContentSourceResultVc::exact(
+                    ContentSourceContent::NeedData {
+                        source: self_vc.into(),
+                        path: path.to_string(),
+                        vary: ContentSourceDataVary {
+                            query: Some(ContentSourceDataFilter::Subset(["id".to_string()].into())),
+                            ..Default::default()
+                        },
+                    }
+                    .cell(),
+                ))
+            }
+        };
+
+        let id = match query.get("id") {
+            Some(QueryValue::String(s)) => Some(s),
+            _ => None,
+        };
+
+        let this = self_vc.await?;
+        let result = this
             .asset_source
             .get(pathname, Value::new(Default::default()))
             .await?;
