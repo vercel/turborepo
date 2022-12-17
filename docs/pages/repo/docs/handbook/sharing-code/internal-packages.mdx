@@ -217,6 +217,10 @@ The fix is simple - we need to tell Next.js to bundle the files from certain pac
 
     We can do that using [`next-transpile-modules`](https://www.npmjs.com/package/next-transpile-modules).
 
+    <Callout>
+      Next.js 13 introduces the experimental feature `transpilePackages`, which allows for the automatic transpilation and bundling of dependencies from both local packages (e.g. monorepos) and external dependencies (`node_modules`). This feature replaces the `next-transpile-modules` package. For more information, [see the Next.js Beta documentation](https://beta.nextjs.org/docs/api-reference/next.config.js#transpilepackages).
+    </Callout>
+
     Install `next-transpile-modules` to your app. For a refresher, see our [package installation](/repo/docs/handbook/package-installation) docs.
 
     Inside your app's `next.config.js`, add `next-transpile-modules`:
