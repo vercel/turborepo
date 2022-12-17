@@ -537,6 +537,9 @@
 <span id="537">537</span>
 <span id="538">538</span>
 <span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -579,7 +582,8 @@
     introspect::IntrospectionSource,
     source::{
         combined::CombinedContentSourceVc, router::RouterContentSource,
-        static_assets::StaticAssetsContentSourceVc, ContentSourceVc,
+        source_maps::SourceMapContentSourceVc, static_assets::StaticAssetsContentSourceVc,
+        ContentSourceVc,
     },
     DevServer,
 };
@@ -888,6 +892,7 @@
     .cell()
     .into();
     <span class="kw">let </span>main_source = main_source.into();
+    <span class="kw">let </span>source_maps = SourceMapContentSourceVc::new(main_source).into();
     <span class="kw">let </span>source_map_trace = NextSourceMapTraceContentSourceVc::new(main_source).into();
     <span class="kw">let </span>img_source = NextImageContentSourceVc::new(
         CombinedContentSourceVc::new(<span class="macro">vec!</span>[static_source, rendered_source]).into(),
@@ -903,6 +908,7 @@
             ),
             <span class="comment">// TODO: Load path from next.config.js
             </span>(<span class="string">&quot;_next/image&quot;</span>.to_string(), img_source),
+            (<span class="string">&quot;__turbopack_sourcemap__/&quot;</span>.to_string(), source_maps),
         ],
         fallback: main_source,
     }
