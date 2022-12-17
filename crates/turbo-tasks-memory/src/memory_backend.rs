@@ -243,6 +243,13 @@ impl MemoryBackend {
             UPPER_MEM_TARGET
         };
         if usage < target {
+            // if idle {
+            //     println!(
+            //         "{:.3} GB: No GC needed ({} tasks in queue)",
+            //         (usage / 1000_000) as f32 / 1000.0,
+            //         self.gc_queue.len()
+            //     );
+            // }
             return;
         }
 
@@ -255,6 +262,17 @@ impl MemoryBackend {
 
         if let Some((collected, count, stats)) = collected {
             let new_usage = turbo_malloc::TurboMalloc::memory_usage();
+            // println!(
+            //     "{:.3} GB -> {:.3} GB: {} Idle {} GC'ed {} tasks <= {:?} ({} tasks in
+            // queue, {:?})",     (usage / 1000_000) as f32 / 1000.0,
+            //     (new_usage / 1000_000) as f32 / 1000.0,
+            //     FormatDuration(start.elapsed()),
+            //     idle,
+            //     count,
+            //     collected,
+            //     self.gc_queue.len(),
+            //     stats
+            // );
 
             if idle {
                 let job = self.create_backend_job(Job::GarbaggeCollection);
