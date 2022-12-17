@@ -510,8 +510,10 @@ impl NodeEntry for AppRenderer {
             .into_iter()
             .try_join()
             .await?;
+        // IPC need to be the first import to allow it to catch errors happening during
+        // the other imports
         let mut result =
-            RopeBuilder::from("import IPC, { Ipc } from \"@vercel/turbopack-next/ipc/index\";\n");
+            RopeBuilder::from("import { IPC } from \"@vercel/turbopack-next/ipc/index\";\n");
 
         for (_, imports) in segments.iter() {
             for (p, identifier, chunks_identifier) in imports.values() {
