@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use turbo_tasks::{
-    primitives::{BoolVc, StringVc, StringsVc},
+    primitives::{BoolVc, StringVc},
     Value,
 };
 use turbo_tasks_env::ProcessEnvVc;
@@ -48,7 +48,7 @@ use crate::{
         },
         NextClientTransition,
     },
-    next_config::load_next_config,
+    next_config::NextConfigVc,
     next_server::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
@@ -66,6 +66,7 @@ pub async fn create_server_rendered_source(
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
+    next_config: NextConfigVc,
 ) -> Result<ContentSourceVc> {
     let project_path = wrap_with_next_js_fs(project_root);
 
@@ -118,28 +119,15 @@ pub async fn create_server_rendered_source(
         TransitionsByNameVc::cell(transitions),
         get_server_environment(server_ty, env),
         get_server_module_options_context(server_ty),
-        get_server_resolve_options_context(project_path, server_ty, StringsVc::empty()),
+        get_server_resolve_options_context(project_path, server_ty, next_config),
     )
     .into();
 
-    let next_config_value = load_next_config(
-        context,
-        DevChunkingContextVc::builder(
-            project_path,
-            output_path,
-            output_path.join("chunks"),
-            get_client_assets_path(server_root, Value::new(ContextType::Pages { pages_dir })),
-        )
-        .build(),
-        project_root,
-        output_path.parent(),
-    );
-
-    let server_runtime_entries = vec![ProcessEnvAssetVc::new(
-        project_path,
-        env_for_js(env, false, Some(next_config_value)),
-    )
-    .as_ecmascript_chunk_placeable()];
+    let server_runtime_entries =
+        vec![
+            ProcessEnvAssetVc::new(project_path, env_for_js(env, false, Some(next_config)))
+                .as_ecmascript_chunk_placeable(),
+        ];
 
     let fallback_page = get_fallback_page(project_path, server_root, env, browserslist_query);
 

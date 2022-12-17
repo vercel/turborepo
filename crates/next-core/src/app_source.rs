@@ -4,10 +4,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use turbo_tasks::{
-    primitives::{StringVc, StringsVc},
-    TryJoinIterExt, Value, ValueToString,
-};
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{
     rope::RopeBuilder, DirectoryContent, DirectoryEntry, File, FileContent, FileContentVc,
@@ -62,7 +59,7 @@ use crate::{
         server_to_client_transition::NextServerToClientTransition,
         ssr_client_module_transition::NextSSRClientModuleTransition,
     },
-    next_config::load_next_config,
+    next_config::NextConfigVc,
     next_server::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
@@ -128,7 +125,7 @@ fn next_ssr_client_module_transition(
     project_root: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     process_env: ProcessEnvVc,
-    externals: StringsVc,
+    next_config: NextConfigVc,
 ) -> TransitionVc {
     let ty = Value::new(ServerContextType::AppSSR { app_dir });
     NextSSRClientModuleTransition {
@@ -136,7 +133,7 @@ fn next_ssr_client_module_transition(
         ssr_resolve_options_context: get_server_resolve_options_context(
             project_root,
             ty,
-            externals,
+            next_config,
         ),
         ssr_environment: get_server_environment(ty, process_env),
     }
@@ -150,12 +147,12 @@ fn next_layout_entry_transition(
     app_dir: FileSystemPathVc,
     server_root: FileSystemPathVc,
     process_env: ProcessEnvVc,
-    externals: StringsVc,
+    next_config: NextConfigVc,
 ) -> TransitionVc {
     let ty = Value::new(ServerContextType::AppRSC { app_dir });
     let rsc_environment = get_server_environment(ty, process_env);
     let rsc_resolve_options_context =
-        get_server_resolve_options_context(project_root, ty, externals);
+        get_server_resolve_options_context(project_root, ty, next_config);
     let rsc_module_options_context = get_server_module_options_context(ty);
 
     NextLayoutEntryTransition {
@@ -176,14 +173,14 @@ fn app_context(
     env: ProcessEnvVc,
     browserslist_query: &str,
     ssr: bool,
-    externals: StringsVc,
+    next_config: NextConfigVc,
 ) -> AssetContextVc {
     let next_server_to_client_transition = NextServerToClientTransition { ssr }.cell().into();
 
     let mut transitions = HashMap::new();
     transitions.insert(
         "next-layout-entry".to_string(),
-        next_layout_entry_transition(project_root, app_dir, server_root, env, externals),
+        next_layout_entry_transition(project_root, app_dir, server_root, env, next_config),
     );
     transitions.insert(
         "server-to-client".to_string(),
@@ -199,7 +196,7 @@ fn app_context(
     );
     transitions.insert(
         "next-ssr-client-module".to_string(),
-        next_ssr_client_module_transition(project_root, app_dir, env, externals),
+        next_ssr_client_module_transition(project_root, app_dir, env, next_config),
     );
 
     let ssr_ty = Value::new(ServerContextType::AppSSR { app_dir });
@@ -207,7 +204,7 @@ fn app_context(
         TransitionsByNameVc::cell(transitions),
         get_server_environment(ssr_ty, env),
         get_server_module_options_context(ssr_ty),
-        get_server_resolve_options_context(project_root, ssr_ty, externals),
+        get_server_resolve_options_context(project_root, ssr_ty, next_config),
     )
     .into()
 }
@@ -221,9 +218,13 @@ pub async fn create_app_source(
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
-    externals: StringsVc,
+    next_config: NextConfigVc,
 ) -> Result<ContentSourceVc> {
     let project_path = wrap_with_next_js_fs(project_root);
+
+    if !*next_config.app_dir().await? {
+        return Ok(NoContentSourceVc::new().into());
+    }
 
     let app = project_path.join("app");
     let src_app = project_path.join("src/app");
@@ -242,7 +243,7 @@ pub async fn create_app_source(
         env,
         browserslist_query,
         true,
-        externals,
+        next_config,
     );
     let context = app_context(
         project_path,
@@ -251,27 +252,14 @@ pub async fn create_app_source(
         env,
         browserslist_query,
         false,
-        externals,
+        next_config,
     );
 
-    let next_config_value = load_next_config(
-        context,
-        DevChunkingContextVc::builder(
-            project_path,
-            output_path,
-            output_path.join("chunks"),
-            server_root.join("_next/static/assets"),
-        )
-        .build(),
-        project_root,
-        output_path.parent(),
-    );
-
-    let server_runtime_entries = vec![ProcessEnvAssetVc::new(
-        project_path,
-        env_for_js(env, false, Some(next_config_value)),
-    )
-    .as_ecmascript_chunk_placeable()];
+    let server_runtime_entries =
+        vec![
+            ProcessEnvAssetVc::new(project_path, env_for_js(env, false, Some(next_config)))
+                .as_ecmascript_chunk_placeable(),
+        ];
 
     let fallback_page = get_fallback_page(project_path, server_root, env, browserslist_query);
 

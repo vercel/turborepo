@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringsVc, Value};
+use turbo_tasks::Value;
 use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
 use turbopack_core::resolve::{
     options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap, ResolvedMapVc},
@@ -9,6 +9,7 @@ use turbopack_core::resolve::{
 use crate::{
     embed_js::{attached_next_js_package_path, VIRTUAL_PACKAGE_NAME},
     next_client::context::ContextType,
+    next_config::NextConfigVc,
     next_font_google::{NextFontGoogleCssModuleReplacerVc, NextFontGoogleReplacerVc},
     next_server::ServerContextType,
 };
@@ -100,7 +101,7 @@ pub fn get_next_client_fallback_import_map(ty: Value<ContextType>) -> ImportMapV
 pub async fn get_next_server_import_map(
     project_path: FileSystemPathVc,
     ty: Value<ServerContextType>,
-    externals: StringsVc,
+    next_config: NextConfigVc,
 ) -> Result<ImportMapVc> {
     let mut import_map = ImportMap::empty();
 
@@ -153,7 +154,7 @@ pub async fn get_next_server_import_map(
                 request_to_import_mapping(app_dir, "next/dist/compiled/react-dom/*"),
             );
 
-            for external in externals.await?.iter() {
+            for external in next_config.server_component_externals().await?.iter() {
                 import_map.insert_exact_alias(external, ImportMapping::External(None).into());
                 import_map.insert_wildcard_alias(
                     format!("{external}/"),

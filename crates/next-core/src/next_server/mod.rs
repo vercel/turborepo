@@ -1,7 +1,4 @@
-use turbo_tasks::{
-    primitives::{StringVc, StringsVc},
-    Value,
-};
+use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::{
@@ -14,7 +11,8 @@ use turbopack_core::environment::{
 use turbopack_ecmascript::EcmascriptInputTransform;
 
 use crate::{
-    next_client::context::add_next_font_transform, next_import_map::get_next_server_import_map,
+    next_client::context::add_next_font_transform, next_config::NextConfigVc,
+    next_import_map::get_next_server_import_map,
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
@@ -29,9 +27,9 @@ pub enum ServerContextType {
 pub fn get_server_resolve_options_context(
     project_path: FileSystemPathVc,
     ty: Value<ServerContextType>,
-    externals: StringsVc,
+    next_config: NextConfigVc,
 ) -> ResolveOptionsContextVc {
-    let next_server_import_map = get_next_server_import_map(project_path, ty, externals);
+    let next_server_import_map = get_next_server_import_map(project_path, ty, next_config);
     match ty.into_value() {
         ServerContextType::Pages { .. } | ServerContextType::AppSSR { .. } => {
             ResolveOptionsContext {
@@ -102,4 +100,26 @@ pub fn get_server_module_options_context(ty: Value<ServerContextType>) -> Module
     .cell();
 
     add_next_font_transform(module_options_context)
+}
+
+#[turbo_tasks::function]
+pub fn get_build_resolve_options_context(
+    _project_path: FileSystemPathVc,
+) -> ResolveOptionsContextVc {
+    ResolveOptionsContext {
+        enable_node_modules: true,
+        enable_node_externals: true,
+        enable_node_native_modules: true,
+        custom_conditions: vec!["development".to_string()],
+        ..Default::default()
+    }
+    .cell()
+}
+
+#[turbo_tasks::function]
+pub fn get_build_module_options_context() -> ModuleOptionsContextVc {
+    ModuleOptionsContext {
+        ..Default::default()
+    }
+    .cell()
 }
