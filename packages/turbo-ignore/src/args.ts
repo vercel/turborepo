@@ -71,9 +71,17 @@ export default function parseArgs({
     args.workspace = argv[0];
   }
 
+  // set task (if provided)
+  const taskArgSentinel = "--task=";
+  const taskArg = argv.find((arg) => arg.startsWith(taskArgSentinel));
+  if (taskArg && taskArg.length > taskArgSentinel.length) {
+    args.task = taskArg.split("=")[1];
+  }
+
   // set fallback (if provided)
-  const fallbackArg = argv.find((arg) => arg.startsWith("--fallback="));
-  if (fallbackArg) {
+  const fallbackSentinel = "--fallback=";
+  const fallbackArg = argv.find((arg) => arg.startsWith(fallbackSentinel));
+  if (fallbackArg && fallbackArg.length > fallbackSentinel.length) {
     args.fallback = fallbackArg.split("=")[1];
   }
 

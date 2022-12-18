@@ -236,7 +236,7 @@ describe("turboIgnore()", () => {
       },
     });
     expect(mockConsole.log).toHaveBeenNthCalledWith(
-      3,
+      4,
       "≫  ",
       'no previous deployments found for "test-app" on branch "my-branch".'
     );
@@ -268,6 +268,7 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'inferred "test-app" as workspace from "package.json"',
+        'using "build" as the task as it was unspecified',
         `found previous deployment ("last-deployed-sha") for \"test-app\" on branch \"my-branch\"`,
         "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
         "this project and its dependencies are not affected",
@@ -298,6 +299,7 @@ describe("turboIgnore()", () => {
       });
     turboIgnore({
       args: {
+        task: "workspace#build",
         directory: "__fixtures__/app",
       },
     });
@@ -305,8 +307,9 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'inferred "test-app" as workspace from "package.json"',
+        'using "workspace#build" as the task from the arguments',
         'found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
-        "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
+        'analyzing results of `npx turbo run "workspace#build" --filter=test-app...[last-deployed-sha] --dry=json`',
         'this commit affects "test-app"',
         () => expect.stringContaining("✅  proceeding with deployment"),
       ],
@@ -342,6 +345,7 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'inferred "test-app" as workspace from "package.json"',
+        'using "build" as the task as it was unspecified',
         'found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
         "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
         'this commit affects "test-app" and 1 dependency (ui)',
@@ -379,6 +383,7 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'inferred "test-app" as workspace from "package.json"',
+        'using "build" as the task as it was unspecified',
         'found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"',
         "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
         'this commit affects "test-app" and 2 dependencies (ui, tsconfig)',
@@ -473,6 +478,7 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'inferred "test-app" as workspace from "package.json"',
+        'using "build" as the task as it was unspecified',
         "found commit message: [vercel skip]",
         () => expect.stringContaining("⬜️  ignoring the change"),
       ],
@@ -496,6 +502,7 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'inferred "test-app" as workspace from "package.json"',
+        'using "build" as the task as it was unspecified',
         "found commit message: [vercel deploy]",
         () => expect.stringContaining("✅  proceeding with deployment"),
       ],
@@ -534,6 +541,7 @@ describe("turboIgnore()", () => {
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'inferred "test-app" as workspace from "package.json"',
+        'using "build" as the task as it was unspecified',
         "conflicting commit messages found: [vercel deploy] and [vercel skip]",
         `found previous deployment ("last-deployed-sha") for \"test-app\" on branch \"my-branch\"`,
         "analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
