@@ -30,7 +30,7 @@ export type EcmascriptChunkUpdate = {
 
 export type HmrUpdateEntry = {
   code: ModuleFactoryString;
-  url: string,
+  url: string;
   map?: string;
 };
 
