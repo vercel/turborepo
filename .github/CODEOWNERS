@@ -17,7 +17,6 @@
 
 # Turbopack-specific things
 
-/crates @vercel/web-tooling
 /Cargo.lock @vercel/web-tooling
 /Cargo.toml @vercel/web-tooling
 /rust-toolchain @vercel/web-tooling
@@ -25,6 +24,13 @@
 .taplo.toml @vercel/web-tooling
 /docs/pages/pack @vercel/web-tooling
 /xtask @vercel/web-tooling
+
+# crates in alphabetical order
+/crates @vercel/web-tooling
+# overrides for crates that are owned by turbo-oss
+/crates/turborepo @vercel/turbo-oss
+/crates/turborepo-lib @vercel/turbo-oss
+/crates/turbo-updater @vercel/turbo-oss
 
 # packages in alphabetical order, to match view github https://github.com/vercel/turbo/tree/main/packages
 # Separate section in this file, so we can add new entries more easily.

@@ -27,7 +27,7 @@ Dependencies
 
    On macOS: `brew install sponge jq`
 
-1. Install [turbo/shim](https://github.com/vercel/turbo/blob/main/shim/README.md) build requirements
+1. Install [turborepo crate](https://github.com/vercel/turbo/blob/main/crates/turborepo/README.md) build requirements
 
 1. Run `pnpm install` at root
 

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use anyhow::Result;
 use serde_json::json;
 use turbo_tasks_fs::File;
@@ -20,15 +22,38 @@ pub struct StackFrame {
     pub name: Option<String>,
 }
 
-impl StackFrame {
-    pub fn get_pos(&self) -> Option<(usize, usize)> {
-        match (self.line, self.column) {
-            (Some(l), Some(c)) => Some((l, c)),
-            _ => None,
-        }
+impl Display for StackFrame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.with_path(&self.file).fmt(f)
     }
 }
 
+impl StackFrame {
+    pub fn with_path<'a>(&'a self, path: &'a str) -> StackFrameWithPath<'a> {
+        StackFrameWithPath { frame: self, path }
+    }
+
+    pub fn get_pos(&self) -> Option<(usize, usize)> {
+        self.line.zip(self.column)
+    }
+}
+
+pub struct StackFrameWithPath<'a> {
+    pub frame: &'a StackFrame,
+    pub path: &'a str,
+}
+
+impl<'a> Display for StackFrameWithPath<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.frame.get_pos() {
+            Some((l, c)) => match &self.frame.name {
+                Some(n) => write!(f, "{} ({}:{}:{})", n, self.path, l, c),
+                None => write!(f, "{}:{}:{}", self.path, l, c),
+            },
+            None => write!(f, "{}", self.path),
+        }
+    }
+}
 /// Source Map Trace is a convenient wrapper to perform and consume a source map
 /// trace's token.
 #[turbo_tasks::value(shared)]

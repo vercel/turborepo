@@ -241,8 +241,8 @@ func TestKillLiveServer(t *testing.T) {
 		ClientConn:   conn,
 	}
 	err = c.sendHello(ctx, client)
-	if !errors.Is(err, errVersionMismatch) {
-		t.Errorf("sendHello error got %v, want %v", err, errVersionMismatch)
+	if !errors.Is(err, ErrVersionMismatch) {
+		t.Errorf("sendHello error got %v, want %v", err, ErrVersionMismatch)
 	}
 	err = c.killLiveServer(ctx, client, 99999)
 	assert.NilError(t, err, "killLiveServer")

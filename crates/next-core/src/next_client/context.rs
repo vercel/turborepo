@@ -2,7 +2,7 @@ use core::{default::Default, result::Result::Ok};
 use std::collections::HashMap;
 
 use anyhow::Result;
-use turbo_tasks::Value;
+use turbo_tasks::{primitives::StringsVc, Value};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::{
@@ -18,6 +18,7 @@ use turbopack_core::{
     chunk::{dev::DevChunkingContextVc, ChunkingContextVc},
     context::AssetContextVc,
     environment::{BrowserEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment},
+    reference_type::{ReferenceType, UrlReferenceSubType},
     resolve::{parse::RequestVc, pattern::Pattern},
 };
 use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
@@ -27,6 +28,7 @@ use crate::{
     embed_js::attached_next_js_package_path,
     env::env_for_js,
     next_client::runtime_entry::{RuntimeEntriesVc, RuntimeEntry},
+    next_config::NextConfigVc,
     next_import_map::{
         get_next_client_fallback_import_map, get_next_client_import_map,
         get_next_client_resolved_map,
@@ -120,6 +122,9 @@ pub async fn add_next_transforms_to_pages(
     module_options_context.custom_rules.push(ModuleRule::new(
         ModuleRuleCondition::all(vec![
             ModuleRuleCondition::ResourcePathInExactDirectory(pages_dir.await?),
+            ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(ReferenceType::Url(
+                UrlReferenceSubType::Undefined,
+            ))),
             ModuleRuleCondition::any(vec![
                 ModuleRuleCondition::ResourcePathEndsWith(".js".to_string()),
                 ModuleRuleCondition::ResourcePathEndsWith(".jsx".to_string()),
@@ -138,29 +143,32 @@ pub async fn add_next_transforms_to_pages(
 pub async fn add_next_font_transform(
     module_options_context: ModuleOptionsContextVc,
 ) -> Result<ModuleOptionsContextVc> {
-    #[cfg(not(feature = "next-font"))]
-    return Ok(module_options_context);
+    #[allow(unused_mut)] // This is mutated when next-font-local is enabled
+    let mut font_loaders = vec!["@next/font/google".to_owned()];
+    #[cfg(feature = "next-font-local")]
+    font_loaders.push("@next/font/local".to_owned());
 
-    #[cfg(feature = "next-font")]
-    {
-        use turbopack::module_options::{ModuleRule, ModuleRuleCondition, ModuleRuleEffect};
-        use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
-
-        let mut module_options_context = module_options_context.await?.clone_value();
-        module_options_context.custom_rules.push(ModuleRule::new(
-            // TODO: Only match in pages (not pages/api), app/, etc.
+    let mut module_options_context = module_options_context.await?.clone_value();
+    module_options_context.custom_rules.push(ModuleRule::new(
+        // TODO: Only match in pages (not pages/api), app/, etc.
+        ModuleRuleCondition::all(vec![
+            ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(ReferenceType::Url(
+                UrlReferenceSubType::Undefined,
+            ))),
             ModuleRuleCondition::any(vec![
                 ModuleRuleCondition::ResourcePathEndsWith(".js".to_string()),
                 ModuleRuleCondition::ResourcePathEndsWith(".jsx".to_string()),
                 ModuleRuleCondition::ResourcePathEndsWith(".ts".to_string()),
                 ModuleRuleCondition::ResourcePathEndsWith(".tsx".to_string()),
             ]),
-            vec![ModuleRuleEffect::AddEcmascriptTransforms(
-                EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::NextJsFont]),
-            )],
-        ));
-        Ok(module_options_context.cell())
-    }
+        ]),
+        vec![ModuleRuleEffect::AddEcmascriptTransforms(
+            EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::NextJsFont(
+                StringsVc::cell(font_loaders),
+            )]),
+        )],
+    ));
+    Ok(module_options_context.cell())
 }
 
 #[turbo_tasks::function]
@@ -223,6 +231,7 @@ pub async fn get_client_runtime_entries(
     project_root: FileSystemPathVc,
     env: ProcessEnvVc,
     ty: Value<ContextType>,
+    next_config: NextConfigVc,
 ) -> Result<RuntimeEntriesVc> {
     let resolve_options_context = get_client_resolve_options_context(project_root, ty);
     let enable_react_refresh =
@@ -231,7 +240,7 @@ pub async fn get_client_runtime_entries(
             .as_request();
 
     let mut runtime_entries = vec![RuntimeEntry::Ecmascript(
-        ProcessEnvAssetVc::new(project_root, env_for_js(env, true)).into(),
+        ProcessEnvAssetVc::new(project_root, env_for_js(env, true, next_config)).into(),
     )
     .cell()];
 

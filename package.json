@@ -18,21 +18,18 @@
     "run-example": "./scripts/run-example.sh"
   },
   "devDependencies": {
-    "@taplo/cli": "^0.4.2",
-    "@types/react": "18.0.21",
-    "eslint": "^8.20.0",
-    "eslint-config-next": "^12.3.1",
+    "@taplo/cli": "^0.5.2",
+    "@types/react": "18.0.26",
+    "eslint": "^8.29.0",
+    "eslint-config-next": "^13.0.6",
     "eslint-config-prettier": "^8.5.0",
-    "husky": "^8.0.1",
-    "lint-staged": "^13.0.3",
-    "next": "^12.3.1",
-    "node-fetch": "^2.6.7",
-    "node-gyp": "^9.1.0",
-    "npm-run-all": "^4.1.5",
-    "prettier": "^2.7.1",
-    "semver": "^7.3.5",
-    "simple-git-hooks": "^2.7.0",
-    "typescript": "^4.8.4"
+    "husky": "^8.0.2",
+    "lint-staged": "^13.1.0",
+    "next": "^13.0.6",
+    "prettier": "^2.8.1",
+    "semver": "^7.3.8",
+    "simple-git-hooks": "^2.8.1",
+    "typescript": "^4.9.4"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
@@ -57,8 +54,8 @@
   },
   "pnpm": {
     "overrides": {
-      "next@latest": "13.0.2"
+      "next@latest": "13.0.6"
     }
   },
-  "packageManager": "pnpm@7.13.5"
+  "packageManager": "pnpm@7.18.2"
 }

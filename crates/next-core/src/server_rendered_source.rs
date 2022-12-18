@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use turbo_tasks::{
-    primitives::{BoolVc, StringVc, StringsVc},
+    primitives::{BoolVc, StringVc},
     Value,
 };
 use turbo_tasks_env::ProcessEnvVc;
@@ -12,6 +12,7 @@ use turbopack_core::{
     asset::AssetVc,
     chunk::{dev::DevChunkingContextVc, ChunkingContextVc},
     context::AssetContextVc,
+    reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
 };
@@ -47,6 +48,7 @@ use crate::{
         },
         NextClientTransition,
     },
+    next_config::NextConfigVc,
     next_server::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
@@ -59,13 +61,14 @@ use crate::{
 /// Next.js pages folder.
 #[turbo_tasks::function]
 pub async fn create_server_rendered_source(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
+    next_config: NextConfigVc,
 ) -> Result<ContentSourceVc> {
-    let project_path = wrap_with_next_js_fs(project_root);
+    let project_path = wrap_with_next_js_fs(project_path);
 
     let pages = project_path.join("pages");
     let src_pages = project_path.join("src/pages");
@@ -80,7 +83,6 @@ pub async fn create_server_rendered_source(
     let ty = Value::new(ContextType::Pages { pages_dir });
     let server_ty = Value::new(ServerContextType::Pages { pages_dir });
 
-    let client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
     let client_environment = get_client_environment(browserslist_query);
     let client_module_options_context =
         get_client_module_options_context(project_path, client_environment, ty);
@@ -95,7 +97,9 @@ pub async fn create_server_rendered_source(
     )
     .into();
 
-    let client_runtime_entries = get_client_runtime_entries(project_path, env, ty);
+    let client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
+
+    let client_runtime_entries = get_client_runtime_entries(project_path, env, ty, next_config);
 
     let next_client_transition = NextClientTransition {
         is_app: false,
@@ -115,14 +119,23 @@ pub async fn create_server_rendered_source(
         TransitionsByNameVc::cell(transitions),
         get_server_environment(server_ty, env),
         get_server_module_options_context(server_ty),
-        get_server_resolve_options_context(project_path, server_ty, StringsVc::empty()),
+        get_server_resolve_options_context(project_path, server_ty, next_config),
     )
     .into();
 
-    let server_runtime_entries = vec![ProcessEnvAssetVc::new(project_path, env_for_js(env, false))
-        .as_ecmascript_chunk_placeable()];
+    let server_runtime_entries =
+        vec![
+            ProcessEnvAssetVc::new(project_path, env_for_js(env, false, next_config))
+                .as_ecmascript_chunk_placeable(),
+        ];
 
-    let fallback_page = get_fallback_page(project_path, server_root, env, browserslist_query);
+    let fallback_page = get_fallback_page(
+        project_path,
+        server_root,
+        env,
+        browserslist_query,
+        next_config,
+    );
 
     let server_rendered_source = create_server_rendered_source_for_directory(
         project_path,
@@ -166,7 +179,10 @@ async fn create_server_rendered_source_for_file(
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<ContentSourceVc> {
     let source_asset = SourceAssetVc::new(page_file).into();
-    let entry_asset = context.process(source_asset);
+    let entry_asset = context.process(
+        source_asset,
+        Value::new(ReferenceType::Entry(EntryReferenceSubType::Page)),
+    );
 
     let chunking_context = DevChunkingContextVc::builder(
         context_path,
@@ -205,7 +221,7 @@ async fn create_server_rendered_source_for_file(
     } else {
         let data_pathname = format!(
             "_next/data/development/{}",
-            get_asset_path_from_route(&*pathname.await?, ".json")
+            get_asset_path_from_route(&pathname.await?, ".json")
         );
         let data_path_regex = regular_expression_for_path(StringVc::cell(data_pathname));
 
@@ -286,7 +302,7 @@ async fn create_server_rendered_source_for_directory(
                         match extension {
                             // pageExtensions option from next.js
                             // defaults: https://github.com/vercel/next.js/blob/611e13f5159457fedf96d850845650616a1f75dd/packages/next/server/config-shared.ts#L499
-                            "js" | "ts" | "jsx" | "tsx" => {
+                            "js" | "ts" | "jsx" | "tsx" | "mdx" => {
                                 let (dev_server_path, intermediate_output_path, specificity) =
                                     if basename == "index" {
                                         (

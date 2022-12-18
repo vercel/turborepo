@@ -322,7 +322,8 @@ jobs:
           # next-swc/core
           cargo check -p next-binding --features __swc_core_next_core,__swc_core_binding_napi_plugin,__swc_core_testing_transform,__swc_testing,__swc_transform_styled_components,__swc_transform_styled_jsx,__swc_transform_emotion,__swc_transform_modularize_imports
           # next-swc/napi
-          cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__turbo_next_dev_server,__turbo_node_file_trace,__feature_mdx_rs
+          cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__turbo_next_dev_server,__turbo_node_file_trace,__feature_mdx_rs,__turbo_native_tls
+          cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__turbo_next_dev_server,__turbo_node_file_trace,__feature_mdx_rs,__turbo_rustls_tls
           # next-swc/wasm
           cargo check -p next-binding --features __swc_core_binding_wasm,__swc_core_binding_wasm_plugin,__feature_mdx_rs --target wasm32-unknown-unknown
 
@@ -637,12 +638,19 @@ jobs:
           args: build --release -p node-file-trace -p next-dev --target ${{ matrix.os.target }}
         if: matrix.os.target == 'x86_64-pc-windows-msvc'
 
-      - name: Build next-dev
+      - name: Build next-dev (native-tls)
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --release -p next-dev --target ${{ matrix.os.target }}
-        if: matrix.os.target != 'x86_64-pc-windows-msvc'
+        if: matrix.os.target != 'x86_64-pc-windows-msvc' && matrix.os.target != 'x86_64-unknown-linux-musl'
+
+      - name: Build next-dev (rustls-tls)
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release -p next-dev --target ${{ matrix.os.target }} --no-default-features --features cli,custom_allocator,rustls-tls
+        if: matrix.os.target == 'x86_64-unknown-linux-musl'
 
       - uses: actions/upload-artifact@v3
         with:
@@ -837,11 +845,13 @@ jobs:
         node: [16, 18]
         group: [1, 2]
     env:
-      # Enabling backtract will makes snapshot tests fail
+      # Enabling backtrace will makes snapshot tests fail
       RUST_BACKTRACE: 0
       NEXT_TELEMETRY_DISABLED: 1
       NEXT_TEST_JOB: 1
       __INTERNAL_CUSTOM_TURBOPACK_BINARY: ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev
+      # Glob pattern to run specific tests with --turbo.
+      __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH: ""
 
     steps:
       # https://github.com/actions/virtual-environments/issues/1187
@@ -852,7 +862,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: vercel/next.js
-          ref: v13.0.5-canary.5
+          ref: v13.0.6-canary.2
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2.2.4
@@ -881,7 +891,10 @@ jobs:
           pnpm install
           pnpm run build
 
-      - run: npm i -g playwright-chromium@1.22.2 && npx playwright install-deps
+      - run: |
+          pnpm i -g playwright-chromium@1.29.0
+          pnpx playwright install --with-deps
+          pnpx playwright install-deps
         timeout-minutes: 15
 
       - run: npx @replayio/playwright install chromium

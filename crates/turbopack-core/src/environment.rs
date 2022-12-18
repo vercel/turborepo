@@ -53,6 +53,8 @@ pub enum EnvironmentIntention {
     StaticRendering,
     /// Intent to render on the client
     Client,
+    /// Intent to evaluate build time javascript code like config, plugins, etc.
+    Build,
     // TODO allow custom trait here
     Custom(u8),
 }
@@ -166,6 +168,18 @@ impl EnvironmentVc {
             | ExecutionEnvironment::NodeJsLambda(env) => env.await?.cwd,
             _ => OptionStringVc::cell(None),
         })
+    }
+
+    #[turbo_tasks::function]
+    pub async fn is_rendering(self) -> Result<BoolVc> {
+        let env = self.await?;
+        Ok(BoolVc::cell(matches!(
+            env.intention,
+            EnvironmentIntention::Prerendering
+                | EnvironmentIntention::ServerRendering
+                | EnvironmentIntention::StaticRendering
+                | EnvironmentIntention::Client
+        )))
     }
 }
 

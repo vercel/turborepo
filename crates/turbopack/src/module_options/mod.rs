@@ -1,5 +1,6 @@
 use anyhow::Result;
 use turbo_tasks_fs::FileSystemPathVc;
+use turbopack_core::reference_type::{ReferenceType, UrlReferenceSubType};
 use turbopack_css::{CssInputTransform, CssInputTransformsVc};
 use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
 
@@ -76,11 +77,24 @@ impl ModuleOptionsVc {
         };
 
         let css_transforms = CssInputTransformsVc::cell(vec![CssInputTransform::Nested]);
+        let mdx_transforms = EcmascriptInputTransformsVc::cell(
+            vec![EcmascriptInputTransform::TypeScript]
+                .iter()
+                .chain(app_transforms.await?.iter())
+                .cloned()
+                .collect(),
+        );
 
         let mut rules = vec![
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".json".to_string()),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Json)],
+            ),
+            ModuleRule::new(
+                ModuleRuleCondition::ResourcePathEndsWith(".mdx".to_string()),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Mdx(
+                    mdx_transforms,
+                ))],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".css".to_string()),
@@ -186,6 +200,12 @@ impl ModuleOptionsVc {
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
                     vendor_transforms,
                 ))],
+            ),
+            ModuleRule::new(
+                ModuleRuleCondition::ReferenceType(ReferenceType::Url(
+                    UrlReferenceSubType::Undefined,
+                )),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Static)],
             ),
         ];
 

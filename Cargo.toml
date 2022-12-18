@@ -26,14 +26,16 @@ members = [
   "crates/turbopack-dev-server",
   "crates/turbopack-ecmascript",
   "crates/turbopack-env",
+  "crates/turbopack-mdx",
   "crates/turbopack-node",
   "crates/turbopack-json",
   "crates/turbopack-static",
   "crates/turbopack-swc-utils",
   "crates/turbopack",
   "crates/turbopack-tests",
+  "crates/turborepo",
+  "crates/turborepo-lib",
   "crates/turbo-updater",
-  "shim",
   "xtask",
 ]
 
@@ -86,12 +88,17 @@ opt-level = 3
 indexmap = { version = "1.9.2" }
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.12.2" }
-swc_core = { version = "0.45.4" }
-testing = { version = "0.31.14" }
-swc_emotion = { version = "0.28.4" }
-styled_jsx = { version = "0.29.8" }
-styled_components = { version = "0.52.8" }
-modularize_imports = { version = "0.25.8" }
-mdxjs = { version = "0.1.3" }
+swc_core = { version = "0.48.12" }
+testing = { version = "0.31.25" }
+swc_emotion = { version = "0.28.6" }
+styled_jsx = { version = "0.29.10" }
+styled_components = { version = "0.52.10" }
+modularize_imports = { version = "0.25.10" }
+mdxjs = { version = "0.1.4" }
 next-dev = { path = "crates/next-dev", version = "0.1.0" }
 node-file-trace = { path = "crates/node-file-trace", version = "0.1.0" }
+# Be careful when selecting tls backend, including change default tls backend.
+# If you changed, must verify with ALL build targets with next-swc to ensure
+# it works. next-swc have various platforms, some doesn't support native (using openssl-sys)
+# and some aren't buildable with rustls.
+reqwest = { version = "0.11.13", default-features = false }

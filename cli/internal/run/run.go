@@ -42,8 +42,7 @@ Arguments passed after '--' will be passed through to the named tasks.
 `
 
 // ExecuteRun executes the run command
-func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.CLIExecutionStateFromRust) error {
-	args := executionState.ParsedArgs
+func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
 		return err
@@ -53,7 +52,7 @@ func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *si
 	if len(tasks) == 0 {
 		return errors.New("at least one task must be specified")
 	}
-	opts, err := optsFromExecutionState(executionState)
+	opts, err := optsFromArgs(args)
 	if err != nil {
 		return err
 	}
@@ -67,11 +66,11 @@ func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *si
 	return nil
 }
 
-func optsFromExecutionState(executionState *turbostate.CLIExecutionStateFromRust) (*Opts, error) {
-	runPayload := executionState.ParsedArgs.Command.Run
+func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
+	runPayload := args.Command.Run
 	opts := getDefaultOptions()
 	// aliases := make(map[string]string)
-	scope.OptsFromArgs(&opts.scopeOpts, &executionState.ParsedArgs)
+	scope.OptsFromArgs(&opts.scopeOpts, args)
 
 	// Cache flags
 	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
@@ -100,7 +99,7 @@ func optsFromExecutionState(executionState *turbostate.CLIExecutionStateFromRust
 	opts.runOpts.continueOnError = runPayload.ContinueExecution
 	opts.runOpts.only = runPayload.Only
 	opts.runOpts.noDaemon = runPayload.NoDaemon
-	opts.runOpts.singlePackage = runPayload.SinglePackage || (executionState.RepoState.Mode == "SinglePackage")
+	opts.runOpts.singlePackage = args.Command.Run.SinglePackage
 
 	// See comment on Graph in turbostate.go for an explanation on Graph's representation.
 	// If flag is passed...
