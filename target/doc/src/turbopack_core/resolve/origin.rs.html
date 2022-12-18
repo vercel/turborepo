@@ -108,11 +108,28 @@
 <span id="108">108</span>
 <span id="109">109</span>
 <span id="110">110</span>
-</pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::Value;
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
-<span class="kw">use super</span>::{options::ResolveOptionsVc, parse::RequestVc, ResolveResultVc};
-<span class="kw">use crate</span>::{context::AssetContextVc, reference_type::ReferenceType};
+<span class="kw">use super</span>::{options::ResolveOptionsVc, parse::RequestVc, ResolveResult, ResolveResultVc};
+<span class="kw">use crate</span>::{asset::AssetOptionVc, context::AssetContextVc, reference_type::ReferenceType};
 
 <span class="doccomment">/// A location where resolving can occur from. It carries some meta information
 /// that are needed for resolving from here.
@@ -127,6 +144,12 @@
     <span class="doccomment">/// The AssetContext that carries the configuration for building that
     /// subgraph.
     </span><span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetContextVc;
+
+    <span class="doccomment">/// Get an inner asset form this origin that doesn&#39;t require resolving but
+    /// is directly attached
+    </span><span class="kw">fn </span>get_inner_asset(<span class="kw-2">&amp;</span><span class="self">self</span>, _request: RequestVc) -&gt; AssetOptionVc {
+        AssetOptionVc::cell(<span class="prelude-val">None</span>)
+    }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -138,14 +161,18 @@
     </span><span class="doccomment">/// Resolve to an asset from that origin. Custom resolve options can be
     /// passed. Otherwise provide `origin.resolve_options()` unmodified.
     </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>resolve_asset(
+    </span><span class="kw">pub async fn </span>resolve_asset(
         <span class="self">self</span>,
         request: RequestVc,
         options: ResolveOptionsVc,
         reference_type: Value&lt;ReferenceType&gt;,
-    ) -&gt; ResolveResultVc {
-        <span class="self">self</span>.context()
-            .resolve_asset(<span class="self">self</span>.origin_path(), request, options, reference_type)
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(asset) = <span class="kw-2">*</span><span class="self">self</span>.get_inner_asset(request).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::Single(asset, Vec::new()).cell());
+        }
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.context()
+            .resolve_asset(<span class="self">self</span>.origin_path(), request, options, reference_type))
     }
 
     <span class="doccomment">/// Get the resolve options that apply for this origin.
@@ -216,6 +243,11 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetContextVc {
         <span class="self">self</span>.previous.context().with_transition(<span class="kw-2">&amp;</span><span class="self">self</span>.transition)
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>get_inner_asset(<span class="kw-2">&amp;</span><span class="self">self</span>, request: RequestVc) -&gt; AssetOptionVc {
+        <span class="self">self</span>.previous.get_inner_asset(request)
     }
 }
 </code></pre></div>

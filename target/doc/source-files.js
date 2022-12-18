@@ -1,7 +1,7 @@
 var sourcesIndex = JSON.parse('{\
 "auto_hash_map":["",[],["lib.rs","map.rs","set.rs"]],\
 "next_binding":["",[],["lib.rs"]],\
-"next_core":["",[["app_render",[],["mod.rs","next_layout_entry_transition.rs"]],["next_client",[],["context.rs","mod.rs","runtime_entry.rs"]],["next_client_component",[],["client_chunks_transition.rs","in_chunking_context_asset.rs","mod.rs","server_to_client_transition.rs","ssr_client_module_transition.rs","with_chunks.rs","with_client_chunks.rs"]],["next_font_google",[],["mod.rs","options.rs","request.rs","util.rs"]],["next_image",[],["mod.rs"]],["next_server",[],["mod.rs"]]],["app_source.rs","embed_js.rs","env.rs","fallback.rs","lib.rs","manifest.rs","next_import_map.rs","page_loader.rs","react_refresh.rs","runtime.rs","server_rendered_source.rs","util.rs","web_entry_source.rs"]],\
+"next_core":["",[["app_render",[],["mod.rs","next_layout_entry_transition.rs"]],["next_client",[],["context.rs","mod.rs","runtime_entry.rs"]],["next_client_component",[],["client_chunks_transition.rs","in_chunking_context_asset.rs","mod.rs","server_to_client_transition.rs","ssr_client_module_transition.rs","with_chunks.rs","with_client_chunks.rs"]],["next_font_google",[],["mod.rs","options.rs","request.rs","util.rs"]],["next_image",[],["mod.rs"]],["next_server",[],["mod.rs"]]],["app_source.rs","embed_js.rs","env.rs","fallback.rs","lib.rs","manifest.rs","next_config.rs","next_import_map.rs","page_loader.rs","react_refresh.rs","runtime.rs","server_rendered_source.rs","util.rs","web_entry_source.rs"]],\
 "next_dev":["",[],["devserver_options.rs","lib.rs","turbo_tasks_viz.rs"]],\
 "node_file_trace":["",[],["lib.rs","nft_json.rs"]],\
 "swc_ast_explorer":["",[],["main.rs"]],\

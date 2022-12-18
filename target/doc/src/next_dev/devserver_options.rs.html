@@ -106,11 +106,6 @@
 <span id="106">106</span>
 <span id="107">107</span>
 <span id="108">108</span>
-<span id="109">109</span>
-<span id="110">110</span>
-<span id="111">111</span>
-<span id="112">112</span>
-<span id="113">113</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{net::IpAddr, path::PathBuf};
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;cli&quot;</span>)]
@@ -205,11 +200,6 @@
     #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
     </span><span class="doccomment">/// Internal for next.js, no specific usage yet.
     </span><span class="kw">pub </span>is_next_dev_command: bool,
-    <span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
-    #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
-    </span><span class="doccomment">/// Specify server component external packages explicitly. This is an
-    /// experimental flag.
-    </span><span class="kw">pub </span>server_components_external_packages: Vec&lt;String&gt;,
 }
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;serializable&quot;</span>)]

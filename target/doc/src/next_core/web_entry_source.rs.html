@@ -90,6 +90,8 @@
 <span id="90">90</span>
 <span id="91">91</span>
 <span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{TryJoinIterExt, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
@@ -111,6 +113,7 @@
         get_client_asset_context, get_client_chunking_context, get_client_runtime_entries,
         ContextType,
     },
+    next_config::NextConfigVc,
 };
 
 <span class="attr">#[turbo_tasks::function]
@@ -121,13 +124,14 @@
     env: ProcessEnvVc,
     eager_compile: bool,
     browserslist_query: <span class="kw-2">&amp;</span>str,
+    next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceVc&gt; {
     <span class="kw">let </span>project_root = wrap_with_next_js_fs(project_root);
 
     <span class="kw">let </span>ty = Value::new(ContextType::Other);
     <span class="kw">let </span>context = get_client_asset_context(project_root, browserslist_query, ty);
     <span class="kw">let </span>chunking_context = get_client_chunking_context(project_root, server_root, ty);
-    <span class="kw">let </span>entries = get_client_runtime_entries(project_root, env, ty);
+    <span class="kw">let </span>entries = get_client_runtime_entries(project_root, env, ty, next_config);
 
     <span class="kw">let </span>runtime_entries = entries.resolve_entries(context);
 

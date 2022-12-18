@@ -103,10 +103,32 @@
 <span id="103">103</span>
 <span id="104">104</span>
 <span id="105">105</span>
-</pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::{
-    primitives::{StringVc, StringsVc},
-    Value,
-};
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+</pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack::{
@@ -119,7 +141,9 @@
 <span class="kw">use </span>turbopack_ecmascript::EcmascriptInputTransform;
 
 <span class="kw">use crate</span>::{
-    next_client::context::add_next_font_transform, next_import_map::get_next_server_import_map,
+    next_client::context::add_next_font_transform,
+    next_config::NextConfigVc,
+    next_import_map::{get_next_build_import_map, get_next_server_import_map},
 };
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
@@ -134,9 +158,9 @@
 </span><span class="kw">pub fn </span>get_server_resolve_options_context(
     project_path: FileSystemPathVc,
     ty: Value&lt;ServerContextType&gt;,
-    externals: StringsVc,
+    next_config: NextConfigVc,
 ) -&gt; ResolveOptionsContextVc {
-    <span class="kw">let </span>next_server_import_map = get_next_server_import_map(project_path, ty, externals);
+    <span class="kw">let </span>next_server_import_map = get_next_server_import_map(project_path, ty, next_config);
     <span class="kw">match </span>ty.into_value() {
         ServerContextType::Pages { .. } | ServerContextType::AppSSR { .. } =&gt; {
             ResolveOptionsContext {
@@ -207,6 +231,32 @@
     .cell();
 
     add_next_font_transform(module_options_context)
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">pub fn </span>get_build_resolve_options_context(
+    project_path: FileSystemPathVc,
+) -&gt; ResolveOptionsContextVc {
+    <span class="kw">let </span>next_build_import_map = get_next_build_import_map(project_path);
+    ResolveOptionsContext {
+        enable_typescript: <span class="bool-val">true</span>,
+        enable_node_modules: <span class="bool-val">true</span>,
+        enable_node_externals: <span class="bool-val">true</span>,
+        enable_node_native_modules: <span class="bool-val">true</span>,
+        custom_conditions: <span class="macro">vec!</span>[<span class="string">&quot;development&quot;</span>.to_string()],
+        import_map: <span class="prelude-val">Some</span>(next_build_import_map),
+        ..Default::default()
+    }
+    .cell()
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">pub fn </span>get_build_module_options_context() -&gt; ModuleOptionsContextVc {
+    ModuleOptionsContext {
+        enable_typescript_transform: <span class="bool-val">true</span>,
+        ..Default::default()
+    }
+    .cell()
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="next_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

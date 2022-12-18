@@ -623,16 +623,33 @@
 <span id="623">623</span>
 <span id="624">624</span>
 <span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
+<span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
 };
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>turbo_tasks::{
-    primitives::{StringVc, StringsVc},
-    TryJoinIterExt, Value, ValueToString,
-};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::{
     rope::RopeBuilder, DirectoryContent, DirectoryEntry, File, FileContent, FileContentVc,
@@ -687,6 +704,7 @@
         server_to_client_transition::NextServerToClientTransition,
         ssr_client_module_transition::NextSSRClientModuleTransition,
     },
+    next_config::NextConfigVc,
     next_server::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
@@ -725,13 +743,14 @@
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: <span class="kw-2">&amp;</span>str,
+    next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;TransitionVc&gt; {
     <span class="kw">let </span>ty = Value::new(ContextType::App { app_dir });
     <span class="kw">let </span>client_chunking_context = get_client_chunking_context(project_root, server_root, ty);
     <span class="kw">let </span>client_environment = get_client_environment(browserslist_query);
     <span class="kw">let </span>client_module_options_context =
         get_client_module_options_context(project_root, client_environment, ty);
-    <span class="kw">let </span>client_runtime_entries = get_client_runtime_entries(project_root, env, ty);
+    <span class="kw">let </span>client_runtime_entries = get_client_runtime_entries(project_root, env, ty, next_config);
     <span class="kw">let </span>client_resolve_options_context = get_client_resolve_options_context(project_root, ty);
 
     <span class="prelude-val">Ok</span>(NextClientTransition {
@@ -752,7 +771,7 @@
     project_root: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     process_env: ProcessEnvVc,
-    externals: StringsVc,
+    next_config: NextConfigVc,
 ) -&gt; TransitionVc {
     <span class="kw">let </span>ty = Value::new(ServerContextType::AppSSR { app_dir });
     NextSSRClientModuleTransition {
@@ -760,7 +779,7 @@
         ssr_resolve_options_context: get_server_resolve_options_context(
             project_root,
             ty,
-            externals,
+            next_config,
         ),
         ssr_environment: get_server_environment(ty, process_env),
     }
@@ -774,12 +793,12 @@
     app_dir: FileSystemPathVc,
     server_root: FileSystemPathVc,
     process_env: ProcessEnvVc,
-    externals: StringsVc,
+    next_config: NextConfigVc,
 ) -&gt; TransitionVc {
     <span class="kw">let </span>ty = Value::new(ServerContextType::AppRSC { app_dir });
     <span class="kw">let </span>rsc_environment = get_server_environment(ty, process_env);
     <span class="kw">let </span>rsc_resolve_options_context =
-        get_server_resolve_options_context(project_root, ty, externals);
+        get_server_resolve_options_context(project_root, ty, next_config);
     <span class="kw">let </span>rsc_module_options_context = get_server_module_options_context(ty);
 
     NextLayoutEntryTransition {
@@ -800,14 +819,14 @@
     env: ProcessEnvVc,
     browserslist_query: <span class="kw-2">&amp;</span>str,
     ssr: bool,
-    externals: StringsVc,
+    next_config: NextConfigVc,
 ) -&gt; AssetContextVc {
     <span class="kw">let </span>next_server_to_client_transition = NextServerToClientTransition { ssr }.cell().into();
 
     <span class="kw">let </span><span class="kw-2">mut </span>transitions = HashMap::new();
     transitions.insert(
         <span class="string">&quot;next-layout-entry&quot;</span>.to_string(),
-        next_layout_entry_transition(project_root, app_dir, server_root, env, externals),
+        next_layout_entry_transition(project_root, app_dir, server_root, env, next_config),
     );
     transitions.insert(
         <span class="string">&quot;server-to-client&quot;</span>.to_string(),
@@ -815,7 +834,14 @@
     );
     transitions.insert(
         <span class="string">&quot;next-client&quot;</span>.to_string(),
-        next_client_transition(project_root, server_root, app_dir, env, browserslist_query),
+        next_client_transition(
+            project_root,
+            server_root,
+            app_dir,
+            env,
+            browserslist_query,
+            next_config,
+        ),
     );
     transitions.insert(
         <span class="string">&quot;next-client-chunks&quot;</span>.to_string(),
@@ -823,7 +849,7 @@
     );
     transitions.insert(
         <span class="string">&quot;next-ssr-client-module&quot;</span>.to_string(),
-        next_ssr_client_module_transition(project_root, app_dir, env, externals),
+        next_ssr_client_module_transition(project_root, app_dir, env, next_config),
     );
 
     <span class="kw">let </span>ssr_ty = Value::new(ServerContextType::AppSSR { app_dir });
@@ -831,7 +857,7 @@
         TransitionsByNameVc::cell(transitions),
         get_server_environment(ssr_ty, env),
         get_server_module_options_context(ssr_ty),
-        get_server_resolve_options_context(project_root, ssr_ty, externals),
+        get_server_resolve_options_context(project_root, ssr_ty, next_config),
     )
     .into()
 }
@@ -840,17 +866,21 @@
 /// Next.js app folder.
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>create_app_source(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: <span class="kw-2">&amp;</span>str,
-    externals: StringsVc,
+    next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceVc&gt; {
-    <span class="kw">let </span>project_root = wrap_with_next_js_fs(project_root);
+    <span class="kw">let </span>project_path = wrap_with_next_js_fs(project_path);
 
-    <span class="kw">let </span>app = project_root.join(<span class="string">&quot;app&quot;</span>);
-    <span class="kw">let </span>src_app = project_root.join(<span class="string">&quot;src/app&quot;</span>);
+    <span class="kw">if </span>!<span class="kw-2">*</span>next_config.app_dir().<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(NoContentSourceVc::new().into());
+    }
+
+    <span class="kw">let </span>app = project_path.join(<span class="string">&quot;app&quot;</span>);
+    <span class="kw">let </span>src_app = project_path.join(<span class="string">&quot;src/app&quot;</span>);
     <span class="kw">let </span>app_dir = <span class="kw">if </span><span class="kw-2">*</span>app.get_type().<span class="kw">await</span><span class="question-mark">? </span>== FileSystemEntryType::Directory {
         app
     } <span class="kw">else if </span><span class="kw-2">*</span>src_app.get_type().<span class="kw">await</span><span class="question-mark">? </span>== FileSystemEntryType::Directory {
@@ -860,33 +890,42 @@
     };
 
     <span class="kw">let </span>context_ssr = app_context(
-        project_root,
+        project_path,
         server_root,
         app_dir,
         env,
         browserslist_query,
         <span class="bool-val">true</span>,
-        externals,
+        next_config,
     );
     <span class="kw">let </span>context = app_context(
-        project_root,
+        project_path,
         server_root,
         app_dir,
         env,
         browserslist_query,
         <span class="bool-val">false</span>,
-        externals,
+        next_config,
     );
 
-    <span class="kw">let </span>server_runtime_entries = <span class="macro">vec!</span>[ProcessEnvAssetVc::new(project_root, env_for_js(env, <span class="bool-val">false</span>))
-        .as_ecmascript_chunk_placeable()];
+    <span class="kw">let </span>server_runtime_entries =
+        <span class="macro">vec!</span>[
+            ProcessEnvAssetVc::new(project_path, env_for_js(env, <span class="bool-val">false</span>, next_config))
+                .as_ecmascript_chunk_placeable(),
+        ];
 
-    <span class="kw">let </span>fallback_page = get_fallback_page(project_root, server_root, env, browserslist_query);
+    <span class="kw">let </span>fallback_page = get_fallback_page(
+        project_path,
+        server_root,
+        env,
+        browserslist_query,
+        next_config,
+    );
 
     <span class="prelude-val">Ok</span>(create_app_source_for_directory(
         context_ssr,
         context,
-        project_root,
+        project_path,
         SpecificityVc::exact(),
         <span class="number">0</span>,
         app_dir,
@@ -1130,9 +1169,10 @@
             </span>.into_iter()
             .try_join()
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>result = RopeBuilder::from(
-            <span class="string">&quot;import IPC, { Ipc } from \&quot;@vercel/turbopack-next/internal/ipc\&quot;;\n&quot;</span>,
-        );
+        <span class="comment">// IPC need to be the first import to allow it to catch errors happening during
+        // the other imports
+        </span><span class="kw">let </span><span class="kw-2">mut </span>result =
+            RopeBuilder::from(<span class="string">&quot;import { IPC } from \&quot;@vercel/turbopack-next/ipc/index\&quot;;\n&quot;</span>);
 
         <span class="kw">for </span>(<span class="kw">_</span>, imports) <span class="kw">in </span>segments.iter() {
             <span class="kw">for </span>(p, identifier, chunks_identifier) <span class="kw">in </span>imports.values() {

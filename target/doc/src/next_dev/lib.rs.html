@@ -529,17 +529,6 @@
 <span id="529">529</span>
 <span id="530">530</span>
 <span id="531">531</span>
-<span id="532">532</span>
-<span id="533">533</span>
-<span id="534">534</span>
-<span id="535">535</span>
-<span id="536">536</span>
-<span id="537">537</span>
-<span id="538">538</span>
-<span id="539">539</span>
-<span id="540">540</span>
-<span id="541">541</span>
-<span id="542">542</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -560,13 +549,12 @@
 <span class="kw">use </span>devserver_options::DevServerOptions;
 <span class="kw">use </span>next_core::{
     create_app_source, create_server_rendered_source, create_web_entry_source, env::load_env,
-    manifest::DevManifestContentSource, next_image::NextImageContentSourceVc,
-    source_map::NextSourceMapTraceContentSourceVc,
+    manifest::DevManifestContentSource, next_config::load_next_config,
+    next_image::NextImageContentSourceVc, source_map::NextSourceMapTraceContentSourceVc,
 };
 <span class="kw">use </span>owo_colors::OwoColorize;
 <span class="kw">use </span>turbo_malloc::TurboMalloc;
 <span class="kw">use </span>turbo_tasks::{
-    primitives::StringsVc,
     util::{FormatBytes, FormatDuration},
     RawVc, StatsType, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
@@ -599,7 +587,6 @@
     project_dir: String,
     root_dir: String,
     entry_requests: Vec&lt;EntryRequest&gt;,
-    server_component_externals: Vec&lt;String&gt;,
     eager_compile: bool,
     hostname: <span class="prelude-ty">Option</span>&lt;IpAddr&gt;,
     port: <span class="prelude-ty">Option</span>&lt;u16&gt;,
@@ -621,7 +608,6 @@
             project_dir,
             root_dir,
             entry_requests: <span class="macro">vec!</span>[],
-            server_component_externals: <span class="macro">vec!</span>[],
             eager_compile: <span class="bool-val">false</span>,
             hostname: <span class="prelude-val">None</span>,
             port: <span class="prelude-val">None</span>,
@@ -637,11 +623,6 @@
 
     <span class="kw">pub fn </span>entry_request(<span class="kw-2">mut </span><span class="self">self</span>, entry_asset_path: EntryRequest) -&gt; NextDevServerBuilder {
         <span class="self">self</span>.entry_requests.push(entry_asset_path);
-        <span class="self">self
-    </span>}
-
-    <span class="kw">pub fn </span>server_component_external(<span class="kw-2">mut </span><span class="self">self</span>, external: String) -&gt; NextDevServerBuilder {
-        <span class="self">self</span>.server_component_externals.push(external);
         <span class="self">self
     </span>}
 
@@ -690,7 +671,6 @@
 
         <span class="kw">let </span>project_dir = <span class="self">self</span>.project_dir;
         <span class="kw">let </span>root_dir = <span class="self">self</span>.root_dir;
-        <span class="kw">let </span>server_component_externals = <span class="self">self</span>.server_component_externals;
         <span class="kw">let </span>eager_compile = <span class="self">self</span>.eager_compile;
         <span class="kw">let </span>show_all = <span class="self">self</span>.show_all;
         <span class="kw">let </span>log_detail = <span class="self">self</span>.log_detail;
@@ -720,7 +700,6 @@
                 turbo_tasks.clone().into(),
                 console_ui.clone().into(),
                 browserslist_query.clone(),
-                server_component_externals.clone(),
             )
         };
 
@@ -817,7 +796,6 @@
     turbo_tasks: TransientInstance&lt;TurboTasks&lt;MemoryBackend&gt;&gt;,
     console_ui: TransientInstance&lt;ConsoleUi&gt;,
     browserslist_query: String,
-    server_component_externals: Vec&lt;String&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceVc&gt; {
     <span class="kw">let </span>console_ui = (<span class="kw-2">*</span>console_ui).clone().cell();
     <span class="kw">let </span>output_fs = output_fs(<span class="kw-2">&amp;</span>project_dir, console_ui);
@@ -829,8 +807,10 @@
     <span class="kw">let </span>project_path = fs.root().join(project_relative);
 
     <span class="kw">let </span>env = load_env(project_path);
+    <span class="kw">let </span>config_output_root = output_fs.root().join(<span class="string">&quot;.next/config&quot;</span>);
+    <span class="kw">let </span>next_config = load_next_config(project_path, config_output_root);
 
-    <span class="kw">let </span>output_root = output_fs.root().join(<span class="string">&quot;/.next/server&quot;</span>);
+    <span class="kw">let </span>output_root = output_fs.root().join(<span class="string">&quot;.next/server&quot;</span>);
 
     <span class="kw">let </span>dev_server_fs = DevServerFileSystemVc::new().as_file_system();
     <span class="kw">let </span>dev_server_root = dev_server_fs.root();
@@ -851,6 +831,7 @@
         env,
         eager_compile,
         <span class="kw-2">&amp;</span>browserslist_query,
+        next_config,
     );
     <span class="kw">let </span>rendered_source = create_server_rendered_source(
         project_path,
@@ -858,6 +839,7 @@
         dev_server_root,
         env,
         <span class="kw-2">&amp;</span>browserslist_query,
+        next_config,
     );
     <span class="kw">let </span>app_source = create_app_source(
         project_path,
@@ -865,7 +847,7 @@
         dev_server_root,
         env,
         <span class="kw-2">&amp;</span>browserslist_query,
-        StringsVc::cell(server_component_externals),
+        next_config,
     );
     <span class="kw">let </span>viz = turbo_tasks_viz::TurboTasksSource {
         turbo_tasks: turbo_tasks.into(),
@@ -982,10 +964,6 @@
     <span class="attr">#[cfg(feature = <span class="string">&quot;serializable&quot;</span>)]
     </span>{
         server = server.allow_retry(options.allow_retry);
-
-        <span class="kw">for </span>package <span class="kw">in </span>options.server_components_external_packages.iter() {
-            server = server.server_component_external(package.to_string());
-        }
     }
 
     <span class="kw">let </span>server = server.build().<span class="kw">await</span><span class="question-mark">?</span>;

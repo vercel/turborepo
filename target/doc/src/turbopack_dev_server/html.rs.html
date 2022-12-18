@@ -416,7 +416,7 @@
     </span><span class="kw">async fn </span>update(self_vc: DevHtmlAssetContentVc, from_version: VersionVc) -&gt; <span class="prelude-ty">Result</span>&lt;UpdateVc&gt; {
         <span class="kw">let </span>from_version = DevHtmlAssetVersionVc::resolve_from(from_version)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.expect(<span class="string">&quot;version must be an `DevHtmlAssetVersionVc`&quot;</span>);
+            </span>.ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;version must be an `DevHtmlAssetVersionVc`&quot;</span>))<span class="question-mark">?</span>;
         <span class="kw">let </span>to_version = self_vc.version();
 
         <span class="kw">let </span>to = to_version.<span class="kw">await</span><span class="question-mark">?</span>;

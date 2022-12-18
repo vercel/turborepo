@@ -292,7 +292,7 @@
         SmallDuration(value <span class="kw">as </span>u32)
     }
 
-    <span class="kw">pub</span>(<span class="self">self</span>) <span class="kw">fn </span>to_duration(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Duration {
+    <span class="kw">pub</span>(<span class="self">self</span>) <span class="kw">fn </span>to_duration(<span class="self">self</span>) -&gt; Duration {
         Duration::from_nanos(<span class="self">self</span>.<span class="number">0 </span><span class="kw">as </span>u64 * P)
     }
 }

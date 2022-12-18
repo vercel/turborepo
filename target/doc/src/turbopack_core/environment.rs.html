@@ -274,6 +274,8 @@
 <span id="274">274</span>
 <span id="275">275</span>
 <span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     process::{Command, Stdio},
     str::FromStr,
@@ -329,6 +331,8 @@
     </span>StaticRendering,
     <span class="doccomment">/// Intent to render on the client
     </span>Client,
+    <span class="doccomment">/// Intent to evaluate build time javascript code like config, plugins, etc.
+    </span>Build,
     <span class="comment">// TODO allow custom trait here
     </span>Custom(u8),
 }

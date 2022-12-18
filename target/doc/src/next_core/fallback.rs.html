@@ -70,6 +70,8 @@
 <span id="70">70</span>
 <span id="71">71</span>
 <span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -91,6 +93,7 @@
         get_client_chunking_context, get_client_environment, get_client_module_options_context,
         get_client_resolve_options_context, get_client_runtime_entries, ContextType,
     },
+    next_config::NextConfigVc,
     next_import_map::insert_next_shared_aliases,
     runtime::resolve_runtime_request,
 };
@@ -101,13 +104,14 @@
     dev_server_root: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: <span class="kw-2">&amp;</span>str,
+    next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;DevHtmlAssetVc&gt; {
     <span class="kw">let </span>ty = Value::new(ContextType::Fallback);
     <span class="kw">let </span>environment = get_client_environment(browserslist_query);
     <span class="kw">let </span>resolve_options_context = get_client_resolve_options_context(project_root, ty);
     <span class="kw">let </span>module_options_context = get_client_module_options_context(project_root, environment, ty);
     <span class="kw">let </span>chunking_context = get_client_chunking_context(project_root, dev_server_root, ty);
-    <span class="kw">let </span>entries = get_client_runtime_entries(project_root, env, ty);
+    <span class="kw">let </span>entries = get_client_runtime_entries(project_root, env, ty, next_config);
 
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();
     insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_root);

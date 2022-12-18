@@ -50,6 +50,9 @@
 <span id="50">50</span>
 <span id="51">51</span>
 <span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
 </pre><pre class="rust"><code><span class="kw">pub use </span>::include_dir::{<span class="self">self</span>, include_dir};
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::TransientInstance;
@@ -88,17 +91,20 @@
 
         <span class="comment">// make sure the types the `include_dir!` proc macro refers to are in scope
         </span><span class="kw">use </span>turbo_tasks_fs::embed::include_dir;
-        <span class="kw">if </span><span class="macro">cfg!</span>(debug_assertions) {
-            <span class="kw">let </span>path = <span class="macro-nonterminal">$path</span>.replace(<span class="string">&quot;$CARGO_MANIFEST_DIR&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;CARGO_MANIFEST_DIR&quot;</span>));
-            turbo_tasks_fs::embed::directory_from_relative_path(<span class="macro-nonterminal">$name</span>, path)
-        } <span class="kw">else </span>{
-            <span class="comment">// check that the directory exists at compile time even for debug builds
-            </span><span class="kw">static </span>dir: include_dir::Dir&lt;<span class="lifetime">&#39;static</span>&gt; = <span class="macro">turbo_tasks_fs::embed::include_dir!</span>(<span class="macro-nonterminal">$path</span>);
+        <span class="attr">#[cfg(debug_assertions)]
+        </span>{
+          <span class="kw">let </span>path = <span class="macro-nonterminal">$path</span>.replace(<span class="string">&quot;$CARGO_MANIFEST_DIR&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;CARGO_MANIFEST_DIR&quot;</span>));
+          turbo_tasks_fs::embed::directory_from_relative_path(<span class="macro-nonterminal">$name</span>, path)
+        }
+        <span class="attr">#[cfg(not(debug_assertions))]
+        </span>{
+           <span class="comment">// check that the directory exists at compile time even for debug builds
+           </span><span class="kw">static </span>dir: include_dir::Dir&lt;<span class="lifetime">&#39;static</span>&gt; = <span class="macro">turbo_tasks_fs::embed::include_dir!</span>(<span class="macro-nonterminal">$path</span>);
 
-            turbo_tasks_fs::embed::directory_from_include_dir(
-                <span class="macro-nonterminal">$name</span>,
-                turbo_tasks::TransientInstance::new(<span class="kw-2">&amp;</span>dir),
-            )
+           turbo_tasks_fs::embed::directory_from_include_dir(
+               <span class="macro-nonterminal">$name</span>,
+               turbo_tasks::TransientInstance::new(<span class="kw-2">&amp;</span>dir),
+           )
         }
     }};
 }
