@@ -271,12 +271,6 @@
 <span id="271">271</span>
 <span id="272">272</span>
 <span id="273">273</span>
-<span id="274">274</span>
-<span id="275">275</span>
-<span id="276">276</span>
-<span id="277">277</span>
-<span id="278">278</span>
-<span id="279">279</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -475,13 +469,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>image_config(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ImageConfigVc&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>image_config = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.images.clone();
-        <span class="comment">// TODO is this the right place to do this?
-        </span>image_config.remote_patterns.push(RemotePattern {
-            hostname: <span class="string">&quot;**&quot;</span>.to_string(),
-            ..Default::default()
-        });
-        <span class="prelude-val">Ok</span>(image_config.cell())
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.images.clone().cell())
     }
 }
 

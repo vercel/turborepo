@@ -264,7 +264,6 @@
 <span id="264">264</span>
 <span id="265">265</span>
 <span id="266">266</span>
-<span id="267">267</span>
 </pre><pre class="rust"><code><span class="kw">use </span>core::{default::Default, result::Result::Ok};
 <span class="kw">use </span>std::collections::HashMap;
 
@@ -507,8 +506,7 @@
             </span>.as_request();
 
     <span class="kw">let </span><span class="kw-2">mut </span>runtime_entries = <span class="macro">vec!</span>[RuntimeEntry::Ecmascript(
-        <span class="comment">//TODO
-        </span>ProcessEnvAssetVc::new(project_root, env_for_js(env, <span class="bool-val">true</span>, next_config)).into(),
+        ProcessEnvAssetVc::new(project_root, env_for_js(env, <span class="bool-val">true</span>, next_config)).into(),
     )
     .cell()];
 

@@ -227,7 +227,7 @@
 <span id="227">227</span>
 <span id="228">228</span>
 <span id="229">229</span>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>mime_guess::mime::TEXT_HTML_UTF_8;
 <span class="kw">use </span>turbo_tasks::{debug::ValueDebug, primitives::StringVc};
 <span class="kw">use </span>turbo_tasks_fs::{File, FileSystemPathVc};
@@ -416,7 +416,7 @@
     </span><span class="kw">async fn </span>update(self_vc: DevHtmlAssetContentVc, from_version: VersionVc) -&gt; <span class="prelude-ty">Result</span>&lt;UpdateVc&gt; {
         <span class="kw">let </span>from_version = DevHtmlAssetVersionVc::resolve_from(from_version)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;version must be an `DevHtmlAssetVersionVc`&quot;</span>))<span class="question-mark">?</span>;
+            </span>.context(<span class="string">&quot;version must be an `DevHtmlAssetVersionVc`&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>to_version = self_vc.version();
 
         <span class="kw">let </span>to = to_version.<span class="kw">await</span><span class="question-mark">?</span>;
