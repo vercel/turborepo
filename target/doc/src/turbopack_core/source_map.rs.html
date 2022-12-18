@@ -313,11 +313,6 @@
 <span id="313">313</span>
 <span id="314">314</span>
 <span id="315">315</span>
-<span id="316">316</span>
-<span id="317">317</span>
-<span id="318">318</span>
-<span id="319">319</span>
-<span id="320">320</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{io::Write, ops::Deref, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -404,7 +399,7 @@
                     .to_string(),
                 original_line: t.get_src_line() <span class="kw">as </span>usize,
                 original_column: t.get_src_col() <span class="kw">as </span>usize,
-                name: t.get_name().map(|n| n.to_string()),
+                name: t.get_name().map(String::from),
             })
         } <span class="kw">else </span>{
             Token::Synthetic(SyntheticToken {
@@ -467,7 +462,7 @@
                 <span class="kw">let </span><span class="kw-2">mut </span>first_section = <span class="bool-val">true</span>;
                 <span class="kw">for </span>(offset, section_map) <span class="kw">in </span>sections {
                     <span class="kw">if </span>!first_section {
-                        <span class="macro">write!</span>(rope, <span class="string">&quot;,&quot;</span>)<span class="question-mark">?</span>;
+                        rope += <span class="string">&quot;,&quot;</span>;
                     }
                     first_section = <span class="bool-val">false</span>;
 
@@ -480,14 +475,11 @@
 
                     rope += <span class="kw-2">&amp;*</span>section_map;
 
-                    <span class="macro">write!</span>(rope, <span class="string">r#&quot;}}&quot;#</span>)<span class="question-mark">?</span>;
+                    rope += <span class="string">&quot;}&quot;</span>;
                 }
 
-                <span class="macro">write!</span>(
-                    rope,
-                    <span class="string">r#&quot;]
-}}&quot;#
-                </span>)<span class="question-mark">?</span>;
+                rope += <span class="string">&quot;]
+}&quot;</span>;
 
                 rope.build()
             }
@@ -500,14 +492,12 @@
     </span><span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>lookup_token(<span class="self">self</span>, line: usize, column: usize) -&gt; <span class="prelude-ty">Result</span>&lt;OptionTokenVc&gt; {
         <span class="kw">let </span>token = <span class="kw">match </span><span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="kw">await</span><span class="question-mark">? </span>{
-            SourceMap::Regular(map) =&gt; {
-                <span class="kw">match </span>map.lookup_token(line <span class="kw">as </span>u32, column <span class="kw">as </span>u32) {
-                    <span class="comment">// The sourcemap package incorrectly returns the last token for large lookup
-                    // lines.
-                    </span><span class="prelude-val">Some</span>(t) <span class="kw">if </span>t.get_dst_line() == line <span class="kw">as </span>u32 =&gt; <span class="prelude-val">Some</span>::&lt;Token&gt;(t.into()),
-                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-                }
-            }
+            SourceMap::Regular(map) =&gt; map
+                .lookup_token(line <span class="kw">as </span>u32, column <span class="kw">as </span>u32)
+                <span class="comment">// The sourcemap crate incorrectly returns a previous line&#39;s token when there&#39;s
+                // not a match on this line.
+                </span>.filter(|t| t.get_dst_line() == line <span class="kw">as </span>u32)
+                .map(Token::from),
 
             SourceMap::Sectioned(map) =&gt; {
                 <span class="kw">let </span>len = map.sections.len();
@@ -532,10 +522,10 @@
                 </span><span class="kw">if </span>low &gt; <span class="number">0 </span>&amp;&amp; low &lt;= len {
                     <span class="kw">let </span>SourceMapSection { map, offset } = <span class="kw-2">&amp;</span>map.sections[low - <span class="number">1</span>];
                     <span class="comment">// We&#39;re looking for the position `l` lines into region covered by this
-                    // sourcemap s section.
+                    // sourcemap&#39;s section.
                     </span><span class="kw">let </span>l = line - offset.line;
-                    <span class="comment">// The source map starts if offset by the column only on its first line. On
-                    // the 2nd+ line, the section covers starting at column 0.
+                    <span class="comment">// The source map starts offset by the section&#39;s column only on its first line.
+                    // On the 2nd+ line, the source map covers starting at column 0.
                     </span><span class="kw">let </span>c = <span class="kw">if </span>line == offset.line {
                         column - offset.column
                     } <span class="kw">else </span>{

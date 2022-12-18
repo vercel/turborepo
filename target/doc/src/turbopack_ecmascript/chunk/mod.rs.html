@@ -1994,6 +1994,7 @@
 <span class="attr">#[derive(serde::Serialize)]
 </span><span class="kw">struct </span>HmrUpdateEntry&lt;<span class="lifetime">&#39;a</span>&gt; {
     code: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Rope,
+    url: String,
     map: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
@@ -2004,15 +2005,14 @@
         </span><span class="kw">struct </span>Id&lt;<span class="lifetime">&#39;a</span>&gt; {
             id: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleId,
         }
+        <span class="kw">let </span>id = serde_qs::to_string(<span class="kw-2">&amp;</span>Id { id: <span class="kw-2">&amp;</span>entry.id }).unwrap();
         HmrUpdateEntry {
             code: entry.source_code(),
-            map: entry.code.has_source_map().then(|| {
-                <span class="macro">format!</span>(
-                    <span class="string">&quot;/__turbopack_sourcemap__/{}.map?{}&quot;</span>,
-                    chunk_path,
-                    serde_qs::to_string(<span class="kw-2">&amp;</span>Id { id: <span class="kw-2">&amp;</span>entry.id }).unwrap()
-                )
-            }),
+            url: <span class="macro">format!</span>(<span class="string">&quot;/{}?{}&quot;</span>, chunk_path, <span class="kw-2">&amp;</span>id),
+            map: entry
+                .code
+                .has_source_map()
+                .then(|| <span class="macro">format!</span>(<span class="string">&quot;/__turbopack_sourcemap__/{}.map?{}&quot;</span>, chunk_path, <span class="kw-2">&amp;</span>id)),
         }
     }
 }

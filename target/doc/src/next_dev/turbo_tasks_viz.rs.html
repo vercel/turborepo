@@ -121,13 +121,10 @@
 <span id="121">121</span>
 <span id="122">122</span>
 <span id="123">123</span>
-<span id="124">124</span>
-<span id="125">125</span>
-<span id="126">126</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{str::FromStr, sync::Arc, time::Duration};
+</pre><pre class="rust"><code><span class="kw">use </span>std::{sync::Arc, time::Duration};
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>mime::Mime;
+<span class="kw">use </span>mime::TEXT_HTML_UTF_8;
 <span class="kw">use </span>turbo_tasks::{get_invalidator, TurboTasks, TurboTasksBackendApi, Value};
 <span class="kw">use </span>turbo_tasks_fs::File;
 <span class="kw">use </span>turbo_tasks_memory::{
@@ -241,10 +238,7 @@
         };
         <span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
             ContentSourceContent::Static(
-                AssetContentVc::from(
-                    File::from(html).with_content_type(Mime::from_str(<span class="string">&quot;text/html&quot;</span>)<span class="question-mark">?</span>),
-                )
-                .into(),
+                AssetContentVc::from(File::from(html).with_content_type(TEXT_HTML_UTF_8)).into(),
             )
             .cell(),
         ))
