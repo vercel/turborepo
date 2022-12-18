@@ -492,6 +492,83 @@
 <span id="492">492</span>
 <span id="493">493</span>
 <span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
+<span id="552">552</span>
+<span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
+<span id="556">556</span>
+<span id="557">557</span>
+<span id="558">558</span>
+<span id="559">559</span>
+<span id="560">560</span>
+<span id="561">561</span>
+<span id="562">562</span>
+<span id="563">563</span>
+<span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cmp::min,
@@ -556,11 +633,32 @@
     /// rope&#39;s is the combination of all these committed bytes.
     </span>committed: Vec&lt;RopeElem&gt;,
 
+    <span class="doccomment">/// Stores bytes that have been pushed, but are not yet committed. This is
+    /// either an attempt to push a static lifetime, or a push of owned bytes.
+    /// When the builder is flushed, we will commit these bytes into a real
+    /// Bytes instance.
+    </span>uncommited: Uncommitted,
+}
+
+<span class="doccomment">/// Stores any bytes which have been pushed, but we haven&#39;t decided to commit
+/// yet. Uncommitted byte bytes allow us to build larger buffers out of possibly
+/// small pushes.
+</span><span class="attr">#[derive(Default)]
+</span><span class="kw">enum </span>Uncommitted {
+    <span class="attr">#[default]
+    </span><span class="prelude-val">None</span>,
+
+    <span class="doccomment">/// Stores our attempt to push static lifetime bytes into the rope. If we
+    /// build the Rope or concatenate another Rope, we can commit a static
+    /// Bytes reference and save memory. If not, we&#39;ll concatenate this into
+    /// writable bytes to be committed later.
+    </span>Static(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[u8]),
+
     <span class="doccomment">/// Mutable bytes collection where non-static/non-shared bytes are written.
     /// This builds until the next time a static or shared bytes is
     /// appended, in which case we split the buffer and commit. Finishing
     /// the builder also commits these bytes.
-    </span>writable: Vec&lt;u8&gt;,
+    </span>Owned(Vec&lt;u8&gt;),
 }
 
 <span class="kw">impl </span>Rope {
@@ -612,8 +710,7 @@
     /// If possible use [push_static_bytes] or `+=` operation instead, as they
     /// will create a reference to shared memory instead of cloning the bytes.
     </span><span class="kw">pub fn </span>push_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bytes: <span class="kw-2">&amp;</span>[u8]) {
-        <span class="self">self</span>.length += bytes.len();
-        <span class="self">self</span>.writable.extend(bytes);
+        <span class="self">self</span>.uncommited.push_bytes(bytes);
     }
 
     <span class="doccomment">/// Push static lifetime bytes into the Rope.
@@ -625,7 +722,7 @@
         // it&#39;s more efficient to own the bytes in a new buffer. We may be able to reuse
         // that buffer when more bytes are pushed.
         </span><span class="kw">if </span>bytes.len() &lt; mem::size_of::&lt;Bytes&gt;() {
-            <span class="kw">return </span><span class="self">self</span>.push_bytes(bytes);
+            <span class="kw">return </span><span class="self">self</span>.uncommited.push_static_bytes(bytes);
         }
 
         <span class="comment">// We may have pending bytes from a prior push.
@@ -651,18 +748,18 @@
     ///
     /// This may be called multiple times without issue.
     </span><span class="kw">pub fn </span>finish(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="kw">if </span>!<span class="self">self</span>.writable.is_empty() {
-            <span class="kw">let </span>writable = mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.writable);
-            <span class="self">self</span>.committed.push(Local(writable.into()));
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(b) = <span class="self">self</span>.uncommited.finish() {
+            <span class="self">self</span>.length += b.len();
+            <span class="self">self</span>.committed.push(Local(b));
         }
     }
 
     <span class="kw">pub fn </span>len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="self">self</span>.length
+        <span class="self">self</span>.length + <span class="self">self</span>.uncommited.len()
     }
 
     <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.length == <span class="number">0
+        <span class="self">self</span>.len() == <span class="number">0
     </span>}
 
     <span class="doccomment">/// Constructs our final, immutable Rope instance.
@@ -670,7 +767,7 @@
         <span class="self">self</span>.finish();
         Rope {
             length: <span class="self">self</span>.length,
-            data: <span class="self">self</span>.committed.into(),
+            data: InnerRope::from(<span class="self">self</span>.committed),
         }
     }
 }
@@ -686,9 +783,8 @@
 <span class="kw">impl </span>From&lt;Vec&lt;u8&gt;&gt; <span class="kw">for </span>RopeBuilder {
     <span class="kw">fn </span>from(bytes: Vec&lt;u8&gt;) -&gt; <span class="self">Self </span>{
         RopeBuilder {
-            length: bytes.len(),
-            committed: <span class="macro">vec!</span>[],
-            writable: bytes,
+            uncommited: Uncommitted::from(bytes),
+            ..Default::default()
         }
     }
 }
@@ -721,6 +817,57 @@
     }
 }
 
+<span class="kw">impl </span>Uncommitted {
+    <span class="kw">fn </span>len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="kw">match </span><span class="self">self </span>{
+            Uncommitted::None =&gt; <span class="number">0</span>,
+            Uncommitted::Static(s) =&gt; s.len(),
+            Uncommitted::Owned(v) =&gt; v.len(),
+        }
+    }
+
+    <span class="doccomment">/// Pushes owned bytes, converting the current representation to an Owned if
+    /// it&#39;s not already.
+    </span><span class="kw">fn </span>push_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bytes: <span class="kw-2">&amp;</span>[u8]) {
+        <span class="kw">match </span><span class="self">self </span>{
+            <span class="self">Self</span>::None =&gt; <span class="kw-2">*</span><span class="self">self </span>= <span class="self">Self</span>::Owned(bytes.to_vec()),
+            <span class="self">Self</span>::Static(s) =&gt; {
+                <span class="comment">// If we&#39;d previously pushed static bytes, we instead concatenate those bytes
+                // with the new bytes in an attempt to use less memory rather than committing 2
+                // Bytes references (2 * 4 usizes).
+                </span><span class="kw">let </span>v = [s, bytes].concat();
+                <span class="kw-2">*</span><span class="self">self </span>= <span class="self">Self</span>::Owned(v);
+            }
+            <span class="self">Self</span>::Owned(v) =&gt; v.extend(bytes),
+        }
+    }
+
+    <span class="doccomment">/// Pushes static lifetime bytes, but only if the current representation is
+    /// None. Else, it coverts to an Owned.
+    </span><span class="kw">fn </span>push_static_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bytes: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[u8]) {
+        <span class="kw">match </span><span class="self">self </span>{
+            <span class="comment">// If we&#39;ve not already pushed static bytes, we attempt to store the bytes for later. If
+            // we push owned bytes or another static bytes, then this attempt will fail and we&#39;ll
+            // instead concatenate into a single owned Bytes. But if we don&#39;t push anything (build
+            // the Rope), or concatenate another Rope (we can&#39;t join our bytes with the InnerRope of
+            // another Rope), we&#39;ll be able to commit a static Bytes reference and save overall
+            // memory (a small static Bytes reference is better than a small owned Bytes reference).
+            </span><span class="self">Self</span>::None =&gt; <span class="kw-2">*</span><span class="self">self </span>= <span class="self">Self</span>::Static(bytes),
+            <span class="kw">_ </span>=&gt; <span class="self">self</span>.push_bytes(bytes),
+        }
+    }
+
+    <span class="doccomment">/// Converts the current uncommited bytes into a Bytes, resetting our
+    /// representation to None.
+    </span><span class="kw">fn </span>finish(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Bytes&gt; {
+        <span class="kw">match </span>mem::take(<span class="self">self</span>) {
+            <span class="self">Self</span>::None =&gt; <span class="prelude-val">None</span>,
+            <span class="self">Self</span>::Static(s) =&gt; <span class="prelude-val">Some</span>(s.into()),
+            <span class="self">Self</span>::Owned(v) =&gt; <span class="prelude-val">Some</span>(v.into()),
+        }
+    }
+}
+
 <span class="kw">impl </span>DeterministicHash <span class="kw">for </span>Rope {
     <span class="doccomment">/// Ropes with similar contents hash the same, regardless of their
     /// structure.
@@ -749,6 +896,12 @@
     }
 }
 
+<span class="kw">impl </span>From&lt;Vec&lt;u8&gt;&gt; <span class="kw">for </span>Uncommitted {
+    <span class="kw">fn </span>from(bytes: Vec&lt;u8&gt;) -&gt; <span class="self">Self </span>{
+        Uncommitted::Owned(bytes)
+    }
+}
+
 <span class="kw">impl </span>DeterministicHash <span class="kw">for </span>InnerRope {
     <span class="doccomment">/// Ropes with similar contents hash the same, regardless of their
     /// structure. Notice the InnerRope does not contain a length (and any
@@ -768,7 +921,12 @@
 }
 
 <span class="kw">impl </span>From&lt;Vec&lt;RopeElem&gt;&gt; <span class="kw">for </span>InnerRope {
-    <span class="kw">fn </span>from(els: Vec&lt;RopeElem&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">fn </span>from(<span class="kw-2">mut </span>els: Vec&lt;RopeElem&gt;) -&gt; <span class="self">Self </span>{
+        <span class="comment">// The RopeBuilder likely over-allocated the vec so we could insert more
+        // RopeElems into it. But we&#39;re constructing a immutable Rope which may
+        // stay alive forever, so we need to trim any excess capacity to save
+        // memory.
+        </span>els.shrink_to_fit();
         InnerRope(Arc::new(els))
     }
 }
@@ -932,10 +1090,12 @@
             <span class="prelude-val">Some</span>(b) =&gt; b,
         };
 
-        <span class="self">self</span>.stack.push(StackElem::Local(bytes));
-        <span class="kw">let </span>bytes = <span class="kw">match </span><span class="self">self</span>.stack.last() {
-            <span class="prelude-val">Some</span>(StackElem::Local(b)) =&gt; b,
-            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+        <span class="comment">// This is just so we can get a reference to the asset that is kept alive by the
+        // RopeReader itself. We can then auto-convert that reference into the needed u8
+        // slice reference.
+        </span><span class="self">self</span>.stack.push(StackElem::Local(bytes));
+        <span class="kw">let </span><span class="prelude-val">Some</span>(StackElem::Local(bytes)) = <span class="self">self</span>.stack.last() <span class="kw">else </span>{
+             <span class="macro">unreachable!</span>()
         };
         <span class="prelude-val">Ok</span>(bytes)
     }
@@ -962,13 +1122,7 @@
     /// differs from [Read::read] by not copying any memory.
     </span><span class="kw">fn </span>poll_next(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, _cx: <span class="kw-2">&amp;mut </span>TaskContext&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Poll&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt;&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.get_mut();
-
-        <span class="kw">let </span>bytes = <span class="kw">match </span>this.next() {
-            <span class="prelude-val">None </span>=&gt; <span class="kw">return </span>Poll::Ready(<span class="prelude-val">None</span>),
-            <span class="prelude-val">Some</span>(b) =&gt; b,
-        };
-
-        Poll::Ready(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(bytes)))
+        Poll::Ready(this.next().map(<span class="prelude-val">Ok</span>))
     }
 }
 
