@@ -180,7 +180,7 @@ impl SourceMapVc {
             SourceMap::Regular(map) => map
                 .lookup_token(line as u32, column as u32)
                 .filter(|t| t.get_dst_line() == line as u32)
-                .map(From::from),
+                .map(Token::from),
 
             SourceMap::Sectioned(map) => {
                 let len = map.sections.len();
