@@ -13,9 +13,9 @@ use turbopack_dev_server::source::{
     ContentSourceVc,
 };
 use turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
+use turbopack_node::{get_intermediate_asset, path_regex::PathRegexVc, NodeEntryVc};
 
-use super::{get_intermediate_asset, render_proxy, NodeEntryVc, RenderData};
-use crate::path_regex::PathRegexVc;
+use super::{render_proxy::render_proxy, RenderData};
 
 /// Creates a [NodeApiContentSource].
 #[turbo_tasks::function]
@@ -179,9 +179,9 @@ impl Introspectable for NodeApiContentSource {
             set.insert((
                 StringVc::cell("intermediate asset".to_string()),
                 IntrospectableAssetVc::new(get_intermediate_asset(
-                    entry.module,
-                    self.runtime_entries,
-                    entry.chunking_context,
+                    entry
+                        .module
+                        .as_evaluated_chunk(entry.chunking_context, Some(self.runtime_entries)),
                     entry.intermediate_output_path,
                 )),
             ));

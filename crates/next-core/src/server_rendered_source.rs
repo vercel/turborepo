@@ -31,7 +31,6 @@ use turbopack_ecmascript::{
 };
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_node::{
-    create_node_api_source, create_node_rendered_source,
     node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
     NodeEntry, NodeEntryVc,
 };
@@ -54,6 +53,9 @@ use crate::{
         get_server_resolve_options_context, ServerContextType,
     },
     page_loader::create_page_loader,
+    render_from_node::{
+        node_api_source::create_node_api_source, rendered_source::create_node_rendered_source,
+    },
     util::{get_asset_path_from_route, pathname_for_path, regular_expression_for_path},
 };
 
@@ -61,14 +63,14 @@ use crate::{
 /// Next.js pages folder.
 #[turbo_tasks::function]
 pub async fn create_server_rendered_source(
-    project_path: FileSystemPathVc,
+    project_root: FileSystemPathVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
     next_config: NextConfigVc,
 ) -> Result<ContentSourceVc> {
-    let project_path = wrap_with_next_js_fs(project_path);
+    let project_path = wrap_with_next_js_fs(project_root);
 
     let pages = project_path.join("pages");
     let src_pages = project_path.join("src/pages");
@@ -138,6 +140,7 @@ pub async fn create_server_rendered_source(
     );
 
     let server_rendered_source = create_server_rendered_source_for_directory(
+        project_root,
         project_path,
         context,
         client_context,
@@ -165,6 +168,7 @@ pub async fn create_server_rendered_source(
 /// Handles a single page file in the pages directory
 #[turbo_tasks::function]
 async fn create_server_rendered_source_for_file(
+    project_root: FileSystemPathVc,
     context_path: FileSystemPathVc,
     context: AssetContextVc,
     client_context: AssetContextVc,
@@ -239,6 +243,7 @@ async fn create_server_rendered_source_for_file(
             create_node_rendered_source(
                 specificity,
                 server_root,
+                project_root,
                 pathname,
                 path_regex,
                 ssr_entry,
@@ -248,6 +253,7 @@ async fn create_server_rendered_source_for_file(
             create_node_rendered_source(
                 specificity,
                 server_root,
+                project_root,
                 pathname,
                 data_path_regex,
                 ssr_entry,
@@ -271,6 +277,7 @@ async fn create_server_rendered_source_for_file(
 /// [create_server_rendered_source_for_file] method for files.
 #[turbo_tasks::function]
 async fn create_server_rendered_source_for_directory(
+    project_root: FileSystemPathVc,
     context_path: FileSystemPathVc,
     context: AssetContextVc,
     client_context: AssetContextVc,
@@ -326,6 +333,7 @@ async fn create_server_rendered_source_for_directory(
                                 sources.push((
                                     name,
                                     create_server_rendered_source_for_file(
+                                        project_root,
                                         context_path,
                                         context,
                                         client_context,
@@ -349,6 +357,7 @@ async fn create_server_rendered_source_for_directory(
                     sources.push((
                         name,
                         create_server_rendered_source_for_directory(
+                            project_root,
                             context_path,
                             context,
                             client_context,

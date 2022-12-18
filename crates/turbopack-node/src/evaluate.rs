@@ -51,6 +51,7 @@ pub async fn evaluate(
     context: AssetContextVc,
     intermediate_output_path: FileSystemPathVc,
     runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
+    args: Vec<String>,
 ) -> Result<JavaScriptValueVc> {
     let chunking_context = DevChunkingContextVc::builder(
         context_path,
@@ -69,11 +70,19 @@ pub async fn evaluate(
     )
     .as_asset();
 
-    let path = intermediate_output_path.join("evaluate.js");
+    let module_path = module_asset.path().await?;
+    let path = intermediate_output_path.join(module_path.file_name());
     let entry_module = EcmascriptModuleAssetVc::new_with_inner_assets(
         VirtualAssetVc::new(
             runtime_asset.path().join("evaluate.js"),
-            File::from("import { run } from 'RUNTIME'; run(() => require('INNER'))").into(),
+            File::from(format!(
+                "import {{ run }} from 'RUNTIME'; run(require('INNER'), {})",
+                args.into_iter()
+                    .map(|arg| format!("JSON.stringify(`{}`)", arg))
+                    .collect::<Vec<String>>()
+                    .join(",")
+            ))
+            .into(),
         )
         .into(),
         context,

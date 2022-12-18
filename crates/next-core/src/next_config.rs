@@ -8,10 +8,8 @@ use turbo_tasks::{
     Value,
 };
 use turbo_tasks_fs::{FileSystemEntryType, FileSystemPathVc};
-use turbopack::{transition::TransitionsByNameVc, ModuleAssetContextVc};
 use turbopack_core::{
     asset::Asset,
-    environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
 };
@@ -21,10 +19,7 @@ use turbopack_ecmascript::{
 };
 use turbopack_node::evaluate::{evaluate, JavaScriptValue};
 
-use crate::{
-    embed_js::next_asset,
-    next_server::{get_build_module_options_context, get_build_resolve_options_context},
-};
+use crate::{embed_js::next_asset, render_from_node::create_node_evaluate_asset_context};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -205,18 +200,7 @@ pub async fn load_next_config(
     project_path: FileSystemPathVc,
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<NextConfigVc> {
-    let context = ModuleAssetContextVc::new(
-        TransitionsByNameVc::cell(Default::default()),
-        EnvironmentVc::new(
-            Value::new(ExecutionEnvironment::NodeJsBuildTime(
-                NodeJsEnvironment::default().cell(),
-            )),
-            Value::new(EnvironmentIntention::Build),
-        ),
-        get_build_module_options_context(),
-        get_build_resolve_options_context(project_path),
-    )
-    .as_asset_context();
+    let context = create_node_evaluate_asset_context(project_path);
     let next_config_mjs_path = project_path.join("next.config.mjs").realpath();
     let next_config_js_path = project_path.join("next.config.js").realpath();
     let config_asset = if matches!(
@@ -259,6 +243,7 @@ pub async fn load_next_config(
         context,
         intermediate_output_path,
         runtime_entries,
+        vec![],
     )
     .await?;
     match &*config_value {

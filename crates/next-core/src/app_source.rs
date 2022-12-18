@@ -35,7 +35,6 @@ use turbopack_ecmascript::{
 };
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_node::{
-    create_node_rendered_source,
     node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
     NodeEntry, NodeEntryVc,
 };
@@ -64,6 +63,7 @@ use crate::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
     },
+    render_from_node::rendered_source::create_node_rendered_source,
     util::{pathname_for_path, regular_expression_for_path},
 };
 
@@ -383,6 +383,7 @@ async fn create_app_source_for_directory(
             sources.push(create_node_rendered_source(
                 specificity,
                 server_root,
+                project_root,
                 pathname,
                 path_regex,
                 AppRenderer {

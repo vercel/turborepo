@@ -22,11 +22,11 @@ use turbopack_dev_server::{
     },
 };
 use turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
-
-use super::{
-    external_asset_entrypoints, get_intermediate_asset, render_static, NodeEntryVc, RenderData,
+use turbopack_node::{
+    external_asset_entrypoints, get_intermediate_asset, path_regex::PathRegexVc, NodeEntryVc,
 };
-use crate::path_regex::PathRegexVc;
+
+use super::{render_static::render_static, RenderData};
 
 /// Creates a content source that renders something in Node.js with the passed
 /// `entry` when it matches a `path_regex`. Once rendered it serves
@@ -38,6 +38,7 @@ use crate::path_regex::PathRegexVc;
 pub fn create_node_rendered_source(
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
+    project_root: FileSystemPathVc,
     pathname: StringVc,
     path_regex: PathRegexVc,
     entry: NodeEntryVc,
@@ -47,6 +48,7 @@ pub fn create_node_rendered_source(
     let source = NodeRenderContentSource {
         specificity,
         server_root,
+        project_root,
         pathname,
         path_regex,
         entry,
@@ -70,6 +72,7 @@ pub fn create_node_rendered_source(
 pub struct NodeRenderContentSource {
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
+    project_root: FileSystemPathVc,
     pathname: StringVc,
     path_regex: PathRegexVc,
     entry: NodeEntryVc,
@@ -159,6 +162,7 @@ impl ContentSource for NodeRenderContentSource {
                     let entry = this.entry.entry(data.clone()).await?;
                     let asset = render_static(
                         this.server_root.join(path),
+                        this.project_root,
                         entry.module,
                         this.runtime_entries,
                         this.fallback_page,
@@ -237,9 +241,9 @@ impl Introspectable for NodeRenderContentSource {
             set.insert((
                 StringVc::cell("intermediate asset".to_string()),
                 IntrospectableAssetVc::new(get_intermediate_asset(
-                    entry.module,
-                    self.runtime_entries,
-                    entry.chunking_context,
+                    entry
+                        .module
+                        .as_evaluated_chunk(entry.chunking_context, Some(self.runtime_entries)),
                     entry.intermediate_output_path,
                 )),
             ));

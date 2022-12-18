@@ -7,8 +7,9 @@ use turbopack_core::asset::AssetContentVc;
 use turbopack_dev_server::source::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
 };
-use turbopack_node::{
-    node_api_source::NodeApiContentSourceVc, node_rendered_source::NodeRenderContentSourceVc,
+
+use crate::render_from_node::{
+    node_api_source::NodeApiContentSourceVc, rendered_source::NodeRenderContentSourceVc,
 };
 
 /// A content source which creates the next.js `_devPagesManifest.json` and
