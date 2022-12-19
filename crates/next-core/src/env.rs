@@ -57,6 +57,7 @@ pub async fn env_for_js(
     };
     let env = EmbeddableProcessEnvVc::new(env).into();
     let image_config = next_config.image_config().await?;
+    let base_path = next_config.base_path().await?;
 
     Ok(CustomProcessEnvVc::new(
         env,
@@ -64,7 +65,9 @@ pub async fn env_for_js(
             // We need to overload the __NEXT_IMAGE_OPTS to override the default remotePatterns field.
             // This allows us to support loading from remote hostnames until we properly support reading
             // the next.config.js file.
-            "__NEXT_IMAGE_OPTS".to_string() => serde_json::to_string(&image_config).unwrap()
+            "__NEXT_IMAGE_OPTS".to_string() => serde_json::to_string(&image_config).unwrap(),
+            // This ensures next/link and the Next.js router work properly when a basePath is configured.
+            "__NEXT_ROUTER_BASEPATH".to_string() => serde_json::to_string(&base_path).unwrap(),
         }),
     )
     .into())
