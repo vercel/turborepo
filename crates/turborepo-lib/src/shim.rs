@@ -87,7 +87,7 @@ impl ShimArgs {
             Err(anyhow!("No value assigned to `--cwd` argument"))
         } else {
             let cwd = if let Some(cwd) = cwd {
-                cwd.canonicalize()?
+                fs_canonicalize(cwd)?
             } else {
                 current_dir()?
             };
