@@ -300,7 +300,6 @@ fn is_turbo_binary_path_set() -> bool {
 }
 
 pub fn run() -> Result<Payload> {
-    println!("{:?}", env::args().collect::<Vec<_>>());
     let args = ShimArgs::parse()?;
     // If skip_infer is passed, we're probably running local turbo with
     // global turbo having handled the inference. We can run without any
