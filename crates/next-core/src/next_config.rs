@@ -26,9 +26,9 @@ use turbopack_node::{
 
 use crate::embed_js::next_asset;
 
+#[turbo_tasks::value(serialization = "custom")]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-#[turbo_tasks::value(transparent, serialization = "custom")]
 pub struct NextConfig {
     pub config_file: Option<String>,
     pub config_file_name: String,
