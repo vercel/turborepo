@@ -2078,7 +2078,7 @@
             </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;reading old content of {}&quot;</span>, full_path.display()))<span class="question-mark">?</span>;
 
         <span class="kw">if </span><span class="kw-2">*</span>content == <span class="kw-2">*</span>old_content {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(CompletionVc::new());
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(CompletionVc::unchanged());
         }
 
         <span class="kw">let </span>create_directory = <span class="kw-2">*</span>old_content == FileContent::NotFound;
@@ -2143,7 +2143,7 @@
             </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;reading old symlink target of {}&quot;</span>, full_path.display()))<span class="question-mark">?</span>;
         <span class="kw">let </span>target_link = target.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>target_link == old_content {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(CompletionVc::new());
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(CompletionVc::unchanged());
         }
         <span class="kw">let </span>file_type = <span class="kw-2">&amp;*</span>fs_path.get_type().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>create_directory = file_type == <span class="kw-2">&amp;</span>FileSystemEntryType::NotFound;

@@ -30,21 +30,10 @@
 <span id="30">30</span>
 <span id="31">31</span>
 <span id="32">32</span>
-<span id="33">33</span>
-<span id="34">34</span>
-<span id="35">35</span>
-<span id="36">36</span>
-<span id="37">37</span>
-<span id="38">38</span>
-<span id="39">39</span>
-<span id="40">40</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
-<span class="kw">use crate</span>::{
-    asset::{Asset, AssetContentVc, AssetVc},
-    reference::AssetReferencesVc,
-};
+<span class="kw">use </span><span class="kw">crate</span>::asset::{Asset, AssetContentVc, AssetVc};
 
 <span class="doccomment">/// An [Asset] that is created from some passed source code.
 </span><span class="attr">#[turbo_tasks::value]
@@ -71,11 +60,6 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetContentVc {
         <span class="self">self</span>.content
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
-        AssetReferencesVc::empty()
     }
 }
 </code></pre></div>

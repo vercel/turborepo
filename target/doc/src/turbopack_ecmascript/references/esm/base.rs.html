@@ -510,7 +510,7 @@
                         visitors.push(<span class="macro">create_visitor!</span>(visit_mut_program(program: <span class="kw-2">&amp;mut </span>Program) {
                             <span class="comment">// TODO Technically this should insert a ESM external, but we don&#39;t support that yet
                             </span><span class="kw">let </span>stmt = <span class="macro">quote!</span>(
-                                <span class="string">&quot;var $name = __turbopack_external_require__($id);&quot; </span><span class="kw">as </span>Stmt,
+                                <span class="string">&quot;var $name = __turbopack_external_require__($id, 1);&quot; </span><span class="kw">as </span>Stmt,
                                 name = Ident::new(ident.clone().into(), DUMMY_SP),
                                 id: Expr = Expr::Lit(request.clone().into())
                             );

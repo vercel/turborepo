@@ -32,10 +32,30 @@
 <span id="32">32</span>
 <span id="33">33</span>
 <span id="34">34</span>
-</pre><pre class="rust"><code><span class="kw">use </span>turbopack_core::environment::EnvironmentVc;
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+</pre><pre class="rust"><code><span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
+<span class="kw">use </span>turbopack_core::{environment::EnvironmentVc, resolve::options::ImportMappingVc};
 <span class="kw">use </span>turbopack_ecmascript::EcmascriptInputTransform;
+<span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
 
 <span class="kw">use </span><span class="kw">super</span>::ModuleRule;
+
+<span class="attr">#[derive(Default, Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>PostCssTransformOptions {
+    <span class="kw">pub </span>postcss_package: <span class="prelude-ty">Option</span>&lt;ImportMappingVc&gt;,
+    <span class="kw">pub </span>placeholder_for_future_extensions: (),
+}
 
 <span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
@@ -44,12 +64,14 @@
     <span class="kw">pub </span>enable_react_refresh: bool,
     <span class="kw">pub </span>enable_styled_components: bool,
     <span class="kw">pub </span>enable_styled_jsx: bool,
+    <span class="kw">pub </span>enable_postcss_transform: <span class="prelude-ty">Option</span>&lt;PostCssTransformOptions&gt;,
     <span class="kw">pub </span>enable_typescript_transform: bool,
     <span class="kw">pub </span>preset_env_versions: <span class="prelude-ty">Option</span>&lt;EnvironmentVc&gt;,
     <span class="kw">pub </span>custom_ecmascript_app_transforms: Vec&lt;EcmascriptInputTransform&gt;,
     <span class="kw">pub </span>custom_ecmascript_transforms: Vec&lt;EcmascriptInputTransform&gt;,
     <span class="doccomment">/// Custom rules to be applied after all default rules.
     </span><span class="kw">pub </span>custom_rules: Vec&lt;ModuleRule&gt;,
+    <span class="kw">pub </span>execution_context: <span class="prelude-ty">Option</span>&lt;ExecutionContextVc&gt;,
     <span class="kw">pub </span>placeholder_for_future_extensions: (),
 }
 

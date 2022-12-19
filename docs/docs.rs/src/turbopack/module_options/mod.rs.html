@@ -214,17 +214,65 @@
 <span id="214">214</span>
 <span id="215">215</span>
 <span id="216">216</span>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
-<span class="kw">use </span>turbopack_core::reference_type::{ReferenceType, UrlReferenceSubType};
-<span class="kw">use </span>turbopack_css::{CssInputTransform, CssInputTransformsVc};
-<span class="kw">use </span>turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
-
-<span class="kw">pub mod </span>module_options_context;
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+</pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
+<span class="kw">pub mod </span>rule_condition;
 
+<span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">pub use </span>module_options_context::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>module_rule::<span class="kw-2">*</span>;
+<span class="kw">pub use </span>rule_condition::<span class="kw-2">*</span>;
+<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span class="kw">use </span>turbopack_core::{
+    reference_type::{ReferenceType, UrlReferenceSubType},
+    resolve::options::{ImportMap, ImportMapping},
+    source_transform::SourceTransformsVc,
+};
+<span class="kw">use </span>turbopack_css::{CssInputTransform, CssInputTransformsVc};
+<span class="kw">use </span>turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
+<span class="kw">use </span>turbopack_node::transforms::postcss::PostCssTransformVc;
+
+<span class="kw">use </span><span class="kw">crate</span>::evaluate_context::node_evaluate_asset_context;
 
 <span class="attr">#[turbo_tasks::value(cell = <span class="string">&quot;new&quot;</span>, eq = <span class="string">&quot;manual&quot;</span>)]
 </span><span class="kw">pub struct </span>ModuleOptions {
@@ -235,7 +283,7 @@
 </span><span class="kw">impl </span>ModuleOptionsVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>new(
-        _path: FileSystemPathVc,
+        path: FileSystemPathVc,
         context: ModuleOptionsContextVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleOptionsVc&gt; {
         <span class="kw">let </span>ModuleOptionsContext {
@@ -244,10 +292,12 @@
             enable_styled_jsx,
             enable_styled_components,
             enable_typescript_transform,
+            <span class="kw-2">ref </span>enable_postcss_transform,
             preset_env_versions,
             <span class="kw-2">ref </span>custom_ecmascript_app_transforms,
             <span class="kw-2">ref </span>custom_ecmascript_transforms,
             <span class="kw-2">ref </span>custom_rules,
+            execution_context,
             ..
         } = <span class="kw-2">*</span>context.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>transforms = custom_ecmascript_app_transforms.clone();
@@ -314,9 +364,39 @@
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.css&quot;</span>.to_string()),
-                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Css(
-                    css_transforms,
-                ))],
+                [
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(options) = enable_postcss_transform {
+                        <span class="kw">let </span>execution_context = execution_context
+                            .context(<span class="string">&quot;execution_context is required for the postcss_transform&quot;</span>)<span class="question-mark">?
+                            </span>.join(<span class="string">&quot;postcss&quot;</span>);
+
+                        <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::default();
+                        import_map.insert_exact_alias(
+                            <span class="string">&quot;@vercel/turbopack/postcss&quot;</span>,
+                            <span class="kw">if let </span><span class="prelude-val">Some</span>(postcss) = options.postcss_package {
+                                postcss
+                            } <span class="kw">else </span>{
+                                ImportMapping::PrimaryAlternative(<span class="string">&quot;postcss&quot;</span>.to_string(), <span class="prelude-val">Some</span>(path))
+                                    .cell()
+                            },
+                        );
+                        <span class="prelude-val">Some</span>(ModuleRuleEffect::SourceTransforms(
+                            SourceTransformsVc::cell(<span class="macro">vec!</span>[PostCssTransformVc::new(
+                                node_evaluate_asset_context(<span class="prelude-val">Some</span>(import_map.cell())),
+                                execution_context,
+                            )
+                            .into()]),
+                        ))
+                    } <span class="kw">else </span>{
+                        <span class="prelude-val">None
+                    </span>},
+                    <span class="prelude-val">Some</span>(ModuleRuleEffect::ModuleType(ModuleType::Css(
+                        css_transforms,
+                    ))),
+                ]
+                .into_iter()
+                .flatten()
+                .collect(),
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.module.css&quot;</span>.to_string()),

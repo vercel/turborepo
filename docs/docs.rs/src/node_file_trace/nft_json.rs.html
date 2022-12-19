@@ -54,17 +54,12 @@
 <span id="54">54</span>
 <span id="55">55</span>
 <span id="56">56</span>
-<span id="57">57</span>
-<span id="58">58</span>
-<span id="59">59</span>
-<span id="60">60</span>
-<span id="61">61</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>turbo_tasks_fs::{File, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    reference::{all_assets, AssetReferencesVc},
+    reference::all_assets,
 };
 
 <span class="attr">#[turbo_tasks::value(shared)]
@@ -113,11 +108,6 @@
         });
 
         <span class="prelude-val">Ok</span>(File::from(json.to_string()).into())
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
-        AssetReferencesVc::empty()
     }
 }
 </code></pre></div>

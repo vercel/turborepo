@@ -81,17 +81,12 @@
 <span id="81">81</span>
 <span id="82">82</span>
 <span id="83">83</span>
-<span id="84">84</span>
-<span id="85">85</span>
-<span id="86">86</span>
-<span id="87">87</span>
-<span id="88">88</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::{File, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
+    reference::{AssetReference, AssetReferenceVc},
     resolve::{ResolveResult, ResolveResultVc},
     source_map::GenerateSourceMap,
 };
@@ -130,11 +125,6 @@
             .to_rope()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(File::from(sm).into())
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
-        AssetReferencesVc::empty()
     }
 }
 

@@ -278,7 +278,7 @@
 };
 <span class="kw">use </span>turbopack_ecmascript::{
     resolve::apply_cjs_specific_options,
-    typescript::resolve::{apply_tsconfig_resolve_options, tsconfig_resolve_options},
+    typescript::resolve::{apply_tsconfig_resolve_options, tsconfig, tsconfig_resolve_options},
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::resolve_options_context::ResolveOptionsContextVc;
@@ -501,7 +501,7 @@
 
     <span class="kw">let </span>options_context = options_context.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>resolve_options = <span class="kw">if </span>options_context.enable_typescript {
-        <span class="kw">let </span>tsconfig = find_context_file(context, <span class="string">&quot;tsconfig.json&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>tsconfig = find_context_file(context, tsconfig()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>cjs_resolve_options = apply_cjs_specific_options(resolve_options);
         <span class="kw">match </span><span class="kw-2">*</span>tsconfig {
             FindContextFileResult::Found(path, <span class="kw">_</span>) =&gt; apply_tsconfig_resolve_options(

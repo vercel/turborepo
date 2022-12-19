@@ -2144,7 +2144,6 @@
 <span id="2144">2144</span>
 <span id="2145">2145</span>
 <span id="2146">2146</span>
-<span id="2147">2147</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::Ordering,
     fmt::Display,
@@ -3165,7 +3164,6 @@
 
     <span class="kw">pub fn </span>has_placeholder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="kw">match </span><span class="self">self </span>{
-            JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject) =&gt; <span class="bool-val">true</span>,
             <span class="comment">// These are leafs and not placeholders
             </span>JsValue::Constant(<span class="kw">_</span>)
             | JsValue::Url(<span class="kw">_</span>)

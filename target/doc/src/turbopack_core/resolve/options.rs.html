@@ -416,11 +416,52 @@
 <span id="416">416</span>
 <span id="417">417</span>
 <span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, future::Future, pin::Pin};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, TryJoinIterExt, Value};
+<span class="kw">use </span>turbo_tasks::{
+    debug::ValueDebugFormat, primitives::StringVc, trace::TraceRawVcs, TryJoinIterExt, Value,
+    ValueToString, ValueToStringVc,
+};
 <span class="kw">use </span>turbo_tasks_fs::{
     glob::{Glob, GlobVc},
     FileSystemPathVc,
@@ -693,6 +734,41 @@
         ),
         ImportMapping::Dynamic(replacement) =&gt; (<span class="kw-2">*</span>replacement.result(request).<span class="kw">await</span><span class="question-mark">?</span>).clone(),
     })
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>ImportMapResult {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            ImportMapResult::Result(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(StringVc::cell(<span class="string">&quot;Resolved by import map&quot;</span>.to_string())),
+            ImportMapResult::Alias(request, context) =&gt; {
+                <span class="kw">let </span>s = <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = context {
+                    <span class="macro">format!</span>(
+                        <span class="string">&quot;aliased to {} inside of {}&quot;</span>,
+                        request.to_string().<span class="kw">await</span><span class="question-mark">?</span>,
+                        path.to_string().<span class="kw">await</span><span class="question-mark">?
+                    </span>)
+                } <span class="kw">else </span>{
+                    <span class="macro">format!</span>(<span class="string">&quot;aliased to {}&quot;</span>, request.to_string().<span class="kw">await</span><span class="question-mark">?</span>)
+                };
+                <span class="prelude-val">Ok</span>(StringVc::cell(s))
+            }
+            ImportMapResult::Alternatives(alternatives) =&gt; {
+                <span class="kw">let </span>strings = alternatives
+                    .iter()
+                    .map(|alternative| alternative.clone().cell().to_string())
+                    .try_join()
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>strings = strings
+                    .iter()
+                    .map(|string| string.as_str())
+                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+                <span class="prelude-val">Ok</span>(StringVc::cell(strings.join(<span class="string">&quot; | &quot;</span>)))
+            }
+            ImportMapResult::NoEntry =&gt; <span class="prelude-val">Ok</span>(StringVc::cell(<span class="string">&quot;No import map entry&quot;</span>.to_string())),
+        }
+    }
 }
 
 <span class="comment">// This cannot be inlined within `import_mapping_to_result`, otherwise we run

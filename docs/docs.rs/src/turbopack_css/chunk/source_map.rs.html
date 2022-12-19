@@ -72,17 +72,12 @@
 <span id="72">72</span>
 <span id="73">73</span>
 <span id="74">74</span>
-<span id="75">75</span>
-<span id="76">76</span>
-<span id="77">77</span>
-<span id="78">78</span>
-<span id="79">79</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::{File, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
+    reference::{AssetReference, AssetReferenceVc},
     resolve::{ResolveResult, ResolveResultVc},
     source_map::GenerateSourceMap,
 };
@@ -114,11 +109,6 @@
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetContentVc&gt; {
         <span class="kw">let </span>sm = <span class="self">self</span>.chunk.generate_source_map().to_rope().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(File::from(sm).into())
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
-        AssetReferencesVc::empty()
     }
 }
 

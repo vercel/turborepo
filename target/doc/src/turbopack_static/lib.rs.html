@@ -223,16 +223,6 @@
 <span id="223">223</span>
 <span id="224">224</span>
 <span id="225">225</span>
-<span id="226">226</span>
-<span id="227">227</span>
-<span id="228">228</span>
-<span id="229">229</span>
-<span id="230">230</span>
-<span id="231">231</span>
-<span id="232">232</span>
-<span id="233">233</span>
-<span id="234">234</span>
-<span id="235">235</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Static asset support for turbopack.
 //!
 //! Static assets are copied directly to the output folder.
@@ -300,11 +290,6 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetContentVc {
         <span class="self">self</span>.source.content()
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
-        <span class="prelude-val">Ok</span>(AssetReferencesVc::empty())
     }
 }
 
@@ -380,11 +365,6 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetContentVc {
         <span class="self">self</span>.source.content()
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
-        AssetReferencesVc::empty()
     }
 }
 

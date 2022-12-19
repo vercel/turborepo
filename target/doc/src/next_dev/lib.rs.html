@@ -529,6 +529,15 @@
 <span id="529">529</span>
 <span id="530">530</span>
 <span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -550,7 +559,7 @@
 <span class="kw">use </span>next_core::{
     create_app_source, create_server_rendered_source, create_web_entry_source, env::load_env,
     manifest::DevManifestContentSource, next_config::load_next_config,
-    next_image::NextImageContentSourceVc, source_map::NextSourceMapTraceContentSourceVc,
+    next_image::NextImageContentSourceVc,
 };
 <span class="kw">use </span>owo_colors::OwoColorize;
 <span class="kw">use </span>turbo_malloc::TurboMalloc;
@@ -574,6 +583,9 @@
         ContentSourceVc,
     },
     DevServer,
+};
+<span class="kw">use </span>turbopack_node::{
+    execution_context::ExecutionContextVc, source_map::NextSourceMapTraceContentSourceVc,
 };
 
 <span class="attr">#[derive(Clone)]
@@ -807,8 +819,11 @@
     <span class="kw">let </span>project_path = fs.root().join(project_relative);
 
     <span class="kw">let </span>env = load_env(project_path);
-    <span class="kw">let </span>config_output_root = output_fs.root().join(<span class="string">&quot;.next/config&quot;</span>);
-    <span class="kw">let </span>next_config = load_next_config(project_path, config_output_root);
+    <span class="kw">let </span>build_output_root = output_fs.root().join(<span class="string">&quot;.next/build&quot;</span>);
+
+    <span class="kw">let </span>execution_context = ExecutionContextVc::new(project_path, build_output_root);
+
+    <span class="kw">let </span>next_config = load_next_config(execution_context.join(<span class="string">&quot;next_config&quot;</span>));
 
     <span class="kw">let </span>output_root = output_fs.root().join(<span class="string">&quot;.next/server&quot;</span>);
 
@@ -826,6 +841,7 @@
 
     <span class="kw">let </span>web_source = create_web_entry_source(
         project_path,
+        execution_context,
         entry_requests,
         dev_server_root,
         env,
@@ -835,6 +851,7 @@
     );
     <span class="kw">let </span>rendered_source = create_server_rendered_source(
         project_path,
+        execution_context,
         output_root.join(<span class="string">&quot;pages&quot;</span>),
         dev_server_root,
         env,
@@ -843,6 +860,7 @@
     );
     <span class="kw">let </span>app_source = create_app_source(
         project_path,
+        execution_context,
         output_root.join(<span class="string">&quot;app&quot;</span>),
         dev_server_root,
         env,

@@ -45,23 +45,10 @@
 <span id="45">45</span>
 <span id="46">46</span>
 <span id="47">47</span>
-<span id="48">48</span>
-<span id="49">49</span>
-<span id="50">50</span>
-<span id="51">51</span>
-<span id="52">52</span>
-<span id="53">53</span>
-<span id="54">54</span>
-<span id="55">55</span>
-<span id="56">56</span>
-<span id="57">57</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemEntryType, FileSystemPathVc, LinkContent};
 
-<span class="kw">use crate</span>::{
-    asset::{Asset, AssetContent, AssetContentVc, AssetVc},
-    reference::AssetReferencesVc,
-};
+<span class="kw">use </span><span class="kw">crate</span>::asset::{Asset, AssetContent, AssetContentVc, AssetVc};
 
 <span class="doccomment">/// The raw [Asset]. It represents raw content from a path without any
 /// references to other [Asset]s.
@@ -103,13 +90,6 @@
             }
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Invalid file type {:?}&quot;</span>, file_type)),
         }
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
-        <span class="comment">// TODO: build input sourcemaps via language specific sourceMappingURL comment
-        // or parse.
-        </span>AssetReferencesVc::empty()
     }
 }
 </code></pre></div>

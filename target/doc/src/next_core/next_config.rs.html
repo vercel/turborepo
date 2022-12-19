@@ -267,10 +267,6 @@
 <span id="267">267</span>
 <span id="268">268</span>
 <span id="269">269</span>
-<span id="270">270</span>
-<span id="271">271</span>
-<span id="272">272</span>
-<span id="273">273</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -280,24 +276,24 @@
     trace::TraceRawVcs,
     Value,
 };
-<span class="kw">use </span>turbo_tasks_fs::{FileSystemEntryType, FileSystemPathVc};
-<span class="kw">use </span>turbopack::{transition::TransitionsByNameVc, ModuleAssetContextVc};
+<span class="kw">use </span>turbo_tasks_fs::FileSystemEntryType;
+<span class="kw">use </span>turbopack::evaluate_context::node_evaluate_asset_context;
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
-    environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     reference_type::{EntryReferenceSubType, ReferenceType},
+    resolve::options::{ImportMap, ImportMapping},
     source_asset::SourceAssetVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::{
     chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
     EcmascriptModuleAssetVc,
 };
-<span class="kw">use </span>turbopack_node::evaluate::{evaluate, JavaScriptValue};
-
-<span class="kw">use crate</span>::{
-    embed_js::next_asset,
-    next_server::{get_build_module_options_context, get_build_resolve_options_context},
+<span class="kw">use </span>turbopack_node::{
+    evaluate::{evaluate, JavaScriptValue},
+    execution_context::{ExecutionContext, ExecutionContextVc},
 };
+
+<span class="kw">use </span><span class="kw">crate</span>::embed_js::next_asset;
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;custom&quot;</span>)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -474,24 +470,19 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub async fn </span>load_next_config(
-    project_path: FileSystemPathVc,
-    intermediate_output_path: FileSystemPathVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;NextConfigVc&gt; {
-    <span class="kw">let </span>context = ModuleAssetContextVc::new(
-        TransitionsByNameVc::cell(Default::default()),
-        EnvironmentVc::new(
-            Value::new(ExecutionEnvironment::NodeJsBuildTime(
-                NodeJsEnvironment::default().cell(),
-            )),
-            Value::new(EnvironmentIntention::Build),
-        ),
-        get_build_module_options_context(),
-        get_build_resolve_options_context(project_path),
-    )
-    .as_asset_context();
-    <span class="kw">let </span>next_config_mjs_path = project_path.join(<span class="string">&quot;next.config.mjs&quot;</span>).realpath();
-    <span class="kw">let </span>next_config_js_path = project_path.join(<span class="string">&quot;next.config.js&quot;</span>).realpath();
+</span><span class="kw">pub async fn </span>load_next_config(execution_context: ExecutionContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;NextConfigVc&gt; {
+    <span class="kw">let </span>ExecutionContext {
+        project_root,
+        intermediate_output_path,
+    } = <span class="kw-2">*</span>execution_context.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::default();
+
+    import_map.insert_exact_alias(<span class="string">&quot;next&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
+    import_map.insert_wildcard_alias(<span class="string">&quot;next/&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
+
+    <span class="kw">let </span>context = node_evaluate_asset_context(<span class="prelude-val">Some</span>(import_map.cell()));
+    <span class="kw">let </span>next_config_mjs_path = project_root.join(<span class="string">&quot;next.config.mjs&quot;</span>).realpath();
+    <span class="kw">let </span>next_config_js_path = project_root.join(<span class="string">&quot;next.config.js&quot;</span>).realpath();
     <span class="kw">let </span>config_asset = <span class="kw">if </span><span class="macro">matches!</span>(
         <span class="kw-2">&amp;*</span>next_config_mjs_path.get_type().<span class="kw">await</span><span class="question-mark">?</span>,
         FileSystemEntryType::File
@@ -519,19 +510,20 @@
         EcmascriptChunkPlaceablesVc::cell(<span class="macro">vec!</span>[config_chunk])
     });
     <span class="kw">let </span>asset_path = config_asset
-        .map_or(project_path, |a| a.path())
+        .map_or(project_root, |a| a.path())
         .join(<span class="string">&quot;load-next-config.js&quot;</span>);
     <span class="kw">let </span>load_next_config_asset = context.process(
         next_asset(asset_path, <span class="string">&quot;entry/config/next.js&quot;</span>),
         Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
     );
     <span class="kw">let </span>config_value = evaluate(
-        project_path,
+        project_root,
         load_next_config_asset,
-        project_path,
+        project_root,
         context,
         intermediate_output_path,
         runtime_entries,
+        <span class="macro">vec!</span>[],
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">match </span><span class="kw-2">&amp;*</span>config_value {

@@ -80,6 +80,7 @@
 <span id="80">80</span>
 <span id="81">81</span>
 <span id="82">82</span>
+<span id="83">83</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>mime::APPLICATION_JSON;
@@ -89,8 +90,8 @@
 <span class="kw">use </span>turbopack_dev_server::source::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
 };
-<span class="kw">use </span>turbopack_node::{
-    node_api_source::NodeApiContentSourceVc, node_rendered_source::NodeRenderContentSourceVc,
+<span class="kw">use </span>turbopack_node::render::{
+    node_api_source::NodeApiContentSourceVc, rendered_source::NodeRenderContentSourceVc,
 };
 
 <span class="doccomment">/// A content source which creates the next.js `_devPagesManifest.json` and
@@ -111,7 +112,8 @@
         <span class="kw">while let </span><span class="prelude-val">Some</span>(content_source) = queue.pop() {
             queue.extend(content_source.get_children().<span class="kw">await</span><span class="question-mark">?</span>.iter());
 
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(api_source) = NodeApiContentSourceVc::resolve_from(content_source).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="comment">// TODO This shouldn&#39;t use casts but an public api instead
+            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(api_source) = NodeApiContentSourceVc::resolve_from(content_source).<span class="kw">await</span><span class="question-mark">? </span>{
                 routes.insert(<span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, api_source.get_pathname().<span class="kw">await</span><span class="question-mark">?</span>));
 
                 <span class="kw">continue</span>;

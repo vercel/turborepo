@@ -72,7 +72,17 @@
 <span id="72">72</span>
 <span id="73">73</span>
 <span id="74">74</span>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
+
+<span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
@@ -118,29 +128,35 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>detail(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>detail = String::new();
+
         <span class="kw">if let </span><span class="prelude-val">Some</span>(error_message) = <span class="kw-2">&amp;</span><span class="self">self</span>.error_message {
-            <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
-                <span class="string">&quot;An error happened during resolving.
-Error message: {error}
-Parsed request as written in source code: {request}
-Path where resolving has started: {context}
-Type of request: {request_type}&quot;</span>,
-                error = error_message,
-                request_type = <span class="self">self</span>.request_type,
-                request = <span class="self">self</span>.request.to_string().<span class="kw">await</span><span class="question-mark">?</span>,
-                context = <span class="self">self</span>.context.to_string().<span class="kw">await</span><span class="question-mark">?
-            </span>)))
+            <span class="macro">writeln!</span>(detail, <span class="string">&quot;An error happened during resolving.&quot;</span>)<span class="question-mark">?</span>;
+            <span class="macro">writeln!</span>(detail, <span class="string">&quot;Error message: {error_message}&quot;</span>)<span class="question-mark">?</span>;
         } <span class="kw">else </span>{
-            <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
-                <span class="string">&quot;It was not possible to find the requested file.
-Parsed request as written in source code: {request}
-Path where resolving has started: {context}
-Type of request: {request_type}&quot;</span>,
-                request_type = <span class="self">self</span>.request_type,
-                request = <span class="self">self</span>.request.to_string().<span class="kw">await</span><span class="question-mark">?</span>,
-                context = <span class="self">self</span>.context.to_string().<span class="kw">await</span><span class="question-mark">?
-            </span>)))
+            <span class="macro">writeln!</span>(detail, <span class="string">&quot;It was not possible to find the requested file.&quot;</span>)<span class="question-mark">?</span>;
         }
+        <span class="macro">writeln!</span>(
+            detail,
+            <span class="string">&quot;Parsed request as written in source code: {request}&quot;</span>,
+            request = <span class="self">self</span>.request.to_string().<span class="kw">await</span><span class="question-mark">?
+        </span>)<span class="question-mark">?</span>;
+        <span class="macro">writeln!</span>(
+            detail,
+            <span class="string">&quot;Path where resolving has started: {context}&quot;</span>,
+            context = <span class="self">self</span>.context.to_string().<span class="kw">await</span><span class="question-mark">?
+        </span>)<span class="question-mark">?</span>;
+        <span class="macro">writeln!</span>(
+            detail,
+            <span class="string">&quot;Type of request: {request_type}&quot;</span>,
+            request_type = <span class="self">self</span>.request_type,
+        )<span class="question-mark">?</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(import_map) = <span class="kw-2">&amp;</span><span class="self">self</span>.resolve_options.<span class="kw">await</span><span class="question-mark">?</span>.import_map {
+            <span class="kw">let </span>result = import_map.lookup(<span class="self">self</span>.request);
+
+            <span class="macro">writeln!</span>(detail, <span class="string">&quot;Import map: {}&quot;</span>, result.to_string().<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
+        }
+        <span class="prelude-val">Ok</span>(StringVc::cell(detail))
     }
 
     <span class="comment">// TODO add sub_issue for a description of resolve_options

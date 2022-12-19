@@ -372,6 +372,7 @@
 <span id="372">372</span>
 <span id="373">373</span>
 <span id="374">374</span>
+<span id="375">375</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -605,7 +606,8 @@
 </span><span class="kw">impl </span>ValueToString <span class="kw">for </span>ModuleChunkItem {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
-        <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
+        <span class="comment">// TODO include inner_assets in this name
+        </span><span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
             <span class="string">&quot;{} (ecmascript)&quot;</span>,
             <span class="self">self</span>.module.<span class="kw">await</span><span class="question-mark">?</span>.source.path().to_string().<span class="kw">await</span><span class="question-mark">?
         </span>)))

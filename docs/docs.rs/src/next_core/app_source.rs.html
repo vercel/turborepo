@@ -643,6 +643,39 @@
 <span id="643">643</span>
 <span id="644">644</span>
 <span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
+<span id="648">648</span>
+<span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
+<span id="668">668</span>
+<span id="669">669</span>
+<span id="670">670</span>
+<span id="671">671</span>
+<span id="672">672</span>
+<span id="673">673</span>
+<span id="674">674</span>
+<span id="675">675</span>
+<span id="676">676</span>
+<span id="677">677</span>
+<span id="678">678</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
@@ -680,9 +713,8 @@
 };
 <span class="kw">use </span>turbopack_env::ProcessEnvAssetVc;
 <span class="kw">use </span>turbopack_node::{
-    create_node_rendered_source,
-    node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
-    NodeEntry, NodeEntryVc,
+    execution_context::ExecutionContextVc, render::rendered_source::create_node_rendered_source,
+    NodeEntry, NodeEntryVc, NodeRenderingEntry, NodeRenderingEntryVc,
 };
 
 <span class="kw">use crate</span>::{
@@ -714,21 +746,22 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">fn </span>next_client_chunks_transition(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     app_dir: FileSystemPathVc,
     server_root: FileSystemPathVc,
     browserslist_query: <span class="kw-2">&amp;</span>str,
 ) -&gt; TransitionVc {
     <span class="kw">let </span>ty = Value::new(ContextType::App { app_dir });
-    <span class="kw">let </span>client_chunking_context = get_client_chunking_context(project_root, server_root, ty);
+    <span class="kw">let </span>client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
     <span class="kw">let </span>client_environment = get_client_environment(browserslist_query);
 
     <span class="kw">let </span>client_module_options_context =
-        get_client_module_options_context(project_root, client_environment, ty);
+        get_client_module_options_context(project_path, execution_context, client_environment, ty);
     NextClientChunksTransition {
         client_chunking_context,
         client_module_options_context,
-        client_resolve_options_context: get_client_resolve_options_context(project_root, ty),
+        client_resolve_options_context: get_client_resolve_options_context(project_path, ty),
         client_environment,
         server_root,
     }
@@ -738,7 +771,8 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>next_client_transition(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     server_root: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
@@ -746,12 +780,12 @@
     next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;TransitionVc&gt; {
     <span class="kw">let </span>ty = Value::new(ContextType::App { app_dir });
-    <span class="kw">let </span>client_chunking_context = get_client_chunking_context(project_root, server_root, ty);
+    <span class="kw">let </span>client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
     <span class="kw">let </span>client_environment = get_client_environment(browserslist_query);
     <span class="kw">let </span>client_module_options_context =
-        get_client_module_options_context(project_root, client_environment, ty);
-    <span class="kw">let </span>client_runtime_entries = get_client_runtime_entries(project_root, env, ty, next_config);
-    <span class="kw">let </span>client_resolve_options_context = get_client_resolve_options_context(project_root, ty);
+        get_client_module_options_context(project_path, execution_context, client_environment, ty);
+    <span class="kw">let </span>client_runtime_entries = get_client_runtime_entries(project_path, env, ty, next_config);
+    <span class="kw">let </span>client_resolve_options_context = get_client_resolve_options_context(project_path, ty);
 
     <span class="prelude-val">Ok</span>(NextClientTransition {
         is_app: <span class="bool-val">true</span>,
@@ -768,16 +802,21 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">fn </span>next_ssr_client_module_transition(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     app_dir: FileSystemPathVc,
     process_env: ProcessEnvVc,
     next_config: NextConfigVc,
 ) -&gt; TransitionVc {
     <span class="kw">let </span>ty = Value::new(ServerContextType::AppSSR { app_dir });
     NextSSRClientModuleTransition {
-        ssr_module_options_context: get_server_module_options_context(ty),
+        ssr_module_options_context: get_server_module_options_context(
+            project_path,
+            execution_context,
+            ty,
+        ),
         ssr_resolve_options_context: get_server_resolve_options_context(
-            project_root,
+            project_path,
             ty,
             next_config,
         ),
@@ -789,7 +828,8 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">fn </span>next_layout_entry_transition(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     app_dir: FileSystemPathVc,
     server_root: FileSystemPathVc,
     process_env: ProcessEnvVc,
@@ -798,8 +838,9 @@
     <span class="kw">let </span>ty = Value::new(ServerContextType::AppRSC { app_dir });
     <span class="kw">let </span>rsc_environment = get_server_environment(ty, process_env);
     <span class="kw">let </span>rsc_resolve_options_context =
-        get_server_resolve_options_context(project_root, ty, next_config);
-    <span class="kw">let </span>rsc_module_options_context = get_server_module_options_context(ty);
+        get_server_resolve_options_context(project_path, ty, next_config);
+    <span class="kw">let </span>rsc_module_options_context =
+        get_server_module_options_context(project_path, execution_context, ty);
 
     NextLayoutEntryTransition {
         rsc_environment,
@@ -813,7 +854,8 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">fn </span>app_context(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     server_root: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
@@ -826,7 +868,14 @@
     <span class="kw">let </span><span class="kw-2">mut </span>transitions = HashMap::new();
     transitions.insert(
         <span class="string">&quot;next-layout-entry&quot;</span>.to_string(),
-        next_layout_entry_transition(project_root, app_dir, server_root, env, next_config),
+        next_layout_entry_transition(
+            project_path,
+            execution_context,
+            app_dir,
+            server_root,
+            env,
+            next_config,
+        ),
     );
     transitions.insert(
         <span class="string">&quot;server-to-client&quot;</span>.to_string(),
@@ -835,7 +884,8 @@
     transitions.insert(
         <span class="string">&quot;next-client&quot;</span>.to_string(),
         next_client_transition(
-            project_root,
+            project_path,
+            execution_context,
             server_root,
             app_dir,
             env,
@@ -845,19 +895,31 @@
     );
     transitions.insert(
         <span class="string">&quot;next-client-chunks&quot;</span>.to_string(),
-        next_client_chunks_transition(project_root, app_dir, server_root, browserslist_query),
+        next_client_chunks_transition(
+            project_path,
+            execution_context,
+            app_dir,
+            server_root,
+            browserslist_query,
+        ),
     );
     transitions.insert(
         <span class="string">&quot;next-ssr-client-module&quot;</span>.to_string(),
-        next_ssr_client_module_transition(project_root, app_dir, env, next_config),
+        next_ssr_client_module_transition(
+            project_path,
+            execution_context,
+            app_dir,
+            env,
+            next_config,
+        ),
     );
 
     <span class="kw">let </span>ssr_ty = Value::new(ServerContextType::AppSSR { app_dir });
     ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(transitions),
         get_server_environment(ssr_ty, env),
-        get_server_module_options_context(ssr_ty),
-        get_server_resolve_options_context(project_root, ssr_ty, next_config),
+        get_server_module_options_context(project_path, execution_context, ssr_ty),
+        get_server_resolve_options_context(project_path, ssr_ty, next_config),
     )
     .into()
 }
@@ -867,6 +929,7 @@
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>create_app_source(
     project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
@@ -891,6 +954,7 @@
 
     <span class="kw">let </span>context_ssr = app_context(
         project_path,
+        execution_context,
         server_root,
         app_dir,
         env,
@@ -900,6 +964,7 @@
     );
     <span class="kw">let </span>context = app_context(
         project_path,
+        execution_context,
         server_root,
         app_dir,
         env,
@@ -916,6 +981,7 @@
 
     <span class="kw">let </span>fallback_page = get_fallback_page(
         project_path,
+        execution_context,
         server_root,
         env,
         browserslist_query,
@@ -943,7 +1009,7 @@
 </span><span class="kw">async fn </span>create_app_source_for_directory(
     context_ssr: AssetContextVc,
     context: AssetContextVc,
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     specificity: SpecificityVc,
     position: u32,
     input_dir: FileSystemPathVc,
@@ -1037,7 +1103,7 @@
                     layout_path: layouts,
                     page_path,
                     target,
-                    project_root,
+                    project_path,
                     intermediate_output_path,
                 }
                 .cell()
@@ -1067,7 +1133,7 @@
                     create_app_source_for_directory(
                         context_ssr,
                         context,
-                        project_root,
+                        project_path,
                         specificity,
                         position,
                         <span class="kw-2">*</span>dir,
@@ -1094,7 +1160,7 @@
     layout_path: LayoutSegmentsVc,
     page_path: FileSystemPathVc,
     target: FileSystemPathVc,
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     intermediate_output_path: FileSystemPathVc,
 }
 
@@ -1225,7 +1291,7 @@ import BOOTSTRAP from {};
         };
 
         <span class="kw">let </span>chunking_context = DevChunkingContextVc::builder(
-            <span class="self">self</span>.project_root,
+            <span class="self">self</span>.project_path,
             intermediate_output_path,
             intermediate_output_path.join(<span class="string">&quot;chunks&quot;</span>),
             <span class="self">self</span>.server_root.join(<span class="string">&quot;_next/static/assets&quot;</span>),

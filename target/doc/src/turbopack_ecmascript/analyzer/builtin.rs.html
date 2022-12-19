@@ -471,6 +471,12 @@
 <span id="471">471</span>
 <span id="472">472</span>
 <span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{mem::take, sync::Arc};
 
 <span class="kw">use super</span>::{ConstantNumber, ConstantValue, JsValue, ObjectPart};
@@ -861,6 +867,10 @@
                     value.make_unknown(<span class="string">&quot;call of object&quot;</span>);
                     <span class="bool-val">true
                 </span>}
+                JsValue::WellKnownObject(..) =&gt; {
+                    value.make_unknown(<span class="string">&quot;call of well known object&quot;</span>);
+                    <span class="bool-val">true
+                </span>}
                 JsValue::Constant(<span class="kw">_</span>) =&gt; {
                     value.make_unknown(<span class="string">&quot;call of constant&quot;</span>);
                     <span class="bool-val">true
@@ -875,6 +885,10 @@
                 </span>}
                 JsValue::Add(..) =&gt; {
                     value.make_unknown(<span class="string">&quot;call of number or string&quot;</span>);
+                    <span class="bool-val">true
+                </span>}
+                JsValue::WellKnownFunction(..) =&gt; {
+                    value.make_unknown(<span class="string">&quot;unknown call of well known function&quot;</span>);
                     <span class="bool-val">true
                 </span>}
                 JsValue::Function(<span class="kw">_</span>, <span class="kw">box </span><span class="kw-2">ref mut </span>return_value) =&gt; {
@@ -913,11 +927,9 @@
                 | JsValue::Call(..)
                 | JsValue::MemberCall(..)
                 | JsValue::Member(..)
-                | JsValue::WellKnownObject(<span class="kw">_</span>)
                 | JsValue::Argument(<span class="kw">_</span>)
-                | JsValue::WellKnownFunction(<span class="kw">_</span>)
                 | JsValue::Module(..) =&gt; {
-                    <span class="comment">// keep the call infact since it might be handled later
+                    <span class="comment">// keep the call intact since it might be handled later
                     </span><span class="macro">debug_assert!</span>(callee.has_placeholder());
                     <span class="bool-val">false
                 </span>}

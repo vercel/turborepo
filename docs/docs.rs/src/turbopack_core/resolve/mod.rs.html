@@ -1159,6 +1159,22 @@
 <span id="1159">1159</span>
 <span id="1160">1160</span>
 <span id="1161">1161</span>
+<span id="1162">1162</span>
+<span id="1163">1163</span>
+<span id="1164">1164</span>
+<span id="1165">1165</span>
+<span id="1166">1166</span>
+<span id="1167">1167</span>
+<span id="1168">1168</span>
+<span id="1169">1169</span>
+<span id="1170">1170</span>
+<span id="1171">1171</span>
+<span id="1172">1172</span>
+<span id="1173">1173</span>
+<span id="1174">1174</span>
+<span id="1175">1175</span>
+<span id="1176">1176</span>
+<span id="1177">1177</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -1171,7 +1187,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value <span class="kw">as </span>JsonValue;
 <span class="kw">use </span>turbo_tasks::{
-    primitives::{BoolVc, StringVc},
+    primitives::{BoolVc, StringVc, StringsVc},
     trace::TraceRawVcs,
     TryJoinIterExt, Value, ValueToString, ValueToStringVc,
 };
@@ -1547,6 +1563,11 @@
     }
 }
 
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">pub fn </span>package_json() -&gt; StringsVc {
+    StringsVc::cell(<span class="macro">vec!</span>[<span class="string">&quot;package.json&quot;</span>.to_string()])
+}
+
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub enum </span>FindContextFileResult {
     Found(FileSystemPathVc, Vec&lt;AssetReferenceVc&gt;),
@@ -1556,22 +1577,24 @@
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>find_context_file(
     context: FileSystemPathVc,
-    name: <span class="kw-2">&amp;</span>str,
+    names: StringsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;FindContextFileResultVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>refs = Vec::new();
     <span class="kw">let </span>context_value = context.<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>fs_path = context.join(name);
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(fs_path) = exists(fs_path, <span class="kw-2">&amp;mut </span>refs).<span class="kw">await</span><span class="question-mark">? </span>{
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(FindContextFileResult::Found(fs_path, refs).into());
+    <span class="kw">for </span>name <span class="kw">in </span><span class="kw-2">&amp;*</span>names.<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="kw">let </span>fs_path = context.join(name);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(fs_path) = exists(fs_path, <span class="kw-2">&amp;mut </span>refs).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(FindContextFileResult::Found(fs_path, refs).into());
+        }
     }
     <span class="kw">if </span>context_value.is_root() {
         <span class="kw">return </span><span class="prelude-val">Ok</span>(FindContextFileResult::NotFound(refs).into());
     }
     <span class="kw">if </span>refs.is_empty() {
         <span class="comment">// Tailcall
-        </span><span class="prelude-val">Ok</span>(find_context_file(context.parent(), name))
+        </span><span class="prelude-val">Ok</span>(find_context_file(context.parent(), names))
     } <span class="kw">else </span>{
-        <span class="kw">let </span>parent_result = find_context_file(context.parent(), name).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>parent_result = find_context_file(context.parent(), names).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>parent_result {
             FindContextFileResult::Found(p, r) =&gt; {
                 refs.extend(r.iter().copied());
@@ -2073,6 +2096,15 @@
             </span><span class="kw">if </span>request.resolve().<span class="kw">await</span><span class="question-mark">? </span>== original_request
                 &amp;&amp; context.resolve().<span class="kw">await</span><span class="question-mark">? </span>== original_context
             {
+                <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
+                    context: original_context,
+                    request_type: <span class="macro">format!</span>(<span class="string">&quot;import map alias to {}&quot;</span>, request.to_string().<span class="kw">await</span><span class="question-mark">?</span>),
+                    request: original_request,
+                    resolve_options: options,
+                    error_message: <span class="prelude-val">Some</span>(<span class="string">&quot;cycle during resolving&quot;</span>.to_string()),
+                }
+                .cell();
+                issue.as_issue().emit();
                 ResolveResult::unresolveable().cell()
             } <span class="kw">else </span>{
                 resolve(context, request, options)
@@ -2159,7 +2191,7 @@
         <span class="kw">match </span>resolve_in {
             ResolveInPackage::AliasField(field) =&gt; {
                 <span class="kw">if let </span>FindContextFileResult::Found(package_json, refs) =
-                    <span class="kw-2">&amp;*</span>find_context_file(fs_path.parent(), <span class="string">&quot;package.json&quot;</span>).<span class="kw">await</span><span class="question-mark">?
+                    <span class="kw-2">&amp;*</span>find_context_file(fs_path.parent(), package_json()).<span class="kw">await</span><span class="question-mark">?
                 </span>{
                     <span class="kw">if let </span>FileJsonContent::Content(package) = <span class="kw-2">&amp;*</span>package_json.read_json().<span class="kw">await</span><span class="question-mark">? </span>{
                         <span class="kw">if let </span><span class="prelude-val">Some</span>(field_value) = package[field].as_object() {

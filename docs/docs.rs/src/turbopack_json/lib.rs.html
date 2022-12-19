@@ -143,11 +143,6 @@
 <span id="143">143</span>
 <span id="144">144</span>
 <span id="145">145</span>
-<span id="146">146</span>
-<span id="147">147</span>
-<span id="148">148</span>
-<span id="149">149</span>
-<span id="150">150</span>
 </pre><pre class="rust"><code><span class="doccomment">//! JSON asset support for turbopack.
 //!
 //! JSON assets are parsed to ensure they contain valid JSON.
@@ -196,11 +191,6 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetContentVc {
         <span class="self">self</span>.source.content()
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
-        AssetReferencesVc::empty()
     }
 }
 

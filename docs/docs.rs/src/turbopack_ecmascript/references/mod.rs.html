@@ -1933,6 +1933,7 @@
 <span id="1933">1933</span>
 <span id="1934">1934</span>
 <span id="1935">1935</span>
+<span id="1936">1936</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>esm;
@@ -1973,8 +1974,8 @@
     reference::{AssetReferenceVc, AssetReferencesVc, SourceMapVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
-        find_context_file, origin::ResolveOriginVc, parse::RequestVc, pattern::Pattern, resolve,
-        FindContextFileResult, ResolveResult,
+        find_context_file, origin::ResolveOriginVc, package_json, parse::RequestVc,
+        pattern::Pattern, resolve, FindContextFileResult, ResolveResult,
     },
 };
 <span class="kw">use </span>turbopack_swc_utils::emitter::IssueEmitter;
@@ -2026,6 +2027,7 @@
         },
         esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
     },
+    typescript::resolve::tsconfig,
     EcmascriptInputTransformsVc,
 };
 
@@ -2118,7 +2120,7 @@
 
     <span class="kw">let </span>parsed = parse(source, ty, transforms);
 
-    <span class="kw">match </span><span class="kw-2">&amp;*</span>find_context_file(path.parent(), <span class="string">&quot;package.json&quot;</span>).<span class="kw">await</span><span class="question-mark">? </span>{
+    <span class="kw">match </span><span class="kw-2">&amp;*</span>find_context_file(path.parent(), package_json()).<span class="kw">await</span><span class="question-mark">? </span>{
         FindContextFileResult::Found(package_json, <span class="kw">_</span>) =&gt; {
             analysis.add_reference(PackageJsonReferenceVc::new(<span class="kw-2">*</span>package_json));
         }
@@ -2126,7 +2128,7 @@
     };
 
     <span class="kw">if </span>is_typescript {
-        <span class="kw">match </span><span class="kw-2">&amp;*</span>find_context_file(path.parent(), <span class="string">&quot;tsconfig.json&quot;</span>).<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="kw">match </span><span class="kw-2">&amp;*</span>find_context_file(path.parent(), tsconfig()).<span class="kw">await</span><span class="question-mark">? </span>{
             FindContextFileResult::Found(tsconfig, <span class="kw">_</span>) =&gt; {
                 analysis.add_reference(TsConfigReferenceVc::new(origin, <span class="kw-2">*</span>tsconfig));
             }

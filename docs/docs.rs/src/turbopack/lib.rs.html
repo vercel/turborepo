@@ -596,6 +596,16 @@
 <span id="596">596</span>
 <span id="597">597</span>
 <span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(trivial_bounds)]
@@ -644,6 +654,7 @@
     },
 };
 
+<span class="kw">pub mod </span>evaluate_context;
 <span class="kw">mod </span>graph;
 <span class="kw">pub mod </span>module_options;
 <span class="kw">pub mod </span>rebase;
@@ -699,17 +710,75 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>get_module_type(
-    path: FileSystemPathVc,
-    options: ModuleOptionsVc,
+</span><span class="kw">async fn </span>apply_module_type(
+    source: AssetVc,
+    context: ModuleAssetContextVc,
+    module_type: ModuleTypeVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
+    <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>module_type.<span class="kw">await</span><span class="question-mark">? </span>{
+        ModuleType::Ecmascript(transforms) =&gt; EcmascriptModuleAssetVc::new(
+            source,
+            context.into(),
+            Value::new(EcmascriptModuleAssetType::Ecmascript),
+            <span class="kw-2">*</span>transforms,
+            context.environment(),
+        )
+        .into(),
+        ModuleType::Typescript(transforms) =&gt; EcmascriptModuleAssetVc::new(
+            source,
+            context.with_typescript_resolving_enabled().into(),
+            Value::new(EcmascriptModuleAssetType::Typescript),
+            <span class="kw-2">*</span>transforms,
+            context.environment(),
+        )
+        .into(),
+        ModuleType::TypescriptDeclaration(transforms) =&gt; EcmascriptModuleAssetVc::new(
+            source,
+            context.with_typescript_resolving_enabled().into(),
+            Value::new(EcmascriptModuleAssetType::TypescriptDeclaration),
+            <span class="kw-2">*</span>transforms,
+            context.environment(),
+        )
+        .into(),
+        ModuleType::Json =&gt; JsonModuleAssetVc::new(source).into(),
+        ModuleType::Raw =&gt; source,
+        ModuleType::Css(transforms) =&gt; {
+            CssModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms).into()
+        }
+        ModuleType::CssModule(transforms) =&gt; {
+            ModuleCssModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms).into()
+        }
+        ModuleType::Static =&gt; StaticModuleAssetVc::new(source, context.into()).into(),
+        ModuleType::Mdx(transforms) =&gt; {
+            MdxModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms).into()
+        }
+        ModuleType::Custom(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
+    })
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>module(
+    source: AssetVc,
+    context: ModuleAssetContextVc,
     reference_type: Value&lt;ReferenceType&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleTypeVc&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
+    <span class="kw">let </span>path = source.path().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>options = ModuleOptionsVc::new(path.parent(), context.module_options_context());
+
     <span class="kw">let </span>reference_type = reference_type.into_value();
+    <span class="kw">let </span><span class="kw-2">mut </span>current_source = source;
     <span class="kw">let </span><span class="kw-2">mut </span>current_module_type = <span class="prelude-val">None</span>;
     <span class="kw">for </span>rule <span class="kw">in </span>options.<span class="kw">await</span><span class="question-mark">?</span>.rules.iter() {
-        <span class="kw">if </span>rule.matches(<span class="kw-2">&amp;</span>path.<span class="kw">await</span><span class="question-mark">?</span>, <span class="kw-2">&amp;</span>reference_type) {
-            <span class="kw">for </span>(<span class="kw">_</span>, effect) <span class="kw">in </span>rule.effects() {
+        <span class="kw">if </span>rule.matches(<span class="kw-2">&amp;*</span>path.<span class="kw">await</span><span class="question-mark">?</span>, <span class="kw-2">&amp;</span>reference_type) {
+            <span class="kw">for </span>effect <span class="kw">in </span>rule.effects() {
                 <span class="kw">match </span>effect {
+                    ModuleRuleEffect::SourceTransforms(transforms) =&gt; {
+                        current_source = transforms.transform(current_source);
+                        <span class="kw">if </span>current_source.path().resolve().<span class="kw">await</span><span class="question-mark">? </span>!= path {
+                            <span class="comment">// The path has been changed, so we need to apply new rules.
+                            </span><span class="kw">return </span><span class="prelude-val">Ok</span>(module(current_source, context, Value::new(reference_type)));
+                        }
+                    }
                     ModuleRuleEffect::ModuleType(module) =&gt; {
                         current_module_type = <span class="prelude-val">Some</span>(<span class="kw-2">*</span>module);
                     }
@@ -761,59 +830,9 @@
         }
     }
 
-    <span class="prelude-val">Ok</span>(current_module_type.unwrap_or(ModuleType::Raw).cell())
-}
+    <span class="kw">let </span>module_type = current_module_type.unwrap_or(ModuleType::Raw).cell();
 
-<span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>module(
-    source: AssetVc,
-    context: ModuleAssetContextVc,
-    reference_type: Value&lt;ReferenceType&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
-    <span class="kw">let </span>path = source.path();
-    <span class="kw">let </span>options = ModuleOptionsVc::new(path.parent(), context.module_options_context());
-
-    <span class="kw">let </span>current_module_type = get_module_type(path, options, reference_type).<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>current_module_type {
-        ModuleType::Ecmascript(transforms) =&gt; EcmascriptModuleAssetVc::new(
-            source,
-            context.into(),
-            Value::new(EcmascriptModuleAssetType::Ecmascript),
-            <span class="kw-2">*</span>transforms,
-            context.environment(),
-        )
-        .into(),
-        ModuleType::Typescript(transforms) =&gt; EcmascriptModuleAssetVc::new(
-            source,
-            context.with_typescript_resolving_enabled().into(),
-            Value::new(EcmascriptModuleAssetType::Typescript),
-            <span class="kw-2">*</span>transforms,
-            context.environment(),
-        )
-        .into(),
-        ModuleType::TypescriptDeclaration(transforms) =&gt; EcmascriptModuleAssetVc::new(
-            source,
-            context.with_typescript_resolving_enabled().into(),
-            Value::new(EcmascriptModuleAssetType::TypescriptDeclaration),
-            <span class="kw-2">*</span>transforms,
-            context.environment(),
-        )
-        .into(),
-        ModuleType::Json =&gt; JsonModuleAssetVc::new(source).into(),
-        ModuleType::Raw =&gt; source,
-        ModuleType::Css(transforms) =&gt; {
-            CssModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms).into()
-        }
-        ModuleType::CssModule(transforms) =&gt; {
-            ModuleCssModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms).into()
-        }
-        ModuleType::Static =&gt; StaticModuleAssetVc::new(source, context.into()).into(),
-        ModuleType::Mdx(transforms) =&gt; {
-            MdxModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms).into()
-        }
-        ModuleType::Custom(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
-    })
+    <span class="prelude-val">Ok</span>(apply_module_type(current_source, context, module_type))
 }
 
 <span class="attr">#[turbo_tasks::value]
@@ -1188,6 +1207,7 @@
     turbopack_core::register();
     turbopack_css::register();
     turbopack_ecmascript::register();
+    turbopack_node::register();
     turbopack_env::register();
     turbopack_mdx::register();
     turbopack_json::register();

@@ -369,11 +369,22 @@
 <span id="369">369</span>
 <span id="370">370</span>
 <span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde_json::Value <span class="kw">as </span>JsonValue;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
+<span class="kw">use </span>turbo_tasks::{
+    primitives::{StringVc, StringsVc},
+    Value, ValueToString, ValueToStringVc,
+};
 <span class="kw">use </span>turbo_tasks_fs::{FileJsonContent, FileJsonContentVc, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::AssetVc,
@@ -576,6 +587,11 @@
         import_map,
     }
     .cell())
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">pub fn </span>tsconfig() -&gt; StringsVc {
+    StringsVc::cell(<span class="macro">vec!</span>[<span class="string">&quot;tsconfig.json&quot;</span>.to_string()])
 }
 
 <span class="attr">#[turbo_tasks::function]
