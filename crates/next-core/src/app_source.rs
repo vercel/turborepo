@@ -36,9 +36,8 @@ use turbopack_ecmascript::{
 };
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_node::{
-    create_node_rendered_source,
-    node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
-    NodeEntry, NodeEntryVc,
+    execution_context::ExecutionContextVc, render::rendered_source::create_node_rendered_source,
+    NodeEntry, NodeEntryVc, NodeRenderingEntry, NodeRenderingEntryVc,
 };
 
 use crate::{
@@ -70,21 +69,22 @@ use crate::{
 
 #[turbo_tasks::function]
 fn next_client_chunks_transition(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     app_dir: FileSystemPathVc,
     server_root: FileSystemPathVc,
     browserslist_query: &str,
 ) -> TransitionVc {
     let ty = Value::new(ContextType::App { app_dir });
-    let client_chunking_context = get_client_chunking_context(project_root, server_root, ty);
+    let client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
     let client_environment = get_client_environment(browserslist_query);
 
     let client_module_options_context =
-        get_client_module_options_context(project_root, client_environment, ty);
+        get_client_module_options_context(project_path, execution_context, client_environment, ty);
     NextClientChunksTransition {
         client_chunking_context,
         client_module_options_context,
-        client_resolve_options_context: get_client_resolve_options_context(project_root, ty),
+        client_resolve_options_context: get_client_resolve_options_context(project_path, ty),
         client_environment,
         server_root,
     }
@@ -94,7 +94,8 @@ fn next_client_chunks_transition(
 
 #[turbo_tasks::function]
 async fn next_client_transition(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     server_root: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
@@ -102,12 +103,12 @@ async fn next_client_transition(
     next_config: NextConfigVc,
 ) -> Result<TransitionVc> {
     let ty = Value::new(ContextType::App { app_dir });
-    let client_chunking_context = get_client_chunking_context(project_root, server_root, ty);
+    let client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
     let client_environment = get_client_environment(browserslist_query);
     let client_module_options_context =
-        get_client_module_options_context(project_root, client_environment, ty);
-    let client_runtime_entries = get_client_runtime_entries(project_root, env, ty, next_config);
-    let client_resolve_options_context = get_client_resolve_options_context(project_root, ty);
+        get_client_module_options_context(project_path, execution_context, client_environment, ty);
+    let client_runtime_entries = get_client_runtime_entries(project_path, env, ty, next_config);
+    let client_resolve_options_context = get_client_resolve_options_context(project_path, ty);
 
     Ok(NextClientTransition {
         is_app: true,
@@ -124,7 +125,8 @@ async fn next_client_transition(
 
 #[turbo_tasks::function]
 fn next_ssr_client_module_transition(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     app_dir: FileSystemPathVc,
     process_env: ProcessEnvVc,
     next_config: NextConfigVc,
@@ -132,9 +134,13 @@ fn next_ssr_client_module_transition(
 ) -> TransitionVc {
     let ty = Value::new(ServerContextType::AppSSR { app_dir });
     NextSSRClientModuleTransition {
-        ssr_module_options_context: get_server_module_options_context(ty),
+        ssr_module_options_context: get_server_module_options_context(
+            project_path,
+            execution_context,
+            ty,
+        ),
         ssr_resolve_options_context: get_server_resolve_options_context(
-            project_root,
+            project_path,
             ty,
             next_config,
         ),
@@ -146,7 +152,8 @@ fn next_ssr_client_module_transition(
 
 #[turbo_tasks::function]
 fn next_layout_entry_transition(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     app_dir: FileSystemPathVc,
     server_root: FileSystemPathVc,
     process_env: ProcessEnvVc,
@@ -156,8 +163,9 @@ fn next_layout_entry_transition(
     let ty = Value::new(ServerContextType::AppRSC { app_dir });
     let rsc_environment = get_server_environment(ty, process_env, server_addr);
     let rsc_resolve_options_context =
-        get_server_resolve_options_context(project_root, ty, next_config);
-    let rsc_module_options_context = get_server_module_options_context(ty);
+        get_server_resolve_options_context(project_path, ty, next_config);
+    let rsc_module_options_context =
+        get_server_module_options_context(project_path, execution_context, ty);
 
     NextLayoutEntryTransition {
         rsc_environment,
@@ -172,7 +180,8 @@ fn next_layout_entry_transition(
 #[allow(clippy::too_many_arguments)]
 #[turbo_tasks::function]
 fn app_context(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     server_root: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
@@ -187,7 +196,8 @@ fn app_context(
     transitions.insert(
         "next-layout-entry".to_string(),
         next_layout_entry_transition(
-            project_root,
+            project_path,
+            execution_context,
             app_dir,
             server_root,
             env,
@@ -202,7 +212,8 @@ fn app_context(
     transitions.insert(
         "next-client".to_string(),
         next_client_transition(
-            project_root,
+            project_path,
+            execution_context,
             server_root,
             app_dir,
             env,
@@ -212,19 +223,32 @@ fn app_context(
     );
     transitions.insert(
         "next-client-chunks".to_string(),
-        next_client_chunks_transition(project_root, app_dir, server_root, browserslist_query),
+        next_client_chunks_transition(
+            project_path,
+            execution_context,
+            app_dir,
+            server_root,
+            browserslist_query,
+        ),
     );
     transitions.insert(
         "next-ssr-client-module".to_string(),
-        next_ssr_client_module_transition(project_root, app_dir, env, next_config, server_addr),
+        next_ssr_client_module_transition(
+            project_path,
+            execution_context,
+            app_dir,
+            env,
+            next_config,
+            server_addr,
+        ),
     );
 
     let ssr_ty = Value::new(ServerContextType::AppSSR { app_dir });
     ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(transitions),
         get_server_environment(ssr_ty, env, server_addr),
-        get_server_module_options_context(ssr_ty),
-        get_server_resolve_options_context(project_root, ssr_ty, next_config),
+        get_server_module_options_context(project_path, execution_context, ssr_ty),
+        get_server_resolve_options_context(project_path, ssr_ty, next_config),
     )
     .into()
 }
@@ -234,6 +258,7 @@ fn app_context(
 #[turbo_tasks::function]
 pub async fn create_app_source(
     project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
@@ -259,6 +284,7 @@ pub async fn create_app_source(
 
     let context_ssr = app_context(
         project_path,
+        execution_context,
         server_root,
         app_dir,
         env,
@@ -269,6 +295,7 @@ pub async fn create_app_source(
     );
     let context = app_context(
         project_path,
+        execution_context,
         server_root,
         app_dir,
         env,
@@ -286,6 +313,7 @@ pub async fn create_app_source(
 
     let fallback_page = get_fallback_page(
         project_path,
+        execution_context,
         server_root,
         env,
         browserslist_query,
@@ -314,7 +342,7 @@ pub async fn create_app_source(
 async fn create_app_source_for_directory(
     context_ssr: AssetContextVc,
     context: AssetContextVc,
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     specificity: SpecificityVc,
     position: u32,
     input_dir: FileSystemPathVc,
@@ -408,7 +436,7 @@ async fn create_app_source_for_directory(
                     layout_path: layouts,
                     page_path,
                     target,
-                    project_root,
+                    project_path,
                     intermediate_output_path,
                 }
                 .cell()
@@ -438,7 +466,7 @@ async fn create_app_source_for_directory(
                     create_app_source_for_directory(
                         context_ssr,
                         context,
-                        project_root,
+                        project_path,
                         specificity,
                         position,
                         *dir,
@@ -465,7 +493,7 @@ struct AppRenderer {
     layout_path: LayoutSegmentsVc,
     page_path: FileSystemPathVc,
     target: FileSystemPathVc,
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     intermediate_output_path: FileSystemPathVc,
 }
 
@@ -596,7 +624,7 @@ import BOOTSTRAP from {};
         };
 
         let chunking_context = DevChunkingContextVc::builder(
-            self.project_root,
+            self.project_path,
             intermediate_output_path,
             intermediate_output_path.join("chunks"),
             self.server_root.join("_next/static/assets"),

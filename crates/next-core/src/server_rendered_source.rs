@@ -32,9 +32,11 @@ use turbopack_ecmascript::{
 };
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_node::{
-    create_node_api_source, create_node_rendered_source,
-    node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
-    NodeEntry, NodeEntryVc,
+    execution_context::ExecutionContextVc,
+    render::{
+        node_api_source::create_node_api_source, rendered_source::create_node_rendered_source,
+    },
+    NodeEntry, NodeEntryVc, NodeRenderingEntry, NodeRenderingEntryVc,
 };
 
 use crate::{
@@ -62,7 +64,8 @@ use crate::{
 /// Next.js pages folder.
 #[turbo_tasks::function]
 pub async fn create_server_rendered_source(
-    project_path: FileSystemPathVc,
+    project_root: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
@@ -70,7 +73,7 @@ pub async fn create_server_rendered_source(
     next_config: NextConfigVc,
     server_addr: ServerAddrVc,
 ) -> Result<ContentSourceVc> {
-    let project_path = wrap_with_next_js_fs(project_path);
+    let project_path = wrap_with_next_js_fs(project_root);
 
     let pages = project_path.join("pages");
     let src_pages = project_path.join("src/pages");
@@ -87,7 +90,7 @@ pub async fn create_server_rendered_source(
 
     let client_environment = get_client_environment(browserslist_query);
     let client_module_options_context =
-        get_client_module_options_context(project_path, client_environment, ty);
+        get_client_module_options_context(project_path, execution_context, client_environment, ty);
     let client_module_options_context =
         add_next_transforms_to_pages(client_module_options_context, pages_dir);
     let client_resolve_options_context = get_client_resolve_options_context(project_path, ty);
@@ -120,7 +123,7 @@ pub async fn create_server_rendered_source(
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(transitions),
         get_server_environment(server_ty, env, server_addr),
-        get_server_module_options_context(server_ty),
+        get_server_module_options_context(project_path, execution_context, server_ty),
         get_server_resolve_options_context(project_path, server_ty, next_config),
     )
     .into();
@@ -133,6 +136,7 @@ pub async fn create_server_rendered_source(
 
     let fallback_page = get_fallback_page(
         project_path,
+        execution_context,
         server_root,
         env,
         browserslist_query,
