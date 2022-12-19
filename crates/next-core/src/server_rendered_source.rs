@@ -31,7 +31,11 @@ use turbopack_ecmascript::{
 };
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_node::{
+    execution_context::ExecutionContextVc,
     node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
+    render::{
+        node_api_source::create_node_api_source, rendered_source::create_node_rendered_source,
+    },
     NodeEntry, NodeEntryVc,
 };
 
@@ -53,9 +57,6 @@ use crate::{
         get_server_resolve_options_context, ServerContextType,
     },
     page_loader::create_page_loader,
-    render_from_node::{
-        node_api_source::create_node_api_source, rendered_source::create_node_rendered_source,
-    },
     util::{get_asset_path_from_route, pathname_for_path, regular_expression_for_path},
 };
 
@@ -64,6 +65,7 @@ use crate::{
 #[turbo_tasks::function]
 pub async fn create_server_rendered_source(
     project_root: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
@@ -87,7 +89,7 @@ pub async fn create_server_rendered_source(
 
     let client_environment = get_client_environment(browserslist_query);
     let client_module_options_context =
-        get_client_module_options_context(project_path, client_environment, ty);
+        get_client_module_options_context(project_path, execution_context, client_environment, ty);
     let client_module_options_context =
         add_next_transforms_to_pages(client_module_options_context, pages_dir);
     let client_resolve_options_context = get_client_resolve_options_context(project_path, ty);
@@ -120,7 +122,7 @@ pub async fn create_server_rendered_source(
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(transitions),
         get_server_environment(server_ty, env),
-        get_server_module_options_context(server_ty),
+        get_server_module_options_context(execution_context, server_ty),
         get_server_resolve_options_context(project_path, server_ty, next_config),
     )
     .into();
@@ -133,6 +135,7 @@ pub async fn create_server_rendered_source(
 
     let fallback_page = get_fallback_page(
         project_path,
+        execution_context,
         server_root,
         env,
         browserslist_query,
@@ -140,7 +143,6 @@ pub async fn create_server_rendered_source(
     );
 
     let server_rendered_source = create_server_rendered_source_for_directory(
-        project_root,
         project_path,
         context,
         client_context,
@@ -168,7 +170,6 @@ pub async fn create_server_rendered_source(
 /// Handles a single page file in the pages directory
 #[turbo_tasks::function]
 async fn create_server_rendered_source_for_file(
-    project_root: FileSystemPathVc,
     context_path: FileSystemPathVc,
     context: AssetContextVc,
     client_context: AssetContextVc,
@@ -243,7 +244,6 @@ async fn create_server_rendered_source_for_file(
             create_node_rendered_source(
                 specificity,
                 server_root,
-                project_root,
                 pathname,
                 path_regex,
                 ssr_entry,
@@ -253,7 +253,6 @@ async fn create_server_rendered_source_for_file(
             create_node_rendered_source(
                 specificity,
                 server_root,
-                project_root,
                 pathname,
                 data_path_regex,
                 ssr_entry,
@@ -277,7 +276,6 @@ async fn create_server_rendered_source_for_file(
 /// [create_server_rendered_source_for_file] method for files.
 #[turbo_tasks::function]
 async fn create_server_rendered_source_for_directory(
-    project_root: FileSystemPathVc,
     context_path: FileSystemPathVc,
     context: AssetContextVc,
     client_context: AssetContextVc,
@@ -333,7 +331,6 @@ async fn create_server_rendered_source_for_directory(
                                 sources.push((
                                     name,
                                     create_server_rendered_source_for_file(
-                                        project_root,
                                         context_path,
                                         context,
                                         client_context,
@@ -357,7 +354,6 @@ async fn create_server_rendered_source_for_directory(
                     sources.push((
                         name,
                         create_server_rendered_source_for_directory(
-                            project_root,
                             context_path,
                             context,
                             client_context,

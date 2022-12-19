@@ -4,7 +4,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{asset::AssetVc, chunk::ChunkingContextVc};
 use turbopack_dev_server::source::{BodyVc, ProxyResult, ProxyResultVc};
 use turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
-use turbopack_node::{get_intermediate_asset, get_renderer_pool, trace_stack, NodeJsOperation};
+use crate::{get_intermediate_asset, get_renderer_pool, trace_stack, NodeJsOperation};
 
 use super::{
     issue::RenderingIssue, RenderDataVc, RenderProxyIncomingMessage, RenderProxyOutgoingMessage,

@@ -22,11 +22,11 @@ use turbopack_dev_server::{
     },
 };
 use turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
-use turbopack_node::{
-    external_asset_entrypoints, get_intermediate_asset, path_regex::PathRegexVc, NodeEntryVc,
-};
 
 use super::{render_static::render_static, RenderData};
+use crate::{
+    external_asset_entrypoints, get_intermediate_asset, path_regex::PathRegexVc, NodeEntryVc,
+};
 
 /// Creates a content source that renders something in Node.js with the passed
 /// `entry` when it matches a `path_regex`. Once rendered it serves
@@ -38,7 +38,6 @@ use super::{render_static::render_static, RenderData};
 pub fn create_node_rendered_source(
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
-    project_root: FileSystemPathVc,
     pathname: StringVc,
     path_regex: PathRegexVc,
     entry: NodeEntryVc,
@@ -48,7 +47,6 @@ pub fn create_node_rendered_source(
     let source = NodeRenderContentSource {
         specificity,
         server_root,
-        project_root,
         pathname,
         path_regex,
         entry,
@@ -72,7 +70,6 @@ pub fn create_node_rendered_source(
 pub struct NodeRenderContentSource {
     specificity: SpecificityVc,
     server_root: FileSystemPathVc,
-    project_root: FileSystemPathVc,
     pathname: StringVc,
     path_regex: PathRegexVc,
     entry: NodeEntryVc,
@@ -162,7 +159,6 @@ impl ContentSource for NodeRenderContentSource {
                     let entry = this.entry.entry(data.clone()).await?;
                     let asset = render_static(
                         this.server_root.join(path),
-                        this.project_root,
                         entry.module,
                         this.runtime_entries,
                         this.fallback_page,

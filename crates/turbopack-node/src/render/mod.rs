@@ -3,15 +3,14 @@ use std::collections::BTreeMap;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use turbopack_dev_server::source::{query::Query, HeaderValue};
-use turbopack_node::{ResponseHeaders, StructuredError};
+
+use crate::{ResponseHeaders, StructuredError};
 
 pub mod issue;
 pub mod node_api_source;
 pub mod render_proxy;
 pub mod render_static;
 pub mod rendered_source;
-
-pub use render_static::create_node_evaluate_asset_context;
 
 #[turbo_tasks::value(shared)]
 pub struct RenderData {

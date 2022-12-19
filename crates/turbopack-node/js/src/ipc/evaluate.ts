@@ -2,8 +2,7 @@ import { IPC, Ipc } from "./index";
 
 type IpcIncomingMessage = {
   type: "evaluate";
-  filepath: string;
-  arguments: string[];
+  args: string[];
 };
 
 type IpcOutgoingMessage = {
@@ -13,21 +12,15 @@ type IpcOutgoingMessage = {
 
 const ipc = IPC as Ipc<IpcIncomingMessage, IpcOutgoingMessage>;
 
-export const run = async (
-  getValue: (...deserializedArgs: any[]) => any,
-  ...args: string[]
-) => {
+export const run = async (getValue: (...deserializedArgs: any[]) => any) => {
   while (true) {
     const msg = await ipc.recv();
 
     switch (msg.type) {
       case "evaluate": {
-        const deserializedArgs = args.map((arg) => JSON.parse(arg));
-        const value = await getValue(...deserializedArgs).catch(
-          (err: Error) => {
-            return ipc.sendError(err);
-          }
-        );
+        const value = await getValue(...msg.args).catch((err: Error) => {
+          return ipc.sendError(err);
+        });
         await ipc.send({
           type: "jsonValue",
           data: JSON.stringify(value),

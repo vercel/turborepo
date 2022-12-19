@@ -16,7 +16,6 @@ mod next_import_map;
 pub mod next_server;
 mod page_loader;
 pub mod react_refresh;
-mod render_from_node;
 mod runtime;
 mod server_rendered_source;
 mod util;

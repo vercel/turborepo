@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, thread::available_parallelism};
 
 use anyhow::{bail, Result};
-use turbo_tasks::Value;
+use turbo_tasks::{primitives::JsonValueVc, TryJoinIterExt, Value};
 use turbo_tasks_fs::{rope::Rope, to_sys_path, File, FileSystemPathVc};
 use turbopack_core::{
     asset::AssetVc,
@@ -16,7 +16,10 @@ use turbopack_ecmascript::{
 };
 
 use crate::{
-    bootstrap::NodeJsBootstrapAsset, embed_js::embed_file_path, emit, pool::NodeJsPool,
+    bootstrap::NodeJsBootstrapAsset,
+    embed_js::embed_file_path,
+    emit,
+    pool::{NodeJsPool, NodeJsPoolVc},
     EvalJavaScriptIncomingMessage, EvalJavaScriptOutgoingMessage, NodeJsOperation,
 };
 
@@ -30,7 +33,7 @@ pub enum JavaScriptValue {
 
 async fn eval_js_operation(
     operation: &mut NodeJsOperation,
-    content: EvalJavaScriptOutgoingMessage,
+    content: EvalJavaScriptOutgoingMessage<'_>,
 ) -> Result<String> {
     operation.send(content).await?;
     match operation.recv().await? {
@@ -44,15 +47,14 @@ async fn eval_js_operation(
 #[turbo_tasks::function]
 /// Pass the file you cared as `runtime_entries` to invalidate and reload the
 /// evaluated result automatically.
-pub async fn evaluate(
+pub async fn get_evaluate_pool(
     context_path: FileSystemPathVc,
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
     context: AssetContextVc,
     intermediate_output_path: FileSystemPathVc,
     runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
-    args: Vec<String>,
-) -> Result<JavaScriptValueVc> {
+) -> Result<NodeJsPoolVc> {
     let chunking_context = DevChunkingContextVc::builder(
         context_path,
         intermediate_output_path,
@@ -75,13 +77,9 @@ pub async fn evaluate(
     let entry_module = EcmascriptModuleAssetVc::new_with_inner_assets(
         VirtualAssetVc::new(
             runtime_asset.path().join("evaluate.js"),
-            File::from(format!(
-                "import {{ run }} from 'RUNTIME'; run(require('INNER'), {})",
-                args.into_iter()
-                    .map(|arg| format!("JSON.stringify(`{}`)", arg))
-                    .collect::<Vec<String>>()
-                    .join(",")
-            ))
+            File::from(
+                "import { run } from 'RUNTIME'; run((...args) => (require('INNER')(...args)))",
+            )
             .into(),
         )
         .into(),
@@ -105,8 +103,49 @@ pub async fn evaluate(
         ),
     };
     emit(bootstrap.cell().into(), intermediate_output_path).await?;
-    let pool = NodeJsPool::new(cwd, entrypoint, HashMap::new(), 1);
+    let pool = NodeJsPool::new(
+        cwd,
+        entrypoint,
+        HashMap::new(),
+        available_parallelism().map_or(1, |v| v.get()),
+    );
+    Ok(pool.cell())
+}
+
+#[turbo_tasks::function]
+/// Pass the file you cared as `runtime_entries` to invalidate and reload the
+/// evaluated result automatically.
+pub async fn evaluate(
+    context_path: FileSystemPathVc,
+    module_asset: AssetVc,
+    cwd: FileSystemPathVc,
+    context: AssetContextVc,
+    intermediate_output_path: FileSystemPathVc,
+    runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
+    args: Vec<JsonValueVc>,
+) -> Result<JavaScriptValueVc> {
+    let pool = get_evaluate_pool(
+        context_path,
+        module_asset,
+        cwd,
+        context,
+        intermediate_output_path,
+        runtime_entries,
+    )
+    .await?;
     let mut operation = pool.operation().await?;
-    let output = eval_js_operation(&mut operation, EvalJavaScriptOutgoingMessage::Evaluate).await?;
+    let args = args.into_iter().map(|v| v).try_join().await?;
+    let output = eval_js_operation(
+        &mut operation,
+        EvalJavaScriptOutgoingMessage::Evaluate {
+            args: args.iter().map(|v| &**v).collect(),
+        },
+    )
+    .await?;
+    if args.is_empty() {
+        // Assume this is a one-off operation, so we can kill the process
+        // TODO use a better way to decide that.
+        operation.wait_or_kill().await?;
+    }
     Ok(JavaScriptValue::Value(output.into()).cell())
 }

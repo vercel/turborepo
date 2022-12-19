@@ -9,6 +9,7 @@ use turbopack_core::environment::{
     EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironmentVc,
 };
 use turbopack_ecmascript::EcmascriptInputTransform;
+use turbopack_node::execution_context::ExecutionContextVc;
 
 use crate::{
     next_client::context::add_next_font_transform,
@@ -78,23 +79,32 @@ pub fn get_server_environment(
 }
 
 #[turbo_tasks::function]
-pub fn get_server_module_options_context(ty: Value<ServerContextType>) -> ModuleOptionsContextVc {
+pub fn get_server_module_options_context(
+    execution_context: ExecutionContextVc,
+    ty: Value<ServerContextType>,
+) -> ModuleOptionsContextVc {
     let module_options_context = match ty.into_value() {
         ServerContextType::Pages { .. } => ModuleOptionsContext {
-            enable_typescript_transform: true,
             enable_styled_jsx: true,
+            enable_postcss_transform: true,
+            enable_typescript_transform: true,
+            execution_context: Some(execution_context),
             ..Default::default()
         },
         ServerContextType::AppSSR { .. } => ModuleOptionsContext {
             enable_styled_jsx: true,
+            enable_postcss_transform: true,
             enable_typescript_transform: true,
+            execution_context: Some(execution_context),
             ..Default::default()
         },
         ServerContextType::AppRSC { .. } => ModuleOptionsContext {
+            enable_postcss_transform: true,
             enable_typescript_transform: true,
             custom_ecmascript_transforms: vec![EcmascriptInputTransform::ClientDirective(
                 StringVc::cell("server-to-client".to_string()),
             )],
+            execution_context: Some(execution_context),
             ..Default::default()
         },
     }

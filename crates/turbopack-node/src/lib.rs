@@ -13,6 +13,7 @@ use indexmap::IndexSet;
 pub use node_entry::{NodeEntry, NodeEntryVc};
 pub use pool::NodeJsOperation;
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt};
 use turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
@@ -32,10 +33,13 @@ use crate::source_map::{SourceMapTraceVc, StackFrame, TraceResult};
 pub mod bootstrap;
 mod embed_js;
 pub mod evaluate;
+pub mod execution_context;
 pub mod node_entry;
 pub mod path_regex;
 pub mod pool;
+pub mod render;
 pub mod source_map;
+pub mod transforms;
 
 #[turbo_tasks::function]
 async fn emit(
@@ -231,9 +235,9 @@ pub struct ResponseHeaders {
 
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
-enum EvalJavaScriptOutgoingMessage {
+enum EvalJavaScriptOutgoingMessage<'a> {
     #[serde(rename_all = "camelCase")]
-    Evaluate,
+    Evaluate { args: Vec<&'a JsonValue> },
 }
 
 #[derive(Deserialize)]
@@ -327,6 +331,6 @@ pub fn register() {
     turbo_tasks::register();
     turbo_tasks_fs::register();
     turbopack_dev_server::register();
-    turbopack::register();
+    turbopack_ecmascript::register();
     include!(concat!(env!("OUT_DIR"), "/register.rs"));
 }

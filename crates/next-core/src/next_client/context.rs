@@ -23,6 +23,7 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
 use turbopack_env::ProcessEnvAssetVc;
+use turbopack_node::execution_context::ExecutionContextVc;
 
 use crate::{
     embed_js::attached_next_js_package_path,
@@ -63,12 +64,12 @@ pub enum ContextType {
 
 #[turbo_tasks::function]
 pub fn get_client_resolve_options_context(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     ty: Value<ContextType>,
 ) -> ResolveOptionsContextVc {
-    let next_client_import_map = get_next_client_import_map(project_root, ty);
+    let next_client_import_map = get_next_client_import_map(project_path, ty);
     let next_client_fallback_import_map = get_next_client_fallback_import_map(ty);
-    let next_client_resolved_map = get_next_client_resolved_map(project_root, project_root);
+    let next_client_resolved_map = get_next_client_resolved_map(project_path, project_path);
     ResolveOptionsContext {
         enable_typescript: true,
         enable_react: true,
@@ -86,13 +87,14 @@ pub fn get_client_resolve_options_context(
 
 #[turbo_tasks::function]
 pub async fn get_client_module_options_context(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     env: EnvironmentVc,
     ty: Value<ContextType>,
 ) -> Result<ModuleOptionsContextVc> {
-    let resolve_options_context = get_client_resolve_options_context(project_root, ty);
+    let resolve_options_context = get_client_resolve_options_context(project_path, ty);
     let enable_react_refresh =
-        assert_can_resolve_react_refresh(project_root, resolve_options_context)
+        assert_can_resolve_react_refresh(project_path, resolve_options_context)
             .await?
             .is_found();
 
@@ -104,8 +106,10 @@ pub async fn get_client_module_options_context(
         enable_react_refresh,
         enable_styled_components: true,
         enable_styled_jsx: true,
+        enable_postcss_transform: true,
         enable_typescript_transform: true,
         preset_env_versions: Some(env),
+        execution_context: Some(execution_context),
         ..Default::default()
     };
 
@@ -173,13 +177,15 @@ pub async fn add_next_font_transform(
 
 #[turbo_tasks::function]
 pub fn get_client_asset_context(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     browserslist_query: &str,
     ty: Value<ContextType>,
 ) -> AssetContextVc {
     let environment = get_client_environment(browserslist_query);
-    let resolve_options_context = get_client_resolve_options_context(project_root, ty);
-    let module_options_context = get_client_module_options_context(project_root, environment, ty);
+    let resolve_options_context = get_client_resolve_options_context(project_path, ty);
+    let module_options_context =
+        get_client_module_options_context(project_path, execution_context, environment, ty);
 
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
@@ -194,12 +200,12 @@ pub fn get_client_asset_context(
 
 #[turbo_tasks::function]
 pub fn get_client_chunking_context(
-    project_root: FileSystemPathVc,
+    project_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
     ty: Value<ContextType>,
 ) -> ChunkingContextVc {
     DevChunkingContextVc::builder(
-        project_root,
+        project_path,
         server_root,
         match ty.into_value() {
             ContextType::Pages { .. } | ContextType::App { .. } => {
