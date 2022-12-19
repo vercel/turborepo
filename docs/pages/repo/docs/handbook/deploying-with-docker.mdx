@@ -174,7 +174,7 @@ ENV TURBO_TOKEN=$TURBO_TOKEN
 RUN yarn turbo run build --filter=web...
 ```
 
-`turbo` will now be able to hit your remote cache. To see a cache hit for a non-cached Docker build image, run a command like this one from your project root:
+`turbo` will now be able to hit your remote cache. To see a Turborepo cache hit for a non-cached Docker build image, run a command like this one from your project root:
 
 ```sh
 docker build -f apps/web/Dockerfile . --build-arg TURBO_TEAM=“your-team-name” --build-arg TURBO_TOKEN=“your-token“ --no-cache
