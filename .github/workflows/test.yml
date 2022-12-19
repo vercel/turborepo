@@ -375,10 +375,10 @@ jobs:
             count=$((count + warnings))
           done
 
-          echo $count > clippy-warnings
-          echo $count clippy warnings
+          echo "$count" > clippy-warnings
+          echo "$count clippy warnings"
 
-          echo $clippy_output > clippy-warnings-raw
+          echo "$clippy_output" > clippy-warnings-raw
 
       - name: Cache clippy warnings
         id: expected-clippy-warnings
@@ -403,14 +403,15 @@ jobs:
           if [[ -f "expected-clippy-warnings" ]]; then
             clippy_warnings=$(cat clippy-warnings)
             expected_clippy_warnings=$(cat expected-clippy-warnings)
+
             if [[ "$clippy_warnings" -gt "$expected_clippy_warnings" ]]; then
               echo "Clippy reported $clippy_warnings warnings, which is higher than the upstream number of $expected_clippy_warnings warnings."
               echo "Please make sure you've run \`cargo clippy\` on the Rust files you've modified."
 
               if [[ -f "expected-clippy-warnings-raw" ]]; then
-                clippy_warnings_raw=$(cat clippy-warnings-raw)
                 diff clippy-warnings-raw expected-clippy-warnings-raw
               fi
+
               exit 1
             fi
           fi
