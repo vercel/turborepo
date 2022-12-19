@@ -127,7 +127,8 @@ async function runOperation(
       previewModeEncryptionKey: "",
       previewModeSigningKey: "",
     },
-    basePath: "",
+    // This is currently passed in from next.config.js through `ProcessEnvAsset`.
+    basePath: process.env.__NEXT_ROUTER_BASEPATH ?? "",
     optimizeFonts: false,
     optimizeCss: false,
     nextScriptWorkers: false,

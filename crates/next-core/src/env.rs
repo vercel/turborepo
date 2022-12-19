@@ -67,6 +67,7 @@ pub async fn env_for_js(
             // the next.config.js file.
             "__NEXT_IMAGE_OPTS".to_string() => serde_json::to_string(&image_config).unwrap(),
             // This ensures next/link and the Next.js router work properly when a basePath is configured.
+            // This is also used in server-renderer.tsx.
             "__NEXT_ROUTER_BASEPATH".to_string() => serde_json::to_string(&base_path).unwrap(),
         }),
     )
