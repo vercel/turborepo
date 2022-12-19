@@ -3,12 +3,12 @@ use std::{
     io::Write,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{
-    rope::RopeBuilder, DirectoryContent, DirectoryEntry, File, FileContent, FileContentVc,
-    FileSystemEntryType, FileSystemPathVc,
+    glob::GlobVc, rope::RopeBuilder, DirectoryContent, DirectoryEntry, File, FileContent,
+    FileContentVc, FileSystemEntryType, FileSystemPathVc,
 };
 use turbopack::{
     ecmascript::EcmascriptInputTransform,
@@ -284,6 +284,7 @@ pub async fn create_app_source(
         SpecificityVc::exact(),
         0,
         app_dir,
+        app_dir,
         server_root,
         EcmascriptChunkPlaceablesVc::cell(server_runtime_entries),
         fallback_page,
@@ -302,6 +303,7 @@ async fn create_app_source_for_directory(
     specificity: SpecificityVc,
     position: u32,
     input_dir: FileSystemPathVc,
+    app_dir: FileSystemPathVc,
     server_root: FileSystemPathVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
     fallback_page: DevHtmlAssetVc,
@@ -333,44 +335,10 @@ async fn create_app_source_for_directory(
         }
 
         let layout = files.get("layout");
-
-        // If a page exists but no layout exists, create a basic root layout
-        // in `app/layout.js` or `app/layout.tsx`.
-        //
-        // TODO: Use let Some(page_file) = page in expression below when
-        // https://rust-lang.github.io/rfcs/2497-if-let-chains.html lands
-        if let (Some(page_file), None, true) = (page, layout, target == server_root) {
-            // Use the extension to determine if the page file is TypeScript.
-            // TODO: Use the presence of a tsconfig.json instead, like Next.js
-            // stable does.
-            let is_tsx = *page_file.extension().await? == "tsx";
-
-            let layout = if is_tsx {
-                input_dir.join("layout.tsx")
-            } else {
-                input_dir.join("layout.js")
-            };
-            files.insert("layout".to_string(), layout);
-            let content = if is_tsx {
-                include_str!("assets/layout.tsx")
-            } else {
-                include_str!("assets/layout.js")
-            };
-
-            layout.write(FileContentVc::from(File::from(content)));
-
-            AppSourceIssue {
-                severity: IssueSeverity::Warning.into(),
-                path: page_file,
-                message: StringVc::cell(format!(
-                    "Your page {} did not have a root layout, we created {} for you.",
-                    page_file.await?.path,
-                    layout.await?.path,
-                )),
-            }
-            .cell()
-            .as_issue()
-            .emit();
+        if let (Some(page_file), None) = (page, layout) {
+            // If a page exists but no layout exists, create a basic root layout
+            // in `app/layout.js` or `app/layout.tsx`.
+            ensure_fallback_layout(input_dir, app_dir, layouts, page_file);
         }
 
         let mut list = layouts.await?.clone_value();
@@ -426,6 +394,7 @@ async fn create_app_source_for_directory(
                         specificity,
                         position,
                         *dir,
+                        app_dir,
                         server_root,
                         runtime_entries,
                         fallback_page,
@@ -439,6 +408,103 @@ async fn create_app_source_for_directory(
         }
     }
     Ok(CombinedContentSource { sources }.cell())
+}
+
+#[turbo_tasks::function]
+async fn ensure_fallback_layout(
+    app_dir: FileSystemPathVc,
+    ancestor_layouts: LayoutSegmentsVc,
+    page_file: FileSystemPathVc,
+) -> Result<()> {
+    // If a layout already exists in an ancestor, no need to fall back
+    let ancestor_layouts = &*ancestor_layouts.await?;
+    for ancestor_layout in ancestor_layouts {
+        if ancestor_layout.await?.files.contains_key("layout") {
+            return Ok(());
+        }
+    }
+
+    // Otherwise, identify where to place a new layout.
+    // Derived from strategy used in stable Next.js: https://github.com/vercel/next.js/blob/7368b6f9e64a4ea4747ae650f0e3bd7379182f31/packages/next/lib/verifyRootLayout.ts#L86
+    let root_segment = ancestor_layouts.first().context("Must have root target")?;
+    let existing_layouts = &*app_dir
+        .read_glob(GlobVc::new("**/layout.{js,ts}"), false)
+        .await?;
+
+    let new_layout_segment_vc = if existing_layouts.results.is_empty() {
+        // Check the first segment following `app/`. This could be a route group.
+        if let Some(first_segment) = ancestor_layouts.get(1) {
+            let first_target = first_segment.await?.target.await?;
+            let dirname = first_target.path.rsplit('/').next();
+
+            match dirname {
+                None => root_segment,
+                Some(dirname) => {
+                    if dirname.starts_with('(') {
+                        first_segment
+                    } else {
+                        root_segment
+                    }
+                }
+            }
+        } else {
+            root_segment
+        }
+    } else {
+        let mut available_layout = None;
+        for ancestor_layout in ancestor_layouts {
+            let candidate_target = ancestor_layout.await?.target.parent();
+            let candidate_path = &candidate_target.await?.path;
+
+            if !existing_layouts
+                .results
+                .iter()
+                .any(|(f, _)| f.starts_with(candidate_path))
+            {
+                available_layout = Some(ancestor_layout);
+                break;
+            }
+        }
+
+        available_layout.unwrap_or(root_segment)
+    };
+
+    // Use the extension to determine if the page file is TypeScript.
+    // TODO: Use the presence of a tsconfig.json instead, like Next.js
+    // stable does.
+    let is_tsx = *page_file.extension().await? == "tsx";
+
+    let new_layout_segment = &*new_layout_segment_vc.await?;
+    let new_layout_dir = new_layout_segment.target.parent();
+    let layout = if is_tsx {
+        new_layout_dir.join("layout.tsx")
+    } else {
+        new_layout_dir.join("layout.js")
+    };
+
+    layout.write(FileContentVc::from(File::from(if is_tsx {
+        include_str!("assets/layout.tsx")
+    } else {
+        include_str!("assets/layout.js")
+    })));
+
+    // let mut files = new_layout_segment.files.clone();
+    // files.insert("layout".to_string(), layout);
+
+    AppSourceIssue {
+        severity: IssueSeverity::Warning.into(),
+        path: page_file,
+        message: StringVc::cell(format!(
+            "Your page {} did not have a root layout, we created {} for you.",
+            page_file.await?.path,
+            layout.await?.path,
+        )),
+    }
+    .cell()
+    .as_issue()
+    .emit();
+
+    Ok(())
 }
 
 #[turbo_tasks::value]
