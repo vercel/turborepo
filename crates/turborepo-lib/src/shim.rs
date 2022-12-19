@@ -69,8 +69,14 @@ impl ShimArgs {
                 if cwd.is_some() {
                     return Err(anyhow!("cannot have multiple `--cwd` flags in command"));
                 }
-                // If we see a `--cwd` we expect the next arg to be a path.
                 found_cwd_flag = true
+            } else if let Some(cwd_arg) = arg.strip_prefix("--cwd=") {
+                // In the case where `--cwd` is passed as `--cwd=./path/to/foo`, that
+                // entire chunk is a single arg, so we need to split it up.
+                if cwd.is_some() {
+                    return Err(anyhow!("cannot have multiple `--cwd` flags in command"));
+                }
+                cwd = Some(cwd_arg.into());
             } else {
                 remaining_turbo_args.push(arg);
             }
@@ -293,6 +299,7 @@ fn is_turbo_binary_path_set() -> bool {
 }
 
 pub fn run() -> Result<Payload> {
+    println!("{:?}", env::args().collect::<Vec<_>>());
     let args = ShimArgs::parse()?;
     // If skip_infer is passed, we're probably running local turbo with
     // global turbo having handled the inference. We can run without any
