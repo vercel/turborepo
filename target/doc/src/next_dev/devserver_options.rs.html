@@ -106,6 +106,8 @@
 <span id="106">106</span>
 <span id="107">107</span>
 <span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{net::IpAddr, path::PathBuf};
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;cli&quot;</span>)]
@@ -166,39 +168,41 @@
     #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
     </span><span class="kw">pub </span>no_open: bool,
 
-    <span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(short, long))]
+    <span class="doccomment">/// Filter by issue severity.
+    </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(short, long))]
     #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
-    </span><span class="doccomment">/// Filter by issue severity.
     </span><span class="kw">pub </span>log_level: <span class="prelude-ty">Option</span>&lt;IssueSeverityCliOption&gt;,
 
-    <span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
-    #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
-    </span><span class="doccomment">/// Show all log messages without limit.
-    </span><span class="kw">pub </span>show_all: bool,
-
-    <span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
-    #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
-    </span><span class="doccomment">/// Expand the log details.
-    </span><span class="kw">pub </span>log_detail: bool,
-
-    <span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
-    #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
-    </span><span class="doccomment">/// Whether to enable full task stats recording in Turbo Engine.
-    </span><span class="kw">pub </span>full_stats: bool,
-
-    <span class="comment">// Inherited options from next-dev, need revisit later.
+    <span class="doccomment">/// Show all log messages without limit.
     </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
     #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
+    </span><span class="kw">pub </span>show_all: bool,
+
+    <span class="doccomment">/// Expand the log details.
+    </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
+    #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
+    </span><span class="kw">pub </span>log_detail: bool,
+
+    <span class="doccomment">/// Whether to enable full task stats recording in Turbo Engine.
+    </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
+    #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
+    </span><span class="kw">pub </span>full_stats: bool,
+
+    <span class="comment">// ==
+    // = Inherited options from next-dev, need revisit later.
+    // ==
     </span><span class="doccomment">/// If port is not explicitly specified, use different port if it&#39;s already
     /// in use.
+    </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
+    #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
     </span><span class="kw">pub </span>allow_retry: bool,
-    <span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
+
+    <span class="doccomment">/// Internal for next.js, no specific usage yet.
+    </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
     #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
-    </span><span class="doccomment">/// Internal for next.js, no specific usage yet.
     </span><span class="kw">pub </span>dev: bool,
-    <span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
-    #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
-    </span><span class="doccomment">/// Internal for next.js, no specific usage yet.
+
+    <span class="doccomment">/// Internal for next.js, no specific usage yet.
     </span><span class="kw">pub </span>is_next_dev_command: bool,
 }
 

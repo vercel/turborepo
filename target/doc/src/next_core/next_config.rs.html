@@ -299,9 +299,9 @@
     next_server::{get_build_module_options_context, get_build_resolve_options_context},
 };
 
-<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+<span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;custom&quot;</span>)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
-#[turbo_tasks::value(transparent, serialization = <span class="string">&quot;custom&quot;</span>)]
 </span><span class="kw">pub struct </span>NextConfig {
     <span class="kw">pub </span>config_file: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>config_file_name: String,
