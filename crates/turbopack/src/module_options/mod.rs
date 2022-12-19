@@ -113,9 +113,11 @@ impl ModuleOptionsVc {
                         Some(ModuleRuleEffect::SourceTransforms(
                             SourceTransformsVc::cell(vec![PostCssTransformVc::new(
                                 node_evaluate_asset_context(None),
-                                execution_context.context(
-                                    "execution_context is required for the postcss_transform",
-                                )?.join("postcss"),
+                                execution_context
+                                    .context(
+                                        "execution_context is required for the postcss_transform",
+                                    )?
+                                    .join("postcss"),
                             )
                             .into()]),
                         ))

@@ -18,9 +18,11 @@ export const run = async (getValue: (...deserializedArgs: any[]) => any) => {
 
     switch (msg.type) {
       case "evaluate": {
-        const value = await getValue(...msg.args).catch((err: Error) => {
-          return ipc.sendError(err);
-        });
+        const value = await Promise.resolve()
+          .then(() => getValue(...msg.args))
+          .catch((err: Error) => {
+            return ipc.sendError(err);
+          });
         await ipc.send({
           type: "jsonValue",
           data: JSON.stringify(value),
