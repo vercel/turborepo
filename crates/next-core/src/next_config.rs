@@ -40,6 +40,8 @@ pub struct NextConfig {
     pub images: ImageConfig,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub redirects: Option<Vec<RedirectConfig>>,
+    #[serde(skip_serializing_if = "Option::is_none", flatten)]
+    pub rewrites: Option<RewriteConfigType>,
 }
 
 #[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
@@ -117,6 +119,38 @@ pub enum RouteHasConfig {
     Host {
         value: String,
     },
+}
+
+#[turbo_tasks::value]
+#[derive(Clone, Debug, Ord, PartialOrd)]
+pub enum RewriteConfigType {
+    Normal(Vec<RewriteConfig>),
+    BeforeAfterFallback(BeforeAfterFallbackConfig),
+}
+
+#[turbo_tasks::value]
+#[derive(Clone, Debug, Ord, PartialOrd)]
+#[serde(rename_all = "camelCase")]
+pub struct RewriteConfig {
+    source: String,
+    destination: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    base_path: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    locale: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    has: Option<Vec<RouteHasConfig>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    missing: Option<Vec<RouteHasConfig>>,
+}
+
+#[turbo_tasks::value]
+#[derive(Clone, Debug, Ord, PartialOrd)]
+#[serde(rename_all = "camelCase")]
+pub struct BeforeAfterFallbackConfig {
+    before_files: Vec<RewriteConfig>,
+    after_files: Vec<RewriteConfig>,
+    fallback: Vec<RewriteConfig>,
 }
 
 impl Default for ImageConfig {
