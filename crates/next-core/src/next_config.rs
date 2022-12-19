@@ -59,10 +59,10 @@ pub struct ImageConfig {
     pub loader: ImageLoader,
     pub domains: Vec<String>,
     pub disable_static_images: bool,
-    #[serde(rename(deserialize = "minimumCacheTTL"))]
+    #[serde(rename = "minimumCacheTTL")]
     pub minimum_cache_ttl: u32,
     pub formats: Vec<ImageFormat>,
-    #[serde(rename(deserialize = "dangerouslyAllowSVG"))]
+    #[serde(rename = "dangerouslyAllowSVG")]
     pub dangerously_allow_svg: bool,
     pub content_security_policy: String,
     pub remote_patterns: Vec<RemotePattern>,
@@ -151,9 +151,9 @@ pub enum ImageLoader {
 
 #[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 pub enum ImageFormat {
-    #[serde(rename(deserialize = "image/webp"))]
+    #[serde(rename = "image/webp")]
     Webp,
-    #[serde(rename(deserialize = "image/avif"))]
+    #[serde(rename = "image/avif")]
     Avif,
 }
 
