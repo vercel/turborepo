@@ -174,7 +174,7 @@ function listTransforms(): void {
       "\n"
     )
   );
-  process.exit(1);
+  process.exit(0);
 }
 
 function expandFilePathsIfNeeded(filesBeforeExpansion: string[]) {

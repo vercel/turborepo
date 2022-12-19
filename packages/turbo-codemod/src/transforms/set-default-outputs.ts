@@ -4,7 +4,7 @@ import fs from "fs-extra";
 import { error, ok, skip } from "../logger";
 import chalk from "chalk";
 
-const DEFAULT_OUTPUTS = ["dist/**/*", "build/**/*"];
+const DEFAULT_OUTPUTS = ["dist/**", "build/**"];
 
 interface TaskDefinition {
   outputs: [];
@@ -52,36 +52,44 @@ export default function addDefaultOutputs(files: string[], flags: Flags) {
 
   let skippedCount = 0;
   let modifiedCount = 0;
-  let deletedEmptyOutputs = 0;
-
+  let unmodifiedCount = 0;
   for (const [taskName, taskDef] of Object.entries(rootTurboJson.pipeline)) {
     if (!taskDef.outputs) {
       ok(`Updating outputs for ${taskName}`);
-      taskDef.outputs = DEFAULT_OUTPUTS;
-      modifiedCount++;
+      if (flags.dry) {
+        skippedCount++;
+      } else {
+        taskDef.outputs = DEFAULT_OUTPUTS;
+        modifiedCount++;
+      }
     } else if (Array.isArray(taskDef.outputs) && taskDef.outputs.length === 0) {
       ok(
         `Removing outputs: [] from ${taskName} as that is now the default behavior`
       );
-      deletedEmptyOutputs++;
-      delete taskDef.outputs;
+      if (flags.dry) {
+        skippedCount++;
+      } else {
+        delete taskDef.outputs;
+        modifiedCount++;
+      }
     } else {
-      skippedCount++;
+      unmodifiedCount++;
       skip(`Skipping "${taskName}", it already has an outputs key defined`);
     }
   }
 
-  if (!flags.dry) {
+  if (flags.dry) {
+    console.log(JSON.stringify(rootTurboJson, null, 2));
+  } else {
     fs.writeJsonSync(turboConfigPath, rootTurboJson, {
       spaces: 2,
     });
-  } else {
-    console.log(JSON.stringify(rootTurboJson, null, 2));
   }
 
   console.log("All done.");
   console.log("Results:");
-  console.log(chalk.green(`${modifiedCount} modified`));
-  console.log(chalk.red(`${deletedEmptyOutputs} unmodified`));
+  console.log(chalk.red(`0 errors`));
   console.log(chalk.yellow(`${skippedCount} skipped`));
+  console.log(chalk.yellow(`${unmodifiedCount} unmodified`));
+  console.log(chalk.green(`${modifiedCount} modified`));
 }
