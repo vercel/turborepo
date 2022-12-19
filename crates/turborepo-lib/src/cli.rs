@@ -60,7 +60,7 @@ pub struct Args {
     #[clap(long, global = true)]
     pub color: bool,
     /// Specify a file to save a cpu profile
-    #[clap(long, aliases = ["cpuprofile"], global = true, value_parser)]
+    #[clap(long = "cpuprofile", global = true, value_parser)]
     pub cpu_profile: Option<String>,
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
