@@ -82,7 +82,6 @@ func RealRun(
 		isSinglePackage: singlePackage,
 	}
 
-	// run the thing
 	execOpts := core.EngineExecutionOptions{
 		Parallel:    rs.Opts.runOpts.parallel,
 		Concurrency: rs.Opts.runOpts.concurrency,
@@ -95,6 +94,7 @@ func RealRun(
 	}
 
 	visitorFn := g.GetPackageTaskVisitor(ctx, execFunc)
+	// run the thing
 	errs := engine.Execute(visitorFn, execOpts)
 
 	// Track if we saw any child with a non-zero exit code

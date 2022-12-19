@@ -52,7 +52,7 @@ func rgb(i int) (int, int, int) {
 		int(math.Sin(f*float64(i)+0)*127 + 128)
 }
 
-// Rainbow function returns a formated colorized string ready to print it to the shell/terminal
+// Rainbow function returns a formatted colorized string ready to print it to the shell/terminal
 //
 // Adapted from go-rainbow
 // Copyright (c) 2017 Raphael Amorim
