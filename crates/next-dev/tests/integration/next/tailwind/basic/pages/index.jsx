@@ -100,7 +100,7 @@ function runTests() {
   console.log(document.querySelectorAll("footer"));
   it("it should apply tailwind styles", function () {
     const footer = document.querySelector("footer");
-    expect(footer.style.justifyItems).toBe("center");
+    expect(getComputedStyle(footer).alignItems).toBe("center");
   });
   testResult.resolve(__jest__.run());
 }
