@@ -33,6 +33,7 @@ import { RenderOpts, renderToHTMLOrFlight } from "next/dist/server/app-render";
 import { PassThrough } from "stream";
 import { ServerResponseShim } from "@vercel/turbopack-next/internal/http";
 import { ParsedUrlQuery } from "node:querystring";
+import { removePathPrefix } from "next/dist/shared/lib/router/utils/remove-path-prefix";
 
 globalThis.__next_require__ = (data) => {
   const [, , ssr_id] = JSON.parse(data);
@@ -202,14 +203,23 @@ async function runOperation(renderData: RenderData) {
     serverCSSManifest,
     runtime: "nodejs",
     serverComponents: true,
-    assetPrefix: "",
+    // This is currently passed in from next.config.js through `ProcessEnvAsset`.
+    assetPrefix: process.env.__TURBOPACK_NEXT_ASSET_PREFIX ?? "",
     pageConfig: pageModule.config,
     reactLoadableManifest: {},
   };
+
+  const basePath = process.env.__NEXT_ROUTER_BASEPATH;
+
+  const path =
+    basePath != null
+      ? removePathPrefix(renderData.path, basePath)
+      : renderData.path;
+
   const result = await renderToHTMLOrFlight(
     req,
     res,
-    renderData.path,
+    path,
     {
       ...renderData.query,
       ...renderData.params,

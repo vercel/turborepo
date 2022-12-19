@@ -7,28 +7,38 @@ import {
   ReactDevOverlay,
 } from "@vercel/turbopack-next/dev/client";
 import { onUpdate } from "@vercel/turbopack-next/dev/hmr-client";
+import { initialize } from "next/dist/client";
 
-const pageChunkPath = location.pathname.slice(1);
+(async () => {
+  const pageChunkPath = location.pathname.slice(1);
 
-onUpdate(
-  {
-    path: pageChunkPath,
-    headers: {
-      accept: "text/html",
+  const { assetPrefix } = await initialize({
+    webpackHMR: {
+      // Expected when `process.env.NODE_ENV === 'development'`
+      onUnrecoverableError() {},
     },
-  },
-  (update) => {
-    if (update.type === "restart") {
-      location.reload();
+  });
+
+  onUpdate(
+    {
+      path: pageChunkPath,
+      headers: {
+        accept: "text/html",
+      },
+    },
+    (update) => {
+      if (update.type === "restart") {
+        location.reload();
+      }
     }
-  }
-);
+  );
 
-initializeHMR({
-  assetPrefix: "",
-});
+  initializeHMR({
+    assetPrefix,
+  });
 
-const el = document.getElementById("__next")!;
-el.innerText = "";
+  const el = document.getElementById("__next")!;
+  el.innerText = "";
 
-createRoot(el).render(<ReactDevOverlay />);
+  createRoot(el).render(<ReactDevOverlay />);
+})();

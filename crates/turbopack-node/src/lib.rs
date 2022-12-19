@@ -35,6 +35,7 @@ pub mod bootstrap;
 mod embed_js;
 pub mod evaluate;
 pub mod execution_context;
+pub mod html_error;
 mod node_entry;
 pub mod path_regex;
 mod pool;

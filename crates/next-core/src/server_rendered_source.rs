@@ -17,14 +17,11 @@ use turbopack_core::{
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
 };
-use turbopack_dev_server::{
-    html::DevHtmlAssetVc,
-    source::{
-        asset_graph::AssetGraphContentSourceVc,
-        combined::{CombinedContentSource, CombinedContentSourceVc},
-        specificity::SpecificityVc,
-        ContentSourceData, ContentSourceVc, NoContentSourceVc,
-    },
+use turbopack_dev_server::source::{
+    asset_graph::AssetGraphContentSourceVc,
+    combined::{CombinedContentSource, CombinedContentSourceVc},
+    specificity::SpecificityVc,
+    ContentSourceData, ContentSourceVc, NoContentSourceVc,
 };
 use turbopack_ecmascript::{
     chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
@@ -33,6 +30,7 @@ use turbopack_ecmascript::{
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_node::{
     execution_context::ExecutionContextVc,
+    html_error::DevErrorHtmlAssetVc,
     render::{
         node_api_source::create_node_api_source, rendered_source::create_node_rendered_source,
     },
@@ -68,6 +66,7 @@ pub async fn create_server_rendered_source(
     execution_context: ExecutionContextVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
+    server_path: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
     next_config: NextConfigVc,
@@ -102,7 +101,8 @@ pub async fn create_server_rendered_source(
     )
     .into();
 
-    let client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
+    let client_chunking_context =
+        get_client_chunking_context(project_path, server_root, server_path, ty);
 
     let client_runtime_entries = get_client_runtime_entries(project_path, env, ty, next_config);
 
@@ -112,7 +112,7 @@ pub async fn create_server_rendered_source(
         client_module_options_context,
         client_resolve_options_context,
         client_environment,
-        server_root,
+        server_root: server_path,
         runtime_entries: client_runtime_entries,
     }
     .cell()
@@ -138,6 +138,7 @@ pub async fn create_server_rendered_source(
         project_path,
         execution_context,
         server_root,
+        server_path,
         env,
         browserslist_query,
         next_config,
@@ -154,8 +155,8 @@ pub async fn create_server_rendered_source(
         EcmascriptChunkPlaceablesVc::cell(server_runtime_entries),
         fallback_page,
         server_root,
-        server_root,
-        server_root.join("api"),
+        server_path,
+        server_path.join("api"),
         output_path,
     );
     let fallback_source =
@@ -178,7 +179,7 @@ async fn create_server_rendered_source_for_file(
     specificity: SpecificityVc,
     page_file: FileSystemPathVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevHtmlAssetVc,
+    fallback_page: DevErrorHtmlAssetVc,
     server_root: FileSystemPathVc,
     server_path: FileSystemPathVc,
     is_api_path: BoolVc,
@@ -201,6 +202,7 @@ async fn create_server_rendered_source_for_file(
     let client_chunking_context = get_client_chunking_context(
         context_path,
         server_root,
+        server_path,
         Value::new(ContextType::Pages { pages_dir }),
     );
 
@@ -285,7 +287,7 @@ async fn create_server_rendered_source_for_directory(
     position: u32,
     input_dir: FileSystemPathVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevHtmlAssetVc,
+    fallback_page: DevErrorHtmlAssetVc,
     server_root: FileSystemPathVc,
     server_path: FileSystemPathVc,
     server_api_path: FileSystemPathVc,

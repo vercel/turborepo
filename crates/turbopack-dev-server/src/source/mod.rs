@@ -16,7 +16,7 @@ use std::{
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize, Serializer};
-use turbo_tasks::{trace::TraceRawVcs, Value};
+use turbo_tasks::{primitives::OptionStringVc, trace::TraceRawVcs, Value};
 use turbo_tasks_fs::rope::Rope;
 use turbopack_core::version::VersionedContentVc;
 
@@ -326,6 +326,13 @@ pub trait ContentSource {
     /// Gets any content sources wrapped in this content source.
     fn get_children(&self) -> ContentSourcesVc {
         ContentSourcesVc::empty()
+    }
+
+    /// The base path of the source, if any. This is used by the dev server to
+    /// expose other resources that are not part of the content source, e.g. the
+    /// HMR endpoint.
+    fn base_path(&self) -> OptionStringVc {
+        OptionStringVc::cell(None)
     }
 }
 

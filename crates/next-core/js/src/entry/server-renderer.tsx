@@ -8,7 +8,7 @@ import "@vercel/turbopack-next/internal/shims";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { renderToHTML, RenderOpts } from "next/dist/server/render";
-import RenderResult from "next/dist/server/render-result";
+import { removePathPrefix } from "next/dist/shared/lib/router/utils/remove-path-prefix";
 import type { BuildManifest } from "next/dist/server/get-page-files";
 
 import { ServerResponseShim } from "@vercel/turbopack-next/internal/http";
@@ -84,6 +84,13 @@ async function runOperation(
   // TODO(alexkirsz) This is missing *a lot* of data, but it's enough to get a
   // basic render working.
 
+  const basePath = process.env.__NEXT_ROUTER_BASEPATH;
+
+  const path =
+    basePath != null
+      ? removePathPrefix(renderData.path, basePath)
+      : renderData.path;
+
   const group = chunkGroup as ChunkGroup;
   const buildManifest: BuildManifest = {
     pages: {
@@ -91,7 +98,7 @@ async function runOperation(
       // computing the chunk items of `next-hydrate.js`, so they contain both
       // _app and page chunks.
       "/_app": [],
-      [renderData.path]: group,
+      [path]: group,
     },
 
     devFiles: [],
@@ -114,20 +121,22 @@ async function runOperation(
       default: Component,
       ...otherExports,
     },
-    pathname: renderData.path,
+    pathname: path,
     buildId: "development",
 
     /* RenderOptsPartial */
     isDataReq,
     runtimeConfig: {},
-    assetPrefix: "",
+    // This is currently passed in from next.config.js through `ProcessEnvAsset`.
+    assetPrefix: process.env.__TURBOPACK_NEXT_ASSET_PREFIX ?? "",
     canonicalBase: "",
     previewProps: {
       previewModeId: "",
       previewModeEncryptionKey: "",
       previewModeSigningKey: "",
     },
-    basePath: "",
+    // This is currently passed in from next.config.js through `ProcessEnvAsset`.
+    basePath: basePath ?? "",
     optimizeFonts: false,
     optimizeCss: false,
     nextScriptWorkers: false,
@@ -172,7 +181,7 @@ async function runOperation(
     /* res: ServerResponse */
     res,
     /* pathname: string */
-    renderData.path,
+    path,
     /* query: ParsedUrlQuery */
     query,
     /* renderOpts: RenderOpts */

@@ -13,6 +13,7 @@ import "next/dist/server/node-polyfill-fetch.js";
 import * as allExports from ".";
 import { NextParsedUrlQuery } from "next/dist/server/request-meta";
 import { apiResolver } from "next/dist/server/api-utils/node";
+import { removePathPrefix } from "next/dist/shared/lib/router/utils/remove-path-prefix";
 
 const ipc = IPC as Ipc<IpcIncomingMessage, IpcOutgoingMessage>;
 
@@ -108,12 +109,19 @@ type Operation = {
 async function createOperation(renderData: RenderData): Promise<Operation> {
   const server = await createServer();
 
+  const basePath = process.env.__NEXT_ROUTER_BASEPATH;
+
+  const path =
+    basePath != null
+      ? removePathPrefix(renderData.path, basePath)
+      : renderData.path;
+
   const {
     clientRequest,
     clientResponsePromise,
     serverRequest,
     serverResponse,
-  } = await makeRequest(server, renderData.method, renderData.path);
+  } = await makeRequest(server, renderData.method, path);
 
   const query = { ...renderData.query, ...renderData.params };
 
@@ -133,7 +141,7 @@ async function createOperation(renderData: RenderData): Promise<Operation> {
       },
       false,
       true,
-      renderData.path
+      path
     ),
   };
 }

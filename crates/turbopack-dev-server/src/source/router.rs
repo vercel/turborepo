@@ -1,5 +1,8 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
+use turbo_tasks::{
+    primitives::{OptionStringVc, StringVc},
+    TryJoinIterExt, Value,
+};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 
 use super::{ContentSource, ContentSourceData, ContentSourceResultVc, ContentSourceVc};
@@ -9,28 +12,33 @@ use crate::source::ContentSourcesVc;
 /// ContentSource will serve all other subpaths.
 #[turbo_tasks::value(shared)]
 pub struct RouterContentSource {
+    pub base_path: OptionStringVc,
     pub routes: Vec<(String, ContentSourceVc)>,
     pub fallback: ContentSourceVc,
 }
 
 impl RouterContentSource {
-    fn get_source<'s, 'a>(&'s self, path: &'a str) -> (&'s ContentSourceVc, &'a str) {
+    async fn get_source<'s, 'a>(&'s self, path: &'a str) -> Result<(&'s ContentSourceVc, &'a str)> {
         for (route, source) in self.routes.iter() {
             if path.starts_with(route) {
                 let path = &path[route.len()..];
-                return (source, path);
+                return Ok((source, path));
             }
         }
-        (&self.fallback, path)
+        Ok((&self.fallback, path))
     }
 }
 
 #[turbo_tasks::value_impl]
 impl ContentSource for RouterContentSource {
     #[turbo_tasks::function]
-    fn get(&self, path: &str, data: Value<ContentSourceData>) -> ContentSourceResultVc {
-        let (source, path) = self.get_source(path);
-        source.get(path, data)
+    async fn get(
+        &self,
+        path: &str,
+        data: Value<ContentSourceData>,
+    ) -> Result<ContentSourceResultVc> {
+        let (source, path) = self.get_source(path).await?;
+        Ok(source.get(path, data))
     }
 
     #[turbo_tasks::function]
@@ -41,6 +49,11 @@ impl ContentSource for RouterContentSource {
         sources.push(self.fallback);
 
         ContentSourcesVc::cell(sources)
+    }
+
+    #[turbo_tasks::function]
+    fn base_path(&self) -> OptionStringVc {
+        self.base_path
     }
 }
 

@@ -53,7 +53,7 @@ pub trait ValueTraitVc:
 
 /// Marker trait that a turbo_tasks::value is prepared for
 /// serialization as Value<...> input.
-/// Either use `#[turbo_tasks::value(serialization: auto_for_input)]`
+/// Either use `#[turbo_tasks::value(serialization = "auto_for_input")]`
 /// or avoid Value<...> in favor of a real Vc
 pub trait TypedForInput: Typed {}
 

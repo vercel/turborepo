@@ -224,6 +224,7 @@ pub fn get_client_asset_context(
 pub fn get_client_chunking_context(
     project_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
+    server_path: FileSystemPathVc,
     ty: Value<ContextType>,
 ) -> ChunkingContextVc {
     DevChunkingContextVc::builder(
@@ -231,11 +232,11 @@ pub fn get_client_chunking_context(
         server_root,
         match ty.into_value() {
             ContextType::Pages { .. } | ContextType::App { .. } => {
-                server_root.join("/_next/static/chunks")
+                server_path.join("/_next/static/chunks")
             }
-            ContextType::Fallback | ContextType::Other => server_root.join("/_chunks"),
+            ContextType::Fallback | ContextType::Other => server_path.join("/_chunks"),
         },
-        get_client_assets_path(server_root, ty),
+        get_client_assets_path(server_path, ty),
     )
     .hot_module_replacement()
     .build()
@@ -243,14 +244,14 @@ pub fn get_client_chunking_context(
 
 #[turbo_tasks::function]
 pub fn get_client_assets_path(
-    server_root: FileSystemPathVc,
+    server_path: FileSystemPathVc,
     ty: Value<ContextType>,
 ) -> FileSystemPathVc {
     match ty.into_value() {
         ContextType::Pages { .. } | ContextType::App { .. } => {
-            server_root.join("/_next/static/assets")
+            server_path.join("/_next/static/assets")
         }
-        ContextType::Fallback | ContextType::Other => server_root.join("/_assets"),
+        ContextType::Fallback | ContextType::Other => server_path.join("/_assets"),
     }
 }
 

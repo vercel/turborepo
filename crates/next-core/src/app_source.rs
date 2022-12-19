@@ -22,13 +22,10 @@ use turbopack_core::{
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     virtual_asset::VirtualAssetVc,
 };
-use turbopack_dev_server::{
-    html::DevHtmlAssetVc,
-    source::{
-        combined::{CombinedContentSource, CombinedContentSourceVc},
-        specificity::SpecificityVc,
-        ContentSourceData, ContentSourceVc, NoContentSourceVc,
-    },
+use turbopack_dev_server::source::{
+    combined::{CombinedContentSource, CombinedContentSourceVc},
+    specificity::SpecificityVc,
+    ContentSourceData, ContentSourceVc, NoContentSourceVc,
 };
 use turbopack_ecmascript::{
     chunk::EcmascriptChunkPlaceablesVc, magic_identifier, utils::stringify_str,
@@ -36,8 +33,9 @@ use turbopack_ecmascript::{
 };
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_node::{
-    execution_context::ExecutionContextVc, render::rendered_source::create_node_rendered_source,
-    NodeEntry, NodeEntryVc, NodeRenderingEntry, NodeRenderingEntryVc,
+    execution_context::ExecutionContextVc, html_error::DevErrorHtmlAssetVc,
+    render::rendered_source::create_node_rendered_source, NodeEntry, NodeEntryVc,
+    NodeRenderingEntry, NodeRenderingEntryVc,
 };
 
 use crate::{
@@ -73,10 +71,12 @@ fn next_client_chunks_transition(
     execution_context: ExecutionContextVc,
     app_dir: FileSystemPathVc,
     server_root: FileSystemPathVc,
+    server_path: FileSystemPathVc,
     browserslist_query: &str,
 ) -> TransitionVc {
     let ty = Value::new(ContextType::App { app_dir });
-    let client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
+    let client_chunking_context =
+        get_client_chunking_context(project_path, server_root, server_path, ty);
     let client_environment = get_client_environment(browserslist_query);
 
     let client_module_options_context =
@@ -97,13 +97,15 @@ async fn next_client_transition(
     project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
     server_root: FileSystemPathVc,
+    server_path: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
     next_config: NextConfigVc,
 ) -> Result<TransitionVc> {
     let ty = Value::new(ContextType::App { app_dir });
-    let client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
+    let client_chunking_context =
+        get_client_chunking_context(project_path, server_root, server_path, ty);
     let client_environment = get_client_environment(browserslist_query);
     let client_module_options_context =
         get_client_module_options_context(project_path, execution_context, client_environment, ty);
@@ -112,7 +114,7 @@ async fn next_client_transition(
 
     Ok(NextClientTransition {
         is_app: true,
-        server_root,
+        server_root: server_path,
         client_chunking_context,
         client_module_options_context,
         client_resolve_options_context,
@@ -183,6 +185,7 @@ fn app_context(
     project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
     server_root: FileSystemPathVc,
+    server_path: FileSystemPathVc,
     app_dir: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
@@ -215,6 +218,7 @@ fn app_context(
             project_path,
             execution_context,
             server_root,
+            server_path,
             app_dir,
             env,
             browserslist_query,
@@ -228,6 +232,7 @@ fn app_context(
             execution_context,
             app_dir,
             server_root,
+            server_path,
             browserslist_query,
         ),
     );
@@ -261,6 +266,7 @@ pub async fn create_app_source(
     execution_context: ExecutionContextVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
+    server_path: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
     next_config: NextConfigVc,
@@ -286,6 +292,7 @@ pub async fn create_app_source(
         project_path,
         execution_context,
         server_root,
+        server_path,
         app_dir,
         env,
         browserslist_query,
@@ -297,6 +304,7 @@ pub async fn create_app_source(
         project_path,
         execution_context,
         server_root,
+        server_path,
         app_dir,
         env,
         browserslist_query,
@@ -315,6 +323,7 @@ pub async fn create_app_source(
         project_path,
         execution_context,
         server_root,
+        server_path,
         env,
         browserslist_query,
         next_config,
@@ -328,9 +337,10 @@ pub async fn create_app_source(
         0,
         app_dir,
         server_root,
+        server_path,
         EcmascriptChunkPlaceablesVc::cell(server_runtime_entries),
         fallback_page,
-        server_root,
+        server_path,
         LayoutSegmentsVc::cell(Vec::new()),
         output_path,
     )
@@ -347,8 +357,9 @@ async fn create_app_source_for_directory(
     position: u32,
     input_dir: FileSystemPathVc,
     server_root: FileSystemPathVc,
+    server_path: FileSystemPathVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevHtmlAssetVc,
+    fallback_page: DevErrorHtmlAssetVc,
     target: FileSystemPathVc,
     layouts: LayoutSegmentsVc,
     intermediate_output_path: FileSystemPathVc,
@@ -433,6 +444,7 @@ async fn create_app_source_for_directory(
                     context_ssr,
                     context,
                     server_root,
+                    server_path,
                     layout_path: layouts,
                     page_path,
                     target,
@@ -471,6 +483,7 @@ async fn create_app_source_for_directory(
                         position,
                         *dir,
                         server_root,
+                        server_path,
                         runtime_entries,
                         fallback_page,
                         new_target,
@@ -490,6 +503,7 @@ struct AppRenderer {
     context_ssr: AssetContextVc,
     context: AssetContextVc,
     server_root: FileSystemPathVc,
+    server_path: FileSystemPathVc,
     layout_path: LayoutSegmentsVc,
     page_path: FileSystemPathVc,
     target: FileSystemPathVc,
@@ -626,7 +640,7 @@ import BOOTSTRAP from {};
             this.server_root.join("_next/static/assets"),
         )
         .layer("ssr")
-        .css_chunk_root_path(this.server_root.join("_next/static/chunks"))
+        .css_chunk_root_path(this.server_path.join("_next/static/chunks"))
         .build();
 
         Ok(NodeRenderingEntry {

@@ -246,43 +246,61 @@ impl DevServerBuilder {
                     let tt = tt.clone();
                     let source_provider = source_provider.clone();
                     let future = async move {
-                        if hyper_tungstenite::is_upgrade_request(&request) {
-                            let uri = request.uri();
-                            let path = uri.path();
+                        run_once(tt.clone(), async move {
+                            let source = source_provider.get_source();
 
-                            if path == "/turbopack-hmr" {
-                                let (response, websocket) =
-                                    hyper_tungstenite::upgrade(request, None)?;
-                                let update_server = UpdateServer::new(source_provider);
-                                update_server.run(&*tt, websocket);
-                                return Ok(response);
+                            if hyper_tungstenite::is_upgrade_request(&request) {
+                                let base_path = source.base_path().await?;
+
+                                let uri = request.uri();
+                                let path = uri.path();
+
+                                let path = if let Some(base_path) = base_path.as_deref() {
+                                    if let Some(path) = path.strip_prefix(base_path) {
+                                        path
+                                    } else {
+                                        return Ok(Response::builder()
+                                            .status(404)
+                                            .body(hyper::Body::empty())?);
+                                    }
+                                } else {
+                                    path
+                                };
+
+                                if path == "/turbopack-hmr" {
+                                    let (response, websocket) =
+                                        hyper_tungstenite::upgrade(request, None)?;
+                                    let update_server = UpdateServer::new(source_provider);
+                                    update_server.run(&*tt, websocket);
+                                    return Ok(response);
+                                }
+
+                                println!("[404] {} (WebSocket)", path);
+                                if path == "/_next/webpack-hmr" {
+                                    // Special-case requests to webpack-hmr as these are made by
+                                    // Next.js clients built
+                                    // without turbopack, which may be making requests in
+                                    // development.
+                                    println!(
+                                        "A non-turbopack next.js client is trying to connect."
+                                    );
+                                    println!(
+                                        "Make sure to reload/close any browser window which has \
+                                         been opened without --turbo."
+                                    );
+                                }
+
+                                return Ok(Response::builder()
+                                    .status(404)
+                                    .body(hyper::Body::empty())?);
                             }
 
-                            println!("[404] {} (WebSocket)", path);
-                            if path == "/_next/webpack-hmr" {
-                                // Special-case requests to webpack-hmr as these are made by Next.js
-                                // clients built without turbopack, which may be making requests in
-                                // development.
-                                println!("A non-turbopack next.js client is trying to connect.");
-                                println!(
-                                    "Make sure to reload/close any browser window which has been \
-                                     opened without --turbo."
-                                );
-                            }
-
-                            return Ok(Response::builder()
-                                .status(404)
-                                .body(hyper::Body::empty())?);
-                        }
-
-                        run_once(tt, async move {
                             let console_ui = (*console_ui).clone().cell();
                             let uri = request.uri();
                             let path = uri.path();
                             // Remove leading slash.
                             let path = &path[1..].to_string();
                             let asset_path = urlencoding::decode(path)?;
-                            let source = source_provider.get_source();
                             handle_issues(source, path, "get source", console_ui).await?;
                             let resolved_source = source.resolve_strongly_consistent().await?;
                             let response = process_request_with_content_source(
