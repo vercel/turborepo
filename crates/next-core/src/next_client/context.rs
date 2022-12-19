@@ -108,7 +108,7 @@ pub async fn get_client_module_options_context(
         enable_styled_components: true,
         enable_styled_jsx: true,
         enable_postcss_transform: Some(PostCssTransformOptions {
-            postcss_package: Some(get_postcss_package_mapping(execution_context)),
+            postcss_package: Some(get_postcss_package_mapping(project_path)),
             ..Default::default()
         }),
         enable_typescript_transform: true,

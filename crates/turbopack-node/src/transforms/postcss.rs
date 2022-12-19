@@ -1,18 +1,24 @@
+use std::collections::HashMap;
+
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{primitives::JsonValueVc, TryJoinIterExt, Value};
+use turbo_tasks::{
+    primitives::{JsonValueVc, StringsVc},
+    TryJoinIterExt, Value,
+};
 use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemEntryType, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     context::AssetContextVc,
     reference_type::{EntryReferenceSubType, ReferenceType},
+    resolve::{find_context_file, FindContextFileResult},
     source_asset::SourceAssetVc,
     source_transform::{SourceTransform, SourceTransformVc},
     virtual_asset::VirtualAssetVc,
 };
 use turbopack_ecmascript::{
     chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc,
+    EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 
 use crate::{
@@ -27,6 +33,34 @@ use crate::{
 struct ProcessedCSS {
     css: String,
     map: Option<String>,
+}
+
+#[turbo_tasks::function]
+fn postcss_configs() -> StringsVc {
+    StringsVc::cell(
+        [
+            ".postcssrc",
+            ".postcssrc.json",
+            ".postcssrc.yaml",
+            ".postcssrc.yml",
+            ".postcssrc.js",
+            ".postcssrc.mjs",
+            ".postcssrc.cjs",
+            ".config/postcssrc",
+            ".config/postcssrc.json",
+            ".config/postcssrc.yaml",
+            ".config/postcssrc.yml",
+            ".config/postcssrc.js",
+            ".config/postcssrc.mjs",
+            ".config/postcssrc.cjs",
+            "postcss.config.js",
+            "postcss.config.mjs",
+            "postcss.config.cjs",
+        ]
+        .into_iter()
+        .map(ToOwned::to_owned)
+        .collect(),
+    )
 }
 
 #[turbo_tasks::value]
@@ -77,6 +111,11 @@ impl Asset for PostCssTransformedAsset {
 
     #[turbo_tasks::function]
     async fn content(&self) -> Result<AssetContentVc> {
+        let find_config_result = find_context_file(self.source.path().parent(), postcss_configs());
+        let FindContextFileResult::Found(config_path, _) = *find_config_result.await? else {
+            return Ok(self.source.content())
+        };
+
         let ExecutionContext {
             project_root,
             intermediate_output_path,
@@ -90,10 +129,8 @@ impl Asset for PostCssTransformedAsset {
         };
         let content = content.content().to_str()?;
         let context = self.evaluate_context;
-        let config_paths = [
-            project_root.join("postcss.config.js").realpath(),
-            project_root.join("tailwind.config.js").realpath(),
-        ];
+        // TODO this is a hack to get these files watched.
+        let config_paths = [config_path.parent().join("tailwind.config.js")];
         let configs = config_paths
             .into_iter()
             .map(|path| async move {
@@ -116,19 +153,28 @@ impl Asset for PostCssTransformedAsset {
             .flatten()
             .collect::<Vec<_>>();
 
-        let postcss_executor = context.process(
+        let config_asset = context.process(
+            SourceAssetVc::new(config_path).into(),
+            Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
+        );
+
+        let postcss_executor = EcmascriptModuleAssetVc::new_with_inner_assets(
             VirtualAssetVc::new(
-                project_root.join("postcss.config.js/transform.js"),
+                config_path.join("transform.js"),
                 AssetContent::File(embed_file("transforms/postcss.js")).cell(),
             )
             .into(),
-            Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
+            context,
+            Value::new(EcmascriptModuleAssetType::Ecmascript),
+            EcmascriptInputTransformsVc::cell(Default::default()),
+            context.environment(),
+            InnerAssetsVc::cell(HashMap::from([("CONFIG".to_string(), config_asset)])),
         );
         let css_fs_path = self.source.path().await?;
         let css_path = css_fs_path.path.as_str();
         let config_value = evaluate(
             project_root,
-            postcss_executor,
+            postcss_executor.into(),
             project_root,
             context,
             intermediate_output_path,

@@ -1,5 +1,5 @@
 import postcss from "@vercel/turbopack/postcss";
-import importedConfig from ".";
+import importedConfig from "CONFIG";
 
 const transform = async (cssContent, name) => {
   let config = importedConfig;

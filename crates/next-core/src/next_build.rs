@@ -8,7 +8,6 @@ use turbopack_core::resolve::{
     pattern::Pattern,
     resolve,
 };
-use turbopack_node::execution_context::ExecutionContextVc;
 
 #[turbo_tasks::function]
 pub async fn get_next_package(project_root: FileSystemPathVc) -> Result<FileSystemPathVc> {
@@ -35,15 +34,14 @@ pub async fn get_next_package(project_root: FileSystemPathVc) -> Result<FileSyst
 
 #[turbo_tasks::function]
 pub async fn get_postcss_package_mapping(
-    execution_context: ExecutionContextVc,
+    project_path: FileSystemPathVc,
 ) -> Result<ImportMappingVc> {
-    let project_root = execution_context.await?.project_root;
     Ok(ImportMapping::Alternatives(vec![
         // Prefer the local installed version over the next.js version
-        ImportMapping::PrimaryAlternative("postcss".to_string(), Some(project_root)).cell(),
+        ImportMapping::PrimaryAlternative("postcss".to_string(), Some(project_path)).cell(),
         ImportMapping::PrimaryAlternative(
             "postcss".to_string(),
-            Some(get_next_package(project_root)),
+            Some(get_next_package(project_path)),
         )
         .cell(),
     ])

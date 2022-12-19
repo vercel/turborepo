@@ -134,7 +134,11 @@ fn next_ssr_client_module_transition(
 ) -> TransitionVc {
     let ty = Value::new(ServerContextType::AppSSR { app_dir });
     NextSSRClientModuleTransition {
-        ssr_module_options_context: get_server_module_options_context(execution_context, ty),
+        ssr_module_options_context: get_server_module_options_context(
+            project_path,
+            execution_context,
+            ty,
+        ),
         ssr_resolve_options_context: get_server_resolve_options_context(
             project_path,
             ty,
@@ -159,7 +163,8 @@ fn next_layout_entry_transition(
     let rsc_environment = get_server_environment(ty, process_env);
     let rsc_resolve_options_context =
         get_server_resolve_options_context(project_path, ty, next_config);
-    let rsc_module_options_context = get_server_module_options_context(execution_context, ty);
+    let rsc_module_options_context =
+        get_server_module_options_context(project_path, execution_context, ty);
 
     NextLayoutEntryTransition {
         rsc_environment,
@@ -237,7 +242,7 @@ fn app_context(
     ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(transitions),
         get_server_environment(ssr_ty, env),
-        get_server_module_options_context(execution_context, ssr_ty),
+        get_server_module_options_context(project_path, execution_context, ssr_ty),
         get_server_resolve_options_context(project_path, ssr_ty, next_config),
     )
     .into()

@@ -81,6 +81,7 @@ pub fn get_server_environment(
 
 #[turbo_tasks::function]
 pub fn get_server_module_options_context(
+    project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
     ty: Value<ServerContextType>,
 ) -> ModuleOptionsContextVc {
@@ -88,7 +89,7 @@ pub fn get_server_module_options_context(
         ServerContextType::Pages { .. } => ModuleOptionsContext {
             enable_styled_jsx: true,
             enable_postcss_transform: Some(PostCssTransformOptions {
-                postcss_package: Some(get_postcss_package_mapping(execution_context)),
+                postcss_package: Some(get_postcss_package_mapping(project_path)),
                 ..Default::default()
             }),
             enable_typescript_transform: true,
@@ -98,7 +99,7 @@ pub fn get_server_module_options_context(
         ServerContextType::AppSSR { .. } => ModuleOptionsContext {
             enable_styled_jsx: true,
             enable_postcss_transform: Some(PostCssTransformOptions {
-                postcss_package: Some(get_postcss_package_mapping(execution_context)),
+                postcss_package: Some(get_postcss_package_mapping(project_path)),
                 ..Default::default()
             }),
             enable_typescript_transform: true,
@@ -107,7 +108,7 @@ pub fn get_server_module_options_context(
         },
         ServerContextType::AppRSC { .. } => ModuleOptionsContext {
             enable_postcss_transform: Some(PostCssTransformOptions {
-                postcss_package: Some(get_postcss_package_mapping(execution_context)),
+                postcss_package: Some(get_postcss_package_mapping(project_path)),
                 ..Default::default()
             }),
             enable_typescript_transform: true,
