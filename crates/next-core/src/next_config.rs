@@ -38,6 +38,8 @@ pub struct NextConfig {
     pub env: Option<HashMap<String, String>>,
     pub compiler: Option<CompilerConfig>,
     pub images: ImageConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub redirects: Option<Vec<RedirectConfig>>,
 }
 
 #[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
@@ -65,6 +67,56 @@ pub struct ImageConfig {
     pub content_security_policy: String,
     pub remote_patterns: Vec<RemotePattern>,
     pub unoptimized: bool,
+}
+
+#[turbo_tasks::value]
+#[derive(Clone, Debug, Ord, PartialOrd)]
+#[serde(rename_all = "camelCase")]
+pub struct RedirectConfig {
+    source: String,
+    destination: String,
+    #[serde(flatten)]
+    status_code_or_permanent: StatusCodeOrPermanent,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    base_path: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    locale: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    has: Option<Vec<RouteHasConfig>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    missing: Option<Vec<RouteHasConfig>>,
+}
+
+#[turbo_tasks::value]
+#[derive(Clone, Debug, Ord, PartialOrd)]
+#[serde(rename_all = "camelCase")]
+enum StatusCodeOrPermanent {
+    StatusCode(u16),
+    Permanent(bool),
+}
+
+#[turbo_tasks::value]
+#[derive(Clone, Debug, Ord, PartialOrd)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum RouteHasConfig {
+    Header {
+        key: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        value: Option<String>,
+    },
+    Query {
+        key: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        value: Option<String>,
+    },
+    Cookie {
+        key: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        value: Option<String>,
+    },
+    Host {
+        value: String,
+    },
 }
 
 impl Default for ImageConfig {
