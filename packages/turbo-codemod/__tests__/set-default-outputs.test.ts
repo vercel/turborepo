@@ -61,8 +61,8 @@ describe("add-default-outputs", () => {
     expect(output.pipeline["build-one"].outputs).toStrictEqual(["foo"]);
     expect(output.pipeline["build-two"].outputs).toStrictEqual(undefined);
     expect(output.pipeline["build-three"].outputs).toStrictEqual([
-      "dist/**/*",
-      "build/**/*",
+      "dist/**",
+      "build/**",
     ]);
 
     // @ts-ignore-next-line
