@@ -25,7 +25,8 @@ use turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
 
 use super::{render_static::render_static, RenderData};
 use crate::{
-    external_asset_entrypoints, get_intermediate_asset, path_regex::PathRegexVc, NodeEntryVc,
+    external_asset_entrypoints, get_intermediate_asset, node_entry::NodeEntryVc,
+    path_regex::PathRegexVc,
 };
 
 /// Creates a content source that renders something in Node.js with the passed

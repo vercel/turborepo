@@ -19,7 +19,7 @@ use devserver_options::DevServerOptions;
 use next_core::{
     create_app_source, create_server_rendered_source, create_web_entry_source, env::load_env,
     manifest::DevManifestContentSource, next_config::load_next_config,
-    next_image::NextImageContentSourceVc, source_map::NextSourceMapTraceContentSourceVc,
+    next_image::NextImageContentSourceVc,
 };
 use owo_colors::OwoColorize;
 use turbo_malloc::TurboMalloc;
@@ -44,7 +44,9 @@ use turbopack_dev_server::{
     },
     DevServer,
 };
-use turbopack_node::execution_context::ExecutionContextVc;
+use turbopack_node::{
+    execution_context::ExecutionContextVc, source_map::NextSourceMapTraceContentSourceVc,
+};
 
 #[derive(Clone)]
 pub enum EntryRequest {

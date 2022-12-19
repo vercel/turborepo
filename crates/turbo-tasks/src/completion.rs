@@ -21,7 +21,12 @@ impl CompletionVc {
         CompletionVc::cell(Completion)
     }
 
+    /// Uses the previous completion. Can be used to cancel without triggering a
+    /// new invalidation.
     pub fn unchanged() -> Self {
+        // This is the same code that CompletionVc::cell uses expect that it
+        // infact compares the cell (CompletionVc::cell opted-out of
+        // that via #[turbo_tasks::value(cell = "new")])
         let cell = turbo_tasks::macro_helpers::find_cell_by_type(*COMPLETIONS_VALUE_TYPE_ID);
         cell.compare_and_update_shared(Completion);
         let raw: RawVc = cell.into();

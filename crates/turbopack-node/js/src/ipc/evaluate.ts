@@ -21,6 +21,7 @@ export const run = async (getValue: (...deserializedArgs: any[]) => any) => {
         const value = await Promise.resolve()
           .then(() => getValue(...msg.args))
           .catch((err: Error) => {
+            // sendError will exit the process
             return ipc.sendError(err);
           });
         await ipc.send({

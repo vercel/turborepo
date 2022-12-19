@@ -599,6 +599,7 @@ pub fn register() {
     turbopack_core::register();
     turbopack_css::register();
     turbopack_ecmascript::register();
+    turbopack_node::register();
     turbopack_env::register();
     turbopack_mdx::register();
     turbopack_json::register();

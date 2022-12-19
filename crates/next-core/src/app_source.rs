@@ -35,10 +35,8 @@ use turbopack_ecmascript::{
 };
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_node::{
-    execution_context::ExecutionContextVc,
-    node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
-    render::rendered_source::create_node_rendered_source,
-    NodeEntry, NodeEntryVc,
+    execution_context::ExecutionContextVc, render::rendered_source::create_node_rendered_source,
+    NodeEntry, NodeEntryVc, NodeRenderingEntry, NodeRenderingEntryVc,
 };
 
 use crate::{

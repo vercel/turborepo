@@ -10,8 +10,9 @@ use std::{
 use anyhow::{anyhow, bail, Result};
 use futures::{stream::FuturesUnordered, TryStreamExt};
 use indexmap::IndexSet;
-pub use node_entry::{NodeEntry, NodeEntryVc};
-pub use pool::NodeJsOperation;
+pub use node_entry::{
+    NodeEntry, NodeEntryVc, NodeRenderingEntriesVc, NodeRenderingEntry, NodeRenderingEntryVc,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt};
@@ -34,9 +35,9 @@ pub mod bootstrap;
 mod embed_js;
 pub mod evaluate;
 pub mod execution_context;
-pub mod node_entry;
+mod node_entry;
 pub mod path_regex;
-pub mod pool;
+mod pool;
 pub mod render;
 pub mod source_map;
 pub mod transforms;

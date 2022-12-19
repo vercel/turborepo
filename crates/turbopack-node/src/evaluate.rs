@@ -19,8 +19,8 @@ use crate::{
     bootstrap::NodeJsBootstrapAsset,
     embed_js::embed_file_path,
     emit,
-    pool::{NodeJsPool, NodeJsPoolVc},
-    EvalJavaScriptIncomingMessage, EvalJavaScriptOutgoingMessage, NodeJsOperation,
+    pool::{NodeJsOperation, NodeJsPool, NodeJsPoolVc},
+    EvalJavaScriptIncomingMessage, EvalJavaScriptOutgoingMessage,
 };
 
 #[turbo_tasks::value(shared)]

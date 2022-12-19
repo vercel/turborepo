@@ -1,4 +1,11 @@
+pub mod module_options_context;
+pub mod module_rule;
+pub mod rule_condition;
+
 use anyhow::{Context, Result};
+pub use module_options_context::*;
+pub use module_rule::*;
+pub use rule_condition::*;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
@@ -7,14 +14,6 @@ use turbopack_core::{
 };
 use turbopack_css::{CssInputTransform, CssInputTransformsVc};
 use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
-
-pub mod module_options_context;
-pub mod module_rule;
-pub mod rule_condition;
-
-pub use module_options_context::*;
-pub use module_rule::*;
-pub use rule_condition::*;
 use turbopack_node::transforms::postcss::PostCssTransformVc;
 
 use crate::evaluate_context::node_evaluate_asset_context;
