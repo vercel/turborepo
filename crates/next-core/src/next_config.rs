@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
-    primitives::{BoolVc, StringsVc},
+    primitives::{BoolVc, OptionStringVc, StringVc, StringsVc},
     trace::TraceRawVcs,
     Value,
 };
@@ -11,7 +11,9 @@ use turbo_tasks_fs::{FileSystemEntryType, FileSystemPathVc};
 use turbopack::{transition::TransitionsByNameVc, ModuleAssetContextVc};
 use turbopack_core::{
     asset::Asset,
+    emit_and_bail,
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
 };
@@ -30,6 +32,7 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 #[turbo_tasks::value(transparent, serialization = "custom")]
 pub struct NextConfig {
+    pub base_path: Option<String>,
     pub config_file: Option<String>,
     pub config_file_name: String,
     pub typescript: Option<TypeScriptConfig>,
@@ -168,8 +171,50 @@ pub enum RemoveConsoleConfig {
     Config { exclude: Option<Vec<String>> },
 }
 
+#[turbo_tasks::value(shared)]
+struct NextConfigIssue {
+    pub severity: IssueSeverityVc,
+    pub path: FileSystemPathVc,
+    pub message: StringVc,
+}
+
+#[turbo_tasks::value_impl]
+impl Issue for NextConfigIssue {
+    #[turbo_tasks::function]
+    fn severity(&self) -> IssueSeverityVc {
+        self.severity
+    }
+
+    #[turbo_tasks::function]
+    async fn title(&self) -> Result<StringVc> {
+        Ok(StringVc::cell(
+            "An issue occurred while reading the Next.js configuration".to_string(),
+        ))
+    }
+
+    #[turbo_tasks::function]
+    fn category(&self) -> StringVc {
+        StringVc::cell("next config".to_string())
+    }
+
+    #[turbo_tasks::function]
+    fn context(&self) -> FileSystemPathVc {
+        self.path
+    }
+
+    #[turbo_tasks::function]
+    fn description(&self) -> StringVc {
+        self.message
+    }
+}
+
 #[turbo_tasks::value_impl]
 impl NextConfigVc {
+    #[turbo_tasks::function]
+    pub async fn base_path(self) -> Result<OptionStringVc> {
+        Ok(OptionStringVc::cell(self.await?.base_path.clone()))
+    }
+
     #[turbo_tasks::function]
     pub async fn server_component_externals(self) -> Result<StringsVc> {
         Ok(StringsVc::cell(
@@ -198,6 +243,41 @@ impl NextConfigVc {
     pub async fn image_config(self) -> Result<ImageConfigVc> {
         Ok(self.await?.images.clone().cell())
     }
+}
+
+/// Validates the Next.js configuration.
+#[turbo_tasks::function]
+async fn validate_next_config(
+    next_config: NextConfigVc,
+    path: FileSystemPathVc,
+) -> Result<NextConfigVc> {
+    let next_config_ref = next_config.await?;
+    if let Some(base_path) = next_config_ref.base_path.as_deref() {
+        if !base_path.starts_with('/') {
+            emit_and_bail!(NextConfigIssue {
+                severity: IssueSeverityVc::cell(IssueSeverity::Error),
+                path,
+                message: StringVc::cell(format!(
+                    "Specified basePath has to start with a /, found {}",
+                    base_path
+                )),
+            }
+            .cell());
+        }
+
+        if base_path.ends_with('/') {
+            emit_and_bail!(NextConfigIssue {
+                severity: IssueSeverityVc::cell(IssueSeverity::Error),
+                path,
+                message: StringVc::cell(format!(
+                    "Specified basePath has to start with a /, found {}",
+                    base_path
+                )),
+            }
+            .cell());
+        }
+    }
+    Ok(next_config)
 }
 
 #[turbo_tasks::function]
@@ -264,10 +344,15 @@ pub async fn load_next_config(
     match &*config_value {
         JavaScriptValue::Value(val) => {
             let next_config: NextConfig = serde_json::from_reader(val.read())?;
-            Ok(next_config.cell())
+            let next_config = next_config.cell();
+            Ok(if let Some(asset) = config_asset {
+                validate_next_config(next_config, asset.path())
+            } else {
+                next_config
+            })
         }
         JavaScriptValue::Stream(_) => {
-            unimplemented!("Stream not supported now");
+            unimplemented!("Stream not supported for now");
         }
     }
 }

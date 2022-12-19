@@ -350,6 +350,7 @@ async fn source(
     )
     .into();
     let source = RouterContentSource {
+        base_path: next_config.base_path(),
         routes: vec![
             ("__turbopack__/".to_string(), introspect),
             ("__turbo_tasks__/".to_string(), viz),

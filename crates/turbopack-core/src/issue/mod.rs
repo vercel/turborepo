@@ -132,6 +132,17 @@ pub trait Issue {
     }
 }
 
+/// Emits an issue and then exits the current function with an error.
+#[macro_export]
+macro_rules! emit_and_bail {
+    ($issue:expr) => {
+        let issue = $issue.as_issue();
+        let description = issue.description().await?;
+        issue.emit();
+        anyhow::bail!(description.clone())
+    };
+}
+
 #[turbo_tasks::value_trait]
 trait IssueProcessingPath {
     fn shortest_path(&self, issue: IssueVc) -> OptionIssueProcessingPathItemsVc;
