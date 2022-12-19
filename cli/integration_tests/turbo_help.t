@@ -21,21 +21,21 @@ Test help flag
     unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Options:
-        --version                    
-        --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
-        --api <API>                  Override the endpoint for API calls
-        --color                      Force color usage in the terminal
-        --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
-        --cwd <CWD>                  The directory in which to run turbo
-        --heap <HEAP>                Specify a file to save a pprof heap profile
-        --login <LOGIN>              Override the login endpoint
-        --no-color                   Suppress color usage in the terminal
-        --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --team <TEAM>                Set the team slug for API calls
-        --token <TOKEN>              Set the auth token for API calls
-        --trace <TRACE>              Specify a file to save a pprof trace
-        --verbosity <COUNT>          Verbosity level
-    -h, --help                       Print help information
+        --version                   
+        --skip-infer                Skip any attempts to infer which version of Turbo the project is configured to use
+        --api <API>                 Override the endpoint for API calls
+        --color                     Force color usage in the terminal
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cwd <CWD>                 The directory in which to run turbo
+        --heap <HEAP>               Specify a file to save a pprof heap profile
+        --login <LOGIN>             Override the login endpoint
+        --no-color                  Suppress color usage in the terminal
+        --preflight                 When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --team <TEAM>               Set the team slug for API calls
+        --token <TOKEN>             Set the auth token for API calls
+        --trace <TRACE>             Specify a file to save a pprof trace
+        --verbosity <COUNT>         Verbosity level
+    -h, --help                      Print help information
   
   Run Arguments:
         --cache-dir <CACHE_DIR>          Override the filesystem cache directory
@@ -84,21 +84,21 @@ Test help flag
     unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Options:
-        --version                    
-        --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
-        --api <API>                  Override the endpoint for API calls
-        --color                      Force color usage in the terminal
-        --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
-        --cwd <CWD>                  The directory in which to run turbo
-        --heap <HEAP>                Specify a file to save a pprof heap profile
-        --login <LOGIN>              Override the login endpoint
-        --no-color                   Suppress color usage in the terminal
-        --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --team <TEAM>                Set the team slug for API calls
-        --token <TOKEN>              Set the auth token for API calls
-        --trace <TRACE>              Specify a file to save a pprof trace
-        --verbosity <COUNT>          Verbosity level
-    -h, --help                       Print help information
+        --version                   
+        --skip-infer                Skip any attempts to infer which version of Turbo the project is configured to use
+        --api <API>                 Override the endpoint for API calls
+        --color                     Force color usage in the terminal
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cwd <CWD>                 The directory in which to run turbo
+        --heap <HEAP>               Specify a file to save a pprof heap profile
+        --login <LOGIN>             Override the login endpoint
+        --no-color                  Suppress color usage in the terminal
+        --preflight                 When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --team <TEAM>               Set the team slug for API calls
+        --token <TOKEN>             Set the auth token for API calls
+        --trace <TRACE>             Specify a file to save a pprof trace
+        --verbosity <COUNT>         Verbosity level
+    -h, --help                      Print help information
   
   Run Arguments:
         --cache-dir <CACHE_DIR>          Override the filesystem cache directory
@@ -132,22 +132,22 @@ Test help flag for link command
   Usage: turbo link [OPTIONS]
   
   Options:
-        --no-gitignore               Do not create or modify .gitignore (default false)
-        --version                    
-        --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
-        --api <API>                  Override the endpoint for API calls
-        --color                      Force color usage in the terminal
-        --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
-        --cwd <CWD>                  The directory in which to run turbo
-        --heap <HEAP>                Specify a file to save a pprof heap profile
-        --login <LOGIN>              Override the login endpoint
-        --no-color                   Suppress color usage in the terminal
-        --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --team <TEAM>                Set the team slug for API calls
-        --token <TOKEN>              Set the auth token for API calls
-        --trace <TRACE>              Specify a file to save a pprof trace
-        --verbosity <COUNT>          Verbosity level
-    -h, --help                       Print help information
+        --no-gitignore              Do not create or modify .gitignore (default false)
+        --version                   
+        --skip-infer                Skip any attempts to infer which version of Turbo the project is configured to use
+        --api <API>                 Override the endpoint for API calls
+        --color                     Force color usage in the terminal
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cwd <CWD>                 The directory in which to run turbo
+        --heap <HEAP>               Specify a file to save a pprof heap profile
+        --login <LOGIN>             Override the login endpoint
+        --no-color                  Suppress color usage in the terminal
+        --preflight                 When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --team <TEAM>               Set the team slug for API calls
+        --token <TOKEN>             Set the auth token for API calls
+        --trace <TRACE>             Specify a file to save a pprof trace
+        --verbosity <COUNT>         Verbosity level
+    -h, --help                      Print help information
   
   Run Arguments:
         --single-package  Run turbo in single-package mode
@@ -161,21 +161,21 @@ Test help flag for unlink command
   Usage: turbo unlink [OPTIONS]
   
   Options:
-        --version                    
-        --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
-        --api <API>                  Override the endpoint for API calls
-        --color                      Force color usage in the terminal
-        --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
-        --cwd <CWD>                  The directory in which to run turbo
-        --heap <HEAP>                Specify a file to save a pprof heap profile
-        --login <LOGIN>              Override the login endpoint
-        --no-color                   Suppress color usage in the terminal
-        --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --team <TEAM>                Set the team slug for API calls
-        --token <TOKEN>              Set the auth token for API calls
-        --trace <TRACE>              Specify a file to save a pprof trace
-        --verbosity <COUNT>          Verbosity level
-    -h, --help                       Print help information
+        --version                   
+        --skip-infer                Skip any attempts to infer which version of Turbo the project is configured to use
+        --api <API>                 Override the endpoint for API calls
+        --color                     Force color usage in the terminal
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cwd <CWD>                 The directory in which to run turbo
+        --heap <HEAP>               Specify a file to save a pprof heap profile
+        --login <LOGIN>             Override the login endpoint
+        --no-color                  Suppress color usage in the terminal
+        --preflight                 When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --team <TEAM>               Set the team slug for API calls
+        --token <TOKEN>             Set the auth token for API calls
+        --trace <TRACE>             Specify a file to save a pprof trace
+        --verbosity <COUNT>         Verbosity level
+    -h, --help                      Print help information
   
   Run Arguments:
         --single-package  Run turbo in single-package mode
@@ -189,22 +189,22 @@ Test help flag for login command
   Usage: turbo login [OPTIONS]
   
   Options:
-        --sso-team <SSO_TEAM>        
-        --version                    
-        --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
-        --api <API>                  Override the endpoint for API calls
-        --color                      Force color usage in the terminal
-        --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
-        --cwd <CWD>                  The directory in which to run turbo
-        --heap <HEAP>                Specify a file to save a pprof heap profile
-        --login <LOGIN>              Override the login endpoint
-        --no-color                   Suppress color usage in the terminal
-        --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --team <TEAM>                Set the team slug for API calls
-        --token <TOKEN>              Set the auth token for API calls
-        --trace <TRACE>              Specify a file to save a pprof trace
-        --verbosity <COUNT>          Verbosity level
-    -h, --help                       Print help information
+        --sso-team <SSO_TEAM>       
+        --version                   
+        --skip-infer                Skip any attempts to infer which version of Turbo the project is configured to use
+        --api <API>                 Override the endpoint for API calls
+        --color                     Force color usage in the terminal
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cwd <CWD>                 The directory in which to run turbo
+        --heap <HEAP>               Specify a file to save a pprof heap profile
+        --login <LOGIN>             Override the login endpoint
+        --no-color                  Suppress color usage in the terminal
+        --preflight                 When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --team <TEAM>               Set the team slug for API calls
+        --token <TOKEN>             Set the auth token for API calls
+        --trace <TRACE>             Specify a file to save a pprof trace
+        --verbosity <COUNT>         Verbosity level
+    -h, --help                      Print help information
   
   Run Arguments:
         --single-package  Run turbo in single-package mode
@@ -218,21 +218,21 @@ Test help flag for logout command
   Usage: turbo logout [OPTIONS]
   
   Options:
-        --version                    
-        --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
-        --api <API>                  Override the endpoint for API calls
-        --color                      Force color usage in the terminal
-        --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
-        --cwd <CWD>                  The directory in which to run turbo
-        --heap <HEAP>                Specify a file to save a pprof heap profile
-        --login <LOGIN>              Override the login endpoint
-        --no-color                   Suppress color usage in the terminal
-        --preflight                  When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --team <TEAM>                Set the team slug for API calls
-        --token <TOKEN>              Set the auth token for API calls
-        --trace <TRACE>              Specify a file to save a pprof trace
-        --verbosity <COUNT>          Verbosity level
-    -h, --help                       Print help information
+        --version                   
+        --skip-infer                Skip any attempts to infer which version of Turbo the project is configured to use
+        --api <API>                 Override the endpoint for API calls
+        --color                     Force color usage in the terminal
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cwd <CWD>                 The directory in which to run turbo
+        --heap <HEAP>               Specify a file to save a pprof heap profile
+        --login <LOGIN>             Override the login endpoint
+        --no-color                  Suppress color usage in the terminal
+        --preflight                 When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --team <TEAM>               Set the team slug for API calls
+        --token <TOKEN>             Set the auth token for API calls
+        --trace <TRACE>             Specify a file to save a pprof trace
+        --verbosity <COUNT>         Verbosity level
+    -h, --help                      Print help information
   
   Run Arguments:
         --single-package  Run turbo in single-package mode
