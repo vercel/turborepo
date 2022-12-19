@@ -30,7 +30,7 @@ pub fn node_evaluate_asset_context(import_map: Option<ImportMapVc>) -> AssetCont
             enable_node_modules: true,
             enable_node_externals: true,
             enable_node_native_modules: true,
-            custom_conditions: vec!["development".to_string()],
+            custom_conditions: vec!["development".to_string(), "node".to_string()],
             import_map,
             ..Default::default()
         }

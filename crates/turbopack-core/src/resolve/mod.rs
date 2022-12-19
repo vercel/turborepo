@@ -912,6 +912,15 @@ async fn resolve_import_map_result(
             if request.resolve().await? == original_request
                 && context.resolve().await? == original_context
             {
+                let issue: ResolvingIssueVc = ResolvingIssue {
+                    context: original_context,
+                    request_type: format!("import map alias to {}", request.to_string().await?),
+                    request: original_request,
+                    resolve_options: options,
+                    error_message: Some("cycle during resolving".to_string()),
+                }
+                .cell();
+                issue.as_issue().emit();
                 ResolveResult::unresolveable().cell()
             } else {
                 resolve(context, request, options)

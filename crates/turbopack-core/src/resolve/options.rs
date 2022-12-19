@@ -289,7 +289,7 @@ impl ValueToString for ImportMapResult {
             ImportMapResult::Alias(request, context) => {
                 let s = if let Some(path) = context {
                     format!(
-                        "aliased to {} from {}",
+                        "aliased to {} inside of {}",
                         request.to_string().await?,
                         path.to_string().await?
                     )

@@ -2,7 +2,7 @@ use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::{
-    module_options::{ModuleOptionsContext, ModuleOptionsContextVc},
+    module_options::{ModuleOptionsContext, ModuleOptionsContextVc, PostCssTransformOptions},
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
 };
 use turbopack_core::environment::{
@@ -12,6 +12,7 @@ use turbopack_ecmascript::EcmascriptInputTransform;
 use turbopack_node::execution_context::ExecutionContextVc;
 
 use crate::{
+    next_build::get_postcss_package_mapping,
     next_client::context::add_next_font_transform,
     next_config::NextConfigVc,
     next_import_map::{get_next_build_import_map, get_next_server_import_map},
@@ -86,20 +87,29 @@ pub fn get_server_module_options_context(
     let module_options_context = match ty.into_value() {
         ServerContextType::Pages { .. } => ModuleOptionsContext {
             enable_styled_jsx: true,
-            enable_postcss_transform: true,
+            enable_postcss_transform: Some(PostCssTransformOptions {
+                postcss_package: Some(get_postcss_package_mapping(execution_context)),
+                ..Default::default()
+            }),
             enable_typescript_transform: true,
             execution_context: Some(execution_context),
             ..Default::default()
         },
         ServerContextType::AppSSR { .. } => ModuleOptionsContext {
             enable_styled_jsx: true,
-            enable_postcss_transform: true,
+            enable_postcss_transform: Some(PostCssTransformOptions {
+                postcss_package: Some(get_postcss_package_mapping(execution_context)),
+                ..Default::default()
+            }),
             enable_typescript_transform: true,
             execution_context: Some(execution_context),
             ..Default::default()
         },
         ServerContextType::AppRSC { .. } => ModuleOptionsContext {
-            enable_postcss_transform: true,
+            enable_postcss_transform: Some(PostCssTransformOptions {
+                postcss_package: Some(get_postcss_package_mapping(execution_context)),
+                ..Default::default()
+            }),
             enable_typescript_transform: true,
             custom_ecmascript_transforms: vec![EcmascriptInputTransform::ClientDirective(
                 StringVc::cell("server-to-client".to_string()),

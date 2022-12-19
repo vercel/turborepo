@@ -8,7 +8,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::{
     module_options::{
         module_options_context::{ModuleOptionsContext, ModuleOptionsContextVc},
-        ModuleRule, ModuleRuleCondition, ModuleRuleEffect,
+        ModuleRule, ModuleRuleCondition, ModuleRuleEffect, PostCssTransformOptions,
     },
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
     transition::TransitionsByNameVc,
@@ -28,6 +28,7 @@ use turbopack_node::execution_context::ExecutionContextVc;
 use crate::{
     embed_js::attached_next_js_package_path,
     env::env_for_js,
+    next_build::get_postcss_package_mapping,
     next_client::runtime_entry::{RuntimeEntriesVc, RuntimeEntry},
     next_config::NextConfigVc,
     next_import_map::{
@@ -106,7 +107,10 @@ pub async fn get_client_module_options_context(
         enable_react_refresh,
         enable_styled_components: true,
         enable_styled_jsx: true,
-        enable_postcss_transform: true,
+        enable_postcss_transform: Some(PostCssTransformOptions {
+            postcss_package: Some(get_postcss_package_mapping(execution_context)),
+            ..Default::default()
+        }),
         enable_typescript_transform: true,
         preset_env_versions: Some(env),
         execution_context: Some(execution_context),

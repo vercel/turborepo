@@ -7,6 +7,7 @@ mod embed_js;
 pub mod env;
 mod fallback;
 pub mod manifest;
+mod next_build;
 pub mod next_client;
 mod next_client_component;
 pub mod next_config;
