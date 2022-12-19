@@ -252,31 +252,35 @@ async fn validate_next_config(
     path: FileSystemPathVc,
 ) -> Result<NextConfigVc> {
     let next_config_ref = next_config.await?;
-    if let Some(base_path) = next_config_ref.base_path.as_deref() {
-        if !base_path.starts_with('/') {
-            emit_and_bail!(NextConfigIssue {
-                severity: IssueSeverityVc::cell(IssueSeverity::Fatal),
-                path,
-                message: StringVc::cell(format!(
-                    "Specified basePath has to start with a /, found {}",
-                    base_path
-                )),
-            }
-            .cell());
-        }
 
-        if base_path.ends_with('/') {
-            emit_and_bail!(NextConfigIssue {
-                severity: IssueSeverityVc::cell(IssueSeverity::Fatal),
-                path,
-                message: StringVc::cell(format!(
-                    "Specified basePath has to start with a /, found {}",
-                    base_path
-                )),
+    if let Some(base_path) = next_config_ref.base_path.as_deref() {
+        if !base_path.is_empty() {
+            if !base_path.starts_with('/') {
+                emit_and_bail!(NextConfigIssue {
+                    severity: IssueSeverityVc::cell(IssueSeverity::Fatal),
+                    path,
+                    message: StringVc::cell(format!(
+                        "Specified basePath has to start with a /, found {}",
+                        base_path
+                    )),
+                }
+                .cell());
             }
-            .cell());
+
+            if base_path.ends_with('/') {
+                emit_and_bail!(NextConfigIssue {
+                    severity: IssueSeverityVc::cell(IssueSeverity::Fatal),
+                    path,
+                    message: StringVc::cell(format!(
+                        "Specified basePath has to start with a /, found {}",
+                        base_path
+                    )),
+                }
+                .cell());
+            }
         }
     }
+
     Ok(next_config)
 }
 

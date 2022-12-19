@@ -36,8 +36,13 @@ impl RouterContentSource {
 }
 
 /// Strips a base path from a given path. The path must not start with a slash.
-/// The base path must start with a slash and must not end with a slash.
+/// The base path must start with a slash and must not end with a slash, or be
+/// the empty string.
 fn strip_base_path<'a, 'b>(path: &'a str, base_path: &'b str) -> Result<&'a str> {
+    if base_path.is_empty() {
+        return Ok(path);
+    }
+
     let base_path = base_path.strip_prefix('/').ok_or_else(|| {
         anyhow!(
             "invalid base path: base path must start with a slash, got {:?}",
