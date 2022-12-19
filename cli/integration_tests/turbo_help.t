@@ -25,7 +25,7 @@ Test help flag
         --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
         --api <API>                  Override the endpoint for API calls
         --color                      Force color usage in the terminal
-        --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
         --cwd <CWD>                  The directory in which to run turbo
         --heap <HEAP>                Specify a file to save a pprof heap profile
         --login <LOGIN>              Override the login endpoint
@@ -88,7 +88,7 @@ Test help flag
         --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
         --api <API>                  Override the endpoint for API calls
         --color                      Force color usage in the terminal
-        --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
         --cwd <CWD>                  The directory in which to run turbo
         --heap <HEAP>                Specify a file to save a pprof heap profile
         --login <LOGIN>              Override the login endpoint
@@ -137,7 +137,7 @@ Test help flag for link command
         --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
         --api <API>                  Override the endpoint for API calls
         --color                      Force color usage in the terminal
-        --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
         --cwd <CWD>                  The directory in which to run turbo
         --heap <HEAP>                Specify a file to save a pprof heap profile
         --login <LOGIN>              Override the login endpoint
@@ -165,7 +165,7 @@ Test help flag for unlink command
         --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
         --api <API>                  Override the endpoint for API calls
         --color                      Force color usage in the terminal
-        --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
         --cwd <CWD>                  The directory in which to run turbo
         --heap <HEAP>                Specify a file to save a pprof heap profile
         --login <LOGIN>              Override the login endpoint
@@ -194,7 +194,7 @@ Test help flag for login command
         --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
         --api <API>                  Override the endpoint for API calls
         --color                      Force color usage in the terminal
-        --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
         --cwd <CWD>                  The directory in which to run turbo
         --heap <HEAP>                Specify a file to save a pprof heap profile
         --login <LOGIN>              Override the login endpoint
@@ -222,7 +222,7 @@ Test help flag for logout command
         --skip-infer                 Skip any attempts to infer which version of Turbo the project is configured to use
         --api <API>                  Override the endpoint for API calls
         --color                      Force color usage in the terminal
-        --cpu-profile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
         --cwd <CWD>                  The directory in which to run turbo
         --heap <HEAP>                Specify a file to save a pprof heap profile
         --login <LOGIN>              Override the login endpoint
