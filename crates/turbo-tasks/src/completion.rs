@@ -1,4 +1,4 @@
-use crate::{self as turbo_tasks};
+use crate::{self as turbo_tasks, RawVc};
 
 /// Just an empty type, but it's never equal to itself.
 /// [CompletionVc] can be used as return value instead of `()`
@@ -19,6 +19,13 @@ impl Default for CompletionVc {
 impl CompletionVc {
     pub fn new() -> Self {
         CompletionVc::cell(Completion)
+    }
+
+    pub fn unchanged() -> Self {
+        let cell = turbo_tasks::macro_helpers::find_cell_by_type(*COMPLETIONS_VALUE_TYPE_ID);
+        cell.compare_and_update_shared(Completion);
+        let raw: RawVc = cell.into();
+        raw.into()
     }
 }
 
