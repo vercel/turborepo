@@ -69,6 +69,7 @@ impl ShimArgs {
                 if cwd.is_some() {
                     return Err(anyhow!("cannot have multiple `--cwd` flags in command"));
                 }
+                // If we see a `--cwd` we expect the next arg to be a path.
                 found_cwd_flag = true
             } else if let Some(cwd_arg) = arg.strip_prefix("--cwd=") {
                 // In the case where `--cwd` is passed as `--cwd=./path/to/foo`, that
