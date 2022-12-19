@@ -55,6 +55,14 @@ To shutdown all running containers:
 docker kill $(docker ps -q) && docker rm $(docker ps -a -q)
 ```
 
+### Remote Caching
+
+This example includes optional remote caching. In the Dockerfiles of the apps, uncomment the build arguments for `TURBO_TEAM` and `TURBO_TOKEN`. Then, pass these build arguments to your Docker build.
+
+You can test this behavior using a command like:
+
+`docker build -f apps/web/Dockerfile . --build-arg TURBO_TEAM=“your-team-name” --build-arg TURBO_TOKEN=“your-token“ --no-cache`
+
 ### Utilities
 
 This Turborepo has some additional tools already setup for you:

@@ -155,3 +155,27 @@ COPY --from=installer --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/we
 
 CMD node apps/web/server.js
 ```
+
+## Remote caching
+
+To take advantage of remote caches during Docker builds, you will need to make sure your build container has the proper credentials to access your Remote Cache.
+
+There are many ways to properly take care of secrets in a Docker image. We will use a simple strategy here with multi-stage builds using secrets as build arguments that will get thrown away for the final image.
+
+Assuming you are using a Dockerfile similar to the one above, we will bring in some environment variables from build arguments right before `turbo build`:
+
+```docker
+ARG TURBO_TEAM
+ENV TURBO_TEAM=$TURBO_TEAM
+
+ARG TURBO_TOKEN
+ENV TURBO_TOKEN=$TURBO_TOKEN
+
+RUN yarn turbo run build --filter=web...
+```
+
+`turbo` will now be able to hit your remote cache. To see a cache hit for a non-cached Docker build image, run a command like this one from your project root:
+
+```sh
+docker build -f apps/web/Dockerfile . --build-arg TURBO_TEAM=“your-team-name” --build-arg TURBO_TOKEN=“your-token“ --no-cache
+```
