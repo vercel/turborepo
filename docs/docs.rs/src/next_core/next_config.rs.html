@@ -267,6 +267,9 @@
 <span id="267">267</span>
 <span id="268">268</span>
 <span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -276,12 +279,15 @@
     trace::TraceRawVcs,
     Value,
 };
-<span class="kw">use </span>turbo_tasks_fs::FileSystemEntryType;
 <span class="kw">use </span>turbopack::evaluate_context::node_evaluate_asset_context;
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
     reference_type::{EntryReferenceSubType, ReferenceType},
-    resolve::options::{ImportMap, ImportMapping},
+    resolve::{
+        find_context_file,
+        options::{ImportMap, ImportMapping},
+        FindContextFileResult,
+    },
     source_asset::SourceAssetVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::{
@@ -296,7 +302,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::embed_js::next_asset;
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;custom&quot;</span>)]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">pub struct </span>NextConfig {
     <span class="kw">pub </span>config_file: <span class="prelude-ty">Option</span>&lt;String&gt;,
@@ -469,6 +475,15 @@
     }
 }
 
+<span class="kw">fn </span>next_configs() -&gt; StringsVc {
+    StringsVc::cell(
+        [<span class="string">&quot;next.config.mjs&quot;</span>, <span class="string">&quot;next.config.js&quot;</span>]
+            .into_iter()
+            .map(ToOwned::to_owned)
+            .collect(),
+    )
+}
+
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>load_next_config(execution_context: ExecutionContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;NextConfigVc&gt; {
     <span class="kw">let </span>ExecutionContext {
@@ -481,21 +496,11 @@
     import_map.insert_wildcard_alias(<span class="string">&quot;next/&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
 
     <span class="kw">let </span>context = node_evaluate_asset_context(<span class="prelude-val">Some</span>(import_map.cell()));
-    <span class="kw">let </span>next_config_mjs_path = project_root.join(<span class="string">&quot;next.config.mjs&quot;</span>).realpath();
-    <span class="kw">let </span>next_config_js_path = project_root.join(<span class="string">&quot;next.config.js&quot;</span>).realpath();
-    <span class="kw">let </span>config_asset = <span class="kw">if </span><span class="macro">matches!</span>(
-        <span class="kw-2">&amp;*</span>next_config_mjs_path.get_type().<span class="kw">await</span><span class="question-mark">?</span>,
-        FileSystemEntryType::File
-    ) {
-        <span class="prelude-val">Some</span>(SourceAssetVc::new(next_config_mjs_path))
-    } <span class="kw">else if </span><span class="macro">matches!</span>(
-        <span class="kw-2">&amp;*</span>next_config_js_path.get_type().<span class="kw">await</span><span class="question-mark">?</span>,
-        FileSystemEntryType::File
-    ) {
-        <span class="prelude-val">Some</span>(SourceAssetVc::new(next_config_js_path))
-    } <span class="kw">else </span>{
-        <span class="prelude-val">None
-    </span>};
+    <span class="kw">let </span>find_config_result = find_context_file(project_root, next_configs());
+    <span class="kw">let </span>config_asset = <span class="kw">match </span><span class="kw-2">&amp;*</span>find_config_result.<span class="kw">await</span><span class="question-mark">? </span>{
+        FindContextFileResult::Found(config_path, <span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(SourceAssetVc::new(<span class="kw-2">*</span>config_path)),
+        FindContextFileResult::NotFound(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+    };
 
     <span class="kw">let </span>runtime_entries = config_asset.map(|config_asset| {
         <span class="comment">// TODO this is a hack to add the config to the bundling to make it watched
@@ -531,6 +536,7 @@
             <span class="kw">let </span>next_config: NextConfig = serde_json::from_reader(val.read())<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(next_config.cell())
         }
+        JavaScriptValue::Error =&gt; <span class="prelude-val">Ok</span>(NextConfig::default().cell()),
         JavaScriptValue::Stream(<span class="kw">_</span>) =&gt; {
             <span class="macro">unimplemented!</span>(<span class="string">&quot;Stream not supported now&quot;</span>);
         }
