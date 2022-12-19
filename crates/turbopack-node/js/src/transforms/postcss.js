@@ -1,27 +1,52 @@
-const {
-  lazyPostCSS,
-} = require("next/dist/build/webpack/config/blocks/css/index");
-const { getSupportedBrowsers } = require("next/dist/build/utils");
+import postcss from "postcss";
+import importedConfig from ".";
 
-module.exports = async (cssContent, name) => {
-  const rootDir = process.cwd();
-  const supportedBrowsers = getSupportedBrowsers(rootDir, true, {
-    experimental: {
-      legacyBrowsers: false,
-    },
+const transform = async (cssContent, name) => {
+  let config = importedConfig;
+  if (typeof config === "function") {
+    config = await config({ env: "development" });
+  }
+  let plugins = config.plugins;
+  if (Array.isArray(plugins)) {
+    plugins = plugins.map((plugin) => {
+      if (Array.isArray(plugin)) {
+        return plugin;
+      } else if (typeof plugin === "string") {
+        return [plugin, {}];
+      } else {
+        return plugin;
+      }
+    });
+  } else if (typeof plugins === "object") {
+    plugins = Object.entries(plugins).filter(([, options]) => options);
+  }
+  const loadedPlugins = plugins.map((plugin) => {
+    if (Array.isArray(plugin)) {
+      const [arg, options] = plugin;
+      let pluginFactory = arg;
+
+      if (typeof pluginFactory === "string") {
+        pluginFactory = __turbopack_external_require__(pluginFactory);
+      }
+
+      if (pluginFactory.default) {
+        pluginFactory = pluginFactory.default;
+      }
+
+      return pluginFactory(options);
+    }
+    return plugin;
   });
-  /**@type {{ postcssWithPlugins: import('postcss').Processor }} */
-  const { postcssWithPlugins } = await lazyPostCSS(
-    rootDir,
-    supportedBrowsers,
-    true
-  );
-  const { css, map } = await postcssWithPlugins.process(cssContent, {
+
+  const processor = postcss(loadedPlugins);
+  const { css, map } = await processor.process(cssContent, {
     from: name,
     to: name,
     map: {
       inline: false,
     },
   });
-  return { css, map };
+  return { css, map: JSON.stringify(map) };
 };
+
+export { transform as default };

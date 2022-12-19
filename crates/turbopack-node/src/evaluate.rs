@@ -78,7 +78,8 @@ pub async fn get_evaluate_pool(
         VirtualAssetVc::new(
             runtime_asset.path().join("evaluate.js"),
             File::from(
-                "import { run } from 'RUNTIME'; run((...args) => (require('INNER')(...args)))",
+                "import { run } from 'RUNTIME'; run((...args) => \
+                 (require('INNER').default(...args)))",
             )
             .into(),
         )

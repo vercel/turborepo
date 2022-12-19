@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{primitives::JsonValueVc, TryJoinIterExt, Value};
 use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemEntryType, FileSystemPathVc};
@@ -142,7 +142,8 @@ impl Asset for PostCssTransformedAsset {
         let JavaScriptValue::Value(val) = &*config_value else {
             bail!("Expected a value from PostCSS transform");
         };
-        let processed_css: ProcessedCSS = serde_json::from_reader(val.read())?;
+        let processed_css: ProcessedCSS = serde_json::from_reader(val.read())
+            .context("Unable to deserializate response from PostCSS transform operation")?;
         let new_content = Rope::from(processed_css.css.clone());
         let file = File::from(new_content);
         // TODO handle SourceMap
