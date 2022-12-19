@@ -255,7 +255,7 @@ async fn validate_next_config(
     if let Some(base_path) = next_config_ref.base_path.as_deref() {
         if !base_path.starts_with('/') {
             emit_and_bail!(NextConfigIssue {
-                severity: IssueSeverityVc::cell(IssueSeverity::Error),
+                severity: IssueSeverityVc::cell(IssueSeverity::Fatal),
                 path,
                 message: StringVc::cell(format!(
                     "Specified basePath has to start with a /, found {}",
@@ -267,7 +267,7 @@ async fn validate_next_config(
 
         if base_path.ends_with('/') {
             emit_and_bail!(NextConfigIssue {
-                severity: IssueSeverityVc::cell(IssueSeverity::Error),
+                severity: IssueSeverityVc::cell(IssueSeverity::Fatal),
                 path,
                 message: StringVc::cell(format!(
                     "Specified basePath has to start with a /, found {}",
