@@ -27,8 +27,8 @@ jobs:
             container-options: "--rm"
             target: "aarch64-unknown-linux-musl"
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
-            rustflags: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld -Ctarget-feature=-crt-static"'
-            setup: "sudo apt-get install -y build-essential musl-tools clang  llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
+            rustflags: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
+            setup: "sudo apt-get install -y build-essential musl-tools clang llvm"
     name: Build - ${{ matrix.settings.host }} (${{ matrix.settings.target }})
     runs-on: ${{ matrix.settings.host }}
     container:
