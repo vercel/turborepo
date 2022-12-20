@@ -556,6 +556,7 @@
 <span id="556">556</span>
 <span id="557">557</span>
 <span id="558">558</span>
+<span id="559">559</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::{indexset, IndexMap, IndexSet};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -569,7 +570,8 @@
 
 <span class="attr">#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 </span><span class="kw">pub struct </span>NextFontGoogleOptions {
-    <span class="kw">pub </span>font_family: String,
+    <span class="doccomment">/// Name of the requested font from Google. Contains literal spaces.
+    </span><span class="kw">pub </span>font_family: String,
     <span class="kw">pub </span>weights: FontWeights,
     <span class="kw">pub </span>styles: IndexSet&lt;String&gt;,
     <span class="kw">pub </span>display: String,

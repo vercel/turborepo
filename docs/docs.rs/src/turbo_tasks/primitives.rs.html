@@ -82,6 +82,9 @@
 <span id="82">82</span>
 <span id="83">83</span>
 <span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ops::Deref;
 
 <span class="kw">use </span>anyhow::Result;
@@ -102,6 +105,9 @@
 
 <span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">pub struct </span>OptionU16(<span class="prelude-ty">Option</span>&lt;u16&gt;);
+
+<span class="attr">#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>U32(u32);
 
 <span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">pub struct </span>U64(u64);
