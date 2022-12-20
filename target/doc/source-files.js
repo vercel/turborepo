@@ -9,7 +9,7 @@ var sourcesIndex = JSON.parse('{\
 "turbo_tasks":["",[["debug",[],["internal.rs","mod.rs"]]],["backend.rs","collectibles.rs","completion.rs","display.rs","event.rs","id.rs","id_factory.rs","join_iter_ext.rs","lib.rs","magic_any.rs","manager.rs","native_function.rs","no_move_vec.rs","nothing.rs","once_map.rs","persisted_graph.rs","primitives.rs","raw_vc.rs","read_ref.rs","registry.rs","small_duration.rs","state.rs","task_input.rs","timed_future.rs","trace.rs","util.rs","value.rs","value_type.rs"]],\
 "turbo_tasks_build":["",[],["lib.rs"]],\
 "turbo_tasks_env":["",[],["command_line.rs","custom.rs","dotenv.rs","filter.rs","lib.rs"]],\
-"turbo_tasks_fs":["",[["embed",[],["dir.rs","file.rs","fs.rs","mod.rs"]]],["attach.rs","glob.rs","invalidator_map.rs","lib.rs","read_glob.rs","retry.rs","rope.rs","util.rs"]],\
+"turbo_tasks_fs":["",[["embed",[],["dir.rs","file.rs","fs.rs","mod.rs"]]],["attach.rs","glob.rs","invalidator_map.rs","lib.rs","mutex_map.rs","read_glob.rs","retry.rs","rope.rs","util.rs"]],\
 "turbo_tasks_hash":["",[],["base16.rs","deterministic_hash.rs","hex.rs","lib.rs","md4.rs","xxh3_hash64.rs"]],\
 "turbo_tasks_macros":["",[["derive",[],["deterministic_hash_macro.rs","mod.rs","trace_raw_vcs_macro.rs","value_debug_format_macro.rs","value_debug_macro.rs"]]],["func.rs","function_macro.rs","lib.rs","util.rs","value_impl_macro.rs","value_macro.rs","value_trait_macro.rs"]],\
 "turbo_tasks_macros_shared":["",[],["expand.rs","ident.rs","lib.rs","value_trait_arguments.rs"]],\

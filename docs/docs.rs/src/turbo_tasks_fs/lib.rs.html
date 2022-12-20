@@ -1608,6 +1608,17 @@
 <span id="1608">1608</span>
 <span id="1609">1609</span>
 <span id="1610">1610</span>
+<span id="1611">1611</span>
+<span id="1612">1612</span>
+<span id="1613">1613</span>
+<span id="1614">1614</span>
+<span id="1615">1615</span>
+<span id="1616">1616</span>
+<span id="1617">1617</span>
+<span id="1618">1618</span>
+<span id="1619">1619</span>
+<span id="1620">1620</span>
+<span id="1621">1621</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -1619,6 +1630,7 @@
 <span class="kw">pub mod </span>embed;
 <span class="kw">pub mod </span>glob;
 <span class="kw">mod </span>invalidator_map;
+<span class="kw">mod </span>mutex_map;
 <span class="kw">mod </span>read_glob;
 <span class="kw">mod </span>retry;
 <span class="kw">pub mod </span>rope;
@@ -1661,6 +1673,7 @@
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 <span class="kw">use </span>util::{join_path, normalize_path, sys_to_unix, unix_to_sys};
 
+<span class="kw">use </span><span class="self">self</span>::mutex_map::MutexMap;
 <span class="attr">#[cfg(target_family = <span class="string">&quot;windows&quot;</span>)]
 </span><span class="kw">use </span><span class="kw">crate</span>::util::is_windows_raw_path;
 <span class="kw">use crate</span>::{
@@ -1686,6 +1699,9 @@
 </span><span class="kw">pub struct </span>DiskFileSystem {
     <span class="kw">pub </span>name: String,
     <span class="kw">pub </span>root: String,
+    <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
+    #[serde(skip)]
+    </span>mutex_map: MutexMap&lt;PathBuf&gt;,
     <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
     </span>invalidator_map: Arc&lt;InvalidatorMap&gt;,
     <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
@@ -1889,6 +1905,7 @@
         <span class="kw">let </span>instance = DiskFileSystem {
             name,
             root,
+            mutex_map: Default::default(),
             invalidator_map: Arc::new(InvalidatorMap::new()),
             dir_invalidator_map: Arc::new(InvalidatorMap::new()),
             watcher: Mutex::new(<span class="prelude-val">None</span>),
@@ -1911,6 +1928,7 @@
         <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path, <span class="bool-val">true</span>);
 
+        <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
         <span class="kw">let </span>content = <span class="kw">match </span>retry_future(|| File::from_path(full_path.clone())).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(file) =&gt; FileContent::new(file),
             <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.kind() == ErrorKind::NotFound =&gt; FileContent::NotFound,
@@ -1981,6 +1999,7 @@
         <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path, <span class="bool-val">true</span>);
 
+        <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
         <span class="kw">let </span>link_path = <span class="kw">match </span>retry_future(|| fs::read_link(<span class="kw-2">&amp;</span>full_path)).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(res) =&gt; res,
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(LinkContent::NotFound.cell()),
@@ -2080,6 +2099,7 @@
         <span class="kw">if </span><span class="kw-2">*</span>content == <span class="kw-2">*</span>old_content {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(CompletionVc::unchanged());
         }
+        <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
 
         <span class="kw">let </span>create_directory = <span class="kw-2">*</span>old_content == FileContent::NotFound;
         <span class="kw">match </span><span class="kw-2">&amp;*</span>content {
@@ -2160,6 +2180,7 @@
                     })<span class="question-mark">?</span>;
             }
         }
+        <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
         <span class="kw">match </span><span class="kw-2">&amp;*</span>target_link {
             LinkContent::Link { target, link_type } =&gt; {
                 <span class="kw">let </span>link_type = <span class="kw-2">*</span>link_type;
@@ -2211,6 +2232,7 @@
         <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path, <span class="bool-val">true</span>);
 
+        <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
         <span class="kw">let </span>meta = retry_future(|| fs::metadata(full_path.clone()))
             .<span class="kw">await
             </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;reading metadata for {}&quot;</span>, full_path.display()))<span class="question-mark">?</span>;
