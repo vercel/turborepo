@@ -500,13 +500,13 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
                 progress_counter += 1;
                 if options.log_detail {
                     print!(
-                        "\x1b[2K{event_type} - updating {progress_counter}s... ({memory})\r",
+                        "\x1b[2K{event_type} - updating for {progress_counter}s... ({memory})\r",
                         event_type = "event".purple(),
                         memory = FormatBytes(TurboMalloc::memory_usage())
                     );
                 } else {
                     print!(
-                        "\x1b[2K{event_type} - updating {progress_counter}s...\r",
+                        "\x1b[2K{event_type} - updating for {progress_counter}s...\r",
                         event_type = "event".purple(),
                     );
                 }
