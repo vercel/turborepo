@@ -28,7 +28,7 @@ jobs:
             target: "aarch64-unknown-linux-musl"
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
             rustflags: 'RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc"'
-            setup: "sudo apt-get install -y musl-tools musl-dev build-essential clang lldb llvm-dev libclang gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
+            setup: "sudo apt-get install -y musl-tools musl-dev build-essential clang lldb llvm-dev gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
     name: Build - ${{ matrix.settings.host }} (${{ matrix.settings.target }})
     runs-on: ${{ matrix.settings.host }}
     container:
