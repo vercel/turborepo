@@ -1,7 +1,8 @@
 use anyhow::Result;
 use swc_core::{
     common::DUMMY_SP,
-    ecma::ast::{Callee, Expr, ExprOrSpread, Ident},
+    ecma::ast::{Callee, Expr, ExprOrSpread, Ident, Module, ModuleItem, Program, Script},
+    quote,
 };
 use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbopack_core::{
@@ -263,6 +264,22 @@ impl CodeGenerateable for CjsExports {
         self_vc: CjsExportsVc,
         _context: ChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
+        let this = self_vc.await?;
+        let mut visitors = Vec::new();
+
+        visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {
+            let stmt = quote!("__turbopack_cjs_export_all__();" as Stmt,
+            );
+            match program {
+                Program::Module(Module { body, .. }) => {
+                    body.insert(0, ModuleItem::Stmt(stmt));
+                }
+                Program::Script(Script { body, .. }) => {
+                    body.insert(0, stmt);
+                }
+            }
+        }));
+
         Ok(CodeGeneration { visitors }.into())
     }
 }
