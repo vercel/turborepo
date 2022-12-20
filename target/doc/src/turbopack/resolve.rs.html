@@ -369,7 +369,7 @@
         }
     }
 
-    <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::new(direct_mappings, Default::default());
+    <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::new(direct_mappings);
     <span class="kw">if let </span><span class="prelude-val">Some</span>(additional_import_map) = opt.import_map {
         <span class="kw">let </span>additional_import_map = additional_import_map.<span class="kw">await</span><span class="question-mark">?</span>;
         import_map.extend(<span class="kw-2">&amp;</span>additional_import_map);
