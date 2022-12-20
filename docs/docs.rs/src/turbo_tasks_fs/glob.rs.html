@@ -300,7 +300,108 @@
 <span id="300">300</span>
 <span id="301">301</span>
 <span id="302">302</span>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+<span id="398">398</span>
+<span id="399">399</span>
+<span id="400">400</span>
+<span id="401">401</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::mem::take;
+
+<span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
 
@@ -349,45 +450,24 @@
 <span class="kw">impl </span>Glob {
     <span class="kw">pub fn </span>execute(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>str) -&gt; bool {
         <span class="kw">let </span>match_partial = path.ends_with(<span class="string">&#39;/&#39;</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>stack = Vec::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>i = <span class="number">0</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>current = path;
-        <span class="kw">let </span><span class="kw-2">mut </span>is_path_separator_equalivalent = <span class="bool-val">true</span>;
-        <span class="kw">loop </span>{
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(part) = <span class="self">self</span>.expression.get(i) {
-                <span class="kw">let </span>iter = <span class="kw">if let </span><span class="prelude-val">Some</span>(iter) = stack.get_mut(i) {
-                    iter
-                } <span class="kw">else </span>{
-                    <span class="kw">let </span>iter = part.iter_matches(current, is_path_separator_equalivalent);
-                    stack.push(iter);
-                    stack.last_mut().unwrap()
-                };
-                <span class="kw">if let </span><span class="prelude-val">Some</span>((new_path, new_is_path_separator_equalivalent)) = iter.next() {
-                    current = new_path;
-                    is_path_separator_equalivalent = new_is_path_separator_equalivalent;
+        <span class="self">self</span>.iter_matches(path, <span class="bool-val">true</span>, match_partial)
+            .next()
+            .is_some()
+    }
 
-                    i += <span class="number">1</span>;
-
-                    <span class="kw">if </span>match_partial &amp;&amp; current.is_empty() {
-                        <span class="kw">return </span><span class="bool-val">true</span>;
-                    }
-                } <span class="kw">else </span>{
-                    <span class="kw">if </span>i == <span class="number">0 </span>{
-                        <span class="comment">// failed to match
-                        </span><span class="kw">return </span><span class="bool-val">false</span>;
-                    }
-                    <span class="comment">// backtrace
-                    </span>stack.pop();
-                    i -= <span class="number">1</span>;
-                }
-            } <span class="kw">else </span>{
-                <span class="comment">// end of expression, matched successfully if also end of path
-                </span><span class="kw">if </span>current.is_empty() {
-                    <span class="kw">return </span><span class="bool-val">true</span>;
-                }
-                <span class="comment">// backtrace
-                </span>i -= <span class="number">1</span>;
-            }
+    <span class="kw">fn </span>iter_matches&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
+        previous_part_is_path_separator_equivalent: bool,
+        match_partial: bool,
+    ) -&gt; GlobMatchesIterator&lt;<span class="lifetime">&#39;a</span>&gt; {
+        GlobMatchesIterator {
+            current: path,
+            glob: <span class="self">self</span>,
+            match_partial,
+            is_path_separator_equivalent: previous_part_is_path_separator_equivalent,
+            stack: Vec::new(),
+            index: <span class="number">0</span>,
         }
     }
 
@@ -405,17 +485,81 @@
     }
 }
 
+<span class="kw">struct </span>GlobMatchesIterator&lt;<span class="lifetime">&#39;a</span>&gt; {
+    current: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
+    glob: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Glob,
+    match_partial: bool,
+    is_path_separator_equivalent: bool,
+    stack: Vec&lt;GlobPartMatchesIterator&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
+    index: usize,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; Iterator <span class="kw">for </span>GlobMatchesIterator&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="kw">type </span>Item = (<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str, bool);
+
+    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
+        <span class="kw">loop </span>{
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(part) = <span class="self">self</span>.glob.expression.get(<span class="self">self</span>.index) {
+                <span class="kw">let </span>iter = <span class="kw">if let </span><span class="prelude-val">Some</span>(iter) = <span class="self">self</span>.stack.get_mut(<span class="self">self</span>.index) {
+                    iter
+                } <span class="kw">else </span>{
+                    <span class="kw">let </span>iter = part.iter_matches(
+                        <span class="self">self</span>.current,
+                        <span class="self">self</span>.is_path_separator_equivalent,
+                        <span class="self">self</span>.match_partial,
+                    );
+                    <span class="self">self</span>.stack.push(iter);
+                    <span class="self">self</span>.stack.last_mut().unwrap()
+                };
+                <span class="kw">if let </span><span class="prelude-val">Some</span>((new_path, new_is_path_separator_equivalent)) = iter.next() {
+                    <span class="self">self</span>.current = new_path;
+                    <span class="self">self</span>.is_path_separator_equivalent = new_is_path_separator_equivalent;
+
+                    <span class="self">self</span>.index += <span class="number">1</span>;
+
+                    <span class="kw">if </span><span class="self">self</span>.match_partial &amp;&amp; <span class="self">self</span>.current.is_empty() {
+                        <span class="kw">return </span><span class="prelude-val">Some</span>((<span class="string">&quot;&quot;</span>, <span class="self">self</span>.is_path_separator_equivalent));
+                    }
+                } <span class="kw">else </span>{
+                    <span class="kw">if </span><span class="self">self</span>.index == <span class="number">0 </span>{
+                        <span class="comment">// failed to match
+                        </span><span class="kw">return </span><span class="prelude-val">None</span>;
+                    }
+                    <span class="comment">// backtrack
+                    </span><span class="self">self</span>.stack.pop();
+                    <span class="self">self</span>.index -= <span class="number">1</span>;
+                }
+            } <span class="kw">else </span>{
+                <span class="comment">// end of expression, matched successfully
+
+                // backtrack for the next iteration
+                </span><span class="self">self</span>.index -= <span class="number">1</span>;
+
+                <span class="kw">return </span><span class="prelude-val">Some</span>((<span class="self">self</span>.current, <span class="self">self</span>.is_path_separator_equivalent));
+            }
+        }
+    }
+}
+
 <span class="kw">impl </span>GlobPart {
-    <span class="kw">fn </span>iter_matches&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="doccomment">/// Iterates over all possible matches of this part with the provided path.
+    /// The least greedy match is returned first. This is usually used for
+    /// backtracking. The string slice returned is the remaining part or the
+    /// path. The boolean flag returned specifies if the matched part should
+    /// be considered as path-separator equivalent.
+    </span><span class="kw">fn </span>iter_matches&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
-        previous_part_is_path_separator_equalivalent: bool,
-    ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str, bool)&gt; {
+        previous_part_is_path_separator_equivalent: bool,
+        match_partial: bool,
+    ) -&gt; GlobPartMatchesIterator&lt;<span class="lifetime">&#39;a</span>&gt; {
         GlobPartMatchesIterator {
             path,
             part: <span class="self">self</span>,
-            previous_part_is_path_separator_equalivalent,
+            match_partial,
+            previous_part_is_path_separator_equivalent,
             index: <span class="number">0</span>,
+            glob_iterator: <span class="prelude-val">None</span>,
         }
     }
 
@@ -432,7 +576,38 @@
             (<span class="string">&#39;?&#39;</span>, <span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>((GlobPart::AnyFileChar, <span class="kw-2">&amp;</span>input[<span class="number">1</span>..])),
             (<span class="string">&#39;[&#39;</span>, <span class="prelude-val">Some</span>(<span class="string">&#39;[&#39;</span>)) =&gt; <span class="macro">todo!</span>(<span class="string">&quot;glob char classes are not implemented yet&quot;</span>),
             (<span class="string">&#39;[&#39;</span>, <span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(<span class="string">&quot;glob char sequences are not implemented yet&quot;</span>),
-            (<span class="string">&#39;{&#39;</span>, <span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(<span class="string">&quot;glob braces are not implemented yet&quot;</span>),
+            (<span class="string">&#39;{&#39;</span>, <span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>current = <span class="kw-2">&amp;</span>input[<span class="number">1</span>..];
+                <span class="kw">let </span><span class="kw-2">mut </span>alternatives = Vec::new();
+                <span class="kw">let </span><span class="kw-2">mut </span>expression = Vec::new();
+
+                <span class="kw">loop </span>{
+                    <span class="kw">let </span>(part, remainder) = GlobPart::parse(current, <span class="bool-val">true</span>)<span class="question-mark">?</span>;
+                    expression.push(part);
+                    current = remainder;
+                    <span class="kw">match </span>current.chars().next() {
+                        <span class="prelude-val">Some</span>(<span class="string">&#39;,&#39;</span>) =&gt; {
+                            alternatives.push(Glob {
+                                expression: take(<span class="kw-2">&amp;mut </span>expression),
+                            });
+                            current = <span class="kw-2">&amp;</span>current[<span class="number">1</span>..];
+                        }
+                        <span class="prelude-val">Some</span>(<span class="string">&#39;}&#39;</span>) =&gt; {
+                            alternatives.push(Glob {
+                                expression: take(<span class="kw-2">&amp;mut </span>expression),
+                            });
+                            current = <span class="kw-2">&amp;</span>current[<span class="number">1</span>..];
+                            <span class="kw">break</span>;
+                        }
+                        <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Unterminated glob braces&quot;</span>),
+                    }
+                }
+
+                <span class="prelude-val">Ok</span>((GlobPart::Alternatives(alternatives), current))
+            }
+            (<span class="string">&#39;{&#39;</span>, <span class="prelude-val">None</span>) =&gt; {
+                <span class="macro">bail!</span>(<span class="string">&quot;Unterminated glob braces&quot;</span>)
+            }
             <span class="kw">_ </span>=&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>is_escaped = <span class="bool-val">false</span>;
                 <span class="kw">let </span><span class="kw-2">mut </span>literal = String::new();
@@ -446,6 +621,7 @@
                         </span>|| c == <span class="string">&#39;*&#39;
                         </span>|| c == <span class="string">&#39;?&#39;
                         </span>|| c == <span class="string">&#39;[&#39;
+                        </span>|| c == <span class="string">&#39;{&#39;
                         </span>|| (inside_of_braces &amp;&amp; (c == <span class="string">&#39;,&#39; </span>|| c == <span class="string">&#39;}&#39;</span>))
                     {
                         <span class="kw">break</span>;
@@ -462,8 +638,10 @@
 <span class="kw">struct </span>GlobPartMatchesIterator&lt;<span class="lifetime">&#39;a</span>&gt; {
     path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
     part: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>GlobPart,
-    previous_part_is_path_separator_equalivalent: bool,
+    match_partial: bool,
+    previous_part_is_path_separator_equivalent: bool,
     index: usize,
+    glob_iterator: <span class="prelude-ty">Option</span>&lt;Box&lt;GlobMatchesIterator&lt;<span class="lifetime">&#39;a</span>&gt;&gt;&gt;,
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; Iterator <span class="kw">for </span>GlobPartMatchesIterator&lt;<span class="lifetime">&#39;a</span>&gt; {
@@ -502,7 +680,7 @@
                     </span>} <span class="kw">else </span>{
                         <span class="prelude-val">Some</span>((
                             <span class="kw-2">&amp;</span><span class="self">self</span>.path[<span class="self">self</span>.index..],
-                            <span class="self">self</span>.previous_part_is_path_separator_equalivalent &amp;&amp; <span class="self">self</span>.index == <span class="number">1</span>,
+                            <span class="self">self</span>.previous_part_is_path_separator_equivalent &amp;&amp; <span class="self">self</span>.index == <span class="number">1</span>,
                         ))
                     }
                 } <span class="kw">else </span>{
@@ -515,7 +693,7 @@
                     <span class="self">self</span>.index = <span class="number">1</span>;
                     <span class="kw">if </span><span class="self">self</span>.path.starts_with(<span class="string">&#39;/&#39;</span>) {
                         <span class="prelude-val">Some</span>((<span class="kw-2">&amp;</span><span class="self">self</span>.path[<span class="number">1</span>..], <span class="bool-val">true</span>))
-                    } <span class="kw">else if </span><span class="self">self</span>.previous_part_is_path_separator_equalivalent {
+                    } <span class="kw">else if </span><span class="self">self</span>.previous_part_is_path_separator_equivalent {
                         <span class="prelude-val">Some</span>((<span class="self">self</span>.path, <span class="bool-val">true</span>))
                     } <span class="kw">else </span>{
                         <span class="prelude-val">None
@@ -542,7 +720,24 @@
                     <span class="prelude-val">None
                 </span>}
             }
-            GlobPart::Alternatives(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
+            GlobPart::Alternatives(alternatives) =&gt; <span class="kw">loop </span>{
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(glob_iterator) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.glob_iterator {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>((path, is_path_separator_equivalent)) = glob_iterator.next() {
+                        <span class="kw">return </span><span class="prelude-val">Some</span>((path, is_path_separator_equivalent));
+                    } <span class="kw">else </span>{
+                        <span class="self">self</span>.index += <span class="number">1</span>;
+                        <span class="self">self</span>.glob_iterator = <span class="prelude-val">None</span>;
+                    }
+                } <span class="kw">else if let </span><span class="prelude-val">Some</span>(alternative) = alternatives.get(<span class="self">self</span>.index) {
+                    <span class="self">self</span>.glob_iterator = <span class="prelude-val">Some</span>(Box::new(alternative.iter_matches(
+                        <span class="self">self</span>.path,
+                        <span class="self">self</span>.previous_part_is_path_separator_equivalent,
+                        <span class="self">self</span>.match_partial,
+                    )));
+                } <span class="kw">else </span>{
+                    <span class="kw">return </span><span class="prelude-val">None</span>;
+                }
+            },
         }
     }
 }
@@ -573,6 +768,9 @@
     #[case::file(<span class="string">&quot;file.js&quot;</span>, <span class="string">&quot;file.js&quot;</span>)]
     #[case::dir_and_file(<span class="string">&quot;dir/file.js&quot;</span>, <span class="string">&quot;dir/file.js&quot;</span>)]
     #[case::dir_and_file_partial(<span class="string">&quot;dir/file.js&quot;</span>, <span class="string">&quot;dir/&quot;</span>)]
+    #[case::file_braces(<span class="string">&quot;file.{ts,js}&quot;</span>, <span class="string">&quot;file.js&quot;</span>)]
+    #[case::dir_and_file_braces(<span class="string">&quot;dir/file.{ts,js}&quot;</span>, <span class="string">&quot;dir/file.js&quot;</span>)]
+    #[case::dir_and_file_dir_braces(<span class="string">&quot;{dir,other}/file.{ts,js}&quot;</span>, <span class="string">&quot;dir/file.js&quot;</span>)]
     #[case::star(<span class="string">&quot;*.js&quot;</span>, <span class="string">&quot;file.js&quot;</span>)]
     #[case::dir_star(<span class="string">&quot;dir/*.js&quot;</span>, <span class="string">&quot;dir/file.js&quot;</span>)]
     #[case::dir_star_partial(<span class="string">&quot;dir/*.js&quot;</span>, <span class="string">&quot;dir/&quot;</span>)]

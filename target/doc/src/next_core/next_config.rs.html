@@ -270,6 +270,7 @@
 <span id="270">270</span>
 <span id="271">271</span>
 <span id="272">272</span>
+<span id="273">273</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -525,6 +526,7 @@
         project_root,
         load_next_config_asset,
         project_root,
+        config_asset.map_or(project_root, |c| c.path()),
         context,
         intermediate_output_path,
         runtime_entries,
