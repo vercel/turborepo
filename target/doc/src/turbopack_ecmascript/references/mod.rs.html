@@ -1932,8 +1932,6 @@
 <span id="1932">1932</span>
 <span id="1933">1933</span>
 <span id="1934">1934</span>
-<span id="1935">1935</span>
-<span id="1936">1936</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>esm;
@@ -2344,8 +2342,7 @@
 
             analysis.set_exports(exports);
 
-            <span class="attr">#[allow(clippy::too_many_arguments)]
-            </span><span class="kw">fn </span>handle_call_boxed&lt;
+            <span class="kw">fn </span>handle_call_boxed&lt;
                 <span class="lifetime">&#39;a</span>,
                 FF: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;JsValue&gt;&gt; + Send + <span class="lifetime">&#39;a</span>,
                 F: Fn(JsValue) -&gt; FF + Sync + <span class="lifetime">&#39;a</span>,
@@ -2379,8 +2376,7 @@
                 ))
             }
 
-            <span class="attr">#[allow(clippy::too_many_arguments)]
-            </span><span class="kw">async fn </span>handle_call&lt;
+            <span class="kw">async fn </span>handle_call&lt;
                 FF: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;JsValue&gt;&gt; + Send,
                 F: Fn(JsValue) -&gt; FF + Sync,
             &gt;(
