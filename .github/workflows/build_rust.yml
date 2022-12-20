@@ -24,7 +24,7 @@ jobs:
           #   lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
           #   setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev musl-tools musl-dev"
           - host: ubuntu-latest
-            container-setup: "apt-get update && apt-get install -y curl"
+            container-options: "--rm"
             target: "aarch64-unknown-linux-musl"
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
             rustflags: 'RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc"'
