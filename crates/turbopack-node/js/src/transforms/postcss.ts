@@ -1,9 +1,14 @@
+declare const __turbopack_external_require__: (id: string) => any;
+
+// @ts-ignore
 import postcss from "@vercel/turbopack/postcss";
+// @ts-ignore
 import importedConfig from "CONFIG";
 import { relative, isAbsolute, sep } from "path";
+import type { Ipc } from "../ipc/evaluate";
 
 const contextDir = process.cwd();
-const toPath = (file) => {
+const toPath = (file: string) => {
   const relPath = relative(contextDir, file);
   if (isAbsolute(relPath)) {
     throw new Error(
@@ -13,14 +18,14 @@ const toPath = (file) => {
   return sep !== "/" ? relPath.replaceAll(sep, "/") : relPath;
 };
 
-const transform = async (ipc, cssContent, name) => {
+const transform = async (ipc: Ipc, cssContent: string, name: string) => {
   let config = importedConfig;
   if (typeof config === "function") {
     config = await config({ env: "development" });
   }
-  let plugins = config.plugins;
-  if (Array.isArray(plugins)) {
-    plugins = plugins.map((plugin) => {
+  let plugins: any[];
+  if (Array.isArray(config.plugins)) {
+    plugins = config.plugins.map((plugin: [string, any] | string | any) => {
       if (Array.isArray(plugin)) {
         return plugin;
       } else if (typeof plugin === "string") {
@@ -29,8 +34,10 @@ const transform = async (ipc, cssContent, name) => {
         return plugin;
       }
     });
-  } else if (typeof plugins === "object") {
-    plugins = Object.entries(plugins).filter(([, options]) => options);
+  } else if (typeof config.plugins === "object") {
+    plugins = Object.entries(config.plugins).filter(([, options]) => options);
+  } else {
+    plugins = [];
   }
   const loadedPlugins = plugins.map((plugin) => {
     if (Array.isArray(plugin)) {
@@ -61,7 +68,6 @@ const transform = async (ipc, cssContent, name) => {
 
   const assets = [];
   for (const msg of messages) {
-    console.error(msg);
     switch (msg.type) {
       case "asset":
         assets.push({

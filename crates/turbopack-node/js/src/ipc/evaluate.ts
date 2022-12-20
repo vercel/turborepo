@@ -1,4 +1,5 @@
-import { IPC, Ipc } from "./index";
+import { IPC } from "./index";
+import type { Ipc as GenericIpc } from "./index";
 
 type IpcIncomingMessage = {
   type: "evaluate";
@@ -11,25 +12,24 @@ type IpcOutgoingMessage =
       data: string;
     }
   | {
-      type: "file-dependency";
+      type: "fileDependency";
       path: string;
     }
   | {
-      type: "build-dependency";
+      type: "buildDependency";
       path: string;
     }
   | {
-      type: "dir-dependency";
+      type: "dirDependency";
       path: string;
+      glob: string;
     };
 
-const ipc = IPC as Ipc<IpcIncomingMessage, IpcOutgoingMessage>;
+export type Ipc = GenericIpc<IpcIncomingMessage, IpcOutgoingMessage>;
+const ipc = IPC as Ipc;
 
 export const run = async (
-  getValue: (
-    ipc: Ipc<IpcIncomingMessage, IpcOutgoingMessage>,
-    ...deserializedArgs: any[]
-  ) => any
+  getValue: (ipc: Ipc, ...deserializedArgs: any[]) => any
 ) => {
   while (true) {
     const msg = await ipc.recv();
@@ -54,3 +54,5 @@ export const run = async (
     }
   }
 };
+
+export type { IpcIncomingMessage, IpcOutgoingMessage };

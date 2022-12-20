@@ -18,8 +18,8 @@ use turbopack_core::{
     virtual_asset::VirtualAssetVc,
 };
 use turbopack_ecmascript::{
-    chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc, InnerAssetsVc,
+    chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
+    EcmascriptModuleAssetType, EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 
 use crate::{
@@ -193,12 +193,12 @@ impl PostCssTransformedAssetVc {
         let postcss_executor = EcmascriptModuleAssetVc::new_with_inner_assets(
             VirtualAssetVc::new(
                 config_path.join("transform.js"),
-                AssetContent::File(embed_file("transforms/postcss.js")).cell(),
+                AssetContent::File(embed_file("transforms/postcss.ts")).cell(),
             )
             .into(),
             context,
-            Value::new(EcmascriptModuleAssetType::Ecmascript),
-            EcmascriptInputTransformsVc::cell(Default::default()),
+            Value::new(EcmascriptModuleAssetType::Typescript),
+            EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
             context.environment(),
             InnerAssetsVc::cell(HashMap::from([("CONFIG".to_string(), config_asset)])),
         );
