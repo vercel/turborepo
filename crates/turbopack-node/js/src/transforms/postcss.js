@@ -1,7 +1,19 @@
 import postcss from "@vercel/turbopack/postcss";
 import importedConfig from "CONFIG";
+import { relative, isAbsolute, sep } from "path";
 
-const transform = async (cssContent, name) => {
+const contextDir = process.cwd();
+const toPath = (file) => {
+  const relPath = relative(contextDir, file);
+  if (isAbsolute(relPath)) {
+    throw new Error(
+      `Cannot depend on path (${file}) outside of root directory (${contextDir})`
+    );
+  }
+  return sep !== "/" ? relPath.replaceAll(sep, "/") : relPath;
+};
+
+const transform = async (ipc, cssContent, name) => {
   let config = importedConfig;
   if (typeof config === "function") {
     config = await config({ env: "development" });
@@ -39,14 +51,63 @@ const transform = async (cssContent, name) => {
   });
 
   const processor = postcss(loadedPlugins);
-  const { css, map } = await processor.process(cssContent, {
+  const { css, map, messages } = await processor.process(cssContent, {
     from: name,
     to: name,
     map: {
       inline: false,
     },
   });
-  return { css, map: JSON.stringify(map) };
+
+  const assets = [];
+  for (const msg of messages) {
+    console.error(msg);
+    switch (msg.type) {
+      case "asset":
+        assets.push({
+          file: msg.file,
+          content: msg.content,
+          sourceMap:
+            typeof msg.sourceMap === "string"
+              ? msg.sourceMap
+              : JSON.stringify(msg.sourceMap),
+          // There is also an info field, which we currently ignore
+        });
+        break;
+      case "file-dependency":
+      case "missing-dependency":
+        ipc.send({
+          type: "fileDependency",
+          path: toPath(msg.file),
+        });
+        break;
+      case "build-dependency":
+        ipc.send({
+          type: "buildDependency",
+          path: toPath(msg.file),
+        });
+        break;
+      case "dir-dependency":
+        ipc.send({
+          type: "dirDependency",
+          path: toPath(msg.dir),
+          glob: msg.glob,
+        });
+        break;
+      case "context-dependency":
+        ipc.send({
+          type: "dirDependency",
+          path: toPath(msg.file),
+          glob: "**",
+        });
+        break;
+    }
+  }
+  return {
+    css,
+    map: JSON.stringify(map),
+    assets,
+  };
 };
 
 export { transform as default };
