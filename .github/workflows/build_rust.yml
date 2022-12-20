@@ -11,7 +11,6 @@ env:
 
 jobs:
   build-native:
-    name: "Build Native"
     strategy:
       fail-fast: false
       matrix:
@@ -31,7 +30,6 @@ jobs:
             target: "x86_64-unknown-linux-musl"
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
             setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev musl-tools"
-            rustflags: 'RUSTFLAGS="-C linker=rust-lld"'
           - host: ubuntu-latest
             container: ubuntu:xenial
             container-options: "--rm"
@@ -45,6 +43,7 @@ jobs:
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
             setup: "mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.exe cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.a && mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.h cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.h && rustup set default-host x86_64-pc-windows-gnu"
             container-options: "--rm"
+    name: Build - ${{ matrix.host }} (${{ matrix.target }})
     runs-on: ${{ matrix.settings.host }}
     container:
       image: ${{ matrix.settings.container }}
