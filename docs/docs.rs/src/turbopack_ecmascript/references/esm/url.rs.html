@@ -197,38 +197,18 @@
 <span id="197">197</span>
 <span id="198">198</span>
 <span id="199">199</span>
-<span id="200">200</span>
-<span id="201">201</span>
-<span id="202">202</span>
-<span id="203">203</span>
-<span id="204">204</span>
-<span id="205">205</span>
-<span id="206">206</span>
-<span id="207">207</span>
-<span id="208">208</span>
-<span id="209">209</span>
-<span id="210">210</span>
-<span id="211">211</span>
-<span id="212">212</span>
-<span id="213">213</span>
-<span id="214">214</span>
-<span id="215">215</span>
-<span id="216">216</span>
-<span id="217">217</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     ecma::ast::{Expr, ExprOrSpread, NewExpr},
     quote,
 };
-<span class="kw">use </span>turbo_tasks::{
-    primitives::{BoolVc, StringVc},
-    Value, ValueToString, ValueToStringVc,
-};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     chunk::{
         ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc, ChunkingType,
         ChunkingTypeOptionVc,
     },
+    environment::{Rendering, RenderingVc},
     issue::{code_gen::CodeGenerationIssue, IssueSeverity},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::UrlReferenceSubType,
@@ -253,7 +233,7 @@
 </span><span class="kw">pub struct </span>UrlAssetReference {
     origin: ResolveOriginVc,
     request: RequestVc,
-    is_rendering: BoolVc,
+    rendering: RenderingVc,
     ast_path: AstPathVc,
 }
 
@@ -263,13 +243,13 @@
     </span><span class="kw">pub fn </span>new(
         origin: ResolveOriginVc,
         request: RequestVc,
-        is_rendering: BoolVc,
+        rendering: RenderingVc,
         ast_path: AstPathVc,
     ) -&gt; <span class="self">Self </span>{
         UrlAssetReference {
             origin,
             request,
-            is_rendering,
+            rendering,
             ast_path,
         }
         .cell()
@@ -332,44 +312,46 @@
 
         <span class="kw">let </span>referenced_asset = self_vc.get_referenced_asset().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">fn </span>warn_unsupported_env(this: <span class="kw-2">&amp;</span>UrlAssetReference) {
-            CodeGenerationIssue {
-                severity: IssueSeverity::Error.into(),
-                title: StringVc::cell(
-                    <span class="string">&quot;new URL(…) not implemented for this environment&quot;</span>.to_string(),
-                ),
-                message: StringVc::cell(
-                    <span class="string">&quot;new URL(…) is only currently supported for rendering environments like \
-                     Client-Side or Server-Side Rendering.&quot;
-                        </span>.to_string(),
-                ),
-                path: this.origin.origin_path(),
+        <span class="comment">// For rendering environments (CSR and SSR), we rewrite the `import.meta.url` to
+        // be a location.origin because it allows us to access files from the root of
+        // the dev server. It&#39;s important that this be rewritten for SSR as well, so
+        // that the client&#39;s hydration matches exactly.
+        //
+        // In a non-rendering env, the `import.meta.url` is already the correct `file://` URL
+        // to load files.
+        </span><span class="kw">let </span>rewrite = <span class="kw">match </span><span class="kw-2">&amp;*</span>this.rendering.<span class="kw">await</span><span class="question-mark">? </span>{
+            Rendering::None =&gt; {
+                CodeGenerationIssue {
+                    severity: IssueSeverity::Error.into(),
+                    title: StringVc::cell(
+                        <span class="string">&quot;new URL(…) not implemented for this environment&quot;</span>.to_string(),
+                    ),
+                    message: StringVc::cell(
+                        <span class="string">&quot;new URL(…) is only currently supported for rendering environments like \
+                         Client-Side or Server-Side Rendering.&quot;
+                            </span>.to_string(),
+                    ),
+                    path: this.origin.origin_path(),
+                }
+                .cell()
+                .as_issue()
+                .emit();
+                <span class="prelude-val">None
+            </span>}
+            Rendering::Client =&gt; <span class="prelude-val">Some</span>(<span class="macro">quote!</span>(<span class="string">&quot;location.origin&quot; </span><span class="kw">as </span>Expr)),
+            Rendering::Server(server_addr) =&gt; {
+                <span class="kw">let </span>location = server_addr.<span class="kw">await</span><span class="question-mark">?</span>.to_string()<span class="question-mark">?</span>;
+                <span class="prelude-val">Some</span>(location.into())
             }
-            .cell()
-            .as_issue()
-            .emit();
-        }
+        };
+
+        <span class="kw">let </span>ast_path = this.ast_path.<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">match </span><span class="kw-2">&amp;*</span>referenced_asset {
             ReferencedAsset::Some(asset) =&gt; {
                 <span class="comment">// We rewrite the first `new URL()` arguments to be a require() of the chunk
                 // item, which exports the static asset path to the linked file.
                 </span><span class="kw">let </span>id = asset.as_chunk_item(context).id().<span class="kw">await</span><span class="question-mark">?</span>;
-
-                <span class="comment">// For rendering environments (CSR and SSR), we rewrite the `import.meta.url` to
-                // be a location.origin because it allows us to access files from the root of
-                // the dev server. It&#39;s important that this be rewritten for SSR as well, so
-                // that the client&#39;s hydration matches exactly.
-                //
-                // In a non-rendering env, the `import.meta.url` is already the correct `file://` URL
-                // to load files.
-                </span><span class="kw">let </span>is_rendering = <span class="kw-2">*</span>this.is_rendering.<span class="kw">await</span><span class="question-mark">?</span>;
-
-                <span class="kw">let </span>ast_path = this.ast_path.<span class="kw">await</span><span class="question-mark">?</span>;
-
-                <span class="kw">if </span>!is_rendering {
-                    warn_unsupported_env(<span class="kw-2">&amp;</span>this);
-                }
 
                 visitors.push(
                     <span class="macro">create_visitor!</span>(ast_path, visit_mut_expr(new_expr: <span class="kw-2">&amp;mut </span>Expr) {
@@ -381,10 +363,9 @@
                                 );
                             }
 
-                            <span class="comment">// TODO: Fix non-rendering
-                            </span><span class="kw">if </span>is_rendering {
+                            <span class="kw">if let </span><span class="prelude-val">Some</span>(rewrite) = <span class="kw-2">&amp;</span>rewrite {
                                 <span class="kw">if let </span><span class="prelude-val">Some</span>(ExprOrSpread { <span class="kw">box </span>expr, spread: <span class="prelude-val">None </span>}) = args.get_mut(<span class="number">1</span>) {
-                                    <span class="kw-2">*</span>expr = <span class="macro">quote!</span>(<span class="string">&quot;location.origin&quot; </span><span class="kw">as </span>Expr);
+                                    <span class="kw-2">*</span>expr = rewrite.clone();
                                 }
                             }
                         }
@@ -392,23 +373,7 @@
                 );
             }
             ReferencedAsset::OriginalReferenceTypeExternal(request) =&gt; {
-                <span class="comment">// Handle new URL that points to an external URL
-
-                // For rendering environments (CSR and SSR), we rewrite the `import.meta.url` to
-                // be a location.origin because it allows us to access files from the root of
-                // the dev server. It&#39;s important that this be rewritten for SSR as well, so
-                // that the client&#39;s hydration matches exactly.
-                //
-                // In a non-rendering env, the `import.meta.url` is already the correct `file://` URL
-                // to load files.
-                </span><span class="kw">let </span>is_rendering = <span class="kw-2">*</span>this.is_rendering.<span class="kw">await</span><span class="question-mark">?</span>;
-
-                <span class="kw">if </span>!is_rendering {
-                    warn_unsupported_env(<span class="kw-2">&amp;</span>this);
-                }
-
                 <span class="kw">let </span>request = request.to_string();
-                <span class="kw">let </span>ast_path = this.ast_path.<span class="kw">await</span><span class="question-mark">?</span>;
                 visitors.push(
                     <span class="macro">create_visitor!</span>(ast_path, visit_mut_expr(new_expr: <span class="kw-2">&amp;mut </span>Expr) {
                         <span class="kw">if let </span>Expr::New(NewExpr { args: <span class="prelude-val">Some</span>(args), .. }) = new_expr {
@@ -416,10 +381,9 @@
                                 <span class="kw-2">*</span>expr = request.as_str().into()
                             }
 
-                            <span class="comment">// TODO: Fix non-rendering
-                            </span><span class="kw">if </span>is_rendering {
+                            <span class="kw">if let </span><span class="prelude-val">Some</span>(rewrite) = <span class="kw-2">&amp;</span>rewrite {
                                 <span class="kw">if let </span><span class="prelude-val">Some</span>(ExprOrSpread { <span class="kw">box </span>expr, spread: <span class="prelude-val">None </span>}) = args.get_mut(<span class="number">1</span>) {
-                                    <span class="kw-2">*</span>expr = <span class="macro">quote!</span>(<span class="string">&quot;location.origin&quot; </span><span class="kw">as </span>Expr);
+                                    <span class="kw-2">*</span>expr = rewrite.clone();
                                 }
                             }
                         }

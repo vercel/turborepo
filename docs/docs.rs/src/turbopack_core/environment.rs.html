@@ -276,7 +276,61 @@
 <span id="276">276</span>
 <span id="277">277</span>
 <span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
+    net::SocketAddr,
     process::{Command, Stdio},
     str::FromStr,
 };
@@ -292,6 +346,53 @@
 <span class="kw">use </span><span class="kw">crate</span>::target::CompileTargetVc;
 
 <span class="kw">static </span>DEFAULT_NODEJS_VERSION: <span class="kw-2">&amp;</span>str = <span class="string">&quot;16.0.0&quot;</span>;
+
+<span class="attr">#[derive(Default)]
+#[turbo_tasks::value(shared)]
+</span><span class="kw">pub struct </span>ServerAddr(<span class="attr">#[turbo_tasks(trace_ignore)] </span><span class="prelude-ty">Option</span>&lt;SocketAddr&gt;);
+
+<span class="kw">impl </span>ServerAddr {
+    <span class="kw">pub fn </span>new(addr: SocketAddr) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(<span class="prelude-val">Some</span>(addr))
+    }
+
+    <span class="kw">pub fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+        <span class="kw">let </span>addr = <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.context(<span class="string">&quot;expected some server address&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>uri = <span class="kw">if </span>addr.ip().is_loopback() || addr.ip().is_unspecified() {
+            <span class="kw">match </span>addr.port() {
+                <span class="number">80 </span>=&gt; <span class="string">&quot;http://localhost&quot;</span>.to_string(),
+                <span class="number">443 </span>=&gt; <span class="string">&quot;https://localhost&quot;</span>.to_string(),
+                <span class="kw">_ </span>=&gt; <span class="macro">format!</span>(<span class="string">&quot;http://localhost:{}&quot;</span>, addr.port()),
+            }
+        } <span class="kw">else </span>{
+            <span class="macro">format!</span>(<span class="string">&quot;http://{}&quot;</span>, addr)
+        };
+        <span class="prelude-val">Ok</span>(uri)
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ServerAddrVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>empty() -&gt; <span class="self">Self </span>{
+        ServerAddr(<span class="prelude-val">None</span>).cell()
+    }
+}
+
+<span class="attr">#[derive(Default)]
+#[turbo_tasks::value]
+</span><span class="kw">pub enum </span>Rendering {
+    <span class="attr">#[default]
+    </span><span class="prelude-val">None</span>,
+    Client,
+    Server(ServerAddrVc),
+}
+
+<span class="kw">impl </span>Rendering {
+    <span class="kw">pub fn </span>is_none(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="macro">matches!</span>(<span class="self">self</span>, Rendering::None)
+    }
+}
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>Environment {
@@ -449,15 +550,17 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>is_rendering(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;BoolVc&gt; {
+    </span><span class="kw">pub async fn </span>rendering(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;RenderingVc&gt; {
         <span class="kw">let </span>env = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(BoolVc::cell(<span class="macro">matches!</span>(
-            env.intention,
-            EnvironmentIntention::Prerendering
-                | EnvironmentIntention::ServerRendering
-                | EnvironmentIntention::StaticRendering
-                | EnvironmentIntention::Client
-        )))
+        <span class="prelude-val">Ok</span>(<span class="kw">match </span>env.execution {
+            ExecutionEnvironment::NodeJsBuildTime(env)
+            | ExecutionEnvironment::NodeJsLambda(env)
+            | ExecutionEnvironment::EdgeFunction(env) =&gt; {
+                Rendering::Server(env.<span class="kw">await</span><span class="question-mark">?</span>.server_addr).cell()
+            }
+            ExecutionEnvironment::Browser(<span class="kw">_</span>) =&gt; Rendering::Client.cell(),
+            <span class="kw">_ </span>=&gt; Rendering::None.cell(),
+        })
     }
 }
 
@@ -471,6 +574,7 @@
     <span class="kw">pub </span>node_version: NodeJsVersionVc,
     <span class="comment">// user specified process.cwd
     </span><span class="kw">pub </span>cwd: OptionStringVc,
+    <span class="kw">pub </span>server_addr: ServerAddrVc,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>NodeJsEnvironment {
@@ -479,6 +583,7 @@
             compile_target: CompileTargetVc::current(),
             node_version: NodeJsVersionVc::default(),
             cwd: OptionStringVc::cell(<span class="prelude-val">None</span>),
+            server_addr: ServerAddrVc::empty(),
         }
     }
 }
@@ -502,11 +607,12 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>current(process_env: ProcessEnvVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>current(process_env: ProcessEnvVc, server_addr: ServerAddrVc) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(NodeJsEnvironment {
             compile_target: CompileTargetVc::current(),
             node_version: NodeJsVersionVc::cell(NodeJsVersion::Current(process_env)),
             cwd: OptionStringVc::cell(<span class="prelude-val">None</span>),
+            server_addr,
         })
     }
 }
