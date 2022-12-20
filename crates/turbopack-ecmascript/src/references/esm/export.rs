@@ -9,7 +9,7 @@ use swc_core::{
     common::DUMMY_SP,
     ecma::ast::{
         ComputedPropName, Expr, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, Module,
-        ModuleItem, ObjectLit, Program, Prop, PropName, PropOrSpread, Script, Str,
+        ModuleItem, ObjectLit, Program, Prop, PropName, PropOrSpread, Script, SpreadElement, Str,
     },
     quote,
 };
@@ -137,6 +137,8 @@ impl CodeGenerateable for EsmExports {
             .map(|(k, v)| (Cow::<str>::Borrowed(k), Cow::Borrowed(v)))
             .collect();
         let mut props = Vec::new();
+        let mut cjs_exports = Vec::new();
+
         for esm_ref in this.star_exports.iter() {
             if let ReferencedAsset::Some(asset) = &*esm_ref.get_referenced_asset().await? {
                 let export_names = expand_star_exports(*asset).await?;
@@ -146,6 +148,21 @@ impl CodeGenerateable for EsmExports {
                             Cow::Owned(export.clone()),
                             Cow::Owned(EsmExport::ImportedBinding(*esm_ref, export.to_string())),
                         );
+                    }
+                }
+
+                if let EcmascriptExports::CommonJs(cjs) = &*asset.get_exports().await? {
+                    let referenced_asset = esm_ref.get_referenced_asset().await?;
+                    let ident = referenced_asset.get_ident().await?;
+
+                    if let Some(ident) = ident {
+                        cjs_exports.push(PropOrSpread::Spread(SpreadElement {
+                            dot3_token: DUMMY_SP,
+                            expr: Box::new(quote!(
+                                "($cjs)" as Expr,
+                                cjs: Expr = Ident::new(ident.into(), DUMMY_SP).into()
+                            )),
+                        }));
                     }
                 }
             }
@@ -200,9 +217,10 @@ impl CodeGenerateable for EsmExports {
                 })));
             }
         }
+        cjs_exports.extend(props);
         let getters = Expr::Object(ObjectLit {
             span: DUMMY_SP,
-            props,
+            props: cjs_exports,
         });
 
         visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {
