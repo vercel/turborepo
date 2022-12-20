@@ -327,16 +327,14 @@ impl<'a> Iterator for GlobPartMatchesIterator<'a> {
                         self.index += 1;
                         self.glob_iterator = None;
                     }
+                } else if let Some(alternative) = alternatives.get(self.index) {
+                    self.glob_iterator = Some(Box::new(alternative.iter_matches(
+                        self.path,
+                        self.previous_part_is_path_separator_equalivalent,
+                        self.match_partial,
+                    )));
                 } else {
-                    if let Some(alternative) = alternatives.get(self.index) {
-                        self.glob_iterator = Some(Box::new(alternative.iter_matches(
-                            self.path,
-                            self.previous_part_is_path_separator_equalivalent,
-                            self.match_partial,
-                        )));
-                    } else {
-                        return None;
-                    }
+                    return None;
                 }
             },
         }
