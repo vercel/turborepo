@@ -438,6 +438,22 @@
 <span id="438">438</span>
 <span id="439">439</span>
 <span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, future::Future, pin::Pin};
 
 <span class="kw">use </span>anyhow::Result;
@@ -596,13 +612,17 @@
 <span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Clone, Default)]
 </span><span class="kw">pub struct </span>ImportMap {
-    map: AliasMap&lt;ImportMappingVc&gt;,
+    direct: AliasMap&lt;ImportMappingVc&gt;,
+    by_glob: Vec&lt;(Glob, ImportMappingVc)&gt;,
 }
 
 <span class="kw">impl </span>ImportMap {
     <span class="doccomment">/// Creates a new import map.
-    </span><span class="kw">pub fn </span>new(map: AliasMap&lt;ImportMappingVc&gt;) -&gt; ImportMap {
-        <span class="self">Self </span>{ map }
+    </span><span class="kw">pub fn </span>new(
+        direct: AliasMap&lt;ImportMappingVc&gt;,
+        by_glob: Vec&lt;(Glob, ImportMappingVc)&gt;,
+    ) -&gt; ImportMap {
+        <span class="self">Self </span>{ direct, by_glob }
     }
 
     <span class="doccomment">/// Creates a new empty import map.
@@ -612,13 +632,14 @@
 
     <span class="doccomment">/// Extends the import map with another import map.
     </span><span class="kw">pub fn </span>extend(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>ImportMap) {
-        <span class="kw">let </span><span class="self">Self </span>{ map } = other.clone();
-        <span class="self">self</span>.map.extend(map);
+        <span class="kw">let </span><span class="self">Self </span>{ direct, by_glob } = other.clone();
+        <span class="self">self</span>.direct.extend(direct);
+        <span class="self">self</span>.by_glob.extend(by_glob);
     }
 
     <span class="doccomment">/// Inserts an alias into the import map.
     </span><span class="kw">pub fn </span>insert_alias(<span class="kw-2">&amp;mut </span><span class="self">self</span>, alias: AliasPattern, mapping: ImportMappingVc) {
-        <span class="self">self</span>.map.insert(alias, mapping);
+        <span class="self">self</span>.direct.insert(alias, mapping);
     }
 
     <span class="doccomment">/// Inserts an exact alias into the import map.
@@ -627,7 +648,7 @@
         pattern: <span class="kw">impl </span>Into&lt;String&gt; + <span class="lifetime">&#39;a</span>,
         mapping: ImportMappingVc,
     ) {
-        <span class="self">self</span>.map.insert(AliasPattern::exact(pattern), mapping);
+        <span class="self">self</span>.direct.insert(AliasPattern::exact(pattern), mapping);
     }
 
     <span class="doccomment">/// Inserts a wildcard alias into the import map.
@@ -636,7 +657,8 @@
         prefix: <span class="kw">impl </span>Into&lt;String&gt; + <span class="lifetime">&#39;a</span>,
         mapping: ImportMappingVc,
     ) {
-        <span class="self">self</span>.map.insert(AliasPattern::wildcard(prefix, <span class="string">&quot;&quot;</span>), mapping);
+        <span class="self">self</span>.direct
+            .insert(AliasPattern::wildcard(prefix, <span class="string">&quot;&quot;</span>), mapping);
     }
 
     <span class="doccomment">/// Inserts a wildcard alias with suffix into the import map.
@@ -646,7 +668,7 @@
         suffix: <span class="kw">impl </span>Into&lt;String&gt; + <span class="lifetime">&#39;s</span>,
         mapping: ImportMappingVc,
     ) {
-        <span class="self">self</span>.map
+        <span class="self">self</span>.direct
             .insert(AliasPattern::wildcard(prefix, suffix), mapping);
     }
 }
@@ -767,13 +789,23 @@
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// TODO lookup pattern
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(request_string) = request.<span class="kw">await</span><span class="question-mark">?</span>.request() {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(result) = this.map.lookup(<span class="kw-2">&amp;</span>request_string).next() {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(result) = this.direct.lookup(<span class="kw-2">&amp;</span>request_string).next() {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(import_mapping_to_result(
                     result.try_join_into_self().<span class="kw">await</span><span class="question-mark">?</span>.into_owned(),
                     request,
                 )
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.into());
+            }
+            <span class="kw">let </span>request_string_without_slash = <span class="kw">if </span>request_string.ends_with(<span class="string">&#39;/&#39;</span>) {
+                <span class="kw-2">&amp;</span>request_string[..request_string.len() - <span class="number">1</span>]
+            } <span class="kw">else </span>{
+                <span class="kw-2">&amp;</span>request_string
+            };
+            <span class="kw">for </span>(glob, mapping) <span class="kw">in </span>this.by_glob.iter() {
+                <span class="kw">if </span>glob.execute(request_string_without_slash) {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(import_mapping_to_result(<span class="kw-2">*</span>mapping, request).<span class="kw">await</span><span class="question-mark">?</span>.into());
+                }
             }
         }
         <span class="prelude-val">Ok</span>(ImportMapResult::NoEntry.into())
