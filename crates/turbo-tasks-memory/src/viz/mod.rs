@@ -99,7 +99,7 @@ fn get_max_values_internal(depth: u32, node: &GroupTree) -> MaxValues {
         max_total_update_duration = max(max_total_update_duration, s.total_update_duration);
         if let Some((total_duration, executions)) = s.total_duration.zip(s.executions) {
             if executions > 0 {
-                let avg_duration = total_duration / executions as u32;
+                let avg_duration = total_duration / executions;
                 max_avg_duration = max_avg_duration
                     .map(|max_avg_duration| max(max_avg_duration, avg_duration))
                     .or(Some(avg_duration));
