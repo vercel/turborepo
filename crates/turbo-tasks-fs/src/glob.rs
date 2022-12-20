@@ -57,14 +57,14 @@ impl Glob {
     fn iter_matches<'a>(
         &'a self,
         path: &'a str,
-        previous_part_is_path_separator_equalivalent: bool,
+        previous_part_is_path_separator_equivalent: bool,
         match_partial: bool,
     ) -> GlobMatchesIterator<'a> {
         GlobMatchesIterator {
             current: path,
             glob: self,
             match_partial,
-            is_path_separator_equalivalent: previous_part_is_path_separator_equalivalent,
+            is_path_separator_equivalent: previous_part_is_path_separator_equivalent,
             stack: Vec::new(),
             index: 0,
         }
@@ -88,7 +88,7 @@ struct GlobMatchesIterator<'a> {
     current: &'a str,
     glob: &'a Glob,
     match_partial: bool,
-    is_path_separator_equalivalent: bool,
+    is_path_separator_equivalent: bool,
     stack: Vec<GlobPartMatchesIterator<'a>>,
     index: usize,
 }
@@ -104,37 +104,37 @@ impl<'a> Iterator for GlobMatchesIterator<'a> {
                 } else {
                     let iter = part.iter_matches(
                         self.current,
-                        self.is_path_separator_equalivalent,
+                        self.is_path_separator_equivalent,
                         self.match_partial,
                     );
                     self.stack.push(iter);
                     self.stack.last_mut().unwrap()
                 };
-                if let Some((new_path, new_is_path_separator_equalivalent)) = iter.next() {
+                if let Some((new_path, new_is_path_separator_equivalent)) = iter.next() {
                     self.current = new_path;
-                    self.is_path_separator_equalivalent = new_is_path_separator_equalivalent;
+                    self.is_path_separator_equivalent = new_is_path_separator_equivalent;
 
                     self.index += 1;
 
                     if self.match_partial && self.current.is_empty() {
-                        return Some(("", self.is_path_separator_equalivalent));
+                        return Some(("", self.is_path_separator_equivalent));
                     }
                 } else {
                     if self.index == 0 {
                         // failed to match
                         return None;
                     }
-                    // backtrace
+                    // backtrack
                     self.stack.pop();
                     self.index -= 1;
                 }
             } else {
                 // end of expression, matched successfully
 
-                // backtrace for the next iteration
+                // backtrack for the next iteration
                 self.index -= 1;
 
-                return Some((self.current, self.is_path_separator_equalivalent));
+                return Some((self.current, self.is_path_separator_equivalent));
             }
         }
     }
@@ -145,18 +145,18 @@ impl GlobPart {
     /// The least greedy match is returned first. This is usually used for
     /// backtracking. The string slice returned is the remaining part or the
     /// path. The boolean flag returned specifies if the matched part should
-    /// be considered as path-separator equalivalent.
+    /// be considered as path-separator equivalent.
     fn iter_matches<'a>(
         &'a self,
         path: &'a str,
-        previous_part_is_path_separator_equalivalent: bool,
+        previous_part_is_path_separator_equivalent: bool,
         match_partial: bool,
     ) -> GlobPartMatchesIterator<'a> {
         GlobPartMatchesIterator {
             path,
             part: self,
             match_partial,
-            previous_part_is_path_separator_equalivalent,
+            previous_part_is_path_separator_equivalent,
             index: 0,
             glob_iterator: None,
         }
@@ -238,7 +238,7 @@ struct GlobPartMatchesIterator<'a> {
     path: &'a str,
     part: &'a GlobPart,
     match_partial: bool,
-    previous_part_is_path_separator_equalivalent: bool,
+    previous_part_is_path_separator_equivalent: bool,
     index: usize,
     glob_iterator: Option<Box<GlobMatchesIterator<'a>>>,
 }
@@ -279,7 +279,7 @@ impl<'a> Iterator for GlobPartMatchesIterator<'a> {
                     } else {
                         Some((
                             &self.path[self.index..],
-                            self.previous_part_is_path_separator_equalivalent && self.index == 1,
+                            self.previous_part_is_path_separator_equivalent && self.index == 1,
                         ))
                     }
                 } else {
@@ -292,7 +292,7 @@ impl<'a> Iterator for GlobPartMatchesIterator<'a> {
                     self.index = 1;
                     if self.path.starts_with('/') {
                         Some((&self.path[1..], true))
-                    } else if self.previous_part_is_path_separator_equalivalent {
+                    } else if self.previous_part_is_path_separator_equivalent {
                         Some((self.path, true))
                     } else {
                         None
@@ -321,8 +321,8 @@ impl<'a> Iterator for GlobPartMatchesIterator<'a> {
             }
             GlobPart::Alternatives(alternatives) => loop {
                 if let Some(glob_iterator) = &mut self.glob_iterator {
-                    if let Some((path, is_path_separator_equalivalent)) = glob_iterator.next() {
-                        return Some((path, is_path_separator_equalivalent));
+                    if let Some((path, is_path_separator_equivalent)) = glob_iterator.next() {
+                        return Some((path, is_path_separator_equivalent));
                     } else {
                         self.index += 1;
                         self.glob_iterator = None;
@@ -330,7 +330,7 @@ impl<'a> Iterator for GlobPartMatchesIterator<'a> {
                 } else if let Some(alternative) = alternatives.get(self.index) {
                     self.glob_iterator = Some(Box::new(alternative.iter_matches(
                         self.path,
-                        self.previous_part_is_path_separator_equalivalent,
+                        self.previous_part_is_path_separator_equivalent,
                         self.match_partial,
                     )));
                 } else {

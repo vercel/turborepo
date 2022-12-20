@@ -219,7 +219,7 @@ impl PostCssTransformedAssetVc {
         )
         .await?;
         let JavaScriptValue::Value(val) = &*config_value else {
-            // An error happened, which has already converted into an issue.
+            // An error happened, which has already been converted into an issue.
             return Ok(ProcessPostCssResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),
                 assets: Vec::new()

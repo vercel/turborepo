@@ -175,6 +175,8 @@ pub async fn evaluate(
             }
         }
     };
+    // Read dependencies to make them a dependencies of this task. This task will
+    // execute again when they change.
     for dep in file_dependencies {
         dep.await?;
     }
@@ -254,7 +256,7 @@ impl Issue for BuildDependencyIssue {
     async fn description(&self) -> Result<StringVc> {
         Ok(StringVc::cell(
             format!("The file at {} is a build dependency, which is not yet implemented.
-Changing this file or any dependency will not be regonized and might requires restarting the server", self.path.to_string().await?)
+Changing this file or any dependency will not be recognized and might require restarting the server", self.path.to_string().await?)
         ))
     }
 }
