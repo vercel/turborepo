@@ -251,3 +251,7 @@ impl CodeGenerateable for CjsRequireCacheAccess {
         Ok(CodeGeneration { visitors }.into())
     }
 }
+
+#[turbo_tasks::value(shared)]
+#[derive(Hash, Debug)]
+pub struct CjsExports {}
