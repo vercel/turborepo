@@ -47,7 +47,7 @@ use self::{
 };
 use crate::{
     parse::ParseResultSourceMapVc,
-    references::esm::EsmExportsVc,
+    references::{cjs::CjsExportsVc, esm::EsmExportsVc},
     utils::{stringify_module_id, stringify_str, FormatIter},
 };
 
@@ -1139,7 +1139,7 @@ impl EcmascriptChunkContextVc {
 #[turbo_tasks::value(shared)]
 pub enum EcmascriptExports {
     EsmExports(EsmExportsVc),
-    CommonJs,
+    CommonJs(CjsExportsVc),
     Value,
     None,
 }

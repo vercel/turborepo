@@ -255,3 +255,14 @@ impl CodeGenerateable for CjsRequireCacheAccess {
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
 pub struct CjsExports {}
+
+#[turbo_tasks::value_impl]
+impl CodeGenerateable for CjsExports {
+    #[turbo_tasks::function]
+    async fn code_generation(
+        self_vc: CjsExportsVc,
+        _context: ChunkingContextVc,
+    ) -> Result<CodeGenerationVc> {
+        Ok(CodeGeneration { visitors }.into())
+    }
+}

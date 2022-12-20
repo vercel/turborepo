@@ -92,7 +92,7 @@ async fn expand_star_exports(root_asset: EcmascriptChunkPlaceableVc) -> Result<S
             .cell()
             .as_issue()
             .emit(),
-            EcmascriptExports::CommonJs => AnalyzeIssue {
+            EcmascriptExports::CommonJs(..) => AnalyzeIssue {
                 code: None,
                 category: StringVc::cell("analyze".to_string()),
                 message: StringVc::cell(format!(
