@@ -16,21 +16,19 @@ jobs:
       fail-fast: false
       matrix:
         settings:
+          # - host: ubuntu-latest
+          #   container: ubuntu:xenial
+          #   container-options: "--platform=linux/amd64 --rm"
+          #   container-setup: "apt-get update && apt-get install -y curl"
+          #   target: "x86_64-unknown-linux-musl"
+          #   lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
+          #   setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev musl-tools musl-dev"
           - host: ubuntu-latest
-            container: ubuntu:xenial
-            container-options: "--platform=linux/amd64 --rm"
-            container-setup: "apt-get update && apt-get install -y curl"
-            target: "x86_64-unknown-linux-musl"
-            lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
-            setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev musl-tools musl-dev"
-          - host: ubuntu-latest
-            container: ubuntu:xenial
-            container-options: "--rm"
             container-setup: "apt-get update && apt-get install -y curl"
             target: "aarch64-unknown-linux-musl"
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
-            rustflags: 'RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc -C target-feature=+crt-static -C link-arg=-lgcc"'
-            setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev musl-tools musl-dev libclang-5.0-dev gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
+            rustflags: 'RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc"'
+            setup: "apt-get install -y musl-tools musl-dev build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
     name: Build - ${{ matrix.settings.host }} (${{ matrix.settings.target }})
     runs-on: ${{ matrix.settings.host }}
     container:
