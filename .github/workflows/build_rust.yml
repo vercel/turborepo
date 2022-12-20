@@ -31,13 +31,14 @@ jobs:
             target: "x86_64-unknown-linux-musl"
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
             setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev musl-tools"
+            rustflags: 'RUSTFLAGS="-C linker=rust-lld"'
           - host: ubuntu-latest
             container: ubuntu:xenial
             container-options: "--rm"
             container-setup: "apt-get update && apt-get install -y curl"
             target: "aarch64-unknown-linux-musl"
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
-            rustflags: 'RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc"'
+            rustflags: 'RUSTFLAGS="-C linker=rust-lld"'
             setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev musl-tools libclang-5.0-dev gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
             target: x86_64-pc-windows-gnu
