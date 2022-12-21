@@ -87,8 +87,7 @@ use crate::{
     magic_identifier,
     references::{
         cjs::{
-            CjsExports, CjsExportsVc, CjsRequireAssetReferenceVc, CjsRequireCacheAccess,
-            CjsRequireResolveAssetReferenceVc,
+            CjsRequireAssetReferenceVc, CjsRequireCacheAccess, CjsRequireResolveAssetReferenceVc,
         },
         esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
     },
@@ -403,10 +402,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 analysis.add_code_gen(esm_exports);
                 EcmascriptExports::EsmExports(esm_exports)
             } else if has_cjs_export(&program) {
-                let cjs_exports: CjsExportsVc = CjsExports {}.into();
-                analysis.add_code_gen(cjs_exports);
-
-                EcmascriptExports::CommonJs(cjs_exports)
+                EcmascriptExports::CommonJs
             } else {
                 EcmascriptExports::None
             };

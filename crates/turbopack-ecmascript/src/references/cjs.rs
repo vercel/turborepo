@@ -252,34 +252,3 @@ impl CodeGenerateable for CjsRequireCacheAccess {
         Ok(CodeGeneration { visitors }.into())
     }
 }
-
-#[turbo_tasks::value(shared)]
-#[derive(Hash, Debug)]
-pub struct CjsExports {}
-
-#[turbo_tasks::value_impl]
-impl CodeGenerateable for CjsExports {
-    #[turbo_tasks::function]
-    async fn code_generation(
-        self_vc: CjsExportsVc,
-        _context: ChunkingContextVc,
-    ) -> Result<CodeGenerationVc> {
-        let this = self_vc.await?;
-        let mut visitors = Vec::new();
-
-        visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {
-            let stmt = quote!("__turbopack_cjs_export_all__();" as Stmt,
-            );
-            match program {
-                Program::Module(Module { body, .. }) => {
-                    body.insert(0, ModuleItem::Stmt(stmt));
-                }
-                Program::Script(Script { body, .. }) => {
-                    body.insert(0, stmt);
-                }
-            }
-        }));
-
-        Ok(CodeGeneration { visitors }.into())
-    }
-}

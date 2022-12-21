@@ -96,7 +96,7 @@ async fn expand_star_exports(root_asset: EcmascriptChunkPlaceableVc) -> Result<S
             .cell()
             .as_issue()
             .emit(),
-            EcmascriptExports::CommonJs(..) => {
+            EcmascriptExports::CommonJs => {
                 // We can now handle cjs modules
             }
         }
@@ -141,7 +141,7 @@ impl CodeGenerateable for EsmExports {
                     }
                 }
 
-                if let EcmascriptExports::CommonJs(cjs) = &*asset.get_exports().await? {
+                if let EcmascriptExports::CommonJs = &*asset.get_exports().await? {
                     let referenced_asset = esm_ref.get_referenced_asset().await?;
                     let ident = referenced_asset.get_ident().await?;
 
