@@ -1,0 +1,10 @@
+{
+  "version": 3,
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["/crates/turbopack-tests/tests/snapshot/export-alls/cjs-script/input/index.js"],"sourcesContent":["import * as foo from './mod.cjs';\n\nconsole.log(foo)"],"names":[],"mappings":"AAAA;;;AAEA,QAAQ,GAAG"}},
+    {"offset": {"line": 8, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"A"}},
+    {"offset": {"line": 12, "column": 0}, "map": {"version":3,"sources":["/crates/turbopack-tests/tests/snapshot/export-alls/cjs-script/input/mod.cjs"],"sourcesContent":["\nexport * from './exported.cjs'"],"names":[],"mappings":"AACA"}},
+    {"offset": {"line": 19, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"A"}},
+    {"offset": {"line": 23, "column": 0}, "map": {"version":3,"sources":["/crates/turbopack-tests/tests/snapshot/export-alls/cjs-script/input/exported.cjs"],"sourcesContent":["module.exports = { foo: 1, bar: 2 }"],"names":[],"mappings":"AAAA,OAAO,OAAO,GAAG;IAAE,KAAK;IAAG,KAAK;AAAE"}},
+    {"offset": {"line": 27, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"A"}}]
+}
