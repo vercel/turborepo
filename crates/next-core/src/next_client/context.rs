@@ -6,6 +6,7 @@ use turbo_tasks::{primitives::StringsVc, Value};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::{
+    condition::ContextCondition,
     module_options::{
         module_options_context::{ModuleOptionsContext, ModuleOptionsContextVc},
         ModuleRule, ModuleRuleCondition, ModuleRuleEffect, PostCssTransformOptions,
@@ -81,6 +82,22 @@ pub fn get_client_resolve_options_context(
         resolved_map: Some(next_client_resolved_map),
         browser: true,
         module: true,
+        rules: vec![(
+            ContextCondition::InDirectory("node_modules".to_string()),
+            Some(
+                ResolveOptionsContext {
+                    enable_node_modules: true,
+                    custom_conditions: vec!["development".to_string()],
+                    import_map: Some(next_client_import_map),
+                    fallback_import_map: Some(next_client_fallback_import_map),
+                    resolved_map: Some(next_client_resolved_map),
+                    browser: true,
+                    module: true,
+                    ..Default::default()
+                }
+                .cell(),
+            ),
+        )],
         ..Default::default()
     }
     .cell()
@@ -114,6 +131,17 @@ pub async fn get_client_module_options_context(
         enable_typescript_transform: true,
         preset_env_versions: Some(env),
         execution_context: Some(execution_context),
+        rules: vec![(
+            ContextCondition::InDirectory("node_modules".to_string()),
+            Some(
+                ModuleOptionsContext {
+                    preset_env_versions: Some(env),
+                    execution_context: Some(execution_context),
+                    ..Default::default()
+                }
+                .cell(),
+            ),
+        )],
         ..Default::default()
     };
 

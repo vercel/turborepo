@@ -2,6 +2,7 @@ use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::{
+    condition::ContextCondition,
     module_options::{ModuleOptionsContext, ModuleOptionsContextVc, PostCssTransformOptions},
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
 };
@@ -44,6 +45,21 @@ pub fn get_server_resolve_options_context(
                 custom_conditions: vec!["development".to_string()],
                 import_map: Some(next_server_import_map),
                 module: true,
+                rules: vec![(
+                    ContextCondition::InDirectory("node_modules".to_string()),
+                    Some(
+                        ResolveOptionsContext {
+                            enable_node_modules: true,
+                            enable_node_externals: true,
+                            enable_node_native_modules: true,
+                            custom_conditions: vec!["development".to_string()],
+                            import_map: Some(next_server_import_map),
+                            module: true,
+                            ..Default::default()
+                        }
+                        .cell(),
+                    ),
+                )],
                 ..Default::default()
             }
         }
@@ -56,6 +72,24 @@ pub fn get_server_resolve_options_context(
             custom_conditions: vec!["development".to_string(), "react-server".to_string()],
             import_map: Some(next_server_import_map),
             module: true,
+            rules: vec![(
+                ContextCondition::InDirectory("node_modules".to_string()),
+                Some(
+                    ResolveOptionsContext {
+                        enable_node_modules: true,
+                        enable_node_externals: true,
+                        enable_node_native_modules: true,
+                        custom_conditions: vec![
+                            "development".to_string(),
+                            "react-server".to_string(),
+                        ],
+                        import_map: Some(next_server_import_map),
+                        module: true,
+                        ..Default::default()
+                    }
+                    .cell(),
+                ),
+            )],
             ..Default::default()
         },
     }
@@ -95,6 +129,16 @@ pub fn get_server_module_options_context(
             }),
             enable_typescript_transform: true,
             execution_context: Some(execution_context),
+            rules: vec![(
+                ContextCondition::InDirectory("node_modules".to_string()),
+                Some(
+                    ModuleOptionsContext {
+                        execution_context: Some(execution_context),
+                        ..Default::default()
+                    }
+                    .cell(),
+                ),
+            )],
             ..Default::default()
         },
         ServerContextType::AppSSR { .. } => ModuleOptionsContext {
@@ -105,6 +149,16 @@ pub fn get_server_module_options_context(
             }),
             enable_typescript_transform: true,
             execution_context: Some(execution_context),
+            rules: vec![(
+                ContextCondition::InDirectory("node_modules".to_string()),
+                Some(
+                    ModuleOptionsContext {
+                        execution_context: Some(execution_context),
+                        ..Default::default()
+                    }
+                    .cell(),
+                ),
+            )],
             ..Default::default()
         },
         ServerContextType::AppRSC { .. } => ModuleOptionsContext {
@@ -117,6 +171,16 @@ pub fn get_server_module_options_context(
                 StringVc::cell("server-to-client".to_string()),
             )],
             execution_context: Some(execution_context),
+            rules: vec![(
+                ContextCondition::InDirectory("node_modules".to_string()),
+                Some(
+                    ModuleOptionsContext {
+                        execution_context: Some(execution_context),
+                        ..Default::default()
+                    }
+                    .cell(),
+                ),
+            )],
             ..Default::default()
         },
     }

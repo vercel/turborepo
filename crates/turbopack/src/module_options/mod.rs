@@ -42,8 +42,21 @@ impl ModuleOptionsVc {
             ref custom_ecmascript_transforms,
             ref custom_rules,
             execution_context,
+            ref rules,
             ..
         } = *context.await?;
+        if !rules.is_empty() {
+            let path_value = path.await?;
+            for (condition, new_context) in rules.iter() {
+                if condition.matches(&path_value) {
+                    if let &Some(new_context) = new_context {
+                        return Ok(ModuleOptionsVc::new(path, new_context));
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
         let mut transforms = custom_ecmascript_app_transforms.clone();
         transforms.extend(custom_ecmascript_transforms.iter().cloned());
 
