@@ -89,11 +89,17 @@ pub async fn create_server_rendered_source(
     let server_ty = Value::new(ServerContextType::Pages { pages_dir });
 
     let client_environment = get_client_environment(browserslist_query);
-    let client_module_options_context =
-        get_client_module_options_context(project_path, execution_context, client_environment, ty);
+    let client_module_options_context = get_client_module_options_context(
+        project_path,
+        execution_context,
+        client_environment,
+        ty,
+        next_config,
+    );
     let client_module_options_context =
         add_next_transforms_to_pages(client_module_options_context, pages_dir);
-    let client_resolve_options_context = get_client_resolve_options_context(project_path, ty);
+    let client_resolve_options_context =
+        get_client_resolve_options_context(project_path, ty, next_config);
     let client_context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
         client_environment,
@@ -123,7 +129,7 @@ pub async fn create_server_rendered_source(
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(transitions),
         get_server_environment(server_ty, env, server_addr),
-        get_server_module_options_context(project_path, execution_context, server_ty),
+        get_server_module_options_context(project_path, execution_context, server_ty, next_config),
         get_server_resolve_options_context(project_path, server_ty, next_config),
     )
     .into();
