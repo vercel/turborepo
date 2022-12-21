@@ -175,6 +175,11 @@ pub fn get_server_module_options_context(
                 ContextCondition::InDirectory("node_modules".to_string()),
                 Some(
                     ModuleOptionsContext {
+                        custom_ecmascript_transforms: vec![
+                            EcmascriptInputTransform::ClientDirective(StringVc::cell(
+                                "server-to-client".to_string(),
+                            )),
+                        ],
                         execution_context: Some(execution_context),
                         ..Default::default()
                     }
