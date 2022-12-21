@@ -1,19 +1,18 @@
 use std::{
-    collections::{hash_map::Entry, BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     fs::{self, File},
     io::BufReader,
     path::PathBuf,
 };
 
 use anyhow::{Context, Result};
+use num_format::{Locale, ToFormattedString};
 use plotters::{
     backend::SVGBackend,
     data::fitting_range,
-    prelude::{
-        ChartBuilder, Circle, EmptyElement, IntoDrawingArea, PathElement, SeriesLabelPosition,
-    },
-    series::{LineSeries, PointSeries},
-    style::RGBColor,
+    prelude::{BindKeyPoints, ChartBuilder, IntoDrawingArea, PathElement, SeriesLabelPosition},
+    series::LineSeries,
+    style::{Color, RGBAColor, RGBColor},
 };
 
 use crate::summarize_bench::data::{BaseBenchmarks, CStats};
@@ -22,17 +21,14 @@ type ByModuleCount = BTreeMap<u32, CStats>;
 type ByBundler = BTreeMap<String, ByModuleCount>;
 type ByBench = BTreeMap<String, ByBundler>;
 
-const COLORS: &[RGBColor] = &[
-    plotters::style::full_palette::BLUE,
-    plotters::style::full_palette::CYAN,
-    plotters::style::full_palette::RED,
-    plotters::style::full_palette::GREEN,
-    plotters::style::full_palette::INDIGO,
-    plotters::style::full_palette::PURPLE,
-    plotters::style::full_palette::PINK_900,
+const BUNDLER_ORDER: &[&str] = &[
+    "Next.js 11 SSR",
+    "Next.js 12 SSR",
+    "Vite SWC CSR",
+    "Turbopack SSR",
 ];
 
-pub fn generate(summary_path: PathBuf) -> Result<()> {
+pub fn generate(summary_path: PathBuf, filter_bundlers: Option<HashSet<&str>>) -> Result<()> {
     let summary_file = File::open(&summary_path)?;
     let reader = BufReader::new(summary_file);
     let summary: BaseBenchmarks = serde_json::from_reader(reader)?;
@@ -41,6 +37,15 @@ pub fn generate(summary_path: PathBuf) -> Result<()> {
     for (_, bench) in summary.benchmarks {
         // TODO: Improve heuristic for detecting bundler benchmarks
         if !bench.info.group_id.starts_with("bench_") {
+            continue;
+        }
+
+        if filter_bundlers
+            .as_ref()
+            .zip(bench.info.function_id.as_ref())
+            .map(|(bundlers, bundler)| !bundlers.contains(bundler.as_str()))
+            .unwrap_or(false)
+        {
             continue;
         }
 
@@ -64,114 +69,199 @@ pub fn generate(summary_path: PathBuf) -> Result<()> {
         );
     }
 
-    let mut bundler_color = BundlerColor::new();
     let output_path = summary_path.parent().context("summary_path needs parent")?;
-    generate_scaling(output_path.join("scaling"), &by_bench, &mut bundler_color)?;
+    generate_scaling(output_path.join("scaling"), &by_bench)?;
 
     Ok(())
 }
 
-fn generate_scaling(
-    output_path: PathBuf,
-    by_bench: &ByBench,
-    bundler_color: &mut BundlerColor,
-) -> Result<()> {
+#[derive(Debug, Clone, Copy)]
+enum FormatTimeStyle {
+    Milliseconds,
+    Seconds,
+}
+
+impl FormatTimeStyle {
+    fn format(self, ns: f64) -> String {
+        (match self {
+            FormatTimeStyle::Milliseconds => ns / 1e6,
+            FormatTimeStyle::Seconds => ns / 1e9,
+        }
+        .round() as u64)
+            .to_formatted_string(&Locale::en)
+    }
+
+    fn unit(self) -> &'static str {
+        match self {
+            FormatTimeStyle::Milliseconds => "ms",
+            FormatTimeStyle::Seconds => "s",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Theme {
+    Light,
+    Dark,
+}
+
+impl Theme {
+    fn name(self) -> &'static str {
+        match self {
+            Theme::Light => "light",
+            Theme::Dark => "dark",
+        }
+    }
+
+    fn legend_background_color(self) -> RGBAColor {
+        match self {
+            Theme::Light => plotters::style::colors::WHITE.into(),
+            Theme::Dark => RGBColor(34, 34, 34).into(),
+        }
+    }
+
+    fn light_line_color(self) -> RGBAColor {
+        match self {
+            Theme::Light => plotters::style::colors::BLACK.mix(0.1),
+            Theme::Dark => plotters::style::colors::WHITE.mix(0.1),
+        }
+    }
+
+    fn bold_line_color(self) -> RGBAColor {
+        match self {
+            Theme::Light => plotters::style::colors::BLACK.mix(0.2),
+            Theme::Dark => plotters::style::colors::WHITE.mix(0.2),
+        }
+    }
+
+    fn axis_line_color(self) -> RGBAColor {
+        match self {
+            Theme::Light => plotters::style::colors::BLACK.into(),
+            Theme::Dark => plotters::style::colors::WHITE.into(),
+        }
+    }
+
+    fn label_color(self) -> RGBAColor {
+        match self {
+            Theme::Light => plotters::style::colors::BLACK.mix(0.75),
+            Theme::Dark => plotters::style::colors::WHITE.mix(0.75),
+        }
+    }
+
+    fn axis_desc_color(self) -> RGBAColor {
+        match self {
+            Theme::Light => plotters::style::colors::BLACK.into(),
+            Theme::Dark => plotters::style::colors::WHITE.into(),
+        }
+    }
+}
+
+const THEMES: [Theme; 2] = [Theme::Light, Theme::Dark];
+
+fn generate_scaling(output_path: PathBuf, by_bench: &ByBench) -> Result<()> {
     fs::create_dir_all(&output_path)?;
 
-    for (bench_name, by_bundler) in by_bench {
-        let module_count_range = fitting_range(
-            by_bundler
+    let colors_by_bundler = HashMap::from([
+        ("Next.js 12 SSR", plotters::style::full_palette::CYAN),
+        ("Next.js 11 SSR", plotters::style::full_palette::BLUE),
+        ("Turbopack SSR", plotters::style::full_palette::RED),
+        ("Vite SWC CSR", plotters::style::full_palette::GREEN),
+    ]);
+
+    for theme in THEMES {
+        for (bench_name, by_bundler) in by_bench {
+            let module_counts: HashSet<_> = by_bundler
                 .values()
-                .flat_map(|by_module_count| by_module_count.keys()),
-        );
+                .flat_map(|by_module_count| by_module_count.keys())
+                .copied()
+                .collect();
+            let module_count_range = fitting_range(module_counts.iter());
 
-        let time_range_iter = by_bundler.values().flat_map(|by_module_count| {
-            by_module_count
-                .values()
-                .map(|stats| ns_to_ms(stats.point_estimate))
-        });
+            // Ensure we have labels for every sampled module count.
+            let module_count_range =
+                module_count_range.with_key_points(module_counts.into_iter().collect());
 
-        // Ensure the time range starts at 0 instead of the minimum time value.
-        let time_range = 0.0..time_range_iter
-            // f64 does not implement Ord.
-            .fold(0.0, |max, time| if time > max { time } else { max });
+            let time_range_iter = by_bundler.values().flat_map(|by_module_count| {
+                by_module_count.values().map(|stats| stats.point_estimate)
+            });
 
-        let file_name = output_path.join(format!("{}.svg", bench_name));
-        let root = SVGBackend::new(&file_name, (960, 720)).into_drawing_area();
-        let mut chart = ChartBuilder::on(&root)
-            .caption(bench_name, ("sans-serif", 32))
-            .x_label_area_size(40)
-            .y_label_area_size(80)
-            .margin(20)
-            .build_cartesian_2d(module_count_range, time_range)?;
+            // Ensure the time range starts at 0 instead of the minimum time value.
+            let time_range = 0.0..time_range_iter
+                // f64 does not implement Ord.
+                .fold(0.0, |max, time| if time > max { time } else { max });
 
-        for (bundler, by_module_count) in by_bundler {
-            let color = bundler_color.get(bundler)?;
-            let points = by_module_count
-                .iter()
-                .map(|(count, stats)| (count.to_owned(), ns_to_ms(stats.point_estimate)));
+            let format_time_style = if time_range.end > 10e8 {
+                FormatTimeStyle::Seconds
+            } else {
+                FormatTimeStyle::Milliseconds
+            };
+
+            let file_name = output_path.join(format!("{}_{}.svg", bench_name, theme.name()));
+            let root = SVGBackend::new(&file_name, (960, 720)).into_drawing_area();
+            let mut chart = ChartBuilder::on(&root)
+                .x_label_area_size(70)
+                .y_label_area_size(70)
+                .margin(30)
+                .build_cartesian_2d(module_count_range, time_range)?;
+
+            let mut bundlers: Vec<_> = by_bundler.iter().collect();
+            bundlers.sort_by_key(|(bundler, _)| {
+                BUNDLER_ORDER
+                    .iter()
+                    .position(|&b| b == bundler.as_str())
+                    .with_context(|| format!("missing bundler order for {}", bundler))
+                    .unwrap()
+            });
+            for (bundler, by_module_count) in bundlers {
+                let color = colors_by_bundler.get(bundler.as_str());
+                let color =
+                    color.with_context(|| format!("missing color for bundler {}", bundler))?;
+                let points = by_module_count
+                    .iter()
+                    .map(|(count, stats)| (count.to_owned(), stats.point_estimate));
+
+                chart
+                    .draw_series(LineSeries::new(points.clone(), color.stroke_width(4)))?
+                    .label(bundler)
+                    .legend(move |(x, y)| {
+                        PathElement::new(vec![(x, y), (x + 20, y)], color.stroke_width(4))
+                    });
+            }
+
+            // This is the font used by the turbo.build website.
+            let font = r#"ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji""#;
 
             chart
-                .draw_series(LineSeries::new(points.clone(), color))?
-                .label(bundler)
-                .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], color));
+                .configure_mesh()
+                .x_labels(10)
+                .y_labels(10)
+                .x_desc("Number of modules")
+                .y_desc(format!(
+                    "Mean time ({}) — lower is better",
+                    format_time_style.unit()
+                ))
+                .x_label_style((font, 20, &theme.label_color()))
+                .y_label_style((font, 20, &theme.label_color()))
+                .axis_desc_style((font, 24, &theme.axis_desc_color()))
+                .x_label_formatter(&|v| v.to_formatted_string(&Locale::en))
+                .y_label_formatter(&|v| format_time_style.format(*v))
+                .bold_line_style(theme.bold_line_color())
+                .light_line_style(theme.light_line_color())
+                .axis_style(theme.axis_line_color())
+                .draw()?;
 
-            chart.draw_series(PointSeries::of_element(
-                points.clone(),
-                2,
-                color,
-                &|coord, size, style| {
-                    EmptyElement::at(coord) + Circle::new((0, 0), size, style.filled())
-                },
-            ))?;
+            chart
+                .configure_series_labels()
+                .background_style(theme.legend_background_color())
+                .border_style(theme.bold_line_color())
+                .label_font((font, 20, &theme.axis_desc_color()))
+                .position(SeriesLabelPosition::UpperLeft)
+                .margin(16)
+                .draw()?;
+
+            root.present()?;
         }
-
-        chart
-            .configure_mesh()
-            .x_desc("Number of modules")
-            .x_labels(10)
-            .y_labels(10)
-            .y_desc("Mean time (ms) -- lower is better")
-            .draw()?;
-
-        chart
-            .configure_series_labels()
-            .background_style(plotters::style::WHITE)
-            .border_style(plotters::style::BLACK)
-            .position(SeriesLabelPosition::UpperLeft)
-            .margin(10)
-            .draw()?;
-
-        root.present()?;
     }
 
     Ok(())
-}
-
-// Avoid Duration to preserve fractional values. Additionally, plotters works
-// directly with f64.
-fn ns_to_ms(ns: f64) -> f64 {
-    ns / 1.0e6
-}
-
-struct BundlerColor {
-    bundler_to_color: HashMap<String, &'static RGBColor>,
-    iter: Box<dyn Iterator<Item = &'static RGBColor>>,
-}
-
-impl BundlerColor {
-    fn new() -> Self {
-        Self {
-            bundler_to_color: HashMap::new(),
-            iter: Box::new(COLORS.iter()),
-        }
-    }
-
-    fn get(&mut self, bundler_name: &str) -> Result<RGBColor> {
-        let entry = self.bundler_to_color.entry(bundler_name.to_owned());
-        Ok(match entry {
-            Entry::Occupied(mut o) => **o.get_mut(),
-            Entry::Vacant(v) => **v.insert(self.iter.next().context("Next color")?),
-        })
-    }
 }
