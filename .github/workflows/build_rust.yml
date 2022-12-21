@@ -43,6 +43,7 @@ jobs:
 
       - name: Install
         uses: actions-rs/toolchain@v1
+        if: ${{ matrix.settings.install }}
         with:
           profile: minimal
           override: true
