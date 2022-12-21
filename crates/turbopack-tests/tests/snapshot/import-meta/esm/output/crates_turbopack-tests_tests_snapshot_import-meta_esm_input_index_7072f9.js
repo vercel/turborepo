@@ -1,13 +1,13 @@
 (self.TURBOPACK = self.TURBOPACK || []).push(["output/crates_turbopack-tests_tests_snapshot_import-meta_esm_input_index_7072f9.js", {
 
-"[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
+"[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm/input/index.js (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
 
 var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$import$2d$meta$2f$esm$2f$input$2f$mod$2e$mjs__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm/input/mod.mjs (ecmascript)");
 "__TURBOPACK__ecmascript__hoisting__location__";
 ;
 
 }.call(this) }),
-"[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm/input/mod.mjs (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
+"[project]/crates/turbopack-tests/tests/snapshot/import-meta/esm/input/mod.mjs (ecmascript)": (function({ r: __turbopack_require__, x: __turbopack_external_require__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, p: process, g: global, __dirname, m: module, e: exports }) { !function() {
 
 const __TURBOPACK__import$2e$meta__ = {
     url: "file:///ROOT/crates/turbopack-tests/tests/snapshot/import-meta/esm/input/mod.mjs"
