@@ -234,6 +234,37 @@
 <span id="234">234</span>
 <span id="235">235</span>
 <span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
 </pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::{util::FormatDuration, StatsType};
 
 <span class="kw">use super</span>::<span class="kw-2">*</span>;
@@ -277,8 +308,9 @@ document.addEventListener(&quot;click&quot;,function(b){try{var p=function(a){re
     }
     out += <span class="string">r#&quot;&lt;table class=&quot;sortable&quot;&gt;&lt;thead&gt;&lt;tr&gt;&quot;#</span>;
     out += <span class="string">r#&quot;&lt;th&gt;function&lt;/th&gt;&quot;#</span>;
-    out += <span class="string">r#&quot;&lt;th&gt;initial executions&lt;/th&gt;&quot;#</span>;
+    out += <span class="string">r#&quot;&lt;th&gt;count&lt;/th&gt;&quot;#</span>;
     out += <span class="string">r#&quot;&lt;th&gt;active&lt;/th&gt;&quot;#</span>;
+    out += <span class="string">r#&quot;&lt;th&gt;unloaded&lt;/th&gt;&quot;#</span>;
     out += <span class="string">r#&quot;&lt;th&gt;reexecutions&lt;/th&gt;&quot;#</span>;
     out += <span class="string">r#&quot;&lt;th&gt;total duration&lt;/th&gt;&quot;#</span>;
     out += <span class="string">r#&quot;&lt;th&gt;total current duration&lt;/th&gt;&quot;#</span>;
@@ -288,6 +320,7 @@ document.addEventListener(&quot;click&quot;,function(b){try{var p=function(a){re
     out += <span class="string">r#&quot;&lt;th&gt;root scopes&lt;/th&gt;&quot;#</span>;
     out += <span class="string">r#&quot;&lt;th&gt;avg scopes&lt;/th&gt;&quot;#</span>;
     out += <span class="string">r#&quot;&lt;th&gt;avg dependencies&lt;/th&gt;&quot;#</span>;
+    out += <span class="string">r#&quot;&lt;th&gt;avg children&lt;/th&gt;&quot;#</span>;
     out += <span class="string">r#&quot;&lt;th&gt;depth&lt;/th&gt;&quot;#</span>;
     out += <span class="string">r#&quot;&lt;th&gt;common parent&lt;/th&gt;&quot;#</span>;
     out += <span class="string">r#&quot;&lt;/tr&gt;&lt;/thead&gt;&quot;#</span>;
@@ -303,25 +336,36 @@ document.addEventListener(&quot;click&quot;,function(b){try{var p=function(a){re
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::fmt::Error&gt; {
         <span class="kw-2">*</span>out += <span class="string">r#&quot;&lt;tr&gt;&quot;#</span>;
         <span class="kw">let </span>name = ty.to_string();
-        <span class="macro">write!</span>(
+        <span class="comment">// name
+        </span><span class="macro">write!</span>(
             out,
             <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
             as_hash_color(<span class="kw-2">&amp;</span>name),
             escape_html(<span class="kw-2">&amp;</span>name)
         )<span class="question-mark">?</span>;
-        <span class="macro">write!</span>(
+        <span class="comment">// count
+        </span><span class="macro">write!</span>(
             out,
             <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
             as_frac_color(stats.count, max_values.count),
             stats.count
         )<span class="question-mark">?</span>;
-        <span class="macro">write!</span>(
+        <span class="comment">// active
+        </span><span class="macro">write!</span>(
             out,
             <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
             as_frac_color(stats.active_count, max_values.active_count),
             stats.active_count
         )<span class="question-mark">?</span>;
-        <span class="kw">let </span>(executions_label, executions_color) =
+        <span class="comment">// unloaded
+        </span><span class="macro">write!</span>(
+            out,
+            <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
+            as_frac_color(stats.unloaded_count, max_values.unloaded_count),
+            stats.unloaded_count
+        )<span class="question-mark">?</span>;
+        <span class="comment">// reexecutions
+        </span><span class="kw">let </span>(executions_label, executions_color) =
             <span class="kw">if let </span><span class="prelude-val">Some</span>((executions, max_updates)) = stats.executions.zip(max_values.updates) {
                 (
                     executions.saturating_sub(stats.count <span class="kw">as </span>u32).to_string(),
@@ -338,7 +382,8 @@ document.addEventListener(&quot;click&quot;,function(b){try{var p=function(a){re
             <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
             executions_color, executions_label
         )<span class="question-mark">?</span>;
-        <span class="kw">let </span>(total_duration_micros, total_duration_label, total_duration_color) =
+        <span class="comment">// total duration
+        </span><span class="kw">let </span>(total_duration_micros, total_duration_label, total_duration_color) =
             <span class="kw">if let </span><span class="prelude-val">Some</span>((total_duration, max_total_duration)) =
                 stats.total_duration.zip(max_values.total_duration)
             {
@@ -355,7 +400,8 @@ document.addEventListener(&quot;click&quot;,function(b){try{var p=function(a){re
             <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot; data-sort=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
             total_duration_color, total_duration_micros, total_duration_label
         )<span class="question-mark">?</span>;
-        <span class="macro">write!</span>(
+        <span class="comment">// total current duration
+        </span><span class="macro">write!</span>(
             out,
             <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot; data-sort=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
             as_frac_color(
@@ -365,7 +411,8 @@ document.addEventListener(&quot;click&quot;,function(b){try{var p=function(a){re
             stats.total_current_duration.as_micros(),
             FormatDuration(stats.total_current_duration)
         )<span class="question-mark">?</span>;
-        <span class="macro">write!</span>(
+        <span class="comment">// total update duration
+        </span><span class="macro">write!</span>(
             out,
             <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot; data-sort=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
             as_frac_color(
@@ -375,7 +422,8 @@ document.addEventListener(&quot;click&quot;,function(b){try{var p=function(a){re
             stats.total_update_duration.as_micros(),
             FormatDuration(stats.total_update_duration)
         )<span class="question-mark">?</span>;
-        <span class="kw">let </span>(avg_duration_micros, avg_duration_label, avg_duration_color) =
+        <span class="comment">// avg duration
+        </span><span class="kw">let </span>(avg_duration_micros, avg_duration_label, avg_duration_color) =
             <span class="kw">if let </span><span class="prelude-val">Some</span>(((total_duration, executions), max_avg_duration)) = stats
                 .total_duration
                 .zip(stats.executions)
@@ -397,7 +445,8 @@ document.addEventListener(&quot;click&quot;,function(b){try{var p=function(a){re
             <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot; data-sort=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
             avg_duration_color, avg_duration_micros, avg_duration_label
         )<span class="question-mark">?</span>;
-        <span class="macro">write!</span>(
+        <span class="comment">// max duration
+        </span><span class="macro">write!</span>(
             out,
             <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot; data-sort=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
             as_frac_color(
@@ -407,13 +456,15 @@ document.addEventListener(&quot;click&quot;,function(b){try{var p=function(a){re
             stats.max_duration.as_micros(),
             FormatDuration(stats.max_duration)
         )<span class="question-mark">?</span>;
-        <span class="macro">write!</span>(
+        <span class="comment">// root scopes
+        </span><span class="macro">write!</span>(
             out,
             <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
             as_frac_color(stats.roots, max_values.roots),
             stats.roots
         )<span class="question-mark">?</span>;
-        <span class="kw">let </span>max_scopes = max_values.scopes.saturating_sub(<span class="number">100</span>);
+        <span class="comment">// avg scopes
+        </span><span class="kw">let </span>max_scopes = max_values.scopes.saturating_sub(<span class="number">100</span>);
         <span class="macro">write!</span>(
             out,
             <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
@@ -423,20 +474,31 @@ document.addEventListener(&quot;click&quot;,function(b){try{var p=function(a){re
             ),
             (<span class="number">100 </span>* stats.scopes / stats.count) <span class="kw">as </span>f32 / <span class="number">100.0
         </span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>dependencies = get_avg_dependencies_count_times_100(stats);
+        <span class="comment">// avg dependencies
+        </span><span class="kw">let </span>dependencies = get_avg_dependencies_count_times_100(stats);
         <span class="macro">write!</span>(
             out,
             <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
             as_frac_color(dependencies, max_values.dependencies),
             (dependencies <span class="kw">as </span>f32) / <span class="number">100.0
         </span>)<span class="question-mark">?</span>;
+        <span class="comment">// avg children
+        </span><span class="kw">let </span>children = get_avg_children_count_times_100(stats);
         <span class="macro">write!</span>(
+            out,
+            <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
+            as_frac_color(children, max_values.children),
+            (children <span class="kw">as </span>f32) / <span class="number">100.0
+        </span>)<span class="question-mark">?</span>;
+        <span class="comment">// depth
+        </span><span class="macro">write!</span>(
             out,
             <span class="string">&quot;&lt;td bgcolor=\&quot;{}\&quot;&gt;{}&lt;/td&gt;&quot;</span>,
             as_frac_color(depth, max_values.depth),
             depth
         )<span class="question-mark">?</span>;
-        <span class="kw">if let </span><span class="prelude-val">Some</span>((ty, <span class="kw">_</span>)) = parent {
+        <span class="comment">// common parent
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>((ty, <span class="kw">_</span>)) = parent {
             <span class="kw">let </span>name = ty.to_string();
             <span class="macro">write!</span>(
                 out,

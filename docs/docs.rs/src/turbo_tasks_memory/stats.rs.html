@@ -342,6 +342,8 @@
 <span id="342">342</span>
 <span id="343">343</span>
 <span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::{<span class="self">self</span>, max},
     collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
@@ -404,6 +406,7 @@
 </span><span class="kw">pub struct </span>ExportedTaskStats {
     <span class="kw">pub </span>count: usize,
     <span class="kw">pub </span>active_count: usize,
+    <span class="kw">pub </span>unloaded_count: usize,
     <span class="kw">pub </span>executions: <span class="prelude-ty">Option</span>&lt;u32&gt;,
     <span class="kw">pub </span>roots: usize,
     <span class="kw">pub </span>scopes: usize,
@@ -419,6 +422,7 @@
         <span class="self">Self </span>{
             count: <span class="number">0</span>,
             active_count: <span class="number">0</span>,
+            unloaded_count: <span class="number">0</span>,
             executions: <span class="prelude-val">None</span>,
             roots: <span class="number">0</span>,
             scopes: <span class="number">0</span>,
@@ -449,11 +453,7 @@
     }
 
     <span class="kw">pub fn </span>add(<span class="kw-2">&amp;mut </span><span class="self">self</span>, backend: <span class="kw-2">&amp;</span>MemoryBackend, task: <span class="kw-2">&amp;</span>Task) {
-        <span class="self">self</span>.add_conditional(backend, task, |<span class="kw">_</span>, info| {
-            info.executions
-                .map(|executions| executions &gt; <span class="number">0</span>)
-                .unwrap_or(<span class="bool-val">true</span>)
-        })
+        <span class="self">self</span>.add_conditional(backend, task, |<span class="kw">_</span>, <span class="kw">_</span>| <span class="bool-val">true</span>)
     }
 
     <span class="kw">pub fn </span>add_conditional(
@@ -474,6 +474,7 @@
             root_scoped,
             child_scopes,
             active,
+            unloaded,
         } = info;
         <span class="kw">let </span>stats = <span class="self">self</span>.tasks.entry(ty).or_default();
         stats.count += <span class="number">1</span>;
@@ -483,6 +484,9 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(total_duration) = total_duration {
             <span class="kw-2">*</span>stats.total_duration.get_or_insert(Duration::ZERO) += total_duration;
         }
+        <span class="kw">if </span>unloaded {
+            stats.unloaded_count += <span class="number">1
+        </span>}
         stats.total_current_duration += last_duration;
         <span class="kw">if </span>executions.map(|executions| executions &gt; <span class="number">1</span>).unwrap_or(<span class="bool-val">true</span>) {
             stats.total_update_duration += last_duration;

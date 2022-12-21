@@ -116,11 +116,6 @@
 <span id="116">116</span>
 <span id="117">117</span>
 <span id="118">118</span>
-<span id="119">119</span>
-<span id="120">120</span>
-<span id="121">121</span>
-<span id="122">122</span>
-<span id="123">123</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{sync::Arc, time::Duration};
 
 <span class="kw">use </span>anyhow::Result;
@@ -199,13 +194,10 @@
                     <span class="kw">let </span><span class="kw-2">mut </span>stats = Stats::new();
                     <span class="kw">let </span>b = tt.backend();
                     <span class="kw">let </span>active_only = query.contains_key(<span class="string">&quot;active&quot;</span>);
+                    <span class="kw">let </span>include_unloaded = query.contains_key(<span class="string">&quot;unloaded&quot;</span>);
                     b.with_all_cached_tasks(|task| {
                         stats.add_id_conditional(b, task, |<span class="kw">_</span>, info| {
-                            (!active_only || info.active)
-                                &amp;&amp; info
-                                    .executions
-                                    .map(|executions| executions &gt; <span class="number">0</span>)
-                                    .unwrap_or(<span class="bool-val">true</span>)
+                            (include_unloaded || !info.unloaded) &amp;&amp; (!active_only || info.active)
                         });
                     });
                     <span class="kw">let </span>tree = stats.treeify(ReferenceType::Dependency);
@@ -217,9 +209,7 @@
                             source: self_vc.into(),
                             path: path.to_string(),
                             vary: ContentSourceDataVary {
-                                query: <span class="prelude-val">Some</span>(ContentSourceDataFilter::Subset(
-                                    [<span class="string">&quot;active&quot;</span>.to_string()].into(),
-                                )),
+                                query: <span class="prelude-val">Some</span>(ContentSourceDataFilter::All),
                                 ..Default::default()
                             },
                         }

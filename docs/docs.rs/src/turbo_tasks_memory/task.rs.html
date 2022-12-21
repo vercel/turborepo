@@ -1873,6 +1873,10 @@
 <span id="1873">1873</span>
 <span id="1874">1874</span>
 <span id="1875">1875</span>
+<span id="1876">1876</span>
+<span id="1877">1877</span>
+<span id="1878">1878</span>
+<span id="1879">1879</span>
 </pre><pre class="rust"><code><span class="kw">mod </span>meta_state;
 <span class="kw">mod </span>stats;
 
@@ -3285,6 +3289,7 @@
                     active: state.scopes.iter().any(|scope| {
                         backend.with_scope(scope, |scope| scope.state.lock().is_active())
                     }),
+                    unloaded: <span class="bool-val">false</span>,
                 }
             }
             TaskMetaStateReadGuard::Partial(state) =&gt; TaskStatsInfo {
@@ -3298,6 +3303,7 @@
                     <span class="number">0
                 </span>},
                 active: <span class="bool-val">false</span>,
+                unloaded: <span class="bool-val">true</span>,
             },
             TaskMetaStateReadGuard::Unloaded(<span class="kw">_</span>) =&gt; TaskStatsInfo {
                 total_duration: <span class="prelude-val">None</span>,
@@ -3306,6 +3312,7 @@
                 root_scoped: <span class="bool-val">false</span>,
                 child_scopes: <span class="number">0</span>,
                 active: <span class="bool-val">false</span>,
+                unloaded: <span class="bool-val">true</span>,
             },
         }
     }
@@ -3747,6 +3754,7 @@
     <span class="kw">pub </span>root_scoped: bool,
     <span class="kw">pub </span>child_scopes: usize,
     <span class="kw">pub </span>active: bool,
+    <span class="kw">pub </span>unloaded: bool,
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="turbo_tasks_memory" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>
