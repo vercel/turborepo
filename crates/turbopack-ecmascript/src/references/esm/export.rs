@@ -225,7 +225,7 @@ impl CodeGenerateable for EsmExports {
             span: DUMMY_SP,
             props,
         });
-        let mut cjs_spread = if !cjs_exports.is_empty() {
+        let mut cjs_stmt = if !cjs_exports.is_empty() {
             Some(Stmt::Expr(ExprStmt {
                 span: DUMMY_SP,
                 expr: box Expr::Call(CallExpr {
@@ -250,15 +250,15 @@ impl CodeGenerateable for EsmExports {
             match program {
                 Program::Module(Module { body, .. }) => {
                     body.insert(0, ModuleItem::Stmt(stmt));
-                    if let Some(cjs_spread) = cjs_spread.clone() {
-                        body.push(ModuleItem::Stmt(cjs_spread));
+                    if let Some(cjs_stmt) = cjs_stmt.clone() {
+                        body.insert(1, ModuleItem::Stmt(cjs_stmt));
                     }
                 }
                 Program::Script(Script { body, .. }) => {
                     body.insert(0, stmt);
 
-                    if let Some(cjs_spread) = cjs_spread.clone() {
-                        body.push(cjs_spread);
+                    if let Some(cjs_stmt) = cjs_stmt.clone() {
+                        body.insert(1, cjs_stmt);
                     }
                 }
             }
