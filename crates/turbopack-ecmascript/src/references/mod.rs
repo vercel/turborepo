@@ -401,7 +401,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 .into();
                 analysis.add_code_gen(esm_exports);
                 EcmascriptExports::EsmExports(esm_exports)
-            } else if has_cjs_export(&program) {
+            } else if has_cjs_export(program) {
                 EcmascriptExports::CommonJs
             } else {
                 EcmascriptExports::None

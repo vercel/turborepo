@@ -1,8 +1,7 @@
 use anyhow::Result;
 use swc_core::{
     common::DUMMY_SP,
-    ecma::ast::{Callee, Expr, ExprOrSpread, Ident, Module, ModuleItem, Program, Script},
-    quote,
+    ecma::ast::{Callee, Expr, ExprOrSpread, Ident},
 };
 use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbopack_core::{
