@@ -435,7 +435,7 @@ impl SsrEntryVc {
 impl NodeEntry for SsrEntry {
     #[turbo_tasks::function]
     fn entry(self_vc: SsrEntryVc, _data: Value<ContentSourceData>) -> NodeRenderingEntryVc {
-        // Call without beeing keyed by data
+        // Call without being keyed by data
         self_vc.entry()
     }
 }
