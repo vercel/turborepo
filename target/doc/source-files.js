@@ -15,7 +15,7 @@ var sourcesIndex = JSON.parse('{\
 "turbo_tasks_macros_shared":["",[],["expand.rs","ident.rs","lib.rs","value_trait_arguments.rs"]],\
 "turbo_tasks_memory":["",[["task",[],["meta_state.rs","stats.rs"]],["viz",[],["graph.rs","mod.rs","table.rs"]]],["cell.rs","count_hash_set.rs","lib.rs","map_guard.rs","memory_backend.rs","memory_backend_with_pg.rs","output.rs","scope.rs","stats.rs","task.rs"]],\
 "turbo_tasks_testing":["",[],["lib.rs","macros.rs","retry.rs"]],\
-"turbopack":["",[["graph",[],["mod.rs"]],["module_options",[],["mod.rs","module_options_context.rs","module_rule.rs","rule_condition.rs"]],["rebase",[],["mod.rs"]],["transition",[],["mod.rs"]]],["evaluate_context.rs","lib.rs","resolve.rs","resolve_options_context.rs"]],\
+"turbopack":["",[["graph",[],["mod.rs"]],["module_options",[],["mod.rs","module_options_context.rs","module_rule.rs","rule_condition.rs"]],["rebase",[],["mod.rs"]],["transition",[],["mod.rs"]]],["condition.rs","evaluate_context.rs","lib.rs","resolve.rs","resolve_options_context.rs"]],\
 "turbopack_cli_utils":["",[],["issue.rs","lib.rs"]],\
 "turbopack_core":["",[["chunk",[],["dev.rs","mod.rs","optimize.rs"]],["introspect",[],["asset.rs","mod.rs"]],["issue",[],["analyze.rs","code_gen.rs","mod.rs","package_json.rs","resolve.rs","unsupported_module.rs"]],["reference",[],["mod.rs","source_map.rs"]],["resolve",[],["alias_map.rs","exports.rs","mod.rs","options.rs","origin.rs","parse.rs","pattern.rs"]]],["asset.rs","code_builder.rs","context.rs","environment.rs","lib.rs","reference_type.rs","source_asset.rs","source_map.rs","source_pos.rs","source_transform.rs","target.rs","utils.rs","version.rs","virtual_asset.rs"]],\
 "turbopack_create_test_app":["",[],["lib.rs","test_app_builder.rs"]],\

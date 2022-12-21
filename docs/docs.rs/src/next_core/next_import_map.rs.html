@@ -492,7 +492,7 @@
                 <span class="string">&quot;**/*/next/dist/client/components/react-dev-overlay/hot-reloader-client.js&quot;</span>,
             ),
             ImportMapping::PrimaryAlternative(
-                <span class="string">&quot;@vercel/turbopack-next/dev/hot-reloader&quot;</span>.to_string(),
+                <span class="string">&quot;@vercel/turbopack-next/dev/hot-reloader.tsx&quot;</span>.to_string(),
                 <span class="prelude-val">Some</span>(root),
             )
             .into(),
@@ -537,7 +537,7 @@
     // own
     </span>import_map.insert_exact_alias(
         <span class="string">&quot;next/dist/compiled/@next/react-dev-overlay/dist/client&quot;</span>,
-        request_to_import_mapping(package_root, <span class="string">&quot;./overlay/client&quot;</span>),
+        request_to_import_mapping(package_root, <span class="string">&quot;./overlay/client.ts&quot;</span>),
     );
 
     insert_package_alias(

@@ -150,10 +150,55 @@
 <span id="150">150</span>
 <span id="151">151</span>
 <span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
 </pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack::{
+    condition::ContextCondition,
     module_options::{ModuleOptionsContext, ModuleOptionsContextVc, PostCssTransformOptions},
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
 };
@@ -187,9 +232,7 @@
     <span class="kw">let </span>next_server_import_map = get_next_server_import_map(project_path, ty, next_config);
     <span class="kw">match </span>ty.into_value() {
         ServerContextType::Pages { .. } | ServerContextType::AppSSR { .. } =&gt; {
-            ResolveOptionsContext {
-                enable_typescript: <span class="bool-val">true</span>,
-                enable_react: <span class="bool-val">true</span>,
+            <span class="kw">let </span>resolve_options_context = ResolveOptionsContext {
                 enable_node_modules: <span class="bool-val">true</span>,
                 enable_node_externals: <span class="bool-val">true</span>,
                 enable_node_native_modules: <span class="bool-val">true</span>,
@@ -197,19 +240,37 @@
                 import_map: <span class="prelude-val">Some</span>(next_server_import_map),
                 module: <span class="bool-val">true</span>,
                 ..Default::default()
+            };
+            ResolveOptionsContext {
+                enable_typescript: <span class="bool-val">true</span>,
+                enable_react: <span class="bool-val">true</span>,
+                rules: <span class="macro">vec!</span>[(
+                    ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+                    resolve_options_context.clone().cell(),
+                )],
+                ..resolve_options_context
             }
         }
-        ServerContextType::AppRSC { .. } =&gt; ResolveOptionsContext {
-            enable_typescript: <span class="bool-val">true</span>,
-            enable_react: <span class="bool-val">true</span>,
-            enable_node_modules: <span class="bool-val">true</span>,
-            enable_node_externals: <span class="bool-val">true</span>,
-            enable_node_native_modules: <span class="bool-val">true</span>,
-            custom_conditions: <span class="macro">vec!</span>[<span class="string">&quot;development&quot;</span>.to_string(), <span class="string">&quot;react-server&quot;</span>.to_string()],
-            import_map: <span class="prelude-val">Some</span>(next_server_import_map),
-            module: <span class="bool-val">true</span>,
-            ..Default::default()
-        },
+        ServerContextType::AppRSC { .. } =&gt; {
+            <span class="kw">let </span>resolve_options_context = ResolveOptionsContext {
+                enable_node_modules: <span class="bool-val">true</span>,
+                enable_node_externals: <span class="bool-val">true</span>,
+                enable_node_native_modules: <span class="bool-val">true</span>,
+                custom_conditions: <span class="macro">vec!</span>[<span class="string">&quot;development&quot;</span>.to_string(), <span class="string">&quot;react-server&quot;</span>.to_string()],
+                import_map: <span class="prelude-val">Some</span>(next_server_import_map),
+                module: <span class="bool-val">true</span>,
+                ..Default::default()
+            };
+            ResolveOptionsContext {
+                enable_typescript: <span class="bool-val">true</span>,
+                enable_react: <span class="bool-val">true</span>,
+                rules: <span class="macro">vec!</span>[(
+                    ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+                    resolve_options_context.clone().cell(),
+                )],
+                ..resolve_options_context
+            }
+        }
     }
     .cell()
 }
@@ -239,38 +300,65 @@
     ty: Value&lt;ServerContextType&gt;,
 ) -&gt; ModuleOptionsContextVc {
     <span class="kw">let </span>module_options_context = <span class="kw">match </span>ty.into_value() {
-        ServerContextType::Pages { .. } =&gt; ModuleOptionsContext {
-            enable_styled_jsx: <span class="bool-val">true</span>,
-            enable_postcss_transform: <span class="prelude-val">Some</span>(PostCssTransformOptions {
-                postcss_package: <span class="prelude-val">Some</span>(get_postcss_package_mapping(project_path)),
+        ServerContextType::Pages { .. } =&gt; {
+            <span class="kw">let </span>module_options_context = ModuleOptionsContext {
+                execution_context: <span class="prelude-val">Some</span>(execution_context),
                 ..Default::default()
-            }),
-            enable_typescript_transform: <span class="bool-val">true</span>,
-            execution_context: <span class="prelude-val">Some</span>(execution_context),
-            ..Default::default()
-        },
-        ServerContextType::AppSSR { .. } =&gt; ModuleOptionsContext {
-            enable_styled_jsx: <span class="bool-val">true</span>,
-            enable_postcss_transform: <span class="prelude-val">Some</span>(PostCssTransformOptions {
-                postcss_package: <span class="prelude-val">Some</span>(get_postcss_package_mapping(project_path)),
+            };
+            ModuleOptionsContext {
+                enable_styled_jsx: <span class="bool-val">true</span>,
+                enable_postcss_transform: <span class="prelude-val">Some</span>(PostCssTransformOptions {
+                    postcss_package: <span class="prelude-val">Some</span>(get_postcss_package_mapping(project_path)),
+                    ..Default::default()
+                }),
+                enable_typescript_transform: <span class="bool-val">true</span>,
+                rules: <span class="macro">vec!</span>[(
+                    ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+                    module_options_context.clone().cell(),
+                )],
+                ..module_options_context
+            }
+        }
+        ServerContextType::AppSSR { .. } =&gt; {
+            <span class="kw">let </span>module_options_context = ModuleOptionsContext {
+                execution_context: <span class="prelude-val">Some</span>(execution_context),
                 ..Default::default()
-            }),
-            enable_typescript_transform: <span class="bool-val">true</span>,
-            execution_context: <span class="prelude-val">Some</span>(execution_context),
-            ..Default::default()
-        },
-        ServerContextType::AppRSC { .. } =&gt; ModuleOptionsContext {
-            enable_postcss_transform: <span class="prelude-val">Some</span>(PostCssTransformOptions {
-                postcss_package: <span class="prelude-val">Some</span>(get_postcss_package_mapping(project_path)),
+            };
+            ModuleOptionsContext {
+                enable_styled_jsx: <span class="bool-val">true</span>,
+                enable_postcss_transform: <span class="prelude-val">Some</span>(PostCssTransformOptions {
+                    postcss_package: <span class="prelude-val">Some</span>(get_postcss_package_mapping(project_path)),
+                    ..Default::default()
+                }),
+                enable_typescript_transform: <span class="bool-val">true</span>,
+                rules: <span class="macro">vec!</span>[(
+                    ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+                    module_options_context.clone().cell(),
+                )],
+                ..module_options_context
+            }
+        }
+        ServerContextType::AppRSC { .. } =&gt; {
+            <span class="kw">let </span>module_options_context = ModuleOptionsContext {
+                custom_ecmascript_transforms: <span class="macro">vec!</span>[EcmascriptInputTransform::ClientDirective(
+                    StringVc::cell(<span class="string">&quot;server-to-client&quot;</span>.to_string()),
+                )],
+                execution_context: <span class="prelude-val">Some</span>(execution_context),
                 ..Default::default()
-            }),
-            enable_typescript_transform: <span class="bool-val">true</span>,
-            custom_ecmascript_transforms: <span class="macro">vec!</span>[EcmascriptInputTransform::ClientDirective(
-                StringVc::cell(<span class="string">&quot;server-to-client&quot;</span>.to_string()),
-            )],
-            execution_context: <span class="prelude-val">Some</span>(execution_context),
-            ..Default::default()
-        },
+            };
+            ModuleOptionsContext {
+                enable_postcss_transform: <span class="prelude-val">Some</span>(PostCssTransformOptions {
+                    postcss_package: <span class="prelude-val">Some</span>(get_postcss_package_mapping(project_path)),
+                    ..Default::default()
+                }),
+                enable_typescript_transform: <span class="bool-val">true</span>,
+                rules: <span class="macro">vec!</span>[(
+                    ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+                    module_options_context.clone().cell(),
+                )],
+                ..module_options_context
+            }
+        }
     }
     .cell();
 

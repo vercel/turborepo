@@ -90,11 +90,18 @@
 <span id="90">90</span>
 <span id="91">91</span>
 <span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbopack_core::{
     environment::EnvironmentVc,
     resolve::options::{ImportMapVc, ResolvedMapVc},
 };
+
+<span class="kw">use </span><span class="kw">crate</span>::condition::ContextCondition;
 
 <span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
@@ -126,6 +133,9 @@
     </span><span class="kw">pub </span>fallback_import_map: <span class="prelude-ty">Option</span>&lt;ImportMapVc&gt;,
     <span class="doccomment">/// An additional resolved map to use after modules have been resolved.
     </span><span class="kw">pub </span>resolved_map: <span class="prelude-ty">Option</span>&lt;ResolvedMapVc&gt;,
+    <span class="doccomment">/// A list of rules to use a different resolve option context for certain
+    /// context paths. The first matching is used.
+    </span><span class="kw">pub </span>rules: Vec&lt;(ContextCondition, ResolveOptionsContextVc)&gt;,
     <span class="kw">pub </span>placeholder_for_future_extensions: (),
 }
 

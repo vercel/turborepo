@@ -254,6 +254,15 @@
 <span id="254">254</span>
 <span id="255">255</span>
 <span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -298,8 +307,17 @@
             <span class="kw-2">ref </span>custom_ecmascript_transforms,
             <span class="kw-2">ref </span>custom_rules,
             execution_context,
+            <span class="kw-2">ref </span>rules,
             ..
         } = <span class="kw-2">*</span>context.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if </span>!rules.is_empty() {
+            <span class="kw">let </span>path_value = path.<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">for </span>(condition, new_context) <span class="kw">in </span>rules.iter() {
+                <span class="kw">if </span>condition.matches(<span class="kw-2">&amp;</span>path_value) {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ModuleOptionsVc::new(path, <span class="kw-2">*</span>new_context));
+                }
+            }
+        }
         <span class="kw">let </span><span class="kw-2">mut </span>transforms = custom_ecmascript_app_transforms.clone();
         transforms.extend(custom_ecmascript_transforms.iter().cloned());
 

@@ -274,6 +274,21 @@
 <span id="274">274</span>
 <span id="275">275</span>
 <span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
 </pre><pre class="rust"><code><span class="kw">use </span>core::{default::Default, result::Result::Ok};
 <span class="kw">use </span>std::collections::HashMap;
 
@@ -282,6 +297,7 @@
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack::{
+    condition::ContextCondition,
     module_options::{
         module_options_context::{ModuleOptionsContext, ModuleOptionsContextVc},
         ModuleRule, ModuleRuleCondition, ModuleRuleEffect, PostCssTransformOptions,
@@ -347,9 +363,7 @@
     <span class="kw">let </span>next_client_import_map = get_next_client_import_map(project_path, ty);
     <span class="kw">let </span>next_client_fallback_import_map = get_next_client_fallback_import_map(ty);
     <span class="kw">let </span>next_client_resolved_map = get_next_client_resolved_map(project_path, project_path);
-    ResolveOptionsContext {
-        enable_typescript: <span class="bool-val">true</span>,
-        enable_react: <span class="bool-val">true</span>,
+    <span class="kw">let </span>module_options_context = ResolveOptionsContext {
         enable_node_modules: <span class="bool-val">true</span>,
         custom_conditions: <span class="macro">vec!</span>[<span class="string">&quot;development&quot;</span>.to_string()],
         import_map: <span class="prelude-val">Some</span>(next_client_import_map),
@@ -358,6 +372,15 @@
         browser: <span class="bool-val">true</span>,
         module: <span class="bool-val">true</span>,
         ..Default::default()
+    };
+    ResolveOptionsContext {
+        enable_typescript: <span class="bool-val">true</span>,
+        enable_react: <span class="bool-val">true</span>,
+        rules: <span class="macro">vec!</span>[(
+            ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+            module_options_context.clone().cell(),
+        )],
+        ..module_options_context
     }
     .cell()
 }
@@ -376,6 +399,11 @@
             </span>.is_found();
 
     <span class="kw">let </span>module_options_context = ModuleOptionsContext {
+        preset_env_versions: <span class="prelude-val">Some</span>(env),
+        execution_context: <span class="prelude-val">Some</span>(execution_context),
+        ..Default::default()
+    };
+    <span class="kw">let </span>module_options_context = ModuleOptionsContext {
         <span class="comment">// We don&#39;t need to resolve React Refresh for each module. Instead,
         // we try resolve it once at the root and pass down a context to all
         // the modules.
@@ -388,9 +416,11 @@
             ..Default::default()
         }),
         enable_typescript_transform: <span class="bool-val">true</span>,
-        preset_env_versions: <span class="prelude-val">Some</span>(env),
-        execution_context: <span class="prelude-val">Some</span>(execution_context),
-        ..Default::default()
+        rules: <span class="macro">vec!</span>[(
+            ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+            module_options_context.clone().cell(),
+        )],
+        ..module_options_context
     };
 
     <span class="prelude-val">Ok</span>(add_next_font_transform(module_options_context.cell()))

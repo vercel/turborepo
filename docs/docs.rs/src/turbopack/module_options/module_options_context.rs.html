@@ -43,6 +43,10 @@
 <span id="43">43</span>
 <span id="44">44</span>
 <span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
 </pre><pre class="rust"><code><span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
 <span class="kw">use </span>turbopack_core::{environment::EnvironmentVc, resolve::options::ImportMappingVc};
@@ -50,6 +54,7 @@
 <span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
 
 <span class="kw">use </span><span class="kw">super</span>::ModuleRule;
+<span class="kw">use </span><span class="kw">crate</span>::condition::ContextCondition;
 
 <span class="attr">#[derive(Default, Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>PostCssTransformOptions {
@@ -72,6 +77,9 @@
     <span class="doccomment">/// Custom rules to be applied after all default rules.
     </span><span class="kw">pub </span>custom_rules: Vec&lt;ModuleRule&gt;,
     <span class="kw">pub </span>execution_context: <span class="prelude-ty">Option</span>&lt;ExecutionContextVc&gt;,
+    <span class="doccomment">/// A list of rules to use a different module option context for certain
+    /// context paths. The first matching is used.
+    </span><span class="kw">pub </span>rules: Vec&lt;(ContextCondition, ModuleOptionsContextVc)&gt;,
     <span class="kw">pub </span>placeholder_for_future_extensions: (),
 }
 

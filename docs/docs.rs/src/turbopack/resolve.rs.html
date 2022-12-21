@@ -264,6 +264,15 @@
 <span id="264">264</span>
 <span id="265">265</span>
 <span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -497,10 +506,19 @@
     context: FileSystemPathVc,
     options_context: ResolveOptionsContextVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveOptionsVc&gt; {
+    <span class="kw">let </span>options_context_value = options_context.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">if </span>!options_context_value.rules.is_empty() {
+        <span class="kw">let </span>context_value = <span class="kw-2">&amp;*</span>context.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">for </span>(condition, new_options_context) <span class="kw">in </span>options_context_value.rules.iter() {
+            <span class="kw">if </span>condition.matches(context_value) {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(resolve_options(context, <span class="kw-2">*</span>new_options_context));
+            }
+        }
+    }
+
     <span class="kw">let </span>resolve_options = base_resolve_options(context, options_context);
 
-    <span class="kw">let </span>options_context = options_context.<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>resolve_options = <span class="kw">if </span>options_context.enable_typescript {
+    <span class="kw">let </span>resolve_options = <span class="kw">if </span>options_context_value.enable_typescript {
         <span class="kw">let </span>tsconfig = find_context_file(context, tsconfig()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>cjs_resolve_options = apply_cjs_specific_options(resolve_options);
         <span class="kw">match </span><span class="kw-2">*</span>tsconfig {
@@ -516,12 +534,12 @@
 
     <span class="comment">// Make sure to always apply `options_context.import_map` last, so it properly
     // overwrites any other mappings.
-    </span><span class="kw">let </span>resolve_options = options_context
+    </span><span class="kw">let </span>resolve_options = options_context_value
         .import_map
         .map(|import_map| resolve_options.with_extended_import_map(import_map))
         .unwrap_or(resolve_options);
     <span class="comment">// And the same for the fallback_import_map
-    </span><span class="kw">let </span>resolve_options = options_context
+    </span><span class="kw">let </span>resolve_options = options_context_value
         .fallback_import_map
         .map(|fallback_import_map| {
             resolve_options.with_extended_fallback_import_map(fallback_import_map)
