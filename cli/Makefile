@@ -22,7 +22,7 @@ GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/t
 turbo: libturbo.a
 	cargo build --manifest-path ../crates/turborepo/Cargo.toml
 
-libturbo.a: stub.c
+libturbo.a: $(GENERATED_FILES) $(SRC_FILES) go.mod stub.c
 	go build -buildmode=c-archive -o libturbo.a  ./cmd/turbo/...
 	clang -Wall -c -o libturbo.a stub.c
 
