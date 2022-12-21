@@ -224,7 +224,7 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
     import_map.insert_wildcard_alias("next/", ImportMapping::External(None).into());
 
     let context = node_evaluate_asset_context(Some(import_map.cell()));
-    let find_config_result = find_context_file(project_root, next_configs());
+    let find_config_result = find_context_file(project_root, next_configs(), false);
     let config_asset = match &*find_config_result.await? {
         FindContextFileResult::Found(config_path, _) => Some(SourceAssetVc::new(*config_path)),
         FindContextFileResult::NotFound(_) => None,

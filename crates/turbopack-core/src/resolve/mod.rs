@@ -401,9 +401,13 @@ pub enum FindContextFileResult {
 pub async fn find_context_file(
     context: FileSystemPathVc,
     names: StringsVc,
+    allow_node_modules: bool,
 ) -> Result<FindContextFileResultVc> {
     let mut refs = Vec::new();
     let context_value = context.await?;
+    if !allow_node_modules && context_value.path.contains("/node_modules/") {
+        return Ok(FindContextFileResult::NotFound(refs).into());
+    }
     for name in &*names.await? {
         let fs_path = context.join(name);
         if let Some(fs_path) = exists(fs_path, &mut refs).await? {
@@ -415,9 +419,13 @@ pub async fn find_context_file(
     }
     if refs.is_empty() {
         // Tailcall
-        Ok(find_context_file(context.parent(), names))
+        Ok(find_context_file(
+            context.parent(),
+            names,
+            allow_node_modules,
+        ))
     } else {
-        let parent_result = find_context_file(context.parent(), names).await?;
+        let parent_result = find_context_file(context.parent(), names, allow_node_modules).await?;
         Ok(match &*parent_result {
             FindContextFileResult::Found(p, r) => {
                 refs.extend(r.iter().copied());
@@ -1014,7 +1022,7 @@ async fn resolved(
         match resolve_in {
             ResolveInPackage::AliasField(field) => {
                 if let FindContextFileResult::Found(package_json, refs) =
-                    &*find_context_file(fs_path.parent(), package_json()).await?
+                    &*find_context_file(fs_path.parent(), package_json(), true).await?
                 {
                     if let FileJsonContent::Content(package) = &*package_json.read_json().await? {
                         if let Some(field_value) = package[field].as_object() {

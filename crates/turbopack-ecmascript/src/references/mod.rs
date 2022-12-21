@@ -184,7 +184,7 @@ pub(crate) async fn analyze_ecmascript_module(
 
     let parsed = parse(source, ty, transforms);
 
-    match &*find_context_file(path.parent(), package_json()).await? {
+    match &*find_context_file(path.parent(), package_json(), true).await? {
         FindContextFileResult::Found(package_json, _) => {
             analysis.add_reference(PackageJsonReferenceVc::new(*package_json));
         }
@@ -192,7 +192,7 @@ pub(crate) async fn analyze_ecmascript_module(
     };
 
     if is_typescript {
-        match &*find_context_file(path.parent(), tsconfig()).await? {
+        match &*find_context_file(path.parent(), tsconfig(), false).await? {
             FindContextFileResult::Found(tsconfig, _) => {
                 analysis.add_reference(TsConfigReferenceVc::new(origin, *tsconfig));
             }

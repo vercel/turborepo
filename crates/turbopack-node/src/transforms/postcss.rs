@@ -137,7 +137,8 @@ impl PostCssTransformedAssetVc {
     #[turbo_tasks::function]
     async fn process(self) -> Result<ProcessPostCssResultVc> {
         let this = self.await?;
-        let find_config_result = find_context_file(this.source.path().parent(), postcss_configs());
+        let find_config_result =
+            find_context_file(this.source.path().parent(), postcss_configs(), false);
         let FindContextFileResult::Found(config_path, _) = *find_config_result.await? else {
             return Ok(ProcessPostCssResult {
                 content: this.source.content(),
