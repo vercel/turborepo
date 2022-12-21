@@ -551,10 +551,6 @@
 <span id="551">551</span>
 <span id="552">552</span>
 <span id="553">553</span>
-<span id="554">554</span>
-<span id="555">555</span>
-<span id="556">556</span>
-<span id="557">557</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -721,13 +717,9 @@
                         // `std::io::ErrorKind::AddrInUse`.
                         </span>e.source()
                             .map(|e| {
-                                e.source()
-                                    .map(|e| {
-                                        e.downcast_ref::&lt;std::io::Error&gt;()
-                                            .map(|e| e.kind() == std::io::ErrorKind::AddrInUse)
-                                            == <span class="prelude-val">Some</span>(<span class="bool-val">true</span>)
-                                    })
-                                    .unwrap_or_else(|| <span class="bool-val">false</span>)
+                                e.downcast_ref::&lt;std::io::Error&gt;()
+                                    .map(|e| e.kind() == std::io::ErrorKind::AddrInUse)
+                                    == <span class="prelude-val">Some</span>(<span class="bool-val">true</span>)
                             })
                             .unwrap_or_else(|| <span class="bool-val">false</span>)
                     } <span class="kw">else </span>{

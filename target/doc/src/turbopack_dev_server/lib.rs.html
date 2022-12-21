@@ -519,7 +519,7 @@
     }
 }
 
-<span class="attr">#[derive(TraceRawVcs)]
+<span class="attr">#[derive(TraceRawVcs, Debug)]
 </span><span class="kw">pub struct </span>DevServerBuilder {
     <span class="attr">#[turbo_tasks(trace_ignore)]
     </span><span class="kw">pub </span>addr: SocketAddr,
