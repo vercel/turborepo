@@ -162,6 +162,18 @@ function esm(exports, getters) {
 }
 
 /**
+ * Adds the getters to the exports object
+ *
+ * @param {Exports} exports
+ * @param {Record<string, any>} props
+ */
+function cjs(exports, props) {
+  for (const key in props) {
+    defineProp(exports, key, { get: () => props[key], enumerable: true });
+  }
+}
+
+/**
  * @param {Module} module
  * @param {any} value
  */
@@ -379,6 +391,7 @@ function instantiateModule(id, sourceType, sourceId) {
       x: externalRequire,
       i: esmImport.bind(null, module),
       s: esm.bind(null, module.exports),
+      j: cjs.bind(null, module.exports),
       v: exportValue.bind(null, module),
       m: module,
       c: moduleCache,
@@ -386,7 +399,6 @@ function instantiateModule(id, sourceType, sourceId) {
       p: _process,
       g: globalThis,
       __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
-    });
   });
 
   module.loaded = true;
