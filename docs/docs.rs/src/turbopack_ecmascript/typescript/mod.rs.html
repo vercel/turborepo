@@ -268,13 +268,37 @@
 <span id="268">268</span>
 <span id="269">269</span>
 <span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
 </pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::{ValueToString, ValueToStringVc};
 <span class="kw">pub mod </span>resolve;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde_json::Value <span class="kw">as </span>JsonValue;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span class="kw">use </span>turbo_tasks_fs::{DirectoryContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
@@ -385,7 +409,31 @@
                 </span>}
             })
             .<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>types = types.unwrap_or_else(|| <span class="macro">vec!</span>[(<span class="self">self</span>.source, <span class="string">&quot;node&quot;</span>.to_string())]);
+            <span class="kw">let </span>types = <span class="kw">if let </span><span class="prelude-val">Some</span>(types) = types {
+                types
+            } <span class="kw">else </span>{
+                <span class="kw">let </span><span class="kw-2">mut </span>all_types = Vec::new();
+                <span class="kw">let </span><span class="kw-2">mut </span>current = <span class="self">self</span>.source.path().parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">loop </span>{
+                    <span class="kw">if let </span>DirectoryContent::Entries(entries) =
+                        <span class="kw-2">&amp;*</span>current.join(<span class="string">&quot;node_modules/@types&quot;</span>).read_dir().<span class="kw">await</span><span class="question-mark">?
+                    </span>{
+                        all_types.extend(entries.iter().filter_map(|(name, <span class="kw">_</span>)| {
+                            <span class="kw">if </span>name.starts_with(<span class="string">&#39;.&#39;</span>) {
+                                <span class="prelude-val">None
+                            </span>} <span class="kw">else </span>{
+                                <span class="prelude-val">Some</span>((<span class="self">self</span>.source, name.to_string()))
+                            }
+                        }));
+                    }
+                    <span class="kw">let </span>parent = current.parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">if </span>parent == current {
+                        <span class="kw">break</span>;
+                    }
+                    current = parent;
+                }
+                all_types
+            };
             <span class="kw">for </span>(<span class="kw">_</span>, name) <span class="kw">in </span>types {
                 references.push(
                     TsConfigTypesReferenceVc::new(
