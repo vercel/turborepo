@@ -64,7 +64,7 @@ PostCSS gives you the ability to use plugins to enhance your CSS toolchain. It's
 
 The most common pattern is adding a `postcss.config.js` file to the root of your application, where you can import and configure your plugins.
 
-Currently, it is relying on JavaScript version of postcss, by launching node.js process.
+When Turbopack finds a `postcss.config.js` file, it will automatically process your CSS files with PostCSS in a Node.js worker pool.
 
 ## SCSS and LESS
 
@@ -74,4 +74,4 @@ These are likely to be available via plugins in the future.
 
 ## Tailwind CSS
 
-Tailwind CSS can be used via PostCSS plugins.
+Tailwind CSS can be used via PostCSS plugins. You can use the [official Tailwind Next.js guide](https://tailwindcss.com/docs/guides/nextjs) to get started.
