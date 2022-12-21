@@ -16,19 +16,17 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          # - host: ubuntu-latest
-          #   container: ubuntu:xenial
-          #   container-options: "--platform=linux/amd64 --rm"
-          #   container-setup: "apt-get update && apt-get install -y curl"
-          #   target: "x86_64-unknown-linux-musl"
-          #   lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
-          #   setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev musl-tools musl-dev"
           - host: ubuntu-latest
-            container-options: "--platform=linux/arm64 --rm"
-            target: "aarch64-unknown-linux-musl"
+            container: clux/muslrust:stable
+            container-options: "--rm"
+            target: "x86_64-unknown-linux-musl"
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
-            rustflags: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Ctarget-feature=-crt-static -Clinker=aarch64-linux-gnu-gcc -Clink-arg=-lgcc"'
-            setup: "sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu"
+          # - host: ubuntu-latest
+          #   container-options: "--platform=linux/arm64 --rm"
+          #   target: "aarch64-unknown-linux-musl"
+          #   lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
+          #   rustflags: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Ctarget-feature=-crt-static -Clinker=aarch64-linux-gnu-gcc -Clink-arg=-lgcc"'
+          #   setup: "sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu"
     name: Build - ${{ matrix.settings.host }} (${{ matrix.settings.target }})
     runs-on: ${{ matrix.settings.host }}
     container:
