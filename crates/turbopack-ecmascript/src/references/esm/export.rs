@@ -7,9 +7,13 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use swc_core::{
     common::DUMMY_SP,
-    ecma::ast::{
-        ComputedPropName, Expr, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, Module,
-        ModuleItem, ObjectLit, Program, Prop, PropName, PropOrSpread, Script, SpreadElement, Str,
+    ecma::{
+        ast::{
+            CallExpr, ComputedPropName, Expr, ExprStmt, Ident, KeyValueProp, Lit, MemberExpr,
+            MemberProp, Module, ModuleItem, ObjectLit, Program, Prop, PropName, PropOrSpread,
+            Script, SpreadElement, Stmt, Str,
+        },
+        utils::{quote_ident, ExprFactory},
     },
     quote,
 };
@@ -217,11 +221,27 @@ impl CodeGenerateable for EsmExports {
                 })));
             }
         }
-        cjs_exports.extend(props);
         let getters = Expr::Object(ObjectLit {
             span: DUMMY_SP,
-            props: cjs_exports,
+            props,
         });
+        let mut cjs_spread = if !cjs_exports.is_empty() {
+            Some(Stmt::Expr(ExprStmt {
+                span: DUMMY_SP,
+                expr: box Expr::Call(CallExpr {
+                    span: DUMMY_SP,
+                    callee: quote_ident!("__turbopack__cjs__").as_callee(),
+                    args: vec![ObjectLit {
+                        span: DUMMY_SP,
+                        props: cjs_exports,
+                    }
+                    .as_arg()],
+                    type_args: Default::default(),
+                }),
+            }))
+        } else {
+            None
+        };
 
         visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {
             let stmt = quote!("__turbopack_esm__($getters);" as Stmt,
@@ -230,9 +250,16 @@ impl CodeGenerateable for EsmExports {
             match program {
                 Program::Module(Module { body, .. }) => {
                     body.insert(0, ModuleItem::Stmt(stmt));
+                    if let Some(cjs_spread) = cjs_spread.clone() {
+                        body.push(ModuleItem::Stmt(cjs_spread));
+                    }
                 }
                 Program::Script(Script { body, .. }) => {
                     body.insert(0, stmt);
+
+                    if let Some(cjs_spread) = cjs_spread.clone() {
+                        body.push(cjs_spread);
+                    }
                 }
             }
         }));
