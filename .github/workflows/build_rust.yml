@@ -21,6 +21,7 @@ jobs:
             container-options: "--rm"
             target: "x86_64-unknown-linux-musl"
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
+            setup: "apt update -y && apt install clang -y"
           # - host: ubuntu-latest
           #   container-options: "--platform=linux/arm64 --rm"
           #   target: "aarch64-unknown-linux-musl"
