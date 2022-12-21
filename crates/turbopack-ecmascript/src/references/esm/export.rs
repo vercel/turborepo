@@ -13,7 +13,7 @@ use swc_core::{
             MemberProp, Module, ModuleItem, ObjectLit, Program, Prop, PropName, PropOrSpread,
             Script, SpreadElement, Stmt, Str,
         },
-        utils::{quote_ident, ExprFactory},
+        utils::{quote_ident, ExprFactory, StmtLike},
     },
     quote,
 };
@@ -237,14 +237,16 @@ impl CodeGenerateable for EsmExports {
                 Program::Module(Module { body, .. }) => {
                     body.insert(0, ModuleItem::Stmt(stmt));
                     if let Some(cjs_stmt) = cjs_stmt.clone() {
-                        body.push(ModuleItem::Stmt(cjs_stmt));
+                        let loc = cjs_insertion_index(body);
+                        body.insert(loc, ModuleItem::Stmt(cjs_stmt));
                     }
                 }
                 Program::Script(Script { body, .. }) => {
                     body.insert(0, stmt);
 
                     if let Some(cjs_stmt) = cjs_stmt.clone() {
-                        body.push(cjs_stmt);
+                        let loc = cjs_insertion_index(body);
+                        body.insert(loc, cjs_stmt);
                     }
                 }
             }
@@ -252,4 +254,26 @@ impl CodeGenerateable for EsmExports {
 
         Ok(CodeGeneration { visitors }.into())
     }
+}
+
+/// Insert the CJS export statement before the hoister directive. Practically,
+/// this places the cjs export statement right after the import statements.
+fn cjs_insertion_index<N>(stmts: &[N]) -> usize
+where
+    N: StmtLike,
+{
+    stmts
+        .iter()
+        .position(|s| {
+            if let Some(Stmt::Expr(ExprStmt { expr, .. })) = s.as_stmt() {
+                if let Expr::Lit(Lit::Str(Str { value, .. })) = &**expr {
+                    value == "__TURBOPACK__ecmascript__hoisting__location__"
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        })
+        .unwrap_or(stmts.len())
 }
