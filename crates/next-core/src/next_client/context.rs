@@ -72,9 +72,7 @@ pub fn get_client_resolve_options_context(
     let next_client_import_map = get_next_client_import_map(project_path, ty);
     let next_client_fallback_import_map = get_next_client_fallback_import_map(ty);
     let next_client_resolved_map = get_next_client_resolved_map(project_path, project_path);
-    ResolveOptionsContext {
-        enable_typescript: true,
-        enable_react: true,
+    let module_options_context = ResolveOptionsContext {
         enable_node_modules: true,
         custom_conditions: vec!["development".to_string()],
         import_map: Some(next_client_import_map),
@@ -82,23 +80,16 @@ pub fn get_client_resolve_options_context(
         resolved_map: Some(next_client_resolved_map),
         browser: true,
         module: true,
+        ..Default::default()
+    };
+    ResolveOptionsContext {
+        enable_typescript: true,
+        enable_react: true,
         rules: vec![(
             ContextCondition::InDirectory("node_modules".to_string()),
-            Some(
-                ResolveOptionsContext {
-                    enable_node_modules: true,
-                    custom_conditions: vec!["development".to_string()],
-                    import_map: Some(next_client_import_map),
-                    fallback_import_map: Some(next_client_fallback_import_map),
-                    resolved_map: Some(next_client_resolved_map),
-                    browser: true,
-                    module: true,
-                    ..Default::default()
-                }
-                .cell(),
-            ),
+            module_options_context.clone().cell(),
         )],
-        ..Default::default()
+        ..module_options_context
     }
     .cell()
 }
@@ -117,6 +108,11 @@ pub async fn get_client_module_options_context(
             .is_found();
 
     let module_options_context = ModuleOptionsContext {
+        preset_env_versions: Some(env),
+        execution_context: Some(execution_context),
+        ..Default::default()
+    };
+    let module_options_context = ModuleOptionsContext {
         // We don't need to resolve React Refresh for each module. Instead,
         // we try resolve it once at the root and pass down a context to all
         // the modules.
@@ -129,20 +125,11 @@ pub async fn get_client_module_options_context(
             ..Default::default()
         }),
         enable_typescript_transform: true,
-        preset_env_versions: Some(env),
-        execution_context: Some(execution_context),
         rules: vec![(
             ContextCondition::InDirectory("node_modules".to_string()),
-            Some(
-                ModuleOptionsContext {
-                    preset_env_versions: Some(env),
-                    execution_context: Some(execution_context),
-                    ..Default::default()
-                }
-                .cell(),
-            ),
+            module_options_context.clone().cell(),
         )],
-        ..Default::default()
+        ..module_options_context
     };
 
     Ok(add_next_font_transform(module_options_context.cell()))

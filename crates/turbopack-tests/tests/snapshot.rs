@@ -173,14 +173,12 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
             custom_conditions: vec!["development".to_string()],
             rules: vec![(
                 ContextCondition::InDirectory("node_modules".to_string()),
-                Some(
-                    ResolveOptionsContext {
-                        enable_node_modules: true,
-                        custom_conditions: vec!["development".to_string()],
-                        ..Default::default()
-                    }
-                    .cell(),
-                ),
+                ResolveOptionsContext {
+                    enable_node_modules: true,
+                    custom_conditions: vec!["development".to_string()],
+                    ..Default::default()
+                }
+                .cell(),
             )],
             ..Default::default()
         }

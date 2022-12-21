@@ -38,7 +38,7 @@ pub struct ResolveOptionsContext {
     pub resolved_map: Option<ResolvedMapVc>,
     /// A list of rules to use a different resolve option context for certain
     /// context paths. The first matching is used.
-    pub rules: Vec<(ContextCondition, Option<ResolveOptionsContextVc>)>,
+    pub rules: Vec<(ContextCondition, ResolveOptionsContextVc)>,
     pub placeholder_for_future_extensions: (),
 }
 

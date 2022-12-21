@@ -30,7 +30,7 @@ pub struct ModuleOptionsContext {
     pub execution_context: Option<ExecutionContextVc>,
     /// A list of rules to use a different module option context for certain
     /// context paths. The first matching is used.
-    pub rules: Vec<(ContextCondition, Option<ModuleOptionsContextVc>)>,
+    pub rules: Vec<(ContextCondition, ModuleOptionsContextVc)>,
     pub placeholder_for_future_extensions: (),
 }
 

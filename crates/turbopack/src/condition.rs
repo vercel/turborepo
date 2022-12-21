@@ -8,11 +8,14 @@ pub enum ContextCondition {
 }
 
 impl ContextCondition {
+    /// Returns true if the condition matches the context.
     pub fn matches(&self, context: &FileSystemPath) -> bool {
         match self {
             ContextCondition::InDirectory(dir) => {
                 context.path.starts_with(&format!("{dir}/"))
                     || context.path.contains(&format!("/{dir}/"))
+                    || context.path.ends_with(&format!("/{dir}"))
+                    || context.path == *dir
             }
         }
     }
