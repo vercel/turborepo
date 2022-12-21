@@ -429,6 +429,16 @@
 <span id="429">429</span>
 <span id="430">430</span>
 <span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -828,17 +838,18 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>NodeEntry <span class="kw">for </span>SsrEntry {
+</span><span class="kw">impl </span>SsrEntryVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>entry(<span class="kw-2">&amp;</span><span class="self">self</span>, _data: Value&lt;ContentSourceData&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;NodeRenderingEntryVc&gt; {
-        <span class="kw">let </span>virtual_asset = <span class="kw">if </span><span class="kw-2">*</span><span class="self">self</span>.is_api_path.<span class="kw">await</span><span class="question-mark">? </span>{
+    </span><span class="kw">async fn </span>entry(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;NodeRenderingEntryVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>virtual_asset = <span class="kw">if </span><span class="kw-2">*</span>this.is_api_path.<span class="kw">await</span><span class="question-mark">? </span>{
             VirtualAssetVc::new(
-                <span class="self">self</span>.entry_asset.path().join(<span class="string">&quot;server-api.tsx&quot;</span>),
+                this.entry_asset.path().join(<span class="string">&quot;server-api.tsx&quot;</span>),
                 next_js_file(<span class="string">&quot;entry/server-api.tsx&quot;</span>).into(),
             )
         } <span class="kw">else </span>{
             VirtualAssetVc::new(
-                <span class="self">self</span>.entry_asset.path().join(<span class="string">&quot;server-renderer.tsx&quot;</span>),
+                this.entry_asset.path().join(<span class="string">&quot;server-renderer.tsx&quot;</span>),
                 next_js_file(<span class="string">&quot;entry/server-renderer.tsx&quot;</span>).into(),
             )
         };
@@ -846,18 +857,27 @@
         <span class="prelude-val">Ok</span>(NodeRenderingEntry {
             module: EcmascriptModuleAssetVc::new(
                 virtual_asset.into(),
-                <span class="self">self</span>.context,
+                this.context,
                 Value::new(EcmascriptModuleAssetType::Typescript),
                 EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[
                     EcmascriptInputTransform::TypeScript,
                     EcmascriptInputTransform::React { refresh: <span class="bool-val">false </span>},
                 ]),
-                <span class="self">self</span>.context.environment(),
+                this.context.environment(),
             ),
-            chunking_context: <span class="self">self</span>.chunking_context,
-            intermediate_output_path: <span class="self">self</span>.intermediate_output_path,
+            chunking_context: this.chunking_context,
+            intermediate_output_path: this.intermediate_output_path,
         }
         .cell())
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>NodeEntry <span class="kw">for </span>SsrEntry {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>entry(self_vc: SsrEntryVc, _data: Value&lt;ContentSourceData&gt;) -&gt; NodeRenderingEntryVc {
+        <span class="comment">// Call without being keyed by data
+        </span>self_vc.entry()
     }
 }
 </code></pre></div>

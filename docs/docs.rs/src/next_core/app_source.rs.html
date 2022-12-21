@@ -687,6 +687,17 @@
 <span id="687">687</span>
 <span id="688">688</span>
 <span id="689">689</span>
+<span id="690">690</span>
+<span id="691">691</span>
+<span id="692">692</span>
+<span id="693">693</span>
+<span id="694">694</span>
+<span id="695">695</span>
+<span id="696">696</span>
+<span id="697">697</span>
+<span id="698">698</span>
+<span id="699">699</span>
+<span id="700">700</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
@@ -1187,16 +1198,12 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>NodeEntry <span class="kw">for </span>AppRenderer {
+</span><span class="kw">impl </span>AppRendererVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>entry(<span class="kw-2">&amp;</span><span class="self">self</span>, data: Value&lt;ContentSourceData&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;NodeRenderingEntryVc&gt; {
-        <span class="kw">let </span>is_rsc = <span class="kw">if let </span><span class="prelude-val">Some</span>(headers) = data.into_value().headers {
-            headers.contains_key(<span class="string">&quot;rsc&quot;</span>)
-        } <span class="kw">else </span>{
-            <span class="bool-val">false
-        </span>};
-        <span class="kw">let </span>layout_path = <span class="self">self</span>.layout_path.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>page = <span class="self">self</span>.page_path;
+    </span><span class="kw">async fn </span>entry(<span class="self">self</span>, is_rsc: bool) -&gt; <span class="prelude-ty">Result</span>&lt;NodeRenderingEntryVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>layout_path = this.layout_path.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>page = this.page_path;
         <span class="kw">let </span>path = page.parent();
         <span class="kw">let </span>path_value = <span class="kw-2">&amp;*</span>path.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>layout_and_page = layout_path
@@ -1205,7 +1212,7 @@
             .chain(std::iter::once(
                 LayoutSegment {
                     files: HashMap::from([(<span class="string">&quot;page&quot;</span>.to_string(), page)]),
-                    target: <span class="self">self</span>.target,
+                    target: this.target,
                 }
                 .cell(),
             ))
@@ -1214,7 +1221,7 @@
         <span class="kw">let </span>segments: Vec&lt;<span class="kw">_</span>&gt; = layout_and_page
             .into_iter()
             .fold(
-                (<span class="self">self</span>.server_root, Vec::new()),
+                (this.server_root, Vec::new()),
                 |(last_path, <span class="kw-2">mut </span>futures), segment| {
                     (segment.target, {
                         futures.push(<span class="kw">async move </span>{
@@ -1307,19 +1314,19 @@ import BOOTSTRAP from {};
         <span class="kw">let </span>file = File::from(result.build());
         <span class="kw">let </span>asset = VirtualAssetVc::new(path.join(<span class="string">&quot;entry&quot;</span>), file.into());
         <span class="kw">let </span>(context, intermediate_output_path) = <span class="kw">if </span>is_rsc {
-            (<span class="self">self</span>.context, <span class="self">self</span>.intermediate_output_path.join(<span class="string">&quot;rsc&quot;</span>))
+            (this.context, this.intermediate_output_path.join(<span class="string">&quot;rsc&quot;</span>))
         } <span class="kw">else </span>{
-            (<span class="self">self</span>.context_ssr, <span class="self">self</span>.intermediate_output_path)
+            (this.context_ssr, this.intermediate_output_path)
         };
 
         <span class="kw">let </span>chunking_context = DevChunkingContextVc::builder(
-            <span class="self">self</span>.project_path,
+            this.project_path,
             intermediate_output_path,
             intermediate_output_path.join(<span class="string">&quot;chunks&quot;</span>),
-            <span class="self">self</span>.server_root.join(<span class="string">&quot;_next/static/assets&quot;</span>),
+            this.server_root.join(<span class="string">&quot;_next/static/assets&quot;</span>),
         )
         .layer(<span class="string">&quot;ssr&quot;</span>)
-        .css_chunk_root_path(<span class="self">self</span>.server_root.join(<span class="string">&quot;_next/static/chunks&quot;</span>))
+        .css_chunk_root_path(this.server_root.join(<span class="string">&quot;_next/static/chunks&quot;</span>))
         .build();
 
         <span class="prelude-val">Ok</span>(NodeRenderingEntry {
@@ -1337,6 +1344,21 @@ import BOOTSTRAP from {};
             intermediate_output_path,
         }
         .cell())
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>NodeEntry <span class="kw">for </span>AppRenderer {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>entry(self_vc: AppRendererVc, data: Value&lt;ContentSourceData&gt;) -&gt; NodeRenderingEntryVc {
+        <span class="kw">let </span>data = data.into_value();
+        <span class="kw">let </span>is_rsc = <span class="kw">if let </span><span class="prelude-val">Some</span>(headers) = data.headers {
+            headers.contains_key(<span class="string">&quot;rsc&quot;</span>)
+        } <span class="kw">else </span>{
+            <span class="bool-val">false
+        </span>};
+        <span class="comment">// Call with only is_rsc as key
+        </span>self_vc.entry(is_rsc)
     }
 }
 
