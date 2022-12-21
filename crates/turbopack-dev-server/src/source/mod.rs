@@ -73,11 +73,15 @@ pub enum ContentSourceContent {
     NotFound,
     Static(VersionedContentVc),
     HttpProxy(ProxyResultVc),
-    NeedData {
-        source: ContentSourceVc,
-        path: String,
-        vary: ContentSourceDataVary,
-    },
+    NeedData(NeededData),
+}
+
+#[turbo_tasks::value(shared)]
+#[derive(Debug, Clone)]
+pub struct NeededData {
+    pub source: ContentSourceVc,
+    pub path: String,
+    pub vary: ContentSourceDataVary,
 }
 
 impl From<VersionedContentVc> for ContentSourceContentVc {

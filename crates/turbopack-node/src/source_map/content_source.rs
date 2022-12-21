@@ -6,7 +6,7 @@ use turbopack_core::{
 };
 use turbopack_dev_server::source::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary,
-    ContentSourceResultVc, ContentSourceVc, ContentSourcesVc,
+    ContentSourceResultVc, ContentSourceVc, ContentSourcesVc, NeededData,
 };
 use url::Url;
 
@@ -38,14 +38,14 @@ impl ContentSource for NextSourceMapTraceContentSource {
         let url = match &data.url {
             None => {
                 return Ok(ContentSourceResultVc::exact(
-                    ContentSourceContent::NeedData {
+                    ContentSourceContent::NeedData(NeededData {
                         source: self_vc.into(),
                         path: path.to_string(),
                         vary: ContentSourceDataVary {
                             url: true,
                             ..Default::default()
                         },
-                    }
+                    })
                     .cell(),
                 ));
             }

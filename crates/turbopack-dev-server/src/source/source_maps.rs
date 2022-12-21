@@ -10,6 +10,7 @@ use turbopack_core::{
 use super::{
     query::QueryValue, ContentSource, ContentSourceContent, ContentSourceData,
     ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
+    NeededData,
 };
 
 /// SourceMapContentSource allows us to serve full source maps, and individual
@@ -53,14 +54,14 @@ impl ContentSource for SourceMapContentSource {
             Some(q) => q,
             None => {
                 return Ok(ContentSourceResultVc::exact(
-                    ContentSourceContent::NeedData {
+                    ContentSourceContent::NeedData(NeededData {
                         source: self_vc.into(),
                         path: path.to_string(),
                         vary: ContentSourceDataVary {
                             query: Some(ContentSourceDataFilter::Subset(["id".to_string()].into())),
                             ..Default::default()
                         },
-                    }
+                    })
                     .cell(),
                 ))
             }

@@ -30,7 +30,7 @@ use hyper::{
     Request, Response, Server,
 };
 use mime_guess::mime;
-use source::{Body, Bytes};
+use source::{Body, Bytes, NeededData};
 use turbo_tasks::{
     run_once, trace::TraceRawVcs, util::FormatDuration, RawVc, TransientValue, TurboTasksApi, Value,
 };
@@ -126,11 +126,13 @@ async fn get_from_source(
             }
         }
         ContentSourceContent::HttpProxy(proxy) => GetFromSourceResult::HttpProxy(proxy.await?),
-        ContentSourceContent::NeedData { source, path, vary } => GetFromSourceResult::NeedData {
-            source: source.resolve().await?,
-            path: path.clone(),
-            vary: vary.clone(),
-        },
+        ContentSourceContent::NeedData(NeededData { source, path, vary }) => {
+            GetFromSourceResult::NeedData {
+                source: source.resolve().await?,
+                path: path.clone(),
+                vary: vary.clone(),
+            }
+        }
         ContentSourceContent::NotFound => GetFromSourceResult::NotFound,
     }
     .cell())

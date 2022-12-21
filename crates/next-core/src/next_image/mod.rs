@@ -6,7 +6,7 @@ use turbopack_core::introspect::{Introspectable, IntrospectableVc};
 use turbopack_dev_server::source::{
     query::QueryValue, ContentSource, ContentSourceContent, ContentSourceData,
     ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
-    ProxyResult,
+    NeededData, ProxyResult,
 };
 
 /// Serves, resizes, optimizes, and re-encodes images to be used with
@@ -45,7 +45,7 @@ impl ContentSource for NextImageContentSource {
                 .collect::<HashSet<_>>();
 
                 return Ok(ContentSourceResultVc::exact(
-                    ContentSourceContent::NeedData {
+                    ContentSourceContent::NeedData(NeededData {
                         source: self_vc.into(),
                         path: path.to_string(),
                         vary: ContentSourceDataVary {
@@ -53,7 +53,7 @@ impl ContentSource for NextImageContentSource {
                             query: Some(ContentSourceDataFilter::Subset(queries)),
                             ..Default::default()
                         },
-                    }
+                    })
                     .cell(),
                 ));
             }
