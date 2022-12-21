@@ -14,7 +14,8 @@ use turbopack_core::{
 };
 
 use super::{
-    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
+    utils::strip_base_path, ContentSource, ContentSourceContent, ContentSourceData,
+    ContentSourceResultVc, ContentSourceVc,
 };
 
 #[turbo_tasks::value(shared)]
@@ -40,27 +41,25 @@ impl ContentSource for StaticAssetsContentSource {
         _data: Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
         if !path.is_empty() {
-            if let Some(base_path) = self
-                .base_path
-                .await?
-                .as_deref()
-                .and_then(|base_path| base_path.strip_prefix('/'))
-            {
-                if let Some(path) = path
-                    .strip_prefix(base_path)
-                    .and_then(|path| path.strip_prefix('/'))
-                {
-                    let path = self.dir.join(path);
-                    let ty = path.get_type().await?;
-                    if matches!(
-                        &*ty,
-                        FileSystemEntryType::File | FileSystemEntryType::Symlink
-                    ) {
-                        let content = SourceAssetVc::new(path).as_asset().content();
-                        return Ok(ContentSourceResultVc::exact(
-                            ContentSourceContent::Static(content.into()).cell(),
-                        ));
-                    }
+            let base_path = self.base_path.await?;
+
+            let path = if let Some(base_path) = base_path.as_deref() {
+                strip_base_path(path, base_path)?
+            } else {
+                Some(path)
+            };
+
+            if let Some(path) = path {
+                let path = self.dir.join(path);
+                let ty = path.get_type().await?;
+                if matches!(
+                    &*ty,
+                    FileSystemEntryType::File | FileSystemEntryType::Symlink
+                ) {
+                    let content = SourceAssetVc::new(path).as_asset().content();
+                    return Ok(ContentSourceResultVc::exact(
+                        ContentSourceContent::Static(content.into()).cell(),
+                    ));
                 }
             }
         }

@@ -7,6 +7,7 @@ pub mod router;
 pub mod source_maps;
 pub mod specificity;
 pub mod static_assets;
+pub mod utils;
 
 use std::{
     collections::{BTreeMap, HashSet},
