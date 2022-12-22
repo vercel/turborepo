@@ -71,7 +71,7 @@ pub enum EcmascriptModuleAssetType {
     Ecmascript,
     /// Module with TypeScript code without types
     Typescript,
-    /// Module with TypeScript code with types
+    /// Module with TypeScript code with references to imported types
     TypescriptWithTypes,
     /// Module with TypeScript declaration code
     TypescriptDeclaration,

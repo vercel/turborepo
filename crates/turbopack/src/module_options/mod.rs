@@ -31,6 +31,7 @@ impl ModuleOptionsVc {
         context: ModuleOptionsContextVc,
     ) -> Result<ModuleOptionsVc> {
         let ModuleOptionsContext {
+            enable_jsx,
             enable_emotion,
             enable_react_refresh,
             enable_styled_jsx,
@@ -68,9 +69,11 @@ impl ModuleOptionsVc {
         if enable_styled_components {
             transforms.push(EcmascriptInputTransform::StyledComponents)
         }
-        transforms.push(EcmascriptInputTransform::React {
-            refresh: enable_react_refresh,
-        });
+        if enable_jsx {
+            transforms.push(EcmascriptInputTransform::React {
+                refresh: enable_react_refresh,
+            });
+        }
 
         if let Some(env) = preset_env_versions {
             transforms.push(EcmascriptInputTransform::PresetEnv(env));
