@@ -116,16 +116,12 @@
 <span id="116">116</span>
 <span id="117">117</span>
 <span id="118">118</span>
-<span id="119">119</span>
-<span id="120">120</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
-
-<span class="kw">use </span>anyhow::Result;
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::File;
 <span class="kw">use </span>turbopack_core::{
     asset::AssetContentVc,
-    introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
+    introspect::{Introspectable, IntrospectableVc},
     source_map::GenerateSourceMapVc,
 };
 
@@ -230,12 +226,12 @@
 </span><span class="kw">impl </span>Introspectable <span class="kw">for </span>SourceMapContentSource {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>ty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
-        StringVc::cell(<span class="string">&quot;static assets directory content source&quot;</span>.to_string())
+        StringVc::cell(<span class="string">&quot;source map content source&quot;</span>.to_string())
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; IntrospectableChildrenVc {
-        IntrospectableChildrenVc::cell(HashSet::new())
+    </span><span class="kw">fn </span>details(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
+        StringVc::cell(<span class="string">&quot;serves chunk and chunk item source maps&quot;</span>.to_string())
     }
 }
 </code></pre></div>

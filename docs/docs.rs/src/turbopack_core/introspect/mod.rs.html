@@ -18,6 +18,8 @@
 <span id="18">18</span>
 <span id="19">19</span>
 <span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset;
 
 <span class="kw">use </span>std::collections::HashSet;
@@ -36,7 +38,9 @@
     <span class="kw">fn </span>details(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
         StringVc::empty()
     }
-    <span class="kw">fn </span>children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; IntrospectableChildrenVc;
+    <span class="kw">fn </span>children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; IntrospectableChildrenVc {
+        IntrospectableChildrenVc::cell(HashSet::new())
+    }
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="turbopack_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

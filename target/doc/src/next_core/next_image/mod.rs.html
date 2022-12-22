@@ -103,16 +103,11 @@
 <span id="103">103</span>
 <span id="104">104</span>
 <span id="105">105</span>
-<span id="106">106</span>
-<span id="107">107</span>
-<span id="108">108</span>
-<span id="109">109</span>
-<span id="110">110</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
-<span class="kw">use </span>turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
+<span class="kw">use </span>turbopack_core::introspect::{Introspectable, IntrospectableVc};
 <span class="kw">use </span>turbopack_dev_server::source::{
     query::QueryValue, ContentSource, ContentSourceContent, ContentSourceData,
     ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
@@ -211,11 +206,6 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>details(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
         StringVc::cell(<span class="string">&quot;suports dynamic serving of any statically imported image&quot;</span>.to_string())
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;IntrospectableChildrenVc&gt; {
-        <span class="prelude-val">Ok</span>(IntrospectableChildrenVc::cell(HashSet::new()))
     }
 }
 </code></pre></div>
