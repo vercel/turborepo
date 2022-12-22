@@ -143,18 +143,15 @@ impl CodeGenerateable for EsmExports {
                 }
 
                 if let EcmascriptExports::CommonJs = &*asset.get_exports().await? {
-                    let referenced_asset = esm_ref.get_referenced_asset().await?;
-                    let ident = referenced_asset.get_ident().await?;
+                    let ident = ReferencedAsset::get_ident_from_chunk(asset).await?;
 
-                    if let Some(ident) = ident {
-                        cjs_exports.push(PropOrSpread::Spread(SpreadElement {
-                            dot3_token: DUMMY_SP,
-                            expr: Box::new(quote!(
-                                "($cjs)" as Expr,
-                                cjs: Expr = Ident::new(ident.into(), DUMMY_SP).into()
-                            )),
-                        }));
-                    }
+                    cjs_exports.push(PropOrSpread::Spread(SpreadElement {
+                        dot3_token: DUMMY_SP,
+                        expr: Box::new(quote!(
+                            "($cjs)" as Expr,
+                            cjs: Expr = Ident::new(ident.into(), DUMMY_SP).into()
+                        )),
+                    }));
                 }
             }
         }
