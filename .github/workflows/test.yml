@@ -299,8 +299,6 @@ jobs:
 
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
-        with:
-          target: wasm32-unknown-unknown
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
@@ -316,17 +314,6 @@ jobs:
           command: check
           args: --workspace --all-targets
 
-      - name: Run cargo feature check for next-binding
-        run: |
-          # Known set of feature combinations we need to support
-          # next-swc/core
-          cargo check -p next-binding --features __swc_core_next_core,__swc_core_binding_napi_plugin,__swc_core_testing_transform,__swc_testing,__swc_transform_styled_components,__swc_transform_styled_jsx,__swc_transform_emotion,__swc_transform_modularize_imports
-          # next-swc/napi
-          cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__turbo_next_dev_server,__turbo_node_file_trace,__feature_mdx_rs,__turbo_native_tls
-          cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__turbo_next_dev_server,__turbo_node_file_trace,__feature_mdx_rs,__turbo_rustls_tls
-          # next-swc/wasm
-          cargo check -p next-binding --features __swc_core_binding_wasm,__swc_core_binding_wasm_plugin,__feature_mdx_rs --target wasm32-unknown-unknown
-
   rust_lint:
     needs: [determine_jobs, rust_prepare]
     if: needs.determine_jobs.outputs.rust == 'true'
@@ -338,6 +325,8 @@ jobs:
 
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
@@ -352,6 +341,17 @@ jobs:
 
       - name: Install cargo rustfmt
         run: rustup component add rustfmt
+
+      - name: Run cargo feature check for next-binding
+        run: |
+          # Known set of feature combinations we need to support
+          # next-swc/core
+          cargo check -p next-binding --features __swc_core_next_core,__swc_core_binding_napi_plugin,__swc_core_testing_transform,__swc_testing,__swc_transform_styled_components,__swc_transform_styled_jsx,__swc_transform_emotion,__swc_transform_modularize_imports
+          # next-swc/napi
+          cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__turbo_next_dev_server,__turbo_node_file_trace,__feature_mdx_rs,__turbo_native_tls
+          cargo check -p next-binding --features __swc_core_binding_napi,__swc_core_binding_napi_plugin,__turbo_next_dev_server,__turbo_node_file_trace,__feature_mdx_rs,__turbo_rustls_tls
+          # next-swc/wasm
+          cargo check -p next-binding --features __swc_core_binding_wasm,__swc_core_binding_wasm_plugin,__feature_mdx_rs --target wasm32-unknown-unknown
 
       - name: Run cargo clippy
         uses: actions-rs/cargo@v1
@@ -375,10 +375,10 @@ jobs:
             count=$((count + warnings))
           done
 
-          echo $count > clippy-warnings
-          echo $count clippy warnings
+          echo "$count" > clippy-warnings
+          echo "$count clippy warnings"
 
-          echo $clippy_output > clippy-warnings-raw
+          echo "$clippy_output" > clippy-warnings-raw
 
       - name: Cache clippy warnings
         id: expected-clippy-warnings
@@ -403,14 +403,15 @@ jobs:
           if [[ -f "expected-clippy-warnings" ]]; then
             clippy_warnings=$(cat clippy-warnings)
             expected_clippy_warnings=$(cat expected-clippy-warnings)
+
             if [[ "$clippy_warnings" -gt "$expected_clippy_warnings" ]]; then
               echo "Clippy reported $clippy_warnings warnings, which is higher than the upstream number of $expected_clippy_warnings warnings."
               echo "Please make sure you've run \`cargo clippy\` on the Rust files you've modified."
 
               if [[ -f "expected-clippy-warnings-raw" ]]; then
-                clippy_warnings_raw=$(cat clippy-warnings-raw)
                 diff clippy-warnings-raw expected-clippy-warnings-raw
               fi
+
               exit 1
             fi
           fi

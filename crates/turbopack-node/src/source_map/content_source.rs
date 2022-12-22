@@ -1,9 +1,7 @@
-use std::collections::HashSet;
-
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value};
 use turbopack_core::{
-    introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
+    introspect::{Introspectable, IntrospectableVc},
     source_map::GenerateSourceMapVc,
 };
 use turbopack_dev_server::source::{
@@ -79,6 +77,9 @@ impl ContentSource for NextSourceMapTraceContentSource {
             Some(p) => p,
             _ => return Ok(ContentSourceResultVc::not_found()),
         };
+        let id = file
+            .query_pairs()
+            .find_map(|(k, v)| if k == "id" { Some(v) } else { None });
 
         let this = self_vc.await?;
         let result = this
@@ -95,7 +96,17 @@ impl ContentSource for NextSourceMapTraceContentSource {
             _ => return Ok(ContentSourceResultVc::not_found()),
         };
 
-        let traced = SourceMapTraceVc::new(gen.generate_source_map(), line, column, frame.name);
+        let sm = if let Some(id) = id {
+            let section = gen.by_section(&id).await?;
+            match &*section {
+                Some(sm) => *sm,
+                None => return Ok(ContentSourceResultVc::not_found()),
+            }
+        } else {
+            gen.generate_source_map()
+        };
+
+        let traced = SourceMapTraceVc::new(sm, line, column, frame.name);
         Ok(ContentSourceResultVc::exact(
             ContentSourceContent::Static(traced.content().into()).cell(),
         ))
@@ -119,10 +130,5 @@ impl Introspectable for NextSourceMapTraceContentSource {
         StringVc::cell(
             "supports tracing an error stack frame to its original source location".to_string(),
         )
-    }
-
-    #[turbo_tasks::function]
-    async fn children(&self) -> Result<IntrospectableChildrenVc> {
-        Ok(IntrospectableChildrenVc::cell(HashSet::new()))
     }
 }

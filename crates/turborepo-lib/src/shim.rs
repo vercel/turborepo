@@ -71,6 +71,13 @@ impl ShimArgs {
                 }
                 // If we see a `--cwd` we expect the next arg to be a path.
                 found_cwd_flag = true
+            } else if let Some(cwd_arg) = arg.strip_prefix("--cwd=") {
+                // In the case where `--cwd` is passed as `--cwd=./path/to/foo`, that
+                // entire chunk is a single arg, so we need to split it up.
+                if cwd.is_some() {
+                    return Err(anyhow!("cannot have multiple `--cwd` flags in command"));
+                }
+                cwd = Some(cwd_arg.into());
             } else {
                 remaining_turbo_args.push(arg);
             }
@@ -80,7 +87,7 @@ impl ShimArgs {
             Err(anyhow!("No value assigned to `--cwd` argument"))
         } else {
             let cwd = if let Some(cwd) = cwd {
-                cwd
+                fs_canonicalize(cwd)?
             } else {
                 current_dir()?
             };

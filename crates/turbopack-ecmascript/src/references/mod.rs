@@ -38,8 +38,8 @@ use turbopack_core::{
     reference::{AssetReferenceVc, AssetReferencesVc, SourceMapVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
-        find_context_file, origin::ResolveOriginVc, parse::RequestVc, pattern::Pattern, resolve,
-        FindContextFileResult, ResolveResult,
+        find_context_file, origin::ResolveOriginVc, package_json, parse::RequestVc,
+        pattern::Pattern, resolve, FindContextFileResult, ResolveResult,
     },
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
@@ -91,6 +91,7 @@ use crate::{
         },
         esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
     },
+    typescript::resolve::tsconfig,
     EcmascriptInputTransformsVc,
 };
 
@@ -175,23 +176,24 @@ pub(crate) async fn analyze_ecmascript_module(
     let mut analysis = AnalyzeEcmascriptModuleResultBuilder::new();
     let path = source.path();
 
-    let is_typescript = match &*ty {
-        EcmascriptModuleAssetType::Typescript
+    // Is this a typescript file that requires analzying type references?
+    let analyze_types = match &*ty {
+        EcmascriptModuleAssetType::TypescriptWithTypes
         | EcmascriptModuleAssetType::TypescriptDeclaration => true,
-        EcmascriptModuleAssetType::Ecmascript => false,
+        EcmascriptModuleAssetType::Typescript | EcmascriptModuleAssetType::Ecmascript => false,
     };
 
     let parsed = parse(source, ty, transforms);
 
-    match &*find_context_file(path.parent(), "package.json").await? {
+    match &*find_context_file(path.parent(), package_json()).await? {
         FindContextFileResult::Found(package_json, _) => {
             analysis.add_reference(PackageJsonReferenceVc::new(*package_json));
         }
         FindContextFileResult::NotFound(_) => {}
     };
 
-    if is_typescript {
-        match &*find_context_file(path.parent(), "tsconfig.json").await? {
+    if analyze_types {
+        match &*find_context_file(path.parent(), tsconfig()).await? {
             FindContextFileResult::Found(tsconfig, _) => {
                 analysis.add_reference(TsConfigReferenceVc::new(origin, *tsconfig));
             }
@@ -214,7 +216,7 @@ pub(crate) async fn analyze_ecmascript_module(
             let mut import_references = Vec::new();
 
             let pos = program.span().lo;
-            if is_typescript {
+            if analyze_types {
                 if let Some(comments) = comments.leading.get(&pos) {
                     for comment in comments.iter() {
                         if let CommentKind::Line = comment.kind {
@@ -407,7 +409,6 @@ pub(crate) async fn analyze_ecmascript_module(
 
             analysis.set_exports(exports);
 
-            #[allow(clippy::too_many_arguments)]
             fn handle_call_boxed<
                 'a,
                 FF: Future<Output = Result<JsValue>> + Send + 'a,
@@ -422,7 +423,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 this: JsValue,
                 args: Vec<JsValue>,
                 link_value: &'a F,
-                is_typescript: bool,
+                analyze_types: bool,
                 analysis: &'a mut AnalyzeEcmascriptModuleResultBuilder,
                 environment: EnvironmentVc,
             ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
@@ -436,13 +437,12 @@ pub(crate) async fn analyze_ecmascript_module(
                     this,
                     args,
                     link_value,
-                    is_typescript,
+                    analyze_types,
                     analysis,
                     environment,
                 ))
             }
 
-            #[allow(clippy::too_many_arguments)]
             async fn handle_call<
                 FF: Future<Output = Result<JsValue>> + Send,
                 F: Fn(JsValue) -> FF + Sync,
@@ -456,7 +456,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 this: JsValue,
                 args: Vec<JsValue>,
                 link_value: &F,
-                is_typescript: bool,
+                analyze_types: bool,
                 analysis: &mut AnalyzeEcmascriptModuleResultBuilder,
                 environment: EnvironmentVc,
             ) -> Result<()> {
@@ -477,7 +477,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 this.clone(),
                                 args.clone(),
                                 link_value,
-                                is_typescript,
+                                analyze_types,
                                 analysis,
                                 environment,
                             )
@@ -503,7 +503,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                             JsValue::Unknown(None, "no this provided"),
                                             args,
                                             link_value,
-                                            is_typescript,
+                                            analyze_types,
                                             analysis,
                                             environment,
                                         )
@@ -1104,7 +1104,7 @@ pub(crate) async fn analyze_ecmascript_module(
                             JsValue::Unknown(None, "no this provided"),
                             args,
                             &link_value,
-                            is_typescript,
+                            analyze_types,
                             &mut analysis,
                             environment,
                         )
@@ -1135,7 +1135,7 @@ pub(crate) async fn analyze_ecmascript_module(
                             obj,
                             args,
                             &link_value,
-                            is_typescript,
+                            analyze_types,
                             &mut analysis,
                             environment,
                         )
@@ -1200,7 +1200,7 @@ pub(crate) async fn analyze_ecmascript_module(
                         analysis.add_reference(UrlAssetReferenceVc::new(
                             origin,
                             RequestVc::parse(Value::new(pat)),
-                            environment.is_rendering(),
+                            environment.rendering(),
                             AstPathVc::cell(ast_path),
                         ));
                     }

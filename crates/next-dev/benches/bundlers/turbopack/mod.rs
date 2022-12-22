@@ -1,4 +1,5 @@
 use std::{
+    fs,
     path::Path,
     process::{Child, Command, Stdio},
 };
@@ -48,12 +49,18 @@ impl Bundler for Turbopack {
         npm::install(
             install_dir,
             &[
-                NpmPackage::new("next", "13.0.3"),
+                NpmPackage::new("next", "13.0.8-canary.2"),
                 // Dependency on this is inserted by swc's preset_env
                 NpmPackage::new("@swc/helpers", "^0.4.11"),
             ],
         )
         .context("failed to install from npm")?;
+
+        fs::write(
+            install_dir.join("next.config.js"),
+            include_bytes!("next.config.js"),
+        )?;
+
         Ok(())
     }
 

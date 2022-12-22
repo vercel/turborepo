@@ -1,4 +1,7 @@
+use std::fmt::Display;
+
 use anyhow::Result;
+use mime::APPLICATION_JSON;
 use serde_json::json;
 use turbo_tasks_fs::File;
 use turbopack_core::{
@@ -20,15 +23,38 @@ pub struct StackFrame {
     pub name: Option<String>,
 }
 
-impl StackFrame {
-    pub fn get_pos(&self) -> Option<(usize, usize)> {
-        match (self.line, self.column) {
-            (Some(l), Some(c)) => Some((l, c)),
-            _ => None,
-        }
+impl Display for StackFrame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.with_path(&self.file).fmt(f)
     }
 }
 
+impl StackFrame {
+    pub fn with_path<'a>(&'a self, path: &'a str) -> StackFrameWithPath<'a> {
+        StackFrameWithPath { frame: self, path }
+    }
+
+    pub fn get_pos(&self) -> Option<(usize, usize)> {
+        self.line.zip(self.column)
+    }
+}
+
+pub struct StackFrameWithPath<'a> {
+    pub frame: &'a StackFrame,
+    pub path: &'a str,
+}
+
+impl<'a> Display for StackFrameWithPath<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.frame.get_pos() {
+            Some((l, c)) => match &self.frame.name {
+                Some(n) => write!(f, "{} ({}:{}:{})", n, self.path, l, c),
+                None => write!(f, "{}:{}:{}", self.path, l, c),
+            },
+            None => write!(f, "{}", self.path),
+        }
+    }
+}
 /// Source Map Trace is a convenient wrapper to perform and consume a source map
 /// trace's token.
 #[turbo_tasks::value(shared)]
@@ -77,13 +103,13 @@ impl SourceMapTraceVc {
 
         let token = this
             .map
-            .lookup_token(this.line.saturating_sub(1), this.column)
+            .lookup_token(this.line.saturating_sub(1), this.column.saturating_sub(1))
             .await?;
         let result = match &*token {
             Some(Token::Original(t)) => TraceResult::Found(StackFrame {
                 file: t.original_file.clone(),
                 line: Some(t.original_line.saturating_add(1)),
-                column: Some(t.original_column),
+                column: Some(t.original_column.saturating_add(1)),
                 name: t.name.clone().or_else(|| this.name.clone()),
             }),
             _ => TraceResult::NotFound,
@@ -107,6 +133,7 @@ impl SourceMapTraceVc {
             })
             .to_string(),
         };
-        Ok(File::from(result).into())
+        let file = File::from(result).with_content_type(APPLICATION_JSON);
+        Ok(file.into())
     }
 }

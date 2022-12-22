@@ -16,6 +16,8 @@ export interface TurboIgnoreArgs {
   directory?: string;
   // the workspace to check for changes
   workspace?: string;
+  // the task to run, if not build
+  task?: string;
   // A ref/head to compare against if no previously deployed SHA is available
   fallback?: string;
 }
