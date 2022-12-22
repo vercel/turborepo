@@ -1949,6 +1949,19 @@ fn has_cjs_export(p: &Program) -> bool {
                 self.found = true;
             }
         }
+        fn visit_expr(&mut self, n: &Expr) {
+            if self.found {
+                return;
+            }
+            n.visit_children_with(self);
+        }
+
+        fn visit_stmt(&mut self, n: &Stmt) {
+            if self.found {
+                return;
+            }
+            n.visit_children_with(self);
+        }
     }
 
     let mut v = Visitor { found: false };
