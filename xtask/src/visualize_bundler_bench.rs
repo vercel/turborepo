@@ -1,8 +1,9 @@
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     fs::{self, File},
     io::BufReader,
     path::PathBuf,
+    str::FromStr,
 };
 
 use anyhow::{Context, Result};
@@ -18,15 +19,103 @@ use plotters::{
 use crate::summarize_bench::data::{BaseBenchmarks, CStats};
 
 type ByModuleCount = BTreeMap<u32, CStats>;
-type ByBundler = BTreeMap<String, ByModuleCount>;
+type ByBundler = BTreeMap<Bundler, ByModuleCount>;
 type ByBench = BTreeMap<String, ByBundler>;
 
-const BUNDLER_ORDER: &[&str] = &[
-    "Next.js 11 SSR",
-    "Next.js 12 SSR",
-    "Vite SWC CSR",
-    "Turbopack SSR",
-];
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Bundler {
+    NextJs11Ssr,
+    NextJs12Ssr,
+    ViteCsr,
+    ViteSsr,
+    ViteSwcCsr,
+    NextJs13Ssr,
+    NextJs13Rsc,
+    NextJs13Rcc,
+    TurbopackCsr,
+    TurbopackSsr,
+    TurbopackRsc,
+    TurbopackRcc,
+    Webpack,
+    Parcel,
+}
+
+impl std::fmt::Display for Bundler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl FromStr for Bundler {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Next.js 11 SSR" => Ok(Self::NextJs11Ssr),
+            "Next.js 12 SSR" => Ok(Self::NextJs12Ssr),
+            "Next.js 13 SSR" => Ok(Self::NextJs13Ssr),
+            "Next.js 13 RSC" => Ok(Self::NextJs13Rsc),
+            "Next.js 13 RCC" => Ok(Self::NextJs13Rcc),
+            "Turbopack CSR" => Ok(Self::TurbopackCsr),
+            "Turbopack SSR" => Ok(Self::TurbopackSsr),
+            "Turbopack RSC" => Ok(Self::TurbopackRsc),
+            "Turbopack RCC" => Ok(Self::TurbopackRcc),
+            "Vite CSR" => Ok(Self::ViteCsr),
+            "Vite SSR" => Ok(Self::ViteSsr),
+            "Vite SWC CSR" => Ok(Self::ViteSwcCsr),
+            "Webpack" => Ok(Self::Webpack),
+            "Parcel" => Ok(Self::Parcel),
+            _ => Err(()),
+        }
+    }
+}
+
+impl Bundler {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::NextJs11Ssr => "Next.js 11 SSR",
+            Self::NextJs12Ssr => "Next.js 12 SSR",
+            Self::NextJs13Ssr => "Next.js 13 SSR",
+            Self::NextJs13Rsc => "Next.js 13 RSC",
+            Self::NextJs13Rcc => "Next.js 13 RCC",
+            Self::TurbopackCsr => "Turbopack CSR",
+            Self::TurbopackSsr => "Turbopack SSR",
+            Self::TurbopackRsc => "Turbopack RSC",
+            Self::TurbopackRcc => "Turbopack RCC",
+            Self::ViteCsr => "Vite CSR",
+            Self::ViteSsr => "Vite SSR",
+            Self::ViteSwcCsr => "Vite SWC CSR",
+            Self::Webpack => "Webpack",
+            Self::Parcel => "Parcel",
+        }
+    }
+
+    fn color(&self) -> RGBColor {
+        match self {
+            // These are the currently used ones.
+            Self::NextJs12Ssr => plotters::style::full_palette::CYAN,
+            Self::NextJs11Ssr => plotters::style::full_palette::BLUE,
+
+            Self::TurbopackSsr => plotters::style::full_palette::RED,
+            Self::ViteSwcCsr => plotters::style::full_palette::GREEN,
+
+            // TODO(alexkirsz) These should probably change to be consistent with the above.
+            Self::NextJs13Ssr => plotters::style::full_palette::PURPLE,
+            Self::NextJs13Rsc => plotters::style::full_palette::PURPLE_300,
+            Self::NextJs13Rcc => plotters::style::full_palette::PURPLE_700,
+
+            Self::TurbopackCsr => plotters::style::full_palette::RED_200,
+            Self::TurbopackRsc => plotters::style::full_palette::RED_300,
+            Self::TurbopackRcc => plotters::style::full_palette::RED_700,
+
+            Self::ViteCsr => plotters::style::full_palette::GREEN_200,
+            Self::ViteSsr => plotters::style::full_palette::GREEN_300,
+
+            Self::Webpack => plotters::style::full_palette::YELLOW,
+            Self::Parcel => plotters::style::full_palette::BROWN,
+        }
+    }
+}
 
 pub fn generate(summary_path: PathBuf, filter_bundlers: Option<HashSet<&str>>) -> Result<()> {
     let summary_file = File::open(&summary_path)?;
@@ -40,10 +129,18 @@ pub fn generate(summary_path: PathBuf, filter_bundlers: Option<HashSet<&str>>) -
             continue;
         }
 
+        let Some(function_id) = bench.info.function_id else {
+            continue;
+        };
+
+        let Ok(bundler) = Bundler::from_str(&function_id) else {
+            eprintln!("Skipping benchmark with unknown bundler: {}", function_id);
+            continue;
+        };
+
         if filter_bundlers
             .as_ref()
-            .zip(bench.info.function_id.as_ref())
-            .map(|(bundlers, bundler)| !bundlers.contains(bundler.as_str()))
+            .map(|bundlers| !bundlers.contains(bundler.as_str()))
             .unwrap_or(false)
         {
             continue;
@@ -51,9 +148,7 @@ pub fn generate(summary_path: PathBuf, filter_bundlers: Option<HashSet<&str>>) -
 
         let by_bundler = by_bench.entry(bench.info.group_id).or_default();
 
-        let by_module_count = by_bundler
-            .entry(bench.info.function_id.context("Missing function_id")?)
-            .or_default();
+        let by_module_count = by_bundler.entry(bundler).or_default();
 
         by_module_count.insert(
             bench
@@ -163,13 +258,6 @@ const THEMES: [Theme; 2] = [Theme::Light, Theme::Dark];
 fn generate_scaling(output_path: PathBuf, by_bench: &ByBench) -> Result<()> {
     fs::create_dir_all(&output_path)?;
 
-    let colors_by_bundler = HashMap::from([
-        ("Next.js 12 SSR", plotters::style::full_palette::CYAN),
-        ("Next.js 11 SSR", plotters::style::full_palette::BLUE),
-        ("Turbopack SSR", plotters::style::full_palette::RED),
-        ("Vite SWC CSR", plotters::style::full_palette::GREEN),
-    ]);
-
     for theme in THEMES {
         for (bench_name, by_bundler) in by_bench {
             let module_counts: HashSet<_> = by_bundler
@@ -211,25 +299,15 @@ fn generate_scaling(output_path: PathBuf, by_bench: &ByBench) -> Result<()> {
                 .margin(30)
                 .build_cartesian_2d(module_count_range, time_range)?;
 
-            let mut bundlers: Vec<_> = by_bundler.iter().collect();
-            bundlers.sort_by_key(|(bundler, _)| {
-                BUNDLER_ORDER
-                    .iter()
-                    .position(|&b| b == bundler.as_str())
-                    .with_context(|| format!("missing bundler order for {}", bundler))
-                    .unwrap()
-            });
-            for (bundler, by_module_count) in bundlers {
-                let color = colors_by_bundler.get(bundler.as_str());
-                let color =
-                    color.with_context(|| format!("missing color for bundler {}", bundler))?;
+            for (bundler, by_module_count) in by_bundler.iter() {
+                let color = bundler.color();
                 let points = by_module_count
                     .iter()
                     .map(|(count, stats)| (count.to_owned(), stats.point_estimate));
 
                 chart
                     .draw_series(LineSeries::new(points.clone(), color.stroke_width(4)))?
-                    .label(bundler)
+                    .label(bundler.as_str())
                     .legend(move |(x, y)| {
                         PathElement::new(vec![(x, y), (x + 20, y)], color.stroke_width(4))
                     });
