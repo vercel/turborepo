@@ -112,6 +112,7 @@ pub async fn get_server_module_options_context(
                 ..Default::default()
             };
             ModuleOptionsContext {
+                enable_jsx: true,
                 enable_styled_jsx: true,
                 enable_postcss_transform: Some(PostCssTransformOptions {
                     postcss_package: Some(get_postcss_package_mapping(project_path)),
@@ -131,6 +132,7 @@ pub async fn get_server_module_options_context(
                 ..Default::default()
             };
             ModuleOptionsContext {
+                enable_jsx: true,
                 enable_styled_jsx: true,
                 enable_postcss_transform: Some(PostCssTransformOptions {
                     postcss_package: Some(get_postcss_package_mapping(project_path)),
@@ -153,6 +155,7 @@ pub async fn get_server_module_options_context(
                 ..Default::default()
             };
             ModuleOptionsContext {
+                enable_jsx: true,
                 enable_postcss_transform: Some(PostCssTransformOptions {
                     postcss_package: Some(get_postcss_package_mapping(project_path)),
                     ..Default::default()
