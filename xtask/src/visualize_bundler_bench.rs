@@ -321,7 +321,7 @@ fn generate_scaling(output_path: PathBuf, by_bench: &ByBench) -> Result<()> {
                 .x_labels(10)
                 .y_labels(10)
                 .x_desc("Number of modules")
-                .y_desc(format!("Mean time — lower is better",))
+                .y_desc("Mean time — lower is better")
                 .x_label_style((font, 20, &theme.label_color()))
                 .y_label_style((font, 20, &theme.label_color()))
                 .axis_desc_style((font, 24, &theme.axis_desc_color()))

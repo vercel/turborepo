@@ -169,7 +169,7 @@ fn main() {
                 .expect("PATH_TO_SUMMARY_JSON is required");
             let bundlers: Option<HashSet<&str>> = sub_matches
                 .get_one::<String>("bundlers")
-                .map(|s| s.split(",").collect());
+                .map(|s| s.split(',').collect());
 
             let path = PathBuf::from(path);
             let path = path.canonicalize().unwrap();
