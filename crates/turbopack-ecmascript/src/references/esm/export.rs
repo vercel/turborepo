@@ -13,7 +13,7 @@ use swc_core::{
             MemberProp, Module, ModuleItem, ObjectLit, Program, Prop, PropName, PropOrSpread,
             Script, SpreadElement, Stmt, Str,
         },
-        utils::{quote_ident, ExprFactory, StmtLike},
+        utils::{quote_ident, ExprFactory},
     },
     quote,
 };
@@ -33,6 +33,7 @@ use crate::{
     chunk::{EcmascriptChunkPlaceableVc, EcmascriptExports},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
+    references::esm::base::insert_hoisted_stmt,
 };
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
@@ -236,44 +237,16 @@ impl CodeGenerateable for EsmExports {
             match program {
                 Program::Module(Module { body, .. }) => {
                     body.insert(0, ModuleItem::Stmt(stmt));
-                    if let Some(cjs_stmt) = cjs_stmt.clone() {
-                        let loc = cjs_insertion_index(body);
-                        body.insert(loc, ModuleItem::Stmt(cjs_stmt));
-                    }
                 }
                 Program::Script(Script { body, .. }) => {
                     body.insert(0, stmt);
-
-                    if let Some(cjs_stmt) = cjs_stmt.clone() {
-                        let loc = cjs_insertion_index(body);
-                        body.insert(loc, cjs_stmt);
-                    }
                 }
+            }
+            if let Some(cjs_stmt) = cjs_stmt.clone() {
+                insert_hoisted_stmt(program, cjs_stmt);
             }
         }));
 
         Ok(CodeGeneration { visitors }.into())
     }
-}
-
-/// Insert the CJS export statement before the hoister directive. Practically,
-/// this places the cjs export statement right after the import statements.
-fn cjs_insertion_index<N>(stmts: &[N]) -> usize
-where
-    N: StmtLike,
-{
-    stmts
-        .iter()
-        .position(|s| {
-            if let Some(Stmt::Expr(ExprStmt { expr, .. })) = s.as_stmt() {
-                if let Expr::Lit(Lit::Str(Str { value, .. })) = &**expr {
-                    value == "__TURBOPACK__ecmascript__hoisting__location__"
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        })
-        .unwrap_or(stmts.len())
 }
