@@ -59,7 +59,7 @@ importers:
       globby: 11.1.0
       ngraph.generators: ^19.3.0
       shelljs: ^0.8.4
-      tar: 6.1.12
+      tar: 6.1.13
       uvu: ^0.5.3
       zstd-codec: 0.1.4
     devDependencies:
@@ -72,7 +72,7 @@ importers:
       globby: 11.1.0
       ngraph.generators: 19.3.1
       shelljs: 0.8.5
-      tar: 6.1.12
+      tar: 6.1.13
       uvu: 0.5.6
       zstd-codec: 0.1.4
 
@@ -8319,6 +8319,13 @@ packages:
       yallist: 4.0.0
     dev: true
 
+  /minipass/4.0.0:
+    resolution: {integrity: sha512-g2Uuh2jEKoht+zvO6vJqXmYpflPqzRBT+Th2h01DKh5z7wbY/AZ2gCQ78cP70YoHPyFdY30YBV5WxgLOEwOykw==}
+    engines: {node: '>=8'}
+    dependencies:
+      yallist: 4.0.0
+    dev: true
+
   /minizlib/2.1.2:
     resolution: {integrity: sha512-bAxsR8BVfj60DWXHE3u30oHzfl4G7khkSuPW+qvpd7jFRHm7dLxOjUk1EHACJ/hxLY8phGJ0YhYHZo7jil7Qdg==}
     engines: {node: '>= 8'}
@@ -10743,13 +10750,13 @@ packages:
     engines: {node: '>=6'}
     dev: true
 
-  /tar/6.1.12:
-    resolution: {integrity: sha512-jU4TdemS31uABHd+Lt5WEYJuzn+TJTCBLljvIAHZOz6M9Os5pJ4dD+vRFLxPa/n3T0iEFzpi+0x1UfuDZYbRMw==}
+  /tar/6.1.13:
+    resolution: {integrity: sha512-jdIBIN6LTIe2jqzay/2vtYLlBHa3JF42ot3h1dW8Q0PaAG4v8rm0cvpVePtau5C6OKXGGcgO9q2AMNSWxiLqKw==}
     engines: {node: '>=10'}
     dependencies:
       chownr: 2.0.0
       fs-minipass: 2.1.0
-      minipass: 3.3.4
+      minipass: 4.0.0
       minizlib: 2.1.2
       mkdirp: 1.0.4
       yallist: 4.0.0
