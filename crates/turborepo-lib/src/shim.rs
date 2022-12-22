@@ -122,8 +122,16 @@ impl ShimArgs {
             .any(|arg| TURBO_SKIP_NOTIFIER_ARGS.contains(&arg.as_str()))
     }
 
-    pub fn should_skip_updater(&self) -> bool {
-        !self.force_update_check && (self.has_json_flags() || self.has_notifier_skip_flags())
+    pub fn should_check_for_update(&self) -> bool {
+        if self.force_update_check {
+            return true;
+        }
+
+        if self.has_notifier_skip_flags() || self.has_json_flags() {
+            return false;
+        }
+
+        true
     }
 }
 
@@ -323,7 +331,7 @@ pub fn run() -> Result<Payload> {
     // global turbo having handled the inference. We can run without any
     // concerns.
 
-    if !args.should_skip_updater() {
+    if args.should_check_for_update() {
         // custom footer for update message
         let footer = format!(
             "Follow {username} for updates: {url}",
