@@ -210,18 +210,22 @@ impl ModuleOptionsVc {
                     ModuleRuleCondition::ResourcePathEndsWith(".ts".to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(".tsx".to_string()),
                 ]),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Typescript(
-                    ts_app_transforms,
-                ))],
+                vec![if enable_typescript_transform {
+                    ModuleRuleEffect::ModuleType(ModuleType::Typescript(ts_app_transforms))
+                } else {
+                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptSource(ts_app_transforms))
+                }],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::all(vec![
                     ModuleRuleCondition::ResourcePathEndsWith(".ts".to_string()),
                     ModuleRuleCondition::ResourcePathInDirectory("node_modules".to_string()),
                 ]),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Typescript(
-                    ts_transforms,
-                ))],
+                vec![if enable_typescript_transform {
+                    ModuleRuleEffect::ModuleType(ModuleType::Typescript(ts_transforms))
+                } else {
+                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptSource(ts_transforms))
+                }],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".d.ts".to_string()),

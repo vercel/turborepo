@@ -69,6 +69,7 @@ use crate::{
 pub enum EcmascriptModuleAssetType {
     Ecmascript,
     Typescript,
+    TypescriptSource,
     TypescriptDeclaration,
 }
 

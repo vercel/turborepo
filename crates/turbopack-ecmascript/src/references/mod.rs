@@ -176,10 +176,11 @@ pub(crate) async fn analyze_ecmascript_module(
     let mut analysis = AnalyzeEcmascriptModuleResultBuilder::new();
     let path = source.path();
 
+    // Is this a typescript file that requires analzying type references?
     let is_typescript = match &*ty {
-        EcmascriptModuleAssetType::Typescript
+        EcmascriptModuleAssetType::TypescriptSource
         | EcmascriptModuleAssetType::TypescriptDeclaration => true,
-        EcmascriptModuleAssetType::Ecmascript => false,
+        EcmascriptModuleAssetType::Typescript | EcmascriptModuleAssetType::Ecmascript => false,
     };
 
     let parsed = parse(source, ty, transforms);
