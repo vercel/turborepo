@@ -23,6 +23,7 @@ export interface BenchmarkBar {
   label: string;
   key: keyof BenchmarkData;
   turbo?: true;
+  swc?: true;
 }
 
 export const DEFAULT_BARS: BenchmarkBar[] = [
@@ -38,6 +39,7 @@ export const DEFAULT_BARS: BenchmarkBar[] = [
   {
     key: "vite",
     label: "Vite",
+    swc: true,
   },
   {
     key: "next11",
@@ -53,6 +55,7 @@ export const HMR_BARS: BenchmarkBar[] = [
   {
     key: "vite",
     label: "Vite",
+    swc: true,
   },
   {
     key: "next12",
