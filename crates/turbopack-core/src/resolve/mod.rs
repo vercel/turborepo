@@ -669,11 +669,17 @@ pub async fn resolve(
             let relative = RequestVc::relative(Value::new(new_pat), true);
 
             let issue: ResolvingIssueVc = ResolvingIssue {
-                request_type: "server relative import: not implemented yet".to_string(),
+                request_type: "server relative import: not implemented yet. Please try an import \
+                               relative to the file you are importing from."
+                    .to_string(),
                 request,
                 context,
                 resolve_options: options,
-                error_message: Some("server relative imports are not implemented yet".to_string()),
+                error_message: Some(
+                    "server relative imports are not implemented yet. Please try an import \
+                     relative to the file you are importing from."
+                        .to_string(),
+                ),
             }
             .into();
             issue.as_issue().emit();
