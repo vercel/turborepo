@@ -76,11 +76,22 @@ pub enum ContentSourceContent {
     NeedData(NeededData),
 }
 
+/// Needed data content signals that the content source requires more
+/// information in order to serve the request. The held data allows us to
+/// partially compute some data, and resume computation after the needed vary
+/// data is supplied by the dev server.
 #[turbo_tasks::value(shared)]
 #[derive(Debug, Clone)]
 pub struct NeededData {
+    /// A [ContentSource] to query once the data has been extracted from the
+    /// server. This _does not_ need to be the original content source.
     pub source: ContentSourceVc,
+
+    /// A path with which to call into that content source. This _does not_ need
+    /// to be the original path.
     pub path: String,
+
+    /// The vary data which is needed in order to process the request.
     pub vary: ContentSourceDataVary,
 }
 
