@@ -68,7 +68,7 @@ impl ContentSource for NextImageContentSource {
         // TODO: consume the assets, resize and reduce quality, re-encode into next-gen
         // formats.
         if let Some(path) = url.strip_prefix('/') {
-            let asset = this.asset_source.get(path, Value::new(Default::default()));
+            let asset = this.asset_source.get(path, Default::default());
             // THERE'S A HUGE PERFORMANCE ISSUE IF THIS MISSES
             let inner = asset.await?;
             if matches!(&*inner.content.await?, ContentSourceContent::Static(..)) {

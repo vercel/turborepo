@@ -28,13 +28,28 @@ pub struct PausableCombinedContentSource {
 
     /// The paused state (partially processed path, content source, vary data)
     /// of the internal content source which asked for vary data.
-    pending: Option<NeededData>,
+    pending: Option<PendingState>,
 
     /// A [CombinedContentSource] which we are querying for content.
     inner: CombinedContentSourceVc,
 
     /// The current most-specific content result.
     max: Option<(SpecificityReadRef, ContentSourceResultVc)>,
+}
+
+/// Stores partially computed data that an inner [ContentSource] returned when
+/// it requested more data.
+#[derive(Clone)]
+#[turbo_tasks::value(shared)]
+struct PendingState {
+    /// A partially computed path. Note that this may be any value and not
+    /// necessarily equal to the path we receive from the dev server.
+    path: String,
+
+    /// A partially computed content source to receive the requested data. Note
+    /// that this is not necessarily the same content source value that
+    /// exists inside the [CombinedContentSource]'s sources vector.
+    source: ContentSourceVc,
 }
 
 impl CombinedContentSourceVc {
@@ -64,24 +79,10 @@ impl ContentSource for CombinedContentSource {
 impl PausableCombinedContentSource {
     fn new(inner: CombinedContentSourceVc) -> Self {
         PausableCombinedContentSource {
+            inner,
             index: 0,
             pending: None,
-            inner,
             max: None,
-        }
-    }
-
-    fn pause(
-        &self,
-        index: usize,
-        max: Option<(SpecificityReadRef, ContentSourceResultVc)>,
-        pending: NeededData,
-    ) -> Self {
-        PausableCombinedContentSource {
-            index,
-            pending: Some(pending),
-            inner: self.inner,
-            max,
         }
     }
 
@@ -90,36 +91,40 @@ impl PausableCombinedContentSource {
     async fn pauseable_get(
         &self,
         path: &str,
-        data: Value<ContentSourceData>,
+        mut data: Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
-        let inner = self.inner.await?;
+        let inner = self.inner;
         let mut max = self.max.clone();
         let mut pending = self.pending.clone();
 
-        for (i, source) in inner.sources.iter().enumerate().skip(self.index) {
+        for (index, source) in inner.await?.sources.iter().enumerate().skip(self.index) {
+            // If there is pending state, then this is the first iteration of the resume and
+            // we've skipped to exactly the source which requested data. Requery the source
+            // with it's partially computed path and needed data.
             let result = match pending.take() {
-                Some(pending) => pending.source.get(&pending.path, data.clone()),
-                None => source.get(path, data.clone()),
+                Some(pending) => pending.source.get(&pending.path, mem::take(&mut data)),
+                None => source.get(path, Default::default()),
             };
 
             let res = result.await?;
             if let ContentSourceContent::NeedData(data) = &*res.content.await? {
-                // If this content source requests more data, then we pause the iteration at
-                // this point. With a bit of fiddling, we can extract the vary
-                // data it requested and keep the data needed to resume with a
-                // single clone.
-                let mut data = data.clone();
-                let vary = mem::take(&mut data.vary);
-                let paused = self.pause(i, max, data);
+                // We create a partially computed content source which will be able to resume
+                // iteration at this exact content source after getting data.
+                let paused = PausableCombinedContentSource {
+                    inner,
+                    index,
+                    pending: Some(PendingState::from(data)),
+                    max,
+                };
 
                 return Ok(ContentSourceResultVc::exact(
                     ContentSourceContent::NeedData(NeededData {
-                        // We do not respect the content source's data.path because that would
-                        // affect later content source requests. However, when we resume, we'll use
-                        // the path stored in pending to correctly requery this source.
+                        // We do not return data.path because that would affect later content source
+                        // requests. However, when we resume, we'll use the path stored in pending
+                        // to correctly requery this source.
                         path: path.to_string(),
                         source: paused.cell().into(),
-                        vary,
+                        vary: data.vary.clone(),
                     })
                     .cell(),
                 ));
@@ -129,7 +134,7 @@ impl PausableCombinedContentSource {
             if specificity.is_exact() {
                 return Ok(result);
             }
-            if let Some((max, _)) = self.max.as_ref() {
+            if let Some((max, _)) = max.as_ref() {
                 if *max >= specificity {
                     // we can keep the current max
                     continue;
@@ -142,6 +147,15 @@ impl PausableCombinedContentSource {
             Ok(result)
         } else {
             Ok(ContentSourceResultVc::not_found())
+        }
+    }
+}
+
+impl From<&NeededData> for PendingState {
+    fn from(value: &NeededData) -> Self {
+        PendingState {
+            path: value.path.clone(),
+            source: value.source,
         }
     }
 }

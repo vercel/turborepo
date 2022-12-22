@@ -126,13 +126,11 @@ async fn get_from_source(
             }
         }
         ContentSourceContent::HttpProxy(proxy) => GetFromSourceResult::HttpProxy(proxy.await?),
-        ContentSourceContent::NeedData(NeededData { source, path, vary }) => {
-            GetFromSourceResult::NeedData {
-                source: source.resolve().await?,
-                path: path.clone(),
-                vary: vary.clone(),
-            }
-        }
+        ContentSourceContent::NeedData(data) => GetFromSourceResult::NeedData {
+            source: data.source.resolve().await?,
+            path: data.path.clone(),
+            vary: data.vary.clone(),
+        },
         ContentSourceContent::NotFound => GetFromSourceResult::NotFound,
     }
     .cell())

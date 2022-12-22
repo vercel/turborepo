@@ -73,10 +73,7 @@ impl ContentSource for SourceMapContentSource {
         };
 
         let this = self_vc.await?;
-        let result = this
-            .asset_source
-            .get(pathname, Value::new(Default::default()))
-            .await?;
+        let result = this.asset_source.get(pathname, Default::default()).await?;
         let file = match &*result.content.await? {
             ContentSourceContent::Static(f) => *f,
             _ => return Ok(ContentSourceResultVc::not_found()),

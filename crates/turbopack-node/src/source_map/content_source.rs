@@ -82,10 +82,7 @@ impl ContentSource for NextSourceMapTraceContentSource {
             .find_map(|(k, v)| if k == "id" { Some(v) } else { None });
 
         let this = self_vc.await?;
-        let result = this
-            .asset_source
-            .get(path, Value::new(Default::default()))
-            .await?;
+        let result = this.asset_source.get(path, Default::default()).await?;
         let file = match &*result.content.await? {
             ContentSourceContent::Static(f) => *f,
             _ => return Ok(ContentSourceResultVc::not_found()),

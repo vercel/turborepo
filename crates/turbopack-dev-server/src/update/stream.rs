@@ -16,7 +16,7 @@ use turbopack_core::{
 use super::protocol::ResourceIdentifier;
 use crate::{
     resource_to_data,
-    source::{ContentSourceContent, ContentSourceResultVc, NeededData},
+    source::{ContentSourceContent, ContentSourceResultVc},
 };
 
 type GetContentFn = Box<dyn Fn() -> ContentSourceResultVc + Send + Sync>;
@@ -43,12 +43,10 @@ async fn get_content_wrapper(
     get_content: TransientInstance<GetContentFn>,
 ) -> Result<ContentSourceResultVc> {
     let mut content = get_content();
-    while let ContentSourceContent::NeedData(NeededData { source, path, vary }) =
-        &*content.await?.content.await?
-    {
-        content = source.get(
-            path,
-            Value::new(resource_to_data(resource.clone().into_value(), vary)),
+    while let ContentSourceContent::NeedData(data) = &*content.await?.content.await? {
+        content = data.source.get(
+            &data.path,
+            Value::new(resource_to_data(resource.clone().into_value(), &data.vary)),
         );
     }
     Ok(content)
