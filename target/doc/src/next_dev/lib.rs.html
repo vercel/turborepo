@@ -547,10 +547,6 @@
 <span id="547">547</span>
 <span id="548">548</span>
 <span id="549">549</span>
-<span id="550">550</span>
-<span id="551">551</span>
-<span id="552">552</span>
-<span id="553">553</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -597,7 +593,7 @@
         source_maps::SourceMapContentSourceVc, static_assets::StaticAssetsContentSourceVc,
         ContentSourceVc,
     },
-    DevServer,
+    DevServer, DevServerBuilder,
 };
 <span class="kw">use </span>turbopack_node::{
     execution_context::ExecutionContextVc, source_map::NextSourceMapTraceContentSourceVc,
@@ -693,38 +689,28 @@
         <span class="self">self
     </span>}
 
-    <span class="kw">pub async fn </span>build(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;DevServer&gt; {
-        <span class="kw">let </span>start_port = <span class="self">self</span>.port.context(<span class="string">&quot;port must be set&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>host = <span class="self">self</span>.hostname.context(<span class="string">&quot;hostname must be set&quot;</span>)<span class="question-mark">?</span>;
-
-        <span class="comment">// Retry to listen on the different port if the port is already in use.
-        </span><span class="kw">let </span><span class="kw-2">mut </span>bound_server = <span class="prelude-val">None</span>;
-        <span class="kw">for </span>retry_count <span class="kw">in </span><span class="number">0</span>..<span class="number">10 </span>{
-            <span class="kw">let </span>current_port = start_port + retry_count;
+    <span class="doccomment">/// Attempts to find an open port to bind.
+    </span><span class="kw">fn </span>find_port(<span class="kw-2">&amp;</span><span class="self">self</span>, host: IpAddr, port: u16, max_attempts: u16) -&gt; <span class="prelude-ty">Result</span>&lt;DevServerBuilder&gt; {
+        <span class="comment">// max_attempts of 1 means we loop 0 times.
+        </span><span class="kw">let </span>max_attempts = max_attempts - <span class="number">1</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>attempts = <span class="number">0</span>;
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>current_port = port + attempts;
             <span class="kw">let </span>addr = SocketAddr::new(host, current_port);
-
             <span class="kw">let </span>listen_result = DevServer::listen(addr);
 
-            <span class="kw">match </span>listen_result {
-                <span class="prelude-val">Ok</span>(server) =&gt; {
-                    bound_server = <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(server));
-                    <span class="kw">break</span>;
-                }
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="kw">let </span>should_retry = <span class="kw">if </span><span class="self">self</span>.allow_retry {
-                        <span class="comment">// Returned error from `listen` is not `std::io::Error` but `anyhow::Error`,
-                        // so we need to access its source to check if it is
-                        // `std::io::ErrorKind::AddrInUse`.
-                        </span>e.source()
-                            .map(|e| {
-                                e.downcast_ref::&lt;std::io::Error&gt;()
-                                    .map(|e| e.kind() == std::io::ErrorKind::AddrInUse)
-                                    == <span class="prelude-val">Some</span>(<span class="bool-val">true</span>)
-                            })
-                            .unwrap_or_else(|| <span class="bool-val">false</span>)
-                    } <span class="kw">else </span>{
-                        <span class="bool-val">false
-                    </span>};
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="kw-2">&amp;</span>listen_result {
+                <span class="kw">if </span><span class="self">self</span>.allow_retry &amp;&amp; attempts &lt; max_attempts {
+                    <span class="comment">// Returned error from `listen` is not `std::io::Error` but `anyhow::Error`,
+                    // so we need to access its source to check if it is
+                    // `std::io::ErrorKind::AddrInUse`.
+                    </span><span class="kw">let </span>should_retry = e
+                        .source()
+                        .and_then(|e| {
+                            e.downcast_ref::&lt;std::io::Error&gt;()
+                                .map(|e| e.kind() == std::io::ErrorKind::AddrInUse)
+                        })
+                        .unwrap_or(<span class="bool-val">false</span>);
 
                     <span class="kw">if </span>should_retry {
                         <span class="macro">println!</span>(
@@ -733,15 +719,21 @@
                             current_port,
                             current_port + <span class="number">1
                         </span>);
-                    } <span class="kw">else </span>{
-                        bound_server = <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(e));
-                        <span class="kw">break</span>;
+                        attempts += <span class="number">1</span>;
+                        <span class="kw">continue</span>;
                     }
                 }
             }
-        }
 
-        <span class="kw">let </span>server = bound_server.unwrap()<span class="question-mark">?</span>;
+            <span class="kw">return </span>listen_result;
+        }
+    }
+
+    <span class="kw">pub async fn </span>build(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;DevServer&gt; {
+        <span class="kw">let </span>port = <span class="self">self</span>.port.context(<span class="string">&quot;port must be set&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>host = <span class="self">self</span>.hostname.context(<span class="string">&quot;hostname must be set&quot;</span>)<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>server = <span class="self">self</span>.find_port(host, port, <span class="number">10</span>)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>turbo_tasks = <span class="self">self</span>.turbo_tasks;
         <span class="kw">let </span>project_dir = <span class="self">self</span>.project_dir;
