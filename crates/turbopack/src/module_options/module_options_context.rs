@@ -21,6 +21,7 @@ pub struct ModuleOptionsContext {
     pub enable_styled_components: bool,
     pub enable_styled_jsx: bool,
     pub enable_postcss_transform: Option<PostCssTransformOptions>,
+    pub enable_types: bool,
     pub enable_typescript_transform: bool,
     pub preset_env_versions: Option<EnvironmentVc>,
     pub custom_ecmascript_app_transforms: Vec<EcmascriptInputTransform>,

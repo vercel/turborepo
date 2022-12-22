@@ -206,7 +206,7 @@ async fn parse_content(
                             allow_return_outside_function: true,
                         }),
                         EcmascriptModuleAssetType::Typescript
-                        | EcmascriptModuleAssetType::TypescriptSource => {
+                        | EcmascriptModuleAssetType::TypescriptWithTypes => {
                             Syntax::Typescript(TsConfig {
                                 decorators: true,
                                 dts: false,
@@ -255,7 +255,7 @@ async fn parse_content(
             let is_typescript = matches!(
                 ty,
                 EcmascriptModuleAssetType::Typescript
-                    | EcmascriptModuleAssetType::TypescriptSource
+                    | EcmascriptModuleAssetType::TypescriptWithTypes
                     | EcmascriptModuleAssetType::TypescriptDeclaration
             );
             parsed_program.visit_mut_with(&mut resolver(

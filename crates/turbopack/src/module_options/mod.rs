@@ -35,6 +35,7 @@ impl ModuleOptionsVc {
             enable_react_refresh,
             enable_styled_jsx,
             enable_styled_components,
+            enable_types,
             enable_typescript_transform,
             ref enable_postcss_transform,
             preset_env_versions,
@@ -210,10 +211,10 @@ impl ModuleOptionsVc {
                     ModuleRuleCondition::ResourcePathEndsWith(".ts".to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(".tsx".to_string()),
                 ]),
-                vec![if enable_typescript_transform {
-                    ModuleRuleEffect::ModuleType(ModuleType::Typescript(ts_app_transforms))
+                vec![if enable_types {
+                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes(ts_app_transforms))
                 } else {
-                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptSource(ts_app_transforms))
+                    ModuleRuleEffect::ModuleType(ModuleType::Typescript(ts_app_transforms))
                 }],
             ),
             ModuleRule::new(
@@ -221,10 +222,10 @@ impl ModuleOptionsVc {
                     ModuleRuleCondition::ResourcePathEndsWith(".ts".to_string()),
                     ModuleRuleCondition::ResourcePathInDirectory("node_modules".to_string()),
                 ]),
-                vec![if enable_typescript_transform {
-                    ModuleRuleEffect::ModuleType(ModuleType::Typescript(ts_transforms))
+                vec![if enable_types {
+                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes(ts_transforms))
                 } else {
-                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptSource(ts_transforms))
+                    ModuleRuleEffect::ModuleType(ModuleType::Typescript(ts_transforms))
                 }],
             ),
             ModuleRule::new(

@@ -178,7 +178,7 @@ pub(crate) async fn analyze_ecmascript_module(
 
     // Is this a typescript file that requires analzying type references?
     let is_typescript = match &*ty {
-        EcmascriptModuleAssetType::TypescriptSource
+        EcmascriptModuleAssetType::TypescriptWithTypes
         | EcmascriptModuleAssetType::TypescriptDeclaration => true,
         EcmascriptModuleAssetType::Typescript | EcmascriptModuleAssetType::Ecmascript => false,
     };

@@ -125,10 +125,10 @@ async fn apply_module_type(
             context.environment(),
         )
         .into(),
-        ModuleType::TypescriptSource(transforms) => EcmascriptModuleAssetVc::new(
+        ModuleType::TypescriptWithTypes(transforms) => EcmascriptModuleAssetVc::new(
             source,
             context.with_types_resolving_enabled().into(),
-            Value::new(EcmascriptModuleAssetType::TypescriptSource),
+            Value::new(EcmascriptModuleAssetType::TypescriptWithTypes),
             *transforms,
             context.environment(),
         )
