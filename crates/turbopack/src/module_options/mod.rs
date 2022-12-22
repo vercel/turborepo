@@ -79,21 +79,18 @@ impl ModuleOptionsVc {
         let app_transforms = EcmascriptInputTransformsVc::cell(transforms);
         let vendor_transforms =
             EcmascriptInputTransformsVc::cell(custom_ecmascript_transforms.clone());
-        let (ts_app_transforms, ts_transforms) = if enable_typescript_transform {
+        let ts_app_transforms = if enable_typescript_transform {
             let mut base_transforms = vec![EcmascriptInputTransform::TypeScript];
             base_transforms.extend(custom_ecmascript_transforms.iter().cloned());
-            (
-                EcmascriptInputTransformsVc::cell(
-                    base_transforms
-                        .iter()
-                        .cloned()
-                        .chain(app_transforms.await?.iter().cloned())
-                        .collect(),
-                ),
-                EcmascriptInputTransformsVc::cell(base_transforms),
+            EcmascriptInputTransformsVc::cell(
+                base_transforms
+                    .iter()
+                    .cloned()
+                    .chain(app_transforms.await?.iter().cloned())
+                    .collect(),
             )
         } else {
-            (app_transforms, vendor_transforms)
+            app_transforms
         };
 
         let css_transforms = CssInputTransformsVc::cell(vec![CssInputTransform::Nested]);
@@ -168,42 +165,15 @@ impl ModuleOptionsVc {
                 ))],
             ),
             ModuleRule::new(
-                ModuleRuleCondition::all(vec![
-                    ModuleRuleCondition::ResourcePathEndsWith(".js".to_string()),
-                    ModuleRuleCondition::ResourcePathInDirectory("node_modules".to_string()),
-                ]),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    vendor_transforms,
-                ))],
-            ),
-            ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".mjs".to_string()),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
                     app_transforms,
                 ))],
             ),
             ModuleRule::new(
-                ModuleRuleCondition::all(vec![
-                    ModuleRuleCondition::ResourcePathEndsWith(".mjs".to_string()),
-                    ModuleRuleCondition::ResourcePathInDirectory("node_modules".to_string()),
-                ]),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    vendor_transforms,
-                ))],
-            ),
-            ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".cjs".to_string()),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
                     app_transforms,
-                ))],
-            ),
-            ModuleRule::new(
-                ModuleRuleCondition::all(vec![
-                    ModuleRuleCondition::ResourcePathEndsWith(".cjs".to_string()),
-                    ModuleRuleCondition::ResourcePathInDirectory("node_modules".to_string()),
-                ]),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(
-                    vendor_transforms,
                 ))],
             ),
             ModuleRule::new(
@@ -215,17 +185,6 @@ impl ModuleOptionsVc {
                     ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes(ts_app_transforms))
                 } else {
                     ModuleRuleEffect::ModuleType(ModuleType::Typescript(ts_app_transforms))
-                }],
-            ),
-            ModuleRule::new(
-                ModuleRuleCondition::all(vec![
-                    ModuleRuleCondition::ResourcePathEndsWith(".ts".to_string()),
-                    ModuleRuleCondition::ResourcePathInDirectory("node_modules".to_string()),
-                ]),
-                vec![if enable_types {
-                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes(ts_transforms))
-                } else {
-                    ModuleRuleEffect::ModuleType(ModuleType::Typescript(ts_transforms))
                 }],
             ),
             ModuleRule::new(
