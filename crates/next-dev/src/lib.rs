@@ -142,7 +142,9 @@ impl NextDevServerBuilder {
 
     /// Attempts to find an open port to bind.
     fn find_port(&self, host: IpAddr, port: u16, max_attempts: u16) -> Result<DevServerBuilder> {
-        let mut attempts = 1;
+        // max_attempts of 1 means we loop 0 times.
+        let max_attempts = max_attempts - 1;
+        let mut attempts = 0;
         loop {
             let current_port = port + attempts;
             let addr = SocketAddr::new(host, current_port);
