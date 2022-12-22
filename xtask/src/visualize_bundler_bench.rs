@@ -83,12 +83,14 @@ enum FormatTimeStyle {
 
 impl FormatTimeStyle {
     fn format(self, ns: f64) -> String {
-        (match self {
+        let value = (match self {
             FormatTimeStyle::Milliseconds => ns / 1e6,
             FormatTimeStyle::Seconds => ns / 1e9,
         }
         .round() as u64)
-            .to_formatted_string(&Locale::en)
+            .to_formatted_string(&Locale::en);
+
+        format!("{}{}", value, self.unit())
     }
 
     fn unit(self) -> &'static str {
@@ -185,10 +187,14 @@ fn generate_scaling(output_path: PathBuf, by_bench: &ByBench) -> Result<()> {
                 by_module_count.values().map(|stats| stats.point_estimate)
             });
 
-            // Ensure the time range starts at 0 instead of the minimum time value.
-            let time_range = 0.0..time_range_iter
+            // Make the time range end 5% higher than the maximum time value so the highest
+            // point is not cut off.
+            let time_range_end = time_range_iter
                 // f64 does not implement Ord.
-                .fold(0.0, |max, time| if time > max { time } else { max });
+                .fold(0.0, |max, time| if time > max { time } else { max })
+                * 1.05;
+            // Ensure the time range starts at 0 instead of the minimum time value.
+            let time_range = 0.0..time_range_end;
 
             let format_time_style = if time_range.end > 10e8 {
                 FormatTimeStyle::Seconds
@@ -199,8 +205,9 @@ fn generate_scaling(output_path: PathBuf, by_bench: &ByBench) -> Result<()> {
             let file_name = output_path.join(format!("{}_{}.svg", bench_name, theme.name()));
             let root = SVGBackend::new(&file_name, (960, 720)).into_drawing_area();
             let mut chart = ChartBuilder::on(&root)
-                .x_label_area_size(70)
-                .y_label_area_size(70)
+                .x_label_area_size(60)
+                // The y labels are horizontal and have units, so they take some room.
+                .y_label_area_size(80)
                 .margin(30)
                 .build_cartesian_2d(module_count_range, time_range)?;
 
@@ -236,10 +243,7 @@ fn generate_scaling(output_path: PathBuf, by_bench: &ByBench) -> Result<()> {
                 .x_labels(10)
                 .y_labels(10)
                 .x_desc("Number of modules")
-                .y_desc(format!(
-                    "Mean time ({}) — lower is better",
-                    format_time_style.unit()
-                ))
+                .y_desc(format!("Mean time — lower is better",))
                 .x_label_style((font, 20, &theme.label_color()))
                 .y_label_style((font, 20, &theme.label_color()))
                 .axis_desc_style((font, 24, &theme.axis_desc_color()))
