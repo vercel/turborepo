@@ -145,7 +145,7 @@ We're excited by Turbopack's performance, but we also expect to make further spe
 To run this benchmark yourself, clone [`vercel/turbo`](https://github.com/vercel/turbo) and then use this command from the root:
 
 ```
-TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p next-dev "hmr_to_eval/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite SWC CSR)"
+TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p next-dev "hmr_to_commit/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite SWC CSR)"
 ```
 
 Here are the numbers we were able to produce on a 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400):
