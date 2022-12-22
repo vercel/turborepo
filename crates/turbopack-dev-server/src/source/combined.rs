@@ -1,3 +1,5 @@
+use std::mem;
+
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
@@ -9,19 +11,29 @@ use super::{
 use crate::source::ContentSourcesVc;
 
 /// Combines multiple [ContentSource]s by trying all content sources in order.
-/// First [ContentSource] that responds with something other than NotFound will
-/// serve the request.
+/// The content source which responds with the most specific response (that is
+/// not a [ContentSourceContent::NotFound]) will be returned.
 #[turbo_tasks::value(shared)]
 pub struct CombinedContentSource {
     pub sources: Vec<ContentSourceVc>,
 }
 
+/// A helper source which allows the [CombinedContentSource] to be paused while
+/// we ask for vary data.
 #[turbo_tasks::value(shared)]
 pub struct PausableCombinedContentSource {
+    /// The index of the item which requested vary data. When running [get], we
+    /// will skip to exactly this item to resume iteration.
     index: usize,
+
+    /// The paused state (partially processed path, content source, vary data)
+    /// of the internal content source which asked for vary data.
+    pending: Option<NeededData>,
+
+    /// A [CombinedContentSource] which we are querying for content.
     inner: CombinedContentSourceVc,
 
-    pending: Option<NeededData>,
+    /// The current most-specific content result.
     max: Option<(SpecificityReadRef, ContentSourceResultVc)>,
 }
 
@@ -31,12 +43,30 @@ impl CombinedContentSourceVc {
     }
 }
 
+#[turbo_tasks::value_impl]
+impl ContentSource for CombinedContentSource {
+    #[turbo_tasks::function]
+    async fn get(
+        self_vc: CombinedContentSourceVc,
+        path: &str,
+        data: Value<ContentSourceData>,
+    ) -> Result<ContentSourceResultVc> {
+        let pauseable = PausableCombinedContentSource::new(self_vc);
+        pauseable.pauseable_get(path, data).await
+    }
+
+    #[turbo_tasks::function]
+    fn get_children(&self) -> ContentSourcesVc {
+        ContentSourcesVc::cell(self.sources.clone())
+    }
+}
+
 impl PausableCombinedContentSource {
     fn new(inner: CombinedContentSourceVc) -> Self {
         PausableCombinedContentSource {
-            inner,
             index: 0,
             pending: None,
+            inner,
             max: None,
         }
     }
@@ -48,38 +78,16 @@ impl PausableCombinedContentSource {
         pending: NeededData,
     ) -> Self {
         PausableCombinedContentSource {
-            inner: self.inner,
             index,
             pending: Some(pending),
+            inner: self.inner,
             max,
         }
     }
-}
 
-#[turbo_tasks::value_impl]
-impl ContentSource for CombinedContentSource {
-    #[turbo_tasks::function]
-    fn get(
-        self_vc: CombinedContentSourceVc,
-        path: &str,
-        data: Value<ContentSourceData>,
-    ) -> ContentSourceResultVc {
-        let pauseable = PausableCombinedContentSource::new(self_vc)
-            .cell()
-            .as_content_source();
-        pauseable.get(path, data)
-    }
-
-    #[turbo_tasks::function]
-    fn get_children(&self) -> ContentSourcesVc {
-        ContentSourcesVc::cell(self.sources.clone())
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl ContentSource for PausableCombinedContentSource {
-    #[turbo_tasks::function]
-    async fn get(
+    /// Queries each content source in turn, returning a new pauseable instance
+    /// if any source requests additional vary data.
+    async fn pauseable_get(
         &self,
         path: &str,
         data: Value<ContentSourceData>,
@@ -96,13 +104,19 @@ impl ContentSource for PausableCombinedContentSource {
 
             let res = result.await?;
             if let ContentSourceContent::NeedData(data) = &*res.content.await? {
-                let paused = self.pause(i, max, data.clone());
-                let mut vary = data.vary.clone();
-                if let Some(pending) = &self.pending {
-                    vary.extend(&pending.vary);
-                };
+                // If this content source requests more data, then we pause the iteration at
+                // this point. With a bit of fiddling, we can extract the vary
+                // data it requested and keep the data needed to resume with a
+                // single clone.
+                let mut data = data.clone();
+                let vary = mem::take(&mut data.vary);
+                let paused = self.pause(i, max, data);
+
                 return Ok(ContentSourceResultVc::exact(
                     ContentSourceContent::NeedData(NeededData {
+                        // We do not respect the content source's data.path because that would
+                        // affect later content source requests. However, when we resume, we'll use
+                        // the path stored in pending to correctly requery this source.
                         path: path.to_string(),
                         source: paused.cell().into(),
                         vary,
@@ -123,6 +137,7 @@ impl ContentSource for PausableCombinedContentSource {
             }
             max = Some((specificity, result));
         }
+
         if let Some((_, result)) = max {
             Ok(result)
         } else {
@@ -131,16 +146,23 @@ impl ContentSource for PausableCombinedContentSource {
     }
 }
 
-#[turbo_tasks::function]
-fn introspectable_type() -> StringVc {
-    StringVc::cell("combined content source".to_string())
+#[turbo_tasks::value_impl]
+impl ContentSource for PausableCombinedContentSource {
+    #[turbo_tasks::function]
+    async fn get(
+        &self,
+        path: &str,
+        data: Value<ContentSourceData>,
+    ) -> Result<ContentSourceResultVc> {
+        self.pauseable_get(path, data).await
+    }
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for CombinedContentSource {
     #[turbo_tasks::function]
     fn ty(&self) -> StringVc {
-        introspectable_type()
+        StringVc::cell("combined content source".to_string())
     }
 
     #[turbo_tasks::function]
