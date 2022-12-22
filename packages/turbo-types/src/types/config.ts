@@ -20,7 +20,7 @@ export interface Schema {
   globalDependencies?: string[];
 
   /**
-   * A list of environment variables, prefixed with $ (e.g. $GITHUB_TOKEN),
+   * A list of environment variables, (e.g. GITHUB_TOKEN),
    * for implicit global hash dependencies.
    *
    * @default []
