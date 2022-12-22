@@ -191,6 +191,11 @@ async fn module(
                             Some(ModuleType::Typescript(transforms)) => Some(
                                 ModuleType::Typescript(transforms.extend(*additional_transforms)),
                             ),
+                            Some(ModuleType::TypescriptWithTypes(transforms)) => {
+                                Some(ModuleType::TypescriptWithTypes(
+                                    transforms.extend(*additional_transforms),
+                                ))
+                            }
                             Some(module_type) => {
                                 ModuleIssue {
                                     path,
@@ -287,8 +292,9 @@ impl ModuleAssetContextVc {
 
     #[turbo_tasks::function]
     pub async fn is_types_resolving_enabled(self) -> Result<BoolVc> {
+        let context = self.await?.resolve_options_context.await?;
         Ok(BoolVc::cell(
-            self.await?.resolve_options_context.await?.enable_types,
+            context.enable_types && context.enable_typescript,
         ))
     }
 
