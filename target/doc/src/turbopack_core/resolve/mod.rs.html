@@ -1175,6 +1175,10 @@
 <span id="1175">1175</span>
 <span id="1176">1176</span>
 <span id="1177">1177</span>
+<span id="1178">1178</span>
+<span id="1179">1179</span>
+<span id="1180">1180</span>
+<span id="1181">1181</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -1850,7 +1854,11 @@
                 request,
                 context,
                 resolve_options: options,
-                error_message: <span class="prelude-val">Some</span>(<span class="string">&quot;server relative imports are not implemented yet&quot;</span>.to_string()),
+                error_message: <span class="prelude-val">Some</span>(
+                    <span class="string">&quot;server relative imports are not implemented yet. Please try an import \
+                     relative to the file you are importing from.&quot;
+                        </span>.to_string(),
+                ),
             }
             .into();
             issue.as_issue().emit();
