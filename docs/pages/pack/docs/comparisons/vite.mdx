@@ -30,6 +30,8 @@ This means that Turbopack's dev server starts up much faster than Vite's. On a 1
 
 In large applications, this differential stays consistent. In a 30,000 module application, Turbopack starts up <DocsBenchmarkStat stat="turbopack-cold-vs-vite-30000" /> faster than Vite.
 
+Note that Vite is using the official [SWC plugin](https://github.com/vitejs/vite-plugin-react-swc) for these benchmarks, which is not the default configuration.
+
 <DocsBenchmarksGraph category="cold" bars={[
   {
     label: 'Turbopack',
@@ -39,6 +41,7 @@ In large applications, this differential stays consistent. In a 30,000 module ap
   {
     label: 'Vite',
     key: 'vite',
+    swc: true
   }
 ]} />
 
@@ -59,5 +62,6 @@ In a 1,000 module application, Turbopack can react to file changes **<DocsBenchm
   {
     label: 'Vite',
     key: 'vite',
+    swc: true
   }
 ]} />
