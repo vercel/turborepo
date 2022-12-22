@@ -18,14 +18,14 @@ pub struct RouterContentSource {
 }
 
 impl RouterContentSource {
-    async fn get_source<'s, 'a>(&'s self, path: &'a str) -> Result<(&'s ContentSourceVc, &'a str)> {
+    fn get_source<'s, 'a>(&'s self, path: &'a str) -> (&'s ContentSourceVc, &'a str) {
         for (route, source) in self.routes.iter() {
             if path.starts_with(route) {
                 let path = &path[route.len()..];
-                return Ok((source, path));
+                return (source, path);
             }
         }
-        Ok((&self.fallback, path))
+        (&self.fallback, path)
     }
 }
 
@@ -37,7 +37,7 @@ impl ContentSource for RouterContentSource {
         path: &str,
         data: Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
-        let (source, path) = self.get_source(path).await?;
+        let (source, path) = self.get_source(path);
         Ok(source.get(path, data))
     }
 
