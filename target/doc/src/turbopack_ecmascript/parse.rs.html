@@ -303,6 +303,10 @@
 <span id="303">303</span>
 <span id="304">304</span>
 <span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -510,12 +514,15 @@
                             allow_super_outside_method: <span class="bool-val">true</span>,
                             allow_return_outside_function: <span class="bool-val">true</span>,
                         }),
-                        EcmascriptModuleAssetType::Typescript =&gt; Syntax::Typescript(TsConfig {
-                            decorators: <span class="bool-val">true</span>,
-                            dts: <span class="bool-val">false</span>,
-                            no_early_errors: <span class="bool-val">true</span>,
-                            tsx: <span class="bool-val">true</span>,
-                        }),
+                        EcmascriptModuleAssetType::Typescript
+                        | EcmascriptModuleAssetType::TypescriptWithTypes =&gt; {
+                            Syntax::Typescript(TsConfig {
+                                decorators: <span class="bool-val">true</span>,
+                                dts: <span class="bool-val">false</span>,
+                                no_early_errors: <span class="bool-val">true</span>,
+                                tsx: <span class="bool-val">true</span>,
+                            })
+                        }
                         EcmascriptModuleAssetType::TypescriptDeclaration =&gt; {
                             Syntax::Typescript(TsConfig {
                                 decorators: <span class="bool-val">true</span>,
@@ -557,6 +564,7 @@
             <span class="kw">let </span>is_typescript = <span class="macro">matches!</span>(
                 ty,
                 EcmascriptModuleAssetType::Typescript
+                    | EcmascriptModuleAssetType::TypescriptWithTypes
                     | EcmascriptModuleAssetType::TypescriptDeclaration
             );
             parsed_program.visit_mut_with(<span class="kw-2">&amp;mut </span>resolver(

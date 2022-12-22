@@ -1932,6 +1932,7 @@
 <span id="1932">1932</span>
 <span id="1933">1933</span>
 <span id="1934">1934</span>
+<span id="1935">1935</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>esm;
@@ -2110,10 +2111,11 @@
     <span class="kw">let </span><span class="kw-2">mut </span>analysis = AnalyzeEcmascriptModuleResultBuilder::new();
     <span class="kw">let </span>path = source.path();
 
-    <span class="kw">let </span>is_typescript = <span class="kw">match </span><span class="kw-2">&amp;*</span>ty {
-        EcmascriptModuleAssetType::Typescript
+    <span class="comment">// Is this a typescript file that requires analzying type references?
+    </span><span class="kw">let </span>analyze_types = <span class="kw">match </span><span class="kw-2">&amp;*</span>ty {
+        EcmascriptModuleAssetType::TypescriptWithTypes
         | EcmascriptModuleAssetType::TypescriptDeclaration =&gt; <span class="bool-val">true</span>,
-        EcmascriptModuleAssetType::Ecmascript =&gt; <span class="bool-val">false</span>,
+        EcmascriptModuleAssetType::Typescript | EcmascriptModuleAssetType::Ecmascript =&gt; <span class="bool-val">false</span>,
     };
 
     <span class="kw">let </span>parsed = parse(source, ty, transforms);
@@ -2125,7 +2127,7 @@
         FindContextFileResult::NotFound(<span class="kw">_</span>) =&gt; {}
     };
 
-    <span class="kw">if </span>is_typescript {
+    <span class="kw">if </span>analyze_types {
         <span class="kw">match </span><span class="kw-2">&amp;*</span>find_context_file(path.parent(), tsconfig()).<span class="kw">await</span><span class="question-mark">? </span>{
             FindContextFileResult::Found(tsconfig, <span class="kw">_</span>) =&gt; {
                 analysis.add_reference(TsConfigReferenceVc::new(origin, <span class="kw-2">*</span>tsconfig));
@@ -2149,7 +2151,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>import_references = Vec::new();
 
             <span class="kw">let </span>pos = program.span().lo;
-            <span class="kw">if </span>is_typescript {
+            <span class="kw">if </span>analyze_types {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(comments) = comments.leading.get(<span class="kw-2">&amp;</span>pos) {
                     <span class="kw">for </span>comment <span class="kw">in </span>comments.iter() {
                         <span class="kw">if let </span>CommentKind::Line = comment.kind {
@@ -2356,7 +2358,7 @@
                 this: JsValue,
                 args: Vec&lt;JsValue&gt;,
                 link_value: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>F,
-                is_typescript: bool,
+                analyze_types: bool,
                 analysis: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>AnalyzeEcmascriptModuleResultBuilder,
                 environment: EnvironmentVc,
             ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;a</span>&gt;&gt; {
@@ -2370,7 +2372,7 @@
                     this,
                     args,
                     link_value,
-                    is_typescript,
+                    analyze_types,
                     analysis,
                     environment,
                 ))
@@ -2389,7 +2391,7 @@
                 this: JsValue,
                 args: Vec&lt;JsValue&gt;,
                 link_value: <span class="kw-2">&amp;</span>F,
-                is_typescript: bool,
+                analyze_types: bool,
                 analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
                 environment: EnvironmentVc,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -2410,7 +2412,7 @@
                                 this.clone(),
                                 args.clone(),
                                 link_value,
-                                is_typescript,
+                                analyze_types,
                                 analysis,
                                 environment,
                             )
@@ -2436,7 +2438,7 @@
                                             JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;no this provided&quot;</span>),
                                             args,
                                             link_value,
-                                            is_typescript,
+                                            analyze_types,
                                             analysis,
                                             environment,
                                         )
@@ -3037,7 +3039,7 @@
                             JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;no this provided&quot;</span>),
                             args,
                             <span class="kw-2">&amp;</span>link_value,
-                            is_typescript,
+                            analyze_types,
                             <span class="kw-2">&amp;mut </span>analysis,
                             environment,
                         )
@@ -3068,7 +3070,7 @@
                             obj,
                             args,
                             <span class="kw-2">&amp;</span>link_value,
-                            is_typescript,
+                            analyze_types,
                             <span class="kw-2">&amp;mut </span>analysis,
                             environment,
                         )

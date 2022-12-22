@@ -47,6 +47,8 @@
 <span id="47">47</span>
 <span id="48">48</span>
 <span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
 </pre><pre class="rust"><code><span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
 <span class="kw">use </span>turbopack_core::{environment::EnvironmentVc, resolve::options::ImportMappingVc};
@@ -65,11 +67,13 @@
 <span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
 </span><span class="kw">pub struct </span>ModuleOptionsContext {
+    <span class="kw">pub </span>enable_jsx: bool,
     <span class="kw">pub </span>enable_emotion: bool,
     <span class="kw">pub </span>enable_react_refresh: bool,
     <span class="kw">pub </span>enable_styled_components: bool,
     <span class="kw">pub </span>enable_styled_jsx: bool,
     <span class="kw">pub </span>enable_postcss_transform: <span class="prelude-ty">Option</span>&lt;PostCssTransformOptions&gt;,
+    <span class="kw">pub </span>enable_types: bool,
     <span class="kw">pub </span>enable_typescript_transform: bool,
     <span class="kw">pub </span>preset_env_versions: <span class="prelude-ty">Option</span>&lt;EnvironmentVc&gt;,
     <span class="kw">pub </span>custom_ecmascript_app_transforms: Vec&lt;EcmascriptInputTransform&gt;,

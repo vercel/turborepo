@@ -590,6 +590,10 @@
 <span id="590">590</span>
 <span id="591">591</span>
 <span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>nft_json;
@@ -624,7 +628,7 @@
     viz, MemoryBackend,
 };
 <span class="kw">use </span>turbopack::{
-    emit_asset, emit_with_completion, rebase::RebasedAssetVc,
+    emit_asset, emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAssetVc,
     resolve_options_context::ResolveOptionsContext, transition::TransitionsByNameVc,
     ModuleAssetContextVc,
 };
@@ -849,7 +853,11 @@
     <span class="kw">let </span>context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
         env,
-        Default::default(),
+        ModuleOptionsContext {
+            enable_types: <span class="bool-val">true</span>,
+            ..Default::default()
+        }
+        .cell(),
         ResolveOptionsContext {
             emulate_environment: <span class="prelude-val">Some</span>(env),
             resolved_map: <span class="prelude-val">Some</span>(

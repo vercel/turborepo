@@ -95,6 +95,8 @@
 <span id="95">95</span>
 <span id="96">96</span>
 <span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbopack_core::{
     environment::EnvironmentVc,
@@ -107,6 +109,7 @@
 #[derive(Default, Clone)]
 </span><span class="kw">pub struct </span>ResolveOptionsContext {
     <span class="kw">pub </span>emulate_environment: <span class="prelude-ty">Option</span>&lt;EnvironmentVc&gt;,
+    <span class="kw">pub </span>enable_types: bool,
     <span class="kw">pub </span>enable_typescript: bool,
     <span class="kw">pub </span>enable_react: bool,
     <span class="kw">pub </span>enable_node_native_modules: bool,
@@ -147,8 +150,9 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>with_typescript_enabled(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+    </span><span class="kw">pub async fn </span>with_types_enabled(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>clone = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
+        clone.enable_types = <span class="bool-val">true</span>;
         clone.enable_typescript = <span class="bool-val">true</span>;
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::cell(clone))
     }

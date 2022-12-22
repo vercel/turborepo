@@ -289,6 +289,7 @@
 <span id="289">289</span>
 <span id="290">290</span>
 <span id="291">291</span>
+<span id="292">292</span>
 </pre><pre class="rust"><code><span class="kw">use </span>core::{default::Default, result::Result::Ok};
 <span class="kw">use </span>std::collections::HashMap;
 
@@ -407,7 +408,8 @@
         <span class="comment">// We don&#39;t need to resolve React Refresh for each module. Instead,
         // we try resolve it once at the root and pass down a context to all
         // the modules.
-        </span>enable_emotion: <span class="bool-val">true</span>,
+        </span>enable_jsx: <span class="bool-val">true</span>,
+        enable_emotion: <span class="bool-val">true</span>,
         enable_react_refresh,
         enable_styled_components: <span class="bool-val">true</span>,
         enable_styled_jsx: <span class="bool-val">true</span>,

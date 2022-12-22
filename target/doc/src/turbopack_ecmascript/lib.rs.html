@@ -373,6 +373,11 @@
 <span id="373">373</span>
 <span id="374">374</span>
 <span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -442,9 +447,14 @@
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
 </span><span class="kw">pub enum </span>EcmascriptModuleAssetType {
-    Ecmascript,
-    Typescript,
-    TypescriptDeclaration,
+    <span class="doccomment">/// Module with EcmaScript code
+    </span>Ecmascript,
+    <span class="doccomment">/// Module with TypeScript code without types
+    </span>Typescript,
+    <span class="doccomment">/// Module with TypeScript code with references to imported types
+    </span>TypescriptWithTypes,
+    <span class="doccomment">/// Module with TypeScript declaration code
+    </span>TypescriptDeclaration,
 }
 
 <span class="attr">#[turbo_tasks::value(transparent)]

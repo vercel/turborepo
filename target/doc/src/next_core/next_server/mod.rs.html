@@ -194,6 +194,9 @@
 <span id="194">194</span>
 <span id="195">195</span>
 <span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
 </pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -306,6 +309,7 @@
                 ..Default::default()
             };
             ModuleOptionsContext {
+                enable_jsx: <span class="bool-val">true</span>,
                 enable_styled_jsx: <span class="bool-val">true</span>,
                 enable_postcss_transform: <span class="prelude-val">Some</span>(PostCssTransformOptions {
                     postcss_package: <span class="prelude-val">Some</span>(get_postcss_package_mapping(project_path)),
@@ -325,6 +329,7 @@
                 ..Default::default()
             };
             ModuleOptionsContext {
+                enable_jsx: <span class="bool-val">true</span>,
                 enable_styled_jsx: <span class="bool-val">true</span>,
                 enable_postcss_transform: <span class="prelude-val">Some</span>(PostCssTransformOptions {
                     postcss_package: <span class="prelude-val">Some</span>(get_postcss_package_mapping(project_path)),
@@ -347,6 +352,7 @@
                 ..Default::default()
             };
             ModuleOptionsContext {
+                enable_jsx: <span class="bool-val">true</span>,
                 enable_postcss_transform: <span class="prelude-val">Some</span>(PostCssTransformOptions {
                     postcss_package: <span class="prelude-val">Some</span>(get_postcss_package_mapping(project_path)),
                     ..Default::default()

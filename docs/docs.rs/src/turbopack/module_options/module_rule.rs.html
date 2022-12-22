@@ -52,6 +52,7 @@
 <span id="52">52</span>
 <span id="53">53</span>
 <span id="54">54</span>
+<span id="55">55</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
@@ -96,6 +97,7 @@
 </span><span class="kw">pub enum </span>ModuleType {
     Ecmascript(EcmascriptInputTransformsVc),
     Typescript(EcmascriptInputTransformsVc),
+    TypescriptWithTypes(EcmascriptInputTransformsVc),
     TypescriptDeclaration(EcmascriptInputTransformsVc),
     Json,
     Raw,
