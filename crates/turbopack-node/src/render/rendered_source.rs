@@ -10,17 +10,13 @@ use turbopack_core::{
         asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
 };
-use turbopack_dev_server::{
-    html::DevHtmlAssetVc,
-    source::{
-        asset_graph::AssetGraphContentSourceVc,
-        conditional::ConditionalContentSourceVc,
-        lazy_instatiated::{GetContentSource, GetContentSourceVc, LazyInstantiatedContentSource},
-        specificity::SpecificityVc,
-        ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataFilter,
-        ContentSourceDataVary, ContentSourceResult, ContentSourceResultVc, ContentSourceVc,
-        NeededData,
-    },
+use turbopack_dev_server::source::{
+    asset_graph::AssetGraphContentSourceVc,
+    conditional::ConditionalContentSourceVc,
+    lazy_instatiated::{GetContentSource, GetContentSourceVc, LazyInstantiatedContentSource},
+    specificity::SpecificityVc,
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataFilter,
+    ContentSourceDataVary, ContentSourceResult, ContentSourceResultVc, ContentSourceVc, NeededData,
 };
 use turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
 
