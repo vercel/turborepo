@@ -543,8 +543,8 @@ struct NextSsg {
 
 impl NextSsg {
     /// Returns `true` when an identifier should be removed from the output.
-    fn should_remove(&self, id: Id) -> bool {
-        self.state.refs_from_removed.contains(&id) && !self.state.refs_from_preserved.contains(&id)
+    fn should_remove(&self, id: &Id) -> bool {
+        self.state.refs_from_removed.contains(id) && !self.state.refs_from_preserved.contains(id)
     }
 
     /// Mark identifiers in `n` as a candidate for elimination.
@@ -606,10 +606,7 @@ impl NextSsg {
                             decls: vec![VarDeclarator {
                                 span: DUMMY_SP,
                                 name: Pat::Ident(Ident::new(data_marker.into(), DUMMY_SP).into()),
-                                init: Some(Box::new(Expr::Lit(Lit::Bool(Bool {
-                                    span: DUMMY_SP,
-                                    value: true,
-                                })))),
+                                init: Some(true.into()),
                                 definite: Default::default(),
                             }],
                         })),
@@ -660,7 +657,7 @@ impl Fold for NextSsg {
             ImportSpecifier::Named(ImportNamedSpecifier { local, .. })
             | ImportSpecifier::Default(ImportDefaultSpecifier { local, .. })
             | ImportSpecifier::Namespace(ImportStarAsSpecifier { local, .. }) => {
-                if self.should_remove(local.to_id()) {
+                if self.should_remove(&local.to_id()) {
                     if matches!(self.state.page_mode, PageMode::Ssr)
                         && matches!(self.state.filter, ExportFilter::StripDataExports)
                         // filter out non-packages import
@@ -822,7 +819,7 @@ impl Fold for NextSsg {
         if self.in_lhs_of_var {
             match &mut p {
                 Pat::Ident(name) => {
-                    if self.should_remove(name.id.to_id()) {
+                    if self.should_remove(&name.id.to_id()) {
                         self.state.should_run_again = true;
                         tracing::trace!(
                             "Dropping var `{}{:?}` because it should be removed",
@@ -855,7 +852,7 @@ impl Fold for NextSsg {
                                     }
                                 }
                                 ObjectPatProp::Assign(prop) => {
-                                    if self.should_remove(prop.key.to_id()) {
+                                    if self.should_remove(&prop.key.to_id()) {
                                         self.mark_as_candidate(&prop.value);
 
                                         None
@@ -886,7 +883,7 @@ impl Fold for NextSsg {
                 Pat::Expr(expr) => match &**expr {
                     Expr::Member(member_expr) => match find_member_root_id(member_expr) {
                         Some(id) => {
-                            if self.should_remove(id.clone()) {
+                            if self.should_remove(&id) {
                                 self.state.should_run_again = true;
                                 tracing::trace!(
                                     "Dropping member expression object `{}{:?}` because it should \
@@ -913,7 +910,7 @@ impl Fold for NextSsg {
     fn fold_stmt(&mut self, mut s: Stmt) -> Stmt {
         match s {
             Stmt::Decl(Decl::Fn(f)) => {
-                if self.should_remove(f.ident.to_id()) {
+                if self.should_remove(&f.ident.to_id()) {
                     self.mark_as_candidate(&f.function);
                     return Stmt::Empty(EmptyStmt { span: DUMMY_SP });
                 }
@@ -921,7 +918,7 @@ impl Fold for NextSsg {
                 s = Stmt::Decl(Decl::Fn(f));
             }
             Stmt::Decl(Decl::Class(c)) => {
-                if self.should_remove(c.ident.to_id()) {
+                if self.should_remove(&c.ident.to_id()) {
                     self.mark_as_candidate(&c.class);
                     return Stmt::Empty(EmptyStmt { span: DUMMY_SP });
                 }
@@ -1014,7 +1011,7 @@ impl Fold for NextSsg {
 /// e.g. `a.b.c` => `a`
 fn find_member_root_id(member_expr: &MemberExpr) -> Option<Id> {
     match &*member_expr.obj {
-        Expr::Member(member) => Some(find_member_root_id(&member)?),
+        Expr::Member(member) => find_member_root_id(&member),
         Expr::Ident(ident) => Some(ident.to_id()),
         _ => None,
     }
