@@ -30,7 +30,7 @@ use hyper::{
     Request, Response, Server,
 };
 use mime_guess::mime;
-use source::{Body, Bytes, NeededData};
+use source::{Body, Bytes};
 use turbo_tasks::{
     run_once, trace::TraceRawVcs, util::FormatDuration, RawVc, TransientValue, TurboTasksApi, Value,
 };
