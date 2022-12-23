@@ -32,13 +32,9 @@ impl RouterContentSource {
 #[turbo_tasks::value_impl]
 impl ContentSource for RouterContentSource {
     #[turbo_tasks::function]
-    async fn get(
-        &self,
-        path: &str,
-        data: Value<ContentSourceData>,
-    ) -> Result<ContentSourceResultVc> {
+    fn get(&self, path: &str, data: Value<ContentSourceData>) -> ContentSourceResultVc {
         let (source, path) = self.get_source(path);
-        Ok(source.get(path, data))
+        source.get(path, data)
     }
 
     #[turbo_tasks::function]
