@@ -111,7 +111,7 @@
 <span class="kw">use </span>turbopack_dev_server::source::{
     query::QueryValue, ContentSource, ContentSourceContent, ContentSourceData,
     ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
-    ProxyResult,
+    NeededData, ProxyResult,
 };
 
 <span class="doccomment">/// Serves, resizes, optimizes, and re-encodes images to be used with
@@ -150,7 +150,7 @@
                 .collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;();
 
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-                    ContentSourceContent::NeedData {
+                    ContentSourceContent::NeedData(NeededData {
                         source: self_vc.into(),
                         path: path.to_string(),
                         vary: ContentSourceDataVary {
@@ -158,7 +158,7 @@
                             query: <span class="prelude-val">Some</span>(ContentSourceDataFilter::Subset(queries)),
                             ..Default::default()
                         },
-                    }
+                    })
                     .cell(),
                 ));
             }
@@ -173,7 +173,7 @@
         <span class="comment">// TODO: consume the assets, resize and reduce quality, re-encode into next-gen
         // formats.
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = url.strip_prefix(<span class="string">&#39;/&#39;</span>) {
-            <span class="kw">let </span>asset = this.asset_source.get(path, Value::new(Default::default()));
+            <span class="kw">let </span>asset = this.asset_source.get(path, Default::default());
             <span class="comment">// THERE&#39;S A HUGE PERFORMANCE ISSUE IF THIS MISSES
             </span><span class="kw">let </span>inner = asset.<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">if </span><span class="macro">matches!</span>(<span class="kw-2">&amp;*</span>inner.content.<span class="kw">await</span><span class="question-mark">?</span>, ContentSourceContent::Static(..)) {

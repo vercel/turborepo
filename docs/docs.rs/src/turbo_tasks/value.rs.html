@@ -156,6 +156,12 @@
 <span id="156">156</span>
 <span id="157">157</span>
 <span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Debug, marker::PhantomData, ops::Deref, sync::Arc};
 
 <span class="kw">use crate</span>::{SharedReference, Typed};
@@ -187,6 +193,12 @@
 }
 
 <span class="kw">impl</span>&lt;T: Typed + Copy&gt; Copy <span class="kw">for </span>Value&lt;T&gt; {}
+
+<span class="kw">impl</span>&lt;T: Typed + Default&gt; Default <span class="kw">for </span>Value&lt;T&gt; {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        Value::new(Default::default())
+    }
+}
 
 <span class="doccomment">/// Pass a value by value (`Value&lt;Xxx&gt;`) instead of by reference (`XxxVc`).
 ///

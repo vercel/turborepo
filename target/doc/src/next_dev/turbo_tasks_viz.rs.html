@@ -129,7 +129,7 @@
 <span class="kw">use </span>turbopack_core::asset::AssetContentVc;
 <span class="kw">use </span>turbopack_dev_server::source::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataFilter,
-    ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
+    ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc, NeededData,
 };
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;none&quot;</span>, eq = <span class="string">&quot;manual&quot;</span>, cell = <span class="string">&quot;new&quot;</span>, into = <span class="string">&quot;new&quot;</span>)]
@@ -205,14 +205,14 @@
                     viz::table::wrap_html(<span class="kw-2">&amp;</span>table)
                 } <span class="kw">else </span>{
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-                        ContentSourceContent::NeedData {
+                        ContentSourceContent::NeedData(NeededData {
                             source: self_vc.into(),
                             path: path.to_string(),
                             vary: ContentSourceDataVary {
                                 query: <span class="prelude-val">Some</span>(ContentSourceDataFilter::All),
                                 ..Default::default()
                             },
-                        }
+                        })
                         .cell(),
                     ));
                 }

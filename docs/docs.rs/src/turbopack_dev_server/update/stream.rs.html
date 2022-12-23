@@ -238,8 +238,6 @@
 <span id="238">238</span>
 <span id="239">239</span>
 <span id="240">240</span>
-<span id="241">241</span>
-<span id="242">242</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -285,12 +283,10 @@
     get_content: TransientInstance&lt;GetContentFn&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>content = get_content();
-    <span class="kw">while let </span>ContentSourceContent::NeedData { source, path, vary } =
-        <span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">?</span>.content.<span class="kw">await</span><span class="question-mark">?
-    </span>{
-        content = source.get(
-            path,
-            Value::new(resource_to_data(resource.clone().into_value(), vary)),
+    <span class="kw">while let </span>ContentSourceContent::NeedData(data) = <span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">?</span>.content.<span class="kw">await</span><span class="question-mark">? </span>{
+        content = data.source.get(
+            <span class="kw-2">&amp;</span>data.path,
+            Value::new(resource_to_data(resource.clone().into_value(), <span class="kw-2">&amp;</span>data.vary)),
         );
     }
     <span class="prelude-val">Ok</span>(content)
@@ -305,7 +301,7 @@
             <span class="macro">panic!</span>(<span class="string">&quot;HTTP proxying is not supported in UpdateStream&quot;</span>)
         }
         ContentSourceContent::Static(content) =&gt; <span class="prelude-val">Some</span>(content),
-        ContentSourceContent::NeedData { .. } =&gt; {
+        ContentSourceContent::NeedData(<span class="kw">_</span>) =&gt; {
             <span class="macro">bail!</span>(<span class="string">&quot;this might only happen temporary as get_content_wrapper resolves the data&quot;</span>)
         }
     })

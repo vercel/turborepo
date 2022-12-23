@@ -114,8 +114,6 @@
 <span id="114">114</span>
 <span id="115">115</span>
 <span id="116">116</span>
-<span id="117">117</span>
-<span id="118">118</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::File;
@@ -128,6 +126,7 @@
 <span class="kw">use super</span>::{
     query::QueryValue, ContentSource, ContentSourceContent, ContentSourceData,
     ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
+    NeededData,
 };
 
 <span class="doccomment">/// SourceMapContentSource allows us to serve full source maps, and individual
@@ -171,14 +170,14 @@
             <span class="prelude-val">Some</span>(q) =&gt; q,
             <span class="prelude-val">None </span>=&gt; {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-                    ContentSourceContent::NeedData {
+                    ContentSourceContent::NeedData(NeededData {
                         source: self_vc.into(),
                         path: path.to_string(),
                         vary: ContentSourceDataVary {
                             query: <span class="prelude-val">Some</span>(ContentSourceDataFilter::Subset([<span class="string">&quot;id&quot;</span>.to_string()].into())),
                             ..Default::default()
                         },
-                    }
+                    })
                     .cell(),
                 ))
             }
@@ -190,10 +189,7 @@
         };
 
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>result = this
-            .asset_source
-            .get(pathname, Value::new(Default::default()))
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>result = this.asset_source.get(pathname, Default::default()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>file = <span class="kw">match </span><span class="kw-2">&amp;*</span>result.content.<span class="kw">await</span><span class="question-mark">? </span>{
             ContentSourceContent::Static(f) =&gt; <span class="kw-2">*</span>f,
             <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),

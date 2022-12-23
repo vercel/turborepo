@@ -580,10 +580,10 @@
             }
         }
         ContentSourceContent::HttpProxy(proxy) =&gt; GetFromSourceResult::HttpProxy(proxy.<span class="kw">await</span><span class="question-mark">?</span>),
-        ContentSourceContent::NeedData { source, path, vary } =&gt; GetFromSourceResult::NeedData {
-            source: source.resolve().<span class="kw">await</span><span class="question-mark">?</span>,
-            path: path.clone(),
-            vary: vary.clone(),
+        ContentSourceContent::NeedData(data) =&gt; GetFromSourceResult::NeedData {
+            source: data.source.resolve().<span class="kw">await</span><span class="question-mark">?</span>,
+            path: data.path.clone(),
+            vary: data.vary.clone(),
         },
         ContentSourceContent::NotFound =&gt; GetFromSourceResult::NotFound,
     }

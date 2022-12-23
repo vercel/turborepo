@@ -344,6 +344,21 @@
 <span id="344">344</span>
 <span id="345">345</span>
 <span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset_graph;
 <span class="kw">pub mod </span>combined;
 <span class="kw">pub mod </span>conditional;
@@ -419,11 +434,26 @@
     NotFound,
     Static(VersionedContentVc),
     HttpProxy(ProxyResultVc),
-    NeedData {
-        source: ContentSourceVc,
-        path: String,
-        vary: ContentSourceDataVary,
-    },
+    NeedData(NeededData),
+}
+
+<span class="doccomment">/// Needed data content signals that the content source requires more
+/// information in order to serve the request. The held data allows us to
+/// partially compute some data, and resume computation after the needed vary
+/// data is supplied by the dev server.
+</span><span class="attr">#[turbo_tasks::value(shared)]
+#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>NeededData {
+    <span class="doccomment">/// A [ContentSource] to query once the data has been extracted from the
+    /// server. This _does not_ need to be the original content source.
+    </span><span class="kw">pub </span>source: ContentSourceVc,
+
+    <span class="doccomment">/// A path with which to call into that content source. This _does not_ need
+    /// to be the original path.
+    </span><span class="kw">pub </span>path: String,
+
+    <span class="doccomment">/// The vary data which is needed in order to process the request.
+    </span><span class="kw">pub </span>vary: ContentSourceDataVary,
 }
 
 <span class="kw">impl </span>From&lt;VersionedContentVc&gt; <span class="kw">for </span>ContentSourceContentVc {
