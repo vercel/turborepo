@@ -317,12 +317,10 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
     match &*config_value {
         JavaScriptValue::Value(val) => {
             let next_config: NextConfig = serde_json::from_reader(val.read())?;
-            let next_config = next_config.cell();
-            Ok(if let Some(asset) = config_asset {
-                validate_next_config(next_config, asset.path())
-            } else {
-                next_config
-            })
+            if let Some(asset) = config_asset {
+                validate_next_config(&next_config, asset.path()).await?;
+            }
+            Ok(next_config.cell())
         }
         JavaScriptValue::Error => Ok(NextConfig::default().cell()),
         JavaScriptValue::Stream(_) => {
@@ -332,13 +330,8 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
 }
 
 /// Validates the Next.js configuration.
-#[turbo_tasks::function]
-async fn validate_next_config(
-    next_config: NextConfigVc,
-    path: FileSystemPathVc,
-) -> Result<NextConfigVc> {
-    let next_config_ref = next_config.await?;
-    if let Some(base_path) = next_config_ref.base_path.as_deref() {
+async fn validate_next_config(next_config: &NextConfig, path: FileSystemPathVc) -> Result<()> {
+    if let Some(base_path) = next_config.base_path.as_deref() {
         if !base_path.is_empty() {
             if !base_path.starts_with('/') {
                 emit_and_bail!(NextConfigIssue {
@@ -365,5 +358,5 @@ async fn validate_next_config(
             }
         }
     }
-    Ok(next_config)
+    Ok(())
 }
