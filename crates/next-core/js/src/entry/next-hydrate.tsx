@@ -1,8 +1,15 @@
 import "@vercel/turbopack-next/internal/shims-client";
 
-import { initialize, hydrate } from "next/dist/client";
+import { initialize, hydrate, router } from "next/dist/client";
+import {
+  assign,
+  urlQueryToSearchParams,
+} from "next/dist/shared/lib/router/utils/querystring";
 import { initializeHMR } from "@vercel/turbopack-next/dev/client";
-import { subscribeToCssChunkUpdates } from "@vercel/turbopack-next/dev/hmr-client";
+import {
+  onUpdate,
+  subscribeToCssChunkUpdates,
+} from "@vercel/turbopack-next/dev/hmr-client";
 
 import * as _app from "@vercel/turbopack-next/pages/_app";
 import * as page from ".";
@@ -35,6 +42,7 @@ async function loadPageChunk(assetPrefix: string, chunkPath: string) {
     },
   });
 
+  subscribePageData({ assetPrefix });
   initializeHMR({
     assetPrefix,
   });
@@ -68,3 +76,51 @@ async function loadPageChunk(assetPrefix: string, chunkPath: string) {
 
   console.debug("The page has been hydrated");
 })().catch((err) => console.error(err));
+
+/**
+ * Subscribes to page data updates from the HMR server.
+ *
+ * TODO(alexkirsz): Handle assetPrefix/basePath.
+ */
+function subscribePageData({ assetPrefix }: { assetPrefix: string }) {
+  const pageChunkPath = location.pathname.slice(1);
+  const dataPath = `_next/data/development/${pageChunkPath}.json`;
+
+  onUpdate(
+    {
+      path: dataPath,
+      headers: {
+        // This header is used by the Next.js server to determine whether this
+        // is a data request.
+        "x-nextjs-data": "1",
+      },
+    },
+    (update) => {
+      console.info(update);
+
+      if (update.type !== "restart") {
+        return;
+      }
+
+      // This triggers a reload of the page data.
+      router
+        .replace(
+          router.pathname +
+            "?" +
+            String(
+              assign(
+                urlQueryToSearchParams(router.query),
+                new URLSearchParams(location.search)
+              )
+            ),
+          router.asPath,
+          { scroll: false }
+        )
+        .catch(() => {
+          // trigger hard reload when failing to refresh data
+          // to show error overlay properly
+          location.reload();
+        });
+    }
+  );
+}

@@ -29,13 +29,18 @@ pub enum EcmascriptInputTransform {
     CommonJs,
     Custom,
     Emotion,
-    /// This enables the Next.js data transform, which will eliminate
-    /// `getStaticProps`, `getStaticPaths`, and `getServerSideProps` exports
-    /// from the output, as well as any imports exclusively used by those
+    /// This enables a Next.js transform which will eliminate the data exports
+    /// from a page file, as well as any imports exclusively used by these
     /// exports.
     ///
     /// It also provides diagnostics for improper use of `getServerSideProps`.
     NextJsStripPageDataExports,
+    /// This enables a Next.js transform which will eliminate the default export
+    /// from a page file, as well as any imports exclusively used by this
+    /// export.
+    ///
+    /// It also provides diagnostics for improper use of `getServerSideProps`.
+    NextJsStripPageDefaultExport,
     NextJsFont(StringsVc),
     PresetEnv(EnvironmentVc),
     React {
@@ -187,12 +192,24 @@ impl EcmascriptInputTransform {
                     eliminated_packages,
                 ));
             }
+            EcmascriptInputTransform::NextJsStripPageDefaultExport => {
+                use next_transform_strip_page_exports::{
+                    next_transform_strip_page_exports, ExportFilter,
+                };
+                let eliminated_packages = Default::default();
+
+                let module_program = unwrap_module_program(program);
+
+                *program = module_program.fold_with(&mut next_transform_strip_page_exports(
+                    ExportFilter::StripDefaultExport,
+                    eliminated_packages,
+                ));
+            }
             EcmascriptInputTransform::NextJsFont(font_loaders_vc) => {
                 let mut font_loaders = vec![];
                 for loader in &(*font_loaders_vc.await?) {
                     font_loaders.push(std::convert::Into::<JsWord>::into(&**loader));
                 }
-
                 let mut next_font = next_font::next_font_loaders(next_font::Config {
                     font_loaders,
                     relative_file_path_from_root: file_name_str.into(),
