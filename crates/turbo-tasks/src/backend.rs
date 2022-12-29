@@ -76,6 +76,14 @@ pub enum PersistentTaskType {
 }
 
 impl PersistentTaskType {
+    pub fn shrink_to_fit(&mut self) {
+        match self {
+            Self::Native(_, inputs) => inputs.shrink_to_fit(),
+            Self::ResolveNative(_, inputs) => inputs.shrink_to_fit(),
+            Self::ResolveTrait(_, _, inputs) => inputs.shrink_to_fit(),
+        }
+    }
+
     pub fn len(&self) -> usize {
         match self {
             PersistentTaskType::Native(_, v)
@@ -111,7 +119,7 @@ pub struct TaskExecutionSpec {
 
 // TODO technically CellContent is already indexed by the ValueTypeId, so we
 // don't need to store it here
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CellContent(pub Option<SharedReference>);
 
 impl Display for CellContent {
@@ -219,13 +227,6 @@ pub trait Backend: Sync + Send {
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> Result<Result<RawVc, EventListener>>;
 
-    fn track_read_task_output(
-        &self,
-        task: TaskId,
-        reader: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
-    );
-
     fn try_read_task_cell(
         &self,
         task: TaskId,
@@ -256,14 +257,6 @@ pub trait Backend: Sync + Send {
             Err(_) => Ok(CellContent(None)),
         }
     }
-
-    fn track_read_task_cell(
-        &self,
-        task: TaskId,
-        index: CellId,
-        reader: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
-    );
 
     fn try_read_task_collectibles(
         &self,

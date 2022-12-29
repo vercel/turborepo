@@ -5,12 +5,14 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::ecmascript::EcmascriptModuleAssetVc;
 use turbopack_core::{
     chunk::{ChunkGroupVc, ChunkableAssetVc},
+    reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{origin::PlainResolveOriginVc, parse::RequestVc},
 };
 use turbopack_dev_server::{
     html::DevHtmlAssetVc,
     source::{asset_graph::AssetGraphContentSourceVc, ContentSourceVc},
 };
+use turbopack_node::execution_context::ExecutionContextVc;
 
 use crate::{
     embed_js::wrap_with_next_js_fs,
@@ -18,23 +20,26 @@ use crate::{
         get_client_asset_context, get_client_chunking_context, get_client_runtime_entries,
         ContextType,
     },
+    next_config::NextConfigVc,
 };
 
 #[turbo_tasks::function]
 pub async fn create_web_entry_source(
     project_root: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     entry_requests: Vec<RequestVc>,
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
     eager_compile: bool,
     browserslist_query: &str,
+    next_config: NextConfigVc,
 ) -> Result<ContentSourceVc> {
     let project_root = wrap_with_next_js_fs(project_root);
 
     let ty = Value::new(ContextType::Other);
-    let context = get_client_asset_context(project_root, browserslist_query, ty);
+    let context = get_client_asset_context(project_root, execution_context, browserslist_query, ty);
     let chunking_context = get_client_chunking_context(project_root, server_root, ty);
-    let entries = get_client_runtime_entries(project_root, env, ty);
+    let entries = get_client_runtime_entries(project_root, env, ty, next_config);
 
     let runtime_entries = entries.resolve_entries(context);
 
@@ -42,8 +47,9 @@ pub async fn create_web_entry_source(
     let entries = entry_requests
         .into_iter()
         .map(|request| async move {
+            let ty = Value::new(ReferenceType::Entry(EntryReferenceSubType::Web));
             Ok(origin
-                .resolve_asset(request, origin.resolve_options())
+                .resolve_asset(request, origin.resolve_options(ty.clone()), ty)
                 .primary_assets()
                 .await?
                 .first()

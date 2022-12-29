@@ -52,6 +52,15 @@ export const users: Array<TurboUser> = [
     pinned: true,
   },
   {
+    caption: "Github",
+    image: "/images/logos/github.svg",
+    infoLink: "https://www.github.com/",
+    pinned: true,
+    style: {
+      width: 110,
+    },
+  },
+  {
     caption: "Alibaba",
     image: "/images/logos/alibaba.svg",
     infoLink: "https://www.alibaba.com/",
@@ -492,5 +501,29 @@ export const users: Array<TurboUser> = [
     image: "/images/logos/solanafm.svg",
     infoLink: "https://solana.fm/",
     pinned: true,
+  },
+  {
+    caption: "Authdog",
+    image: "/images/logos/authdog.svg",
+    infoLink: "https://www.authdog.com/",
+    pinned: true,
+    style: {
+      width: 175,
+    },
+  },
+  {
+    caption: "Nhost",
+    image: "/images/logos/nhost.svg",
+    infoLink: "https://nhost.io/",
+    pinned: true,
+  },
+  {
+    caption: "LG U+",
+    image: "/images/logos/lguplus.svg",
+    infoLink: "https://www.lguplus.com/about/en",
+    pinned: true,
+    style: {
+      width: 150,
+    },
   },
 ];

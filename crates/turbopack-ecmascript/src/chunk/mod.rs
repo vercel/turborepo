@@ -31,7 +31,7 @@ use turbopack_core::{
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
     reference::{AssetReferenceVc, AssetReferencesVc},
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapVc},
     version::{
         PartialUpdate, TotalUpdate, Update, UpdateVc, Version, VersionVc, VersionedContent,
         VersionedContentVc,
@@ -739,22 +739,46 @@ impl GenerateSourceMap for EcmascriptChunkContent {
     fn generate_source_map(self_vc: EcmascriptChunkContentVc) -> SourceMapVc {
         self_vc.code().generate_source_map()
     }
+
+    #[turbo_tasks::function]
+    async fn by_section(&self, section: &str) -> Result<OptionSourceMapVc> {
+        // Weirdly, the ContentSource will have already URL decoded the ModuleId, and we
+        // can't reparse that via serde.
+        if let Ok(id) = ModuleId::parse(section) {
+            for entry in self.module_factories.iter() {
+                if id == *entry.id() {
+                    let sm = entry.code_vc.generate_source_map();
+                    return Ok(OptionSourceMapVc::cell(Some(sm)));
+                }
+            }
+        }
+
+        Ok(OptionSourceMapVc::cell(None))
+    }
 }
 
 #[derive(serde::Serialize)]
 struct HmrUpdateEntry<'a> {
     code: &'a Rope,
+    url: String,
     map: Option<String>,
 }
 
 impl<'a> HmrUpdateEntry<'a> {
     fn new(entry: &'a EcmascriptChunkContentEntry, chunk_path: &str) -> Self {
+        /// serde_qs can't serialize a lone enum when it's [serde::untagged].
+        #[derive(Serialize)]
+        struct Id<'a> {
+            id: &'a ModuleId,
+        }
+        let id = serde_qs::to_string(&Id { id: &entry.id }).unwrap();
         HmrUpdateEntry {
             code: entry.source_code(),
+            url: format!("/{}?{}", chunk_path, &id),
             map: entry
                 .code
                 .has_source_map()
-                .then(|| format!("{}.{}.map", chunk_path, entry.id.to_truncated_hash())),
+                .then(|| format!("/__turbopack_sourcemap__/{}.map?{}", chunk_path, &id)),
         }
     }
 }
@@ -972,14 +996,7 @@ impl Asset for EcmascriptChunk {
         for chunk_group in content.async_chunk_groups.iter() {
             references.push(ChunkGroupReferenceVc::new(*chunk_group).into());
         }
-
-        references.push(
-            EcmascriptChunkSourceMapAssetReferenceVc::new(
-                self_vc,
-                *this.context.is_hot_module_replacement_enabled().await?,
-            )
-            .into(),
-        );
+        references.push(EcmascriptChunkSourceMapAssetReferenceVc::new(self_vc).into());
 
         Ok(AssetReferencesVc::cell(references))
     }

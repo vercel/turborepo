@@ -1,0 +1,19 @@
+name: Update Google font-data.json
+
+on:
+  schedule:
+    - cron: "15 0 * * *" # Run every day at 00:15
+  workflow_dispatch:
+
+jobs:
+  update_font_data:
+    name: Update Google font-data.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-node
+      - run: node --experimental-fetch ./scripts/fetch-google-font-data.js > crates/next-core/src/next_font_google/__generated__/font-data.json
+      - uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Update Google font-data.json (${{ github.sha }})
+          file_pattern: crates/next-core/src/next_font_google/__generated__/font-data.json

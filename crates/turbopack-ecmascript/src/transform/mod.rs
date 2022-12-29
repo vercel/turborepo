@@ -8,6 +8,7 @@ use swc_core::{
     common::{chain, util::take::Take, FileName, Mark, SourceMap},
     ecma::{
         ast::{Module, ModuleItem, Program},
+        atoms::JsWord,
         preset_env::{self, Targets},
         transforms::{
             base::{feature::FeatureFlag, helpers::inject_helpers, resolver, Assumptions},
@@ -16,7 +17,7 @@ use swc_core::{
         visit::{FoldWith, VisitMutWith},
     },
 };
-use turbo_tasks::primitives::StringVc;
+use turbo_tasks::primitives::{StringVc, StringsVc};
 use turbopack_core::environment::EnvironmentVc;
 
 use self::server_to_client_proxy::{create_proxy_module, is_client_module};
@@ -34,7 +35,8 @@ pub enum EcmascriptInputTransform {
     /// well as any imports that are only used by those exports.
     ///
     /// It also provides diagnostics for improper use of `getServerSideProps`.
-    NextJs,
+    NextJsPageSsr,
+    NextJsFont(StringsVc),
     PresetEnv(EnvironmentVc),
     React {
         #[serde(default)]
@@ -172,13 +174,26 @@ impl EcmascriptInputTransform {
                     program.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
                 }
             }
-            EcmascriptInputTransform::NextJs => {
+            EcmascriptInputTransform::NextJsPageSsr => {
                 use next_ssg::next_ssg;
                 let eliminated_packages = Default::default();
 
                 let module_program = unwrap_module_program(program);
 
                 *program = module_program.fold_with(&mut next_ssg(eliminated_packages));
+            }
+            EcmascriptInputTransform::NextJsFont(font_loaders_vc) => {
+                let mut font_loaders = vec![];
+                for loader in &(*font_loaders_vc.await?) {
+                    font_loaders.push(std::convert::Into::<JsWord>::into(&**loader));
+                }
+
+                let mut next_font = next_font::next_font_loaders(next_font::Config {
+                    font_loaders,
+                    relative_file_path_from_root: file_name_str.into(),
+                });
+
+                program.visit_mut_with(&mut next_font);
             }
             EcmascriptInputTransform::Custom => todo!(),
         }

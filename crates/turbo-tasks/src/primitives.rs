@@ -17,6 +17,12 @@ impl StringVc {
 }
 
 #[turbo_tasks::value(transparent)]
+pub struct OptionU16(Option<u16>);
+
+#[turbo_tasks::value(transparent)]
+pub struct U32(u32);
+
+#[turbo_tasks::value(transparent)]
 pub struct U64(u64);
 
 #[turbo_tasks::value(transparent)]

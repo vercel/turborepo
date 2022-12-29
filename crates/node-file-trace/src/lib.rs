@@ -32,7 +32,7 @@ use turbo_tasks_memory::{
     viz, MemoryBackend,
 };
 use turbopack::{
-    emit_asset, emit_with_completion, rebase::RebasedAssetVc,
+    emit_asset, emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAssetVc,
     resolve_options_context::ResolveOptionsContext, transition::TransitionsByNameVc,
     ModuleAssetContextVc,
 };
@@ -204,7 +204,10 @@ async fn add_glob_results(
     for entry in result.results.values() {
         if let DirectoryEntry::File(path) = entry {
             let source = SourceAssetVc::new(*path).into();
-            list.push(context.process(source));
+            list.push(context.process(
+                source,
+                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+            ));
         }
     }
     for result in result.inner.values() {
@@ -254,7 +257,11 @@ async fn input_to_modules<'a>(
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
         env,
-        Default::default(),
+        ModuleOptionsContext {
+            enable_types: true,
+            ..Default::default()
+        }
+        .cell(),
         ResolveOptionsContext {
             emulate_environment: Some(env),
             resolved_map: Some(
@@ -272,7 +279,10 @@ async fn input_to_modules<'a>(
     for input in input.iter() {
         if exact {
             let source = SourceAssetVc::new(root.join(input)).into();
-            list.push(context.process(source));
+            list.push(context.process(
+                source,
+                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+            ));
         } else {
             let glob = GlobVc::new(input);
             add_glob_results(context, root.read_glob(glob, false), &mut list).await?;

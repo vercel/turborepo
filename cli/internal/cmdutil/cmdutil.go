@@ -18,6 +18,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/config"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/ui"
 )
 
@@ -33,9 +34,6 @@ type Helper struct {
 	// TurboVersion is the version of turbo that is currently executing
 	TurboVersion string
 
-	// for UI
-	forceColor bool
-	noColor    bool
 	// for logging
 	verbosity int
 
@@ -78,10 +76,10 @@ func (h *Helper) Cleanup(cliConfig config.CLIConfigProvider) {
 
 func (h *Helper) getUI(flags config.CLIConfigProvider) cli.Ui {
 	colorMode := ui.GetColorModeFromEnv()
-	if flags.GetNoColor() && h.noColor {
+	if flags.GetNoColor() {
 		colorMode = ui.ColorModeSuppressed
 	}
-	if flags.GetColor() && h.forceColor {
+	if flags.GetColor() {
 		colorMode = ui.ColorModeForced
 	}
 	return ui.BuildColoredUi(colorMode)
@@ -127,10 +125,7 @@ func (h *Helper) getLogger() (hclog.Logger, error) {
 // AddFlags adds common flags for all turbo commands to the given flagset and binds
 // them to this instance of Helper
 func (h *Helper) AddFlags(flags *pflag.FlagSet) {
-	flags.BoolVar(&h.forceColor, "color", false, "Force color usage in the terminal")
-	flags.BoolVar(&h.noColor, "no-color", false, "Suppress color usage in the terminal")
 	flags.CountVarP(&h.verbosity, "verbosity", "v", "verbosity")
-	flags.StringVar(&h.rawRepoRoot, "cwd", "", "The directory in which to run turbo")
 	client.AddFlags(&h.clientOpts, flags)
 	config.AddRepoConfigFlags(flags)
 	config.AddUserConfigFlags(flags)
@@ -138,10 +133,11 @@ func (h *Helper) AddFlags(flags *pflag.FlagSet) {
 
 // NewHelper returns a new helper instance to hold configuration values for the root
 // turbo command.
-func NewHelper(turboVersion string) *Helper {
+func NewHelper(turboVersion string, args turbostate.ParsedArgsFromRust) *Helper {
 	return &Helper{
 		TurboVersion:   turboVersion,
 		UserConfigPath: config.DefaultUserConfigPath(),
+		verbosity:      args.Verbosity,
 	}
 }
 
@@ -155,7 +151,11 @@ func (h *Helper) GetCmdBase(cliConfig config.CLIConfigProvider) (*CmdBase, error
 	if err != nil {
 		return nil, err
 	}
-	cwd, err := fs.GetCwd()
+	cwdRaw, err := cliConfig.GetCwd()
+	if err != nil {
+		return nil, err
+	}
+	cwd, err := fs.GetCwd(cwdRaw)
 	if err != nil {
 		return nil, err
 	}

@@ -2,11 +2,11 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value};
-use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
+use turbopack_core::introspect::{Introspectable, IntrospectableVc};
 use turbopack_dev_server::source::{
     query::QueryValue, ContentSource, ContentSourceContent, ContentSourceData,
     ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
-    ProxyResult,
+    NeededData, ProxyResult,
 };
 
 /// Serves, resizes, optimizes, and re-encodes images to be used with
@@ -45,7 +45,7 @@ impl ContentSource for NextImageContentSource {
                 .collect::<HashSet<_>>();
 
                 return Ok(ContentSourceResultVc::exact(
-                    ContentSourceContent::NeedData {
+                    ContentSourceContent::NeedData(NeededData {
                         source: self_vc.into(),
                         path: path.to_string(),
                         vary: ContentSourceDataVary {
@@ -53,7 +53,7 @@ impl ContentSource for NextImageContentSource {
                             query: Some(ContentSourceDataFilter::Subset(queries)),
                             ..Default::default()
                         },
-                    }
+                    })
                     .cell(),
                 ));
             }
@@ -68,7 +68,7 @@ impl ContentSource for NextImageContentSource {
         // TODO: consume the assets, resize and reduce quality, re-encode into next-gen
         // formats.
         if let Some(path) = url.strip_prefix('/') {
-            let asset = this.asset_source.get(path, Value::new(Default::default()));
+            let asset = this.asset_source.get(path, Default::default());
             // THERE'S A HUGE PERFORMANCE ISSUE IF THIS MISSES
             let inner = asset.await?;
             if matches!(&*inner.content.await?, ContentSourceContent::Static(..)) {
@@ -101,10 +101,5 @@ impl Introspectable for NextImageContentSource {
     #[turbo_tasks::function]
     fn details(&self) -> StringVc {
         StringVc::cell("suports dynamic serving of any statically imported image".to_string())
-    }
-
-    #[turbo_tasks::function]
-    async fn children(&self) -> Result<IntrospectableChildrenVc> {
-        Ok(IntrospectableChildrenVc::cell(HashSet::new()))
     }
 }

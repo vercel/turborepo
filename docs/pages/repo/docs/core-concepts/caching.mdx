@@ -20,7 +20,7 @@ Each task in your codebase has **inputs** and **outputs**.
 
 Let's say you run a `build` task with Turborepo using `turbo run build`:
 
-![](../../../../public/images/docs/cache-miss.png)
+![](/images/docs/cache-miss.png)
 
 1. Turborepo will **evaluate the inputs to your task** (by default all non-gitignored files in the workspace folder) and **turn them into a hash** (e.g. `78awdk123`).
 
@@ -40,7 +40,7 @@ Let's say you run a `build` task with Turborepo using `turbo run build`:
 
 Let's say that you run the task again without changing any of its inputs:
 
-![](../../../../public/images/docs/cache-hit.png)
+![](/images/docs/cache-hit.png)
 
 1. The **hash will be the same** because **the inputs haven't changed** (e.g. `78awdk123`)
 

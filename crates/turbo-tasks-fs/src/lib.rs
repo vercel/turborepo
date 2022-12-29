@@ -9,6 +9,7 @@ pub mod attach;
 pub mod embed;
 pub mod glob;
 mod invalidator_map;
+mod mutex_map;
 mod read_glob;
 mod retry;
 pub mod rope;
@@ -42,6 +43,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::{fs, io::AsyncReadExt};
 use turbo_tasks::{
+    mark_stateful,
     primitives::{BoolVc, StringReadRef, StringVc},
     spawn_thread,
     trace::TraceRawVcs,
@@ -50,6 +52,7 @@ use turbo_tasks::{
 use turbo_tasks_hash::hash_xxh3_hash64;
 use util::{join_path, normalize_path, sys_to_unix, unix_to_sys};
 
+use self::mutex_map::MutexMap;
 #[cfg(target_family = "windows")]
 use crate::util::is_windows_raw_path;
 use crate::{
@@ -75,6 +78,9 @@ pub trait FileSystem: ValueToString {
 pub struct DiskFileSystem {
     pub name: String,
     pub root: String,
+    #[turbo_tasks(debug_ignore, trace_ignore)]
+    #[serde(skip)]
+    mutex_map: MutexMap<PathBuf>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     invalidator_map: Arc<InvalidatorMap>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
@@ -271,12 +277,14 @@ pub fn path_to_key(path: impl AsRef<Path>) -> String {
 impl DiskFileSystemVc {
     #[turbo_tasks::function]
     pub async fn new(name: String, root: String) -> Result<Self> {
+        mark_stateful();
         // create the directory for the filesystem on disk, if it doesn't exist
         fs::create_dir_all(&root).await?;
 
         let instance = DiskFileSystem {
             name,
             root,
+            mutex_map: Default::default(),
             invalidator_map: Arc::new(InvalidatorMap::new()),
             dir_invalidator_map: Arc::new(InvalidatorMap::new()),
             watcher: Mutex::new(None),
@@ -299,6 +307,7 @@ impl FileSystem for DiskFileSystem {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path, true);
 
+        let _lock = self.mutex_map.lock(full_path.clone()).await;
         let content = match retry_future(|| File::from_path(full_path.clone())).await {
             Ok(file) => FileContent::new(file),
             Err(e) if e.kind() == ErrorKind::NotFound => FileContent::NotFound,
@@ -369,6 +378,7 @@ impl FileSystem for DiskFileSystem {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path, true);
 
+        let _lock = self.mutex_map.lock(full_path.clone()).await;
         let link_path = match retry_future(|| fs::read_link(&full_path)).await {
             Ok(res) => res,
             Err(_) => return Ok(LinkContent::NotFound.cell()),
@@ -466,8 +476,9 @@ impl FileSystem for DiskFileSystem {
             .with_context(|| format!("reading old content of {}", full_path.display()))?;
 
         if *content == *old_content {
-            return Ok(CompletionVc::new());
+            return Ok(CompletionVc::unchanged());
         }
+        let _lock = self.mutex_map.lock(full_path.clone()).await;
 
         let create_directory = *old_content == FileContent::NotFound;
         match &*content {
@@ -531,7 +542,7 @@ impl FileSystem for DiskFileSystem {
             .with_context(|| format!("reading old symlink target of {}", full_path.display()))?;
         let target_link = target.await?;
         if target_link == old_content {
-            return Ok(CompletionVc::new());
+            return Ok(CompletionVc::unchanged());
         }
         let file_type = &*fs_path.get_type().await?;
         let create_directory = file_type == &FileSystemEntryType::NotFound;
@@ -548,6 +559,7 @@ impl FileSystem for DiskFileSystem {
                     })?;
             }
         }
+        let _lock = self.mutex_map.lock(full_path.clone()).await;
         match &*target_link {
             LinkContent::Link { target, link_type } => {
                 let link_type = *link_type;
@@ -599,6 +611,7 @@ impl FileSystem for DiskFileSystem {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path, true);
 
+        let _lock = self.mutex_map.lock(full_path.clone()).await;
         let meta = retry_future(|| fs::metadata(full_path.clone()))
             .await
             .with_context(|| format!("reading metadata for {}", full_path.display()))?;

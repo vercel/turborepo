@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use turbo_tasks::{
-    primitives::{BoolVc, StringsVc},
+    primitives::{BoolVc, StringVc},
     Value,
 };
 use turbo_tasks_env::ProcessEnvVc;
@@ -12,6 +12,8 @@ use turbopack_core::{
     asset::AssetVc,
     chunk::{dev::DevChunkingContextVc, ChunkingContextVc},
     context::AssetContextVc,
+    environment::ServerAddrVc,
+    reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
 };
@@ -30,9 +32,11 @@ use turbopack_ecmascript::{
 };
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_node::{
-    create_node_api_source, create_node_rendered_source,
-    node_entry::{NodeRenderingEntry, NodeRenderingEntryVc},
-    NodeEntry, NodeEntryVc,
+    execution_context::ExecutionContextVc,
+    render::{
+        node_api_source::create_node_api_source, rendered_source::create_node_rendered_source,
+    },
+    NodeEntry, NodeEntryVc, NodeRenderingEntry, NodeRenderingEntryVc,
 };
 
 use crate::{
@@ -47,11 +51,13 @@ use crate::{
         },
         NextClientTransition,
     },
+    next_config::NextConfigVc,
     next_server::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
     },
-    util::{pathname_for_path, regular_expression_for_path},
+    page_loader::create_page_loader,
+    util::{get_asset_path_from_route, pathname_for_path, regular_expression_for_path},
 };
 
 /// Create a content source serving the `pages` or `src/pages` directory as
@@ -59,10 +65,13 @@ use crate::{
 #[turbo_tasks::function]
 pub async fn create_server_rendered_source(
     project_root: FileSystemPathVc,
+    execution_context: ExecutionContextVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
+    next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
 ) -> Result<ContentSourceVc> {
     let project_path = wrap_with_next_js_fs(project_root);
 
@@ -79,15 +88,23 @@ pub async fn create_server_rendered_source(
     let ty = Value::new(ContextType::Pages { pages_dir });
     let server_ty = Value::new(ServerContextType::Pages { pages_dir });
 
-    let client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
     let client_environment = get_client_environment(browserslist_query);
     let client_module_options_context =
-        get_client_module_options_context(project_path, client_environment, ty);
+        get_client_module_options_context(project_path, execution_context, client_environment, ty);
     let client_module_options_context =
         add_next_transforms_to_pages(client_module_options_context, pages_dir);
     let client_resolve_options_context = get_client_resolve_options_context(project_path, ty);
+    let client_context: AssetContextVc = ModuleAssetContextVc::new(
+        TransitionsByNameVc::cell(HashMap::new()),
+        client_environment,
+        client_module_options_context,
+        client_resolve_options_context,
+    )
+    .into();
 
-    let client_runtime_entries = get_client_runtime_entries(project_path, env, ty);
+    let client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
+
+    let client_runtime_entries = get_client_runtime_entries(project_path, env, ty, next_config);
 
     let next_client_transition = NextClientTransition {
         is_app: false,
@@ -105,20 +122,31 @@ pub async fn create_server_rendered_source(
     transitions.insert("next-client".to_string(), next_client_transition);
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(transitions),
-        get_server_environment(server_ty, env),
-        get_server_module_options_context(server_ty),
-        get_server_resolve_options_context(project_path, server_ty, StringsVc::empty()),
+        get_server_environment(server_ty, env, server_addr),
+        get_server_module_options_context(project_path, execution_context, server_ty),
+        get_server_resolve_options_context(project_path, server_ty, next_config),
     )
     .into();
 
-    let server_runtime_entries = vec![ProcessEnvAssetVc::new(project_path, env_for_js(env, false))
-        .as_ecmascript_chunk_placeable()];
+    let server_runtime_entries =
+        vec![
+            ProcessEnvAssetVc::new(project_path, env_for_js(env, false, next_config))
+                .as_ecmascript_chunk_placeable(),
+        ];
 
-    let fallback_page = get_fallback_page(project_path, server_root, env, browserslist_query);
+    let fallback_page = get_fallback_page(
+        project_path,
+        execution_context,
+        server_root,
+        env,
+        browserslist_query,
+        next_config,
+    );
 
     let server_rendered_source = create_server_rendered_source_for_directory(
         project_path,
         context,
+        client_context,
         pages_dir,
         SpecificityVc::exact(),
         0,
@@ -145,6 +173,7 @@ pub async fn create_server_rendered_source(
 async fn create_server_rendered_source_for_file(
     context_path: FileSystemPathVc,
     context: AssetContextVc,
+    client_context: AssetContextVc,
     pages_dir: FileSystemPathVc,
     specificity: SpecificityVc,
     page_file: FileSystemPathVc,
@@ -156,7 +185,10 @@ async fn create_server_rendered_source_for_file(
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<ContentSourceVc> {
     let source_asset = SourceAssetVc::new(page_file).into();
-    let entry_asset = context.process(source_asset);
+    let entry_asset = context.process(
+        source_asset,
+        Value::new(ReferenceType::Entry(EntryReferenceSubType::Page)),
+    );
 
     let chunking_context = DevChunkingContextVc::builder(
         context_path,
@@ -166,27 +198,17 @@ async fn create_server_rendered_source_for_file(
     )
     .build();
 
+    let client_chunking_context = get_client_chunking_context(
+        context_path,
+        server_root,
+        Value::new(ContextType::Pages { pages_dir }),
+    );
+
     let pathname = pathname_for_path(server_root, server_path, true);
-    let path_regex = regular_expression_for_path(server_root, server_path, true);
+    let path_regex = regular_expression_for_path(pathname);
 
     Ok(if *is_api_path.await? {
         create_node_api_source(
-            specificity,
-            server_root,
-            path_regex,
-            SsrEntry {
-                context,
-                entry_asset,
-                is_api_path,
-                chunking_context,
-                intermediate_output_path,
-            }
-            .cell()
-            .into(),
-            runtime_entries,
-        )
-    } else {
-        create_node_rendered_source(
             specificity,
             server_root,
             pathname,
@@ -201,8 +223,52 @@ async fn create_server_rendered_source_for_file(
             .cell()
             .into(),
             runtime_entries,
-            fallback_page,
         )
+    } else {
+        let data_pathname = format!(
+            "_next/data/development/{}",
+            get_asset_path_from_route(&pathname.await?, ".json")
+        );
+        let data_path_regex = regular_expression_for_path(StringVc::cell(data_pathname));
+
+        let ssr_entry = SsrEntry {
+            context,
+            entry_asset,
+            is_api_path,
+            chunking_context,
+            intermediate_output_path,
+        }
+        .cell()
+        .into();
+
+        CombinedContentSourceVc::new(vec![
+            create_node_rendered_source(
+                specificity,
+                server_root,
+                pathname,
+                path_regex,
+                ssr_entry,
+                runtime_entries,
+                fallback_page,
+            ),
+            create_node_rendered_source(
+                specificity,
+                server_root,
+                pathname,
+                data_path_regex,
+                ssr_entry,
+                runtime_entries,
+                fallback_page,
+            ),
+            create_page_loader(
+                server_root,
+                client_context,
+                client_chunking_context,
+                entry_asset,
+                pathname,
+            ),
+        ])
+        .into()
     })
 }
 
@@ -213,6 +279,7 @@ async fn create_server_rendered_source_for_file(
 async fn create_server_rendered_source_for_directory(
     context_path: FileSystemPathVc,
     context: AssetContextVc,
+    client_context: AssetContextVc,
     pages_dir: FileSystemPathVc,
     specificity: SpecificityVc,
     position: u32,
@@ -241,7 +308,7 @@ async fn create_server_rendered_source_for_directory(
                         match extension {
                             // pageExtensions option from next.js
                             // defaults: https://github.com/vercel/next.js/blob/611e13f5159457fedf96d850845650616a1f75dd/packages/next/server/config-shared.ts#L499
-                            "js" | "ts" | "jsx" | "tsx" => {
+                            "js" | "ts" | "jsx" | "tsx" | "mdx" => {
                                 let (dev_server_path, intermediate_output_path, specificity) =
                                     if basename == "index" {
                                         (
@@ -251,7 +318,7 @@ async fn create_server_rendered_source_for_directory(
                                         )
                                     } else if basename == "404" {
                                         (
-                                            server_path.join("[...]"),
+                                            server_path.join("[...].html"),
                                             intermediate_output_path.join(basename),
                                             specificity.with_fallback(position),
                                         )
@@ -267,6 +334,7 @@ async fn create_server_rendered_source_for_directory(
                                     create_server_rendered_source_for_file(
                                         context_path,
                                         context,
+                                        client_context,
                                         pages_dir,
                                         specificity,
                                         *file,
@@ -289,6 +357,7 @@ async fn create_server_rendered_source_for_directory(
                         create_server_rendered_source_for_directory(
                             context_path,
                             context,
+                            client_context,
                             pages_dir,
                             specificity,
                             position + 1,
@@ -328,17 +397,18 @@ struct SsrEntry {
 }
 
 #[turbo_tasks::value_impl]
-impl NodeEntry for SsrEntry {
+impl SsrEntryVc {
     #[turbo_tasks::function]
-    async fn entry(&self, _data: Value<ContentSourceData>) -> Result<NodeRenderingEntryVc> {
-        let virtual_asset = if *self.is_api_path.await? {
+    async fn entry(self) -> Result<NodeRenderingEntryVc> {
+        let this = self.await?;
+        let virtual_asset = if *this.is_api_path.await? {
             VirtualAssetVc::new(
-                self.entry_asset.path().join("server-api.tsx"),
+                this.entry_asset.path().join("server-api.tsx"),
                 next_js_file("entry/server-api.tsx").into(),
             )
         } else {
             VirtualAssetVc::new(
-                self.entry_asset.path().join("server-renderer.tsx"),
+                this.entry_asset.path().join("server-renderer.tsx"),
                 next_js_file("entry/server-renderer.tsx").into(),
             )
         };
@@ -346,17 +416,26 @@ impl NodeEntry for SsrEntry {
         Ok(NodeRenderingEntry {
             module: EcmascriptModuleAssetVc::new(
                 virtual_asset.into(),
-                self.context,
+                this.context,
                 Value::new(EcmascriptModuleAssetType::Typescript),
                 EcmascriptInputTransformsVc::cell(vec![
                     EcmascriptInputTransform::TypeScript,
                     EcmascriptInputTransform::React { refresh: false },
                 ]),
-                self.context.environment(),
+                this.context.environment(),
             ),
-            chunking_context: self.chunking_context,
-            intermediate_output_path: self.intermediate_output_path,
+            chunking_context: this.chunking_context,
+            intermediate_output_path: this.intermediate_output_path,
         }
         .cell())
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl NodeEntry for SsrEntry {
+    #[turbo_tasks::function]
+    fn entry(self_vc: SsrEntryVc, _data: Value<ContentSourceData>) -> NodeRenderingEntryVc {
+        // Call without being keyed by data
+        self_vc.entry()
     }
 }

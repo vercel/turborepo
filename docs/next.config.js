@@ -58,7 +58,6 @@ const nextConfig = withNextra({
   },
   reactStrictMode: true,
   experimental: {
-    newNextLinkBehavior: true,
     legacyBrowsers: false,
   },
   webpack: (config, { webpack }) => {
@@ -164,6 +163,21 @@ const nextConfig = withNextra({
         source: "/docs/guides/continuous-integration",
         permanent: true,
         destination: "/repo/docs/ci",
+      },
+      {
+        source: "/repo/docs/handbook/prisma",
+        permanent: true,
+        destination: "/repo/docs/handbook/tools/prisma",
+      },
+      {
+        source: "/pack/docs/comparisons/turbopack-vs-vite",
+        permanent: true,
+        destination: "/pack/docs/comparisons/vite",
+      },
+      {
+        source: "/pack/docs/comparisons/turbopack-vs-webpack",
+        permanent: true,
+        destination: "/pack/docs/comparisons/webpack",
       },
       {
         // Accidentally created, eventually removable. See below.

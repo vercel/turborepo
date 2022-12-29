@@ -3,205 +3,236 @@ Setup
 
 Test help flag
   $ ${TURBO} -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   The build system that makes ship happen
   
-  Usage:
-    turbo [command]
+  Usage: turbo [OPTIONS] [COMMAND]
   
-  Available Commands:
+  Commands:
     bin         Get the path to the Turbo binary
     completion  Generate the autocompletion script for the specified shell
     daemon      Runs the Turborepo background daemon
-    help        Help about any command
-    prune       Prepare a subset of your monorepo.
+    link        Link your local directory to a Vercel organization and enable remote caching
+    login       Login to your Vercel account
+    logout      Logout to your Vercel account
+    prune       Prepare a subset of your monorepo
     run         Run tasks across projects in your monorepo
+    unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
-  Flags:
-        --api string          Override the endpoint for API calls
-        --color               Force color usage in the terminal
-        --cpuprofile string   Specify a file to save a cpu profile
-        --cwd string          The directory in which to run turbo
-        --heap string         Specify a file to save a pprof heap profile
-    -h, --help                help for turbo
-        --login string        Override the login endpoint
-        --no-color            Suppress color usage in the terminal
-        --preflight           When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --team string         Set the team slug for API calls
-        --token string        Set the auth token for API calls
-        --trace string        Specify a file to save a pprof trace
-    -v, --verbosity count     verbosity
-        --version             version for turbo
+  Options:
+        --version                   
+        --skip-infer                Skip any attempts to infer which version of Turbo the project is configured to use
+        --api <API>                 Override the endpoint for API calls
+        --color                     Force color usage in the terminal
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cwd <CWD>                 The directory in which to run turbo
+        --heap <HEAP>               Specify a file to save a pprof heap profile
+        --login <LOGIN>             Override the login endpoint
+        --no-color                  Suppress color usage in the terminal
+        --preflight                 When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --team <TEAM>               Set the team slug for API calls
+        --token <TOKEN>             Set the auth token for API calls
+        --trace <TRACE>             Specify a file to save a pprof trace
+        --verbosity <COUNT>         Verbosity level
+    -h, --help                      Print help information
   
-  Use "turbo [command] --help" for more information about a command.
+  Run Arguments:
+        --cache-dir <CACHE_DIR>          Override the filesystem cache directory
+        --cache-workers <CACHE_WORKERS>  Set the number of concurrent cache operations (default 10) [default: 10]
+        --concurrency <CONCURRENCY>      Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
+        --continue                       Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
+        --dry-run [<DRY_RUN>]            [possible values: text, json]
+        --single-package                 Run turbo in single-package mode
+        --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
+        --force                          Ignore the existing cache (to force execution)
+        --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
+        --graph [<GRAPH>]                Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
+        --ignore <IGNORE>                Files to ignore when calculating changed files (i.e. --since). Supports globs
+        --include-dependencies           Include the dependencies of tasks in execution
+        --no-cache                       Avoid saving task results to the cache. Useful for development/watch tasks
+        --no-daemon                      Run without using turbo's daemon process
+        --no-deps                        Exclude dependent task consumers from execution
+        --output-logs <OUTPUT_LOGS>      Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [default: full] [possible values: full, none, hash-only, new-only, errors-only]
+        --parallel                       Execute all tasks in parallel
+        --profile <PROFILE>              File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
+        --remote-only                    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
+        --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
+        --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
+
+
+
+
+
 
   $ ${TURBO} --help
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   The build system that makes ship happen
   
-  Usage:
-    turbo [command]
+  Usage: turbo [OPTIONS] [COMMAND]
   
-  Available Commands:
+  Commands:
     bin         Get the path to the Turbo binary
     completion  Generate the autocompletion script for the specified shell
     daemon      Runs the Turborepo background daemon
-    help        Help about any command
-    prune       Prepare a subset of your monorepo.
+    link        Link your local directory to a Vercel organization and enable remote caching
+    login       Login to your Vercel account
+    logout      Logout to your Vercel account
+    prune       Prepare a subset of your monorepo
     run         Run tasks across projects in your monorepo
+    unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
-  Flags:
-        --api string          Override the endpoint for API calls
-        --color               Force color usage in the terminal
-        --cpuprofile string   Specify a file to save a cpu profile
-        --cwd string          The directory in which to run turbo
-        --heap string         Specify a file to save a pprof heap profile
-    -h, --help                help for turbo
-        --login string        Override the login endpoint
-        --no-color            Suppress color usage in the terminal
-        --preflight           When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --team string         Set the team slug for API calls
-        --token string        Set the auth token for API calls
-        --trace string        Specify a file to save a pprof trace
-    -v, --verbosity count     verbosity
-        --version             version for turbo
+  Options:
+        --version                   
+        --skip-infer                Skip any attempts to infer which version of Turbo the project is configured to use
+        --api <API>                 Override the endpoint for API calls
+        --color                     Force color usage in the terminal
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cwd <CWD>                 The directory in which to run turbo
+        --heap <HEAP>               Specify a file to save a pprof heap profile
+        --login <LOGIN>             Override the login endpoint
+        --no-color                  Suppress color usage in the terminal
+        --preflight                 When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --team <TEAM>               Set the team slug for API calls
+        --token <TOKEN>             Set the auth token for API calls
+        --trace <TRACE>             Specify a file to save a pprof trace
+        --verbosity <COUNT>         Verbosity level
+    -h, --help                      Print help information
   
-  Use "turbo [command] --help" for more information about a command.
+  Run Arguments:
+        --cache-dir <CACHE_DIR>          Override the filesystem cache directory
+        --cache-workers <CACHE_WORKERS>  Set the number of concurrent cache operations (default 10) [default: 10]
+        --concurrency <CONCURRENCY>      Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
+        --continue                       Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
+        --dry-run [<DRY_RUN>]            [possible values: text, json]
+        --single-package                 Run turbo in single-package mode
+        --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
+        --force                          Ignore the existing cache (to force execution)
+        --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
+        --graph [<GRAPH>]                Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
+        --ignore <IGNORE>                Files to ignore when calculating changed files (i.e. --since). Supports globs
+        --include-dependencies           Include the dependencies of tasks in execution
+        --no-cache                       Avoid saving task results to the cache. Useful for development/watch tasks
+        --no-daemon                      Run without using turbo's daemon process
+        --no-deps                        Exclude dependent task consumers from execution
+        --output-logs <OUTPUT_LOGS>      Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [default: full] [possible values: full, none, hash-only, new-only, errors-only]
+        --parallel                       Execute all tasks in parallel
+        --profile <PROFILE>              File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
+        --remote-only                    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
+        --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
+        --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
 
-Test help flag for shim
-  $ ${SHIM} -h
-  turbo 
-  The build system that makes ship happen
-  
-  USAGE:
-      turbo [OPTIONS] [TASKS]... [SUBCOMMAND]
-  
-  ARGS:
-      <TASKS>...    
-  
-  OPTIONS:
-          --api <API>                    Override the endpoint for API calls
-          --color                        Force color usage in the terminal
-          --cpu-profile <CPU_PROFILE>    Specify a file to save a cpu profile
-          --cwd <CWD>                    The directory in which to run turbo
-      -h, --help                         
-          --heap <HEAP>                  Specify a file to save a pprof heap profile
-          --login <LOGIN>                Override the login endpoint
-          --no-color                     Suppress color usage in the terminal
-          --preflight                    When enabled, turbo will precede HTTP requests with an
-                                         OPTIONS request for authorization
-          --team <TEAM>                  Set the team slug for API calls
-          --token <TOKEN>                Set the auth token for API calls
-          --trace <TRACE>                Specify a file to save a pprof trace
-      -v, --verbosity <VERBOSITY>        verbosity
-          --version                      
-  
-  SUBCOMMANDS:
-      bin           Get the path to the Turbo binary
-      completion    Generate the autocompletion script for the specified shell
-      daemon        Runs the Turborepo background daemon
-      help          Help about any command
-      link          Link your local directory to a Vercel organization and enable remote caching
-      login         Login to your Vercel account
-      logout        Logout to your Vercel account
-      prune         Prepare a subset of your monorepo
-      run           Run tasks across projects in your monorepo
-      unlink        Unlink the current directory from your Vercel organization and disable Remote
-                        Caching
-
-
-
-
-
-
-  $ ${SHIM} --help
-  turbo 
-  The build system that makes ship happen
-  
-  USAGE:
-      turbo [OPTIONS] [TASKS]... [SUBCOMMAND]
-  
-  ARGS:
-      <TASKS>...    
-  
-  OPTIONS:
-          --api <API>                    Override the endpoint for API calls
-          --color                        Force color usage in the terminal
-          --cpu-profile <CPU_PROFILE>    Specify a file to save a cpu profile
-          --cwd <CWD>                    The directory in which to run turbo
-      -h, --help                         
-          --heap <HEAP>                  Specify a file to save a pprof heap profile
-          --login <LOGIN>                Override the login endpoint
-          --no-color                     Suppress color usage in the terminal
-          --preflight                    When enabled, turbo will precede HTTP requests with an
-                                         OPTIONS request for authorization
-          --team <TEAM>                  Set the team slug for API calls
-          --token <TOKEN>                Set the auth token for API calls
-          --trace <TRACE>                Specify a file to save a pprof trace
-      -v, --verbosity <VERBOSITY>        verbosity
-          --version                      
-  
-  SUBCOMMANDS:
-      bin           Get the path to the Turbo binary
-      completion    Generate the autocompletion script for the specified shell
-      daemon        Runs the Turborepo background daemon
-      help          Help about any command
-      link          Link your local directory to a Vercel organization and enable remote caching
-      login         Login to your Vercel account
-      logout        Logout to your Vercel account
-      prune         Prepare a subset of your monorepo
-      run           Run tasks across projects in your monorepo
-      unlink        Unlink the current directory from your Vercel organization and disable Remote
-                        Caching
-
-Test help flag for shim's link command
-  $ ${SHIM} link -h
-  link 
+Test help flag for link command
+  $ ${TURBO} link -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   Link your local directory to a Vercel organization and enable remote caching
   
-  USAGE:
-      link [OPTIONS]
+  Usage: turbo link [OPTIONS]
   
-  OPTIONS:
-      -h, --help
-              help for link
+  Options:
+        --no-gitignore              Do not create or modify .gitignore (default false)
+        --version                   
+        --skip-infer                Skip any attempts to infer which version of Turbo the project is configured to use
+        --api <API>                 Override the endpoint for API calls
+        --color                     Force color usage in the terminal
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cwd <CWD>                 The directory in which to run turbo
+        --heap <HEAP>               Specify a file to save a pprof heap profile
+        --login <LOGIN>             Override the login endpoint
+        --no-color                  Suppress color usage in the terminal
+        --preflight                 When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --team <TEAM>               Set the team slug for API calls
+        --token <TOKEN>             Set the auth token for API calls
+        --trace <TRACE>             Specify a file to save a pprof trace
+        --verbosity <COUNT>         Verbosity level
+    -h, --help                      Print help information
   
-          --no-gitignore
-              Do not create or modify .gitignore (default false)
+  Run Arguments:
+        --single-package  Run turbo in single-package mode
 
-Test help flag for shim's unlink command
-  $ ${SHIM} unlink -h
-  unlink 
+Test help flag for unlink command
+  $ ${TURBO} unlink -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   Unlink the current directory from your Vercel organization and disable Remote Caching
   
-  USAGE:
-      unlink
+  Usage: turbo unlink [OPTIONS]
   
-  OPTIONS:
-      -h, --help
-              Help flag
+  Options:
+        --version                   
+        --skip-infer                Skip any attempts to infer which version of Turbo the project is configured to use
+        --api <API>                 Override the endpoint for API calls
+        --color                     Force color usage in the terminal
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cwd <CWD>                 The directory in which to run turbo
+        --heap <HEAP>               Specify a file to save a pprof heap profile
+        --login <LOGIN>             Override the login endpoint
+        --no-color                  Suppress color usage in the terminal
+        --preflight                 When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --team <TEAM>               Set the team slug for API calls
+        --token <TOKEN>             Set the auth token for API calls
+        --trace <TRACE>             Specify a file to save a pprof trace
+        --verbosity <COUNT>         Verbosity level
+    -h, --help                      Print help information
+  
+  Run Arguments:
+        --single-package  Run turbo in single-package mode
 
-Test help flag for shim's login command
-  $ ${SHIM} login -h
-  login 
+Test help flag for login command
+  $ ${TURBO} login -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   Login to your Vercel account
   
-  USAGE:
-      login [OPTIONS]
+  Usage: turbo login [OPTIONS]
   
-  OPTIONS:
-      -h, --help
-              Help flag
+  Options:
+        --sso-team <SSO_TEAM>       
+        --version                   
+        --skip-infer                Skip any attempts to infer which version of Turbo the project is configured to use
+        --api <API>                 Override the endpoint for API calls
+        --color                     Force color usage in the terminal
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cwd <CWD>                 The directory in which to run turbo
+        --heap <HEAP>               Specify a file to save a pprof heap profile
+        --login <LOGIN>             Override the login endpoint
+        --no-color                  Suppress color usage in the terminal
+        --preflight                 When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --team <TEAM>               Set the team slug for API calls
+        --token <TOKEN>             Set the auth token for API calls
+        --trace <TRACE>             Specify a file to save a pprof trace
+        --verbosity <COUNT>         Verbosity level
+    -h, --help                      Print help information
   
-          --sso-team <SSO_TEAM>
-              
+  Run Arguments:
+        --single-package  Run turbo in single-package mode
 
-Test help flag for shim's logout command
-  $ ${SHIM} logout -h
-  logout 
+Test help flag for logout command
+  $ ${TURBO} logout -h
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   Logout to your Vercel account
   
-  USAGE:
-      logout
+  Usage: turbo logout [OPTIONS]
   
-  OPTIONS:
-      -h, --help
-              Help flag
+  Options:
+        --version                   
+        --skip-infer                Skip any attempts to infer which version of Turbo the project is configured to use
+        --api <API>                 Override the endpoint for API calls
+        --color                     Force color usage in the terminal
+        --cpuprofile <CPU_PROFILE>  Specify a file to save a cpu profile
+        --cwd <CWD>                 The directory in which to run turbo
+        --heap <HEAP>               Specify a file to save a pprof heap profile
+        --login <LOGIN>             Override the login endpoint
+        --no-color                  Suppress color usage in the terminal
+        --preflight                 When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --team <TEAM>               Set the team slug for API calls
+        --token <TOKEN>             Set the auth token for API calls
+        --trace <TRACE>             Specify a file to save a pprof trace
+        --verbosity <COUNT>         Verbosity level
+    -h, --help                      Print help information
+  
+  Run Arguments:
+        --single-package  Run turbo in single-package mode

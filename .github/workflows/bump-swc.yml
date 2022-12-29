@@ -1,0 +1,44 @@
+name: Bump up swc
+
+on:
+  schedule:
+    # two times daily, at 12:00 and 06:00
+    - cron: "0 0 * * *"
+    - cron: "0 0,6 * * *"
+
+jobs:
+  upgrade-swc-core:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          profile: minimal
+          override: true
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "gha-cargo-upgrade"
+          cache-on-failure: true
+
+      - name: Run cargo upgrade
+        uses: kwonoj/gha-cargo-upgrade@latest
+        with:
+          token: ${{ secrets.GHA_UPGRADE_TOKEN }}
+          # These are the packages relying on swc
+          packages: "swc_core,testing,swc_emotion,styled_jsx,styled_components,modularize_imports,mdxjs"
+          # To reduce noise, we'll only open a PR if these packages are updated altogether
+          mandatory_packages: "swc_core,swc_emotion,styled_jsx,styled_components,modularize_imports"
+          # We'll bump anyway, let PR fails if it have breaking changes to resolve manually
+          incompatible: true

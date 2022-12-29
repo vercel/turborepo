@@ -48,17 +48,17 @@ This test measures how fast a local development server starts up on an applicati
 <ThemedImageFigure
   borderRadius={true}
   dark={{
-    source: '/images/blog/turbopack-benchmarks/bench_startup_all_dark.svg',
+    source: '/images/blog/turbopack-benchmarks/bench_startup_dark.svg',
     height: 720,
     width: 1960
   }}
   light={{
-    source: '/images/blog/turbopack-benchmarks/bench_startup_all_light.svg',
+    source: '/images/blog/turbopack-benchmarks/bench_startup_light.svg',
     height: 720,
     width: 1960
   }}
   captionSpacing={24}
-  caption="Startup time by module count. Benchmark data generated from 14” MacBook Pro 2021, M1 Max, 64GB RAM, macOS 12.6 (21G115)."
+  caption="Startup time by module count. Benchmark data generated from 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400)."
 />
 
 #### Data
@@ -66,56 +66,56 @@ This test measures how fast a local development server starts up on an applicati
 To run this benchmark yourself, clone [`vercel/turbo`](https://github.com/vercel/turbo) and then use this command from the root:
 
 ```sh
-TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p next-dev "startup/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite CSR)."
+TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p next-dev "startup/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite SWC CSR)."
 ```
 
-Here are the numbers we were able to produce on a 14” MacBook Pro 2021, M1 Max, 64GB RAM, macOS 12.6 (21G115):
+Here are the numbers we were able to produce on a 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400):
 
 ```sh
-bench_startup/Next.js 11 SSR/1000 modules              7.7±0.06s
-bench_startup/Next.js 11 SSR/5000 modules             24.8±0.11s
-bench_startup/Next.js 11 SSR/10000 modules            49.4±0.28s
-bench_startup/Next.js 11 SSR/30000 modules           176.2±1.42s
-bench_startup/Next.js 12 SSR/1000 modules              3.4±0.01s
-bench_startup/Next.js 12 SSR/5000 modules             10.7±0.02s
-bench_startup/Next.js 12 SSR/10000 modules            20.1±0.07s
-bench_startup/Next.js 12 SSR/30000 modules            76.6±0.66s
-bench_startup/Turbopack SSR/1000 modules          1125.3±44.54ms
-bench_startup/Turbopack SSR/5000 modules               3.6±0.02s
-bench_startup/Turbopack SSR/10000 modules              7.5±0.44s
-bench_startup/Turbopack SSR/30000 modules             22.3±1.29s
-bench_startup/Vite CSR/1000 modules                    4.8±0.02s
-bench_startup/Vite CSR/5000 modules                   19.2±0.15s
-bench_startup/Vite CSR/10000 modules                  37.2±0.29s
-bench_startup/Vite CSR/30000 modules                 109.5±1.14s
+bench_startup/Next.js 11 SSR/1000 modules                  9.2±0.04s
+bench_startup/Next.js 11 SSR/5000 modules                 32.9±0.67s
+bench_startup/Next.js 11 SSR/10000 modules                71.8±2.57s
+bench_startup/Next.js 11 SSR/30000 modules               237.6±6.43s
+bench_startup/Next.js 12 SSR/1000 modules                  3.6±0.02s
+bench_startup/Next.js 12 SSR/5000 modules                 12.1±0.32s
+bench_startup/Next.js 12 SSR/10000 modules                23.3±0.32s
+bench_startup/Next.js 12 SSR/30000 modules                89.1±0.21s
+bench_startup/Turbopack SSR/1000 modules               1381.9±5.62ms
+bench_startup/Turbopack SSR/5000 modules                   4.0±0.04s
+bench_startup/Turbopack SSR/10000 modules                  7.3±0.07s
+bench_startup/Turbopack SSR/30000 modules                 22.0±0.32s
+bench_startup/Vite SWC CSR/1000 modules                    4.2±0.02s
+bench_startup/Vite SWC CSR/5000 modules                   16.6±0.08s
+bench_startup/Vite SWC CSR/10000 modules                  32.3±0.12s
+bench_startup/Vite SWC CSR/30000 modules                  97.7±1.53s
 ```
 
 ### File updates (HMR)
 
-We also measure how quickly the development server works from when an update is applied to a source file to when we receive a custom browser event that the modified code was executed.
+We also measure how quickly the development server works from when an update is applied to a source file to when the corresponding change is re-rendered in the browser.
 
-Note that executing modified code does not mean that the changes are visible to the user yet. When a React component changes, it still needs to be re-rendered by the browser. With this methodology, we are focusing _only_ on the time the compiler takes to do its work and the time it takes for the browser to evaluate an updated module.
+For Hot Module Reloading (HMR) benchmarks, we first start the dev server on a fresh installation with the test application. We wait for the HMR server to boot up by running updates until one succeeds. We then run ten changes to warm up the tooling. This step is important as it prevents discrepancies that can arise with cold processes.
 
-For Hot Module Reloading (HMR) benchmarks, we first start the dev server on a fresh installation with the test application. We then run five changes to warm up the tooling. This step is important as it prevents discrepancies that can arise with cold processes.
+Once our tooling is warmed up, we run a series of updates to a list of modules within the test application. Modules are sampled randomly with a distribution that ensures we test a uniform number of modules per module depth. The depth of a module is its distance from the entry module in the dependency graph. For instance, if the entry module A imports module B, which imports modules C and D, the depth of the entry module A will be 0, that of module B will be 1, and that of modules C and D will be 2. Modules A and B will have an equal probability of being sampled, but modules C and D will only have half the probability of being sampled.
 
-Once our tooling is warmed up, we measure the sixth file update. After repeating this 10 times, we use the average as our final number.
+We report the linear regression slope of the data points as the target metric. This is an estimate of the average time it takes for the tooling to apply an update to the application.
 
 <DocsBenchmarksGraph category="file_change" bars={HMR_BARS} />
 
 <ThemedImageFigure
   borderRadius={true}
   dark={{
-    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_eval_all_dark.svg',
+    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_commit_dark.svg',
     height: 720,
     width: 1960
   }}
   light={{
-    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_eval_all_light.svg',
+    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_commit_light.svg',
     height: 720,
     width: 1960
   }}
   captionSpacing={24}
-  caption="Turbopack vs. Next.js (Webpack) vs. Vite HMR by module count. Benchmark data generated from 14” MacBook Pro 2021, M1 Max, 64GB RAM, macOS 12.6 (21G115)."
+  caption="Turbopack, Next.js (Webpack), and Vite HMR by module count. Benchmark data generated from 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400)."
 />
 
 <a id="bench"/>
@@ -123,91 +123,52 @@ Once our tooling is warmed up, we measure the sixth file update. After repeating
 <ThemedImageFigure
   borderRadius={true}
   dark={{
-    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_eval_vite_tp_dark.svg',
+    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_commit_turbopack_vite_dark.svg',
     height: 720,
     width: 1960
   }}
   light={{
-    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_eval_vite_tp_light.svg',
+    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_commit_turbopack_vite_light.svg',
     height: 720,
     width: 1960
   }}
   captionSpacing={24}
-  caption="Turbopack vs. Vite HMR by module count. Benchmark data generated from 14” MacBook Pro 2021, M1 Max, 64GB RAM, macOS 12.6 (21G115)."
+  caption="Turbopack and Vite HMR by module count. Benchmark data generated from 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400)."
 />
 
-From our benchmarks, we find the following:
+The takeaway from these benchmarks: Turbopack performance is a function of **the size of an update**, not the size of an application.
 
-- Turbopack HMR is **10x faster than Vite once the application scales above 30k modules**. These marks continue to improve with more modules, showing 20x faster above 50k modules.
-- Turbopack HMR is **700x faster than Webpack-based Next.js 11** for large applications with over 50k modules.
-
-The takeaway: Turbopack performance is a function of **the size of an update**, not the size of an application.
-
-We're excited by Turbopack's performance, but we also expect to make further speed improvements for both small and large applications in the future. For more info, visit the comparison docs for [Vite](/pack/docs/comparisons/turbopack-vs-vite) and [Webpack](/pack/docs/comparisons/turbopack-vs-webpack).
+We're excited by Turbopack's performance, but we also expect to make further speed improvements for both small and large applications in the future. For more info, visit the comparison docs for [Vite](/pack/docs/comparisons/vite) and [Webpack](/pack/docs/comparisons/webpack).
 
 #### Data
 
 To run this benchmark yourself, clone [`vercel/turbo`](https://github.com/vercel/turbo) and then use this command from the root:
 
 ```
-TURBOPACK_BENCH_COUNTS=10,100,200,500,1000,2000,3000,4000,5000,10000,20000,30000,50000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p next-dev "hmr_to_eval/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite CSR)"
+TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p next-dev "hmr_to_commit/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite SWC CSR)"
 ```
 
-Here are the numbers we were able to produce on a 14” MacBook Pro 2021, M1 Max, 64GB RAM, macOS 12.6 (21G115):
+Here are the numbers we were able to produce on a 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400):
 
 ```sh
-bench_hmr_to_eval/Next.js 11 SSR/10 modules         77.9±21.03ms
-bench_hmr_to_eval/Next.js 11 SSR/100 modules        100.5±2.04ms
-bench_hmr_to_eval/Next.js 11 SSR/200 modules         98.7±4.48ms
-bench_hmr_to_eval/Next.js 11 SSR/500 modules       140.0±14.06ms
-bench_hmr_to_eval/Next.js 11 SSR/1000 modules      273.2±17.11ms
-bench_hmr_to_eval/Next.js 11 SSR/2000 modules      404.0±24.81ms
-bench_hmr_to_eval/Next.js 11 SSR/3000 modules      498.3±22.10ms
-bench_hmr_to_eval/Next.js 11 SSR/4000 modules      698.8±54.46ms
-bench_hmr_to_eval/Next.js 11 SSR/5000 modules      849.7±14.64ms
-bench_hmr_to_eval/Next.js 11 SSR/10000 modules    1713.9±32.96ms
-bench_hmr_to_eval/Next.js 11 SSR/20000 modules         5.0±0.12s
-bench_hmr_to_eval/Next.js 11 SSR/30000 modules         6.9±1.75s
-bench_hmr_to_eval/Next.js 11 SSR/50000 modules        11.6±0.50s
-bench_hmr_to_eval/Next.js 12 SSR/10 modules          50.2±5.68ms
-bench_hmr_to_eval/Next.js 12 SSR/100 modules         45.7±2.99ms
-bench_hmr_to_eval/Next.js 12 SSR/200 modules         50.6±8.27ms
-bench_hmr_to_eval/Next.js 12 SSR/500 modules        93.9±19.93ms
-bench_hmr_to_eval/Next.js 12 SSR/1000 modules      133.9±12.69ms
-bench_hmr_to_eval/Next.js 12 SSR/2000 modules      147.4±24.38ms
-bench_hmr_to_eval/Next.js 12 SSR/3000 modules      210.7±33.00ms
-bench_hmr_to_eval/Next.js 12 SSR/4000 modules      295.0±21.65ms
-bench_hmr_to_eval/Next.js 12 SSR/5000 modules      386.2±84.54ms
-bench_hmr_to_eval/Next.js 12 SSR/10000 modules    1067.1±133.67ms
-bench_hmr_to_eval/Next.js 12 SSR/20000 modules         2.8±0.09s
-bench_hmr_to_eval/Next.js 12 SSR/30000 modules         5.4±0.50s
-bench_hmr_to_eval/Next.js 12 SSR/50000 modules         8.5±0.32s
-bench_hmr_to_eval/Turbopack SSR/10 modules           13.3±0.49ms
-bench_hmr_to_eval/Turbopack SSR/100 modules          13.8±1.10ms
-bench_hmr_to_eval/Turbopack SSR/200 modules          14.5±2.18ms
-bench_hmr_to_eval/Turbopack SSR/500 modules          14.3±1.63ms
-bench_hmr_to_eval/Turbopack SSR/1000 modules         15.3±0.27ms
-bench_hmr_to_eval/Turbopack SSR/2000 modules         14.1±0.14ms
-bench_hmr_to_eval/Turbopack SSR/3000 modules         15.1±0.37ms
-bench_hmr_to_eval/Turbopack SSR/4000 modules         16.0±0.31ms
-bench_hmr_to_eval/Turbopack SSR/5000 modules         16.5±0.41ms
-bench_hmr_to_eval/Turbopack SSR/10000 modules        14.9±1.35ms
-bench_hmr_to_eval/Turbopack SSR/20000 modules        15.3±1.52ms
-bench_hmr_to_eval/Turbopack SSR/30000 modules        15.1±1.03ms
-bench_hmr_to_eval/Turbopack SSR/50000 modules        16.7±3.73ms
-bench_hmr_to_eval/Vite CSR/10 modules                94.8±5.24ms
-bench_hmr_to_eval/Vite CSR/100 modules              102.4±2.32ms
-bench_hmr_to_eval/Vite CSR/200 modules              101.7±2.39ms
-bench_hmr_to_eval/Vite CSR/500 modules              100.1±4.24ms
-bench_hmr_to_eval/Vite CSR/1000 modules              86.5±9.13ms
-bench_hmr_to_eval/Vite CSR/2000 modules             111.6±3.76ms
-bench_hmr_to_eval/Vite CSR/3000 modules             105.0±2.51ms
-bench_hmr_to_eval/Vite CSR/4000 modules             99.0±12.26ms
-bench_hmr_to_eval/Vite CSR/5000 modules             92.5±22.77ms
-bench_hmr_to_eval/Vite CSR/10000 modules           110.4±32.82ms
-bench_hmr_to_eval/Vite CSR/20000 modules           204.4±61.72ms
-bench_hmr_to_eval/Vite CSR/30000 modules           256.2±67.72ms
-bench_hmr_to_eval/Vite CSR/50000 modules          509.8±137.92ms
+bench_hmr_to_commit/Next.js 11 SSR/1000 modules         211.6±1.14ms
+bench_hmr_to_commit/Next.js 11 SSR/5000 modules        866.0±34.44ms
+bench_hmr_to_commit/Next.js 11 SSR/10000 modules           2.4±0.13s
+bench_hmr_to_commit/Next.js 11 SSR/30000 modules           9.5±3.12s
+bench_hmr_to_commit/Next.js 12 SSR/1000 modules         146.2±2.17ms
+bench_hmr_to_commit/Next.js 12 SSR/5000 modules        494.7±25.13ms
+bench_hmr_to_commit/Next.js 12 SSR/10000 modules     1151.9±280.68ms
+bench_hmr_to_commit/Next.js 12 SSR/30000 modules           6.4±2.29s
+bench_hmr_to_commit/Turbopack SSR/1000 modules           18.9±2.92ms
+bench_hmr_to_commit/Turbopack SSR/5000 modules           23.8±0.31ms
+bench_hmr_to_commit/Turbopack SSR/10000 modules          23.0±0.35ms
+bench_hmr_to_commit/Turbopack SSR/30000 modules          22.5±0.88ms
+bench_hmr_to_commit/Vite SWC CSR/1000 modules           104.8±1.52ms
+bench_hmr_to_commit/Vite SWC CSR/5000 modules           109.6±3.94ms
+bench_hmr_to_commit/Vite SWC CSR/10000 modules          113.0±1.20ms
+bench_hmr_to_commit/Vite SWC CSR/30000 modules         133.3±23.65ms
 ```
+
+Note that Vite is using the official [SWC plugin](https://github.com/vitejs/vite-plugin-react-swc) for these benchmarks, which is not the default configuration.
 
 If you have questions about the benchmark, please open an [issue on GitHub](https://github.com/vercel/turbo/issues).

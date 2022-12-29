@@ -3,10 +3,14 @@ Setup
   $ . ${TESTDIR}/logged_in.sh
 
 Logout while logged in
-  $ ${SHIM} logout
+  $ ${TURBO} logout
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   >>> Logged out
 
 Logout while logged out
-  $ ${SHIM} logout
+  $ ${TURBO} logout
+  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
+  Running command as global turbo
   >>> Logged out
 

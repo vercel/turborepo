@@ -5,36 +5,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"unsafe"
 
 	"github.com/vercel/turbo/cli/internal/cmd"
 	"github.com/vercel/turbo/cli/internal/turbostate"
 )
 
 func main() {
-	os.Exit(cmd.RunWithArgs(os.Args[1:], turboVersion))
+	fmt.Printf("ERROR: Go binary cannot be used on its own. Please build as c-archive and use with Rust crate")
+	os.Exit(1)
 }
 
 //export nativeRunWithArgs
-func nativeRunWithArgs(argc C.int, argv **C.char) C.uint {
-	arglen := int(argc)
-	args := make([]string, arglen)
-	for i, arg := range unsafe.Slice(argv, arglen) {
-		args[i] = C.GoString(arg)
-	}
-
-	exitCode := cmd.RunWithArgs(args, turboVersion)
-	return C.uint(exitCode)
-}
-
-//export nativeRunWithTurboState
-func nativeRunWithTurboState(turboStateString string) C.uint {
-	var turboState turbostate.CLIExecutionStateFromRust
-	err := json.Unmarshal([]byte(turboStateString), &turboState)
+func nativeRunWithArgs(argsString string) C.uint {
+	var args turbostate.ParsedArgsFromRust
+	err := json.Unmarshal([]byte(argsString), &args)
 	if err != nil {
-		fmt.Printf("Error unmarshalling turboState: %v\n Turbo state string: %v\n", err, turboStateString)
+		fmt.Printf("Error unmarshalling CLI args: %v\n Arg string: %v\n", err, argsString)
 		return 1
 	}
-	exitCode := cmd.RunWithTurboState(turboState, turboVersion)
+	exitCode := cmd.RunWithArgs(args, turboVersion)
 	return C.uint(exitCode)
 }

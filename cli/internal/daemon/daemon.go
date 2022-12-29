@@ -10,19 +10,17 @@ import (
 	"os"
 	"time"
 
-	"github.com/vercel/turbo/cli/internal/config"
-
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/hashicorp/go-hclog"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/daemon/connector"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/server"
 	"github.com/vercel/turbo/cli/internal/signals"
 	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -77,71 +75,75 @@ func (d *daemon) logError(err error) {
 // we do not need to read the log file.
 var _logFileFlags = os.O_WRONLY | os.O_APPEND | os.O_CREATE
 
-// GetCmd returns the root daemon command
-func GetCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
-	var idleTimeout time.Duration
-	cmd := &cobra.Command{
-		Use:           "daemon",
-		Short:         "Runs the Turborepo background daemon",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			flags := config.FlagSet{FlagSet: cmd.Flags()}
-			base, err := helper.GetCmdBase(flags)
-			if err != nil {
-				return err
-			}
-			logFilePath, err := getLogFilePath(base.RepoRoot)
-			if err != nil {
-				return err
-			}
-			if err := logFilePath.EnsureDir(); err != nil {
-				return err
-			}
-			logFile, err := logFilePath.OpenFile(_logFileFlags, 0644)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = logFile.Close() }()
-			logger := hclog.New(&hclog.LoggerOptions{
-				Output: io.MultiWriter(logFile, os.Stdout),
-				Level:  hclog.Info,
-				Color:  hclog.ColorOff,
-				Name:   "turbod",
-			})
-			ctx := cmd.Context()
-			d := &daemon{
-				logger:     logger,
-				repoRoot:   base.RepoRoot,
-				timeout:    idleTimeout,
-				reqCh:      make(chan struct{}),
-				timedOutCh: make(chan struct{}),
-			}
-			serverName := getRepoHash(base.RepoRoot)
-			turboServer, err := server.New(serverName, d.logger.Named("rpc server"), base.RepoRoot, base.TurboVersion, logFilePath)
-			if err != nil {
-				d.logError(err)
-				return err
-			}
-			defer func() { _ = turboServer.Close() }()
-			err = d.runTurboServer(ctx, turboServer, signalWatcher)
-			if err != nil {
-				d.logError(err)
-				return err
-			}
-			return nil
-		},
-	}
-	cmd.Flags().DurationVar(&idleTimeout, "idle-time", 4*time.Hour, "Set the idle timeout for turbod")
-	addDaemonSubcommands(cmd, helper)
-	return cmd
-}
+// ExecuteDaemon executes the root daemon command
+func ExecuteDaemon(ctx context.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, args *turbostate.ParsedArgsFromRust) error {
+	if args.Command.Daemon.Command != "" {
+		var subcommandError error
+		if args.Command.Daemon.Command == "Status" {
+			subcommandError = RunStatus(ctx, helper, args)
+		} else {
+			subcommandError = RunLifecycle(ctx, helper, args)
+		}
 
-func addDaemonSubcommands(cmd *cobra.Command, helper *cmdutil.Helper) {
-	addStatusCmd(cmd, helper)
-	addStartCmd(cmd, helper)
-	addStopCmd(cmd, helper)
-	addRestartCmd(cmd, helper)
+		return subcommandError
+	}
+
+	base, err := helper.GetCmdBase(args)
+	if err != nil {
+		return err
+	}
+	if args.TestRun {
+		base.UI.Info("Daemon test run successful")
+		return nil
+	}
+
+	idleTimeout := 4 * time.Hour
+	if args.Command.Daemon.IdleTimeout != "" {
+		idleTimeout, err = time.ParseDuration(args.Command.Daemon.IdleTimeout)
+		if err != nil {
+			return err
+		}
+	}
+
+	logFilePath, err := getLogFilePath(base.RepoRoot)
+	if err != nil {
+		return err
+	}
+	if err := logFilePath.EnsureDir(); err != nil {
+		return err
+	}
+	logFile, err := logFilePath.OpenFile(_logFileFlags, 0644)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = logFile.Close() }()
+	logger := hclog.New(&hclog.LoggerOptions{
+		Output: io.MultiWriter(logFile, os.Stdout),
+		Level:  hclog.Info,
+		Color:  hclog.ColorOff,
+		Name:   "turbod",
+	})
+
+	d := &daemon{
+		logger:     logger,
+		repoRoot:   base.RepoRoot,
+		timeout:    idleTimeout,
+		reqCh:      make(chan struct{}),
+		timedOutCh: make(chan struct{}),
+	}
+	serverName := getRepoHash(base.RepoRoot)
+	turboServer, err := server.New(serverName, d.logger.Named("rpc server"), base.RepoRoot, base.TurboVersion, logFilePath)
+	if err != nil {
+		d.logError(err)
+		return err
+	}
+	defer func() { _ = turboServer.Close() }()
+	err = d.runTurboServer(ctx, turboServer, signalWatcher)
+	if err != nil {
+		d.logError(err)
+		return err
+	}
+	return nil
 }
 
 var errInactivityTimeout = errors.New("turbod shut down from inactivity")
@@ -304,9 +306,5 @@ func GetClient(ctx context.Context, repoRoot turbopath.AbsoluteSystemPath, logge
 		LogPath:      logPath,
 		TurboVersion: turboVersion,
 	}
-	client, err := c.Connect(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
+	return c.Connect(ctx)
 }

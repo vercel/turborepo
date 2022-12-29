@@ -2,6 +2,7 @@ import { exec } from "child_process";
 import path from "path";
 import { getTurboRoot } from "turbo-utils";
 import { getComparison } from "./getComparison";
+import { getTask } from "./getTask";
 import { getWorkspace } from "./getWorkspace";
 import { info, warn, error } from "./logger";
 import { shouldWarn } from "./errors";
@@ -50,6 +51,9 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
     return continueBuild();
   }
 
+  // Identify which task to execute from the command-line args
+  let task = getTask(args);
+
   // check the commit message
   const parsedCommit = checkCommit({ workspace });
   if (parsedCommit.result === "skip") {
@@ -72,7 +76,7 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
   }
 
   // Build, and execute the command
-  const command = `npx turbo run build --filter=${workspace}...[${comparison.ref}] --dry=json`;
+  const command = `npx turbo run ${task} --filter=${workspace}...[${comparison.ref}] --dry=json`;
   info(`analyzing results of \`${command}\``);
   exec(
     command,

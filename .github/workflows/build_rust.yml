@@ -19,30 +19,46 @@ jobs:
           - host: macos-latest
             target: "x86_64-apple-darwin"
             lib-cache-key: turbo-lib-darwin-${{ inputs.release_branch }}
+            container-options: "--rm"
           - host: macos-latest
             target: "aarch64-apple-darwin"
             lib-cache-key: turbo-lib-darwin-${{ inputs.release_branch }}
+            container-options: "--rm"
           - host: ubuntu-latest
+            container: ubuntu:xenial
+            container-options: "--platform=linux/amd64 --rm"
+            container-setup: "apt-get update && apt-get install -y curl"
             target: "x86_64-unknown-linux-gnu"
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
-            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
+            setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev"
           - host: ubuntu-latest
+            container: ubuntu:xenial
+            container-options: "--rm"
+            container-setup: "apt-get update && apt-get install -y curl"
             target: "aarch64-unknown-linux-gnu"
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
             rustflags: 'RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc"'
-            setup: "sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
+            setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
             target: x86_64-pc-windows-gnu
             lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
+            setup: "mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.exe cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.a && mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.h cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.h && rustup set default-host x86_64-pc-windows-gnu"
+            container-options: "--rm"
     runs-on: ${{ matrix.settings.host }}
+    container:
+      image: ${{ matrix.settings.container }}
+      options: ${{ matrix.settings.container-options }}
     steps:
       - uses: actions/checkout@v3
         with:
           ref: "${{ inputs.release_branch }}"
 
+      - name: Setup Container
+        if: ${{ matrix.settings.container-setup }}
+        run: ${{ matrix.settings.container-setup }}
+
       - name: Install
         uses: actions-rs/toolchain@v1
-        if: ${{ !matrix.settings.docker }}
         with:
           profile: minimal
           override: true
@@ -82,7 +98,7 @@ jobs:
           # https://github.com/actions/download-artifact#download-all-artifacts
           name: ${{ matrix.settings.lib-cache-key }}
           # Optional, a directory where to extract artifact(s), defaults to the current directory
-          path: shim/libturbo
+          path: cli/libturbo
           # Optional, choose how to exit the action if no artifact is found
           # can be one of:
           #  "fail", "warn", "ignore"
@@ -94,24 +110,20 @@ jobs:
       #   uses: actions/download-artifact@v3
       #   with:
       #     name: ${{ matrix.settings.lib-cache-key }}
-      #     path: shim/libturbo
+      #     path: cli/libturbo
       - name: Build Setup
+        shell: bash
         if: ${{ matrix.settings.setup }}
         run: ${{ matrix.settings.setup }}
 
       - name: Build
-        if: ${{ !matrix.settings.docker }}
-        run: ${{ matrix.settings.rustflags }} cargo build --release -p turbo --target ${{ matrix.settings.target }}
-
-      - name: Build in Docker
-        if: ${{ matrix.settings.docker }}
         run: ${{ matrix.settings.rustflags }} cargo build --release -p turbo --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: shim-${{ matrix.settings.target }}
-          path: shim/target/${{ matrix.settings.target }}/release/turbo*
+          name: turbo-${{ matrix.settings.target }}
+          path: target/${{ matrix.settings.target }}/release/turbo*
 
   final-publish:
     name: "Publish To NPM"
@@ -146,41 +158,41 @@ jobs:
       - name: Download Apple ARM64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-aarch64-apple-darwin
+          name: turbo-aarch64-apple-darwin
           path: cli/dist-darwin-arm64
 
       - name: Download Ubuntu ARM64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-aarch64-unknown-linux-gnu
+          name: turbo-aarch64-unknown-linux-gnu
           path: cli/dist-linux-arm64
 
       - name: Download Windows ARM64 (Ships as x86_64) Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-x86_64-pc-windows-gnu
+          name: turbo-x86_64-pc-windows-gnu
           path: cli/dist-windows-arm64
 
       - name: Download Ubuntu x86_64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-x86_64-unknown-linux-gnu
+          name: turbo-x86_64-unknown-linux-gnu
           path: cli/dist-linux-amd64
 
       - name: Download Apple x86_64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-x86_64-apple-darwin
+          name: turbo-x86_64-apple-darwin
           path: cli/dist-darwin-amd64
 
       - name: Download Windows x86_64 Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: shim-x86_64-pc-windows-gnu
+          name: turbo-x86_64-pc-windows-gnu
           path: cli/dist-windows-amd64
 
       - name: Perform Release
-        run: cd cli && make publish-shim
+        run: cd cli && make publish-turbo
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -189,5 +201,5 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: shim-combined
+          name: turbo-combined
           path: cli/dist

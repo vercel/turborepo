@@ -22,6 +22,8 @@ pub mod typescript;
 pub mod utils;
 pub mod webpack;
 
+use std::collections::HashMap;
+
 use anyhow::Result;
 use chunk::{
     EcmascriptChunkItem, EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
@@ -41,21 +43,22 @@ pub use transform::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
 use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
+    asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc},
     chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
     context::AssetContextVc,
     environment::EnvironmentVc,
     reference::AssetReferencesVc,
-    resolve::origin::{ResolveOrigin, ResolveOriginVc},
+    resolve::{
+        origin::{ResolveOrigin, ResolveOriginVc},
+        parse::RequestVc,
+    },
 };
 
-use self::{
-    chunk::{
-        EcmascriptChunkItemContent, EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions,
-        EcmascriptExportsVc,
-    },
-    references::AnalyzeEcmascriptModuleResultVc,
+use self::chunk::{
+    EcmascriptChunkItemContent, EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions,
+    EcmascriptExportsVc,
 };
+pub use self::references::AnalyzeEcmascriptModuleResultVc;
 use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
     references::analyze_ecmascript_module,
@@ -64,10 +67,18 @@ use crate::{
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
 pub enum EcmascriptModuleAssetType {
+    /// Module with EcmaScript code
     Ecmascript,
+    /// Module with TypeScript code without types
     Typescript,
+    /// Module with TypeScript code with references to imported types
+    TypescriptWithTypes,
+    /// Module with TypeScript declaration code
     TypescriptDeclaration,
 }
+
+#[turbo_tasks::value(transparent)]
+pub struct InnerAssets(HashMap<String, AssetVc>);
 
 #[turbo_tasks::value]
 #[derive(Clone, Copy)]
@@ -77,6 +88,7 @@ pub struct EcmascriptModuleAsset {
     pub ty: EcmascriptModuleAssetType,
     pub transforms: EcmascriptInputTransformsVc,
     pub environment: EnvironmentVc,
+    pub inner_assets: Option<InnerAssetsVc>,
 }
 
 #[turbo_tasks::value_impl]
@@ -95,6 +107,26 @@ impl EcmascriptModuleAssetVc {
             ty: ty.into_value(),
             transforms,
             environment,
+            inner_assets: None,
+        })
+    }
+
+    #[turbo_tasks::function]
+    pub fn new_with_inner_assets(
+        source: AssetVc,
+        context: AssetContextVc,
+        ty: Value<EcmascriptModuleAssetType>,
+        transforms: EcmascriptInputTransformsVc,
+        environment: EnvironmentVc,
+        inner_assets: InnerAssetsVc,
+    ) -> Self {
+        Self::cell(EcmascriptModuleAsset {
+            source,
+            context,
+            ty: ty.into_value(),
+            transforms,
+            environment,
+            inner_assets: Some(inner_assets),
         })
     }
 
@@ -177,6 +209,21 @@ impl ResolveOrigin for EcmascriptModuleAsset {
     fn context(&self) -> AssetContextVc {
         self.context
     }
+
+    #[turbo_tasks::function]
+    async fn get_inner_asset(&self, request: RequestVc) -> Result<AssetOptionVc> {
+        Ok(AssetOptionVc::cell(
+            if let Some(inner_assets) = &self.inner_assets {
+                if let Some(request) = request.await?.request() {
+                    inner_assets.await?.get(&request).copied()
+                } else {
+                    None
+                }
+            } else {
+                None
+            },
+        ))
+    }
 }
 
 #[turbo_tasks::value]
@@ -189,6 +236,7 @@ struct ModuleChunkItem {
 impl ValueToString for ModuleChunkItem {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<StringVc> {
+        // TODO include inner_assets in this name
         Ok(StringVc::cell(format!(
             "{} (ecmascript)",
             self.module.await?.source.path().to_string().await?
@@ -226,6 +274,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             }
         }
         for c in code_generation.await?.iter() {
+            let c = c.resolve().await?;
             code_gens.push(c.code_generation(context));
         }
         // need to keep that around to allow references into that

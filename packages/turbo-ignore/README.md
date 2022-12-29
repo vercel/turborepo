@@ -25,8 +25,7 @@ field of the "package.json" located at the current working directory.
 
 Flags:
   --fallback=<ref>    On Vercel, if no previously deployed SHA is available to compare against,
-                      fallback to comparing against the provided ref, or use "false" to
-                      disable [default: HEAD^]
+                      fallback to comparing against the provided ref [default: None]
   --help, -h          Show this help message
   --version, -v       Show the version of this script
 

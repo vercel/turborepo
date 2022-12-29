@@ -1,0 +1,43 @@
+name: "Turborepo Build Debug"
+description: "Builds debug version of turborepo"
+inputs:
+  target:
+    description: "Compilation target"
+    required: true
+  github-token:
+    description: "GitHub token. You can pass secrets.GITHUB_TOKEN"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: "Setup Node"
+      uses: ./.github/actions/setup-node
+    - name: "Setup Go"
+      uses: ./.github/actions/setup-go
+      with:
+        github-token: ${{ inputs.github-token }}
+    - name: "Setup Rust toolchain"
+      uses: actions-rs/toolchain@v1
+      if: ${{ inputs.target != 'windows' }}
+    - name: "Set Windows default host to MingW"
+      if: ${{ inputs.target == 'windows' }}
+      shell: bash
+      run: rustup set default-host x86_64-pc-windows-gnu && rustup show
+    - name: "Setup Rust Cache"
+      uses: Swatinem/rust-cache@v2
+      with:
+        key: debug-${{ inputs.target }}
+    - name: Build Turborepo
+      shell: bash
+      run: |
+        cd cli
+        make turbo
+        cd ..
+    - name: Strip Turborepo binary
+      shell: bash
+      run: strip target/debug/turbo.exe
+      if: ${{ inputs.target == 'windows' }}
+    - name: Strip Turborepo binary
+      shell: bash
+      run: strip target/debug/turbo
+      if: ${{ inputs.target != 'windows' }}

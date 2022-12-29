@@ -4,6 +4,7 @@ pub mod conditional;
 pub mod lazy_instatiated;
 pub mod query;
 pub mod router;
+pub mod source_maps;
 pub mod specificity;
 pub mod static_assets;
 
@@ -72,11 +73,26 @@ pub enum ContentSourceContent {
     NotFound,
     Static(VersionedContentVc),
     HttpProxy(ProxyResultVc),
-    NeedData {
-        source: ContentSourceVc,
-        path: String,
-        vary: ContentSourceDataVary,
-    },
+    NeedData(NeededData),
+}
+
+/// Needed data content signals that the content source requires more
+/// information in order to serve the request. The held data allows us to
+/// partially compute some data, and resume computation after the needed vary
+/// data is supplied by the dev server.
+#[turbo_tasks::value(shared)]
+#[derive(Debug, Clone)]
+pub struct NeededData {
+    /// A [ContentSource] to query once the data has been extracted from the
+    /// server. This _does not_ need to be the original content source.
+    pub source: ContentSourceVc,
+
+    /// A path with which to call into that content source. This _does not_ need
+    /// to be the original path.
+    pub path: String,
+
+    /// The vary data which is needed in order to process the request.
+    pub vary: ContentSourceDataVary,
 }
 
 impl From<VersionedContentVc> for ContentSourceContentVc {
@@ -306,6 +322,22 @@ pub trait ContentSource {
     /// arguments, so we want to make the arguments contain as little
     /// information as possible to increase cache hit ratio.
     fn get(&self, path: &str, data: Value<ContentSourceData>) -> ContentSourceResultVc;
+
+    /// Gets any content sources wrapped in this content source.
+    fn get_children(&self) -> ContentSourcesVc {
+        ContentSourcesVc::empty()
+    }
+}
+
+#[turbo_tasks::value(transparent)]
+pub struct ContentSources(Vec<ContentSourceVc>);
+
+#[turbo_tasks::value_impl]
+impl ContentSourcesVc {
+    #[turbo_tasks::function]
+    pub fn empty() -> Self {
+        ContentSourcesVc::cell(Vec::new())
+    }
 }
 
 /// An empty ContentSource implementation that responds with NotFound for every

@@ -16,7 +16,7 @@ import Date from "../../components/blog/Date";
 
 # Turbopack Performance Benchmarks
 
-<Date>
+<Date update={<>Thursday, December 22nd, 2022</>}>
   Monday, October 31st, 2022
 </Date>
 
@@ -25,9 +25,9 @@ import Date from "../../components/blog/Date";
 <p className="text-gray-500 mt-6 uppercase text-sm tracking-wider">Summary</p>
 
 - We are thankful for the work of the entire OSS ecosystem and the incredible interest and reception from the [Turbopack release](https://vercel.com/blog/turbopack). We look forward to continuing our collaboration with and integration into the broader Web ecosystem of tooling and frameworks.
-- In this article, you’ll find our methodology and documentation supporting the benchmarks that show **Turbopack is up to [10x and 700x faster](#bench) than existing approaches.**
+- In this article, you will find our methodology and documentation supporting the benchmarks that show **Turbopack is [much faster](#bench) than existing non-incremental approaches.**
 - **Turbopack** and [**Next.js 13.0.1**](https://github.com/vercel/next.js/releases/tag/v13.0.1) are out addressing a regression that snuck in prior to public release and after the initial benchmarks were taken. We also fixed an incorrect rounding bug on our website (`0.01s` → `15ms`). We appreciate [Evan You](https://twitter.com/youyuxi)'s work that helped us identify and [correct this](https://github.com/vercel/turbo/pull/2516).
-- We’re excited to continue to evolve the incremental build architecture of Turbopack. We believe that there are still significant performance wins on the table.
+- We are excited to continue to evolve the incremental build architecture of Turbopack. We believe that there are still significant performance wins on the table.
 
 <hr className="mt-8 w-full border-gray-400 authors border-opacity-20"/>
 
@@ -35,11 +35,11 @@ At [Next.js Conf](https://nextjs.org), [we announced](https://www.youtube.com/wa
 
 The project began as an exploration to improve Webpack’s performance and create ways for it to more easily integrate with tooling moving forward. In doing so, the team realized that a greater effort was necessary. While we saw opportunities for better performance, the premise of a new architecture that could scale to the largest projects in the world was inspiring.
 
-In this post, we’ll explore why Turbopack is so fast, how its incremental engine works, and benchmark it against existing approaches.
+In this post, we will explore why Turbopack is so fast, how its incremental engine works, and benchmark it against existing approaches.
 
 ## Why is Turbopack _blazing_ fast?
 
-Turbopack’s speed comes from its incremental computation engine. Similar to trends we've seen in frontend state libraries, computational work is split into reactive functions that enable Turbopack to apply updates to an existing compilation without going through a full graph recomputation and bundling lifecycle.
+Turbopack’s speed comes from its incremental computation engine. Similar to trends we have seen in frontend state libraries, computational work is split into reactive functions that enable Turbopack to apply updates to an existing compilation without going through a full graph recomputation and bundling lifecycle.
 
 This does not work like traditional caching where you look up a result from a cache before an operation and then decide whether or not to use it. That would be too slow.
 
@@ -54,7 +54,7 @@ We created a test generator that makes an application with a variable amount of 
 - Next.js 13 with Turbopack
 - Vite
 
-As the current state of the art, we're including [Vite](https://vitejs.dev/) along with Webpack-based [Next.js](https://nextjs.org) solutions. All of these toolchains point to the same generated component tree, assembling a [Sierpiński triangle](https://en.wikipedia.org/wiki/Sierpi%C5%84ski_triangle) in the browser, where every triangle is a separate module.
+As the current state of the art, we are including [Vite](https://vitejs.dev/) along with Webpack-based [Next.js](https://nextjs.org) solutions. All of these toolchains point to the same generated component tree, assembling a [Sierpiński triangle](https://en.wikipedia.org/wiki/Sierpi%C5%84ski_triangle) in the browser, where every triangle is a separate module.
 
 <ThemedImageFigure
   borderRadius={false}
@@ -76,22 +76,24 @@ As the current state of the art, we're including [Vite](https://vitejs.dev/) alo
 
 This test measures how fast a local development server starts up on an application of various sizes. We measure this as the time from startup (without cache) until the app is rendered in the browser. We do not wait for the app to be interactive or hydrated in the browser for this dataset.
 
+Based on feedback and collaboration with the Vite team, we used the [SWC plugin](https://github.com/vitejs/vite-plugin-react-swc) with Vite in replacement for the [default Babel plugin](https://github.com/vitejs/vite-plugin-react) for improved performance in this benchmark.
+
 <DocsBenchmarksGraph category="cold" bars={DEFAULT_BARS} />
 
 <ThemedImageFigure
   borderRadius={true}
   dark={{
-    source: '/images/blog/turbopack-benchmarks/bench_startup_all_dark.svg',
+    source: '/images/blog/turbopack-benchmarks/bench_startup_dark.svg',
     height: 720,
     width: 1960
   }}
   light={{
-    source: '/images/blog/turbopack-benchmarks/bench_startup_all_light.svg',
+    source: '/images/blog/turbopack-benchmarks/bench_startup_light.svg',
     height: 720,
     width: 1960
   }}
   captionSpacing={24}
-  caption="Startup time by module count. Benchmark data generated from 14” MacBook Pro 2021, M1 Max, 64GB RAM, macOS 12.6 (21G115)."
+  caption="Startup time by module count. Benchmark data generated from 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400)."
 />
 
 #### Data
@@ -99,56 +101,56 @@ This test measures how fast a local development server starts up on an applicati
 To run this benchmark yourself, clone [`vercel/turbo`](https://github.com/vercel/turbo) and then use this command from the root:
 
 ```sh
-TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p next-dev "startup/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite CSR)."
+TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p next-dev "startup/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite SWC CSR)."
 ```
 
-Here are the numbers we were able to produce on a 14” MacBook Pro 2021, M1 Max, 64GB RAM, macOS 12.6 (21G115):
+Here are the numbers we were able to produce on a 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400):
 
 ```sh
-bench_startup/Next.js 11 SSR/1000 modules              7.7±0.06s
-bench_startup/Next.js 11 SSR/5000 modules             24.8±0.11s
-bench_startup/Next.js 11 SSR/10000 modules            49.4±0.28s
-bench_startup/Next.js 11 SSR/30000 modules           176.2±1.42s
-bench_startup/Next.js 12 SSR/1000 modules              3.4±0.01s
-bench_startup/Next.js 12 SSR/5000 modules             10.7±0.02s
-bench_startup/Next.js 12 SSR/10000 modules            20.1±0.07s
-bench_startup/Next.js 12 SSR/30000 modules            76.6±0.66s
-bench_startup/Turbopack SSR/1000 modules          1125.3±44.54ms
-bench_startup/Turbopack SSR/5000 modules               3.6±0.02s
-bench_startup/Turbopack SSR/10000 modules              7.5±0.44s
-bench_startup/Turbopack SSR/30000 modules             22.3±1.29s
-bench_startup/Vite CSR/1000 modules                    4.8±0.02s
-bench_startup/Vite CSR/5000 modules                   19.2±0.15s
-bench_startup/Vite CSR/10000 modules                  37.2±0.29s
-bench_startup/Vite CSR/30000 modules                 109.5±1.14s
+bench_startup/Next.js 11 SSR/1000 modules                  9.2±0.04s
+bench_startup/Next.js 11 SSR/5000 modules                 32.9±0.67s
+bench_startup/Next.js 11 SSR/10000 modules                71.8±2.57s
+bench_startup/Next.js 11 SSR/30000 modules               237.6±6.43s
+bench_startup/Next.js 12 SSR/1000 modules                  3.6±0.02s
+bench_startup/Next.js 12 SSR/5000 modules                 12.1±0.32s
+bench_startup/Next.js 12 SSR/10000 modules                23.3±0.32s
+bench_startup/Next.js 12 SSR/30000 modules                89.1±0.21s
+bench_startup/Turbopack SSR/1000 modules               1381.9±5.62ms
+bench_startup/Turbopack SSR/5000 modules                   4.0±0.04s
+bench_startup/Turbopack SSR/10000 modules                  7.3±0.07s
+bench_startup/Turbopack SSR/30000 modules                 22.0±0.32s
+bench_startup/Vite SWC CSR/1000 modules                    4.2±0.02s
+bench_startup/Vite SWC CSR/5000 modules                   16.6±0.08s
+bench_startup/Vite SWC CSR/10000 modules                  32.3±0.12s
+bench_startup/Vite SWC CSR/30000 modules                  97.7±1.53s
 ```
 
 ### File updates (HMR)
 
-We also measure how quickly the development server works from when an update is applied to a source file to when we receive a custom browser event that the modified code was executed.
+We also measure how quickly the development server works from when an update is applied to a source file to when the corresponding change is re-rendered in the browser.
 
-Note that executing modified code does not mean that the changes are visible to the user yet. When a React component changes, it still needs to be re-rendered by the browser. With this methodology, we are focusing _only_ on the time the compiler takes to do its work and the time it takes for the browser to evaluate an updated module.
+For Hot Module Reloading (HMR) benchmarks, we first start the dev server on a fresh installation with the test application. We wait for the HMR server to boot up by running updates until one succeeds. We then run ten changes to warm up the tooling. This step is important as it prevents discrepancies that can arise with cold processes.
 
-For Hot Module Reloading (HMR) benchmarks, we first start the dev server on a fresh installation with the test application. We then run five changes to warm up the tooling. This step is important as it prevents discrepancies that can arise with cold processes.
+Once our tooling is warmed up, we run a series of updates to a list of modules within the test application. Modules are sampled randomly with a distribution that ensures we test a uniform number of modules per module depth. The depth of a module is its distance from the entry module in the dependency graph. For instance, if the entry module A imports module B, which imports modules C and D, the depth of the entry module A will be 0, that of module B will be 1, and that of modules C and D will be 2. Modules A and B will have an equal probability of being sampled, but modules C and D will only have half the probability of being sampled.
 
-Once our tooling is warmed up, we measure the sixth file update. After repeating this 10 times, we use the average as our final number.
+We report the linear regression slope of the data points as the target metric. This is an estimate of the average time it takes for the tooling to apply an update to the application.
 
 <DocsBenchmarksGraph category="file_change" bars={HMR_BARS} />
 
 <ThemedImageFigure
   borderRadius={true}
   dark={{
-    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_eval_all_dark.svg',
+    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_commit_dark.svg',
     height: 720,
     width: 1960
   }}
   light={{
-    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_eval_all_light.svg',
+    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_commit_light.svg',
     height: 720,
     width: 1960
   }}
   captionSpacing={24}
-  caption="Turbopack vs. Next.js (Webpack) vs. Vite HMR by module count. Benchmark data generated from 14” MacBook Pro 2021, M1 Max, 64GB RAM, macOS 12.6 (21G115)."
+  caption="Turbopack, Next.js (Webpack), and Vite HMR by module count. Benchmark data generated from 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400)."
 />
 
 <a id="bench"/>
@@ -156,92 +158,53 @@ Once our tooling is warmed up, we measure the sixth file update. After repeating
 <ThemedImageFigure
   borderRadius={true}
   dark={{
-    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_eval_vite_tp_dark.svg',
+    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_commit_turbopack_vite_dark.svg',
     height: 720,
     width: 1960
   }}
   light={{
-    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_eval_vite_tp_light.svg',
+    source: '/images/blog/turbopack-benchmarks/bench_hmr_to_commit_turbopack_vite_light.svg',
     height: 720,
     width: 1960
   }}
   captionSpacing={24}
-  caption="Turbopack vs. Vite HMR by module count. Benchmark data generated from 14” MacBook Pro 2021, M1 Max, 64GB RAM, macOS 12.6 (21G115)."
+  caption="Turbopack and Vite HMR by module count. Benchmark data generated from 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400)."
 />
-
-From our benchmarks, we find the following:
-
-- Turbopack HMR is **10x faster than Vite once the application scales above 30k modules**. These marks continue to improve with more modules, showing 20x faster above 50k modules.
-- Turbopack HMR is **700x faster than Webpack-based Next.js 11** for large applications with over 50k modules.
 
 The takeaway: Turbopack performance is a function of **the size of an update**, not the size of an application.
 
-For more info, visit the comparison docs for [Vite](/pack/docs/comparisons/turbopack-vs-vite) and [Webpack](/pack/docs/comparisons/turbopack-vs-webpack).
+For more info, visit the comparison docs for [Vite](/pack/docs/comparisons/vite) and [Webpack](/pack/docs/comparisons/webpack).
 
 #### Data
 
 To run this benchmark yourself, clone [`vercel/turbo`](https://github.com/vercel/turbo) and then use this command from the root:
 
 ```
-TURBOPACK_BENCH_COUNTS=10,100,200,500,1000,2000,3000,4000,5000,10000,20000,30000,50000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p next-dev "hmr_to_eval/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite CSR)"
+TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p next-dev "hmr_to_commit/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite SWC CSR)"
 ```
 
-Here are the numbers we were able to produce on a 14” MacBook Pro 2021, M1 Max, 64GB RAM, macOS 12.6 (21G115):
+Here are the numbers we were able to produce on a 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400):
 
 ```sh
-bench_hmr_to_eval/Next.js 11 SSR/10 modules         77.9±21.03ms
-bench_hmr_to_eval/Next.js 11 SSR/100 modules        100.5±2.04ms
-bench_hmr_to_eval/Next.js 11 SSR/200 modules         98.7±4.48ms
-bench_hmr_to_eval/Next.js 11 SSR/500 modules       140.0±14.06ms
-bench_hmr_to_eval/Next.js 11 SSR/1000 modules      273.2±17.11ms
-bench_hmr_to_eval/Next.js 11 SSR/2000 modules      404.0±24.81ms
-bench_hmr_to_eval/Next.js 11 SSR/3000 modules      498.3±22.10ms
-bench_hmr_to_eval/Next.js 11 SSR/4000 modules      698.8±54.46ms
-bench_hmr_to_eval/Next.js 11 SSR/5000 modules      849.7±14.64ms
-bench_hmr_to_eval/Next.js 11 SSR/10000 modules    1713.9±32.96ms
-bench_hmr_to_eval/Next.js 11 SSR/20000 modules         5.0±0.12s
-bench_hmr_to_eval/Next.js 11 SSR/30000 modules         6.9±1.75s
-bench_hmr_to_eval/Next.js 11 SSR/50000 modules        11.6±0.50s
-bench_hmr_to_eval/Next.js 12 SSR/10 modules          50.2±5.68ms
-bench_hmr_to_eval/Next.js 12 SSR/100 modules         45.7±2.99ms
-bench_hmr_to_eval/Next.js 12 SSR/200 modules         50.6±8.27ms
-bench_hmr_to_eval/Next.js 12 SSR/500 modules        93.9±19.93ms
-bench_hmr_to_eval/Next.js 12 SSR/1000 modules      133.9±12.69ms
-bench_hmr_to_eval/Next.js 12 SSR/2000 modules      147.4±24.38ms
-bench_hmr_to_eval/Next.js 12 SSR/3000 modules      210.7±33.00ms
-bench_hmr_to_eval/Next.js 12 SSR/4000 modules      295.0±21.65ms
-bench_hmr_to_eval/Next.js 12 SSR/5000 modules      386.2±84.54ms
-bench_hmr_to_eval/Next.js 12 SSR/10000 modules    1067.1±133.67ms
-bench_hmr_to_eval/Next.js 12 SSR/20000 modules         2.8±0.09s
-bench_hmr_to_eval/Next.js 12 SSR/30000 modules         5.4±0.50s
-bench_hmr_to_eval/Next.js 12 SSR/50000 modules         8.5±0.32s
-bench_hmr_to_eval/Turbopack SSR/10 modules           13.3±0.49ms
-bench_hmr_to_eval/Turbopack SSR/100 modules          13.8±1.10ms
-bench_hmr_to_eval/Turbopack SSR/200 modules          14.5±2.18ms
-bench_hmr_to_eval/Turbopack SSR/500 modules          14.3±1.63ms
-bench_hmr_to_eval/Turbopack SSR/1000 modules         15.3±0.27ms
-bench_hmr_to_eval/Turbopack SSR/2000 modules         14.1±0.14ms
-bench_hmr_to_eval/Turbopack SSR/3000 modules         15.1±0.37ms
-bench_hmr_to_eval/Turbopack SSR/4000 modules         16.0±0.31ms
-bench_hmr_to_eval/Turbopack SSR/5000 modules         16.5±0.41ms
-bench_hmr_to_eval/Turbopack SSR/10000 modules        14.9±1.35ms
-bench_hmr_to_eval/Turbopack SSR/20000 modules        15.3±1.52ms
-bench_hmr_to_eval/Turbopack SSR/30000 modules        15.1±1.03ms
-bench_hmr_to_eval/Turbopack SSR/50000 modules        16.7±3.73ms
-bench_hmr_to_eval/Vite CSR/10 modules                94.8±5.24ms
-bench_hmr_to_eval/Vite CSR/100 modules              102.4±2.32ms
-bench_hmr_to_eval/Vite CSR/200 modules              101.7±2.39ms
-bench_hmr_to_eval/Vite CSR/500 modules              100.1±4.24ms
-bench_hmr_to_eval/Vite CSR/1000 modules              86.5±9.13ms
-bench_hmr_to_eval/Vite CSR/2000 modules             111.6±3.76ms
-bench_hmr_to_eval/Vite CSR/3000 modules             105.0±2.51ms
-bench_hmr_to_eval/Vite CSR/4000 modules             99.0±12.26ms
-bench_hmr_to_eval/Vite CSR/5000 modules             92.5±22.77ms
-bench_hmr_to_eval/Vite CSR/10000 modules           110.4±32.82ms
-bench_hmr_to_eval/Vite CSR/20000 modules           204.4±61.72ms
-bench_hmr_to_eval/Vite CSR/30000 modules           256.2±67.72ms
-bench_hmr_to_eval/Vite CSR/50000 modules          509.8±137.92ms
+bench_hmr_to_commit/Next.js 11 SSR/1000 modules         211.6±1.14ms
+bench_hmr_to_commit/Next.js 11 SSR/5000 modules        866.0±34.44ms
+bench_hmr_to_commit/Next.js 11 SSR/10000 modules           2.4±0.13s
+bench_hmr_to_commit/Next.js 11 SSR/30000 modules           9.5±3.12s
+bench_hmr_to_commit/Next.js 12 SSR/1000 modules         146.2±2.17ms
+bench_hmr_to_commit/Next.js 12 SSR/5000 modules        494.7±25.13ms
+bench_hmr_to_commit/Next.js 12 SSR/10000 modules     1151.9±280.68ms
+bench_hmr_to_commit/Next.js 12 SSR/30000 modules           6.4±2.29s
+bench_hmr_to_commit/Turbopack SSR/1000 modules           18.9±2.92ms
+bench_hmr_to_commit/Turbopack SSR/5000 modules           23.8±0.31ms
+bench_hmr_to_commit/Turbopack SSR/10000 modules          23.0±0.35ms
+bench_hmr_to_commit/Turbopack SSR/30000 modules          22.5±0.88ms
+bench_hmr_to_commit/Vite SWC CSR/1000 modules           104.8±1.52ms
+bench_hmr_to_commit/Vite SWC CSR/5000 modules           109.6±3.94ms
+bench_hmr_to_commit/Vite SWC CSR/10000 modules          113.0±1.20ms
+bench_hmr_to_commit/Vite SWC CSR/30000 modules         133.3±23.65ms
 ```
+
+As a reminder, Vite is using the official [SWC plugin](https://github.com/vitejs/vite-plugin-react-swc) for these benchmarks, which is not the default configuration.
 
 Visit the [Turbopack benchmark documentation](/pack/docs/benchmarks) to run the benchmarks yourself. If you have questions about the benchmark, please open an [issue on GitHub](https://github.com/vercel/turbo/issues).
 
@@ -249,8 +212,64 @@ Visit the [Turbopack benchmark documentation](/pack/docs/benchmarks) to run the 
 
 Our team has taken the lessons from 10 years of Webpack, combined with the innovations in incremental computation from [Turborepo](/repo) and Google's Bazel, and created an architecture ready to support the coming decades of computing.
 
-Our goal is to create a system of open source tooling that helps to build the future of the Web—powered by Turbopack. We're creating a reusable piece of architecture that will make both development and warm production builds faster for everyone.
+Our goal is to create a system of open source tooling that helps to build the future of the Web—powered by Turbopack. We are creating a reusable piece of architecture that will make both development and warm production builds faster for everyone.
 
-For Turbopack's alpha, we are including it in Next.js 13. But, in time, [we hope that Turbopack will power other frameworks and builders](https://twitter.com/youyuxi/status/1585040276447690752?s=20&t=YV0ASkHl5twCWQvJF5jpwg) as a seamless, low-level, incremental engine to build great developer experiences with.
+For Turbopack’s alpha, we are including it in Next.js 13. But, in time, [we hope that Turbopack will power other frameworks and builders](https://twitter.com/youyuxi/status/1585040276447690752?s=20&t=YV0ASkHl5twCWQvJF5jpwg) as a seamless, low-level, incremental engine to build great developer experiences with.
 
-We look forward to being a part of the community bringing developers better tooling so that they can continue to deliver better experiences to end users. If you’d like to learn more about Turbopack benchmarks, visit [turbo.build](https://turbo.build/). To try out Turbopack in Next.js 13, visit [nextjs.org](https://nextjs.org/docs/advanced-features/turbopack).
+We look forward to being a part of the community bringing developers better tooling so that they can continue to deliver better experiences to end users. If you would like to learn more about Turbopack benchmarks, visit [turbo.build](https://turbo.build/). To try out Turbopack in Next.js 13, visit [nextjs.org](https://nextjs.org/docs/advanced-features/turbopack).
+
+---
+
+## Update (2022/12/22)
+
+When we first released Turbopack, we made some claims about its performance relative to previous Next.js versions (11 and 12), and relative to Vite. These numbers were computed with our benchmark suite, which was publicly available on the [turbo repository](https://github.com/vercel/turbo), but we hadn’t written up much about them, nor had we provided clear instructions on how to run them.
+
+After collaborating with Vite’s core contributor [Evan You](https://github.com/yyx990803), we released this blog post explaining our methodology and we updated our website to provide instructions on how to run the benchmarks.
+
+Based on the outcome of our collaboration with Vite, here are some clarifications we have made to the benchmarks above on our testing methodology:
+
+### Raw HMR vs. React Refresh
+
+In the numbers we initially published, we were measuring the time between a file change and the update being run in the browser, but not the time it takes for React Refresh to re-render the update (`hmr_to_eval`).
+
+We had another benchmark which included React Refresh (`hmr_to_commit`) which we elected not to use because we thought it mostly accounted for React overhead—an additional 30ms. However, this assumption turned out to be wrong, and the issue was [within Next.js’ update handling code](https://github.com/vercel/next.js/pull/42350).
+
+On the other hand, Vite’s `hmr_to_eval` and `hmr_to_commit` numbers were much closer together (no 30ms difference), and [this brought up suspicion that our benchmark methodology was flawed and that we weren’t measuring the right thing](https://github.com/yyx990803/vite-vs-next-turbo-hmr/discussions/8).
+
+This blog post has been updated to include React Refresh numbers.
+
+### Root vs. Leaf
+
+[Evan You’s benchmark application](https://github.com/yyx990803/vite-vs-next-turbo-hmr) is composed of a single, very large file with a thousand imports, and a thousand very small files. The shape of our benchmark is different – it represents a tree of files, with each file importing 0 or 3 other files, trying to mimic an average application. Evan helped us find a regression when editing large, root files in his benchmark. The cause for this was [quickly identified and fixed by Tobias](https://github.com/vercel/turbo/commit/a11422fdf6b1b3cde9072d90aab6d9eebfacb591) and was released in Next 13.0.1.
+
+We have adapted our HMR benchmarks to samples modules uniformly at all depths, and we have updated this blog post and our documentation to include more details about this proces.
+
+### SWC vs. Babel
+
+When we initially released the benchmarks, we were using the official Vite React plugin which uses Babel under the hood. Turbopack itself uses SWC, [which is much faster than Babel](https://swc.rs/blog/perf-swc-vs-babel). Evan You suggested that for a more accurate comparison, we should change Vite’s benchmark to use the SWC plugin instead of the default Babel experience.
+
+While SWC does improve Vite’s startup performance significantly, it only shows a small difference in HMR updates (\<10%). It should be noted that the React Refresh implementations between the plugins are different, hence this might not be measuring SWC’s effect but some other implementation detail.
+
+We have updated our benchmarks to run Vite with the official SWC plugin.
+
+### File Watcher Differences
+
+Every OS provide its own APIs for watching files. On macOS, Turbopack uses [FSEvents](https://developer.apple.com/documentation/coreservices/file_system_events), which have shown to have [~12ms latency](https://twitter.com/devongovett/status/1586599130494746625) for reporting updates. We have considered using [kqueue](https://www.freebsd.org/cgi/man.cgi?query=kqueue&sektion=2) instead, which has much lower latency. However, since it is not a drop-in replacement, and brings its lot of drawbacks, this is still in the exploratory stage and not a priority.
+
+Expect to see different numbers on Linux, where [inotify](https://man7.org/linux/man-pages/man7/inotify.7.html) is the standard monitoring mechanism.
+
+### Improving our Methodology
+
+Our benchmarks originally only sampled 1 HMR update from 10 different instances of each bundler running in isolation, for a total of 10 sampled updates, and reported the mean time. Before sampling each update, bundler instances were warmed up by running 5 updates.
+
+Sampling so few updates meant high variance from one measurement to the next, and this was particularly significant in Vite’s HMR benchmark, where single updates could take anywhere between 80 and 300ms.
+
+We have since refactored our benchmarking architecture to measure a variable number of updates per bundler instance, which results in anywhere between 400 and 4000 sampled updates per bundler. We have also increased the number of warmup updates to 10.
+
+Finally, instead of measuring the mean of all samples, we are measuring the slope of the linear regression line.
+
+This change has improved the soundness of our results. It also brings Vite’s numbers down to an **almost constant 100ms at any application size**, while we were previously measuring 200+ms updates for larger applications of over 10,000 modules.
+
+### Conclusion
+
+We are now measuring Turbopack to be consistently 5x faster than Vite for HMR, over all application sizes, after collaborating with the Vite team on the benchmarks. We have updated all of our benchmarks to reflect our new methodology.

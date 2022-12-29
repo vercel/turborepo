@@ -21,6 +21,8 @@ let isToPathJS = true;
 
 function validateBinaryVersion(...command) {
   command.push("--version");
+  // Make sure that we get the version of the binary that was just installed
+  command.push("--skip-infer");
   const stdout = child_process
     .execFileSync(command.shift(), command, {
       // Without this, this install script strangely crashes with the error

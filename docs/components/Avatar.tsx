@@ -1,4 +1,4 @@
-import Image from "next/future/image";
+import Image from "next/image";
 import type { AuthorDetails } from "../content/team";
 
 export const Avatar = ({ name, picture, twitterUsername }: AuthorDetails) => (
