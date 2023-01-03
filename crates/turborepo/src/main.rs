@@ -6,10 +6,7 @@ use turborepo_lib::{Args, Payload};
 fn native_run(args: Args) -> Result<i32> {
     let mut go_binary_path = current_exe()?;
     go_binary_path.pop();
-    go_binary_path.pop();
-    go_binary_path.pop();
-    go_binary_path.push("cli");
-    go_binary_path.push("turbo");
+    go_binary_path.push("go-turbo");
 
     let serialized_args = serde_json::to_string(&args)?;
 

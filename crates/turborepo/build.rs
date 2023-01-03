@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf, process::Command};
+use std::{env, fs, path::PathBuf, process::Command};
 
 fn main() {
     let is_ci_release = matches!(env::var("PROFILE"), Ok(profile) if profile == "release")
@@ -84,6 +84,21 @@ fn build_debug_go_binary() -> PathBuf {
             .success(),
         "failed to build go binary"
     );
+
+    let go_binary_path = env::var("CARGO_WORKSPACE_DIR")
+        .map(PathBuf::from)
+        .unwrap()
+        .join("cli")
+        .join("turbo");
+
+    let new_go_binary_path = env::var_os("CARGO_WORKSPACE_DIR")
+        .map(PathBuf::from)
+        .unwrap()
+        .join("target")
+        .join("debug")
+        .join("go-turbo");
+
+    fs::rename(go_binary_path, new_go_binary_path).unwrap();
     cli_path
 }
 
