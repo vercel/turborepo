@@ -6,7 +6,7 @@ Make sure we use local and don't pass --skip-infer to old binary
   $ ${TURBO} build --filter foo
   Running local turbo binary in .*node_modules/.bin/turbo (re)
   
-  build --filter foo --single-package --
+  build --filter foo --
 
 Make sure we use local and pass --skip-infer to newer binary
   $ . ${TESTDIR}/setup.sh 1.8.9

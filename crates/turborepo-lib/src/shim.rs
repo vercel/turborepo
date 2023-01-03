@@ -256,24 +256,30 @@ impl RepoState {
             local_turbo_path.display()
         );
 
+        let supports_skip_infer_and_single_package =
+            self.local_turbo_supports_skip_infer_and_single_package()?;
         let already_has_single_package_flag = shim_args
             .remaining_turbo_args
             .contains(&"--single-package".to_string());
-        let should_add_single_package_flag =
-            self.mode == RepoMode::SinglePackage && !already_has_single_package_flag;
+        let should_add_single_package_flag = self.mode == RepoMode::SinglePackage
+            && !already_has_single_package_flag
+            && supports_skip_infer_and_single_package;
 
         let cwd = fs_canonicalize(&self.root)?;
-        let mut raw_args: Vec<_> = if self.local_turbo_supports_skip_infer_and_single_package()? {
-            if should_add_single_package_flag {
-                vec!["--skip-infer".to_string(), "--single-package".to_string()]
-            } else {
-                vec!["--skip-infer".to_string()]
-            }
+        let mut raw_args: Vec<_> = if supports_skip_infer_and_single_package {
+            vec!["--skip-infer".to_string()]
         } else {
             Vec::new()
         };
 
         raw_args.append(&mut shim_args.remaining_turbo_args);
+
+        // We add this flag after the raw args to avoid accidentally passing it
+        // as a global flag instead of as a run flag.
+        if should_add_single_package_flag {
+            raw_args.push("--single-package".to_string());
+        }
+
         raw_args.push("--".to_string());
         raw_args.append(&mut shim_args.forwarded_args);
 
