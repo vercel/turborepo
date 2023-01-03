@@ -215,6 +215,11 @@
 <span id="215">215</span>
 <span id="216">216</span>
 <span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 
 <span class="kw">use </span>std::{path::Path, sync::Arc};
@@ -238,7 +243,6 @@
 <span class="kw">use </span>turbopack_core::environment::EnvironmentVc;
 
 <span class="kw">use </span><span class="self">self</span>::server_to_client_proxy::{create_proxy_module, is_client_module};
-<span class="kw">mod </span>next_ssg;
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
@@ -247,12 +251,13 @@
     CommonJs,
     Custom,
     Emotion,
-    <span class="doccomment">/// This enables the Next SSG transform, which will eliminate
-    /// `getStaticProps`/`getServerSideProps`/etc. exports from the output, as
-    /// well as any imports that are only used by those exports.
+    <span class="doccomment">/// This enables the Next.js data transform, which will eliminate
+    /// `getStaticProps`, `getStaticPaths`, and `getServerSideProps` exports
+    /// from the output, as well as any imports exclusively used by those
+    /// exports.
     ///
     /// It also provides diagnostics for improper use of `getServerSideProps`.
-    </span>NextJsPageSsr,
+    </span>NextJsStripPageDataExports,
     NextJsFont(StringsVc),
     PresetEnv(EnvironmentVc),
     React {
@@ -391,13 +396,18 @@
                     program.visit_mut_with(<span class="kw-2">&amp;mut </span>resolver(unresolved_mark, top_level_mark, <span class="bool-val">false</span>));
                 }
             }
-            EcmascriptInputTransform::NextJsPageSsr =&gt; {
-                <span class="kw">use </span>next_ssg::next_ssg;
+            EcmascriptInputTransform::NextJsStripPageDataExports =&gt; {
+                <span class="kw">use </span>next_transform_strip_page_exports::{
+                    next_transform_strip_page_exports, ExportFilter,
+                };
                 <span class="kw">let </span>eliminated_packages = Default::default();
 
                 <span class="kw">let </span>module_program = unwrap_module_program(program);
 
-                <span class="kw-2">*</span>program = module_program.fold_with(<span class="kw-2">&amp;mut </span>next_ssg(eliminated_packages));
+                <span class="kw-2">*</span>program = module_program.fold_with(<span class="kw-2">&amp;mut </span>next_transform_strip_page_exports(
+                    ExportFilter::StripDataExports,
+                    eliminated_packages,
+                ));
             }
             EcmascriptInputTransform::NextJsFont(font_loaders_vc) =&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>font_loaders = <span class="macro">vec!</span>[];
