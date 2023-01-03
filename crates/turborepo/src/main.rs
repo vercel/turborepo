@@ -1,4 +1,4 @@
-use std::{env::current_exe, io::Write, process, process::Stdio};
+use std::{env::current_exe, process, process::Stdio};
 
 use anyhow::Result;
 use turborepo_lib::{Args, Payload};
@@ -11,20 +11,15 @@ fn native_run(args: Args) -> Result<i32> {
     go_binary_path.push("cli");
     go_binary_path.push("turbo");
 
+    let serialized_args = serde_json::to_string(&args)?;
+
     let mut command = process::Command::new(go_binary_path)
-        .stdin(Stdio::piped())
+        .arg(serialized_args)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn()
         .expect("Failed to execute turbo.");
 
-    let serialized_args = serde_json::to_string(&args)?;
-
-    command
-        .stdin
-        .as_mut()
-        .ok_or_else(|| anyhow::anyhow!("Failed to get stdin"))?
-        .write_all(serialized_args.as_bytes())?;
     let exit_code = command.wait()?.code().unwrap_or(2);
 
     Ok(exit_code.try_into()?)
