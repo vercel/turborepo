@@ -4,7 +4,9 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::module_options::{
     ModuleOptionsContextVc, ModuleRule, ModuleRuleCondition, ModuleRuleEffect,
 };
-use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
+use turbopack_ecmascript::{
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, NextJsPageExportFilter,
+};
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord)]
@@ -20,8 +22,12 @@ pub async fn add_next_transforms_to_pages(
     transform_ty: Value<PageTransformType>,
 ) -> Result<ModuleOptionsContextVc> {
     let page_transform = match transform_ty.into_value() {
-        PageTransformType::Client => EcmascriptInputTransform::NextJsStripPageDataExports,
-        PageTransformType::SsrData => EcmascriptInputTransform::NextJsStripPageDefaultExport,
+        PageTransformType::Client => EcmascriptInputTransform::NextJsStripPageExports(
+            NextJsPageExportFilter::StripDataExports,
+        ),
+        PageTransformType::SsrData => EcmascriptInputTransform::NextJsStripPageExports(
+            NextJsPageExportFilter::StripDefaultExport,
+        ),
     };
     let mut module_options_context = module_options_context.await?.clone_value();
     // Apply the Next SSG tranform to all pages.
