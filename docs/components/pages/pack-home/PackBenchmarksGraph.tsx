@@ -57,7 +57,9 @@ export function BenchmarksGraph({
             <GraphBar
               key={bar.key}
               turbo={bar.turbo}
-              Label={<GraphLabel label={bar.label} turbo={bar.turbo} />}
+              Label={
+                <GraphLabel label={bar.label} turbo={bar.turbo} swc={bar.swc} />
+              }
               duration={data[bar.key] * 1000}
               longestTime={longestTimeWithPadding}
               inView={graphInView}
@@ -291,11 +293,13 @@ const Time = ({
 function GraphLabel({
   label,
   turbo,
+  swc,
   mobileOnly,
   esbuild,
 }: {
   label: string;
   turbo?: boolean;
+  swc?: boolean;
   mobileOnly?: boolean;
   esbuild?: boolean;
 }) {
@@ -314,6 +318,11 @@ function GraphLabel({
           )}
         >
           turbo
+        </p>
+      )}
+      {swc && (
+        <p className="font-space-grotesk m-0 font-light text-[#666666]">
+          with SWC
         </p>
       )}
       {esbuild && (

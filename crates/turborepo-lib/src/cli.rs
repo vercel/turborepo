@@ -60,7 +60,7 @@ pub struct Args {
     #[clap(long, global = true)]
     pub color: bool,
     /// Specify a file to save a cpu profile
-    #[clap(long, global = true, value_parser)]
+    #[clap(long = "cpuprofile", global = true, value_parser)]
     pub cpu_profile: Option<String>,
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
@@ -90,6 +90,9 @@ pub struct Args {
     /// verbosity
     #[clap(flatten)]
     pub verbosity: Verbosity,
+    #[clap(long, global = true, hide = true)]
+    /// Force a check for a new version of turbo
+    pub check_for_update: bool,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]

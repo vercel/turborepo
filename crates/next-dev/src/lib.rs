@@ -8,6 +8,7 @@ use std::{
     collections::HashSet,
     env::current_dir,
     future::{join, Future},
+    io::{stdout, Write},
     net::{IpAddr, SocketAddr},
     path::MAIN_SEPARATOR,
     sync::Arc,
@@ -31,6 +32,7 @@ use turbo_tasks_fs::{DiskFileSystemVc, FileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack_cli_utils::issue::{ConsoleUi, ConsoleUiVc, LogOptions};
 use turbopack_core::{
+    environment::ServerAddr,
     issue::IssueSeverity,
     resolve::{parse::RequestVc, pattern::QueryMapVc},
 };
@@ -42,7 +44,7 @@ use turbopack_dev_server::{
         source_maps::SourceMapContentSourceVc, static_assets::StaticAssetsContentSourceVc,
         ContentSourceVc,
     },
-    DevServer,
+    DevServer, DevServerBuilder,
 };
 use turbopack_node::{
     execution_context::ExecutionContextVc, source_map::NextSourceMapTraceContentSourceVc,
@@ -138,9 +140,53 @@ impl NextDevServerBuilder {
         self
     }
 
-    pub async fn build(self) -> Result<DevServer> {
-        let turbo_tasks = self.turbo_tasks;
+    /// Attempts to find an open port to bind.
+    fn find_port(&self, host: IpAddr, port: u16, max_attempts: u16) -> Result<DevServerBuilder> {
+        // max_attempts of 1 means we loop 0 times.
+        let max_attempts = max_attempts - 1;
+        let mut attempts = 0;
+        loop {
+            let current_port = port + attempts;
+            let addr = SocketAddr::new(host, current_port);
+            let listen_result = DevServer::listen(addr);
 
+            if let Err(e) = &listen_result {
+                if self.allow_retry && attempts < max_attempts {
+                    // Returned error from `listen` is not `std::io::Error` but `anyhow::Error`,
+                    // so we need to access its source to check if it is
+                    // `std::io::ErrorKind::AddrInUse`.
+                    let should_retry = e
+                        .source()
+                        .and_then(|e| {
+                            e.downcast_ref::<std::io::Error>()
+                                .map(|e| e.kind() == std::io::ErrorKind::AddrInUse)
+                        })
+                        .unwrap_or(false);
+
+                    if should_retry {
+                        println!(
+                            "{} - Port {} is in use, trying {} instead",
+                            "warn ".yellow(),
+                            current_port,
+                            current_port + 1
+                        );
+                        attempts += 1;
+                        continue;
+                    }
+                }
+            }
+
+            return listen_result;
+        }
+    }
+
+    pub async fn build(self) -> Result<DevServer> {
+        let port = self.port.context("port must be set")?;
+        let host = self.hostname.context("hostname must be set")?;
+
+        let server = self.find_port(host, port, 10)?;
+
+        let turbo_tasks = self.turbo_tasks;
         let project_dir = self.project_dir;
         let root_dir = self.root_dir;
         let eager_compile = self.eager_compile;
@@ -153,15 +199,10 @@ impl NextDevServerBuilder {
             log_detail,
             log_level: self.log_level,
         };
-        let entry_requests = Arc::new(self.entry_requests.clone());
+        let entry_requests = Arc::new(self.entry_requests);
         let console_ui = Arc::new(ConsoleUi::new(log_options));
         let console_ui_to_dev_server = console_ui.clone();
-
-        let start_port = self.port.context("port must be set")?;
-        let host = self.hostname.context("hostname must be set")?;
-
-        let mut err: Option<anyhow::Error> = None;
-
+        let server_addr = Arc::new(server.addr);
         let tasks = turbo_tasks.clone();
         let source = move || {
             source(
@@ -172,62 +213,11 @@ impl NextDevServerBuilder {
                 turbo_tasks.clone().into(),
                 console_ui.clone().into(),
                 browserslist_query.clone(),
+                server_addr.clone().into(),
             )
         };
 
-        // Retry to listen on the different port if the port is already in use.
-        for retry_count in 0..10 {
-            let current_port = start_port + retry_count;
-            let addr = SocketAddr::new(host, current_port);
-
-            let listen_result = DevServer::listen(
-                tasks.clone(),
-                source.clone(),
-                addr,
-                console_ui_to_dev_server.clone(),
-            );
-
-            match listen_result {
-                Ok(server) => {
-                    return Ok(server);
-                }
-                Err(e) => {
-                    let should_retry = if self.allow_retry {
-                        // Returned error from `listen` is not `std::io::Error` but `anyhow::Error`,
-                        // so we need to access its source to check if it is
-                        // `std::io::ErrorKind::AddrInUse`.
-                        e.source()
-                            .map(|e| {
-                                e.source()
-                                    .map(|e| {
-                                        e.downcast_ref::<std::io::Error>()
-                                            .map(|e| e.kind() == std::io::ErrorKind::AddrInUse)
-                                            == Some(true)
-                                    })
-                                    .unwrap_or_else(|| false)
-                            })
-                            .unwrap_or_else(|| false)
-                    } else {
-                        false
-                    };
-
-                    if !should_retry {
-                        return Err(e);
-                    } else {
-                        println!(
-                            "{} - Port {} is in use, trying {} instead",
-                            "warn ".yellow(),
-                            current_port,
-                            current_port + 1
-                        );
-                    }
-
-                    err = Some(e);
-                }
-            }
-        }
-
-        Err(err.expect("Should have an error if we get here"))
+        Ok(server.serve(tasks, source, console_ui_to_dev_server))
     }
 }
 
@@ -259,6 +249,7 @@ async fn output_fs(project_dir: &str, console_ui: ConsoleUiVc) -> Result<FileSys
     Ok(disk_fs.into())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[turbo_tasks::function]
 async fn source(
     root_dir: String,
@@ -268,6 +259,7 @@ async fn source(
     turbo_tasks: TransientInstance<TurboTasks<MemoryBackend>>,
     console_ui: TransientInstance<ConsoleUi>,
     browserslist_query: String,
+    server_addr: TransientInstance<SocketAddr>,
 ) -> Result<ContentSourceVc> {
     let console_ui = (*console_ui).clone().cell();
     let output_fs = output_fs(&project_dir, console_ui);
@@ -286,6 +278,7 @@ async fn source(
     let next_config = load_next_config(execution_context.join("next_config"));
 
     let output_root = output_fs.root().join(".next/server");
+    let server_addr = ServerAddr::new(*server_addr).cell();
 
     let dev_server_fs = DevServerFileSystemVc::new().as_file_system();
     let dev_server_root = dev_server_fs.root();
@@ -317,6 +310,7 @@ async fn source(
         env,
         &browserslist_query,
         next_config,
+        server_addr,
     );
     let app_source = create_app_source(
         project_path,
@@ -326,6 +320,7 @@ async fn source(
         env,
         &browserslist_query,
         next_config,
+        server_addr,
     );
     let viz = turbo_tasks_viz::TurboTasksSource {
         turbo_tasks: turbo_tasks.into(),
@@ -447,11 +442,7 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
     let server = server.build().await?;
 
     {
-        let index_uri = if server.addr.ip().is_loopback() || server.addr.ip().is_unspecified() {
-            format!("http://localhost:{}", server.addr.port())
-        } else {
-            format!("http://{}", server.addr)
-        };
+        let index_uri = ServerAddr::new(server.addr).to_string()?;
         println!(
             "{} - started server on {}:{}, url: {}",
             "ready".green(),
@@ -480,27 +471,45 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
             );
         }
 
+        let mut progress_counter = 0;
         loop {
             let update_future = profile_timeout(
                 tt_clone.as_ref(),
-                tt_clone.get_or_wait_update_info(Duration::from_millis(100)),
+                tt_clone.update_info(Duration::from_millis(100), Duration::MAX),
             );
 
-            let (elapsed, count) = update_future.await;
-            if options.log_detail {
-                println!(
-                    "{event_type} - updated in {elapsed} ({tasks} tasks, {memory})",
-                    event_type = "event".purple(),
-                    elapsed = FormatDuration(elapsed),
-                    tasks = count,
-                    memory = FormatBytes(TurboMalloc::memory_usage())
-                );
+            if let Some((elapsed, count)) = update_future.await {
+                progress_counter = 0;
+                if options.log_detail {
+                    println!(
+                        "\x1b[2K{event_type} - updated in {elapsed} ({tasks} tasks, {memory})",
+                        event_type = "event".purple(),
+                        elapsed = FormatDuration(elapsed),
+                        tasks = count,
+                        memory = FormatBytes(TurboMalloc::memory_usage())
+                    );
+                } else {
+                    println!(
+                        "\x1b[2K{event_type} - updated in {elapsed}",
+                        event_type = "event".purple(),
+                        elapsed = FormatDuration(elapsed),
+                    );
+                }
             } else {
-                println!(
-                    "{event_type} - updated in {elapsed}",
-                    event_type = "event".purple(),
-                    elapsed = FormatDuration(elapsed),
-                );
+                progress_counter += 1;
+                if options.log_detail {
+                    print!(
+                        "\x1b[2K{event_type} - updating for {progress_counter}s... ({memory})\r",
+                        event_type = "event".purple(),
+                        memory = FormatBytes(TurboMalloc::memory_usage())
+                    );
+                } else {
+                    print!(
+                        "\x1b[2K{event_type} - updating for {progress_counter}s...\r",
+                        event_type = "event".purple(),
+                    );
+                }
+                let _ = stdout().lock().flush();
             }
         }
     };

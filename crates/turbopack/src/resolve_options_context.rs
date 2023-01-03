@@ -4,10 +4,13 @@ use turbopack_core::{
     resolve::options::{ImportMapVc, ResolvedMapVc},
 };
 
+use crate::condition::ContextCondition;
+
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
 pub struct ResolveOptionsContext {
     pub emulate_environment: Option<EnvironmentVc>,
+    pub enable_types: bool,
     pub enable_typescript: bool,
     pub enable_react: bool,
     pub enable_node_native_modules: bool,
@@ -34,6 +37,9 @@ pub struct ResolveOptionsContext {
     pub fallback_import_map: Option<ImportMapVc>,
     /// An additional resolved map to use after modules have been resolved.
     pub resolved_map: Option<ResolvedMapVc>,
+    /// A list of rules to use a different resolve option context for certain
+    /// context paths. The first matching is used.
+    pub rules: Vec<(ContextCondition, ResolveOptionsContextVc)>,
     pub placeholder_for_future_extensions: (),
 }
 
@@ -45,8 +51,9 @@ impl ResolveOptionsContextVc {
     }
 
     #[turbo_tasks::function]
-    pub async fn with_typescript_enabled(self) -> Result<Self> {
+    pub async fn with_types_enabled(self) -> Result<Self> {
         let mut clone = self.await?.clone_value();
+        clone.enable_types = true;
         clone.enable_typescript = true;
         Ok(Self::cell(clone))
     }

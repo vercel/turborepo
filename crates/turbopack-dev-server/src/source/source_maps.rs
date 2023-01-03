@@ -1,17 +1,16 @@
-use std::collections::HashSet;
-
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_fs::File;
 use turbopack_core::{
     asset::AssetContentVc,
-    introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
+    introspect::{Introspectable, IntrospectableVc},
     source_map::GenerateSourceMapVc,
 };
 
 use super::{
     query::QueryValue, ContentSource, ContentSourceContent, ContentSourceData,
     ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
+    NeededData,
 };
 
 /// SourceMapContentSource allows us to serve full source maps, and individual
@@ -55,14 +54,14 @@ impl ContentSource for SourceMapContentSource {
             Some(q) => q,
             None => {
                 return Ok(ContentSourceResultVc::exact(
-                    ContentSourceContent::NeedData {
+                    ContentSourceContent::NeedData(NeededData {
                         source: self_vc.into(),
                         path: path.to_string(),
                         vary: ContentSourceDataVary {
                             query: Some(ContentSourceDataFilter::Subset(["id".to_string()].into())),
                             ..Default::default()
                         },
-                    }
+                    })
                     .cell(),
                 ))
             }
@@ -74,10 +73,7 @@ impl ContentSource for SourceMapContentSource {
         };
 
         let this = self_vc.await?;
-        let result = this
-            .asset_source
-            .get(pathname, Value::new(Default::default()))
-            .await?;
+        let result = this.asset_source.get(pathname, Default::default()).await?;
         let file = match &*result.content.await? {
             ContentSourceContent::Static(f) => *f,
             _ => return Ok(ContentSourceResultVc::not_found()),
@@ -110,11 +106,11 @@ impl ContentSource for SourceMapContentSource {
 impl Introspectable for SourceMapContentSource {
     #[turbo_tasks::function]
     fn ty(&self) -> StringVc {
-        StringVc::cell("static assets directory content source".to_string())
+        StringVc::cell("source map content source".to_string())
     }
 
     #[turbo_tasks::function]
-    fn children(&self) -> IntrospectableChildrenVc {
-        IntrospectableChildrenVc::cell(HashSet::new())
+    fn details(&self) -> StringVc {
+        StringVc::cell("serves chunk and chunk item source maps".to_string())
     }
 }

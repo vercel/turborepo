@@ -9,8 +9,9 @@ ogImage: /images/blog/you-might-not-need-typescript-project-references/twitter-c
 # You might not need TypeScript project references
 
 import { Authors } from "../../components/Authors";
+import Callout from "../../components/Callout";
 
-<Authors authors={["jaredpalmer"]} />
+<Authors authors={['jaredpalmer']} />
 
 If you've worked in a larger TypeScript codebase or monorepo, you are likely familiar with [project references](https://www.typescriptlang.org/docs/handbook/project-references.html). They are indeed fairly powerful.
 
@@ -56,7 +57,18 @@ As far as I can tell, this internal package pattern works with all yarn/npm/pnpm
 
 ### Next.js
 
-If you use Next.js, you can satisfy these constraints with the `next-transpile-modules` plugin which will tell Next.js to run certain dependencies through its Webpack/Babel/TypeScript pipelines.
+Next.js 13 can automatically transpile and bundle dependencies from local packages (like monorepos) or from external dependencies (`node_modules`).
+
+```js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  transpilePackages: ['@acme/ui', 'lodash-es'],
+};
+
+module.exports = nextConfig;
+```
+
+<Callout type="info">As of Next.js 13.1, you no longer need the `next-transpile-modules` package. For more information, visit the Next.js [Built-in module transpilation](https://nextjs.org/blog/next-13-1#built-in-module-transpilation-stable) blog post.</Callout>
 
 ### Vite
 

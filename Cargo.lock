@@ -3587,6 +3587,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "next-transform-strip-page-exports"
+version = "0.1.0"
+dependencies = [
+ "fxhash",
+ "swc_core",
+ "testing",
+ "tracing",
+]
+
+[[package]]
 name = "nix"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3689,6 +3699,16 @@ dependencies = [
  "num-integer",
  "num-traits",
  "serde",
+]
+
+[[package]]
+name = "num-format"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a652d9771a63711fd3c3deb670acfbe5c30a4072e664d7a3bf5a9e1056ac72c3"
+dependencies = [
+ "arrayvec 0.7.2",
+ "itoa 1.0.4",
 ]
 
 [[package]]
@@ -7196,6 +7216,7 @@ dependencies = [
  "jsonc-parser",
  "mime",
  "notify",
+ "parking_lot",
  "rstest",
  "serde",
  "serde_json",
@@ -7433,6 +7454,7 @@ dependencies = [
  "indexmap",
  "lazy_static",
  "next-font",
+ "next-transform-strip-page-exports",
  "num-bigint",
  "once_cell",
  "pin-project-lite",
@@ -8555,6 +8577,7 @@ dependencies = [
  "clap 4.0.29",
  "indexmap",
  "inquire",
+ "num-format",
  "owo-colors",
  "plotters",
  "semver 1.0.14",

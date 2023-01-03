@@ -18,6 +18,7 @@ use turbopack::{
 use turbopack_core::{
     chunk::dev::DevChunkingContextVc,
     context::AssetContextVc,
+    environment::ServerAddrVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     virtual_asset::VirtualAssetVc,
 };
@@ -129,6 +130,7 @@ fn next_ssr_client_module_transition(
     app_dir: FileSystemPathVc,
     process_env: ProcessEnvVc,
     next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
 ) -> TransitionVc {
     let ty = Value::new(ServerContextType::AppSSR { app_dir });
     NextSSRClientModuleTransition {
@@ -142,7 +144,7 @@ fn next_ssr_client_module_transition(
             ty,
             next_config,
         ),
-        ssr_environment: get_server_environment(ty, process_env),
+        ssr_environment: get_server_environment(ty, process_env, server_addr),
     }
     .cell()
     .into()
@@ -156,9 +158,10 @@ fn next_layout_entry_transition(
     server_root: FileSystemPathVc,
     process_env: ProcessEnvVc,
     next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
 ) -> TransitionVc {
     let ty = Value::new(ServerContextType::AppRSC { app_dir });
-    let rsc_environment = get_server_environment(ty, process_env);
+    let rsc_environment = get_server_environment(ty, process_env, server_addr);
     let rsc_resolve_options_context =
         get_server_resolve_options_context(project_path, ty, next_config);
     let rsc_module_options_context =
@@ -174,6 +177,7 @@ fn next_layout_entry_transition(
     .into()
 }
 
+#[allow(clippy::too_many_arguments)]
 #[turbo_tasks::function]
 fn app_context(
     project_path: FileSystemPathVc,
@@ -184,6 +188,7 @@ fn app_context(
     browserslist_query: &str,
     ssr: bool,
     next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
 ) -> AssetContextVc {
     let next_server_to_client_transition = NextServerToClientTransition { ssr }.cell().into();
 
@@ -197,6 +202,7 @@ fn app_context(
             server_root,
             env,
             next_config,
+            server_addr,
         ),
     );
     transitions.insert(
@@ -233,13 +239,14 @@ fn app_context(
             app_dir,
             env,
             next_config,
+            server_addr,
         ),
     );
 
     let ssr_ty = Value::new(ServerContextType::AppSSR { app_dir });
     ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(transitions),
-        get_server_environment(ssr_ty, env),
+        get_server_environment(ssr_ty, env, server_addr),
         get_server_module_options_context(project_path, execution_context, ssr_ty),
         get_server_resolve_options_context(project_path, ssr_ty, next_config),
     )
@@ -257,6 +264,7 @@ pub async fn create_app_source(
     env: ProcessEnvVc,
     browserslist_query: &str,
     next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
 ) -> Result<ContentSourceVc> {
     let project_path = wrap_with_next_js_fs(project_path);
 
@@ -283,6 +291,7 @@ pub async fn create_app_source(
         browserslist_query,
         true,
         next_config,
+        server_addr,
     );
     let context = app_context(
         project_path,
@@ -293,6 +302,7 @@ pub async fn create_app_source(
         browserslist_query,
         false,
         next_config,
+        server_addr,
     );
 
     let server_runtime_entries =
@@ -327,6 +337,7 @@ pub async fn create_app_source(
     .into())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[turbo_tasks::function]
 async fn create_app_source_for_directory(
     context_ssr: AssetContextVc,
@@ -487,16 +498,12 @@ struct AppRenderer {
 }
 
 #[turbo_tasks::value_impl]
-impl NodeEntry for AppRenderer {
+impl AppRendererVc {
     #[turbo_tasks::function]
-    async fn entry(&self, data: Value<ContentSourceData>) -> Result<NodeRenderingEntryVc> {
-        let is_rsc = if let Some(headers) = data.into_value().headers {
-            headers.contains_key("rsc")
-        } else {
-            false
-        };
-        let layout_path = self.layout_path.await?;
-        let page = self.page_path;
+    async fn entry(self, is_rsc: bool) -> Result<NodeRenderingEntryVc> {
+        let this = self.await?;
+        let layout_path = this.layout_path.await?;
+        let page = this.page_path;
         let path = page.parent();
         let path_value = &*path.await?;
         let layout_and_page = layout_path
@@ -505,7 +512,7 @@ impl NodeEntry for AppRenderer {
             .chain(std::iter::once(
                 LayoutSegment {
                     files: HashMap::from([("page".to_string(), page)]),
-                    target: self.target,
+                    target: this.target,
                 }
                 .cell(),
             ))
@@ -514,7 +521,7 @@ impl NodeEntry for AppRenderer {
         let segments: Vec<_> = layout_and_page
             .into_iter()
             .fold(
-                (self.server_root, Vec::new()),
+                (this.server_root, Vec::new()),
                 |(last_path, mut futures), segment| {
                     (segment.target, {
                         futures.push(async move {
@@ -607,19 +614,19 @@ import BOOTSTRAP from {};
         let file = File::from(result.build());
         let asset = VirtualAssetVc::new(path.join("entry"), file.into());
         let (context, intermediate_output_path) = if is_rsc {
-            (self.context, self.intermediate_output_path.join("rsc"))
+            (this.context, this.intermediate_output_path.join("rsc"))
         } else {
-            (self.context_ssr, self.intermediate_output_path)
+            (this.context_ssr, this.intermediate_output_path)
         };
 
         let chunking_context = DevChunkingContextVc::builder(
-            self.project_path,
+            this.project_path,
             intermediate_output_path,
             intermediate_output_path.join("chunks"),
-            self.server_root.join("_next/static/assets"),
+            this.server_root.join("_next/static/assets"),
         )
         .layer("ssr")
-        .css_chunk_root_path(self.server_root.join("_next/static/chunks"))
+        .css_chunk_root_path(this.server_root.join("_next/static/chunks"))
         .build();
 
         Ok(NodeRenderingEntry {
@@ -637,6 +644,21 @@ import BOOTSTRAP from {};
             intermediate_output_path,
         }
         .cell())
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl NodeEntry for AppRenderer {
+    #[turbo_tasks::function]
+    fn entry(self_vc: AppRendererVc, data: Value<ContentSourceData>) -> NodeRenderingEntryVc {
+        let data = data.into_value();
+        let is_rsc = if let Some(headers) = data.headers {
+            headers.contains_key("rsc")
+        } else {
+            false
+        };
+        // Call with only is_rsc as key
+        self_vc.entry(is_rsc)
     }
 }
 

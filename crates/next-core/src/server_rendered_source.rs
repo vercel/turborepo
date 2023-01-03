@@ -12,6 +12,7 @@ use turbopack_core::{
     asset::AssetVc,
     chunk::{dev::DevChunkingContextVc, ChunkingContextVc},
     context::AssetContextVc,
+    environment::ServerAddrVc,
     reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
@@ -70,6 +71,7 @@ pub async fn create_server_rendered_source(
     env: ProcessEnvVc,
     browserslist_query: &str,
     next_config: NextConfigVc,
+    server_addr: ServerAddrVc,
 ) -> Result<ContentSourceVc> {
     let project_path = wrap_with_next_js_fs(project_root);
 
@@ -120,7 +122,7 @@ pub async fn create_server_rendered_source(
     transitions.insert("next-client".to_string(), next_client_transition);
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(transitions),
-        get_server_environment(server_ty, env),
+        get_server_environment(server_ty, env, server_addr),
         get_server_module_options_context(project_path, execution_context, server_ty),
         get_server_resolve_options_context(project_path, server_ty, next_config),
     )
@@ -316,7 +318,7 @@ async fn create_server_rendered_source_for_directory(
                                         )
                                     } else if basename == "404" {
                                         (
-                                            server_path.join("[...]"),
+                                            server_path.join("[...].html"),
                                             intermediate_output_path.join(basename),
                                             specificity.with_fallback(position),
                                         )
@@ -395,17 +397,18 @@ struct SsrEntry {
 }
 
 #[turbo_tasks::value_impl]
-impl NodeEntry for SsrEntry {
+impl SsrEntryVc {
     #[turbo_tasks::function]
-    async fn entry(&self, _data: Value<ContentSourceData>) -> Result<NodeRenderingEntryVc> {
-        let virtual_asset = if *self.is_api_path.await? {
+    async fn entry(self) -> Result<NodeRenderingEntryVc> {
+        let this = self.await?;
+        let virtual_asset = if *this.is_api_path.await? {
             VirtualAssetVc::new(
-                self.entry_asset.path().join("server-api.tsx"),
+                this.entry_asset.path().join("server-api.tsx"),
                 next_js_file("entry/server-api.tsx").into(),
             )
         } else {
             VirtualAssetVc::new(
-                self.entry_asset.path().join("server-renderer.tsx"),
+                this.entry_asset.path().join("server-renderer.tsx"),
                 next_js_file("entry/server-renderer.tsx").into(),
             )
         };
@@ -413,17 +416,26 @@ impl NodeEntry for SsrEntry {
         Ok(NodeRenderingEntry {
             module: EcmascriptModuleAssetVc::new(
                 virtual_asset.into(),
-                self.context,
+                this.context,
                 Value::new(EcmascriptModuleAssetType::Typescript),
                 EcmascriptInputTransformsVc::cell(vec![
                     EcmascriptInputTransform::TypeScript,
                     EcmascriptInputTransform::React { refresh: false },
                 ]),
-                self.context.environment(),
+                this.context.environment(),
             ),
-            chunking_context: self.chunking_context,
-            intermediate_output_path: self.intermediate_output_path,
+            chunking_context: this.chunking_context,
+            intermediate_output_path: this.intermediate_output_path,
         }
         .cell())
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl NodeEntry for SsrEntry {
+    #[turbo_tasks::function]
+    fn entry(self_vc: SsrEntryVc, _data: Value<ContentSourceData>) -> NodeRenderingEntryVc {
+        // Call without being keyed by data
+        self_vc.entry()
     }
 }

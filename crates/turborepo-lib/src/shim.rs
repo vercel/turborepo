@@ -8,6 +8,7 @@ use std::{
     process,
     process::Stdio,
     str::FromStr,
+    time::Duration,
 };
 
 use anyhow::{anyhow, Result};
@@ -33,12 +34,14 @@ static TURBO_PURE_OUTPUT_ARGS: [&str; 6] = [
     "--dry-run=json",
 ];
 
+static TURBO_SKIP_NOTIFIER_ARGS: [&str; 4] = ["--help", "--h", "--version", "--v"];
 static SUPPORTS_SKIP_INFER_SEMVER: &str = ">=1.7.0-canary.0";
 
 #[derive(Debug)]
 struct ShimArgs {
     cwd: PathBuf,
     skip_infer: bool,
+    force_update_check: bool,
     remaining_turbo_args: Vec<String>,
     forwarded_args: Vec<String>,
 }
@@ -48,6 +51,7 @@ impl ShimArgs {
         let mut found_cwd_flag = false;
         let mut cwd: Option<PathBuf> = None;
         let mut skip_infer = false;
+        let mut force_update_check = false;
         let mut remaining_turbo_args = Vec::new();
         let mut forwarded_args = Vec::new();
         let mut is_forwarded_args = false;
@@ -58,6 +62,8 @@ impl ShimArgs {
                 forwarded_args.push(arg);
             } else if arg == "--skip-infer" {
                 skip_infer = true;
+            } else if arg == "--check-for-update" {
+                force_update_check = true;
             } else if arg == "--" {
                 // If we've hit `--` we've reached the args forwarded to tasks.
                 is_forwarded_args = true;
@@ -71,6 +77,13 @@ impl ShimArgs {
                 }
                 // If we see a `--cwd` we expect the next arg to be a path.
                 found_cwd_flag = true
+            } else if let Some(cwd_arg) = arg.strip_prefix("--cwd=") {
+                // In the case where `--cwd` is passed as `--cwd=./path/to/foo`, that
+                // entire chunk is a single arg, so we need to split it up.
+                if cwd.is_some() {
+                    return Err(anyhow!("cannot have multiple `--cwd` flags in command"));
+                }
+                cwd = Some(cwd_arg.into());
             } else {
                 remaining_turbo_args.push(arg);
             }
@@ -80,7 +93,7 @@ impl ShimArgs {
             Err(anyhow!("No value assigned to `--cwd` argument"))
         } else {
             let cwd = if let Some(cwd) = cwd {
-                cwd
+                fs_canonicalize(cwd)?
             } else {
                 current_dir()?
             };
@@ -88,6 +101,7 @@ impl ShimArgs {
             Ok(ShimArgs {
                 cwd,
                 skip_infer,
+                force_update_check,
                 remaining_turbo_args,
                 forwarded_args,
             })
@@ -95,10 +109,29 @@ impl ShimArgs {
     }
 
     // returns true if any flags result in pure json output to stdout
-    pub fn has_json_flags(&self) -> bool {
+    fn has_json_flags(&self) -> bool {
         self.remaining_turbo_args
             .iter()
             .any(|arg| TURBO_PURE_OUTPUT_ARGS.contains(&arg.as_str()))
+    }
+
+    // returns true if any flags should bypass the update notifier
+    fn has_notifier_skip_flags(&self) -> bool {
+        self.remaining_turbo_args
+            .iter()
+            .any(|arg| TURBO_SKIP_NOTIFIER_ARGS.contains(&arg.as_str()))
+    }
+
+    pub fn should_check_for_update(&self) -> bool {
+        if self.force_update_check {
+            return true;
+        }
+
+        if self.has_notifier_skip_flags() || self.has_json_flags() {
+            return false;
+        }
+
+        true
     }
 }
 
@@ -298,7 +331,7 @@ pub fn run() -> Result<Payload> {
     // global turbo having handled the inference. We can run without any
     // concerns.
 
-    if !args.has_json_flags() {
+    if args.should_check_for_update() {
         // custom footer for update message
         let footer = format!(
             "Follow {username} for updates: {url}",
@@ -306,15 +339,22 @@ pub fn run() -> Result<Payload> {
             url = "https://twitter.com/turborepo"
         );
 
+        let interval = if args.force_update_check {
+            // force update check
+            Some(Duration::ZERO)
+        } else {
+            // use default (24 hours)
+            None
+        };
         // check for updates
         let _ = check_for_updates(
             "turbo",
             "https://github.com/vercel/turbo",
             Some(&footer),
             get_version(),
-            // use defaults for timeout and refresh interval (800ms and 1 day respectively)
+            // use default for timeout (800ms)
             None,
-            None,
+            interval,
         );
     }
 

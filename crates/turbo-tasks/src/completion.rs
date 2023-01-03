@@ -24,11 +24,11 @@ impl CompletionVc {
     /// Uses the previous completion. Can be used to cancel without triggering a
     /// new invalidation.
     pub fn unchanged() -> Self {
-        // This is the same code that CompletionVc::cell uses expect that it
-        // infact compares the cell (CompletionVc::cell opted-out of
-        // that via #[turbo_tasks::value(cell = "new")])
-        let cell = turbo_tasks::macro_helpers::find_cell_by_type(*COMPLETIONS_VALUE_TYPE_ID);
-        cell.compare_and_update_shared(Completion);
+        // This is the same code that CompletionVc::cell uses except that it
+        // only updates the cell when it is empty (CompletionVc::cell opted-out of
+        // that via `#[turbo_tasks::value(cell = "new")]`)
+        let cell = turbo_tasks::macro_helpers::find_cell_by_type(*COMPLETION_VALUE_TYPE_ID);
+        cell.conditional_update_shared(|old| old.is_none().then_some(Completion));
         let raw: RawVc = cell.into();
         raw.into()
     }
