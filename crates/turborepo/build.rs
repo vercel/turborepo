@@ -18,7 +18,6 @@ fn main() {
         "cargo:rustc-link-search={}",
         lib_search_path.to_string_lossy()
     );
-    println!("cargo:rustc-link-lib=turbo");
 
     let target = build_target::target().unwrap();
 
