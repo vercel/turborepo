@@ -19,14 +19,11 @@ GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
-turbo: libturbo.a
+turbo: go-binary
 	cargo build --manifest-path ../crates/turborepo/Cargo.toml
 
-libturbo.a: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	go build -buildmode=c-archive -o libturbo.a  ./cmd/turbo/...
-
-turbo.lib: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	go build -buildmode=c-archive -o turbo.lib  ./cmd/turbo/...
+go-binary: $(GENERATED_FILES) $(SRC_FILES) go.mod
+	go build $(GO_FLAGS) ./cmd/turbo
 
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \

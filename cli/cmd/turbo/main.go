@@ -2,6 +2,7 @@ package main
 
 import "C"
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,8 +12,18 @@ import (
 )
 
 func main() {
-	fmt.Printf("ERROR: Go binary cannot be used on its own. Please build as c-archive and use with Rust crate")
-	os.Exit(1)
+	reader := bufio.NewReader(os.Stdin)
+	argsString, _ := reader.ReadString('\n')
+
+	var args turbostate.ParsedArgsFromRust
+	err := json.Unmarshal([]byte(argsString), &args)
+	if err != nil {
+		fmt.Printf("Error unmarshalling CLI args: %v\n Arg string: %v\n", err, argsString)
+		os.Exit(1)
+	}
+
+	exitCode := cmd.RunWithArgs(args, turboVersion)
+	os.Exit(exitCode)
 }
 
 //export nativeRunWithArgs
