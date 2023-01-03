@@ -8,7 +8,8 @@ ogImage: /images/blog/you-might-not-need-typescript-project-references/twitter-c
 
 # You might not need TypeScript project references
 
-import { Authors } from '../../components/Authors';
+import { Authors } from "../../components/Authors";
+import Callout from "../../components/Callout";
 
 <Authors authors={['jaredpalmer']} />
 
@@ -66,6 +67,8 @@ const nextConfig = {
 
 module.exports = nextConfig;
 ```
+
+<Callout type="info">As of Next.js 13.1, you no longer need the `next-transpile-modules` package. For more information, visit the Next.js blog post [here](https://nextjs.org/blog/next-13-1#built-in-module-transpilation-stable).</Callout>
 
 ### Vite
 
