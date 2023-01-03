@@ -1,10 +1,12 @@
 import "@vercel/turbopack-next/internal/shims-client";
 
 import { initialize, hydrate, router } from "next/dist/client";
+import type { Router } from "next/dist/client/router";
 import {
   assign,
   urlQueryToSearchParams,
 } from "next/dist/shared/lib/router/utils/querystring";
+import { formatWithValidation } from "next/dist/shared/lib/router/utils/format-url";
 import { initializeHMR } from "@vercel/turbopack-next/dev/client";
 import {
   onUpdate,
@@ -42,7 +44,6 @@ async function loadPageChunk(assetPrefix: string, chunkPath: string) {
     },
   });
 
-  subscribePageData({ assetPrefix });
   initializeHMR({
     assetPrefix,
   });
@@ -74,21 +75,77 @@ async function loadPageChunk(assetPrefix: string, chunkPath: string) {
 
   await hydrate({});
 
+  // This needs to happen after hydration because the router is initialized
+  // during hydration. To make this dependency clearer, we pass `router` as an
+  // explicit argument instead of relying on the `router` import binding.
+  subscribeToCurrentPageData({ assetPrefix, router });
+
   console.debug("The page has been hydrated");
 })().catch((err) => console.error(err));
 
 /**
- * Subscribes to page data updates from the HMR server.
+ * Subscribes to the current page's data updates from the HMR server.
  *
+ * Updates on route change.
+ */
+function subscribeToCurrentPageData({
+  router,
+  assetPrefix,
+}: {
+  router: Router;
+  assetPrefix: string;
+}) {
+  let dataPath = getCurrentPageDataHref();
+  let unsubscribe = subscribeToPageData({
+    router,
+    dataPath,
+    assetPrefix,
+  });
+
+  router.events.on("routeChangeComplete", () => {
+    const nextDataPath = getCurrentPageDataHref();
+    if (dataPath === nextDataPath) {
+      return;
+    }
+    dataPath = nextDataPath;
+
+    unsubscribe();
+    unsubscribe = subscribeToPageData({
+      router,
+      dataPath,
+      assetPrefix,
+    });
+  });
+}
+
+function getCurrentPageDataHref(): string {
+  return router.pageLoader.getDataHref({
+    asPath: router.asPath,
+    href: formatWithValidation({
+      // No need to pass `router.query` when `skipInterpolation` is true.
+      pathname: router.pathname,
+    }),
+    skipInterpolation: true,
+  });
+}
+
+/**
  * TODO(alexkirsz): Handle assetPrefix/basePath.
  */
-function subscribePageData({ assetPrefix }: { assetPrefix: string }) {
-  const pageChunkPath = location.pathname.slice(1);
-  const dataPath = `_next/data/development/${pageChunkPath}.json`;
-
-  onUpdate(
+function subscribeToPageData({
+  router,
+  dataPath,
+  assetPrefix,
+}: {
+  router: Router;
+  dataPath: string;
+  assetPrefix: string;
+}): () => void {
+  return onUpdate(
     {
-      path: dataPath,
+      // We need to remove the leading / from the data path as Turbopack
+      // resources are not prefixed with a /.
+      path: dataPath.slice(1),
       headers: {
         // This header is used by the Next.js server to determine whether this
         // is a data request.
@@ -96,13 +153,12 @@ function subscribePageData({ assetPrefix }: { assetPrefix: string }) {
       },
     },
     (update) => {
-      console.info(update);
-
       if (update.type !== "restart") {
         return;
       }
 
       // This triggers a reload of the page data.
+      // Adapted from next.js/packages/next/client/next-dev.js.
       router
         .replace(
           router.pathname +
