@@ -31,27 +31,29 @@ function runTests() {
     });
   });
 
-  it("loads the font face for Inter matching ascii ranges", async () => {
-    expect(
-      [...(await document.fonts.ready)].filter((f) => f.status === "loaded")
-    ).toMatchObject([
-      {
-        ascentOverride: "normal",
-        descentOverride: "normal",
-        display: "optional",
-        family: "__Inter_34ab8b4d",
-        featureSettings: "normal",
-        lineGapOverride: "normal",
-        sizeAdjust: "100%",
-        status: "loaded",
-        stretch: "normal",
-        style: "normal",
-        unicodeRange:
-          "U+0-FF, U+131, U+152-153, U+2BB-2BC, U+2C6, U+2DA, U+2DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
-        variant: "normal",
-        weight: "100 900",
-      },
-    ]);
+  it("includes a rule styling the exported className", () => {
+    const selector = `.${CSS.escape(interNoArgs.className)}`;
+
+    let matchingRule;
+    for (const stylesheet of document.querySelectorAll(
+      "link[rel=stylesheet]"
+    )) {
+      const sheet = stylesheet.sheet;
+      if (sheet == null) {
+        continue;
+      }
+
+      for (const rule of sheet.cssRules) {
+        if (rule.selectorText === selector) {
+          matchingRule = rule;
+          break;
+        }
+      }
+    }
+
+    expect(matchingRule).toBeTruthy();
+    expect(matchingRule.style.fontFamily).toEqual("__Inter_34ab8b4d");
+    expect(matchingRule.style.fontStyle).toEqual("normal");
   });
 
   testResult.resolve(__jest__.run());

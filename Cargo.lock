@@ -849,9 +849,14 @@ version = "3.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71655c45cb9845d3270c9d6df84ebe72b4dad3c2ba3f7023ad47c144e4e473a5"
 dependencies = [
+ "atty",
  "bitflags",
+ "clap_derive 3.2.18",
  "clap_lex 0.2.4",
  "indexmap",
+ "once_cell",
+ "strsim",
+ "termcolor",
  "textwrap 0.16.0",
 ]
 
@@ -862,7 +867,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d63b9e9c07271b9957ad22c173bae2a4d9a81127680962039296abcd2f8251d"
 dependencies = [
  "bitflags",
- "clap_derive",
+ "clap_derive 4.0.21",
  "clap_lex 0.3.0",
  "is-terminal",
  "once_cell",
@@ -877,6 +882,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7b3c9eae0de7bf8e3f904a5e40612b21fb2e2e566456d177809a48b892d24da"
 dependencies = [
  "clap 4.0.29",
+]
+
+[[package]]
+name = "clap_derive"
+version = "3.2.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea0c8bce528c4be4da13ea6fead8965e95b6073585a2f05204bd8f4119f82a65"
+dependencies = [
+ "heck",
+ "proc-macro-error",
+ "proc-macro2 1.0.47",
+ "quote 1.0.21",
+ "syn 1.0.105",
 ]
 
 [[package]]
@@ -1783,6 +1801,19 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
+dependencies = [
+ "atty",
+ "humantime",
+ "log",
+ "regex",
+ "termcolor",
+]
+
+[[package]]
+name = "env_logger"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85cdab6a89accf66733ad5a1693a4dcced6aeff64602b634530dd73c1f3ee9f0"
@@ -2381,7 +2412,9 @@ dependencies = [
  "async-trait",
  "base64",
  "basic-cookies",
+ "clap 3.2.23",
  "crossbeam-utils",
+ "env_logger 0.9.3",
  "form_urlencoded",
  "futures-util",
  "hyper",
@@ -2393,6 +2426,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_regex",
+ "serde_yaml",
  "similar",
  "tokio",
  "url",
@@ -3515,6 +3549,7 @@ dependencies = [
  "criterion 0.4.0",
  "fs_extra",
  "futures",
+ "httpmock",
  "lazy_static",
  "mime",
  "next-core",
@@ -7561,7 +7596,7 @@ dependencies = [
  "clap 4.0.29",
  "clap_complete",
  "dunce",
- "env_logger",
+ "env_logger 0.10.0",
  "itertools",
  "log",
  "predicates",
