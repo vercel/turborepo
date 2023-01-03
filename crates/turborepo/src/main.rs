@@ -1,32 +1,32 @@
-mod ffi {
-    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-}
-
-use std::{ffi::CString, process};
+use std::{env::current_exe, io::Write, process, process::Stdio};
 
 use anyhow::Result;
 use turborepo_lib::{Args, Payload};
 
-use crate::ffi::{nativeRunWithArgs, GoString};
-
-impl TryInto<GoString> for Args {
-    type Error = anyhow::Error;
-
-    fn try_into(self) -> std::result::Result<GoString, Self::Error> {
-        let json = serde_json::to_string(&self)?;
-        let cstring = CString::new(json)?;
-        let n = cstring.as_bytes().len() as isize;
-
-        Ok(GoString {
-            p: cstring.into_raw(),
-            n,
-        })
-    }
-}
-
 fn native_run(args: Args) -> Result<i32> {
-    let serialized_args = args.try_into()?;
-    let exit_code = unsafe { nativeRunWithArgs(serialized_args) };
+    let mut go_binary_path = current_exe()?;
+    go_binary_path.pop();
+    go_binary_path.pop();
+    go_binary_path.pop();
+    go_binary_path.push("cli");
+    go_binary_path.push("turbo");
+
+    let mut command = process::Command::new(go_binary_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("Failed to execute turbo.");
+
+    let serialized_args = serde_json::to_string(&args)?;
+
+    command
+        .stdin
+        .as_mut()
+        .ok_or_else(|| anyhow::anyhow!("Failed to get stdin"))?
+        .write_all(serialized_args.as_bytes())?;
+    let exit_code = command.wait()?.code().unwrap_or(2);
+
     Ok(exit_code.try_into()?)
 }
 

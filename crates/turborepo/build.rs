@@ -1,8 +1,4 @@
-use std::{
-    env,
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{env, path::PathBuf, process::Command};
 
 fn main() {
     let is_ci_release = matches!(env::var("PROFILE"), Ok(profile) if profile == "release")
@@ -12,7 +8,7 @@ fn main() {
     let lib_search_path = if is_ci_release {
         expect_release_lib()
     } else {
-        build_debug_libturbo()
+        build_debug_go_binary()
     };
     println!(
         "cargo:rerun-if-changed={}",
@@ -25,22 +21,6 @@ fn main() {
     println!("cargo:rustc-link-lib=turbo");
 
     let target = build_target::target().unwrap();
-    let bindings = bindgen::Builder::default()
-        .header(lib_search_path.join("libturbo.h").to_string_lossy())
-        // Tell cargo to invalidate the built crate whenever any of the
-        // included header files changed.
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-        .allowlist_function("nativeRunWithArgs")
-        .allowlist_type("GoString")
-        .generate()
-        .expect("Unable to generate bindings");
-
-    let out_dir = env::var("OUT_DIR").unwrap();
-    let out_path = Path::new(&out_dir).join("bindings.rs");
-
-    bindings
-        .write_to_file(out_path)
-        .expect("Couldn't write bindings!");
 
     if target.os == build_target::Os::MacOs {
         println!("cargo:rustc-link-lib=framework=cocoa");
@@ -71,7 +51,7 @@ fn expect_release_lib() -> PathBuf {
     dir
 }
 
-fn build_debug_libturbo() -> PathBuf {
+fn build_debug_go_binary() -> PathBuf {
     let cli_path = cli_path();
     let target = build_target::target().unwrap();
     let mut cmd = Command::new("make");
@@ -94,16 +74,16 @@ fn build_debug_libturbo() -> PathBuf {
         cmd.env("CGO_ENABLED", "1")
             .env("CC", "gcc")
             .env("CXX", "g++")
-            .arg("turbo.lib");
+            .arg("go-binary");
     } else {
-        cmd.arg("libturbo.a");
+        cmd.arg("go-binary");
     }
     assert!(
         cmd.stdout(std::process::Stdio::inherit())
             .status()
-            .expect("failed to build turbo.lib")
+            .expect("failed to build go binary")
             .success(),
-        "failed to build turbo static library"
+        "failed to build go binary"
     );
     cli_path
 }
