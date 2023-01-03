@@ -2,7 +2,6 @@ package main
 
 import "C"
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,10 +11,9 @@ import (
 )
 
 func main() {
-	reader := bufio.NewReader(os.Stdin)
-	argsString, _ := reader.ReadString('\n')
-
 	var args turbostate.ParsedArgsFromRust
+	argsString := os.Args[1]
+
 	err := json.Unmarshal([]byte(argsString), &args)
 	if err != nil {
 		fmt.Printf("Error unmarshalling CLI args: %v\n Arg string: %v\n", err, argsString)
