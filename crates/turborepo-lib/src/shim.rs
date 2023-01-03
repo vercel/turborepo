@@ -237,7 +237,7 @@ impl RepoState {
         }
     }
 
-    fn local_turbo_supports_skip_infer(&self) -> Result<bool> {
+    fn local_turbo_supports_skip_infer_and_single_package(&self) -> Result<bool> {
         let local_turbo_package_path = self
             .root
             .join("node_modules")
@@ -256,22 +256,24 @@ impl RepoState {
             local_turbo_path.display()
         );
 
+        let already_has_single_package_flag = shim_args
+            .remaining_turbo_args
+            .contains(&"--single-package".to_string());
+        let should_add_single_package_flag =
+            self.mode == RepoMode::SinglePackage && !already_has_single_package_flag;
+
         let cwd = fs_canonicalize(&self.root)?;
-        let mut raw_args: Vec<_> = if self.local_turbo_supports_skip_infer()? {
-            vec!["--skip-infer".to_string()]
+        let mut raw_args: Vec<_> = if self.local_turbo_supports_skip_infer_and_single_package()? {
+            if should_add_single_package_flag {
+                vec!["--skip-infer".to_string(), "--single-package".to_string()]
+            } else {
+                vec!["--skip-infer".to_string()]
+            }
         } else {
             Vec::new()
         };
 
-        let has_single_package_flag = shim_args
-            .remaining_turbo_args
-            .contains(&"--single-package".to_string());
-
         raw_args.append(&mut shim_args.remaining_turbo_args);
-        if self.mode == RepoMode::SinglePackage && !has_single_package_flag {
-            raw_args.push("--single-package".to_string());
-        }
-
         raw_args.push("--".to_string());
         raw_args.append(&mut shim_args.forwarded_args);
 
