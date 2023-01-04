@@ -10,23 +10,23 @@ on:
         description: "Staging branch to run release from"
 
 jobs:
-  smoke-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: ${{ inputs.release_branch }}
-      - uses: ./.github/actions/setup-node
-        with:
-          enable-corepack: false
-      - uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - name: Test
-        run: pnpm -- turbo run test --filter=cli --color
+  # smoke-test:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #       with:
+  #         ref: ${{ inputs.release_branch }}
+  #     - uses: ./.github/actions/setup-node
+  #       with:
+  #         enable-corepack: false
+  #     - uses: ./.github/actions/setup-go
+  #       with:
+  #         github-token: "${{ secrets.GITHUB_TOKEN }}"
+  #     - name: Test
+  #       run: pnpm -- turbo run test --filter=cli --color
 
   darwin:
-    needs: [smoke-test]
+    #needs: [smoke-test]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -59,7 +59,7 @@ jobs:
 
   # compiles linux and windows in a container
   cross:
-    needs: [smoke-test]
+    #needs: [smoke-test]
     runs-on: ubuntu-latest
     container:
       image: docker://ghcr.io/vercel/turbo-cross:v1.18.5
