@@ -1,0 +1,47 @@
+name: Build Rust cache
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build_cache:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            # myb use 16 core, idk
+            runner: ubuntu-latest
+            nextest: linux
+          - name: macos
+            runner: macos-latest
+            nextest: mac
+          - name: windows
+            runner: windows-latest
+            nextest: windows-tar
+
+    runs-on: ${{ matrix.os.runner }}
+    name: Building Rust cache for ${{ matrix.os.name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          shared-cache-key: dependencies
+          # disable for now, figure out how to make this cache most of what we need
+          save-cache: false
+
+      - name: Install cargo-chef
+        if: always()
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-chef
+
+      - name: Compile dependencies
+        run: |
+          cargo chef prepare
+          cargo chef cook --all-targets

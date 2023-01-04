@@ -38,7 +38,7 @@ runs:
         targets: ${{ inputs.targets }}
         components: ${{ inputs.components }}
 
-    - name: "Set Windows default host to MingW"
+    - name: "Set Windows default host to MinGW"
       if: ${{ inputs.target == 'windows' }}
       shell: bash
       run: rustup set default-host x86_64-pc-windows-gnu && rustup show
