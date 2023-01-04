@@ -42,7 +42,8 @@ jobs:
           - host: windows-latest
             target: x86_64-pc-windows-gnu
             lib-cache-key: turbo-go-cross-${{ inputs.release_branch }}
-            setup: "mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.exe cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.a && mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.h cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.h && rustup set default-host x86_64-pc-windows-gnu"
+            #setup: "mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.exe cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.a && mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.h cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.h && rustup set default-host x86_64-pc-windows-gnu"
+            setup: "rustup set default-host x86_64-pc-windows-gnu"
             container-options: "--rm"
     runs-on: ${{ matrix.settings.host }}
     container:
