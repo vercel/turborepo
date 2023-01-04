@@ -14,17 +14,6 @@ fn main() {
         "cargo:rerun-if-changed={}",
         lib_search_path.to_string_lossy()
     );
-    println!(
-        "cargo:rustc-link-search={}",
-        lib_search_path.to_string_lossy()
-    );
-
-    let target = build_target::target().unwrap();
-
-    if target.os == build_target::Os::MacOs {
-        println!("cargo:rustc-link-lib=framework=cocoa");
-        println!("cargo:rustc-link-lib=framework=security");
-    }
 }
 
 fn expect_release_lib() -> PathBuf {
