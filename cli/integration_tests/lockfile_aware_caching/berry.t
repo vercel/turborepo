@@ -4,6 +4,8 @@ Setup
 
 Populate cache
   $ ${TURBO} build --filter=a
+  No local turbo binary found at: .+node_modules/\.bin/turbo (re)
+  Running command as global turbo
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -15,6 +17,8 @@ Populate cache
     Time:\s*[\.0-9]+m?s  (re)
   
   $ ${TURBO} build --filter=b
+  No local turbo binary found at: .+node_modules/\.bin/turbo (re)
+  Running command as global turbo
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -31,6 +35,8 @@ Only b should have a cache miss
   $ patch yarn.lock yarn-lock.patch
   patching file yarn.lock
   $ ${TURBO} build  --filter=a
+  No local turbo binary found at: .+node_modules/\.bin/turbo (re)
+  Running command as global turbo
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -43,6 +49,8 @@ Only b should have a cache miss
   
 
   $ ${TURBO} build  --filter=b
+  No local turbo binary found at: .+node_modules/\.bin/turbo (re)
+  Running command as global turbo
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -58,6 +66,8 @@ Bump of root workspace invalidates all packages
   $ patch yarn.lock turbo-bump.patch
   patching file yarn.lock
   $ ${TURBO} build  --filter=a
+  No local turbo binary found at: .+node_modules/\.bin/turbo (re)
+  Running command as global turbo
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -69,6 +79,8 @@ Bump of root workspace invalidates all packages
     Time:\s*[\.0-9]+m?s  (re)
   
   $ ${TURBO} build  --filter=b
+  No local turbo binary found at: .+node_modules/\.bin/turbo (re)
+  Running command as global turbo
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
