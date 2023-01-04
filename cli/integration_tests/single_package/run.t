@@ -4,8 +4,6 @@ Setup
 
 Check
   $ ${TURBO} run build --single-package
-  No local turbo binary found at: .+node_modules/\.bin/turbo (re)
-  Running command as global turbo
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache miss, executing 7bf32e1dedb04a5d
@@ -20,8 +18,6 @@ Check
   
 Run a second time, verify caching works because there is a config
   $ ${TURBO} run build --single-package
-  No local turbo binary found at: .+node_modules/\.bin/turbo (re)
-  Running command as global turbo
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, replaying output 7bf32e1dedb04a5d
