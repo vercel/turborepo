@@ -259,6 +259,11 @@ impl RepoState {
                 self.spawn_local_turbo(&canonical_local_turbo, shim_args),
             ))
         } else {
+            eprintln!(
+                "No local turbo binary found at: {}",
+                local_turbo_path.display()
+            );
+            eprintln!("Running command as global turbo");
             cli::run(Some(self))
         }
     }
