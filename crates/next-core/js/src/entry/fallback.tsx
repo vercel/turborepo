@@ -7,38 +7,36 @@ import {
   ReactDevOverlay,
 } from "@vercel/turbopack-next/dev/client";
 import { onUpdate } from "@vercel/turbopack-next/dev/hmr-client";
-import { initialize } from "next/dist/client";
 
-(async () => {
-  const pageChunkPath = location.pathname.slice(1);
+const pageChunkPath = location.pathname.slice(1);
 
-  const { assetPrefix } = await initialize({
-    webpackHMR: {
-      // Expected when `process.env.NODE_ENV === 'development'`
-      onUnrecoverableError() {},
+// We don't need a full `initialize()` here as the page will be reloaded on
+// update anyway. Including `next/dist/client` in this chunk causes a 70ms
+// slowdown on startup.
+const nextData = JSON.parse(
+  document.getElementById("__NEXT_DATA__")!.textContent!
+);
+const assetPrefix: string = nextData.assetPrefix || "";
+
+onUpdate(
+  {
+    path: pageChunkPath,
+    headers: {
+      accept: "text/html",
     },
-  });
-
-  onUpdate(
-    {
-      path: pageChunkPath,
-      headers: {
-        accept: "text/html",
-      },
-    },
-    (update) => {
-      if (update.type === "restart") {
-        location.reload();
-      }
+  },
+  (update) => {
+    if (update.type === "restart") {
+      location.reload();
     }
-  );
+  }
+);
 
-  initializeHMR({
-    assetPrefix,
-  });
+initializeHMR({
+  assetPrefix,
+});
 
-  const el = document.getElementById("__next")!;
-  el.innerText = "";
+const el = document.getElementById("__next")!;
+el.innerText = "";
 
-  createRoot(el).render(<ReactDevOverlay />);
-})();
+createRoot(el).render(<ReactDevOverlay />);
