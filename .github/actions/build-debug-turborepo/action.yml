@@ -12,32 +12,37 @@ runs:
   steps:
     - name: "Setup Node"
       uses: ./.github/actions/setup-node
+
     - name: "Setup Go"
       uses: ./.github/actions/setup-go
       with:
         github-token: ${{ inputs.github-token }}
-    - name: "Setup Rust toolchain"
-      uses: actions-rs/toolchain@v1
-      if: ${{ inputs.target != 'windows' }}
+
+    - name: "Setup Rust"
+      uses: ./.github/actions/setup-rust
+      with:
+        shared-cache-key: turborepo-debug-build
+        cache-key: ${{ inputs.target }}
+        save-cache: true
+
     - name: "Set Windows default host to MingW"
       if: ${{ inputs.target == 'windows' }}
       shell: bash
-      run: rustup set default-host x86_64-pc-windows-gnu && rustup show
-    - name: "Setup Rust Cache"
-      uses: Swatinem/rust-cache@v2
-      with:
-        key: debug-${{ inputs.target }}
+      run: |
+        rustup set default-host x86_64-pc-windows-gnu && rustup show
+
     - name: Build Turborepo
+      working-directory: ./cli
       shell: bash
       run: |
-        cd cli
         make turbo
-        cd ..
+
     - name: Strip Turborepo binary
+      if: ${{ inputs.target == 'windows' }}
       shell: bash
       run: strip target/debug/turbo.exe
-      if: ${{ inputs.target == 'windows' }}
+
     - name: Strip Turborepo binary
+      if: ${{ inputs.target != 'windows' }}
       shell: bash
       run: strip target/debug/turbo
-      if: ${{ inputs.target != 'windows' }}

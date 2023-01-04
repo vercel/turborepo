@@ -26,37 +26,37 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: bench_nft
 
       - uses: ./.github/actions/setup-node
         with:
           package-install: false
 
-      - name: Install dependencies
-        working-directory: crates/turbopack/tests/node-file-trace
-        run: |
-          echo 'node-linker = "hoisted"' > .npmrc
-          pnpm install -r --side-effects-cache false
+      - uses: ./.github/actions/setup-rust
 
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Install hoisted npm dependencies
+        working-directory: crates/turbopack/tests/node-file-trace
+        run: |
+          echo 'node-linker = "hoisted"' > .npmrc
+          pnpm install -r --side-effects-cache false
+
       - name: Install nextest
-        run: curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
-        shell: bash
+        uses: taiki-e/install-action@nextest
+
+      - name: Build benchmark
+        timeout-minutes: 60
+        run: |
+          cargo nextest run --no-run --release \
+            -p turbopack --features bench_against_node_nft bench_against_node_nft
 
       - name: Run benchmark
-        uses: actions-rs/cargo@v1
         timeout-minutes: 60
-        with:
-          command: nextest
-          args: run -j 1 --no-fail-fast -r -p turbopack --features bench_against_node_nft bench_against_node_nft
+        run: |
+          cargo nextest run --test-threads 1 --no-fail-fast --release \
+            -p turbopack --features bench_against_node_nft bench_against_node_nft
 
       - name: Show benchmark result
-        uses: actions-rs/cargo@v1
-        with:
-          command: xtask
-          args: nft-bench-result
+        run: cargo xtask nft-bench-result

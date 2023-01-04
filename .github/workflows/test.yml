@@ -288,34 +288,8 @@ jobs:
           TURBO_REMOTE_ONLY: true
         run: pnpm -- turbo run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
 
-  rust_prepare:
-    name: Check rust crates
-    runs-on: ubuntu-latest-16-core-oss
-    needs: determine_jobs
-    if: needs.determine_jobs.outputs.rust == 'true'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-
-      - name: Run cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --workspace --all-targets
-
   rust_lint:
-    needs: [determine_jobs, rust_prepare]
+    needs: determine_jobs
     if: needs.determine_jobs.outputs.rust == 'true'
     name: Rust linting
     runs-on: ubuntu-latest-16-core-oss
@@ -324,23 +298,16 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: ./.github/actions/setup-rust
         with:
-          target: wasm32-unknown-unknown
+          components: clippy,rustfmt
+          targets: wasm32-unknown-unknown
+          save-cache: true
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install cargo clippy
-        run: rustup component add clippy
-
-      - name: Install cargo rustfmt
-        run: rustup component add rustfmt
 
       - name: Run cargo feature check for next-binding
         run: |
@@ -354,16 +321,12 @@ jobs:
           cargo check -p next-binding --features __swc_core_binding_wasm,__swc_core_binding_wasm_plugin,__feature_mdx_rs --target wasm32-unknown-unknown
 
       - name: Run cargo clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --workspace --all-targets
+        run: |
+          cargo clippy --workspace --all-targets
 
       - name: Run cargo fmt check
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --check
+        run: |
+          cargo fmt --check
 
       - name: Count clippy warnings
         run: |
@@ -425,13 +388,11 @@ jobs:
           command: check licenses
 
       - name: Run cargo check release
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --workspace --all-targets --release
+        run: |
+          cargo check --workspace --all-targets --release
 
   rust_test:
-    needs: [determine_jobs, rust_prepare]
+    needs: determine_jobs
     if: needs.determine_jobs.outputs.rust == 'true'
     strategy:
       fail-fast: false
@@ -459,23 +420,12 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: ./.github/actions/setup-rust
+        with:
+          save-cache: true
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-
-      - name: Start Redis
-        uses: supercharge/redis-github-action@1.4.0
-        with:
-          redis-version: 6
-        if: matrix.os.name == 'ubuntu'
-
-      - name: Set Redis URL
-        run: echo "BULL_REDIS_CONNECTION=redis://127.0.0.1:6379" >> $GITHUB_ENV
-        if: matrix.os.name == 'ubuntu'
 
       - name: Prepare toolchain on Windows
         run: |
@@ -492,26 +442,16 @@ jobs:
         run: npm install
 
       - name: Install nextest
-        id: nextest-install
-        continue-on-error: true
-        run: curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
-        shell: bash
-
-      - name: Install nextest (second try)
-        if: steps.nextest-install.outcome == 'failure'
-        run: curl -LsSf https://get.nexte.st/latest/${{ matrix.os.nextest }} | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
-        shell: bash
+        uses: taiki-e/install-action@nextest
 
       - name: Run nextest
-        uses: actions-rs/cargo@v1
         timeout-minutes: 120
-        with:
-          command: nextest
+        run: |
           # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
-          args: run --workspace --release --no-fail-fast --exclude turbo
+          cargo nextest run --workspace --release --no-fail-fast --exclude turbo
 
   rust_test_bench:
-    needs: [determine_jobs, rust_prepare]
+    needs: determine_jobs
     if: needs.determine_jobs.outputs.rust == 'true'
     strategy:
       fail-fast: false
@@ -536,11 +476,14 @@ jobs:
           git config --global core.autocrlf false
           git config --global core.eol lf
         if: matrix.os.name == 'windows'
+
       - name: Checkout
         uses: actions/checkout@v3
 
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: ./.github/actions/setup-rust
+        with:
+          save-cache: true
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
@@ -552,33 +495,26 @@ jobs:
         with:
           node-version: 16
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-
       - name: Run cargo test on benchmarks
-        uses: actions-rs/cargo@v1
         timeout-minutes: 120
         env:
           TURBOPACK_BENCH_COUNTS: "100"
           TURBOPACK_BENCH_PROGRESS: "1"
-        with:
-          command: test
-          args: --benches --release
+        run: |
+          cargo test --benches --release
 
       - name: Run cargo test on benchmarks for other bundlers
-        uses: actions-rs/cargo@v1
         if: needs.determine_jobs.outputs.rust_bench == 'true'
         timeout-minutes: 120
         env:
           TURBOPACK_BENCH_COUNTS: "100"
           TURBOPACK_BENCH_PROGRESS: "1"
           TURBOPACK_BENCH_BUNDLERS: "others"
-        with:
-          command: test
-          args: --benches --release
+        run: |
+          cargo test --benches --release
 
   rust_build_release:
-    needs: [determine_jobs, rust_prepare]
+    needs: determine_jobs
     if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
     strategy:
       fail-fast: false
@@ -599,11 +535,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install target
-        uses: actions-rs/toolchain@v1
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
         with:
-          target: ${{ matrix.os.target }}
-          default: true
+          components: ${{ matrix.os.target == 'x86_64-pc-windows-msvc' && 'llvm-tools-preview' || '' }}
+          targets: ${{ matrix.os.target }}
+          cache-key: ${{ matrix.os.target }}
+          save-cache: true
 
       - name: Install musl tools
         run: |
@@ -615,43 +553,30 @@ jobs:
         if: matrix.os.target == 'x86_64-unknown-linux-musl'
 
       - name: Install Cargo xwin toolchain
-        run: |
-          cargo install cargo-xwin
-          rustup component add llvm-tools-preview
         if: matrix.os.target == 'x86_64-pc-windows-msvc'
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+        uses: baptiste0928/cargo-install@v1
         with:
-          key: release-${{ matrix.os.target }}
+          crate: cargo-xwin
 
       - name: Build node-file-trace
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release -p node-file-trace --target ${{ matrix.os.target }}
         if: matrix.os.target != 'x86_64-pc-windows-msvc'
+        run: |
+          cargo build --release -p node-file-trace --target ${{ matrix.os.target }}
 
       - name: Build node-file-trace
-        uses: actions-rs/cargo@v1
-        with:
-          command: xwin
-          args: build --release -p node-file-trace -p next-dev --target ${{ matrix.os.target }}
         if: matrix.os.target == 'x86_64-pc-windows-msvc'
+        run: |
+          cargo xwin build --release -p node-file-trace --target ${{ matrix.os.target }}
 
       - name: Build next-dev (native-tls)
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release -p next-dev --target ${{ matrix.os.target }}
         if: matrix.os.target != 'x86_64-pc-windows-msvc' && matrix.os.target != 'x86_64-unknown-linux-musl'
+        run: |
+          cargo build --release -p next-dev --target ${{ matrix.os.target }}
 
       - name: Build next-dev (rustls-tls)
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release -p next-dev --target ${{ matrix.os.target }} --no-default-features --features cli,custom_allocator,rustls-tls
         if: matrix.os.target == 'x86_64-unknown-linux-musl'
+        run: |
+          cargo build --release -p next-dev --target ${{ matrix.os.target }} --no-default-features --features cli,custom_allocator,rustls-tls
 
       - uses: actions/upload-artifact@v3
         with:
@@ -663,7 +588,7 @@ jobs:
             target/${{ matrix.os.target }}/release/next-dev.exe
 
   rust_bench_pr:
-    needs: [determine_jobs, rust_prepare]
+    needs: determine_jobs
     if: needs.determine_jobs.outputs.rust == 'true' && github.event_name == 'pull_request'
     name: Benchmark and compare Turbopack performance
     runs-on: ubuntu-latest-16-core-oss
@@ -686,8 +611,10 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          shared-cache-key: benchmark-${{ matrix.bench.cache_key }}
 
       - name: Benchmark and compare with base branch
         uses: sokra/criterion-compare-action@main
@@ -697,7 +624,7 @@ jobs:
           cwd: crates/next-dev
 
   rust_bench:
-    needs: [determine_jobs, rust_prepare]
+    needs: determine_jobs
     if: (needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true') || needs.determine_jobs.outputs.rust_bench == 'true'
     strategy:
       fail-fast: false
@@ -744,38 +671,32 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
         with:
-          key: benchmark-${{ matrix.bench.cache_key }}
+          shared-cache-key: benchmark-${{ matrix.bench.cache_key }}
+          save-cache: true
 
       - name: Clear benchmarks
         run: rm -rf target/criterion
 
       - name: Compile cargo benches
-        uses: actions-rs/cargo@v1
         env:
           TURBOPACK_BENCH_COUNTS: ${{ matrix.bench.TURBOPACK_BENCH_COUNTS }}
-        with:
-          command: bench
-          args: --no-run ${{ matrix.bench.args }}
+        run: cargo bench --no-run ${{ matrix.bench.args }}
 
       - name: Run cargo bench
-        uses: actions-rs/cargo@v1
         timeout-minutes: 180
         env:
           TURBOPACK_BENCH_COUNTS: ${{ matrix.bench.TURBOPACK_BENCH_COUNTS }}
           TURBOPACK_BENCH_PROGRESS: 1
-        with:
-          command: bench
-          args: ${{ matrix.bench.args }}
+        run: cargo bench ${{ matrix.bench.args }}
 
       - name: Install critcmp
         if: always()
-        uses: actions-rs/cargo@v1
+        uses: baptiste0928/cargo-install@v1
         with:
-          command: install
-          args: critcmp
+          crate: critcmp
 
       - name: Compare results
         if: always()
@@ -805,10 +726,10 @@ jobs:
       - name: Get current date
         id: date
         run: |
-          echo "::set-output name=year::$(date +'%Y')"
-          echo "::set-output name=month::$(date +'%m')"
-          echo "::set-output name=date::$(date +'%s')"
-          echo "::set-output name=pretty::$(date +'%Y-%m-%d %H:%M')"
+          echo "year=$(date +'%Y')" >> $GITHUB_OUTPUT
+          echo "month=$(date +'%m')" >> $GITHUB_OUTPUT
+          echo "date=$(date +'%s')" >> $GITHUB_OUTPUT
+          echo "pretty=$(date +'%Y-%m-%d %H:%M')" >> $GITHUB_OUTPUT
 
       - name: Checkout benchmark-data
         uses: actions/checkout@v3
@@ -836,7 +757,7 @@ jobs:
           commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})
 
   next_js_integration:
-    needs: [determine_jobs, rust_prepare, rust_build_release]
+    needs: [determine_jobs, rust_build_release]
     if: needs.determine_jobs.outputs.rust == 'true'
     name: Next.js integration test
     runs-on: ubuntu-latest-8-core-oss
@@ -947,7 +868,6 @@ jobs:
       - go_lint
       - go_unit
       - go_examples
-      - rust_prepare
       - rust_lint
       - rust_test
       - rust_test_bench
@@ -964,7 +884,7 @@ jobs:
     steps:
       - name: Check cancellation
         id: cancelled
-        if: needs.rust_prepare.result == 'cancelled' || needs.rust_lint.result == 'cancelled' || needs.rust_test.result == 'cancelled' || needs.rust_test_bench.result == 'cancelled' || needs.rust_build_release.result == 'cancelled' || needs.node_lint.result == 'cancelled' || needs.rust_bench_commit.result == 'cancelled'
+        if: needs.rust_lint.result == 'cancelled' || needs.rust_test.result == 'cancelled' || needs.rust_test_bench.result == 'cancelled' || needs.rust_build_release.result == 'cancelled' || needs.node_lint.result == 'cancelled' || needs.rust_bench_commit.result == 'cancelled'
         run: echo "cancelled=true" >> $GITHUB_OUTPUT
 
       - name: Start summary
@@ -994,12 +914,6 @@ jobs:
         if: always() && needs.go_examples.result != 'success' && needs.go_examples.result != 'skipped'
         run: |
           echo "- Go Examples" >> failures.md
-          exit 1
-
-      - name: Rust Check failed
-        if: always() && needs.rust_prepare.result != 'success' && needs.rust_prepare.result != 'skipped'
-        run: |
-          echo "- Rust checks" >> failures.md
           exit 1
 
       - name: Rust Linting failed
