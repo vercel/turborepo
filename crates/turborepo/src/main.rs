@@ -1,12 +1,18 @@
 use std::{env::current_exe, process, process::Stdio};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use turborepo_lib::{Args, Payload};
 
 fn run_go_binary(args: Args) -> Result<i32> {
     let mut go_binary_path = current_exe()?;
     go_binary_path.pop();
     go_binary_path.push("go-turbo");
+    if !go_binary_path.exists() {
+        bail!(
+            "Unable to find Go turbo binary at {}",
+            go_binary_path.display()
+        );
+    }
 
     let serialized_args = serde_json::to_string(&args)?;
 

@@ -5,38 +5,9 @@ fn main() {
         && env::var("RELEASE_TURBO_CLI")
             .map(|val| val == "true")
             .unwrap_or(false);
-    let lib_search_path = if is_ci_release {
-        expect_release_lib()
-    } else {
-        build_debug_go_binary()
-    };
-    println!(
-        "cargo:rerun-if-changed={}",
-        lib_search_path.to_string_lossy()
-    );
-}
-
-fn expect_release_lib() -> PathBuf {
-    // We expect all artifacts to be in the cli path
-    let mut dir = cli_path();
-    let target = build_target::target().unwrap();
-    let platform = match target.os {
-        build_target::Os::MacOs => "darwin",
-        build_target::Os::Windows => "windows",
-        build_target::Os::Linux => "linux",
-        _ => panic!("unsupported target {}", target.triple),
-    };
-    let arch = match target.arch {
-        build_target::Arch::AARCH64 => "arm64",
-        build_target::Arch::X86_64 => "amd64_v1",
-        _ => panic!("unsupported target {}", target.triple),
-    };
-    dir.push("libturbo");
-    // format is ${BUILD_ID}_${OS}_${ARCH}. Build id is, for goreleaser reasons,
-    // turbo-${OS}
-    dir.push(format!("turbo-{platform}_{platform}_{arch}"));
-    dir.push("lib");
-    dir
+    if !is_ci_release {
+        build_debug_go_binary();
+    }
 }
 
 fn build_debug_go_binary() -> PathBuf {
@@ -58,13 +29,9 @@ fn build_debug_go_binary() -> PathBuf {
         for ext in ["pdb", "exe", "d", "lib"].iter() {
             std::fs::remove_file(output_deps.join(format!("turbo.{ext}"))).unwrap_or(());
         }
-
-        cmd.env("CGO_ENABLED", "1")
-            .env("CC", "gcc")
-            .env("CXX", "g++")
-            .arg("go-binary");
+        cmd.arg("go-turbo.exe");
     } else {
-        cmd.arg("go-binary");
+        cmd.arg("go-turbo");
     }
     assert!(
         cmd.stdout(std::process::Stdio::inherit())
@@ -75,9 +42,9 @@ fn build_debug_go_binary() -> PathBuf {
     );
 
     let go_binary_name = if target.os == build_target::Os::Windows {
-        "turbo.exe"
+        "go-turbo.exe"
     } else {
-        "turbo"
+        "go-turbo"
     };
     let new_go_binary_name = if target.os == build_target::Os::Windows {
         "go-turbo.exe"
