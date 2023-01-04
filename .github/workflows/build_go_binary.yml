@@ -33,9 +33,9 @@ jobs:
         with:
           ref: ${{ inputs.release_branch }}
       - run: git fetch origin --tags
-      - uses: ./.github/actions/setup-node
-        with:
-          enable-corepack: false
+      # - uses: ./.github/actions/setup-node
+      #   with:
+      #     enable-corepack: false
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -68,9 +68,9 @@ jobs:
         with:
           ref: "${{ inputs.release_branch }}"
       - run: git fetch origin --tags
-      - uses: ./.github/actions/setup-node
-        with:
-          enable-corepack: false
+      # - uses: ./.github/actions/setup-node
+      #   with:
+      #     enable-corepack: false
       - uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"

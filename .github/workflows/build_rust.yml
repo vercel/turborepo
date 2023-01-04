@@ -183,7 +183,36 @@ jobs:
           # https://github.com/actions/download-artifact#download-all-artifacts
           name: turbo-go-darwin-${{ inputs.release_branch }}
           # Optional, a directory where to extract artifact(s), defaults to the current directory
-          path: cli/libturbo
+          path: cli
+          # Optional, choose how to exit the action if no artifact is found
+          # can be one of:
+          #  "fail", "warn", "ignore"
+          # default fail
+          if_no_artifact_found: fail
+
+      - name: Download Cross-Compiled Go Artifacts
+        uses: dawidd6/action-download-artifact@v2
+        #uses: actions/download-artifact@v3
+        with:
+          # Optional, workflow file name or ID
+          # If not specified, will be inferred from run_id (if run_id is specified), or will be the current workflow
+          workflow: build_go_binary.yml
+          # Optional, the status or conclusion of a completed workflow to search for
+          # Can be one of a workflow conclusion:
+          #   "failure", "success", "neutral", "cancelled", "skipped", "timed_out", "action_required"
+          # Or a workflow status:
+          #   "completed", "in_progress", "queued"
+          # Use the empty string ("") to ignore status or conclusion in the search
+          workflow_conclusion: success
+          # Optional, will use the specified branch. Defaults to all branches
+          branch: ${{ inputs.release_branch }}
+          # Optional, uploaded artifact name,
+          # will download all artifacts if not specified
+          # and extract them into respective subdirectories
+          # https://github.com/actions/download-artifact#download-all-artifacts
+          name: turbo-go-cross-${{ inputs.release_branch }}
+          # Optional, a directory where to extract artifact(s), defaults to the current directory
+          path: cli
           # Optional, choose how to exit the action if no artifact is found
           # can be one of:
           #  "fail", "warn", "ignore"
@@ -221,7 +250,7 @@ jobs:
           path: cli/dist-windows-amd64
 
       - name: Perform Release
-        run: cd cli && make publish-turbo
+        run: cd cli && make snapshot-turbo
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
