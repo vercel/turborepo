@@ -220,11 +220,34 @@
 <span id="220">220</span>
 <span id="221">221</span>
 <span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 
 <span class="kw">use </span>std::{path::Path, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>next_transform_strip_page_exports::{next_transform_strip_page_exports, ExportFilter};
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>swc_core::{
     base::SwcComments,
     common::{chain, util::take::Take, FileName, Mark, SourceMap},
@@ -239,10 +262,33 @@
         visit::{FoldWith, VisitMutWith},
     },
 };
-<span class="kw">use </span>turbo_tasks::primitives::{StringVc, StringsVc};
+<span class="kw">use </span>turbo_tasks::{
+    primitives::{StringVc, StringsVc},
+    trace::TraceRawVcs,
+};
 <span class="kw">use </span>turbopack_core::environment::EnvironmentVc;
 
 <span class="kw">use </span><span class="self">self</span>::server_to_client_proxy::{create_proxy_module, is_client_module};
+
+<span class="attr">#[derive(
+    Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize, TraceRawVcs,
+)]
+</span><span class="kw">pub enum </span>NextJsPageExportFilter {
+    <span class="doccomment">/// Strip all data exports (getServerSideProps,
+    /// getStaticProps, getStaticPaths exports.) and their unique dependencies.
+    </span>StripDataExports,
+    <span class="doccomment">/// Strip default export and all its unique dependencies.
+    </span>StripDefaultExport,
+}
+
+<span class="kw">impl </span>From&lt;NextJsPageExportFilter&gt; <span class="kw">for </span>ExportFilter {
+    <span class="kw">fn </span>from(val: NextJsPageExportFilter) -&gt; <span class="self">Self </span>{
+        <span class="kw">match </span>val {
+            NextJsPageExportFilter::StripDataExports =&gt; ExportFilter::StripDataExports,
+            NextJsPageExportFilter::StripDefaultExport =&gt; ExportFilter::StripDefaultExport,
+        }
+    }
+}
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
@@ -251,13 +297,12 @@
     CommonJs,
     Custom,
     Emotion,
-    <span class="doccomment">/// This enables the Next.js data transform, which will eliminate
-    /// `getStaticProps`, `getStaticPaths`, and `getServerSideProps` exports
-    /// from the output, as well as any imports exclusively used by those
+    <span class="doccomment">/// This enables a Next.js transform which will eliminate some exports
+    /// from a page file, as well as any imports exclusively used by these
     /// exports.
     ///
     /// It also provides diagnostics for improper use of `getServerSideProps`.
-    </span>NextJsStripPageDataExports,
+    </span>NextJsStripPageExports(NextJsPageExportFilter),
     NextJsFont(StringsVc),
     PresetEnv(EnvironmentVc),
     React {
@@ -396,16 +441,14 @@
                     program.visit_mut_with(<span class="kw-2">&amp;mut </span>resolver(unresolved_mark, top_level_mark, <span class="bool-val">false</span>));
                 }
             }
-            EcmascriptInputTransform::NextJsStripPageDataExports =&gt; {
-                <span class="kw">use </span>next_transform_strip_page_exports::{
-                    next_transform_strip_page_exports, ExportFilter,
-                };
-                <span class="kw">let </span>eliminated_packages = Default::default();
+            EcmascriptInputTransform::NextJsStripPageExports(export_type) =&gt; {
+                <span class="comment">// TODO(alexkirsz) Connect the eliminated_packages to telemetry.
+                </span><span class="kw">let </span>eliminated_packages = Default::default();
 
                 <span class="kw">let </span>module_program = unwrap_module_program(program);
 
                 <span class="kw-2">*</span>program = module_program.fold_with(<span class="kw-2">&amp;mut </span>next_transform_strip_page_exports(
-                    ExportFilter::StripDataExports,
+                    export_type.into(),
                     eliminated_packages,
                 ));
             }
@@ -414,7 +457,6 @@
                 <span class="kw">for </span>loader <span class="kw">in </span><span class="kw-2">&amp;</span>(<span class="kw-2">*</span>font_loaders_vc.<span class="kw">await</span><span class="question-mark">?</span>) {
                     font_loaders.push(std::convert::Into::&lt;JsWord&gt;::into(<span class="kw-2">&amp;**</span>loader));
                 }
-
                 <span class="kw">let </span><span class="kw-2">mut </span>next_font = next_font::next_font_loaders(next_font::Config {
                     font_loaders,
                     relative_file_path_from_root: file_name_str.into(),

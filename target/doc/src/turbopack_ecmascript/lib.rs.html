@@ -378,6 +378,8 @@
 <span id="378">378</span>
 <span id="379">379</span>
 <span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -419,7 +421,9 @@
         visit::{VisitMutWith, VisitMutWithPath},
     },
 };
-<span class="kw">pub use </span>transform::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
+<span class="kw">pub use </span>transform::{
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, NextJsPageExportFilter,
+};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{

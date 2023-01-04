@@ -66,6 +66,8 @@
 <span id="66">66</span>
 <span id="67">67</span>
 <span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
 </pre><pre class="rust"><code><span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{primitives::Regex, trace::TraceRawVcs};
 <span class="kw">use </span>turbo_tasks_fs::{FileSystemPath, FileSystemPathReadRef};
@@ -77,6 +79,7 @@
     Any(Vec&lt;ModuleRuleCondition&gt;),
     Not(Box&lt;ModuleRuleCondition&gt;),
     ReferenceType(ReferenceType),
+    ResourcePathEquals(FileSystemPathReadRef),
     ResourcePathHasNoExtension,
     ResourcePathEndsWith(String),
     ResourcePathInDirectory(String),
@@ -109,6 +112,7 @@
                 conditions.iter().any(|c| c.matches(path, reference_type))
             }
             ModuleRuleCondition::Not(condition) =&gt; !condition.matches(path, reference_type),
+            ModuleRuleCondition::ResourcePathEquals(other) =&gt; path == <span class="kw-2">&amp;**</span>other,
             ModuleRuleCondition::ResourcePathEndsWith(end) =&gt; path.path.ends_with(end),
             ModuleRuleCondition::ResourcePathHasNoExtension =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(i) = path.path.rfind(<span class="string">&#39;.&#39;</span>) {

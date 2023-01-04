@@ -545,8 +545,6 @@
 <span id="545">545</span>
 <span id="546">546</span>
 <span id="547">547</span>
-<span id="548">548</span>
-<span id="549">549</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -567,9 +565,9 @@
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>devserver_options::DevServerOptions;
 <span class="kw">use </span>next_core::{
-    create_app_source, create_server_rendered_source, create_web_entry_source, env::load_env,
+    create_app_source, create_page_source, create_web_entry_source, env::load_env,
     manifest::DevManifestContentSource, next_config::load_next_config,
-    next_image::NextImageContentSourceVc,
+    next_image::NextImageContentSourceVc, source_map::NextSourceMapTraceContentSourceVc,
 };
 <span class="kw">use </span>owo_colors::OwoColorize;
 <span class="kw">use </span>turbo_malloc::TurboMalloc;
@@ -595,9 +593,7 @@
     },
     DevServer, DevServerBuilder,
 };
-<span class="kw">use </span>turbopack_node::{
-    execution_context::ExecutionContextVc, source_map::NextSourceMapTraceContentSourceVc,
-};
+<span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub enum </span>EntryRequest {
@@ -851,7 +847,7 @@
         <span class="kw-2">&amp;</span>browserslist_query,
         next_config,
     );
-    <span class="kw">let </span>rendered_source = create_server_rendered_source(
+    <span class="kw">let </span>page_source = create_page_source(
         project_path,
         execution_context,
         output_root.join(<span class="string">&quot;pages&quot;</span>),
@@ -879,7 +875,7 @@
     <span class="kw">let </span>static_source =
         StaticAssetsContentSourceVc::new(String::new(), project_path.join(<span class="string">&quot;public&quot;</span>)).into();
     <span class="kw">let </span>manifest_source = DevManifestContentSource {
-        page_roots: <span class="macro">vec!</span>[app_source, rendered_source],
+        page_roots: <span class="macro">vec!</span>[app_source, page_source],
     }
     .cell()
     .into();
@@ -887,7 +883,7 @@
         manifest_source,
         static_source,
         app_source,
-        rendered_source,
+        page_source,
         web_source,
     ]);
     <span class="kw">let </span>introspect = IntrospectionSource {
@@ -899,7 +895,7 @@
     <span class="kw">let </span>source_maps = SourceMapContentSourceVc::new(main_source).into();
     <span class="kw">let </span>source_map_trace = NextSourceMapTraceContentSourceVc::new(main_source).into();
     <span class="kw">let </span>img_source = NextImageContentSourceVc::new(
-        CombinedContentSourceVc::new(<span class="macro">vec!</span>[static_source, rendered_source]).into(),
+        CombinedContentSourceVc::new(<span class="macro">vec!</span>[static_source, page_source]).into(),
     )
     .into();
     <span class="kw">let </span>source = RouterContentSource {
@@ -921,7 +917,7 @@
 
     handle_issues(dev_server_fs, console_ui).<span class="kw">await</span><span class="question-mark">?</span>;
     handle_issues(web_source, console_ui).<span class="kw">await</span><span class="question-mark">?</span>;
-    handle_issues(rendered_source, console_ui).<span class="kw">await</span><span class="question-mark">?</span>;
+    handle_issues(page_source, console_ui).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(source)
 }

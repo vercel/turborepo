@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["PageTransformType",""]],"fn":[["add_next_transforms_to_pages",""],["add_next_transforms_to_pages_inline",""]],"struct":[["PageTransformTypeVc","Vc for [`PageTransformType`]"]],"type":[["PageTransformTypeReadRef","see [turbo_tasks::ReadRef]"]]};

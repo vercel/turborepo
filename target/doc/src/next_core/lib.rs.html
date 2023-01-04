@@ -35,6 +35,8 @@
 <span id="35">35</span>
 <span id="36">36</span>
 <span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 
@@ -52,15 +54,17 @@
 <span class="kw">pub mod </span>next_image;
 <span class="kw">mod </span>next_import_map;
 <span class="kw">pub mod </span>next_server;
+<span class="kw">pub mod </span>next_shared;
 <span class="kw">mod </span>page_loader;
+<span class="kw">mod </span>page_source;
 <span class="kw">pub mod </span>react_refresh;
 <span class="kw">mod </span>runtime;
-<span class="kw">mod </span>server_rendered_source;
 <span class="kw">mod </span>util;
 <span class="kw">mod </span>web_entry_source;
 
 <span class="kw">pub use </span>app_source::create_app_source;
-<span class="kw">pub use </span>server_rendered_source::create_server_rendered_source;
+<span class="kw">pub use </span>page_source::create_page_source;
+<span class="kw">pub use </span>turbopack_node::source_map;
 <span class="kw">pub use </span>web_entry_source::create_web_entry_source;
 
 <span class="kw">pub fn </span>register() {

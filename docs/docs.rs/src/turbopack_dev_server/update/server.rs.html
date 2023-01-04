@@ -217,6 +217,9 @@
 <span id="217">217</span>
 <span id="218">218</span>
 <span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     pin::Pin,
     task::{Context, Poll},
@@ -279,6 +282,9 @@
                             };
                             <span class="kw">let </span>stream = UpdateStream::new(resource.clone(), TransientInstance::new(Box::new(get_content))).<span class="kw">await</span><span class="question-mark">?</span>;
                             streams.insert(resource, stream);
+                        }
+                        <span class="prelude-val">Some</span>(ClientMessage::Unsubscribe { resource }) =&gt; {
+                            streams.remove(<span class="kw-2">&amp;</span>resource);
                         }
                         <span class="prelude-val">None </span>=&gt; {
                             <span class="comment">// WebSocket was closed, stop sending updates

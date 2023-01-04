@@ -154,6 +154,10 @@
 <span id="154">154</span>
 <span id="155">155</span>
 <span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, ops::Deref, path::PathBuf};
 
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -175,6 +179,10 @@
 #[serde(tag = <span class="string">&quot;type&quot;</span>, rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">pub enum </span>ClientMessage {
     Subscribe {
+        <span class="attr">#[serde(flatten)]
+        </span>resource: ResourceIdentifier,
+    },
+    Unsubscribe {
         <span class="attr">#[serde(flatten)]
         </span>resource: ResourceIdentifier,
     },
