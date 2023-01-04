@@ -85,18 +85,29 @@ fn build_debug_go_binary() -> PathBuf {
         "failed to build go binary"
     );
 
+    let go_binary_name = if target.os == build_target::Os::Windows {
+        "turbo.exe"
+    } else {
+        "turbo"
+    };
+    let new_go_binary_name = if target.os == build_target::Os::Windows {
+        "go-turbo.exe"
+    } else {
+        "go-turbo"
+    };
+
     let go_binary_path = env::var("CARGO_WORKSPACE_DIR")
         .map(PathBuf::from)
         .unwrap()
         .join("cli")
-        .join("turbo");
+        .join(go_binary_name);
 
     let new_go_binary_path = env::var_os("CARGO_WORKSPACE_DIR")
         .map(PathBuf::from)
         .unwrap()
         .join("target")
         .join("debug")
-        .join("go-turbo");
+        .join(new_go_binary_name);
 
     fs::rename(go_binary_path, new_go_binary_path).unwrap();
     cli_path
