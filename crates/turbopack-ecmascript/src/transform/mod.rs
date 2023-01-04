@@ -38,9 +38,9 @@ pub enum NextJsPageExportFilter {
     StripDefaultExport,
 }
 
-impl Into<ExportFilter> for NextJsPageExportFilter {
-    fn into(self) -> ExportFilter {
-        match self {
+impl From<NextJsPageExportFilter> for ExportFilter {
+    fn from(val: NextJsPageExportFilter) -> Self {
+        match val {
             NextJsPageExportFilter::StripDataExports => ExportFilter::StripDataExports,
             NextJsPageExportFilter::StripDefaultExport => ExportFilter::StripDefaultExport,
         }

@@ -77,7 +77,7 @@ fn get_page_client_module_options_context(
         ContextType::Pages { pages_dir } => add_next_transforms_to_pages(
             client_module_options_context,
             pages_dir,
-            Value::new(PageTransformType::Client.into()),
+            Value::new(PageTransformType::Client),
         ),
         _ => client_module_options_context,
     };
@@ -150,7 +150,7 @@ pub async fn create_page_source(
     let client_module_options_context = add_next_transforms_to_pages(
         client_module_options_context,
         pages_dir,
-        Value::new(PageTransformType::Client.into()),
+        Value::new(PageTransformType::Client),
     );
     let client_resolve_options_context = get_client_resolve_options_context(project_path, ty);
     let client_context: AssetContextVc = ModuleAssetContextVc::new(
