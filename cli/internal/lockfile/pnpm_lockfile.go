@@ -3,6 +3,7 @@ package lockfile
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -259,7 +260,10 @@ func prunePatches(patches map[string]PatchFile, packages map[string]PackageSnaps
 
 	patchPackages := make(map[string]PatchFile, len(patches))
 	for dependency, entry := range patches {
-		dependencyString := fmt.Sprintf("%s_%s", dependency, entry.Hash)
+		// The name for patches is of the form name@version
+		// https://github.com/pnpm/pnpm/blob/2895389ae1f2bf7346e140c017f495aa47186eba/packages/plugin-commands-patching/src/patchCommit.ts#L38
+		parts := strings.SplitN(dependency, "@", 2)
+		dependencyString := fmt.Sprintf("%s_%s", formatPnpmKey(parts[0], parts[1]), entry.Hash)
 		_, inPackages := packages[dependencyString]
 		if inPackages {
 			patchPackages[dependency] = entry

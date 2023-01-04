@@ -1,0 +1,36 @@
+lockfileVersion: 5.4
+
+patchedDependencies:
+  is-odd@3.0.1:
+    hash: nrrwwz7lemethtlvvm75r5bmhq
+    path: patches/is-odd@3.0.1.patch
+
+importers:
+  .:
+    specifiers: {}
+
+  packages/dependency:
+    specifiers:
+      is-odd: ^3.0.1
+    dependencies:
+      is-odd: 3.0.1_nrrwwz7lemethtlvvm75r5bmhq
+
+packages:
+  /is-number/6.0.0:
+    resolution:
+      {
+        integrity: sha512-Wu1VHeILBK8KAWJUAiSZQX94GmOE45Rg6/538fKwiloUu21KncEkYGPqob2oSZ5mUT73vLGrHQjKw3KMPwfDzg==,
+      }
+    engines: { node: ">=0.10.0" }
+    dev: false
+
+  /is-odd/3.0.1_nrrwwz7lemethtlvvm75r5bmhq:
+    resolution:
+      {
+        integrity: sha512-CQpnWPrDwmP1+SMHXZhtLtJv90yiyVfluGsX5iNCVkrhQtU3TQHsUWPG9wkdk9Lgd5yNpAg9jQEo90CBaXgWMA==,
+      }
+    engines: { node: ">=4" }
+    dependencies:
+      is-number: 6.0.0
+    dev: false
+    patched: true
