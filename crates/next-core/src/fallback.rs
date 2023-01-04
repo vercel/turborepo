@@ -17,7 +17,7 @@ use turbopack_core::{
 use turbopack_dev_server::html::DevHtmlAssetVc;
 use turbopack_node::{
     execution_context::ExecutionContextVc,
-    html_error::{DevErrorHtmlAsset, DevErrorHtmlAssetVc},
+    html_error::{FallbackPageAsset, FallbackPageAssetVc},
 };
 
 use crate::{
@@ -39,7 +39,7 @@ pub async fn get_fallback_page(
     env: ProcessEnvVc,
     browserslist_query: &str,
     next_config: NextConfigVc,
-) -> Result<DevErrorHtmlAssetVc> {
+) -> Result<FallbackPageAssetVc> {
     let ty = Value::new(ContextType::Fallback);
     let environment = get_client_environment(browserslist_query);
     let resolve_options_context = get_client_resolve_options_context(project_path, ty);
@@ -96,9 +96,9 @@ struct FallbackAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl DevErrorHtmlAsset for FallbackAsset {
+impl FallbackPageAsset for FallbackAsset {
     #[turbo_tasks::function]
-    async fn error(&self, exit_code: Option<i32>, error: StringVc) -> Result<AssetVc> {
+    async fn with_error(&self, exit_code: Option<i32>, error: StringVc) -> Result<AssetVc> {
         let error = error.await?;
 
         let html_status = match exit_code {

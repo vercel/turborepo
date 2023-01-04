@@ -30,7 +30,7 @@ use turbopack_ecmascript::{
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_node::{
     execution_context::ExecutionContextVc,
-    html_error::DevErrorHtmlAssetVc,
+    html_error::FallbackPageAssetVc,
     render::{
         node_api_source::create_node_api_source, rendered_source::create_node_rendered_source,
     },
@@ -179,7 +179,7 @@ async fn create_server_rendered_source_for_file(
     specificity: SpecificityVc,
     page_file: FileSystemPathVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevErrorHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
     server_root: FileSystemPathVc,
     server_path: FileSystemPathVc,
     is_api_path: BoolVc,
@@ -287,7 +287,7 @@ async fn create_server_rendered_source_for_directory(
     position: u32,
     input_dir: FileSystemPathVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevErrorHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
     server_root: FileSystemPathVc,
     server_path: FileSystemPathVc,
     server_api_path: FileSystemPathVc,

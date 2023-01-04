@@ -22,7 +22,7 @@ use turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
 
 use super::{render_static::render_static, RenderData};
 use crate::{
-    external_asset_entrypoints, get_intermediate_asset, html_error::DevErrorHtmlAssetVc,
+    external_asset_entrypoints, get_intermediate_asset, html_error::FallbackPageAssetVc,
     node_entry::NodeEntryVc, path_regex::PathRegexVc,
 };
 
@@ -40,7 +40,7 @@ pub fn create_node_rendered_source(
     path_regex: PathRegexVc,
     entry: NodeEntryVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevErrorHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
 ) -> ContentSourceVc {
     let source = NodeRenderContentSource {
         specificity,
@@ -72,7 +72,7 @@ pub struct NodeRenderContentSource {
     path_regex: PathRegexVc,
     entry: NodeEntryVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevErrorHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
 }
 
 #[turbo_tasks::value_impl]

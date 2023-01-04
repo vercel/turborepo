@@ -13,7 +13,7 @@ use super::{
     RenderStaticOutgoingMessage,
 };
 use crate::{
-    get_intermediate_asset, get_renderer_pool, html_error::DevErrorHtmlAssetVc,
+    get_intermediate_asset, get_renderer_pool, html_error::FallbackPageAssetVc,
     pool::NodeJsOperation, trace_stack,
 };
 
@@ -23,7 +23,7 @@ pub async fn render_static(
     path: FileSystemPathVc,
     module: EcmascriptModuleAssetVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevErrorHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
     data: RenderDataVc,
@@ -91,7 +91,7 @@ async fn static_error(
     path: FileSystemPathVc,
     error: anyhow::Error,
     operation: Option<NodeJsOperation>,
-    fallback_page: DevErrorHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
 ) -> Result<AssetContentVc> {
     let message = format!("{error:?}");
     let status = match operation {
@@ -109,7 +109,7 @@ async fn static_error(
 
     issue.cell().as_issue().emit();
 
-    let html = fallback_page.error(status.and_then(|status| status.code()), message);
+    let html = fallback_page.with_error(status.and_then(|status| status.code()), message);
 
     Ok(html.content())
 }
