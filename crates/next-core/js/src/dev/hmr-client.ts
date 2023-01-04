@@ -47,13 +47,13 @@ export function connect({ assetPrefix }: ClientOptions) {
   }
   globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS = {
     push: ([chunkPath, callback]: [ChunkPath, UpdateCallback]) => {
-      onChunkUpdate(chunkPath, callback);
+      subscribeToChunkUpdate(chunkPath, callback);
     },
   };
 
   if (Array.isArray(queued)) {
     for (const [chunkPath, callback] of queued) {
-      onChunkUpdate(chunkPath, callback);
+      subscribeToChunkUpdate(chunkPath, callback);
     }
   }
 
@@ -261,11 +261,11 @@ function handleSocketMessage(msg: ServerMessage) {
   }
 }
 
-export function onChunkUpdate(
+export function subscribeToChunkUpdate(
   chunkPath: ChunkPath,
   callback: UpdateCallback
 ): () => void {
-  return onUpdate(
+  return subscribeToUpdate(
     {
       path: chunkPath,
     },
@@ -273,7 +273,7 @@ export function onChunkUpdate(
   );
 }
 
-export function onUpdate(
+export function subscribeToUpdate(
   resource: ResourceIdentifier,
   callback: UpdateCallback
 ) {
@@ -349,7 +349,7 @@ export function subscribeToCssChunkUpdates(
   }
 
   const chunkPath = pathname.slice(cssChunkPrefix.length);
-  onChunkUpdate(chunkPath, (update) => {
+  subscribeToChunkUpdate(chunkPath, (update) => {
     switch (update.type) {
       case "restart": {
         console.info(`Reloading CSS chunk \`${chunkPath}\``);

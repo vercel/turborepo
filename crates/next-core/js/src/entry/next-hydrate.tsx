@@ -9,7 +9,7 @@ import {
 import { formatWithValidation } from "next/dist/shared/lib/router/utils/format-url";
 import { initializeHMR } from "@vercel/turbopack-next/dev/client";
 import {
-  onUpdate,
+  subscribeToUpdate,
   subscribeToCssChunkUpdates,
 } from "@vercel/turbopack-next/dev/hmr-client";
 
@@ -141,7 +141,7 @@ function subscribeToPageData({
   dataPath: string;
   assetPrefix: string;
 }): () => void {
-  return onUpdate(
+  return subscribeToUpdate(
     {
       // We need to remove the leading / from the data path as Turbopack
       // resources are not prefixed with a /.
