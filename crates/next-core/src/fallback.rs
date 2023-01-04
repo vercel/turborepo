@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{bail, Result};
+use indoc::formatdoc;
 use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
@@ -106,17 +107,20 @@ impl FallbackPageAsset for FallbackAsset {
             None => "<h3>No exit status</pre>".to_owned(),
         };
 
-        let body = format!(
-            "<script id=\"__NEXT_DATA__\" type=\"application/json\">{{ \"props\": {{}}, \
-             \"assetPrefix\": {assetPrefix} }}</script>
-    <div id=\"__next\">
-        <h1>Error rendering page</h1>
-        <h2>Message</h2>
-        <pre>{error}</pre>
-        {html_status}
-    </div>",
-            assetPrefix = serde_json::to_string(&self.config.asset_prefix().await?.as_deref())?
-        );
+        let body = formatdoc! {r#"
+            <script id="__NEXT_DATA__" type="application/json">
+                {{
+                    "props": {{}}, \
+                    "assetPrefix": {assetPrefix}
+                }}
+            </script>
+            <div id="__next">
+                <h1>Error rendering page</h1>
+                <h2>Message</h2>
+                <pre>{error}</pre>
+                {html_status}
+            </div>
+        "#, assetPrefix = serde_json::to_string(&self.config.asset_prefix().await?.as_deref())? };
 
         Ok(self.html_asset.with_body(body).into())
     }
