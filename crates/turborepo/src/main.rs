@@ -3,7 +3,7 @@ use std::{env::current_exe, process, process::Stdio};
 use anyhow::Result;
 use turborepo_lib::{Args, Payload};
 
-fn native_run(args: Args) -> Result<i32> {
+fn run_go_binary(args: Args) -> Result<i32> {
     let mut go_binary_path = current_exe()?;
     go_binary_path.pop();
     go_binary_path.push("go-turbo");
@@ -27,7 +27,7 @@ fn native_run(args: Args) -> Result<i32> {
 fn main() -> Result<()> {
     let exit_code = match turborepo_lib::main()? {
         Payload::Rust(res) => res.unwrap_or(1),
-        Payload::Go(state) => native_run(*state)?,
+        Payload::Go(state) => run_go_binary(*state)?,
     };
 
     process::exit(exit_code)
