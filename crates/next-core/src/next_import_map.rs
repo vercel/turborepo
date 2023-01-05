@@ -127,7 +127,7 @@ pub async fn get_next_server_import_map(
     insert_next_shared_aliases(&mut import_map, project_path);
 
     match ty.into_value() {
-        ServerContextType::Pages { pages_dir } => {
+        ServerContextType::Pages { pages_dir } | ServerContextType::PagesData { pages_dir } => {
             insert_alias_to_alternatives(
                 &mut import_map,
                 format!("{VIRTUAL_PACKAGE_NAME}/pages/_app"),
