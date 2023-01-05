@@ -33,9 +33,8 @@ template.version = version;
 
 const outputPath = path.join(__dirname, "build", template.name);
 fs.rmSync(outputPath, { recursive: true, force: true });
-fs.mkdirSync(outputPath, { recursive: true });
+fs.mkdirSync(path.join(outputPath, "bin"), { recursive: true });
 
-fs.mkdirSync(path.join(outputPath, "bin"));
 if (os === "windows") {
   fs.copyFileSync(
     path.join(__dirname, "template", "bin", "turbo"),
@@ -50,8 +49,9 @@ fs.writeFileSync(
   path.join(outputPath, "package.json"),
   JSON.stringify(template, null, 2)
 );
+
 const goBin = os === "windows" ? "go-turbo.exe" : "go-turbo";
 fs.copyFileSync(
-  path.join("turbo_" + template.os + "_" + template.cpu, "bin", goBin),
+  path.join(__dirname, "..", "..", `dist-${os}-${arch}`, "bin", goBin),
   path.join(outputPath, "bin", goBin)
 );
