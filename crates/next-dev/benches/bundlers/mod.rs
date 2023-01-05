@@ -5,6 +5,7 @@ use anyhow::Result;
 use self::{
     nextjs::{NextJs, NextJsVersion},
     parcel::Parcel,
+    rspack::RsPack,
     turbopack::Turbopack,
     vite::Vite,
     webpack::Webpack,
@@ -13,6 +14,7 @@ use crate::util::env::read_env;
 
 mod nextjs;
 mod parcel;
+mod rspack;
 mod turbopack;
 mod vite;
 mod webpack;
@@ -129,6 +131,7 @@ pub fn get_bundlers() -> Vec<Box<dyn Bundler>> {
             "/page",
             RenderType::ServerSidePrerendered,
         )));
+        bundlers.push(Box::new(RsPack {}));
         bundlers.push(Box::new(Parcel {}));
         bundlers.push(Box::new(Vite::new(false, false)));
         bundlers.push(Box::new(Vite::new(true, false)));
