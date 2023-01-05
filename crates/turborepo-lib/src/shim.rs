@@ -188,7 +188,7 @@ impl LocalTurboState {
 
         if !local_turbo_path.exists() {
             debug!(
-                "No local turbo binary found at {}",
+                "No local turbo binary found at: {}",
                 local_turbo_path.display()
             );
             return None;
