@@ -26,40 +26,14 @@ pub fn get_next_client_import_map(
 
     match ty.into_value() {
         ClientContextType::Pages { pages_dir } => {
-            insert_alias_to_alternatives(
-                &mut import_map,
-                format!("{VIRTUAL_PACKAGE_NAME}/pages/_app"),
-                vec![
-                    request_to_import_mapping(pages_dir, "./_app"),
-                    request_to_import_mapping(pages_dir, "next/app"),
-                ],
-            );
-            insert_alias_to_alternatives(
-                &mut import_map,
-                format!("{VIRTUAL_PACKAGE_NAME}/pages/_document"),
-                vec![
-                    request_to_import_mapping(pages_dir, "./_document"),
-                    request_to_import_mapping(pages_dir, "next/document"),
-                ],
-            );
+            alias_app_and_document_to_next_pages(&mut import_map, pages_dir);
         }
         ClientContextType::App { app_dir } => {
-            import_map.insert_exact_alias(
-                "react",
-                request_to_import_mapping(app_dir, "next/dist/compiled/react"),
-            );
-            import_map.insert_wildcard_alias(
-                "react/",
-                request_to_import_mapping(app_dir, "next/dist/compiled/react/*"),
-            );
-            import_map.insert_exact_alias(
-                "react-dom",
-                request_to_import_mapping(app_dir, "next/dist/compiled/react-dom"),
-            );
-            import_map.insert_wildcard_alias(
-                "react-dom/",
-                request_to_import_mapping(app_dir, "next/dist/compiled/react-dom/*"),
-            );
+            // Alias `next/dynamic` to React.lazy implementation for RSC
+            alias_next_dynamic_to_react_lazy_for_rsc(&mut import_map, app_dir);
+
+            alias_react_to_compiled_react(&mut import_map, app_dir);
+            alias_react_dom_to_compiled_react_dom(&mut import_map, app_dir);
         }
         ClientContextType::Fallback => {}
         ClientContextType::Other => {}
@@ -128,22 +102,7 @@ pub async fn get_next_server_import_map(
 
     match ty.into_value() {
         ServerContextType::Pages { pages_dir } | ServerContextType::PagesData { pages_dir } => {
-            insert_alias_to_alternatives(
-                &mut import_map,
-                format!("{VIRTUAL_PACKAGE_NAME}/pages/_app"),
-                vec![
-                    request_to_import_mapping(pages_dir, "./_app"),
-                    external_request_to_import_mapping("next/app"),
-                ],
-            );
-            insert_alias_to_alternatives(
-                &mut import_map,
-                format!("{VIRTUAL_PACKAGE_NAME}/pages/_document"),
-                vec![
-                    request_to_import_mapping(pages_dir, "./_document"),
-                    external_request_to_import_mapping("next/document"),
-                ],
-            );
+            alias_app_and_document_to_next_pages(&mut import_map, pages_dir);
 
             import_map.insert_exact_alias("next", ImportMapping::External(None).into());
             import_map.insert_wildcard_alias("next/", ImportMapping::External(None).into());
@@ -153,25 +112,10 @@ pub async fn get_next_server_import_map(
             import_map.insert_wildcard_alias("react-dom/", ImportMapping::External(None).into());
         }
         ServerContextType::AppSSR { app_dir } | ServerContextType::AppRSC { app_dir } => {
-            import_map.insert_exact_alias(
-                "react",
-                request_to_import_mapping(app_dir, "next/dist/compiled/react"),
-            );
-            import_map.insert_wildcard_alias(
-                "react/",
-                request_to_import_mapping(app_dir, "next/dist/compiled/react/*"),
-            );
-            import_map.insert_exact_alias(
-                "react-dom",
-                request_to_import_mapping(
-                    app_dir,
-                    "next/dist/compiled/react-dom/server-rendering-stub.js",
-                ),
-            );
-            import_map.insert_wildcard_alias(
-                "react-dom/",
-                request_to_import_mapping(app_dir, "next/dist/compiled/react-dom/*"),
-            );
+            alias_next_dynamic_to_react_lazy_for_rsc(&mut import_map, app_dir);
+
+            alias_react_to_compiled_react(&mut import_map, app_dir);
+            alias_react_dom_to_compiled_react_dom_stub(&mut import_map, app_dir);
 
             for external in next_config.server_component_externals().await?.iter() {
                 import_map.insert_exact_alias(external, ImportMapping::External(None).into());
@@ -184,6 +128,71 @@ pub async fn get_next_server_import_map(
     }
 
     Ok(import_map.cell())
+}
+
+fn alias_app_and_document_to_next_pages(import_map: &mut ImportMap, pages_dir: FileSystemPathVc) {
+    insert_alias_to_alternatives(
+        import_map,
+        format!("{VIRTUAL_PACKAGE_NAME}/pages/_app"),
+        vec![
+            request_to_import_mapping(pages_dir, "./_app"),
+            external_request_to_import_mapping("next/app"),
+        ],
+    );
+    insert_alias_to_alternatives(
+        import_map,
+        format!("{VIRTUAL_PACKAGE_NAME}/pages/_document"),
+        vec![
+            request_to_import_mapping(pages_dir, "./_document"),
+            external_request_to_import_mapping("next/document"),
+        ],
+    );
+}
+
+fn alias_next_dynamic_to_react_lazy_for_rsc(import_map: &mut ImportMap, app_dir: FileSystemPathVc) {
+    import_map.insert_exact_alias(
+        "next/dynamic",
+        request_to_import_mapping(app_dir, "next/dist/compiled/react-lazy"),
+    );
+}
+
+fn alias_react_to_compiled_react(import_map: &mut ImportMap, app_dir: FileSystemPathVc) {
+    import_map.insert_exact_alias(
+        "react",
+        request_to_import_mapping(app_dir, "next/dist/compiled/react"),
+    );
+    import_map.insert_wildcard_alias(
+        "react/",
+        request_to_import_mapping(app_dir, "next/dist/compiled/react/*"),
+    );
+}
+
+fn alias_react_dom_to_compiled_react_dom(import_map: &mut ImportMap, app_dir: FileSystemPathVc) {
+    import_map.insert_exact_alias(
+        "react-dom",
+        request_to_import_mapping(app_dir, "next/dist/compiled/react-dom"),
+    );
+    import_map.insert_wildcard_alias(
+        "react-dom/",
+        request_to_import_mapping(app_dir, "next/dist/compiled/react-dom/*"),
+    );
+}
+
+fn alias_react_dom_to_compiled_react_dom_stub(
+    import_map: &mut ImportMap,
+    app_dir: FileSystemPathVc,
+) {
+    import_map.insert_exact_alias(
+        "react-dom",
+        request_to_import_mapping(
+            app_dir,
+            "next/dist/compiled/react-dom/server-rendering-stub.js",
+        ),
+    );
+    import_map.insert_wildcard_alias(
+        "react-dom/",
+        request_to_import_mapping(app_dir, "next/dist/compiled/react-dom/*"),
+    );
 }
 
 pub fn get_next_client_resolved_map(
