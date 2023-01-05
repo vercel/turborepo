@@ -1,6 +1,5 @@
 package main
 
-import "C"
 import (
 	"encoding/json"
 	"fmt"
@@ -11,9 +10,13 @@ import (
 )
 
 func main() {
-	var args turbostate.ParsedArgsFromRust
-	argsString := os.Args[1]
+	if len(os.Args) != 2 {
+		fmt.Printf("go-turbo is expected to be invoked via turbo")
+		os.Exit(1)
+	}
 
+	argsString := os.Args[1]
+	var args turbostate.ParsedArgsFromRust
 	err := json.Unmarshal([]byte(argsString), &args)
 	if err != nil {
 		fmt.Printf("Error unmarshalling CLI args: %v\n Arg string: %v\n", err, argsString)
@@ -22,16 +25,4 @@ func main() {
 
 	exitCode := cmd.RunWithArgs(args, turboVersion)
 	os.Exit(exitCode)
-}
-
-//export nativeRunWithArgs
-func nativeRunWithArgs(argsString string) C.uint {
-	var args turbostate.ParsedArgsFromRust
-	err := json.Unmarshal([]byte(argsString), &args)
-	if err != nil {
-		fmt.Printf("Error unmarshalling CLI args: %v\n Arg string: %v\n", err, argsString)
-		return 1
-	}
-	exitCode := cmd.RunWithArgs(args, turboVersion)
-	return C.uint(exitCode)
 }
