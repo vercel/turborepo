@@ -3,8 +3,6 @@ Setup
 
 Make sure exit code is 2 when no args are passed
   $ ${TURBO}
-  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
-  Running command as global turbo
   The build system that makes ship happen
   
   Usage: turbo [OPTIONS] [COMMAND]

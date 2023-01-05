@@ -5,8 +5,6 @@ Setup
 Check error is properly reported
 Note that npm reports any failed script as exit code 1, even though we "exit 2"
   $ ${TURBO} error
-  No local turbo binary found at: .+node_modules/\.bin/turbo (re)
-  Running command as global turbo
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -38,8 +36,6 @@ Note that npm reports any failed script as exit code 1, even though we "exit 2"
 
 Make sure error isn't cached
   $ ${TURBO} error
-  No local turbo binary found at: .+node_modules/\.bin/turbo (re)
-  Running command as global turbo
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -71,8 +67,6 @@ Make sure error isn't cached
 
 Running with --output-mode=errors-only gives error output only
   $ ${TURBO} --output-logs=errors-only error
-  No local turbo binary found at: .+node_modules/\.bin/turbo (re)
-  Running command as global turbo
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
