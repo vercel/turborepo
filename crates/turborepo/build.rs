@@ -1,10 +1,7 @@
 use std::{env, fs, path::PathBuf, process::Command};
 
 fn main() {
-    let is_ci_release = matches!(env::var("PROFILE"), Ok(profile) if profile == "release")
-        && env::var("RELEASE_TURBO_CLI")
-            .map(|val| val == "true")
-            .unwrap_or(false);
+    let is_ci_release = matches!(env::var("PROFILE"), Ok(profile) if profile == "release");
     if !is_ci_release {
         build_debug_go_binary();
     }
