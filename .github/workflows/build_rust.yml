@@ -165,7 +165,7 @@ jobs:
         run: |
           mv rust-artifacts/turbo-aarch64-apple-darwin cli/dist-darwin-arm64
           mv rust-artifacts/turbo-aarch64-unknown-linux-gnu cli/dist-linux-arm64
-          mv rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-arm64
+          cp -r rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-arm64
           mv rust-artifacts/turbo-x86_64-unknown-linux-gnu cli/dist-linux-amd64
           mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-amd64
           mv rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-amd64
