@@ -14,7 +14,7 @@ bench = false
 [dependencies]
 anyhow = "1.0.47"
 clap = { version = "4.0.18", features = ["derive"] }
-crossterm = "0.25"
+crossterm = { workspace = true }
 owo-colors = "3"
 serde = { version = "1.0.136", features = ["derive"] }
 turbo-tasks = { path = "../turbo-tasks" }

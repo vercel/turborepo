@@ -11,7 +11,7 @@ bench = false
 [dependencies]
 anyhow = "1.0.47"
 auto-hash-map = { path = "../auto-hash-map" }
-crossterm = "0.25"
+crossterm = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 indoc = "1.0"
 mime = "0.3.16"
