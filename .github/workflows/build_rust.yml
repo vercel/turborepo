@@ -156,99 +156,31 @@ jobs:
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
-      - name: Download Apple ARM64 Artifacts
+      - name: Download Rust artifacts
         uses: actions/download-artifact@v3
         with:
-          name: turbo-aarch64-apple-darwin
-          path: cli/dist-darwin-arm64
+          path: rust-artifacts
 
-      - name: Download Apple Go Artifacts
-        uses: dawidd6/action-download-artifact@v2
-        #uses: actions/download-artifact@v3
-        with:
-          # Optional, workflow file name or ID
-          # If not specified, will be inferred from run_id (if run_id is specified), or will be the current workflow
-          workflow: Build Go Binary
-          # Optional, the status or conclusion of a completed workflow to search for
-          # Can be one of a workflow conclusion:
-          #   "failure", "success", "neutral", "cancelled", "skipped", "timed_out", "action_required"
-          # Or a workflow status:
-          #   "completed", "in_progress", "queued"
-          # Use the empty string ("") to ignore status or conclusion in the search
-          workflow_conclusion: success
-          # Optional, will use the specified branch. Defaults to all branches
-          branch: ${{ inputs.release_branch }}
-          # Optional, uploaded artifact name,
-          # will download all artifacts if not specified
-          # and extract them into respective subdirectories
-          # https://github.com/actions/download-artifact#download-all-artifacts
-          name: turbo-go-darwin-${{ inputs.release_branch }}
-          # Optional, a directory where to extract artifact(s), defaults to the current directory
-          path: cli
-          # Optional, choose how to exit the action if no artifact is found
-          # can be one of:
-          #  "fail", "warn", "ignore"
-          # default fail
-          if_no_artifact_found: fail
+      - name: Move Rust artifacts into place
+        run: |
+          mv rust-artifacts/turbo-aarch64-apple-darwin cli/dist-darwin-arm64
+          mv rust-artifacts/turbo-aarch64-unknown-linux-gnu cli/dist-linux-arm64
+          mv rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-arm64
+          mv rust-artifacts/turbo-x86_64-unknown-linux-gnu cli/dist-linux-amd64
+          mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-amd64
+          mv rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-amd64
 
-      - name: Download Cross-Compiled Go Artifacts
+      - name: Download Go artifacts
+        id: download-artifact
         uses: dawidd6/action-download-artifact@v2
-        #uses: actions/download-artifact@v3
         with:
-          # Optional, workflow file name or ID
-          # If not specified, will be inferred from run_id (if run_id is specified), or will be the current workflow
+          github_token: ${{secrets.DOWNLOAD_ARTIFACT}}
           workflow: build_go_binary.yml
-          # Optional, the status or conclusion of a completed workflow to search for
-          # Can be one of a workflow conclusion:
-          #   "failure", "success", "neutral", "cancelled", "skipped", "timed_out", "action_required"
-          # Or a workflow status:
-          #   "completed", "in_progress", "queued"
-          # Use the empty string ("") to ignore status or conclusion in the search
           workflow_conclusion: success
-          # Optional, will use the specified branch. Defaults to all branches
           branch: ${{ inputs.release_branch }}
-          # Optional, uploaded artifact name,
-          # will download all artifacts if not specified
-          # and extract them into respective subdirectories
-          # https://github.com/actions/download-artifact#download-all-artifacts
-          name: turbo-go-cross-${{ inputs.release_branch }}
-          # Optional, a directory where to extract artifact(s), defaults to the current directory
           path: cli
-          # Optional, choose how to exit the action if no artifact is found
-          # can be one of:
-          #  "fail", "warn", "ignore"
-          # default fail
+          skip_unpack: false
           if_no_artifact_found: fail
-
-      - name: Download Ubuntu ARM64 Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: turbo-aarch64-unknown-linux-gnu
-          path: cli/dist-linux-arm64
-
-      - name: Download Windows ARM64 (Ships as x86_64) Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: turbo-x86_64-pc-windows-gnu
-          path: cli/dist-windows-arm64
-
-      - name: Download Ubuntu x86_64 Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: turbo-x86_64-unknown-linux-gnu
-          path: cli/dist-linux-amd64
-
-      - name: Download Apple x86_64 Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: turbo-x86_64-apple-darwin
-          path: cli/dist-darwin-amd64
-
-      - name: Download Windows x86_64 Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: turbo-x86_64-pc-windows-gnu
-          path: cli/dist-windows-amd64
 
       - name: Perform Release
         run: cd cli && make snapshot-turbo
