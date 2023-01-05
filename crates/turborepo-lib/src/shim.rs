@@ -77,17 +77,15 @@ impl ShimArgs {
             } else if arg == "--verbosity" {
                 // If we see `--verbosity` we expect the next arg to be a number.
                 found_verbosity_flag = true
-            } else if found_verbosity_flag {
-                verbosity = match arg.parse::<usize>() {
-                    Ok(level) => level,
-                    Err(_) => 0,
+            } else if arg.starts_with("--verbosity=") || found_verbosity_flag {
+                let verbosity_count = if found_verbosity_flag {
+                    found_verbosity_flag = false;
+                    &arg
+                } else {
+                    arg.strip_prefix("--verbosity=").unwrap_or("0")
                 };
-                found_verbosity_flag = false;
-            } else if let Some(verbosity_level) = arg.strip_prefix("--verbosity=") {
-                verbosity = match verbosity_level.parse::<usize>() {
-                    Ok(level) => level,
-                    Err(_) => 0,
-                }
+
+                verbosity = verbosity_count.parse::<usize>().unwrap_or(0);
             } else if arg == "-v" || arg.starts_with("-vv") {
                 verbosity = arg[1..].len();
             } else if found_cwd_flag {
