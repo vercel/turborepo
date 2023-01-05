@@ -56,6 +56,7 @@ impl ShimArgs {
         let mut found_cwd_flag = false;
         let mut cwd: Option<PathBuf> = None;
         let mut skip_infer = false;
+        let mut found_verbosity_flag = false;
         let mut verbosity = 0;
         let mut force_update_check = false;
         let mut remaining_turbo_args = Vec::new();
@@ -73,19 +74,21 @@ impl ShimArgs {
             } else if arg == "--" {
                 // If we've hit `--` we've reached the args forwarded to tasks.
                 is_forwarded_args = true;
-            // parse verbosity
+            } else if arg == "--verbosity" {
+                // If we see `--verbosity` we expect the next arg to be a number.
+                found_verbosity_flag = true
+            } else if found_verbosity_flag {
+                verbosity = match arg.parse::<usize>() {
+                    Ok(level) => level,
+                    Err(_) => 0,
+                };
+                found_verbosity_flag = false;
             } else if let Some(verbosity_level) = arg.strip_prefix("--verbosity=") {
                 verbosity = match verbosity_level.parse::<usize>() {
-                    Ok(level) => {
-                        if level <= 3 {
-                            level
-                        } else {
-                            0
-                        }
-                    }
+                    Ok(level) => level,
                     Err(_) => 0,
                 }
-            } else if arg == "-v" || arg == "-vv" || arg == "-vvv" {
+            } else if arg == "-v" || arg.starts_with("-vv") {
                 verbosity = arg[1..].len();
             } else if found_cwd_flag {
                 // We've seen a `--cwd` and therefore set the cwd to this arg.
@@ -362,10 +365,10 @@ fn is_turbo_binary_path_set() -> bool {
 fn init_env_logger(verbosity: usize) {
     // configure logger
     let level = match verbosity {
+        0 => LevelFilter::Warn,
         1 => LevelFilter::Info,
         2 => LevelFilter::Debug,
-        3 => LevelFilter::Trace,
-        _ => LevelFilter::Warn,
+        _ => LevelFilter::Trace,
     };
 
     let mut builder = Builder::new();
