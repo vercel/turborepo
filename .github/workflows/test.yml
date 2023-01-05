@@ -444,6 +444,12 @@ jobs:
       - name: Install nextest
         uses: taiki-e/install-action@nextest
 
+      - name: Build nextest
+        timeout-minutes: 120
+        run: |
+          # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
+          cargo nextest run --no-run --workspace --release --exclude turbo
+
       - name: Run nextest
         timeout-minutes: 120
         run: |

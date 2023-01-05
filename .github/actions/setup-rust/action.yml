@@ -52,6 +52,7 @@ runs:
       with:
         shared-key: ${{ inputs.shared-cache-key }}
         key: ${{ inputs.cache-key }}
+        prefix-key: rust-cache-test
         # the cache is huge and we only get 10gb max, so we only save on master
         # TODO: remove PR branch
         save-if: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/pull/3175/merge') && inputs.save-cache || 'false' }}
