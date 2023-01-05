@@ -314,13 +314,13 @@ impl RepoState {
     /// returns: Result<i32, Error>
     fn run_correct_turbo(self, shim_args: ShimArgs) -> Result<Payload> {
         if let Some(LocalTurboState { bin_path, version }) = &self.local_turbo_state {
-            try_check_for_updates(&shim_args, &version);
+            try_check_for_updates(&shim_args, &version, false);
             let canonical_local_turbo = fs_canonicalize(&bin_path)?;
             Ok(Payload::Rust(
                 self.spawn_local_turbo(&canonical_local_turbo, shim_args),
             ))
         } else {
-            try_check_for_updates(&shim_args, get_version());
+            try_check_for_updates(&shim_args, get_version(), true);
             debug!("Running command as global turbo");
             cli::run(Some(self))
         }
@@ -459,7 +459,7 @@ fn init_env_logger(verbosity: usize) {
     builder.init();
 }
 
-fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
+fn try_check_for_updates(args: &ShimArgs, current_version: &str, is_global_turbo: bool) {
     if args.should_check_for_update() {
         // custom footer for update message
         let footer = format!(
@@ -484,6 +484,7 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
             // use default for timeout (800ms)
             None,
             interval,
+            is_global_turbo,
         );
     }
 }
