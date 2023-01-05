@@ -21,8 +21,8 @@ GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
-# turbo: go-turbo
-# 	cargo build --manifest-path ../crates/turborepo/Cargo.toml
+turbo: go-turbo$(EXT)
+	cargo build --manifest-path ../crates/turborepo/Cargo.toml
 
 go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod
 	CGO_ENABLED=1 go build $(GO_FLAGS) -o go-turbo$(EXT) ./cmd/turbo
