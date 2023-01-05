@@ -4,8 +4,6 @@ Setup
 
 Check
   $ ${TURBO} run test --dry --single-package
-  No local turbo binary found at: .+node_modules/\.bin/turbo (re)
-  Running command as global turbo
   
   Tasks to Run
   build
@@ -30,8 +28,6 @@ Check
     Dependendents   =                                              
 
   $ ${TURBO} run test --dry=json --single-package
-  No local turbo binary found at: .+node_modules/\.bin/turbo (re)
-  Running command as global turbo
   {
     "tasks": [
       {

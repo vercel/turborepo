@@ -4,6 +4,7 @@ use std::{
     env,
     env::current_dir,
     fs::{self, File},
+    io::Write,
     path::{Path, PathBuf},
     process,
     process::Stdio,
@@ -12,8 +13,11 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use chrono::offset::Local;
 #[cfg(windows)]
 use dunce::canonicalize as fs_canonicalize;
+use env_logger::{fmt::Color, Builder, Env, WriteStyle};
+use log::{debug, Level, LevelFilter};
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
@@ -41,6 +45,7 @@ static SUPPORTS_SKIP_INFER_SEMVER: &str = ">=1.7.0-canary.0";
 struct ShimArgs {
     cwd: PathBuf,
     skip_infer: bool,
+    verbosity: usize,
     force_update_check: bool,
     remaining_turbo_args: Vec<String>,
     forwarded_args: Vec<String>,
@@ -51,6 +56,8 @@ impl ShimArgs {
         let mut found_cwd_flag = false;
         let mut cwd: Option<PathBuf> = None;
         let mut skip_infer = false;
+        let mut found_verbosity_flag = false;
+        let mut verbosity = 0;
         let mut force_update_check = false;
         let mut remaining_turbo_args = Vec::new();
         let mut forwarded_args = Vec::new();
@@ -67,6 +74,20 @@ impl ShimArgs {
             } else if arg == "--" {
                 // If we've hit `--` we've reached the args forwarded to tasks.
                 is_forwarded_args = true;
+            } else if arg == "--verbosity" {
+                // If we see `--verbosity` we expect the next arg to be a number.
+                found_verbosity_flag = true
+            } else if arg.starts_with("--verbosity=") || found_verbosity_flag {
+                let verbosity_count = if found_verbosity_flag {
+                    found_verbosity_flag = false;
+                    &arg
+                } else {
+                    arg.strip_prefix("--verbosity=").unwrap_or("0")
+                };
+
+                verbosity = verbosity_count.parse::<usize>().unwrap_or(0);
+            } else if arg == "-v" || arg.starts_with("-vv") {
+                verbosity = arg[1..].len();
             } else if found_cwd_flag {
                 // We've seen a `--cwd` and therefore set the cwd to this arg.
                 cwd = Some(arg.into());
@@ -101,6 +122,7 @@ impl ShimArgs {
             Ok(ShimArgs {
                 cwd,
                 skip_infer,
+                verbosity,
                 force_update_check,
                 remaining_turbo_args,
                 forwarded_args,
@@ -259,11 +281,11 @@ impl RepoState {
                 self.spawn_local_turbo(&canonical_local_turbo, shim_args),
             ))
         } else {
-            eprintln!(
+            debug!(
                 "No local turbo binary found at: {}",
                 local_turbo_path.display()
             );
-            eprintln!("Running command as global turbo");
+            debug!("Running command as global turbo");
             cli::run(Some(self))
         }
     }
@@ -282,7 +304,7 @@ impl RepoState {
     }
 
     fn spawn_local_turbo(&self, local_turbo_path: &Path, mut shim_args: ShimArgs) -> Result<i32> {
-        println!(
+        debug!(
             "Running local turbo binary in {}\n",
             local_turbo_path.display()
         );
@@ -338,9 +360,76 @@ fn is_turbo_binary_path_set() -> bool {
     env::var("TURBO_BINARY_PATH").is_ok()
 }
 
+fn init_env_logger(verbosity: usize) {
+    // configure logger
+    let level = match verbosity {
+        0 => LevelFilter::Warn,
+        1 => LevelFilter::Info,
+        2 => LevelFilter::Debug,
+        _ => LevelFilter::Trace,
+    };
+
+    let mut builder = Builder::new();
+    let env = Env::new().filter("TURBO_LOG_VERBOSITY");
+
+    builder
+        // set defaults
+        .filter_level(level)
+        .write_style(WriteStyle::Auto)
+        // override from env (if available)
+        .parse_env(env);
+
+    builder.format(|buf, record| match record.level() {
+        Level::Error => {
+            let mut level_style = buf.style();
+            let mut log_style = buf.style();
+            level_style.set_bg(Color::Red).set_color(Color::Black);
+            log_style.set_color(Color::Red);
+
+            writeln!(
+                buf,
+                "{} {}",
+                level_style.value(record.level()),
+                log_style.value(record.args())
+            )
+        }
+        Level::Warn => {
+            let mut level_style = buf.style();
+            let mut log_style = buf.style();
+            level_style.set_bg(Color::Yellow).set_color(Color::Black);
+            log_style.set_color(Color::Yellow);
+
+            writeln!(
+                buf,
+                "{} {}",
+                level_style.value(record.level()),
+                log_style.value(record.args())
+            )
+        }
+        Level::Info => writeln!(buf, "{}", record.args()),
+        // trace and debug use the same style
+        _ => {
+            let now = Local::now();
+            writeln!(
+                buf,
+                "{} [{}] {}: {}",
+                // build our own timestamp to match the hashicorp/go-hclog format used by the go
+                // binary
+                now.format("%Y-%m-%dT%H:%M:%S.%3f%z"),
+                record.level(),
+                record.target(),
+                record.args()
+            )
+        }
+    });
+
+    builder.init();
+}
+
 pub fn run() -> Result<Payload> {
     let args = ShimArgs::parse()?;
 
+    init_env_logger(args.verbosity);
     if args.should_check_for_update() {
         // custom footer for update message
         let footer = format!(
@@ -388,8 +477,8 @@ pub fn run() -> Result<Payload> {
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global
             // commands like login/logout/link/unlink to still work
-            eprintln!("Repository inference failed: {}", err);
-            eprintln!("Running command as global turbo");
+            debug!("Repository inference failed: {}", err);
+            debug!("Running command as global turbo");
             cli::run(None)
         }
     }

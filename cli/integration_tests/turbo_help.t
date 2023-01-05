@@ -3,8 +3,6 @@ Setup
 
 Test help flag
   $ ${TURBO} -h
-  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
-  Running command as global turbo
   The build system that makes ship happen
   
   Usage: turbo [OPTIONS] [COMMAND]
@@ -66,8 +64,6 @@ Test help flag
 
 
   $ ${TURBO} --help
-  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
-  Running command as global turbo
   The build system that makes ship happen
   
   Usage: turbo [OPTIONS] [COMMAND]
@@ -125,8 +121,6 @@ Test help flag
 
 Test help flag for link command
   $ ${TURBO} link -h
-  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
-  Running command as global turbo
   Link your local directory to a Vercel organization and enable remote caching
   
   Usage: turbo link [OPTIONS]
@@ -154,8 +148,6 @@ Test help flag for link command
 
 Test help flag for unlink command
   $ ${TURBO} unlink -h
-  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
-  Running command as global turbo
   Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Usage: turbo unlink [OPTIONS]
@@ -182,8 +174,6 @@ Test help flag for unlink command
 
 Test help flag for login command
   $ ${TURBO} login -h
-  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
-  Running command as global turbo
   Login to your Vercel account
   
   Usage: turbo login [OPTIONS]
@@ -211,8 +201,6 @@ Test help flag for login command
 
 Test help flag for logout command
   $ ${TURBO} logout -h
-  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
-  Running command as global turbo
   Logout to your Vercel account
   
   Usage: turbo logout [OPTIONS]

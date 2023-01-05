@@ -4,8 +4,6 @@ Setup
 
 Graph
   $ ${TURBO} run test --single-package --graph
-  No local turbo binary found at: .+node_modules/\.bin/turbo (re)
-  Running command as global turbo
   
   digraph {
   \tcompound = "true" (esc)
