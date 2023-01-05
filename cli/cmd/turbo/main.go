@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 1 {
+	if len(os.Args) != 2 {
 		fmt.Printf("go-turbo is expected to be invoked via turbo")
 		os.Exit(1)
 	}
