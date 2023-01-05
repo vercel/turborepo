@@ -377,6 +377,7 @@ struct UnsupportedExperimentalConfig {
     swc_minify_debug_options: Option<serde_json::Value>,
     swc_plugins: Option<serde_json::Value>,
     swc_trace_profiling: Option<bool>,
+    transpile_packages: Option<Vec<String>>,
     turbotrace: Option<serde_json::Value>,
     url_imports: Option<serde_json::Value>,
     web_vitals_attribution: Option<serde_json::Value>,
@@ -434,6 +435,7 @@ impl Default for UnsupportedExperimentalConfig {
             swc_plugins: None,
             swc_trace_profiling: Some(false),
             turbotrace: None,
+            transpile_packages: None,
             url_imports: None,
             web_vitals_attribution: None,
             worker_threads: Some(false),
@@ -652,7 +654,7 @@ const SUPPORTED_OPTIONS: &[&'static str] = &[
     "experimental.serverComponentsExternalPackages",
 ];
 
-pub async fn validate_next_config(
+async fn validate_next_config(
     project_path: FileSystemPathVc,
     next_config: NextConfigVc,
 ) -> Result<()> {
