@@ -8,7 +8,6 @@ use std::{
     path::{Path, PathBuf},
     process,
     process::Stdio,
-    str::FromStr,
     time::Duration,
 };
 
@@ -168,10 +167,53 @@ struct PackageJson {
     version: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LocalTurboState {
+    bin_path: PathBuf,
+    version: String,
+}
+
+impl LocalTurboState {
+    pub fn infer(repo_root: &Path) -> Option<Self> {
+        let local_turbo_path = repo_root.join("node_modules").join(".bin").join({
+            #[cfg(windows)]
+            {
+                "turbo.cmd"
+            }
+            #[cfg(not(windows))]
+            {
+                "turbo"
+            }
+        });
+
+        if !local_turbo_path.exists() {
+            debug!(
+                "No local turbo binary found at {}",
+                local_turbo_path.display()
+            );
+            return None;
+        }
+
+        let local_turbo_package_path = repo_root
+            .join("node_modules")
+            .join("turbo")
+            .join("package.json");
+
+        let package_json: PackageJson =
+            serde_json::from_reader(File::open(local_turbo_package_path).ok()?).ok()?;
+
+        Some(Self {
+            bin_path: local_turbo_path,
+            version: package_json.version,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct RepoState {
     pub root: PathBuf,
     pub mode: RepoMode,
+    pub local_turbo_state: Option<LocalTurboState>,
 }
 
 impl RepoState {
@@ -203,9 +245,12 @@ impl RepoState {
                 RepoMode::SinglePackage
             };
 
+            let local_turbo_state = LocalTurboState::infer(root_path);
+
             return Ok(Self {
                 root: root_path.to_path_buf(),
                 mode,
+                local_turbo_state,
             });
         }
 
@@ -228,9 +273,12 @@ impl RepoState {
                 pnpm.get_workspace_globs(dir).is_ok() || npm.get_workspace_globs(dir).is_ok();
 
             if is_workspace {
+                let local_turbo_state = LocalTurboState::infer(dir);
+
                 return Ok(Self {
                     root: dir.to_path_buf(),
                     mode: RepoMode::MultiPackage,
+                    local_turbo_state,
                 });
             }
         }
@@ -246,9 +294,11 @@ impl RepoState {
             })?
             .to_path_buf();
 
+        let local_turbo_state = LocalTurboState::infer(&root);
         Ok(Self {
             root,
             mode: RepoMode::SinglePackage,
+            local_turbo_state,
         })
     }
 
@@ -263,44 +313,27 @@ impl RepoState {
     ///
     /// returns: Result<i32, Error>
     fn run_correct_turbo(self, shim_args: ShimArgs) -> Result<Payload> {
-        let local_turbo_path = self.root.join("node_modules").join(".bin").join({
-            #[cfg(windows)]
-            {
-                "turbo.cmd"
-            }
-            #[cfg(not(windows))]
-            {
-                "turbo"
-            }
-        });
-
-        if local_turbo_path.exists() {
-            let canonical_local_turbo = fs_canonicalize(&local_turbo_path)?;
-            // Otherwise we spawn the local turbo process.
+        if let Some(LocalTurboState { bin_path, version }) = &self.local_turbo_state {
+            try_check_for_updates(&shim_args, &version);
+            let canonical_local_turbo = fs_canonicalize(&bin_path)?;
             Ok(Payload::Rust(
                 self.spawn_local_turbo(&canonical_local_turbo, shim_args),
             ))
         } else {
-            debug!(
-                "No local turbo binary found at: {}",
-                local_turbo_path.display()
-            );
+            try_check_for_updates(&shim_args, get_version());
             debug!("Running command as global turbo");
             cli::run(Some(self))
         }
     }
 
     fn local_turbo_supports_skip_infer_and_single_package(&self) -> Result<bool> {
-        let local_turbo_package_path = self
-            .root
-            .join("node_modules")
-            .join("turbo")
-            .join("package.json");
-        let package_json: PackageJson =
-            serde_json::from_reader(File::open(local_turbo_package_path)?)?;
-        let version = Version::from_str(&package_json.version)?;
         let skip_infer_versions = VersionReq::parse(SUPPORTS_SKIP_INFER_SEMVER).unwrap();
-        Ok(skip_infer_versions.matches(&version))
+        if let Some(LocalTurboState { version, .. }) = &self.local_turbo_state {
+            let version = Version::parse(version)?;
+            Ok(skip_infer_versions.matches(&version))
+        } else {
+            Ok(false)
+        }
     }
 
     fn spawn_local_turbo(&self, local_turbo_path: &Path, mut shim_args: ShimArgs) -> Result<i32> {
@@ -426,10 +459,7 @@ fn init_env_logger(verbosity: usize) {
     builder.init();
 }
 
-pub fn run() -> Result<Payload> {
-    let args = ShimArgs::parse()?;
-
-    init_env_logger(args.verbosity);
+fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
     if args.should_check_for_update() {
         // custom footer for update message
         let footer = format!(
@@ -450,12 +480,18 @@ pub fn run() -> Result<Payload> {
             "turbo",
             "https://github.com/vercel/turbo",
             Some(&footer),
-            get_version(),
+            &current_version,
             // use default for timeout (800ms)
             None,
             interval,
         );
     }
+}
+
+pub fn run() -> Result<Payload> {
+    let args = ShimArgs::parse()?;
+
+    init_env_logger(args.verbosity);
 
     // If skip_infer is passed, we're probably running local turbo with
     // global turbo having handled the inference. We can run without any
