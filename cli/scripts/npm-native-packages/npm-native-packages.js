@@ -52,6 +52,6 @@ fs.writeFileSync(
 
 const goBin = os === "windows" ? "go-turbo.exe" : "go-turbo";
 fs.copyFileSync(
-  path.join(__dirname, "..", "..", `dist-${os}-${arch}`, "bin", goBin),
+  path.join(__dirname, "..", "..", `dist-${os}-${arch}`, goBin),
   path.join(outputPath, "bin", goBin)
 );
