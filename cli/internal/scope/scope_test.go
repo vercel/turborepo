@@ -17,11 +17,20 @@ import (
 )
 
 type mockSCM struct {
-	changed []string
+	changed  []string
+	contents map[string][]byte
 }
 
 func (m *mockSCM) ChangedFiles(_fromCommit string, _toCommit string, _includeUntracked bool, _relativeTo string) ([]string, error) {
 	return m.changed, nil
+}
+
+func (m *mockSCM) PreviousContent(fromCommit string, filePath string) ([]byte, error) {
+	contents, ok := m.contents[filePath]
+	if !ok {
+		return nil, fmt.Errorf("No contents found")
+	}
+	return contents, nil
 }
 
 func TestResolvePackages(t *testing.T) {
