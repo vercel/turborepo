@@ -1,8 +1,10 @@
 TURBO_VERSION = $(shell cat ../version.txt | sed -n '1 p')
 TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
+EXT :=
 ifeq ($(OS),Windows_NT)
 	UNAME := Windows
+	EXT = ".exe"
 else
 	UNAME := $(shell uname -s)
 endif
@@ -19,10 +21,10 @@ GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
-turbo: go-binary
+turbo: go-turbo$(EXT)
 	cargo build --manifest-path ../crates/turborepo/Cargo.toml
 
-go-binary: $(GENERATED_FILES) $(SRC_FILES) go.mod
+go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod
 	go build $(GO_FLAGS) ./cmd/turbo
 
 protoc: internal/turbodprotocol/turbod.proto
