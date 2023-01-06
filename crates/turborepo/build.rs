@@ -46,7 +46,7 @@ fn build_local_go_binary(profile: String) -> PathBuf {
         .join(profile)
         .join(go_binary_name);
 
-    fs::copy(go_binary_path, new_go_binary_path).unwrap();
+    fs::rename(go_binary_path, new_go_binary_path).unwrap();
     cli_path
 }
 
