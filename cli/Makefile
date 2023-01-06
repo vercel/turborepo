@@ -124,6 +124,14 @@ snapshot-lib-turbo-cross:
 build-lib-turbo-darwin:
 	goreleaser release --rm-dist -f darwin-lib.yml
 
+.PHONY: build-go-turbo-darwin
+build-go-turbo-darwin:
+	goreleaser release --rm-dist -f darwin-release.yml
+
+.PHONY: build-go-turbo-cross
+build-go-turbo-cross:
+	goreleaser release --rm-dist -f cross-release.yml
+
 .PHONY: build-lib-turbo-cross
 build-lib-turbo-cross:
 	goreleaser release --rm-dist -f cross-lib.yml
@@ -195,10 +203,10 @@ snapshot-turbo:
 	goreleaser release --rm-dist -f combined-shim.yml --snapshot
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
-	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/dist/
+	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/dist/
+	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/dist/
+	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/dist/
 
 
 .PHONY: publish-turbo
