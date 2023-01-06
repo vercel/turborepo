@@ -6,6 +6,8 @@ import RepoSymbol from "./RepoSymbol";
 import TurboWordmark from "./TurboWordmark";
 import { useEffect } from "react";
 
+import styles from "./AnimatedLogo.module.css";
+
 const VERTICAL_OFFSET = 23;
 const ANIMATION_SPEED = 0.4;
 
@@ -39,7 +41,7 @@ const AnimatedLogo = () => {
               : animatedSymbol(<RepoSymbol />, 'repo')}
           </AnimatePresence>
         </div>
-        <TurboWordmark />
+        <TurboWordmark className={styles.desktopLogo} />
       </div>
   )
 };
