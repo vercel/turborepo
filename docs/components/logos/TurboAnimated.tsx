@@ -6,45 +6,6 @@ type LogoProps = {
   height?: number;
 };
 
-export const TurboLogoCondensed = ({
-  height = 32,
-  className = "",
-}: LogoProps) => (
-  <svg
-    className={className}
-    width="32"
-    height={height}
-    viewBox="0 0 32 32"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <title>Turborepo</title>
-    <path
-      d="M15.9309 7.33936C11.1933 7.33936 7.33887 11.1938 7.33887 15.9314C7.33887 20.669 11.1933 24.5234 15.9309 24.5234C20.6685 24.5234 24.5229 20.669 24.5229 15.9314C24.5229 11.1938 20.6685 7.33936 15.9309 7.33936ZM15.9309 20.3778C13.4749 20.3778 11.4845 18.3874 11.4845 15.9314C11.4845 13.4754 13.4749 11.485 15.9309 11.485C18.3869 11.485 20.3773 13.4754 20.3773 15.9314C20.3773 18.3874 18.3869 20.3778 15.9309 20.3778Z"
-      className="dark:fill-white fill-black"
-    />
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M16.6509 5.92821V2.72021C23.6237 3.09301 29.1629 8.86581 29.1629 15.9314C29.1629 22.997 23.6237 28.7682 16.6509 29.1426V25.9346C21.8477 25.5634 25.9629 21.221 25.9629 15.9314C25.9629 10.6418 21.8477 6.29941 16.6509 5.92821ZM8.35333 22.4914C6.97573 20.901 6.08773 18.8754 5.92933 16.6514H2.71973C2.88613 19.7634 4.13093 22.5874 6.08133 24.7618L8.35173 22.4914H8.35333ZM15.2109 29.1426V25.9346C12.9853 25.7762 10.9597 24.8898 9.36935 23.5106L7.09895 25.781C9.27495 27.733 12.0989 28.9762 15.2093 29.1426H15.2109Z"
-      fill="url(#paint0_linear_967_9283)"
-    />
-    <defs>
-      <linearGradient
-        id="paint0_linear_967_9283"
-        x1="17.1694"
-        y1="4.578"
-        x2="4.16465"
-        y2="17.5828"
-        gradientUnits="userSpaceOnUse"
-      >
-        <stop stopColor="#0096FF" />
-        <stop offset="1" stopColor="#FF1E56" />
-      </linearGradient>
-    </defs>
-  </svg>
-);
-
 const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
   const router = useRouter();
   const showTurboRepoLogo = !router.route.startsWith("/pack");
@@ -78,21 +39,8 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
               fillRule="evenodd"
               clipRule="evenodd"
               d="M14.5697 5.187V2.38C20.6709 2.7062 25.5177 7.7574 25.5177 13.9398C25.5177 20.1222 20.6709 25.172 14.5697 25.4996V22.6926C19.1169 22.3678 22.7177 18.5682 22.7177 13.9398C22.7177 9.3114 19.1169 5.5118 14.5697 5.187ZM7.30928 19.6798C6.10388 18.2882 5.32688 16.5158 5.18828 14.5698H2.37988C2.52548 17.2928 3.61468 19.7638 5.32128 21.6664L7.30788 19.6798H7.30928ZM13.3097 25.4996V22.6926C11.3623 22.554 9.5899 21.7784 8.1983 20.5716L6.2117 22.5582C8.1157 24.2662 10.5867 25.354 13.3083 25.4996H13.3097Z"
-              fill="url(#paint0_linear_531_5968)"
+              fill="url(#logo-ring-gradient)"
             />
-            <defs>
-              <linearGradient
-                id="paint0_linear_531_5968"
-                x1="15.0234"
-                y1="4.00556"
-                x2="3.64419"
-                y2="15.3847"
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop stopColor="#0096FF" />
-                <stop offset="1" stopColor="#FF1E56" />
-              </linearGradient>
-            </defs>
           </motion.g>
         ) : (
           <motion.g
@@ -114,21 +62,8 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
               fill-rule="evenodd"
               clip-rule="evenodd"
               d="M2 13.8059V22.1684C2 22.7295 2.15656 23.254 2.42838 23.7007L5.44339 20.6857V13.8059H2ZM3.37481 24.664L6.36423 21.6745C6.38505 21.6758 6.40605 21.6765 6.42723 21.6765H13.0144V25.12H4.95147C4.37169 25.12 3.83094 24.9528 3.37481 24.664ZM14.3648 25.12H22.1684C23.7985 25.12 25.12 23.7985 25.12 22.1684V4.95147C25.12 3.32142 23.7985 2 22.1684 2H13.8059V5.44339H20.6927C21.236 5.44339 21.6765 5.88386 21.6765 6.42723V20.6927C21.6765 21.2361 21.236 21.6765 20.6927 21.6765H14.3648V25.12Z"
-              fill="url(#paint0_linear_4_31)"
+              fill="url(#logo-ring-gradient)"
             />
-            <defs>
-              <linearGradient
-                id="paint0_linear_4_31"
-                x1="14.6967"
-                y1="3.62562"
-                x2="3.31769"
-                y2="14.9275"
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop stop-color="#0096FF" />
-                <stop offset="1" stop-color="#FF1E56" />
-              </linearGradient>
-            </defs>
           </motion.g>
         )}
       </AnimatePresence>
@@ -154,6 +89,19 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
           className="dark:fill-white fill-black"
         />
       </g>
+      <defs>
+        <linearGradient
+          id="logo-ring-gradient"
+          x1="15.0234"
+          y1="4.00556"
+          x2="3.64419"
+          y2="15.3847"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#0096FF" />
+          <stop offset="1" stopColor="#FF1E56" />
+        </linearGradient>
+      </defs>
     </svg>
   );
 };
