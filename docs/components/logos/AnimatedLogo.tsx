@@ -8,8 +8,8 @@ import { useEffect } from "react";
 
 import styles from "./AnimatedLogo.module.css";
 
-const VERTICAL_OFFSET = 23;
-const ANIMATION_SPEED = 0.4;
+const SYMBOL_SIZE = 24;
+const ANIMATION_DURATION = 0.4;
 
 const AnimatedLogo = () => {
   const symbol = useTurboSite();
@@ -19,22 +19,25 @@ const AnimatedLogo = () => {
   useEffect(() => setHasLoadedOnce(true), []);
 
   const animatedSymbol = (children: JSX.Element, key: string) =>
-  <motion.div
-    key={key}
-    style={{ position: "absolute", top: 0, left: 0 }}
-    initial={hasLoadedOnce
-      ? { opacity: 0, y: VERTICAL_OFFSET}
-      : false}
-    animate={{ opacity: 1, y: 0 }}
-    exit={{ opacity: 0, y: -VERTICAL_OFFSET }}
-    transition={{ duration: ANIMATION_SPEED, ease: "easeOut" }}
-  >
-    {children}
-  </motion.div>
+    <motion.div
+      key={key}
+      style={{ position: "absolute", top: 0, left: 0 }}
+      initial={hasLoadedOnce
+        ? { opacity: 0, y: SYMBOL_SIZE}
+        : false}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -SYMBOL_SIZE }}
+      transition={{ duration: ANIMATION_DURATION, ease: "easeOut" }}
+    >
+      {children}
+    </motion.div>
 
   return (
       <div className="flex items-center gap-2">
-        <div className="relative w-[25px] h-[21px]">
+        <div
+          className="relative"
+          style={{ width: SYMBOL_SIZE, height: SYMBOL_SIZE }}
+        >
           <AnimatePresence>
             {symbol === "pack"
               ? animatedSymbol(<PackSymbol />, 'pack')
