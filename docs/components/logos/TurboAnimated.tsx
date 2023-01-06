@@ -34,13 +34,19 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
           <stop stopColor="#0096FF" />
           <stop offset="1" stopColor="#FF1E56" />
         </linearGradient>
-        <clipPath id="logo-mask">
-          <rect x="-8" y="0" width="40" height="26" />
-        </clipPath>
+        <linearGradient id="gradient">
+          <stop offset="0%" stop-color="#000000" />
+          <stop offset="5%" stop-color="#ffffff" />
+          <stop offset="95%" stop-color="#ffffff" />
+          <stop offset="100%" stop-color="#000000" />
+        </linearGradient>
+        <mask id="logo-mask">
+          <rect x="0" y="0" width="28" height="26" fill="url(#gradient)" />
+        </mask>
       </defs>
 
       <AnimatePresence mode="sync" initial={false}>
-        <g clipPath="url(#logo-mask)">
+        <g mask="url(#logo-mask)">
           {site === "repo" ? (
             <motion.g
               key="turborepo"
