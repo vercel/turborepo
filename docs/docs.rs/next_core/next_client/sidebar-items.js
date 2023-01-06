@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["NextClientTransition","Makes a transition into a next.js client context."],["NextClientTransitionVc","Vc for [`NextClientTransition`]"]],"type":[["NextClientTransitionReadRef","see [turbo_tasks::ReadRef]"]]};
+window.SIDEBAR_ITEMS = {};

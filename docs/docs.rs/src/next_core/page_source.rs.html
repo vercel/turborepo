@@ -556,6 +556,12 @@
 <span id="556">556</span>
 <span id="557">557</span>
 <span id="558">558</span>
+<span id="559">559</span>
+<span id="560">560</span>
+<span id="561">561</span>
+<span id="562">562</span>
+<span id="563">563</span>
+<span id="564">564</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -607,12 +613,12 @@
         context::{
             get_client_assets_path, get_client_chunking_context, get_client_environment,
             get_client_module_options_context, get_client_resolve_options_context,
-            get_client_runtime_entries, ContextType,
+            get_client_runtime_entries, ClientContextType,
         },
-        NextClientTransition,
+        transition::NextClientTransition,
     },
     next_config::NextConfigVc,
-    next_server::{
+    next_server::context::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
     },
@@ -626,13 +632,13 @@
     project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
     client_environment: EnvironmentVc,
-    ty: Value&lt;ContextType&gt;,
+    ty: Value&lt;ClientContextType&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleOptionsContextVc&gt; {
     <span class="kw">let </span>client_module_options_context =
         get_client_module_options_context(project_path, execution_context, client_environment, ty);
 
     <span class="kw">let </span>client_module_options_context = <span class="kw">match </span>ty.into_value() {
-        ContextType::Pages { pages_dir } =&gt; add_next_transforms_to_pages(
+        ClientContextType::Pages { pages_dir } =&gt; add_next_transforms_to_pages(
             client_module_options_context,
             pages_dir,
             Value::new(PageTransformType::Client),
@@ -695,7 +701,7 @@
         <span class="kw">return </span><span class="prelude-val">Ok</span>(NoContentSourceVc::new().into());
     };
 
-    <span class="kw">let </span>ty = Value::new(ContextType::Pages { pages_dir });
+    <span class="kw">let </span>ty = Value::new(ClientContextType::Pages { pages_dir });
     <span class="kw">let </span>server_ty = Value::new(ServerContextType::Pages { pages_dir });
 
     <span class="kw">let </span>client_environment = get_client_environment(browserslist_query);
@@ -846,7 +852,10 @@
         context_path,
         intermediate_output_path,
         intermediate_output_path.join(<span class="string">&quot;chunks&quot;</span>),
-        get_client_assets_path(server_root, Value::new(ContextType::Pages { pages_dir })),
+        get_client_assets_path(
+            server_root,
+            Value::new(ClientContextType::Pages { pages_dir }),
+        ),
     )
     .build();
 
@@ -856,14 +865,17 @@
         context_path,
         data_intermediate_output_path,
         data_intermediate_output_path.join(<span class="string">&quot;chunks&quot;</span>),
-        get_client_assets_path(server_root, Value::new(ContextType::Pages { pages_dir })),
+        get_client_assets_path(
+            server_root,
+            Value::new(ClientContextType::Pages { pages_dir }),
+        ),
     )
     .build();
 
     <span class="kw">let </span>client_chunking_context = get_client_chunking_context(
         context_path,
         server_root,
-        Value::new(ContextType::Pages { pages_dir }),
+        Value::new(ClientContextType::Pages { pages_dir }),
     );
 
     <span class="kw">let </span>pathname = pathname_for_path(server_root, server_path, <span class="bool-val">true</span>);

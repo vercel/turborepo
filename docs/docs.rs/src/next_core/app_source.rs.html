@@ -750,9 +750,9 @@
     next_client::{
         context::{
             get_client_chunking_context, get_client_environment, get_client_module_options_context,
-            get_client_resolve_options_context, get_client_runtime_entries, ContextType,
+            get_client_resolve_options_context, get_client_runtime_entries, ClientContextType,
         },
-        NextClientTransition,
+        transition::NextClientTransition,
     },
     next_client_component::{
         client_chunks_transition::NextClientChunksTransition,
@@ -760,7 +760,7 @@
         ssr_client_module_transition::NextSSRClientModuleTransition,
     },
     next_config::NextConfigVc,
-    next_server::{
+    next_server::context::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
     },
@@ -775,7 +775,7 @@
     server_root: FileSystemPathVc,
     browserslist_query: <span class="kw-2">&amp;</span>str,
 ) -&gt; TransitionVc {
-    <span class="kw">let </span>ty = Value::new(ContextType::App { app_dir });
+    <span class="kw">let </span>ty = Value::new(ClientContextType::App { app_dir });
     <span class="kw">let </span>client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
     <span class="kw">let </span>client_environment = get_client_environment(browserslist_query);
 
@@ -802,7 +802,7 @@
     browserslist_query: <span class="kw-2">&amp;</span>str,
     next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;TransitionVc&gt; {
-    <span class="kw">let </span>ty = Value::new(ContextType::App { app_dir });
+    <span class="kw">let </span>ty = Value::new(ClientContextType::App { app_dir });
     <span class="kw">let </span>client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
     <span class="kw">let </span>client_environment = get_client_environment(browserslist_query);
     <span class="kw">let </span>client_module_options_context =
