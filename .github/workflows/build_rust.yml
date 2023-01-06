@@ -131,7 +131,7 @@ jobs:
         id: download-artifact
         uses: dawidd6/action-download-artifact@v2
         with:
-          github_token: ${{secrets.DOWNLOAD_ARTIFACT}}
+          github_token: ${{secrets.TURBOBOT}}
           workflow: build_go_binary.yml
           workflow_conclusion: success
           branch: ${{ inputs.release_branch }}
