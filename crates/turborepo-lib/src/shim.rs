@@ -314,8 +314,8 @@ impl RepoState {
     /// returns: Result<i32, Error>
     fn run_correct_turbo(self, shim_args: ShimArgs) -> Result<Payload> {
         if let Some(LocalTurboState { bin_path, version }) = &self.local_turbo_state {
-            try_check_for_updates(&shim_args, &version, false);
-            let canonical_local_turbo = fs_canonicalize(&bin_path)?;
+            try_check_for_updates(&shim_args, version, false);
+            let canonical_local_turbo = fs_canonicalize(bin_path)?;
             Ok(Payload::Rust(
                 self.spawn_local_turbo(&canonical_local_turbo, shim_args),
             ))
@@ -480,7 +480,7 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str, is_global_turbo
             "turbo",
             "https://github.com/vercel/turbo",
             Some(&footer),
-            &current_version,
+            current_version,
             // use default for timeout (800ms)
             None,
             interval,

@@ -229,7 +229,7 @@ pub enum Command {
     /// occurred again).
     ///
     /// Arguments passed after '--' will be passed through to the named tasks.
-    Run(RunArgs),
+    Run(Box<RunArgs>),
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
     Unlink {},
@@ -345,7 +345,7 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
     // `self.parsed_args.run_args` as arguments.
     if clap_args.command.is_none() {
         if let Some(run_args) = mem::take(&mut clap_args.run_args) {
-            clap_args.command = Some(Command::Run(run_args));
+            clap_args.command = Some(Command::Run(Box::new(run_args)));
         } else {
             return Err(anyhow!("No command specified"));
         }
