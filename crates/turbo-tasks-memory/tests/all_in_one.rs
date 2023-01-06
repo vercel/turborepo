@@ -1,7 +1,8 @@
-#![feature(min_specialization)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 use anyhow::{anyhow, Result};
-use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
+use turbo_tasks::{Value, ValueToString, Vc};
 use turbo_tasks_testing::{register, run};
 
 register!();
@@ -9,15 +10,18 @@ register!();
 #[tokio::test]
 async fn all_in_one() {
     run! {
-        let a = MyTransparentValueVc::cell(4242);
+        let a: Vc<u32> = Vc::cell(4242);
         assert_eq!(*a.await?, 4242);
 
-        let b = MyEnumValueVc::cell(MyEnumValue::More(MyEnumValue::Yeah(42).into()));
+        let a: Vc<MyTransparentValue> = Vc::cell(4242);
+        assert_eq!(*a.await?, 4242);
+
+        let b = MyEnumValue::cell(MyEnumValue::More(MyEnumValue::Yeah(42).into()));
         assert_eq!(*b.to_string().await?, "42");
 
         let c = MyStructValue {
             value: 42,
-            next: Some(MyStructValueVc::new(a)),
+            next: Some(MyStructValue::new(a)),
         }
         .into();
 
@@ -56,10 +60,10 @@ impl MyEnumValueVc {
 #[turbo_tasks::value_impl]
 impl ValueToString for MyEnumValue {
     #[turbo_tasks::function]
-    fn to_string(&self) -> StringVc {
+    fn to_string(&self) -> Vc<String> {
         match self {
-            MyEnumValue::Yeah(value) => StringVc::cell(value.to_string()),
-            MyEnumValue::Nah => StringVc::cell("nah".to_string()),
+            MyEnumValue::Yeah(value) => Vc::cell(value.to_string()),
+            MyEnumValue::Nah => Vc::cell("nah".to_string()),
             MyEnumValue::More(more) => more.to_string(),
         }
     }
@@ -85,31 +89,31 @@ impl MyStructValueVc {
 #[turbo_tasks::value_impl]
 impl ValueToString for MyStructValue {
     #[turbo_tasks::function]
-    fn to_string(&self) -> StringVc {
-        StringVc::cell(self.value.to_string())
+    fn to_string(&self) -> Vc<String> {
+        Vc::cell(self.value.to_string())
     }
 }
 
 #[turbo_tasks::value_impl]
 impl MyTrait for MyStructValue {
     #[turbo_tasks::function]
-    fn my_trait_function2(self_vc: MyStructValueVc) -> StringVc {
+    fn my_trait_function2(self_vc: MyStructValueVc) -> Vc<String> {
         self_vc.to_string()
     }
     #[turbo_tasks::function]
-    async fn my_trait_function3(&self) -> Result<StringVc> {
+    async fn my_trait_function3(&self) -> Result<Vc<String>> {
         if let Some(next) = self.next {
             return Ok(next.my_trait_function3());
         }
-        Ok(StringVc::cell(self.value.to_string()))
+        Ok(Vc::cell(self.value.to_string()))
     }
 }
 
 #[turbo_tasks::value_trait]
 trait MyTrait: ValueToString {
     // TODO #[turbo_tasks::function]
-    async fn my_trait_function(self_vc: MyTraitVc) -> Result<StringVc> {
-        if *self_vc.to_string().await? != "42" {
+    async fn my_trait_function(self: Vc<Self>) -> Result<Vc<String>> {
+        if *self.to_string().await? != "42" {
             return Err(anyhow!(
                 "my_trait_function must only be called with 42 as value"
             ));
@@ -118,15 +122,15 @@ trait MyTrait: ValueToString {
         Ok(self_vc.to_string())
     }
 
-    fn my_trait_function2(&self) -> StringVc;
-    fn my_trait_function3(&self) -> StringVc;
+    fn my_trait_function2(&self) -> Vc<String>;
+    fn my_trait_function3(&self) -> Vc<String>;
 }
 
 #[turbo_tasks::function]
 async fn my_function(
-    a: MyTransparentValueVc,
-    b: MyEnumValueVc,
-    c: MyStructValueVc,
+    a: Vc<MyTransparentValue>,
+    b: Vc<MyEnumValue>,
+    c: Vc<MyStructValue>,
     d: Value<MyEnumValue>,
 ) -> Result<MyStructValueVc> {
     assert_eq!(*a.await?, 4242);

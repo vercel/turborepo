@@ -1,6 +1,6 @@
 use anyhow::Result;
 use criterion::{BenchmarkId, Criterion};
-use turbo_tasks::{NothingVc, TryJoinIterExt, TurboTasks};
+use turbo_tasks::{unit, TryJoinIterExt, TurboTasks};
 use turbo_tasks_memory::MemoryBackend;
 
 use super::register;
@@ -33,7 +33,7 @@ pub fn fibonacci(c: &mut Criterion) {
             let size = *size;
 
             b.to_async(rt).iter_with_large_drop(move || {
-                let tt = TurboTasks::new(MemoryBackend::default());
+                let tt = TurboTasks::new(MemoryBackend::new());
                 async move {
                     let task = tt.spawn_once_task(async move {
                         // Number of tasks:
@@ -41,7 +41,7 @@ pub fn fibonacci(c: &mut Criterion) {
                         // size >= 1 => + fib(0) = 1
                         // size >= 2 => + fib(1) = 2
                         (0..size).map(|i| fib(i, i)).try_join().await?;
-                        Ok(NothingVc::new().into())
+                        Ok(unit().into())
                     });
                     tt.wait_task_completion(task, false).await.unwrap();
                     tt

@@ -8751,6 +8751,7 @@ name = "turbo-tasks"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "auto-hash-map",
  "concurrent-queue",
  "dashmap",
@@ -10021,6 +10022,20 @@ name = "value-bag"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4d330786735ea358f3bc09eea4caa098569c1c93f342d9aca0514915022fe7e"
+
+[[package]]
+name = "vc-test"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "tokio",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-malloc",
+ "turbo-tasks-memory",
+]
 
 [[package]]
 name = "vcpkg"

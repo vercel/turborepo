@@ -1,16 +1,16 @@
 use std::{fmt::Debug, marker::PhantomData, ops::Deref, sync::Arc};
 
-use crate::{SharedReference, Typed};
+use crate::SharedReference;
 
 /// Pass a value by value (`Value<Xxx>`) instead of by reference (`XxxVc`).
 ///
 /// Persistent, requires serialization.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-pub struct Value<T: Typed> {
+pub struct Value<T> {
     inner: T,
 }
 
-impl<T: Typed> Value<T> {
+impl<T> Value<T> {
     pub fn new(value: T) -> Self {
         Self { inner: value }
     }
@@ -20,13 +20,7 @@ impl<T: Typed> Value<T> {
     }
 }
 
-impl<T: Typed> From<T> for Value<T> {
-    fn from(value: T) -> Self {
-        Value::new(value)
-    }
-}
-
-impl<T: Typed> Deref for Value<T> {
+impl<T> Deref for Value<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -34,9 +28,9 @@ impl<T: Typed> Deref for Value<T> {
     }
 }
 
-impl<T: Typed + Copy> Copy for Value<T> {}
+impl<T: Copy> Copy for Value<T> {}
 
-impl<T: Typed + Default> Default for Value<T> {
+impl<T: Default> Default for Value<T> {
     fn default() -> Self {
         Value::new(Default::default())
     }

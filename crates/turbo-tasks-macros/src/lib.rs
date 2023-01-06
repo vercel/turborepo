@@ -6,7 +6,7 @@
 mod derive;
 mod func;
 mod function_macro;
-mod util;
+mod primitive_macro;
 mod value_impl_macro;
 mod value_macro;
 mod value_trait_macro;
@@ -85,4 +85,11 @@ pub fn function(args: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn value_impl(args: TokenStream, input: TokenStream) -> TokenStream {
     value_impl_macro::value_impl(args, input)
+}
+
+#[allow_internal_unstable(min_specialization, into_future, trivial_bounds)]
+#[proc_macro_error]
+#[proc_macro]
+pub fn primitive(input: TokenStream) -> TokenStream {
+    primitive_macro::primitive(input)
 }
