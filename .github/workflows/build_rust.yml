@@ -142,17 +142,23 @@ jobs:
       - name: Move Go artifacts into place
         run: |
           mv go-artifacts/turbo-go-cross-${{ inputs.release_branch }}/turbo_linux_amd64_v1/bin/* cli/dist-linux-amd64
-          chmod a+x cli/dist-linux-amd64/bin/*
+          chmod a+x cli/dist-linux-amd64/turbo
+          chmod a+x cli/dist-linux-amd64/go-turbo
           mv go-artifacts/turbo-go-cross-${{ inputs.release_branch }}/turbo_linux_arm64/bin/* cli/dist-linux-arm64
-          chmod a+x cli/dist-linux-arm64/bin/*
+          chmod a+x cli/dist-linux-arm64/turbo
+          chmod a+x cli/dist-linux-arm64/go-turbo
           mv go-artifacts/turbo-go-cross-${{ inputs.release_branch }}/turbo_windows_amd64_v1/bin/* cli/dist-windows-amd64
-          chmod a+x cli/dist-windows-amd64/bin/*
+          chmod a+x cli/dist-windows-amd64/turbo.exe
+          chmod a+x cli/dist-windows-amd64/go-turbo.exe
           mv go-artifacts/turbo-go-cross-${{ inputs.release_branch }}/turbo_windows_arm64/bin/* cli/dist-windows-arm64
-          chmod a+x cli/dist-windows-arm64/bin/*
+          chmod a+x cli/dist-windows-arm64/turbo.exe
+          chmod a+x cli/dist-windows-arm64/go-turbo.exe
           mv go-artifacts/turbo-go-darwin-${{ inputs.release_branch }}/turbo_darwin_amd64_v1/bin/* cli/dist-darwin-amd64
-          chmod a+x cli/dist-darwin-amd64/bin/*
+          chmod a+x cli/dist-darwin-amd64/turbo
+          chmod a+x cli/dist-darwin-amd64/go-turbo
           mv go-artifacts/turbo-go-darwin-${{ inputs.release_branch }}/turbo_darwin_arm64/bin/* cli/dist-darwin-arm64
-          chmod a+x cli/dist-darwin-arm64/bin/*
+          chmod a+x cli/dist-darwin-arm64/turbo
+          chmod a+x cli/dist-darwin-arm64/go-turbo
 
       - name: Perform Release
         run: cd cli && make publish-turbo
