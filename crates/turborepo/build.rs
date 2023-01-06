@@ -16,24 +16,15 @@ fn build_local_go_binary(profile: String) -> PathBuf {
     let target = build_target::target().unwrap();
     let mut cmd = Command::new("make");
     cmd.current_dir(&cli_path);
-    if target.os == build_target::Os::Windows {
-        let output_dir = env::var_os("OUT_DIR").map(PathBuf::from).unwrap();
-        let output_deps = output_dir
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join("deps");
-        // workaround to make increment build works
-        for ext in ["pdb", "exe", "d", "lib"].iter() {
-            std::fs::remove_file(output_deps.join(format!("turbo.{ext}"))).unwrap_or(());
-        }
-        cmd.arg("go-turbo.exe");
+
+    let go_binary_name = if target.os == build_target::Os::Windows {
+        "go-turbo.exe"
     } else {
-        cmd.arg("go-turbo");
-    }
+        "go-turbo"
+    };
+
+    cmd.arg(go_binary_name);
+
     assert!(
         cmd.stdout(std::process::Stdio::inherit())
             .status()
@@ -41,12 +32,6 @@ fn build_local_go_binary(profile: String) -> PathBuf {
             .success(),
         "failed to build go binary"
     );
-
-    let go_binary_name = if target.os == build_target::Os::Windows {
-        "go-turbo.exe"
-    } else {
-        "go-turbo"
-    };
 
     let go_binary_path = env::var("CARGO_WORKSPACE_DIR")
         .map(PathBuf::from)
