@@ -45,8 +45,8 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
         </mask>
       </defs>
 
-      <AnimatePresence mode="sync" initial={false}>
-        <g mask="url(#logo-mask)">
+      <g mask="url(#logo-mask)">
+        <AnimatePresence mode="sync" initial={false}>
           {site === "repo" ? (
             <motion.g
               key="turborepo"
@@ -92,8 +92,8 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
               />
             </motion.g>
           )}
-        </g>
-      </AnimatePresence>
+        </AnimatePresence>
+      </g>
 
       {/* Turbo Wordmark */}
       <g className={cn("z-10 relative", styles.desktopLogo)}>
