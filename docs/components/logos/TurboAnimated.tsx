@@ -67,7 +67,7 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
             initial="hidden"
             animate="visible"
             exit="hidden"
-            custom={-24}
+            custom={24}
             className="z-0 relative"
           >
             <path
@@ -101,7 +101,7 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
             initial="hidden"
             animate="visible"
             exit="hidden"
-            custom={24}
+            custom={-24}
             className="z-0 relative"
           >
             <path
@@ -164,12 +164,15 @@ const variants: Variants = {
   visible: {
     opacity: 1,
     x: 0,
+    transition: {
+      duration: 0.3,
+    },
   },
   hidden: (distance) => ({
     opacity: 0,
     x: distance,
     transition: {
-      duration: 0.2,
+      duration: 0.3,
     },
   }),
 };
