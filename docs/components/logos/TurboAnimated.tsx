@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, Variants } from "framer-motion";
-import { useRouter } from "next/router";
+import { useTurboSite } from "../SiteSwitcher";
 
 type LogoProps = {
   className?: string;
@@ -7,8 +7,7 @@ type LogoProps = {
 };
 
 const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
-  const router = useRouter();
-  const showTurboRepoLogo = !router.route.startsWith("/pack");
+  const site = useTurboSite();
 
   return (
     <svg
@@ -22,7 +21,7 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
       <title>Turborepo</title>
       <AnimatePresence mode="sync" initial={false}>
         <g clipPath="url(#logoMask)">
-          {showTurboRepoLogo ? (
+          {site === "repo" ? (
             <motion.g
               key="turborepo"
               variants={variants}
