@@ -43,7 +43,7 @@ fn build_local_go_binary(profile: String) -> PathBuf {
         .map(PathBuf::from)
         .unwrap()
         .join("target")
-        .join(&profile)
+        .join(profile)
         .join(go_binary_name);
 
     fs::copy(go_binary_path, new_go_binary_path).unwrap();

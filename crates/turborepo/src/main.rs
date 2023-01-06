@@ -22,7 +22,7 @@ fn run_go_binary(args: Args) -> Result<i32> {
 
     let exit_code = command.wait()?.code().unwrap_or(2);
 
-    Ok(exit_code.try_into()?)
+    Ok(exit_code)
 }
 
 // This function should not expanded. Please add any logic to
