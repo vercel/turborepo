@@ -1,13 +1,17 @@
 use std::{env, fs, path::PathBuf, process::Command};
 
 fn main() {
-    let is_ci_release = matches!(env::var("PROFILE"), Ok(profile) if profile == "release");
+    println!("cargo:rerun-if-changed=../../cli");
+    let profile = env::var("PROFILE").unwrap();
+    let is_ci_release =
+        &profile == "release" && matches!(env::var("RELEASE_TURBO_CLI"), Ok(v) if v == "true");
+
     if !is_ci_release {
-        build_debug_go_binary();
+        build_local_go_binary(profile);
     }
 }
 
-fn build_debug_go_binary() -> PathBuf {
+fn build_local_go_binary(profile: String) -> PathBuf {
     let cli_path = cli_path();
     let target = build_target::target().unwrap();
     let mut cmd = Command::new("make");
@@ -54,7 +58,7 @@ fn build_debug_go_binary() -> PathBuf {
         .map(PathBuf::from)
         .unwrap()
         .join("target")
-        .join("debug")
+        .join(&profile)
         .join(go_binary_name);
 
     fs::rename(go_binary_path, new_go_binary_path).unwrap();
