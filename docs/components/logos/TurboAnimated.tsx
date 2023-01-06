@@ -21,6 +21,24 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
       xmlns="http://www.w3.org/2000/svg"
     >
       <title>Turborepo</title>
+
+      <defs>
+        <linearGradient
+          id="logo-ring-gradient"
+          x1="15.0234"
+          y1="4.00556"
+          x2="3.64419"
+          y2="15.3847"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#0096FF" />
+          <stop offset="1" stopColor="#FF1E56" />
+        </linearGradient>
+        <clipPath id="logo-mask">
+          <rect x="-8" y="0" width="40" height="26" />
+        </clipPath>
+      </defs>
+
       <AnimatePresence mode="sync" initial={false}>
         <g clipPath="url(#logo-mask)">
           {site === "repo" ? (
@@ -70,6 +88,8 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
           )}
         </g>
       </AnimatePresence>
+
+      {/* Turbo Wordmark */}
       <g className={cn("z-10 relative", styles.desktopLogo)}>
         <path
           d="M48.2623 11.2944V8.24418H33.5623V11.2944H39.1115V21.4374H42.713V11.2944H48.2623Z"
@@ -92,22 +112,6 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
           className="dark:fill-white fill-black"
         />
       </g>
-      <defs>
-        <linearGradient
-          id="logo-ring-gradient"
-          x1="15.0234"
-          y1="4.00556"
-          x2="3.64419"
-          y2="15.3847"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="#0096FF" />
-          <stop offset="1" stopColor="#FF1E56" />
-        </linearGradient>
-        <clipPath id="logo-mask">
-          <rect x="-8" y="0" width="40" height="26" />
-        </clipPath>
-      </defs>
     </svg>
   );
 };
