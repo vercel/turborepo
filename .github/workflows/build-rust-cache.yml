@@ -41,6 +41,12 @@ jobs:
         with:
           crate: cargo-chef
 
+      - name: Install cargo-sweep
+        if: always()
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-chef
+
       - name: Compile dependencies
         run: |
           cargo chef prepare
