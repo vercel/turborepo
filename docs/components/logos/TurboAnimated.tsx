@@ -1,5 +1,7 @@
 import { AnimatePresence, motion, Variants } from "framer-motion";
 import { useTurboSite } from "../SiteSwitcher";
+import cn from "classnames";
+import styles from "../header-logo.module.css";
 
 type LogoProps = {
   className?: string;
@@ -68,7 +70,7 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
           )}
         </g>
       </AnimatePresence>
-      <g className="z-10 relative">
+      <g className={cn("z-10 relative", styles.desktopLogo)}>
         <path
           d="M48.2623 11.2944V8.24418H33.5623V11.2944H39.1115V21.4374H42.713V11.2944H48.2623Z"
           className="dark:fill-white fill-black"

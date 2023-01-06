@@ -1,4 +1,3 @@
-import { TurboLogoCondensed } from "./logos/Turbo";
 import SiteSwitcher from "./SiteSwitcher";
 import Link from "next/link";
 import styles from "./header-logo.module.css";
@@ -42,8 +41,7 @@ function HeaderLogo() {
       </svg>
 
       <Link href="/" title="Home" className="hover:opacity-75">
-        <TurboAnimated height={32} className={styles.desktopLogo} />
-        <TurboLogoCondensed height={32} className={styles.mobileLogo} />
+        <TurboAnimated height={32} />
       </Link>
       <div className={styles.siteSwitcher}>
         <SiteSwitcher />
