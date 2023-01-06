@@ -25,7 +25,7 @@ turbo: go-turbo$(EXT)
 	cargo build --manifest-path ../crates/turborepo/Cargo.toml
 
 go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod
-	go build $(GO_FLAGS) ./cmd/turbo
+	CGO_ENABLED=1 go build $(GO_FLAGS) -o go-turbo$(EXT) ./cmd/turbo
 
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
