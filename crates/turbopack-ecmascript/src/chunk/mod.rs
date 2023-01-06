@@ -26,6 +26,7 @@ use turbopack_core::{
         FromChunkableAsset, ModuleId, ModuleIdReadRef, ModuleIdVc, ModuleIdsVc,
     },
     code_builder::{Code, CodeBuilder, CodeReadRef, CodeVc},
+    environment::{ChunkLoading, EnvironmentVc},
     introspect::{
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
@@ -343,6 +344,7 @@ pub struct EcmascriptChunkContent {
     chunk_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
     evaluate: Option<EcmascriptChunkContentEvaluateVc>,
+    environment: EnvironmentVc,
 }
 
 #[turbo_tasks::value(transparent)]
@@ -452,6 +454,7 @@ impl EcmascriptChunkContentVc {
             chunk_path,
             output_root,
             evaluate,
+            environment: context.environment(),
         }
         .cell())
     }
@@ -625,7 +628,11 @@ impl EcmascriptChunkContentVc {
         }
         code += "]);\n";
         if this.evaluate.is_some() {
-            let runtime_code = embed_file!("js/src/runtime.js").await?;
+            let runtime_code = match *this.environment.chunk_loading().await? {
+                ChunkLoading::None => return Err(anyhow!("unsupported environment")),
+                ChunkLoading::Cjs => embed_file!("js/src/runtime.cjs.js").await?,
+                ChunkLoading::Dom => embed_file!("js/src/runtime.dom.js").await?,
+            };
             match &*runtime_code {
                 FileContent::NotFound => return Err(anyhow!("runtime code is not found")),
                 FileContent::Content(file) => code.push_source(file.content(), None),

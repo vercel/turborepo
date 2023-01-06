@@ -31,7 +31,7 @@ interface Module {
   exports: Exports;
   loaded: boolean;
   id: ModuleId;
-  hot: Hot;
+  hot?: Hot;
   children: ModuleId[];
   parents: ModuleId[];
   interopNamespace?: EsmInteropNamespace;
