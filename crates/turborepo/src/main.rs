@@ -7,7 +7,7 @@ fn run_go_binary(args: Args) -> Result<i32> {
     let mut go_binary_path = current_exe()?;
     go_binary_path.pop();
     #[cfg(windows)]
-        go_binary_path.push("go-turbo.exe");
+    go_binary_path.push("go-turbo.exe");
     #[cfg(not(windows))]
     go_binary_path.push("go-turbo");
 
