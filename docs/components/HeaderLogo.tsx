@@ -4,7 +4,6 @@ import Link from "next/link";
 import styles from "./header-logo.module.css";
 import { useTheme } from "next-themes";
 import TurboAnimated from "./logos/TurboAnimated";
-import TurboAnimatedV2 from "./logos/TurboAnimatedV2";
 
 function HeaderLogo() {
   return (
@@ -46,7 +45,6 @@ function HeaderLogo() {
       <Link href="/" title="Home" className="hover:opacity-75">
         {/* <TurboLogo height={32} className={styles.desktopLogo} /> */}
         <TurboAnimated height={32} className={styles.desktopLogo} />
-        {/* <TurboAnimatedV2 height={32} className={styles.desktopLogo} /> */}
         <TurboLogoCondensed height={32} className={styles.mobileLogo} />
       </Link>
       <div className={styles.siteSwitcher}>
