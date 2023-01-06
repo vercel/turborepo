@@ -222,9 +222,9 @@ function maybeOptimizePackage(binPath) {
         // Ignore errors here since this optimization is optional
       }
     };
-    optimizeBin(binPath, toPath, "bin-turbo");
     const goBinPath = path.join(path.dirname(binPath), "go-turbo");
     optimizeBin(goBinPath, goToPath, "bin-go-turbo");
+    optimizeBin(binPath, toPath, "bin-turbo");
   }
 }
 
