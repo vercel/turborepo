@@ -20,7 +20,7 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
     >
       <title>Turborepo</title>
       <AnimatePresence mode="sync" initial={false}>
-        <g clipPath="url(#logoMask)">
+        <g clipPath="url(#logo-mask)">
           {site === "repo" ? (
             <motion.g
               key="turborepo"
@@ -102,7 +102,7 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
           <stop stopColor="#0096FF" />
           <stop offset="1" stopColor="#FF1E56" />
         </linearGradient>
-        <clipPath id="logoMask">
+        <clipPath id="logo-mask">
           <rect x="-8" y="0" width="40" height="26" />
         </clipPath>
       </defs>
