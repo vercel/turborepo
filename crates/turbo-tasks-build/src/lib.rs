@@ -13,7 +13,7 @@ use syn::{
     PathArguments, PathSegment, TraitItem, TraitItemMethod, Type, TypePath,
 };
 use turbo_tasks_macros_shared::{
-    get_function_ident, get_impl_function_ident, get_ref_ident, get_register_trait_methods_ident,
+    get_impl_function_ident, get_native_function_ident, get_register_trait_methods_ident,
     get_register_value_type_ident, get_trait_default_impl_function_ident,
     get_trait_impl_function_ident, get_trait_type_ident, ValueTraitArguments,
 };
@@ -215,7 +215,7 @@ impl<'a> RegisterContext<'a> {
     fn process_fn(&mut self, fn_item: ItemFn) -> Result<()> {
         if has_attribute(&fn_item.attrs, "function") {
             let ident = &fn_item.sig.ident;
-            let type_ident = get_function_ident(ident);
+            let type_ident = get_native_function_ident(ident);
 
             self.register(type_ident, self.get_global_name(&[ident]))?;
         }
@@ -332,8 +332,7 @@ impl<'a> RegisterContext<'a> {
 
             let trait_args: ValueTraitArguments = parse_attr_args(attr)?.unwrap_or_default();
             if trait_args.debug {
-                let ref_ident = get_ref_ident(trait_ident);
-                self.register_debug_impl(&ref_ident, DebugType::Trait)?;
+                self.register_debug_impl(trait_ident, DebugType::Trait)?;
             }
         }
         Ok(())
@@ -410,10 +409,13 @@ impl<'a> RegisterContext<'a> {
                         self.get_global_name(&[ident, &trait_ident, &fn_ident]),
                     )
                 }
-                DebugType::Trait => (
-                    get_impl_function_ident(ident, &fn_ident),
-                    self.get_global_name(&[ident, &fn_ident]),
-                ),
+                DebugType::Trait => {
+                    let trait_ident = Ident::new("ValueDebug", ident.span());
+                    (
+                        get_trait_impl_function_ident(ident, &trait_ident, &fn_ident),
+                        self.get_global_name(&[ident, &trait_ident, &fn_ident]),
+                    )
+                }
             };
 
             self.register(impl_fn_ident, global_name)?;

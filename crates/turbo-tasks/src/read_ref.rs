@@ -1,9 +1,7 @@
 use std::{
-    borrow::Borrow,
     cmp::Ordering,
     fmt::{Debug, Display},
     hash::Hash,
-    marker::PhantomData,
     sync::Arc,
 };
 
@@ -13,6 +11,7 @@ use turbo_tasks_hash::DeterministicHash;
 use crate::{
     debug::{ValueDebugFormat, ValueDebugFormatString},
     trace::{TraceRawVcs, TraceRawVcsContext},
+    VcRead, VcValueType,
 };
 
 /// The read value of a value cell. The read value is immutable, while the cell
@@ -20,95 +19,128 @@ use crate::{
 /// certain point in time.
 ///
 /// Internally it stores a reference counted reference to a value on the heap.
-///
-/// Invariant: T and U are binary identical (#[repr(transparent)])
-pub struct ReadRef<T, U = T>(Arc<T>, PhantomData<Arc<U>>);
+pub struct ReadRef<T>(Arc<T>);
 
-impl<T, U> Clone for ReadRef<T, U> {
+impl<T> Clone for ReadRef<T> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), PhantomData)
+        Self(self.0.clone())
     }
 }
 
-impl<T, U> std::ops::Deref for ReadRef<T, U> {
-    type Target = U;
+impl<T> std::ops::Deref for ReadRef<T>
+where
+    T: VcValueType,
+{
+    type Target = <T::Read as VcRead<T>>::Target;
 
     fn deref(&self) -> &Self::Target {
-        let inner: &T = &self.0;
-        unsafe { std::mem::transmute(inner) }
+        T::Read::value_to_target_ref(&self.0)
     }
 }
 
-unsafe impl<T, U> stable_deref_trait::StableDeref for ReadRef<T, U> {}
-unsafe impl<T, U> stable_deref_trait::CloneStableDeref for ReadRef<T, U> {}
-
-impl<T, U: Display> Display for ReadRef<T, U> {
+impl<T> Display for ReadRef<T>
+where
+    T: VcValueType,
+    <T::Read as VcRead<T>>::Target: Display,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&**self, f)
     }
 }
 
-impl<T, U: Debug> Debug for ReadRef<T, U> {
+impl<T> Debug for ReadRef<T>
+where
+    T: VcValueType,
+    <T::Read as VcRead<T>>::Target: Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&**self, f)
     }
 }
 
-impl<T, U: TraceRawVcs> TraceRawVcs for ReadRef<T, U> {
+impl<T> TraceRawVcs for ReadRef<T>
+where
+    T: VcValueType,
+    <T::Read as VcRead<T>>::Target: TraceRawVcs,
+{
     fn trace_raw_vcs(&self, context: &mut TraceRawVcsContext) {
         (**self).trace_raw_vcs(context);
     }
 }
 
-impl<T, U: ValueDebugFormat + 'static> ValueDebugFormat for ReadRef<T, U> {
+impl<T> ValueDebugFormat for ReadRef<T>
+where
+    T: VcValueType,
+    <T::Read as VcRead<T>>::Target: ValueDebugFormat + 'static,
+{
     fn value_debug_format(&self, depth: usize) -> ValueDebugFormatString {
         let value = &**self;
         value.value_debug_format(depth)
     }
 }
 
-impl<T, U: PartialEq> PartialEq for ReadRef<T, U> {
+impl<T> PartialEq for ReadRef<T>
+where
+    T: VcValueType,
+    <T::Read as VcRead<T>>::Target: PartialEq,
+{
     fn eq(&self, other: &Self) -> bool {
         PartialEq::eq(&**self, &**other)
     }
 }
 
-impl<T, U: Eq> Eq for ReadRef<T, U> {}
+impl<T> Eq for ReadRef<T>
+where
+    T: VcValueType,
+    <T::Read as VcRead<T>>::Target: Eq,
+{
+}
 
-impl<T, U: PartialOrd> PartialOrd for ReadRef<T, U> {
+impl<T> PartialOrd for ReadRef<T>
+where
+    T: VcValueType,
+    <T::Read as VcRead<T>>::Target: PartialOrd,
+{
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         PartialOrd::partial_cmp(&**self, &**other)
     }
 }
 
-impl<T, U: Ord> Ord for ReadRef<T, U> {
+impl<T> Ord for ReadRef<T>
+where
+    T: VcValueType,
+    <T::Read as VcRead<T>>::Target: Ord,
+{
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         Ord::cmp(&**self, &**other)
     }
 }
 
-impl<T, U: Hash> Hash for ReadRef<T, U> {
+impl<T> Hash for ReadRef<T>
+where
+    T: VcValueType,
+    <T::Read as VcRead<T>>::Target: Hash,
+{
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         Hash::hash(&**self, state)
     }
 }
 
-impl<T, U: DeterministicHash> DeterministicHash for ReadRef<T, U> {
+impl<T> DeterministicHash for ReadRef<T>
+where
+    T: VcValueType,
+    <T::Read as VcRead<T>>::Target: DeterministicHash,
+{
     fn deterministic_hash<H: turbo_tasks_hash::DeterministicHasher>(&self, state: &mut H) {
         let p = &**self;
         p.deterministic_hash(state);
     }
 }
 
-impl<T, U> Borrow<U> for ReadRef<T, U> {
-    fn borrow(&self) -> &U {
-        self
-    }
-}
-
-impl<'a, T, U, I, J: Iterator<Item = I>> IntoIterator for &'a ReadRef<T, U>
+impl<'a, T, I, J: Iterator<Item = I>> IntoIterator for &'a ReadRef<T>
 where
-    &'a U: IntoIterator<Item = I, IntoIter = J>,
+    T: VcValueType,
+    &'a <T::Read as VcRead<T>>::Target: IntoIterator<Item = I, IntoIter = J>,
 {
     type Item = I;
 
@@ -119,7 +151,11 @@ where
     }
 }
 
-impl<T, U: Serialize> Serialize for ReadRef<T, U> {
+impl<T> Serialize for ReadRef<T>
+where
+    T: VcValueType,
+    <T::Read as VcRead<T>>::Target: Serialize,
+{
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -128,43 +164,41 @@ impl<T, U: Serialize> Serialize for ReadRef<T, U> {
     }
 }
 
-impl<'de, T: Deserialize<'de>> Deserialize<'de> for ReadRef<T, T> {
+impl<'de, T> Deserialize<'de> for ReadRef<T>
+where
+    T: Deserialize<'de>,
+{
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         let value = T::deserialize(deserializer)?;
-        Ok(Self(Arc::new(value), PhantomData))
+        Ok(Self(Arc::new(value)))
     }
 }
 
-impl<T> ReadRef<T, T> {
+impl<T> ReadRef<T> {
     pub fn new(arc: Arc<T>) -> Self {
-        Self(arc, PhantomData)
-    }
-}
-
-impl<T, U> ReadRef<T, U> {
-    /// # Safety
-    ///
-    /// T and U must be binary identical (#[repr(transparent)])
-    pub unsafe fn new_transparent(arc: Arc<T>) -> Self {
-        Self(arc, PhantomData)
+        Self(arc)
     }
 
-    pub fn ptr_eq(&self, other: &ReadRef<T, U>) -> bool {
+    pub fn ptr_eq(&self, other: &ReadRef<T>) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }
 
-    pub fn ptr_cmp(&self, other: &ReadRef<T, U>) -> Ordering {
+    pub fn ptr_cmp(&self, other: &ReadRef<T>) -> Ordering {
         Arc::as_ptr(&self.0).cmp(&Arc::as_ptr(&other.0))
     }
 }
 
-impl<T, U: Clone> ReadRef<T, U> {
+impl<T> ReadRef<T>
+where
+    T: VcValueType,
+    <T::Read as VcRead<T>>::Target: Clone,
+{
     /// This will clone the contained value instead of cloning the ReadRef.
     /// This clone is more expensive, but allows to get an mutable owned value.
-    pub fn clone_value(&self) -> U {
+    pub fn clone_value(&self) -> <T::Read as VcRead<T>>::Target {
         (**self).clone()
     }
 }

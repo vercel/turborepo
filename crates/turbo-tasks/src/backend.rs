@@ -10,13 +10,14 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use auto_hash_map::AutoSet;
 use serde::{Deserialize, Serialize};
 
 pub use crate::id::BackendJobId;
 use crate::{
-    event::EventListener, manager::TurboTasksBackendApi, primitives::RawVcSetVc, raw_vc::CellId,
-    registry, task_input::SharedReference, FunctionId, RawVc, ReadRef, TaskId, TaskIdProvider,
-    TaskInput, TraitTypeId,
+    event::EventListener, manager::TurboTasksBackendApi, raw_vc::CellId, registry,
+    ConcreteTaskInput, FunctionId, RawVc, ReadRef, SharedReference, TaskId, TaskIdProvider,
+    TraitTypeId, Vc, VcValueType,
 };
 
 /// Different Task types
@@ -62,17 +63,17 @@ impl Debug for TransientTaskType {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum PersistentTaskType {
     /// A normal task execution a native (rust) function
-    Native(FunctionId, Vec<TaskInput>),
+    Native(FunctionId, Vec<ConcreteTaskInput>),
 
     /// A resolve task, which resolves arguments and calls the function with
     /// resolve arguments. The inner function call will do a cache lookup.
-    ResolveNative(FunctionId, Vec<TaskInput>),
+    ResolveNative(FunctionId, Vec<ConcreteTaskInput>),
 
     /// A trait method resolve task. It resolves the first (`self`) argument and
     /// looks up the trait method on that value. Then it calls that method.
     /// The method call will do a cache lookup and might resolve arguments
     /// before.
-    ResolveTrait(TraitTypeId, Cow<'static, str>, Vec<TaskInput>),
+    ResolveTrait(TraitTypeId, Cow<'static, str>, Vec<ConcreteTaskInput>),
 }
 
 impl Display for PersistentTaskType {
@@ -145,7 +146,7 @@ impl Display for CellContent {
 }
 
 impl CellContent {
-    pub fn cast<T: Any + Send + Sync>(self) -> Result<ReadRef<T>> {
+    pub fn cast<T: Any + VcValueType>(self) -> Result<ReadRef<T>> {
         let data = self.0.ok_or_else(|| anyhow!("Cell is empty"))?;
         let data = data
             .downcast()
@@ -153,18 +154,7 @@ impl CellContent {
         Ok(ReadRef::new(data))
     }
 
-    /// # Safety
-    ///
-    /// T and U must be binary identical (#[repr(transparent)])
-    pub unsafe fn cast_transparent<T: Any + Send + Sync, U>(self) -> Result<ReadRef<T, U>> {
-        let data = self.0.ok_or_else(|| anyhow!("Cell is empty"))?;
-        let data = data
-            .downcast()
-            .ok_or_else(|| anyhow!("Unexpected type in cell"))?;
-        Ok(unsafe { ReadRef::new_transparent(data) })
-    }
-
-    pub fn try_cast<T: Any + Send + Sync>(self) -> Option<ReadRef<T>> {
+    pub fn try_cast<T: Any + VcValueType>(self) -> Option<ReadRef<T>> {
         self.0
             .and_then(|data| data.downcast().map(|data| ReadRef::new(data)))
     }
@@ -281,7 +271,7 @@ pub trait Backend: Sync + Send {
         trait_id: TraitTypeId,
         reader: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi<Self>,
-    ) -> RawVcSetVc;
+    ) -> Vc<AutoSet<RawVc>>;
 
     fn emit_collectible(
         &self,
@@ -331,7 +321,7 @@ pub trait Backend: Sync + Send {
 impl PersistentTaskType {
     pub async fn run_resolve_native<B: Backend + 'static>(
         fn_id: FunctionId,
-        inputs: Vec<TaskInput>,
+        inputs: Vec<ConcreteTaskInput>,
         turbo_tasks: Arc<dyn TurboTasksBackendApi<B>>,
     ) -> Result<RawVc> {
         let mut resolved_inputs = Vec::with_capacity(inputs.len());
@@ -344,7 +334,7 @@ impl PersistentTaskType {
     pub async fn run_resolve_trait<B: Backend + 'static>(
         trait_type: TraitTypeId,
         name: Cow<'static, str>,
-        inputs: Vec<TaskInput>,
+        inputs: Vec<ConcreteTaskInput>,
         turbo_tasks: Arc<dyn TurboTasksBackendApi<B>>,
     ) -> Result<RawVc> {
         let mut resolved_inputs = Vec::with_capacity(inputs.len());

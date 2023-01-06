@@ -17,6 +17,8 @@ hanging_detection = []
 
 [dependencies]
 anyhow = "1.0.47"
+async-trait = "0.1"
+async_fn_traits = "0.1"
 auto-hash-map = { path = "../auto-hash-map" }
 concurrent-queue = "1.2.2"
 dashmap = "5.4.0"
@@ -33,7 +35,6 @@ regex = "1.6.0"
 serde = { version = "1.0.136", features = ["rc", "derive"] }
 serde_json = "1.0.85"
 serde_regex = "1.1.0"
-stable_deref_trait = "1.2.0"
 thiserror = "1.0.31"
 tokio = { version = "1.21.2", features = ["full"] }
 turbo-tasks-hash = { path = "../turbo-tasks-hash" }

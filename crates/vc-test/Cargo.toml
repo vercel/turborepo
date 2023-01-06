@@ -1,0 +1,26 @@
+[package]
+name = "vc-test"
+version = "0.1.0"
+description = "TBD"
+license = "MPL-2.0"
+edition = "2021"
+autobenches = false
+
+[[bin]]
+name = "vc-test"
+path = "src/main.rs"
+bench = false
+
+[lib]
+bench = false
+
+[dependencies]
+anyhow = "1.0.47"
+serde = "1.0.136"
+tokio = { version = "1.21.2", features = ["full"] }
+turbo-malloc = { path = "../turbo-malloc" }
+turbo-tasks = { path = "../turbo-tasks" }
+turbo-tasks-memory = { path = "../turbo-tasks-memory" }
+
+[build-dependencies]
+turbo-tasks-build = { path = "../turbo-tasks-build" }

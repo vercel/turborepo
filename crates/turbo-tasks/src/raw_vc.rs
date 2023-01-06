@@ -21,11 +21,11 @@ use crate::{
         find_cell_by_type, read_task_cell, read_task_cell_untracked, read_task_output,
         read_task_output_untracked, CurrentCellRef, TurboTasksApi,
     },
-    primitives::{RawVcSet, RawVcSetVc},
     registry::{self, get_value_type},
     turbo_tasks,
-    value_type::ValueTraitVc,
-    CollectiblesSource, ReadRef, SharedReference, TaskId, TraitTypeId, ValueTypeId,
+    vc::Vc,
+    CollectiblesSource, ReadRef, SharedReference, TaskId, TraitTypeId, ValueTypeId, VcValueTrait,
+    VcValueType,
 };
 
 #[derive(Error, Debug)]
@@ -64,46 +64,21 @@ pub enum RawVc {
 }
 
 impl RawVc {
-    pub fn into_read<T: Any + Send + Sync>(self) -> ReadRawVcFuture<T> {
+    pub fn into_read<T: Any + VcValueType>(self) -> ReadRawVcFuture<T> {
         // returns a custom future to have something concrete and sized
         // this avoids boxing in IntoFuture
         ReadRawVcFuture::new(self)
     }
 
-    pub fn into_strongly_consistent_read<T: Any + Send + Sync>(self) -> ReadRawVcFuture<T> {
+    pub fn into_strongly_consistent_read<T: Any + VcValueType>(self) -> ReadRawVcFuture<T> {
         // returns a custom future to have something concrete and sized
         // this avoids boxing in IntoFuture
         ReadRawVcFuture::new_strongly_consistent(self)
     }
 
-    /// # Safety
-    ///
-    /// T and U must be binary identical (#[repr(transparent)])
-    pub unsafe fn into_transparent_read<T: Any + Send + Sync, U: Any + Send + Sync>(
-        self,
-    ) -> ReadRawVcFuture<T, U> {
-        // returns a custom future to have something concrete and sized
-        // this avoids boxing in IntoFuture
-        unsafe { ReadRawVcFuture::new_transparent(self) }
-    }
-
-    /// # Safety
-    ///
-    /// T and U must be binary identical (#[repr(transparent)])
-    pub unsafe fn into_transparent_strongly_consistent_read<
-        T: Any + Send + Sync,
-        U: Any + Send + Sync,
-    >(
-        self,
-    ) -> ReadRawVcFuture<T, U> {
-        // returns a custom future to have something concrete and sized
-        // this avoids boxing in IntoFuture
-        unsafe { ReadRawVcFuture::new_transparent_strongly_consistent(self) }
-    }
-
     /// INVALIDATION: Be careful with this, it will not track dependencies, so
     /// using it could break cache invalidation.
-    pub async fn into_read_untracked<T: Any + Send + Sync>(
+    pub async fn into_read_untracked<T: Any + VcValueType>(
         self,
         turbo_tasks: &dyn TurboTasksApi,
     ) -> Result<ReadRef<T>> {
@@ -114,7 +89,7 @@ impl RawVc {
 
     /// INVALIDATION: Be careful with this, it will not track dependencies, so
     /// using it could break cache invalidation.
-    pub async fn into_strongly_consistent_read_untracked<T: Any + Send + Sync>(
+    pub async fn into_strongly_consistent_read_untracked<T: Any + VcValueType>(
         self,
         turbo_tasks: &dyn TurboTasksApi,
     ) -> Result<ReadRef<T>> {
@@ -229,15 +204,7 @@ impl RawVc {
         }
     }
 
-    /// Resolve the reference until it points to a cell directly.
-    ///
-    /// Resolving will wait for task execution to be finished, so that the
-    /// returned Vc points to a cell that stores a value.
-    ///
-    /// Resolving is necessary to compare identities of Vcs.
-    ///
-    /// This is async and will rethrow any fatal error that happened during task
-    /// execution.
+    /// See [`crate::Vc::resolve`].
     pub async fn resolve(self) -> Result<RawVc> {
         let tt = turbo_tasks();
         let mut current = self;
@@ -255,17 +222,7 @@ impl RawVc {
             }
         }
     }
-
-    /// Resolve the reference until it points to a cell directly in a strongly
-    /// consistent way.
-    ///
-    /// Resolving will wait for task execution to be finished, so that the
-    /// returned Vc points to a cell that stores a value.
-    ///
-    /// Resolving is necessary to compare identities of Vcs.
-    ///
-    /// This is async and will rethrow any fatal error that happened during task
-    /// execution.
+    /// See [`crate::Vc::resolve_strongly_consistent`].
     pub async fn resolve_strongly_consistent(self) -> Result<RawVc> {
         let tt = turbo_tasks();
         let mut current = self;
@@ -282,11 +239,6 @@ impl RawVc {
                 RawVc::TaskCell(_, _) => return Ok(current),
             }
         }
-    }
-
-    pub fn connect(&self) {
-        let tt = turbo_tasks();
-        tt.connect_task(self.get_task_id());
     }
 
     pub fn is_resolved(&self) -> bool {
@@ -337,10 +289,11 @@ impl RawVc {
 }
 
 impl CollectiblesSource for RawVc {
-    fn peek_collectibles<T: ValueTraitVc>(self) -> CollectiblesFuture<T> {
+    fn peek_collectibles<T: VcValueTrait>(self) -> CollectiblesFuture<T> {
         let tt = turbo_tasks();
         tt.notify_scheduled_tasks();
-        let set: RawVcSetVc = tt.read_task_collectibles(self.get_task_id(), T::get_trait_type_id());
+        let set: Vc<AutoSet<RawVc>> =
+            tt.read_task_collectibles(self.get_task_id(), T::get_trait_type_id());
         CollectiblesFuture {
             turbo_tasks: tt,
             inner: set.into_future(),
@@ -349,10 +302,11 @@ impl CollectiblesSource for RawVc {
         }
     }
 
-    fn take_collectibles<T: ValueTraitVc>(self) -> CollectiblesFuture<T> {
+    fn take_collectibles<T: VcValueTrait>(self) -> CollectiblesFuture<T> {
         let tt = turbo_tasks();
         tt.notify_scheduled_tasks();
-        let set: RawVcSetVc = tt.read_task_collectibles(self.get_task_id(), T::get_trait_type_id());
+        let set: Vc<AutoSet<RawVc>> =
+            tt.read_task_collectibles(self.get_task_id(), T::get_trait_type_id());
         CollectiblesFuture {
             turbo_tasks: tt,
             inner: set.into_future(),
@@ -375,15 +329,15 @@ impl Display for RawVc {
     }
 }
 
-pub struct ReadRawVcFuture<T: Any + Send + Sync, U: Any + Send + Sync = T> {
+pub struct ReadRawVcFuture<T: Any + VcValueType> {
     turbo_tasks: Arc<dyn TurboTasksApi>,
     strongly_consistent: bool,
     current: RawVc,
     listener: Option<EventListener>,
-    phantom_data: PhantomData<Pin<Box<(T, U)>>>,
+    phantom_data: PhantomData<Pin<Box<T>>>,
 }
 
-impl<T: Any + Send + Sync> ReadRawVcFuture<T, T> {
+impl<T: Any + VcValueType> ReadRawVcFuture<T> {
     fn new(vc: RawVc) -> Self {
         let tt = turbo_tasks();
         tt.notify_scheduled_tasks();
@@ -409,40 +363,8 @@ impl<T: Any + Send + Sync> ReadRawVcFuture<T, T> {
     }
 }
 
-impl<T: Any + Send + Sync, U: Any + Send + Sync> ReadRawVcFuture<T, U> {
-    /// # Safety
-    ///
-    /// T and U must be binary identical (#[repr(transparent)])
-    unsafe fn new_transparent(vc: RawVc) -> Self {
-        let tt = turbo_tasks();
-        tt.notify_scheduled_tasks();
-        ReadRawVcFuture {
-            turbo_tasks: tt,
-            strongly_consistent: false,
-            current: vc,
-            listener: None,
-            phantom_data: PhantomData,
-        }
-    }
-
-    /// # Safety
-    ///
-    /// T and U must be binary identical (#[repr(transparent)])
-    unsafe fn new_transparent_strongly_consistent(vc: RawVc) -> Self {
-        let tt = turbo_tasks();
-        tt.notify_scheduled_tasks();
-        ReadRawVcFuture {
-            turbo_tasks: tt,
-            strongly_consistent: true,
-            current: vc,
-            listener: None,
-            phantom_data: PhantomData,
-        }
-    }
-}
-
-impl<T: Any + Send + Sync, U: Any + Send + Sync> Future for ReadRawVcFuture<T, U> {
-    type Output = Result<ReadRef<T, U>>;
+impl<T: Any + VcValueType> Future for ReadRawVcFuture<T> {
+    type Output = Result<ReadRef<T>>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
         self.turbo_tasks.notify_scheduled_tasks();
@@ -474,7 +396,7 @@ impl<T: Any + Send + Sync, U: Any + Send + Sync> Future for ReadRawVcFuture<T, U
                     match this.turbo_tasks.try_read_task_cell(task, index) {
                         Ok(Ok(content)) => {
                             // SAFETY: Constructor ensures that T and U are binary identical
-                            return Poll::Ready(unsafe { content.cast_transparent::<T, U>() });
+                            return Poll::Ready(content.cast::<T>());
                         }
                         Ok(Err(listener)) => listener,
                         Err(err) => return Poll::Ready(Err(err)),
@@ -499,22 +421,15 @@ pub struct ReadCollectiblesError {
     source: anyhow::Error,
 }
 
-pub struct CollectiblesFuture<T: ValueTraitVc> {
+pub struct CollectiblesFuture<T: VcValueTrait> {
     turbo_tasks: Arc<dyn TurboTasksApi>,
-    inner: ReadRawVcFuture<RawVcSet, AutoSet<RawVc>>,
+    inner: ReadRawVcFuture<AutoSet<RawVc>>,
     take: bool,
     phantom: PhantomData<fn() -> T>,
 }
 
-impl<T: ValueTraitVc> CollectiblesFuture<T> {
-    pub fn strongly_consistent(mut self) -> Self {
-        self.inner.strongly_consistent = true;
-        self
-    }
-}
-
-impl<T: ValueTraitVc> Future for CollectiblesFuture<T> {
-    type Output = Result<AutoSet<T>>;
+impl<T: VcValueTrait> Future for CollectiblesFuture<T> {
+    type Output = Result<AutoSet<Vc<T>>>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
         // SAFETY: we are not moving `this`

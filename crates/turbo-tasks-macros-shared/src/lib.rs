@@ -1,4 +1,5 @@
 #![feature(proc_macro_diagnostic)]
+#![feature(box_patterns)]
 
 mod expand;
 mod ident;

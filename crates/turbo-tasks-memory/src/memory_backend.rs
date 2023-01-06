@@ -25,9 +25,8 @@ use turbo_tasks::{
         TransientTaskType,
     },
     event::EventListener,
-    primitives::RawVcSetVc,
     util::{IdFactory, NoMoveVec},
-    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi, Unused,
+    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi, Unused, Vc,
 };
 
 use crate::{
@@ -583,7 +582,7 @@ impl Backend for MemoryBackend {
         trait_id: TraitTypeId,
         reader: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> RawVcSetVc {
+    ) -> Vc<AutoSet<RawVc>> {
         self.with_task(id, |task| {
             task.read_task_collectibles(reader, trait_id, self, turbo_tasks)
         })
