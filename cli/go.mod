@@ -44,7 +44,7 @@ require (
 	google.golang.org/grpc v1.46.2
 	google.golang.org/protobuf v1.28.0
 	gotest.tools/v3 v3.3.0
-	muzzammil.xyz/jsonc v1.0.0
+	github.com/muhammadmuzzammil1998/jsonc v1.0.0
 )
 
 require (
