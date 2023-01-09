@@ -18,6 +18,7 @@ importers:
 
   apps/docs:
     specifiers:
+      '@acme/ui': workspace:*
       '@sveltejs/adapter-auto': latest
       '@sveltejs/kit': latest
       eslint-config-custom: workspace:*
@@ -26,13 +27,12 @@ importers:
       svelte-preprocess: ^4.10.6
       tslib: ^2.3.1
       typescript: ^4.7.2
-      ui: workspace:*
       vite: ^4.0.0
     dependencies:
-      ui: link:../../packages/ui
+      '@acme/ui': link:../../packages/ui
     devDependencies:
-      '@sveltejs/adapter-auto': 1.0.0-next.90
-      '@sveltejs/kit': 1.0.0-next.584_svelte@3.53.1+vite@4.0.0
+      '@sveltejs/adapter-auto': 1.0.0_@sveltejs+kit@1.0.10
+      '@sveltejs/kit': 1.0.10_svelte@3.53.1+vite@4.0.0
       eslint-config-custom: link:../../packages/eslint-config-custom
       svelte: 3.53.1
       svelte-check: 2.9.2_svelte@3.53.1
@@ -43,6 +43,7 @@ importers:
 
   apps/web:
     specifiers:
+      '@acme/ui': workspace:*
       '@sveltejs/adapter-auto': latest
       '@sveltejs/kit': latest
       eslint-config-custom: workspace:*
@@ -51,13 +52,12 @@ importers:
       svelte-preprocess: ^4.10.6
       tslib: ^2.3.1
       typescript: ^4.7.2
-      ui: workspace:*
       vite: ^4.0.0
     dependencies:
-      ui: link:../../packages/ui
+      '@acme/ui': link:../../packages/ui
     devDependencies:
-      '@sveltejs/adapter-auto': 1.0.0-next.90
-      '@sveltejs/kit': 1.0.0-next.584_svelte@3.53.1+vite@4.0.0
+      '@sveltejs/adapter-auto': 1.0.0_@sveltejs+kit@1.0.10
+      '@sveltejs/kit': 1.0.10_svelte@3.53.1+vite@4.0.0
       eslint-config-custom: link:../../packages/eslint-config-custom
       svelte: 3.53.1
       svelte-check: 2.9.2_svelte@3.53.1
@@ -77,7 +77,7 @@ importers:
       '@typescript-eslint/eslint-plugin': 5.44.0_fnsv2sbzcckq65bwfk7a5xwslu
       '@typescript-eslint/parser': 5.44.0_hsf322ms6xhhd4b5ne6lb74y4a
       eslint-config-prettier: 8.5.0_eslint@8.28.0
-      eslint-config-turbo: 0.0.4_eslint@8.28.0
+      eslint-config-turbo: 0.0.7_eslint@8.28.0
       eslint-plugin-svelte3: 4.0.0_xgu65rlhscpnxffotiaicv6m5i
 
   packages/ui:
@@ -359,15 +359,18 @@ packages:
     resolution: {integrity: sha512-a5Sab1C4/icpTZVzZc5Ghpz88yQtGOyNqYXcZgOssB2uuAr+wF/MvN6bgtW32q7HHrvBki+BsZ0OuNv6EV3K9g==}
     dev: true
 
-  /@sveltejs/adapter-auto/1.0.0-next.90:
-    resolution: {integrity: sha512-qxH46Oqqn40998wTmnbffONI0HcW/kiZ3OIjZoysjONne+LU4uEsG425MZ2RHDxmR04zxhsdjCAsn6B4du8D7w==}
+  /@sveltejs/adapter-auto/1.0.0_@sveltejs+kit@1.0.10:
+    resolution: {integrity: sha512-yKyPvlLVua1bJ/42FrR3X041mFGdB4GzTZOAEoHUcNBRE5Mhx94+eqHpC3hNvAOiLEDcKfVO0ObyKSu7qldU+w==}
+    peerDependencies:
+      '@sveltejs/kit': ^1.0.0
     dependencies:
+      '@sveltejs/kit': 1.0.10_svelte@3.53.1+vite@4.0.0
       import-meta-resolve: 2.2.0
     dev: true
 
-  /@sveltejs/kit/1.0.0-next.584_svelte@3.53.1+vite@4.0.0:
-    resolution: {integrity: sha512-iBfrrwkza1szR1GVMorTjj1Yw3SXhDVB5MMdDzCMKqKcCwxCehQ3K6QnlmyXHtHg2qX5rfvz0cpkp0uGGmcxQw==}
-    engines: {node: '>=16.14'}
+  /@sveltejs/kit/1.0.10_svelte@3.53.1+vite@4.0.0:
+    resolution: {integrity: sha512-8rlj7fFleKv7NEmn48iKsmbrnuopFMslqBB/RVwS3/+3Oo1gsNiTxIJlub9w43Rxd4sxQWCY/4p12X5Yiro3aw==}
+    engines: {node: ^16.14 || >=18}
     hasBin: true
     requiresBuild: true
     peerDependencies:
@@ -783,13 +786,13 @@ packages:
       eslint: 8.28.0
     dev: false
 
-  /eslint-config-turbo/0.0.4_eslint@8.28.0:
-    resolution: {integrity: sha512-HErPS/wfWkSdV9Yd2dDkhZt3W2B78Ih/aWPFfaHmCMjzPalh+5KxRRGTf8MOBQLCebcWJX0lP1Zvc1rZIHlXGg==}
+  /eslint-config-turbo/0.0.7_eslint@8.28.0:
+    resolution: {integrity: sha512-WbrGlyfs94rOXrhombi1wjIAYGdV2iosgJRndOZtmDQeq5GLTzYmBUCJQZWtLBEBUPCj96RxZ2OL7Cn+xv/Azg==}
     peerDependencies:
-      eslint: ^7.23.0 || ^8.0.0
+      eslint: '>6.6.0'
     dependencies:
       eslint: 8.28.0
-      eslint-plugin-turbo: 0.0.4_eslint@8.28.0
+      eslint-plugin-turbo: 0.0.7_eslint@8.28.0
     dev: false
 
   /eslint-plugin-svelte3/4.0.0_xgu65rlhscpnxffotiaicv6m5i:
@@ -802,10 +805,10 @@ packages:
       svelte: 3.53.1
     dev: false
 
-  /eslint-plugin-turbo/0.0.4_eslint@8.28.0:
-    resolution: {integrity: sha512-dfmYE/iPvoJInQq+5E/0mj140y/rYwKtzZkn3uVK8+nvwC5zmWKQ6ehMWrL4bYBkGzSgpOndZM+jOXhPQ2m8Cg==}
+  /eslint-plugin-turbo/0.0.7_eslint@8.28.0:
+    resolution: {integrity: sha512-iajOH8eD4jha3duztGVBD1BEmvNrQBaA/y3HFHf91vMDRYRwH7BpHSDFtxydDpk5ghlhRxG299SFxz7D6z4MBQ==}
     peerDependencies:
-      eslint: ^7.23.0 || ^8.0.0
+      eslint: '>6.6.0'
     dependencies:
       eslint: 8.28.0
     dev: false

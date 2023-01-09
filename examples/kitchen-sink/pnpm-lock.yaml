@@ -12,6 +12,8 @@ importers:
 
   apps/admin:
     specifiers:
+      '@acme/tsconfig': workspace:*
+      '@acme/ui': workspace:*
       '@types/react': ^17.0.0
       '@types/react-dom': ^17.0.0
       '@vitejs/plugin-react': ^2.1.0
@@ -19,26 +21,25 @@ importers:
       eslint-config-custom: workspace:*
       react: ^18.2.0
       react-dom: ^18.2.0
-      tsconfig: workspace:*
       typescript: ^4.8.3
-      ui: workspace:*
       vite: ^3.1.0
     dependencies:
+      '@acme/ui': link:../../packages/ui
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
-      ui: link:../../packages/ui
     devDependencies:
+      '@acme/tsconfig': link:../../packages/tsconfig
       '@types/react': 17.0.52
       '@types/react-dom': 17.0.18
       '@vitejs/plugin-react': 2.2.0_vite@3.2.4
       eslint: 7.32.0
       eslint-config-custom: link:../../packages/eslint-config-custom
-      tsconfig: link:../../packages/tsconfig
       typescript: 4.9.3
       vite: 3.2.4
 
   apps/api:
     specifiers:
+      '@acme/tsconfig': workspace:*
       '@types/body-parser': ^1.19.0
       '@types/cors': ^2.8.10
       '@types/express': ^4.17.12
@@ -56,7 +57,6 @@ importers:
       logger: workspace:*
       morgan: ^1.10.0
       supertest: ^6.2.4
-      tsconfig: workspace:*
       tsup: ^6.2.3
       typescript: ^4.8.3
     dependencies:
@@ -66,6 +66,7 @@ importers:
       logger: link:../../packages/logger
       morgan: 1.10.0
     devDependencies:
+      '@acme/tsconfig': link:../../packages/tsconfig
       '@types/body-parser': 1.19.2
       '@types/cors': 2.8.12
       '@types/express': 4.17.14
@@ -78,12 +79,13 @@ importers:
       jest: 26.6.3
       jest-presets: link:../../packages/jest-presets
       supertest: 6.3.1
-      tsconfig: link:../../packages/tsconfig
       tsup: 6.5.0_typescript@4.9.3
       typescript: 4.9.3
 
   apps/blog:
     specifiers:
+      '@acme/tsconfig': workspace:*
+      '@acme/ui': workspace:*
       '@remix-run/dev': ^1.7.0
       '@remix-run/node': ^1.7.0
       '@remix-run/react': ^1.7.0
@@ -94,27 +96,27 @@ importers:
       '@vercel/node': ^2.5.14
       react: ^18.2.0
       react-dom: ^18.2.0
-      tsconfig: workspace:*
       typescript: ^4.8.3
-      ui: workspace:*
     dependencies:
+      '@acme/ui': link:../../packages/ui
       '@remix-run/node': 1.7.6_biqbaboplfbrettd7655fr4n2y
       '@remix-run/react': 1.7.6_biqbaboplfbrettd7655fr4n2y
       '@remix-run/vercel': 1.7.6_h4x5lethm2mzgboo6z74nswtlq
       '@vercel/node': 2.6.4
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
-      ui: link:../../packages/ui
     devDependencies:
+      '@acme/tsconfig': link:../../packages/tsconfig
       '@remix-run/dev': 1.7.6_4vz2e3qrixth2olsykapxulhwu
       '@remix-run/serve': 1.7.6_biqbaboplfbrettd7655fr4n2y
       '@types/react': 17.0.52
       '@types/react-dom': 17.0.18
-      tsconfig: link:../../packages/tsconfig
       typescript: 4.9.3
 
   apps/storefront:
     specifiers:
+      '@acme/tsconfig': workspace:*
+      '@acme/ui': workspace:*
       '@types/jest': ^26.0.22
       '@types/node': ^17.0.12
       '@types/react': ^17.0.13
@@ -124,22 +126,20 @@ importers:
       next: latest
       react: ^18.2.0
       react-dom: ^18.2.0
-      tsconfig: workspace:*
       typescript: ^4.8.3
-      ui: workspace:*
     dependencies:
+      '@acme/ui': link:../../packages/ui
       logger: link:../../packages/logger
       next: 13.1.1_biqbaboplfbrettd7655fr4n2y
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
-      ui: link:../../packages/ui
     devDependencies:
+      '@acme/tsconfig': link:../../packages/tsconfig
       '@types/jest': 26.0.24
       '@types/node': 17.0.45
       '@types/react': 17.0.52
       '@types/react-dom': 17.0.18
       eslint-config-custom: link:../../packages/eslint-config-custom
-      tsconfig: link:../../packages/tsconfig
       typescript: 4.9.3
 
   packages/eslint-config-custom:
@@ -168,22 +168,22 @@ importers:
 
   packages/logger:
     specifiers:
+      '@acme/tsconfig': workspace:*
       '@types/jest': ^26.0.22
       '@types/node': ^18.11.9
       eslint: ^7.32.0
       eslint-config-custom: workspace:*
       jest: ^26.6.3
       jest-presets: workspace:*
-      tsconfig: workspace:*
       typescript: ^4.8.3
     devDependencies:
+      '@acme/tsconfig': link:../tsconfig
       '@types/jest': 26.0.24
       '@types/node': 18.11.9
       eslint: 7.32.0
       eslint-config-custom: link:../eslint-config-custom
       jest: 26.6.3
       jest-presets: link:../jest-presets
-      tsconfig: link:../tsconfig
       typescript: 4.9.3
 
   packages/tsconfig:
@@ -191,6 +191,7 @@ importers:
 
   packages/ui:
     specifiers:
+      '@acme/tsconfig': workspace:*
       '@types/jest': ^26.0.22
       '@types/react': ^17.0.13
       '@types/react-dom': ^17.0.8
@@ -200,12 +201,12 @@ importers:
       jest-presets: workspace:*
       react: ^18.2.0
       react-dom: ^18.2.0
-      tsconfig: workspace:*
       tsup: ^6.2.3
       typescript: ^4.8.3
     dependencies:
       react-dom: 18.2.0_react@18.2.0
     devDependencies:
+      '@acme/tsconfig': link:../tsconfig
       '@types/jest': 26.0.24
       '@types/react': 17.0.52
       '@types/react-dom': 17.0.18
@@ -214,7 +215,6 @@ importers:
       jest: 26.6.3
       jest-presets: link:../jest-presets
       react: 18.2.0
-      tsconfig: link:../tsconfig
       tsup: 6.5.0_typescript@4.9.3
       typescript: 4.9.3
 
