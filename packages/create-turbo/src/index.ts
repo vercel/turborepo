@@ -198,7 +198,7 @@ async function run() {
   // if we're using a pre-release version of create-turbo, install turbo canary instead of latest
   const shouldUsePreRelease = semverPrerelease(cliPkgJson.version) !== null;
   if (shouldUsePreRelease && sharedPkg?.devDependencies?.turbo) {
-    sharedPkg.devDependencies.turbo = 'canary'
+    sharedPkg.devDependencies.turbo = "canary";
   }
 
   // write package.json
