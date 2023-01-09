@@ -9,6 +9,7 @@ import meow from "meow";
 import { satisfies } from "semver";
 import gradient from "gradient-string";
 import checkForUpdate from "update-check";
+import semverPrerelease from "semver/functions/prerelease";
 import chalk from "chalk";
 import cliPkgJson from "../package.json";
 import { shouldUseYarn } from "./shouldUseYarn";
@@ -193,6 +194,12 @@ async function run() {
 
   sharedPkg.packageManager = `${packageManager.command}@${packageManagerVersion}`;
   sharedPkg.name = projectName;
+
+  // if we're using a pre-release version of create-turbo, install turbo canary instead of latest
+  const shouldUsePreRelease = semverPrerelease(cliPkgJson.version) !== null;
+  if (shouldUsePreRelease && sharedPkg?.devDependencies?.turbo) {
+    sharedPkg.devDependencies.turbo = 'canary'
+  }
 
   // write package.json
   fse.writeFileSync(
