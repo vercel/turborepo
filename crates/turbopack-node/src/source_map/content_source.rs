@@ -1,14 +1,12 @@
-use std::collections::HashSet;
-
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value};
 use turbopack_core::{
-    introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
+    introspect::{Introspectable, IntrospectableVc},
     source_map::GenerateSourceMapVc,
 };
 use turbopack_dev_server::source::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary,
-    ContentSourceResultVc, ContentSourceVc, ContentSourcesVc,
+    ContentSourceResultVc, ContentSourceVc, ContentSourcesVc, NeededData,
 };
 use url::Url;
 
@@ -40,14 +38,14 @@ impl ContentSource for NextSourceMapTraceContentSource {
         let url = match &data.url {
             None => {
                 return Ok(ContentSourceResultVc::exact(
-                    ContentSourceContent::NeedData {
+                    ContentSourceContent::NeedData(NeededData {
                         source: self_vc.into(),
                         path: path.to_string(),
                         vary: ContentSourceDataVary {
                             url: true,
                             ..Default::default()
                         },
-                    }
+                    })
                     .cell(),
                 ));
             }
@@ -84,10 +82,7 @@ impl ContentSource for NextSourceMapTraceContentSource {
             .find_map(|(k, v)| if k == "id" { Some(v) } else { None });
 
         let this = self_vc.await?;
-        let result = this
-            .asset_source
-            .get(path, Value::new(Default::default()))
-            .await?;
+        let result = this.asset_source.get(path, Default::default()).await?;
         let file = match &*result.content.await? {
             ContentSourceContent::Static(f) => *f,
             _ => return Ok(ContentSourceResultVc::not_found()),
@@ -132,10 +127,5 @@ impl Introspectable for NextSourceMapTraceContentSource {
         StringVc::cell(
             "supports tracing an error stack frame to its original source location".to_string(),
         )
-    }
-
-    #[turbo_tasks::function]
-    async fn children(&self) -> Result<IntrospectableChildrenVc> {
-        Ok(IntrospectableChildrenVc::cell(HashSet::new()))
     }
 }
