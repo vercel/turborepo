@@ -67,7 +67,7 @@ jobs:
           cargo chef cook --workspace --all-targets --check
           cargo chef cook --workspace --all-targets --check --release
           cargo chef cook --workspace --all-targets --clippy
-          cargo nextest run --no-run --release --exclude turbo
+          cargo nextest run --no-run --release --workspace --exclude turbo
           cargo sweep -f
 
 #  # TODO: remove this after testing
