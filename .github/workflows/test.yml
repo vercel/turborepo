@@ -288,8 +288,33 @@ jobs:
           TURBO_REMOTE_ONLY: true
         run: pnpm -- turbo run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
 
-  rust_lint:
+  rust_prepare:
+    name: Check rust crates
+    runs-on: ubuntu-latest-16-core-oss
     needs: determine_jobs
+    if: needs.determine_jobs.outputs.rust == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          save-cache: true
+
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --workspace --all-targets
+
+  rust_lint:
+    needs: [determine_jobs, rust_prepare]
     if: needs.determine_jobs.outputs.rust == 'true'
     name: Rust linting
     runs-on: ubuntu-latest-16-core-oss
@@ -392,7 +417,7 @@ jobs:
           cargo check --workspace --all-targets --release
 
   rust_test:
-    needs: determine_jobs
+    needs: [determine_jobs, rust_prepare]
     if: needs.determine_jobs.outputs.rust == 'true'
     strategy:
       fail-fast: false
@@ -457,7 +482,7 @@ jobs:
           cargo nextest run --workspace --release --no-fail-fast --exclude turbo
 
   rust_test_bench:
-    needs: determine_jobs
+    needs: [determine_jobs, rust_prepare]
     if: needs.determine_jobs.outputs.rust == 'true'
     strategy:
       fail-fast: false
@@ -525,7 +550,7 @@ jobs:
           cargo test --benches --release
 
   rust_build_release:
-    needs: determine_jobs
+    needs: [determine_jobs, rust_prepare]
     if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
     strategy:
       fail-fast: false
@@ -599,7 +624,7 @@ jobs:
             target/${{ matrix.os.target }}/release/next-dev.exe
 
   rust_bench_pr:
-    needs: determine_jobs
+    needs: [determine_jobs, rust_prepare]
     if: needs.determine_jobs.outputs.rust == 'true' && github.event_name == 'pull_request'
     name: Benchmark and compare Turbopack performance
     runs-on: ubuntu-latest-16-core-oss
@@ -635,7 +660,7 @@ jobs:
           cwd: crates/next-dev
 
   rust_bench:
-    needs: determine_jobs
+    needs: [determine_jobs, rust_prepare]
     if: (needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true') || needs.determine_jobs.outputs.rust_bench == 'true'
     strategy:
       fail-fast: false
@@ -768,7 +793,7 @@ jobs:
           commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})
 
   next_js_integration:
-    needs: [determine_jobs, rust_build_release]
+    needs: [determine_jobs, rust_prepare, rust_build_release]
     if: needs.determine_jobs.outputs.rust == 'true'
     name: Next.js integration test
     runs-on: ubuntu-latest-8-core-oss
