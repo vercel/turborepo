@@ -8,15 +8,20 @@ type LogoProps = {
   height?: number;
 };
 
+const LEFT_PADDING = 8;
+const RIGHT_PADDING = 8;
+// The width of the logo + wordmark. This does not include the "invisible" padding.
+const VISUAL_WIDTH = 112;
+
 const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
   const site = useTurboSite();
 
   return (
     <svg
       className={className}
-      width="112"
+      width={LEFT_PADDING + VISUAL_WIDTH}
       height={height}
-      viewBox="0 0 112 28"
+      viewBox={`0 0 ${LEFT_PADDING + VISUAL_WIDTH} 28`}
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
@@ -36,16 +41,23 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
         </linearGradient>
         <linearGradient id="gradient">
           <stop offset="0%" stop-color="#000000" />
-          <stop offset="10%" stop-color="#ffffff" />
-          <stop offset="90%" stop-color="#ffffff" />
+          <stop offset="25%" stop-color="#ffffff" />
+          <stop offset="85%" stop-color="#ffffff" />
           <stop offset="100%" stop-color="#000000" />
         </linearGradient>
         <mask id="logo-mask">
-          <rect x="0" y="0" width="28" height="26" fill="url(#gradient)" />
+          <rect
+            x="0"
+            y="0"
+            width={`${26 + LEFT_PADDING + RIGHT_PADDING}`}
+            height="26"
+            fill="url(#gradient)"
+            transform="translate(-8,0)"
+          />
         </mask>
       </defs>
 
-      <g mask="url(#logo-mask)">
+      <g mask="url(#logo-mask)" transform={`translate(${LEFT_PADDING},0)`}>
         <AnimatePresence mode="sync" initial={false}>
           {site === "repo" || site === undefined ? (
             <motion.g
@@ -96,7 +108,10 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
       </g>
 
       {/* Turbo Wordmark */}
-      <g className={cn("z-10 relative", styles.desktopLogo)}>
+      <g
+        className={cn("z-10 relative", styles.desktopLogo)}
+        transform={`translate(${LEFT_PADDING},0)`}
+      >
         <path
           d="M48.2623 11.2944V8.24418H33.5623V11.2944H39.1115V21.4374H42.713V11.2944H48.2623Z"
           className="dark:fill-white fill-black"
