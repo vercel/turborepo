@@ -12,7 +12,7 @@ jobs:
         os:
           - name: ubuntu
             # myb use 16 core, idk
-            runner: ubuntu-latest
+            runner: ubuntu-latest-16-core-oss
             nextest: linux
           - name: macos
             runner: macos-latest
@@ -32,26 +32,35 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           shared-cache-key: dependencies
-          # disable for now, figure out how to make this cache most of what we need
-          save-cache: false
+          save-cache: true
+
+      - name: Test Cache Size
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: dependencies
 
       - name: Install cargo-chef
-        if: always()
         uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-chef
 
       - name: Install cargo-sweep
-        if: always()
         uses: baptiste0928/cargo-install@v1
         with:
-          crate: cargo-chef
+          crate: cargo-sweep
+
+      - name: Install nextest
+        uses: taiki-e/install-action@nextest
 
       - name: Compile dependencies
+        # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
+          cargo sweep -s
           cargo chef prepare
-          cargo chef cook --all-targets
-          cargo chef cook --all-targets --release
-          cargo chef cook --all-targets --check
-          cargo chef cook --all-targets --check --release
-          cargo chef cook --all-targets --clippy
+          cargo chef cook --workspace --all-targets
+          cargo chef cook --workspace --all-targets --release
+          cargo chef cook --workspace --all-targets --check
+          cargo chef cook --workspace --all-targets --check --release
+          cargo chef cook --workspace --all-targets --clippy
+          cargo nextest run --no-run --release --exclude turbo
+          cargo sweep -f
