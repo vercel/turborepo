@@ -1,4 +1,3 @@
-#[cfg(not(windows))]
 use std::{
     env,
     env::current_dir,
