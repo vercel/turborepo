@@ -1,10 +1,13 @@
-use std::{env::current_exe, process, process::Stdio};
+use std::{env::current_exe, fs::canonicalize as fs_canonicalize, process, process::Stdio};
 
 use anyhow::Result;
+#[cfg(windows)]
+use dunce::canonicalize as fs_canonicalize;
 use turborepo_lib::{Args, Payload};
 
 fn run_go_binary(args: Args) -> Result<i32> {
-    let mut go_binary_path = current_exe()?;
+    // canonicalize the binary path  to ensure we can find go-turbo
+    let mut go_binary_path = fs_canonicalize(current_exe()?)?;
     go_binary_path.pop();
     #[cfg(windows)]
     go_binary_path.push("go-turbo.exe");
