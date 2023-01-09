@@ -51,3 +51,7 @@ jobs:
         run: |
           cargo chef prepare
           cargo chef cook --all-targets
+          cargo chef cook --all-targets --release
+          cargo chef cook --all-targets --check
+          cargo chef cook --all-targets --check --release
+          cargo chef cook --all-targets --clippy
