@@ -1,5 +1,4 @@
 #[cfg(not(windows))]
-use std::fs::canonicalize as fs_canonicalize;
 use std::{
     env,
     env::current_dir,
@@ -13,7 +12,6 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use chrono::offset::Local;
-#[cfg(windows)]
 use dunce::canonicalize as fs_canonicalize;
 use env_logger::{fmt::Color, Builder, Env, WriteStyle};
 use log::{debug, Level, LevelFilter};

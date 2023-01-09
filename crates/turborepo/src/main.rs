@@ -1,7 +1,6 @@
-use std::{env::current_exe, fs::canonicalize as fs_canonicalize, process, process::Stdio};
+use std::{env::current_exe, process, process::Stdio};
 
 use anyhow::Result;
-#[cfg(windows)]
 use dunce::canonicalize as fs_canonicalize;
 use turborepo_lib::{Args, Payload};
 
