@@ -18,31 +18,24 @@ jobs:
         settings:
           - host: macos-latest
             target: "x86_64-apple-darwin"
-            lib-cache-key: turbo-lib-darwin-${{ inputs.release_branch }}
             container-options: "--rm"
           - host: macos-latest
             target: "aarch64-apple-darwin"
-            lib-cache-key: turbo-lib-darwin-${{ inputs.release_branch }}
             container-options: "--rm"
           - host: ubuntu-latest
             container: ubuntu:xenial
             container-options: "--platform=linux/amd64 --rm"
-            container-setup: "apt-get update && apt-get install -y curl"
-            target: "x86_64-unknown-linux-gnu"
-            lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
+            container-setup: "apt-get update && apt-get install -y curl musl-tools"
+            target: "x86_64-unknown-linux-musl"
             setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev"
           - host: ubuntu-latest
-            container: ubuntu:xenial
             container-options: "--rm"
-            container-setup: "apt-get update && apt-get install -y curl"
-            target: "aarch64-unknown-linux-gnu"
-            lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
-            rustflags: 'RUSTFLAGS="-C linker=aarch64-linux-gnu-gcc"'
-            setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
+            target: "aarch64-unknown-linux-musl"
+            rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
+            setup: "sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
             target: x86_64-pc-windows-gnu
-            lib-cache-key: turbo-lib-cross-${{ inputs.release_branch }}
-            setup: "mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.exe cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.a && mv cli/libturbo/turbo-windows_windows_amd64_v1/lib/turbo.h cli/libturbo/turbo-windows_windows_amd64_v1/lib/libturbo.h && rustup set default-host x86_64-pc-windows-gnu"
+            setup: "rustup set default-host x86_64-pc-windows-gnu"
             container-options: "--rm"
     runs-on: ${{ matrix.settings.host }}
     container:
@@ -57,67 +50,17 @@ jobs:
         if: ${{ matrix.settings.container-setup }}
         run: ${{ matrix.settings.container-setup }}
 
-      - name: Install
-        uses: actions-rs/toolchain@v1
+      - uses: ./.github/actions/setup-rust
         with:
-          profile: minimal
-          override: true
-          target: ${{ matrix.settings.target }}
+          targets: ${{ matrix.settings.target }}
 
-      # - name: Cache cargo registry
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: ~/.cargo/registry
-      #     key: ${{ matrix.settings.target }}-cargo-registry
-
-      # - name: Cache cargo index
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: ~/.cargo/git
-      #     key: ${{ matrix.settings.target }}-cargo-index
-
-      - name: Download artifact
-        id: download-artifact
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          # Optional, workflow file name or ID
-          # If not specified, will be inferred from run_id (if run_id is specified), or will be the current workflow
-          workflow: build_go_lib.yml
-          # Optional, the status or conclusion of a completed workflow to search for
-          # Can be one of a workflow conclusion:
-          #   "failure", "success", "neutral", "cancelled", "skipped", "timed_out", "action_required"
-          # Or a workflow status:
-          #   "completed", "in_progress", "queued"
-          # Use the empty string ("") to ignore status or conclusion in the search
-          workflow_conclusion: success
-          # Optional, will use the specified branch. Defaults to all branches
-          branch: ${{ inputs.release_branch }}
-          # Optional, uploaded artifact name,
-          # will download all artifacts if not specified
-          # and extract them into respective subdirectories
-          # https://github.com/actions/download-artifact#download-all-artifacts
-          name: ${{ matrix.settings.lib-cache-key }}
-          # Optional, a directory where to extract artifact(s), defaults to the current directory
-          path: cli/libturbo
-          # Optional, choose how to exit the action if no artifact is found
-          # can be one of:
-          #  "fail", "warn", "ignore"
-          # default fail
-          if_no_artifact_found: fail
-
-      # TODO: re-enable this instead of the above when this runs together with the go library build
-      # - name: Download Cross-compiled Artifacts
-      #   uses: actions/download-artifact@v3
-      #   with:
-      #     name: ${{ matrix.settings.lib-cache-key }}
-      #     path: cli/libturbo
       - name: Build Setup
         shell: bash
         if: ${{ matrix.settings.setup }}
         run: ${{ matrix.settings.setup }}
 
       - name: Build
-        run: ${{ matrix.settings.rustflags }} cargo build --release -p turbo --target ${{ matrix.settings.target }}
+        run: ${{ matrix.settings.rust-build-env }} cargo build --release -p turbo --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
@@ -155,41 +98,52 @@ jobs:
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
-      - name: Download Apple ARM64 Artifacts
+      - name: Download Rust artifacts
         uses: actions/download-artifact@v3
         with:
-          name: turbo-aarch64-apple-darwin
-          path: cli/dist-darwin-arm64
+          path: rust-artifacts
 
-      - name: Download Ubuntu ARM64 Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: turbo-aarch64-unknown-linux-gnu
-          path: cli/dist-linux-arm64
+      - name: Move Rust artifacts into place
+        run: |
+          mv rust-artifacts/turbo-aarch64-apple-darwin cli/dist-darwin-arm64
+          mv rust-artifacts/turbo-aarch64-unknown-linux-musl cli/dist-linux-arm64
+          cp -r rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-arm64
+          mv rust-artifacts/turbo-x86_64-unknown-linux-musl cli/dist-linux-amd64
+          mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-amd64
+          mv rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-amd64
 
-      - name: Download Windows ARM64 (Ships as x86_64) Artifacts
-        uses: actions/download-artifact@v3
+      - name: Download Go artifacts
+        id: download-artifact
+        uses: dawidd6/action-download-artifact@v2
         with:
-          name: turbo-x86_64-pc-windows-gnu
-          path: cli/dist-windows-arm64
+          github_token: ${{secrets.TURBOBOT}}
+          workflow: build_go_binary.yml
+          workflow_conclusion: success
+          branch: ${{ inputs.release_branch }}
+          path: go-artifacts
+          skip_unpack: false
+          if_no_artifact_found: fail
 
-      - name: Download Ubuntu x86_64 Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: turbo-x86_64-unknown-linux-gnu
-          path: cli/dist-linux-amd64
-
-      - name: Download Apple x86_64 Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: turbo-x86_64-apple-darwin
-          path: cli/dist-darwin-amd64
-
-      - name: Download Windows x86_64 Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: turbo-x86_64-pc-windows-gnu
-          path: cli/dist-windows-amd64
+      - name: Move Go artifacts into place
+        run: |
+          mv go-artifacts/turbo-go-cross-${{ inputs.release_branch }}/turbo_linux_amd64_v1/bin/* cli/dist-linux-amd64
+          chmod a+x cli/dist-linux-amd64/turbo
+          chmod a+x cli/dist-linux-amd64/go-turbo
+          mv go-artifacts/turbo-go-cross-${{ inputs.release_branch }}/turbo_linux_arm64/bin/* cli/dist-linux-arm64
+          chmod a+x cli/dist-linux-arm64/turbo
+          chmod a+x cli/dist-linux-arm64/go-turbo
+          mv go-artifacts/turbo-go-cross-${{ inputs.release_branch }}/turbo_windows_amd64_v1/bin/* cli/dist-windows-amd64
+          chmod a+x cli/dist-windows-amd64/turbo.exe
+          chmod a+x cli/dist-windows-amd64/go-turbo.exe
+          mv go-artifacts/turbo-go-cross-${{ inputs.release_branch }}/turbo_windows_arm64/bin/* cli/dist-windows-arm64
+          chmod a+x cli/dist-windows-arm64/turbo.exe
+          chmod a+x cli/dist-windows-arm64/go-turbo.exe
+          mv go-artifacts/turbo-go-darwin-${{ inputs.release_branch }}/turbo_darwin_amd64_v1/bin/* cli/dist-darwin-amd64
+          chmod a+x cli/dist-darwin-amd64/turbo
+          chmod a+x cli/dist-darwin-amd64/go-turbo
+          mv go-artifacts/turbo-go-darwin-${{ inputs.release_branch }}/turbo_darwin_arm64/bin/* cli/dist-darwin-arm64
+          chmod a+x cli/dist-darwin-arm64/turbo
+          chmod a+x cli/dist-darwin-arm64/go-turbo
 
       - name: Perform Release
         run: cd cli && make publish-turbo

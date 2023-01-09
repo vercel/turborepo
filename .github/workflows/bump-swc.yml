@@ -15,22 +15,22 @@ jobs:
         with:
           submodules: true
 
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           override: true
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-edit
+        uses: baptiste0928/cargo-install@v1
         with:
-          shared-key: "gha-cargo-upgrade"
-          cache-on-failure: true
+          crate: cargo-edit
+          version: "0.11.6"
+
+      - name: Install cargo-outdated
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-outdated
+          version: "0.11.1"
 
       - name: Run cargo upgrade
         uses: kwonoj/gha-cargo-upgrade@latest

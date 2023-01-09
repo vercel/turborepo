@@ -24,6 +24,11 @@
       "type": "shell",
       "command": "cd ${cwd}/cli && make turbo",
       "label": "make turbo"
+    },
+    {
+      "type": "shell",
+      "label": "prepare turbo",
+      "command": "cargo build -p turbo"
     }
   ]
 }
