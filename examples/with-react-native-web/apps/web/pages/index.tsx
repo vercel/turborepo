@@ -1,4 +1,4 @@
-import { Button } from "ui";
+import { Button } from "@acme/ui";
 
 import styles from "../styles/index.module.css";
 

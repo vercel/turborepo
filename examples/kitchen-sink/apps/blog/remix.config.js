@@ -12,5 +12,5 @@ module.exports = {
   // assetsBuildDirectory: "public/build",
   // serverBuildPath: "api/index.js",
   // publicPath: "/build/",
-  watchPaths: [require.resolve("ui")],
+  watchPaths: [require.resolve("@acme/ui")],
 };

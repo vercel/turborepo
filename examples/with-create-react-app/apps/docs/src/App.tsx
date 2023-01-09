@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "ui";
+import { Link } from "@acme/ui";
 import "./App.css";
 
 function App() {

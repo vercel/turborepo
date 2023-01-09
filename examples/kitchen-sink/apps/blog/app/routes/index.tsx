@@ -1,4 +1,4 @@
-import { CounterButton, NewTabLink } from "ui";
+import { CounterButton, NewTabLink } from "@acme/ui";
 
 export default function Index() {
   return (

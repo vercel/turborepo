@@ -16,6 +16,8 @@ importers:
 
   apps/docs:
     specifiers:
+      '@acme/tsconfig': workspace:*
+      '@acme/ui': workspace:*
       '@types/node': ^17.0.12
       '@types/react': ^18.0.22
       '@types/react-dom': ^18.0.7
@@ -23,24 +25,24 @@ importers:
       next: latest
       react: ^18.2.0
       react-dom: ^18.2.0
-      tsconfig: workspace:*
       typescript: ^4.5.3
-      ui: workspace:*
     dependencies:
+      '@acme/ui': link:../../packages/ui
       next: 13.1.1_biqbaboplfbrettd7655fr4n2y
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
-      ui: link:../../packages/ui
     devDependencies:
+      '@acme/tsconfig': link:../../packages/tsconfig
       '@types/node': 17.0.45
       '@types/react': 18.0.25
       '@types/react-dom': 18.0.9
       eslint-config-custom: link:../../packages/eslint-config-custom
-      tsconfig: link:../../packages/tsconfig
       typescript: 4.9.3
 
   apps/web:
     specifiers:
+      '@acme/tsconfig': workspace:*
+      '@acme/ui': workspace:*
       '@types/node': ^17.0.12
       '@types/react': ^18.0.22
       '@types/react-dom': ^18.0.7
@@ -48,20 +50,18 @@ importers:
       next: latest
       react: ^18.2.0
       react-dom: ^18.2.0
-      tsconfig: workspace:*
       typescript: ^4.5.3
-      ui: workspace:*
     dependencies:
+      '@acme/ui': link:../../packages/ui
       next: 13.1.1_biqbaboplfbrettd7655fr4n2y
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
-      ui: link:../../packages/ui
     devDependencies:
+      '@acme/tsconfig': link:../../packages/tsconfig
       '@types/node': 17.0.45
       '@types/react': 18.0.25
       '@types/react-dom': 18.0.9
       eslint-config-custom: link:../../packages/eslint-config-custom
-      tsconfig: link:../../packages/tsconfig
       typescript: 4.9.3
 
   packages/eslint-config-custom:
@@ -81,20 +81,20 @@ importers:
 
   packages/ui:
     specifiers:
+      '@acme/tsconfig': workspace:*
       '@types/react': ^17.0.37
       '@types/react-dom': ^17.0.11
       eslint: ^7.32.0
       eslint-config-custom: workspace:*
       react: ^17.0.2
-      tsconfig: workspace:*
       typescript: ^4.5.2
     devDependencies:
+      '@acme/tsconfig': link:../tsconfig
       '@types/react': 17.0.52
       '@types/react-dom': 17.0.18
       eslint: 7.32.0
       eslint-config-custom: link:../eslint-config-custom
       react: 17.0.2
-      tsconfig: link:../tsconfig
       typescript: 4.9.3
 
 packages:

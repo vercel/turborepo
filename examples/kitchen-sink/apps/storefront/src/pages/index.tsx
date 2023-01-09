@@ -1,6 +1,6 @@
 import { log } from "logger";
 import Head from "next/head";
-import { CounterButton, NewTabLink } from "ui";
+import { CounterButton, NewTabLink } from "@acme/ui";
 
 export default function Store() {
   log("Hey! This is Home.");

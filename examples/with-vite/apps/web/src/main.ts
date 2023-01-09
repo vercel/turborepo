@@ -1,6 +1,6 @@
 import "./style.css";
 import typescriptLogo from "./typescript.svg";
-import { Header, Counter, setupCounter } from "ui";
+import { Header, Counter, setupCounter } from "@acme/ui";
 
 document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
   <div>
