@@ -3,6 +3,8 @@ title: Frequently Asked Questions
 description: Frequently asked questions about Turborepo.
 ---
 
+import Callout from '../../../components/Callout'
+
 # Frequently Asked Questions
 
 ## Do I have to use Remote Caching to use Turborepo?
@@ -33,4 +35,8 @@ When [Remote Caching](/repo/docs/core-concepts/remote-caching) is enabled, by de
 
 ## How can I retain Fast Refresh in my Turborepo when using multiple Next.js applications?
 
-[Fast Refresh](https://nextjs.org/docs/basic-features/fast-refresh) gives you instantaneous feedback on edits made to your React components in Next.js applications. If your Turborepo has multiple Next.js applications, you can use `next-transpile-modules` to ensure that imports across workspaces will work with Fast Refresh when changes are made. Turborepo will effectively watch for any edits and the rebuild when saving. You can get started from [this example](https://github.com/vercel/turbo/tree/main/examples/basic) which is set up to handle Fast Refresh.
+[Fast Refresh](https://nextjs.org/docs/basic-features/fast-refresh) gives you instantaneous feedback on edits made to your React components in Next.js applications.
+
+If your Turborepo has multiple Next.js applications, you can use `transpilePackages` inside `next.config.js` to ensure that imports across workspaces will work with Fast Refresh when changes are made. Turborepo will effectively watch for any edits and the rebuild when saving. You can get started from [this example](https://github.com/vercel/turbo/tree/main/examples/basic) which is set up to handle Fast Refresh.
+
+<Callout type="info">If you are using a Next.js version below 13, you will want to use [`next-transpile-modules`](https://www.npmjs.com/package/next-transpile-modules) for the same Fast Refresh behavior.</Callout>

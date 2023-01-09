@@ -215,21 +215,15 @@ The fix is simple - we need to tell Next.js to bundle the files from certain pac
 <Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
   <Tab>
 
-    We can do that using [`next-transpile-modules`](https://www.npmjs.com/package/next-transpile-modules).
-
-    Install `next-transpile-modules` to your app. For a refresher, see our [package installation](/repo/docs/handbook/package-installation) docs.
-
-    Inside your app's `next.config.js`, add `next-transpile-modules`:
+    We can do that using `transpilePackages` in `next.config.js` (requires v13.1+):
 
     ```ts filename="apps/web/next.config.js"
-    const withTM = require("next-transpile-modules")([
-      // Add "math-helpers" to this array:
-      "math-helpers",
-    ]);
+    /** @type {import('next').NextConfig} */
+    const nextConfig = {
+      transpilePackages: ['math-helpers'],
+    };
 
-    module.exports = withTM({
-      // Any additional config for next goes in here
-    });
+    module.exports = nextConfig;
     ```
 
     Restart your dev script, and go to the browser.

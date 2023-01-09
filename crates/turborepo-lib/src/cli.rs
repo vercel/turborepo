@@ -90,6 +90,9 @@ pub struct Args {
     /// verbosity
     #[clap(flatten)]
     pub verbosity: Verbosity,
+    #[clap(long, global = true, hide = true)]
+    /// Force a check for a new version of turbo
+    pub check_for_update: bool,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
@@ -226,7 +229,7 @@ pub enum Command {
     /// occurred again).
     ///
     /// Arguments passed after '--' will be passed through to the named tasks.
-    Run(RunArgs),
+    Run(Box<RunArgs>),
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
     Unlink {},
@@ -342,7 +345,7 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
     // `self.parsed_args.run_args` as arguments.
     if clap_args.command.is_none() {
         if let Some(run_args) = mem::take(&mut clap_args.run_args) {
-            clap_args.command = Some(Command::Run(run_args));
+            clap_args.command = Some(Command::Run(Box::new(run_args)));
         } else {
             return Err(anyhow!("No command specified"));
         }
@@ -437,10 +440,10 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -448,10 +451,10 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "lint", "test"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()],
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -459,11 +462,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--cache-dir", "foobar"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     cache_dir: Some("foobar".to_string()),
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -471,11 +474,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--cache-workers", "100"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     cache_workers: 100,
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -483,11 +486,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--concurrency", "20"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     concurrency: Some("20".to_string()),
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -495,11 +498,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--continue"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     continue_execution: true,
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -507,11 +510,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--dry-run"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     dry_run: Some(DryRunMode::Text),
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -519,11 +522,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--dry-run", "json"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     dry_run: Some(DryRunMode::Json),
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -535,7 +538,7 @@ mod test {
             ])
             .unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     filter: vec![
                         "water".to_string(),
@@ -544,7 +547,7 @@ mod test {
                         "air".to_string()
                     ],
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -552,11 +555,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--force"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     force: true,
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -564,11 +567,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--global-deps", ".env"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     global_deps: vec![".env".to_string()],
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -585,11 +588,11 @@ mod test {
             ])
             .unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     global_deps: vec![".env".to_string(), ".env.development".to_string()],
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -597,11 +600,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--graph"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     graph: Some("".to_string()),
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -609,11 +612,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--graph", "out.html"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     graph: Some("out.html".to_string()),
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -621,11 +624,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--ignore", "foo.js"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     ignore: vec!["foo.js".to_string()],
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -636,11 +639,11 @@ mod test {
             ])
             .unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     ignore: vec!["foo.js".to_string(), "bar.js".to_string()],
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -648,11 +651,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--include-dependencies"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     include_dependencies: true,
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -660,11 +663,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--no-cache"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     no_cache: true,
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -672,11 +675,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--no-daemon"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     no_daemon: true,
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -684,11 +687,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--no-deps"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     no_deps: true,
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -696,11 +699,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--output-logs", "full"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     output_logs: OutputLogsMode::Full,
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -708,11 +711,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--output-logs", "none"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     output_logs: OutputLogsMode::None,
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -720,11 +723,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--output-logs", "hash-only"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     output_logs: OutputLogsMode::HashOnly,
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -732,11 +735,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--parallel"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     parallel: true,
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -744,11 +747,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--profile", "profile_out"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     profile: Some("profile_out".to_string()),
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -756,11 +759,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--remote-only"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     remote_only: true,
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -769,11 +772,11 @@ mod test {
             Args::try_parse_from(["turbo", "run", "build", "--scope", "foo", "--scope", "bar"])
                 .unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     scope: vec!["foo".to_string(), "bar".to_string()],
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -781,11 +784,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--since", "foo"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     since: Some("foo".to_string()),
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -1039,11 +1042,11 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--", "--script-arg=42"]).unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     pass_through_args: vec!["--script-arg=42".to_string()],
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );
@@ -1061,7 +1064,7 @@ mod test {
             ])
             .unwrap(),
             Args {
-                command: Some(Command::Run(RunArgs {
+                command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     pass_through_args: vec![
                         "--script-arg=42".to_string(),
@@ -1070,7 +1073,7 @@ mod test {
                         "bat".to_string()
                     ],
                     ..get_default_run_args()
-                })),
+                }))),
                 ..Args::default()
             }
         );

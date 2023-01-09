@@ -1,8 +1,10 @@
 TURBO_VERSION = $(shell cat ../version.txt | sed -n '1 p')
 TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
+EXT :=
 ifeq ($(OS),Windows_NT)
 	UNAME := Windows
+	EXT = ".exe"
 else
 	UNAME := $(shell uname -s)
 endif
@@ -19,14 +21,11 @@ GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
-turbo: libturbo.a
+turbo: go-turbo$(EXT)
 	cargo build --manifest-path ../crates/turborepo/Cargo.toml
 
-libturbo.a: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	go build -buildmode=c-archive -o libturbo.a  ./cmd/turbo/...
-
-turbo.lib: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	go build -buildmode=c-archive -o turbo.lib  ./cmd/turbo/...
+go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod
+	CGO_ENABLED=1 go build $(GO_FLAGS) -o go-turbo$(EXT) ./cmd/turbo
 
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
@@ -125,6 +124,14 @@ snapshot-lib-turbo-cross:
 build-lib-turbo-darwin:
 	goreleaser release --rm-dist -f darwin-lib.yml
 
+.PHONY: build-go-turbo-darwin
+build-go-turbo-darwin:
+	goreleaser release --rm-dist -f darwin-release.yml
+
+.PHONY: build-go-turbo-cross
+build-go-turbo-cross:
+	goreleaser release --rm-dist -f cross-release.yml
+
 .PHONY: build-lib-turbo-cross
 build-lib-turbo-cross:
 	goreleaser release --rm-dist -f cross-lib.yml
@@ -196,10 +203,10 @@ snapshot-turbo:
 	goreleaser release --rm-dist -f combined-shim.yml --snapshot
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
-	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/dist/
+	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/dist/
+	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/dist/
+	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/dist/
 
 
 .PHONY: publish-turbo

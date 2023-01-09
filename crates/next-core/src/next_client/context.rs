@@ -57,7 +57,7 @@ pub fn get_client_environment(browserslist_query: &str) -> EnvironmentVc {
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord)]
-pub enum ContextType {
+pub enum ClientContextType {
     Pages { pages_dir: FileSystemPathVc },
     App { app_dir: FileSystemPathVc },
     Fallback,
@@ -67,7 +67,7 @@ pub enum ContextType {
 #[turbo_tasks::function]
 pub async fn get_client_resolve_options_context(
     project_path: FileSystemPathVc,
-    ty: Value<ContextType>,
+    ty: Value<ClientContextType>,
     next_config: NextConfigVc,
 ) -> Result<ResolveOptionsContextVc> {
     let next_client_import_map = get_next_client_import_map(project_path, ty);
@@ -100,7 +100,7 @@ pub async fn get_client_module_options_context(
     project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
     env: EnvironmentVc,
-    ty: Value<ContextType>,
+    ty: Value<ClientContextType>,
     next_config: NextConfigVc,
 ) -> Result<ModuleOptionsContextVc> {
     let resolve_options_context = get_client_resolve_options_context(project_path, ty, next_config);
@@ -136,33 +136,6 @@ pub async fn get_client_module_options_context(
     };
 
     Ok(add_next_font_transform(module_options_context.cell()))
-}
-
-#[turbo_tasks::function]
-pub async fn add_next_transforms_to_pages(
-    module_options_context: ModuleOptionsContextVc,
-    pages_dir: FileSystemPathVc,
-) -> Result<ModuleOptionsContextVc> {
-    let mut module_options_context = module_options_context.await?.clone_value();
-    // Apply the Next SSG tranform to all pages.
-    module_options_context.custom_rules.push(ModuleRule::new(
-        ModuleRuleCondition::all(vec![
-            ModuleRuleCondition::ResourcePathInExactDirectory(pages_dir.await?),
-            ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(ReferenceType::Url(
-                UrlReferenceSubType::Undefined,
-            ))),
-            ModuleRuleCondition::any(vec![
-                ModuleRuleCondition::ResourcePathEndsWith(".js".to_string()),
-                ModuleRuleCondition::ResourcePathEndsWith(".jsx".to_string()),
-                ModuleRuleCondition::ResourcePathEndsWith(".ts".to_string()),
-                ModuleRuleCondition::ResourcePathEndsWith(".tsx".to_string()),
-            ]),
-        ]),
-        vec![ModuleRuleEffect::AddEcmascriptTransforms(
-            EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::NextJsPageSsr]),
-        )],
-    ));
-    Ok(module_options_context.cell())
 }
 
 #[turbo_tasks::function]
@@ -202,7 +175,7 @@ pub fn get_client_asset_context(
     project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
     browserslist_query: &str,
-    ty: Value<ContextType>,
+    ty: Value<ClientContextType>,
     next_config: NextConfigVc,
 ) -> AssetContextVc {
     let environment = get_client_environment(browserslist_query);
@@ -230,16 +203,16 @@ pub fn get_client_asset_context(
 pub fn get_client_chunking_context(
     project_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
-    ty: Value<ContextType>,
+    ty: Value<ClientContextType>,
 ) -> ChunkingContextVc {
     DevChunkingContextVc::builder(
         project_path,
         server_root,
         match ty.into_value() {
-            ContextType::Pages { .. } | ContextType::App { .. } => {
+            ClientContextType::Pages { .. } | ClientContextType::App { .. } => {
                 server_root.join("/_next/static/chunks")
             }
-            ContextType::Fallback | ContextType::Other => server_root.join("/_chunks"),
+            ClientContextType::Fallback | ClientContextType::Other => server_root.join("/_chunks"),
         },
         get_client_assets_path(server_root, ty),
     )
@@ -250,13 +223,13 @@ pub fn get_client_chunking_context(
 #[turbo_tasks::function]
 pub fn get_client_assets_path(
     server_root: FileSystemPathVc,
-    ty: Value<ContextType>,
+    ty: Value<ClientContextType>,
 ) -> FileSystemPathVc {
     match ty.into_value() {
-        ContextType::Pages { .. } | ContextType::App { .. } => {
+        ClientContextType::Pages { .. } | ClientContextType::App { .. } => {
             server_root.join("/_next/static/assets")
         }
-        ContextType::Fallback | ContextType::Other => server_root.join("/_assets"),
+        ClientContextType::Fallback | ClientContextType::Other => server_root.join("/_assets"),
     }
 }
 
@@ -264,7 +237,7 @@ pub fn get_client_assets_path(
 pub async fn get_client_runtime_entries(
     project_root: FileSystemPathVc,
     env: ProcessEnvVc,
-    ty: Value<ContextType>,
+    ty: Value<ClientContextType>,
     next_config: NextConfigVc,
 ) -> Result<RuntimeEntriesVc> {
     let resolve_options_context = get_client_resolve_options_context(project_root, ty, next_config);
@@ -284,7 +257,7 @@ pub async fn get_client_runtime_entries(
     if let Some(request) = enable_react_refresh {
         runtime_entries.push(RuntimeEntry::Request(request, project_root.join("_")).cell())
     };
-    if matches!(ty.into_value(), ContextType::Other) {
+    if matches!(ty.into_value(), ClientContextType::Other) {
         runtime_entries.push(
             RuntimeEntry::Request(
                 RequestVc::parse(Value::new(Pattern::Constant(
