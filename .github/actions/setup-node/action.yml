@@ -4,7 +4,7 @@ inputs:
   enable-corepack:
     description: "Control turning on corepack."
     required: false
-    default: true
+    default: "true"
   extra-flags:
     description: "Extra flags to pass to the pnpm install."
     required: false
@@ -12,7 +12,8 @@ inputs:
   package-install:
     description: "Don't run the install step."
     required: false
-    default: true
+    default: "true"
+
 runs:
   using: "composite"
   steps:
@@ -28,19 +29,14 @@ runs:
         cache: pnpm
 
     - name: Configure corepack
+      if: ${{ inputs.enable-corepack == 'true' }}
+      shell: bash
       # Forcibly upgrade our available version of corepack.
       # The bundled version in node 16 has known issues.
       # Prepends the npm bin dir so that it is always first.
-      shell: bash
       run: |
         npm install --force --global corepack@latest
         npm config get prefix >> $GITHUB_PATH
-        corepack enable
-
-    - name: Enable corepack
-      if: ${{ inputs.enable-corepack == 'true' }}
-      shell: bash
-      run: |
         corepack enable
 
     - name: pnpm install
