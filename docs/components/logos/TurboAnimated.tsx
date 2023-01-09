@@ -47,7 +47,7 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
 
       <g mask="url(#logo-mask)">
         <AnimatePresence mode="sync" initial={false}>
-          {site === "repo" ? (
+          {site === "repo" || site === undefined ? (
             <motion.g
               key="turborepo"
               variants={variants}
