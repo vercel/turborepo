@@ -31,10 +31,6 @@ pub(crate) fn get_font_axes(
         .context("Font family not found")?
         .axes;
 
-    let Some(defineable_axes) = all_axes else {
-        bail!("Font {} has no definable `axes`", font_family);
-    };
-
     let ital = {
         let has_italic = styles.contains("italic");
         let has_normal = styles.contains("normal");
@@ -50,6 +46,10 @@ pub(crate) fn get_font_axes(
 
     match weights {
         FontWeights::Variable => {
+            let Some(defineable_axes) = all_axes else {
+                bail!("Font {} has no definable `axes`", font_family);
+            };
+
             if let Some(selected_variable_axes) = selected_variable_axes {
                 let definable_axes_tags = defineable_axes
                     .iter()
