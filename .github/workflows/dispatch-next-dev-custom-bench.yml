@@ -30,7 +30,6 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           shared-cache-key: benchmark-next-dev
-          save-cache: "false"
 
       - name: Clear benchmarks
         run: rm -rf target/criterion
@@ -66,10 +65,6 @@ jobs:
         with:
           name: custom
           path: raw.json
-
-      # This avoids putting this data into the rust-cache
-      - name: Clear benchmarks
-        run: rm -rf target/criterion
 
   commit_results:
     name: Commit benchmark-data

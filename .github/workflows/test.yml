@@ -273,7 +273,7 @@ jobs:
         run: corepack disable
 
       - name: Setup Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: 16
           cache: ${{ matrix.manager }}
@@ -500,6 +500,11 @@ jobs:
         uses: ./.github/actions/setup-node
         with:
           node-version: 16
+
+      - name: Build benchmarks for tests
+        timeout-minutes: 120
+        run: |
+          cargo test --benches --release --no-run
 
       - name: Run cargo test on benchmarks
         timeout-minutes: 120

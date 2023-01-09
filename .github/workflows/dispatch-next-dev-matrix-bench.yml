@@ -45,11 +45,6 @@ jobs:
         with:
           shared-cache-key: benchmark-next-dev
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: benchmark-next-dev
-          save-if: "false"
-
       - name: Clear benchmarks
         run: rm -rf target/criterion
 
@@ -87,10 +82,6 @@ jobs:
         with:
           name: custom ${{ matrix.bench.name }} ${{ matrix.bench.type }}
           path: raw.json
-
-      # This avoids putting this data into the rust-cache
-      - name: Clear benchmarks
-        run: rm -rf target/criterion
 
   commit_results:
     name: Commit benchmark-data
