@@ -9,7 +9,7 @@ type LogoProps = {
 };
 
 const LEFT_PADDING = 8;
-const RIGHT_PADDING = 8;
+const RIGHT_PADDING = 12;
 // The width of the logo + wordmark. This does not include the "invisible" padding.
 const VISUAL_WIDTH = 112;
 
