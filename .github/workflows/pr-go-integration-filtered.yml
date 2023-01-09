@@ -38,7 +38,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: cli/.cram_env
-          key: ${{ runner.os }}-prysk
+          key: prysk-venv-${{ matrix.os.name }}
 
       - name: Integration Tests
         run: pnpm -- turbo run integration-tests --filter=cli

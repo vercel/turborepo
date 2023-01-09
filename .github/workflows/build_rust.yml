@@ -31,7 +31,7 @@ jobs:
           - host: ubuntu-latest
             container-options: "--rm"
             target: "aarch64-unknown-linux-musl"
-            rustflags: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
+            rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
             setup: "sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
             target: x86_64-pc-windows-gnu
@@ -50,24 +50,9 @@ jobs:
         if: ${{ matrix.settings.container-setup }}
         run: ${{ matrix.settings.container-setup }}
 
-      - name: Install
-        uses: actions-rs/toolchain@v1
+      - uses: ./.github/actions/setup-rust
         with:
-          profile: minimal
-          override: true
-          target: ${{ matrix.settings.target }}
-
-      # - name: Cache cargo registry
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: ~/.cargo/registry
-      #     key: ${{ matrix.settings.target }}-cargo-registry
-
-      # - name: Cache cargo index
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: ~/.cargo/git
-      #     key: ${{ matrix.settings.target }}-cargo-index
+          targets: ${{ matrix.settings.target }}
 
       - name: Build Setup
         shell: bash
@@ -75,7 +60,7 @@ jobs:
         run: ${{ matrix.settings.setup }}
 
       - name: Build
-        run: ${{ matrix.settings.rustflags }} cargo build --release -p turbo --target ${{ matrix.settings.target }}
+        run: ${{ matrix.settings.rust-build-env }} cargo build --release -p turbo --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3

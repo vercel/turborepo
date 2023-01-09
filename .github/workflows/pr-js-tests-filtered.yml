@@ -33,28 +33,25 @@ jobs:
       TURBO_REMOTE_ONLY: true
 
     steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/build-debug-turborepo
+      # on main -> current + prev commit
+      # pr -> pr commits + base commit
+      - name: Determine fetch depth
+        id: fetch-depth
+        run: |
+          echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
+
+      - name: Build debug binary
+        uses: ./.github/actions/build-debug-turborepo
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           target: ${{ matrix.os.name }}
-      - name: checkout
-        # We want to fetch all of the commits in PR and the commit it's based on
-        # If this isn't a PR, then this is a push and we check against the previous commit
-        run: |
-          pr_commits=${{ github.event.pull_request.commits }}
-          if [[ -n "$pr_commits" ]]; then
-            git fetch --no-tags --prune --progress --depth="$(( pr_commits + 1 ))" origin +${{ github.event.pull_request.base.sha }}:${{ github.ref }}
-            git checkout ${{ github.ref }} --force
-          else
-            git fetch --no-tags --prune --progress --depth=2
-          fi
 
-      # Note this runs nothing on push since event is push and not pull_request and ...[] matches nothing?
-      # For push we should just do ..[HEAD^]
-      - if: ${{ github.event.pull_request }}
+      - name: Run tests
         run: |
-          pnpm -- turbo run test  --filter=...[${{ github.event.pull_request.base.sha }}] --filter=!cli --color
-      - if: ${{ github.event.push }}
-        run: |
-          pnpm -- turbo run test  --filter=...[HEAD^1] --filter=!cli --color
+          pnpm -- turbo run test --filter=...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --filter=!cli --color
