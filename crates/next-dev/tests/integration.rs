@@ -163,9 +163,10 @@ async fn run_test(resource: &str) -> JestRunResult {
     );
 
     let result = tokio::select! {
+        // Poll the mock_server first to add the env var
+        _ = mock_server_future => panic!("Never resolves"),
         r = run_browser(server.addr) => r.expect("error while running browser"),
         _ = server.future => panic!("Never resolves"),
-        _ = mock_server_future => panic!("Never resolves"),
     };
 
     env::remove_var("TURBOPACK_TEST_ONLY_MOCK_SERVER");
