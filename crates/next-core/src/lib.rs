@@ -7,6 +7,7 @@ mod embed_js;
 pub mod env;
 mod fallback;
 pub mod manifest;
+mod middleware_loader;
 mod next_build;
 pub mod next_client;
 mod next_client_component;
@@ -24,6 +25,7 @@ mod util;
 mod web_entry_source;
 
 pub use app_source::create_app_source;
+pub use middleware_loader::create_middleware_loader;
 pub use page_source::create_page_source;
 pub use turbopack_node::source_map;
 pub use web_entry_source::create_web_entry_source;

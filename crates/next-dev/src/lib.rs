@@ -18,8 +18,8 @@ use std::{
 use anyhow::{anyhow, Context, Result};
 use devserver_options::DevServerOptions;
 use next_core::{
-    create_app_source, create_page_source, create_web_entry_source, env::load_env,
-    manifest::DevManifestContentSource, next_config::load_next_config,
+    create_app_source, create_middleware_loader, create_page_source, create_web_entry_source,
+    env::load_env, manifest::DevManifestContentSource, next_config::load_next_config,
     next_image::NextImageContentSourceVc, source_map::NextSourceMapTraceContentSourceVc,
 };
 use owo_colors::OwoColorize;
@@ -290,6 +290,8 @@ async fn source(
         })
         .collect();
 
+    let middleware_loader = create_middleware_loader(project_path, dev_server_root, output_root);
+
     let web_source = create_web_entry_source(
         project_path,
         execution_context,
@@ -338,6 +340,7 @@ async fn source(
         app_source,
         page_source,
         web_source,
+        middleware_loader,
     ]);
     let introspect = IntrospectionSource {
         roots: HashSet::from([main_source.into()]),
