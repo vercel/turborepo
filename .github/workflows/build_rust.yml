@@ -42,7 +42,8 @@ jobs:
       image: ${{ matrix.settings.container }}
       options: ${{ matrix.settings.container-options }}
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
         with:
           ref: "${{ inputs.release_branch }}"
 
@@ -50,9 +51,12 @@ jobs:
         if: ${{ matrix.settings.container-setup }}
         run: ${{ matrix.settings.container-setup }}
 
-      - uses: ./.github/actions/setup-rust
+      - name: Rust Setup
+        uses: actions-rs/toolchain@v1
         with:
-          targets: ${{ matrix.settings.target }}
+          profile: minimal
+          override: true
+          target: ${{ matrix.settings.target }}
 
       - name: Build Setup
         shell: bash
