@@ -16,13 +16,10 @@ jobs:
           - name: ubuntu
             # myb use 16 core, idk
             runner: ubuntu-latest-16-core-oss
-            nextest: linux
           - name: macos
             runner: macos-latest
-            nextest: mac
           - name: windows
             runner: windows-latest
-            nextest: windows-tar
 
     runs-on: ${{ matrix.os.runner }}
     name: Building Rust cache for ${{ matrix.os.name }}
