@@ -21,15 +21,10 @@ runs:
     - name: "Setup Rust"
       uses: ./.github/actions/setup-rust
       with:
+        target: ${{ inputs.target }}
         shared-cache-key: turborepo-debug-build
         cache-key: ${{ inputs.target }}
         save-cache: true
-
-    - name: "Set Windows default host to MingW"
-      if: ${{ inputs.target == 'windows' }}
-      shell: bash
-      run: |
-        rustup set default-host x86_64-pc-windows-gnu && rustup show
 
     - name: Build Turborepo
       working-directory: ./cli
