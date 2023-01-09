@@ -394,6 +394,7 @@ impl<B: Backend> TurboTasks<B> {
 
         let this = self.pin();
         let future = async move {
+            #[allow(clippy::blocks_in_if_conditions)]
             while CURRENT_TASK_STATE
                 .scope(Default::default(), async {
                     if this.stopped.load(Ordering::Acquire) {

@@ -80,10 +80,6 @@ impl GcQueue {
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.queue.len()
-    }
-
     pub fn task_executed(&self, task: TaskId, duration: Duration) {
         // A freshly executed task will start on EmptyUnusedCells, even while we are not
         // sure if there are unused cells.

@@ -214,42 +214,20 @@ impl MemoryBackend {
     pub fn run_gc(&self, idle: bool, turbo_tasks: &dyn TurboTasksBackendApi) {
         const MAX_COLLECT_FACTOR: u8 = u8::MAX / 8;
         const MB: usize = 1024 * 1024;
-        #[cfg(not(debug_assertions))]
         const GB: usize = 1024 * MB;
 
-        #[cfg(debug_assertions)]
-        const LOWER_MEM_TARGET: usize = 300 * MB;
-        #[cfg(debug_assertions)]
-        const IDLE_UPPER_MEM_TARGET: usize = 600 * MB;
-        #[cfg(debug_assertions)]
-        const UPPER_MEM_TARGET: usize = 1000 * MB;
-        #[cfg(debug_assertions)]
-        const MEM_LIMIT: usize = 2000 * MB;
-
-        #[cfg(not(debug_assertions))]
         const LOWER_MEM_TARGET: usize = 4 * GB;
-        #[cfg(not(debug_assertions))]
         const IDLE_UPPER_MEM_TARGET: usize = 5 * GB;
-        #[cfg(not(debug_assertions))]
         const UPPER_MEM_TARGET: usize = 6 * GB;
-        #[cfg(not(debug_assertions))]
         const MEM_LIMIT: usize = 7 * GB;
 
         let usage = turbo_malloc::TurboMalloc::memory_usage();
-        let start = Instant::now();
         let target = if idle {
             IDLE_UPPER_MEM_TARGET
         } else {
             UPPER_MEM_TARGET
         };
         if usage < target {
-            // if idle {
-            //     println!(
-            //         "{:.3} GB: No GC needed ({} tasks in queue)",
-            //         (usage / 1000_000) as f32 / 1000.0,
-            //         self.gc_queue.len()
-            //     );
-            // }
             return;
         }
 
@@ -260,41 +238,12 @@ impl MemoryBackend {
 
         let collected = self.gc_queue.run_gc(collect_factor, self, turbo_tasks);
 
-        if let Some((collected, count, stats)) = collected {
-            let new_usage = turbo_malloc::TurboMalloc::memory_usage();
-            // println!(
-            //     "{:.3} GB -> {:.3} GB: {} Idle {} GC'ed {} tasks <= {:?} ({} tasks in
-            // queue, {:?})",     (usage / 1000_000) as f32 / 1000.0,
-            //     (new_usage / 1000_000) as f32 / 1000.0,
-            //     FormatDuration(start.elapsed()),
-            //     idle,
-            //     count,
-            //     collected,
-            //     self.gc_queue.len(),
-            //     stats
-            // );
-
+        if let Some((_collected, _count, _stats)) = collected {
             if idle {
                 let job = self.create_backend_job(Job::GarbaggeCollection);
                 turbo_tasks.schedule_backend_background_job(job);
             }
         }
-
-        // println!(
-        //     "memory_tasks: {} entries capacity {} kB",
-        //     self.memory_tasks.capacity(),
-        //     std::mem::size_of::<Task>() * self.memory_tasks.capacity() / 1024
-        // );
-        // println!(
-        //     "memory_task_scopes: {} entries capacity {} kB",
-        //     self.memory_task_scopes.capacity(),
-        //     std::mem::size_of::<TaskScope>() *
-        // self.memory_task_scopes.capacity() / 1024 );
-        // println!(
-        //     "backend_jobs: {} entries capacity {} kB",
-        //     self.backend_jobs.capacity(),
-        //     std::mem::size_of::<Job>() * self.backend_jobs.capacity() / 1024
-        // );
     }
 }
 

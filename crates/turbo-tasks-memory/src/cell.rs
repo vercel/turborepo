@@ -307,18 +307,17 @@ impl Cell {
                 updates,
             } => {
                 if !dependent_tasks.is_empty() {
-                    turbo_tasks.schedule_notify_tasks_set(&dependent_tasks);
-                    dependent_tasks.clear();
+                    turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
                 }
                 if updates == 1 {
                     *self = Cell::InitialValue {
                         content,
-                        dependent_tasks: take(dependent_tasks),
+                        dependent_tasks: AutoSet::new(),
                     };
                 } else {
                     *self = Cell::Full(box FullCell::UpdatedValue {
                         content,
-                        dependent_tasks: take(dependent_tasks),
+                        dependent_tasks: AutoSet::new(),
                         updates,
                     });
                 }
@@ -330,12 +329,11 @@ impl Cell {
                 if content != *old_content {
                     if !dependent_tasks.is_empty() {
                         turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
-                        dependent_tasks.clear();
                     }
                     *self = Cell::Full(box FullCell::UpdatedValue {
                         content,
                         updates: 2,
-                        dependent_tasks: take(dependent_tasks),
+                        dependent_tasks: AutoSet::new(),
                     });
                 }
             }

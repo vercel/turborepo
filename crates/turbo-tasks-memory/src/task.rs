@@ -2090,18 +2090,14 @@ impl Task {
                     let mut has_used_cells = false;
                     for cells in state.cells.values_mut() {
                         for cell in cells.iter_mut() {
-                            if cell.is_available() {
-                                if cell.has_dependent_tasks() {
-                                    has_used_cells = true;
-                                    for task_id in cell.dependent_tasks() {
-                                        if included_tasks.insert(task_id) {
-                                            if let Some(duration) =
-                                                task_duration_cache.get(&task_id)
-                                            {
-                                                dependent_tasks_compute_duration += *duration;
-                                            } else {
-                                                missing_durations.push(task_id);
-                                            }
+                            if cell.is_available() && cell.has_dependent_tasks() {
+                                has_used_cells = true;
+                                for task_id in cell.dependent_tasks() {
+                                    if included_tasks.insert(task_id) {
+                                        if let Some(duration) = task_duration_cache.get(&task_id) {
+                                            dependent_tasks_compute_duration += *duration;
+                                        } else {
+                                            missing_durations.push(task_id);
                                         }
                                     }
                                 }

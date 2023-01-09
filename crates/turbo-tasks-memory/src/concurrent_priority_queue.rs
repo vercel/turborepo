@@ -55,6 +55,7 @@ impl<K: Hash + Eq, V: Ord + Clone + Debug, H: BuildHasher + Clone>
         unsafe { self.shards.get_unchecked(index) }.lock()
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         let mut len = 0;
         for shard in self.shards.iter() {
@@ -132,30 +133,26 @@ impl<K: Hash + Eq, V: Ord + Clone + Debug, H: BuildHasher + Clone>
                     value: next_value, ..
                 }) = shards_queue.peek()
                 {
-                    loop {
-                        if let Some((_, peeked_value)) = shard.peek() {
-                            // Is the next item in this shard (still) the global next
-                            if peeked_value < next_value {
-                                // some other shard is next
-                                // enqueue this shard again
-                                shards_queue.push(ShardsQueueItem {
-                                    index: i,
-                                    value: peeked_value.clone(),
-                                    len: shard.len(),
-                                });
-                                break;
-                            }
-
-                            result.push(shard.pop().unwrap());
-                            if result.len() >= count {
-                                return result;
-                            }
-                            // We keep the shard lock and check the next item for a fast path
-                            continue;
-                        } else {
-                            // shard has become empty concurrently
+                    // The peek will be None if the shard has become empty concurrently
+                    while let Some((_, peeked_value)) = shard.peek() {
+                        // Is the next item in this shard (still) the global next
+                        if peeked_value < next_value {
+                            // some other shard is next
+                            // enqueue this shard again
+                            shards_queue.push(ShardsQueueItem {
+                                index: i,
+                                value: peeked_value.clone(),
+                                len: shard.len(),
+                            });
                             break;
                         }
+
+                        result.push(shard.pop().unwrap());
+                        if result.len() >= count {
+                            return result;
+                        }
+                        // We keep the shard lock and check the next item for a
+                        // fast path
                     }
                 } else {
                     // No other shards
