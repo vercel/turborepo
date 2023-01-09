@@ -1,13 +1,17 @@
 name: Cleanup branch caches
 on:
   pull_request:
-    types:
-      - closed
+    types: [opened, edited, closed, synchronize]
+  check_run:
+    types: [completed]
+  check_suite:
+    types: [completed]
   workflow_dispatch:
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+    if: ${{ github.ref != 'refs/heads/main' }}
     steps:
       - name: Check out code
         uses: actions/checkout@v3
