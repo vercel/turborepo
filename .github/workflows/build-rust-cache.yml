@@ -8,6 +8,35 @@ on:
     branches: [main]
 
 jobs:
+  build-cache-tools:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            # myb use 16 core, idk
+            runner: ubuntu-latest-16-core-oss
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
+
+    runs-on: ${{ matrix.os.runner }}
+    name: Building Rust cache tools for ${{ matrix.os.name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install cargo-chef
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-chef
+
+      - name: Install cargo-sweep
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-sweep
+
   build_cache:
     strategy:
       fail-fast: false
