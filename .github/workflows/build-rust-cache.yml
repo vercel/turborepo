@@ -3,6 +3,9 @@ name: Build Rust cache
 on:
   push:
     branches: [main]
+  # TODO: remove this after testing
+  pull_request:
+    branches: [main]
 
 jobs:
   build_cache:
@@ -34,6 +37,7 @@ jobs:
           shared-cache-key: dependencies
           save-cache: true
 
+      # TODO: remove this after testing
       - name: Test Cache Size
         uses: Swatinem/rust-cache@v2
         with:
@@ -64,3 +68,31 @@ jobs:
           cargo chef cook --workspace --all-targets --clippy
           cargo nextest run --no-run --release --exclude turbo
           cargo sweep -f
+
+#  # TODO: remove this after testing
+#  cleanup:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Check out code
+#        uses: actions/checkout@v3
+#
+#      - name: Cleanup
+#        env:
+#          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#        run: |
+#          gh extension install actions/gh-actions-cache
+#
+#          REPO=${{ github.repository }}
+#          BRANCH=${{ github.ref }}
+#
+#          echo "Fetching list of cache key"
+#          cacheKeysForPR=$(gh actions-cache list -R $REPO -B $BRANCH | cut -f 1 )
+#
+#          ## Setting this to not fail the workflow while deleting cache keys.
+#          set +e
+#          echo "Deleting caches..."
+#          for cacheKey in $cacheKeysForPR
+#          do
+#              gh actions-cache delete $cacheKey -R $REPO -B $BRANCH --confirm
+#          done
+#          echo "Done"
