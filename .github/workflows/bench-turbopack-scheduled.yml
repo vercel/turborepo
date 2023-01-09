@@ -79,7 +79,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          shared-key: benchmark-${{ matrix.bench.cache_key }}
+          shared-cache-key: benchmark-${{ matrix.bench.cache_key }}
 
       - name: Clear potentially cached benchmarks
         run: rm -rf target/criterion

@@ -471,14 +471,14 @@ jobs:
 
       - name: Build nextest
         timeout-minutes: 120
+        # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
           cargo nextest run --no-run --workspace --release --exclude turbo
 
       - name: Run nextest
         timeout-minutes: 120
+        # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
           cargo nextest run --workspace --release --no-fail-fast --exclude turbo
 
   rust_test_bench:

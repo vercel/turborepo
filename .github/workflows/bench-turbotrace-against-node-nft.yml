@@ -24,6 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     name: bench
 
+    env:
+      BUILD_ARGS: --release -p turbopack --features bench_against_node_nft bench_against_node_nft
+
     steps:
       - uses: actions/checkout@v3
 
@@ -49,14 +52,12 @@ jobs:
       - name: Build benchmark
         timeout-minutes: 60
         run: |
-          cargo nextest run --no-run --release \
-            -p turbopack --features bench_against_node_nft bench_against_node_nft
+          cargo nextest run --no-run ${{ env.BENCH_ARGS }}
 
       - name: Run benchmark
         timeout-minutes: 60
         run: |
-          cargo nextest run --test-threads 1 --no-fail-fast --release \
-            -p turbopack --features bench_against_node_nft bench_against_node_nft
+          cargo nextest run --test-threads 1 --no-fail-fast ${{ env.BENCH_ARGS }}
 
       - name: Show benchmark result
         run: cargo xtask nft-bench-result
