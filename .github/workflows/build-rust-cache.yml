@@ -34,6 +34,7 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
+          components: clippy
           shared-cache-key: dependencies
           save-cache: true
 
