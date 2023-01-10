@@ -1,12 +1,15 @@
 name: Cleanup branch caches
 on:
-  pull_request:
-    types: [opened, edited, closed, synchronize]
-  check_run:
-    types: [completed]
   check_suite:
     types: [completed]
+  pull_request:
+    types: [opened, closed, reopened, synchronize]
+  push:
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   cleanup:
