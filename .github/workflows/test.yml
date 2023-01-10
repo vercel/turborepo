@@ -843,6 +843,14 @@ jobs:
           chmod +x ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev
           ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev --display-version
 
+      - run: chmod +x ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev
+
+      - run: |
+          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && xvfb-run node run-tests.js --type development --timings -g ${{ matrix.group }}/2 >> /proc/1/fd/1"
+        name: Run test/development
+        env:
+          RECORD_REPLAY_METADATA_TEST_RUN_TITLE: testDev / Group ${{ matrix.group }}
+
       - name: Install dependencies
         run: |
           corepack disable
@@ -858,14 +866,6 @@ jobs:
       - run: npx @replayio/playwright install chromium
 
       - run: |
-          chmod +x ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev
-          node run-tests.js --type development --timings -g ${{ matrix.group }}/2
-        name: Run test/development
-        env:
-          RECORD_REPLAY_METADATA_TEST_RUN_TITLE: testDev / Group ${{ matrix.group }}
-
-      - run: |
-          chmod +x ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev
           node run-tests.js --type e2e --timings -g ${{ matrix.group }}/3
         name: Run test/e2e (dev)
         env:
@@ -874,7 +874,6 @@ jobs:
           RECORD_REPLAY_TEST_METRICS: 1
 
       - run: |
-          chmod +x ${{ github.workspace }}/artifacts/release-x86_64-unknown-linux-musl/next-dev
           xvfb-run node run-tests.js --timings -g ${{ matrix.group }}/20
         name: Test Integration
         env:
