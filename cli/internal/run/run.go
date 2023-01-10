@@ -201,7 +201,13 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	pipeline := turboJSON.Pipeline
 	if err := validateTasks(pipeline, targets); err != nil {
-		return err
+		location := ""
+		if r.opts.runOpts.singlePackage {
+			location = "in `scripts` in \"package.json\""
+		} else {
+			location = "in `pipeline` in \"turbo.json\""
+		}
+		return fmt.Errorf("%s %s. Are you sure you added it?", err, location)
 	}
 
 	scmInstance, err := scm.FromInRepo(r.base.RepoRoot)
@@ -436,7 +442,7 @@ const (
 func validateTasks(pipeline fs.Pipeline, tasks []string) error {
 	for _, task := range tasks {
 		if !pipeline.HasTask(task) {
-			return fmt.Errorf("task `%v` not found in turbo `pipeline` in \"turbo.json\". Are you sure you added it?", task)
+			return fmt.Errorf("task `%v` not found", task)
 		}
 	}
 	return nil
