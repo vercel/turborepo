@@ -25,6 +25,29 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      # Set trace-start variable to collect build events tracing timing
+      - name: Set trace-start
+        id: set-trace-start
+        run: |
+          echo "trace-start=$(date +%s)" >> $GITHUB_OUTPUT
+
+      - uses: honeycombio/gha-buildevents@v2
+        with:
+          # Required: a Honeycomb API key - needed to send traces.
+          apikey: ${{ secrets.HONEYCOMB_BUILDEVENT_APIKEY }}
+          # Required: the Honeycomb dataset to send traces to.
+          dataset: turbopack-ci-workflow
+          status: ${{ job.status }}
+          # Optional: this should only be used in combination with matrix builds. Set
+          # this to a value uniquely describing each matrix configuration.
+          matrix-key: ${{ matrix.value }}
+
+      # Record current steps with start time
+      - run: |
+          STEP_ID=determine_jobs
+          echo "STEP_ID=${STEP_ID}" >> $GITHUB_ENV
+          echo "STEP_START=$(date +%s)" >> $GITHUB_ENV
+
       - name: Find PR Comment
         id: comment
         if: github.event_name == 'pull_request'
@@ -135,6 +158,8 @@ jobs:
       tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
       main_push: ${{ github.event_name == 'push' && github.ref == 'refs/head/main' }}
       tag_push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace') }}
+      # Preserve trace start time from 'set-trace-start' to collect entire build time span
+      trace-start: ${{ steps.set-trace-start.outputs.trace-start }}
 
   go_lint:
     name: Go linting
@@ -1036,3 +1061,31 @@ jobs:
       - name: It's fine
         if: success() && steps.cancelled.outputs.cancelled != 'true'
         run: echo Ok
+
+  # A job to run after **all** of the jobs completed, to create an event completes top level span.
+  end-trace:
+    runs-on: ubuntu-latest
+    needs: [final]
+    if: ${{ always() }}
+    steps:
+    - uses: technote-space/workflow-conclusion-action@v3
+    - uses: honeycombio/gha-buildevents@v2
+      with:
+        # Required: a Honeycomb API key - needed to send traces.
+        apikey: ${{ secrets.HONEYCOMB_BUILDEVENT_APIKEY }}
+
+        # Required: the Honeycomb dataset to send traces to.
+        dataset: turbopack-ci-workflow
+
+        # Required on the final job: status, this will be used in the post section and sent
+        # as status of the trace.
+        # Note: in V1 this was called job-status which has been deprecated
+        status: ${{ env.WORKFLOW_CONCLUSION }}
+
+        # Optional: trace-start, this will be used in the post section and sent
+        # to calculate duration of the trace. In multi job workflows, set on the final job of a workflow. Not necessary for single job workflows
+        trace-start: ${{ needs.setup-trace.outputs.trace-start }}
+
+        # Optional: this should only be used in combination with matrix builds. Set
+        # this to a value uniquely describing each matrix configuration.
+        matrix-key: ${{ matrix.value }}
