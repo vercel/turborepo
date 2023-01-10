@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use next_transform_dynamic::next_dynamic;
+use next_transform_dynamic::{next_dynamic, NextDynamicMode};
 use swc_core::{
     common::FileName,
     ecma::{
@@ -27,6 +27,7 @@ fn next_dynamic_errors(input: PathBuf) {
                 true,
                 false,
                 false,
+                NextDynamicMode::Webpack,
                 FileName::Real(PathBuf::from("/some-project/src/some-file.js")),
                 Some("/some-project/src".into()),
             )

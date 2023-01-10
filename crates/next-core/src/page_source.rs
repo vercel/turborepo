@@ -51,6 +51,7 @@ use crate::{
         },
         transition::NextClientTransition,
     },
+    next_client_chunks::client_chunks_transition::NextClientChunksTransitionVc,
     next_config::NextConfigVc,
     next_server::context::{
         get_server_environment, get_server_module_options_context,
@@ -134,9 +135,23 @@ pub async fn create_page_source(
     let server_module_options_context =
         get_server_module_options_context(project_path, execution_context, server_ty, next_config);
     let server_transitions = TransitionsByNameVc::cell(
-        [("next-client".to_string(), next_client_transition)]
-            .into_iter()
-            .collect(),
+        [
+            ("next-client".to_string(), next_client_transition),
+            (
+                "next-client-chunks".to_string(),
+                NextClientChunksTransitionVc::new(
+                    project_path,
+                    execution_context,
+                    client_ty,
+                    server_root,
+                    browserslist_query,
+                    next_config,
+                )
+                .into(),
+            ),
+        ]
+        .into_iter()
+        .collect(),
     );
 
     let server_context: AssetContextVc = ModuleAssetContextVc::new(

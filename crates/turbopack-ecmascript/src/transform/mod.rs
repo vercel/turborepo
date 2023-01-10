@@ -3,7 +3,7 @@ mod server_to_client_proxy;
 use std::{path::Path, sync::Arc};
 
 use anyhow::Result;
-use next_transform_dynamic::next_dynamic;
+use next_transform_dynamic::{next_dynamic, NextDynamicMode};
 use next_transform_strip_page_exports::{next_transform_strip_page_exports, ExportFilter};
 use serde::{Deserialize, Serialize};
 use swc_core::{
@@ -238,6 +238,7 @@ impl EcmascriptInputTransform {
                     is_development,
                     is_server,
                     is_server_components,
+                    NextDynamicMode::Turbo,
                     FileName::Real(file_path_str.into()),
                     pages_dir,
                 ));
