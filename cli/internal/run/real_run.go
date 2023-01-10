@@ -89,11 +89,6 @@ func RealRun(
 	}
 
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
-		err := hashes.CalculateFileHashes(packageTask.TaskID, 1, base.RepoRoot)
-		if err != nil {
-			return err
-		}
-
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		// deps here are passed in to calculate the task hash
 		return ec.exec(ctx, packageTask, deps)
@@ -166,7 +161,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	tracer := ec.runState.Run(packageTask.TaskID)
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
-	hash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, ec.logger, passThroughArgs)
+	hash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, ec.repoRoot, ec.logger, passThroughArgs)
 	ec.logger.Debug("task hash", "value", hash)
 	if err != nil {
 		ec.ui.Error(fmt.Sprintf("Hashing error: %v", err))

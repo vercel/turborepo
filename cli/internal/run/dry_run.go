@@ -85,7 +85,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		passThroughArgs := rs.ArgsForTask(packageTask.Task)
-		hash, err := taskHashes.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
+		hash, err := taskHashes.CalculateTaskHash(packageTask, deps, base.RepoRoot, base.Logger, passThroughArgs)
 		if err != nil {
 			return err
 		}

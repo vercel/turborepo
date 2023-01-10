@@ -29,24 +29,22 @@ import (
 // package-task hashing is threadsafe, provided topographical order is
 // respected.
 type Tracker struct {
-	rootNode            string
-	globalHash          string
-	pipeline            fs.Pipeline
-	workspaceInfos      graph.WorkspaceInfos
-	mu                  sync.RWMutex
-	packageInputsHashes packageFileHashes
-	packageTaskHashes   map[string]string // taskID -> hash
+	rootNode          string
+	globalHash        string
+	pipeline          fs.Pipeline
+	workspaceInfos    graph.WorkspaceInfos
+	mu                sync.RWMutex
+	packageTaskHashes map[string]string // taskID -> hash
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
 func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, workspaceInfos graph.WorkspaceInfos) *Tracker {
 	return &Tracker{
-		rootNode:            rootNode,
-		globalHash:          globalHash,
-		pipeline:            pipeline,
-		workspaceInfos:      workspaceInfos,
-		packageInputsHashes: make(map[packageFileHashKey]string),
-		packageTaskHashes:   make(map[string]string),
+		rootNode:          rootNode,
+		globalHash:        globalHash,
+		pipeline:          pipeline,
+		workspaceInfos:    workspaceInfos,
+		packageTaskHashes: make(map[string]string),
 	}
 }
 
@@ -158,18 +156,18 @@ type packageFileHashes map[packageFileHashKey]string
 
 // CalculateFileHashes hashes each unique package-inputs combination that is present
 // in the task graph. Must be called before calculating task hashes.
-func (th *Tracker) CalculateFileHashes(taskID string, workerCount int, repoRoot turbopath.AbsoluteSystemPath) error {
+func (th *Tracker) CalculateFileHashes(taskID string, repoRoot turbopath.AbsoluteSystemPath) (string, error) {
 	if taskID == th.rootNode {
-		return nil
+		return "", nil
 	}
 	pkgName, _ := util.GetPackageTaskFromId(taskID)
 	if pkgName == th.rootNode {
-		return nil
+		return "", nil
 	}
 
 	taskDefinition, ok := th.pipeline.GetTaskDefinition(taskID)
 	if !ok {
-		return fmt.Errorf("missing pipeline entry %v", taskID)
+		return "", fmt.Errorf("missing pipeline entry %v", taskID)
 	}
 
 	pfs := &packageFileSpec{
@@ -179,18 +177,14 @@ func (th *Tracker) CalculateFileHashes(taskID string, workerCount int, repoRoot 
 
 	pkg, ok := th.workspaceInfos[pfs.pkg]
 	if !ok {
-		return fmt.Errorf("cannot find package %v", pfs.pkg)
+		return "", fmt.Errorf("cannot find package %v", pfs.pkg)
 	}
 	hash, err := pfs.hash(pkg, repoRoot)
 	if err != nil {
-		return err
+		return "", err
 	}
-	th.mu.Lock()
-	pfsKey := pfs.ToKey()
-	th.packageInputsHashes[pfsKey] = hash
-	th.mu.Unlock()
 
-	return nil
+	return hash, nil
 }
 
 type taskHashInputs struct {
@@ -236,12 +230,12 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // CalculateTaskHash calculates the hash for package-task combination. It is threadsafe, provided
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
-func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, logger hclog.Logger, args []string) (string, error) {
+func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, repoRoot turbopath.AbsoluteSystemPath, logger hclog.Logger, args []string) (string, error) {
 	pfs := specFromPackageTask(packageTask)
 	pkgFileHashKey := pfs.ToKey()
 
-	hashOfFiles, ok := th.packageInputsHashes[pkgFileHashKey]
-	if !ok {
+	hashOfFiles, err := th.CalculateFileHashes(packageTask.TaskID, repoRoot)
+	if err != nil {
 		return "", fmt.Errorf("cannot find package-file hash for %v", pkgFileHashKey)
 	}
 
