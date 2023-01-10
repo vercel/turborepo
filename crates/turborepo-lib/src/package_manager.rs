@@ -13,7 +13,32 @@ struct PnpmWorkspaces {
 
 #[derive(Debug, Deserialize)]
 struct PackageJsonWorkspaces {
-    pub workspaces: Vec<String>,
+    workspaces: Workspaces,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
+#[serde(untagged)]
+enum Workspaces {
+    TopLevel(Vec<String>),
+    Nested { packages: Vec<String> },
+}
+
+impl AsRef<[String]> for Workspaces {
+    fn as_ref(&self) -> &[String] {
+        match self {
+            Workspaces::TopLevel(packages) => packages.as_slice(),
+            Workspaces::Nested { packages } => packages.as_slice(),
+        }
+    }
+}
+
+impl From<Workspaces> for Vec<String> {
+    fn from(value: Workspaces) -> Self {
+        match value {
+            Workspaces::TopLevel(packages) => packages,
+            Workspaces::Nested { packages } => packages,
+        }
+    }
 }
 
 pub enum PackageManager {
@@ -70,13 +95,13 @@ impl PackageManager {
                 let package_json_text = fs::read_to_string(root_path.join("package.json"))?;
                 let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)?;
 
-                if package_json.workspaces.is_empty() {
+                if package_json.workspaces.as_ref().is_empty() {
                     return Err(anyhow!(
                         "package.json: no packages found. Turborepo requires packages to be \
                          defined in the root package.json"
                     ));
                 } else {
-                    package_json.workspaces
+                    package_json.workspaces.into()
                 }
             }
         };
@@ -116,5 +141,16 @@ mod tests {
             globs.inclusions,
             vec![PathBuf::from("apps/*"), PathBuf::from("packages/*")]
         );
+    }
+
+    #[test]
+    fn test_nested_workspace_globs() -> Result<()> {
+        let top_level: PackageJsonWorkspaces =
+            serde_json::from_str("{ \"workspaces\": [\"packages/**\"]}")?;
+        assert_eq!(top_level.workspaces.as_ref(), vec!["packages/**"]);
+        let nested: PackageJsonWorkspaces =
+            serde_json::from_str("{ \"workspaces\": {\"packages\": [\"packages/**\"]}}")?;
+        assert_eq!(nested.workspaces.as_ref(), vec!["packages/**"]);
+        Ok(())
     }
 }
