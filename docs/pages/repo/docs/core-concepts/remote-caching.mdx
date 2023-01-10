@@ -40,7 +40,7 @@ This can save enormous amounts of time by **preventing duplicated work across yo
 If you want to link your local turborepo to your Remote Cache, first authenticate the Turborepo CLI with your Vercel account:
 
 ```sh
-npx turbo login
+turbo login
 ```
 
 <Callout>
@@ -52,7 +52,7 @@ npx turbo login
 Next, link your Turborepo to your remote cache:
 
 ```sh
-npx turbo link
+turbo link
 ```
 
 Once enabled, make some changes to a workspace you are currently caching and run tasks against it with `turbo run`.
