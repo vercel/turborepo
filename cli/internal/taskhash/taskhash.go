@@ -158,34 +158,28 @@ type packageFileHashes map[packageFileHashKey]string
 
 // CalculateFileHashes hashes each unique package-inputs combination that is present
 // in the task graph. Must be called before calculating task hashes.
-func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, repoRoot turbopath.AbsoluteSystemPath) error {
+func (th *Tracker) CalculateFileHashes(taskID string, workerCount int, repoRoot turbopath.AbsoluteSystemPath) error {
 	hashTasks := make(util.Set)
 
-	for _, v := range allTasks {
-		taskID, ok := v.(string)
-		if !ok {
-			return fmt.Errorf("unknown task %v", taskID)
-		}
-		if taskID == th.rootNode {
-			continue
-		}
-		pkgName, _ := util.GetPackageTaskFromId(taskID)
-		if pkgName == th.rootNode {
-			continue
-		}
-
-		taskDefinition, ok := th.pipeline.GetTaskDefinition(taskID)
-		if !ok {
-			return fmt.Errorf("missing pipeline entry %v", taskID)
-		}
-
-		pfs := &packageFileSpec{
-			pkg:    pkgName,
-			inputs: taskDefinition.Inputs,
-		}
-
-		hashTasks.Add(pfs)
+	if taskID == th.rootNode {
+		return nil
 	}
+	pkgName, _ := util.GetPackageTaskFromId(taskID)
+	if pkgName == th.rootNode {
+		return nil
+	}
+
+	taskDefinition, ok := th.pipeline.GetTaskDefinition(taskID)
+	if !ok {
+		return fmt.Errorf("missing pipeline entry %v", taskID)
+	}
+
+	pfs := &packageFileSpec{
+		pkg:    pkgName,
+		inputs: taskDefinition.Inputs,
+	}
+
+	hashTasks.Add(pfs)
 
 	hashes := make(map[packageFileHashKey]string)
 	hashQueue := make(chan *packageFileSpec, workerCount)
