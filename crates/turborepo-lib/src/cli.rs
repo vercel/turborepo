@@ -3,6 +3,7 @@ use std::{env, io, mem, path::PathBuf, process};
 use anyhow::{anyhow, Result};
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
+use log::error;
 use serde::Serialize;
 
 use crate::{
@@ -151,7 +152,7 @@ impl Args {
         let mut clap_args = match Args::try_parse() {
             Ok(args) => args,
             Err(e) if e.use_stderr() => {
-                let _ = e.print();
+                error!("{}", e.to_string());
                 process::exit(1);
             }
             // If the clap error shouldn't be printed to stderr it indicates help text
