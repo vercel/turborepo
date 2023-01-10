@@ -40,6 +40,10 @@
 <span id="40">40</span>
 <span id="41">41</span>
 <span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::Result;
@@ -75,7 +79,11 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
             CssInputTransform::Nested =&gt; {
-                stylesheet.visit_mut_with(<span class="kw-2">&amp;mut </span>swc_core::css::compat::nesting::nesting());
+                stylesheet.visit_mut_with(<span class="kw-2">&amp;mut </span>swc_core::css::compat::compiler::Compiler::new(
+                    swc_core::css::compat::compiler::Config {
+                        process: swc_core::css::compat::feature::Features::NESTING,
+                    },
+                ));
             }
             CssInputTransform::Custom =&gt; <span class="macro">todo!</span>(),
         }
