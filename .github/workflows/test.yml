@@ -4,6 +4,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, closed, reopened, synchronize]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -152,19 +153,22 @@ jobs:
           PATTERNS: |
             **/*.{yml,yaml,md,mdx,js,jsx,ts,tsx,json,toml,css}
 
+      - name: Push
+        id: push
+        if: ${{ github.event_name == 'push' }}
+        run: echo "ref=${{ github.ref }}" >> $GITHUB_OUTPUT
+
     outputs:
-      rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
-      turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
-      turborepo: ${{ steps.ci.outputs.diff != '' || steps.turborepo.outputs.diff != '' }}
-      rust_bench: ${{ steps.ci.outputs.diff != '' || steps.rust_bench.outputs.diff != '' }}
-      go: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' }}
-      go_e2e: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' || steps.go_e2e.outputs.diff != '' }}
-      examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
-      format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
+      rust: ${{ steps.push.outputs.ref == 'refs/heads/main' || steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
+      turbopack: ${{ steps.push.outputs.ref == 'refs/heads/main' || steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
+      turborepo: ${{ steps.push.outputs.ref == 'refs/heads/main' || steps.ci.outputs.diff != '' || steps.turborepo.outputs.diff != '' }}
+      rust_bench: ${{ steps.push.outputs.ref == 'refs/heads/main' || steps.ci.outputs.diff != '' || steps.rust_bench.outputs.diff != '' }}
+      go: ${{ steps.push.outputs.ref == 'refs/heads/main' || steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' }}
+      go_e2e: ${{ steps.push.outputs.ref == 'refs/heads/main' || steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' || steps.go_e2e.outputs.diff != '' }}
+      examples: ${{ steps.push.outputs.ref == 'refs/heads/main' || steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
+      format: ${{ steps.push.outputs.ref == 'refs/heads/main' || steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
-      tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
-      main_push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-      tag_push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace') }}
+      main_push: ${{ steps.push.outputs.ref == 'refs/heads/main' }}
 
   go_lint:
     name: Go linting
@@ -893,7 +897,7 @@ jobs:
 
   rust_bench_commit:
     needs: [determine_jobs, rust_bench]
-    if: always() && needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true' && needs.rust_bench.result != 'skipped'
+    if: always() && needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.main_push == 'true' && needs.rust_bench.result != 'skipped'
     name: Store benchmark result
     runs-on: ubuntu-latest
     permissions:
@@ -927,7 +931,6 @@ jobs:
         run: git pull --depth=1 --no-tags origin benchmark-data
 
       - name: Push data to branch
-        if: needs.determine_jobs.outputs.main_push == 'true'
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           file_pattern: data/**
