@@ -76,12 +76,15 @@ type NpmDependency struct {
 	Dependencies map[string]NpmDependency `json:"dependencies,omitempty"`
 }
 
+// Workspaces represents the standard workspaces field in package.json
 type Workspaces []string
 
+// WorkspacesAlt represents the alternate workspaces field (nested) package.json
 type WorkspacesAlt struct {
 	Packages []string `json:"packages,omitempty"`
 }
 
+// UnmarshalJSON determines the correct format of the workspaces field to unmarshal
 func (r *Workspaces) UnmarshalJSON(data []byte) error {
 	var tmp = &WorkspacesAlt{}
 	if err := json.Unmarshal(data, tmp); err == nil {
