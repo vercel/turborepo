@@ -45,9 +45,9 @@ Using Turborepo simplifes managing your design system monorepo, as you can have 
 This Turborepo includes the following packages and applications:
 
 - `apps/docs`: Component documentation site with Storybook
-- `packages/@acme/core`: Core React components
-- `packages/@acme/utils`: Shared React utilities
-- `packages/@acme/tsconfig`: Shared `tsconfig.json`s used throughout the Turborepo
+- `packages/acme-core`: Core React components
+- `packages/acme-tsconfig`: Shared `tsconfig.json`s used throughout the Turborepo
+- `packages/acme-utils`: Shared React utilities
 - `packages/eslint-config-acme`: ESLint preset
 
 Each package and app is 100% [TypeScript](https://www.typescriptlang.org/). Workspaces enables us to "hoist" dependencies that are shared between packages to the root `package.json`. This means smaller `node_modules` folders and a better local dev experience. To install a dependency for the entire monorepo, use the `-w` workspaces flag with `pnpm add`.
@@ -127,8 +127,8 @@ Storybook provides us with an interactive UI playground for our components. This
 For example, here's the included Story for our `Button` component:
 
 ```js:apps/docs/stories/button.stories.mdx
-import { Button } from '@acme-core/src';
-import { Meta, Story, Preview, Props } from '@storybook/addon-docs/blocks';
+import { Button } from "@acme/core/src";
+import { Meta, Story, Canvas, ArgsTable } from "@storybook/addon-docs";
 
 <Meta title="Components/Button" component={Button} />
 
@@ -138,15 +138,15 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec euismod, nisl ege
 
 ## Props
 
-<Props of={Box} />
+<ArgsTable of={Button} />
 
 ## Examples
 
-<Preview>
+<Canvas>
   <Story name="Default">
     <Button>Hello</Button>
   </Story>
-</Preview>
+</Canvas>
 ```
 
 This example includes a few helpful Storybook scripts:
