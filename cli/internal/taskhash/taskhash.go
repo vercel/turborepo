@@ -48,28 +48,6 @@ func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, worksp
 	}
 }
 
-// packageFileSpec defines a combination of a package and optional set of input globs
-type packageFileSpec struct {
-	pkg    string
-	inputs []string
-}
-
-func specFromPackageTask(packageTask *nodes.PackageTask) packageFileSpec {
-	return packageFileSpec{
-		pkg:    packageTask.PackageName,
-		inputs: packageTask.TaskDefinition.Inputs,
-	}
-}
-
-// packageFileHashKey is a hashable representation of a packageFileSpec.
-type packageFileHashKey string
-
-// hashes the inputs for a packageTask
-func (pfs packageFileSpec) ToKey() packageFileHashKey {
-	sort.Strings(pfs.inputs)
-	return packageFileHashKey(fmt.Sprintf("%v#%v", pfs.pkg, strings.Join(pfs.inputs, "!")))
-}
-
 func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
 	if fs.FileExists(filepath) {
 		return gitignore.CompileIgnoreFile(filepath)
@@ -78,13 +56,13 @@ func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
 	return gitignore.CompileIgnoreLines([]string{}...), nil
 }
 
-func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot turbopath.AbsoluteSystemPath) (string, error) {
+func actuallyHash(pkg *fs.PackageJSON, inputs []string, repoRoot turbopath.AbsoluteSystemPath) (string, error) {
 	hashObject, pkgDepsErr := hashing.GetPackageDeps(repoRoot, &hashing.PackageDepsOptions{
 		PackagePath:   pkg.Dir,
-		InputPatterns: pfs.inputs,
+		InputPatterns: inputs,
 	})
 	if pkgDepsErr != nil {
-		manualHashObject, err := manuallyHashPackage(pkg, pfs.inputs, repoRoot)
+		manualHashObject, err := manuallyHashPackage(pkg, inputs, repoRoot)
 		if err != nil {
 			return "", err
 		}
@@ -150,10 +128,6 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 	return hashObject, nil
 }
 
-// packageFileHashes is a map from a package and optional input globs to the hash of
-// the matched files in the package.
-type packageFileHashes map[packageFileHashKey]string
-
 // CalculateFileHashes hashes each unique package-inputs combination that is present
 // in the task graph. Must be called before calculating task hashes.
 func (th *Tracker) CalculateFileHashes(taskID string, repoRoot turbopath.AbsoluteSystemPath) (string, error) {
@@ -170,16 +144,11 @@ func (th *Tracker) CalculateFileHashes(taskID string, repoRoot turbopath.Absolut
 		return "", fmt.Errorf("missing pipeline entry %v", taskID)
 	}
 
-	pfs := &packageFileSpec{
-		pkg:    pkgName,
-		inputs: taskDefinition.Inputs,
-	}
-
-	pkg, ok := th.workspaceInfos[pfs.pkg]
+	pkg, ok := th.workspaceInfos[pkgName]
 	if !ok {
-		return "", fmt.Errorf("cannot find package %v", pfs.pkg)
+		return "", fmt.Errorf("cannot find package %v", pkgName)
 	}
-	hash, err := pfs.hash(pkg, repoRoot)
+	hash, err := actuallyHash(pkg, taskDefinition.Inputs, repoRoot)
 	if err != nil {
 		return "", err
 	}
