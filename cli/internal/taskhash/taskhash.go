@@ -231,12 +231,9 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
 func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, repoRoot turbopath.AbsoluteSystemPath, logger hclog.Logger, args []string) (string, error) {
-	pfs := specFromPackageTask(packageTask)
-	pkgFileHashKey := pfs.ToKey()
-
 	hashOfFiles, err := th.CalculateFileHashes(packageTask.TaskID, repoRoot)
 	if err != nil {
-		return "", fmt.Errorf("cannot find package-file hash for %v", pkgFileHashKey)
+		return "", err
 	}
 
 	var envPrefixes []string
