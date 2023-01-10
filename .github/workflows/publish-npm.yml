@@ -13,15 +13,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - uses: ./.github/actions/setup-node
-      - name: Cache cargo registry
-        uses: actions/cache@v3
-        # Don't care the Cargo.lock, just cache it
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: publish-npm-cargo-cache
+      - uses: ./.github/actions/setup-rust
 
       - name: Build packages
         run: pnpx turbo@canary run build:ts
@@ -30,7 +22,4 @@ jobs:
         run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN_ELEVATED }}" > ~/.npmrc
 
       - name: Publish
-        uses: actions-rs/cargo@v1
-        with:
-          command: xtask
-          args: workspace --publish
+        run: cargo xtask workspace --publish

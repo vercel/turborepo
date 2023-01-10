@@ -13,7 +13,12 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-node
       - run: node --experimental-fetch ./scripts/fetch-google-font-data.js > crates/next-core/src/next_font_google/__generated__/font-data.json
-      - uses: stefanzweifel/git-auto-commit-action@v4
+      - run: echo "PR_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+      - uses: peter-evans/create-pull-request@v4
         with:
-          commit_message: Update Google font-data.json (${{ github.sha }})
-          file_pattern: crates/next-core/src/next_font_google/__generated__/font-data.json
+          title: Update Google font-data.json (${{ env.PR_DATE }})
+          commit-message: Update Google font-data.json (${{ github.sha }})
+          add-paths: crates/next-core/src/next_font_google/__generated__/font-data.json
+          labels: |
+            automated
+            pr: automerge
