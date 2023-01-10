@@ -21,7 +21,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
-	"golang.org/x/sync/errgroup"
 )
 
 // Tracker caches package-inputs hashes, as well as package-task hashes.
@@ -42,11 +41,12 @@ type Tracker struct {
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
 func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, workspaceInfos graph.WorkspaceInfos) *Tracker {
 	return &Tracker{
-		rootNode:          rootNode,
-		globalHash:        globalHash,
-		pipeline:          pipeline,
-		workspaceInfos:    workspaceInfos,
-		packageTaskHashes: make(map[string]string),
+		rootNode:            rootNode,
+		globalHash:          globalHash,
+		pipeline:            pipeline,
+		workspaceInfos:      workspaceInfos,
+		packageInputsHashes: make(map[packageFileHashKey]string),
+		packageTaskHashes:   make(map[string]string),
 	}
 }
 
@@ -159,8 +159,6 @@ type packageFileHashes map[packageFileHashKey]string
 // CalculateFileHashes hashes each unique package-inputs combination that is present
 // in the task graph. Must be called before calculating task hashes.
 func (th *Tracker) CalculateFileHashes(taskID string, workerCount int, repoRoot turbopath.AbsoluteSystemPath) error {
-	hashTasks := make(util.Set)
-
 	if taskID == th.rootNode {
 		return nil
 	}
@@ -179,40 +177,19 @@ func (th *Tracker) CalculateFileHashes(taskID string, workerCount int, repoRoot 
 		inputs: taskDefinition.Inputs,
 	}
 
-	hashTasks.Add(pfs)
-
-	hashes := make(map[packageFileHashKey]string)
-	hashQueue := make(chan *packageFileSpec, workerCount)
-	hashErrs := &errgroup.Group{}
-
-	for i := 0; i < workerCount; i++ {
-		hashErrs.Go(func() error {
-			for packageFileSpec := range hashQueue {
-				pkg, ok := th.workspaceInfos[packageFileSpec.pkg]
-				if !ok {
-					return fmt.Errorf("cannot find package %v", packageFileSpec.pkg)
-				}
-				hash, err := packageFileSpec.hash(pkg, repoRoot)
-				if err != nil {
-					return err
-				}
-				th.mu.Lock()
-				pfsKey := packageFileSpec.ToKey()
-				hashes[pfsKey] = hash
-				th.mu.Unlock()
-			}
-			return nil
-		})
+	pkg, ok := th.workspaceInfos[pfs.pkg]
+	if !ok {
+		return fmt.Errorf("cannot find package %v", pfs.pkg)
 	}
-	for ht := range hashTasks {
-		hashQueue <- ht.(*packageFileSpec)
-	}
-	close(hashQueue)
-	err := hashErrs.Wait()
+	hash, err := pfs.hash(pkg, repoRoot)
 	if err != nil {
 		return err
 	}
-	th.packageInputsHashes = hashes
+	th.mu.Lock()
+	pfsKey := pfs.ToKey()
+	th.packageInputsHashes[pfsKey] = hash
+	th.mu.Unlock()
+
 	return nil
 }
 
