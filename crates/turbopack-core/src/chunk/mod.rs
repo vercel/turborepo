@@ -159,12 +159,15 @@ pub trait ParallelChunkReference: AssetReference + ValueToString {
 
 /// Specifies how a chunk interacts with other chunks when building a chunk
 /// group
-#[derive(Copy, Clone, TraceRawVcs, Serialize, Deserialize, Eq, PartialEq, ValueDebugFormat)]
+#[derive(
+    Copy, Default, Clone, TraceRawVcs, Serialize, Deserialize, Eq, PartialEq, ValueDebugFormat,
+)]
 pub enum ChunkingType {
     /// Asset is always placed into the referencing chunk and loaded with it.
     Placed,
     /// A heuristic determines if the asset is placed into the referencing chunk
     /// or in a separate chunk that is loaded in parallel.
+    #[default]
     PlacedOrParallel,
     /// Asset is always placed in a separate chunk that is loaded in parallel.
     Parallel,
@@ -173,15 +176,9 @@ pub enum ChunkingType {
     /// Note: Separate chunks need to be loaded by something external to current
     /// reference.
     Separate,
-    /// A async loader is placed into the referencing chunk and loads the
+    /// An async loader is placed into the referencing chunk and loads the
     /// separate chunk group in which the asset is placed.
     SeparateAsync,
-}
-
-impl Default for ChunkingType {
-    fn default() -> Self {
-        ChunkingType::PlacedOrParallel
-    }
 }
 
 #[turbo_tasks::value(transparent)]

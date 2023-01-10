@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use next_transform_dynamic::next_dynamic;
+use next_transform_dynamic::{next_dynamic, NextDynamicMode};
 use swc_core::{
     common::FileName,
     ecma::{
@@ -29,6 +29,7 @@ fn next_dynamic_fixture(input: PathBuf) {
                 true,
                 false,
                 false,
+                NextDynamicMode::Webpack,
                 FileName::Real(PathBuf::from("/some-project/src/some-file.js")),
                 Some("/some-project/src".into()),
             )
@@ -44,6 +45,7 @@ fn next_dynamic_fixture(input: PathBuf) {
                 false,
                 false,
                 false,
+                NextDynamicMode::Webpack,
                 FileName::Real(PathBuf::from("/some-project/src/some-file.js")),
                 Some("/some-project/src".into()),
             )
@@ -59,6 +61,7 @@ fn next_dynamic_fixture(input: PathBuf) {
                 false,
                 true,
                 false,
+                NextDynamicMode::Webpack,
                 FileName::Real(PathBuf::from("/some-project/src/some-file.js")),
                 Some("/some-project/src".into()),
             )
