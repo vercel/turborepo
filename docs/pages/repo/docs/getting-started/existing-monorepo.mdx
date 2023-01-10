@@ -123,22 +123,18 @@ Workspaces that do not have the specified script defined in their `package.json`
       // A package's `test` script depends on that package's
       // own `build` script being completed first.
       "dependsOn": ["build"],
-      "outputs": [],
       // A package's `test` script should only be rerun when
       // either a `.tsx` or `.ts` file has changed in `src` or `test` folders.
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts", "test/**/*.tsx"]
     },
-    "lint": {
-      // A package's `lint` script has no dependencies and
-      // can be run whenever. It also has no filesystem outputs.
-      "outputs": []
-    },
+    // A package's `lint` script has no dependencies and
+    // can be run whenever. It also has no filesystem outputs.
+    "lint": {},
     "deploy": {
       // A package's `deploy` script depends on the `build`,
       // `test`, and `lint` scripts of the same package
       // being completed. It also has no filesystem outputs.
-      "dependsOn": ["build", "test", "lint"],
-      "outputs": []
+      "dependsOn": ["build", "test", "lint"]
     }
   }
 }

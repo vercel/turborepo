@@ -46,9 +46,7 @@ Inside the root `turbo.json`, we recommend setting up a `test` task in your [pip
 ```json filename="turbo.json"
 {
   "pipeline": {
-    "test": {
-      "outputs": []
-    }
+    "test": {}
   }
 }
 ```
@@ -103,9 +101,7 @@ Here's an example:
 ```json filename="turbo.json"
 {
   "pipeline": {
-    "test": {
-      "outputs": []
-    },
+    "test": {},
     "test:watch": {
       "cache": false
     }

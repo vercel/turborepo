@@ -167,11 +167,14 @@ The list of environment variables a task depends on.
 
 `type: string[]`
 
-Defaults to `["dist/**", "build/**"]`. The set of glob patterns of a task's cacheable filesystem outputs.
+The set of glob patterns of a task's cacheable filesystem outputs.
 
-Note: `turbo` automatically logs `stderr`/`stdout` to `.turbo/run-<task>.log`. This file is _always_ treated as a cacheable artifact and never needs to be specified.
+Note: `turbo` automatically logs `stderr`/`stdout` to `.turbo/run-<task>.log`. This file is _always_
+treated as a cacheable artifact and never needs to be specified.
 
-Passing an empty array can be used to tell `turbo` that a task is a side-effect and thus doesn't emit any filesystem artifacts (e.g. like a linter), but you still want to cache its logs (and treat them like an artifact).
+Omitting this key or passing an empty array can be used to tell `turbo` that a task is a side-effect
+and thus doesn't emit any filesystem artifacts (e.g. like a linter), but you still want to cache its
+logs (and treat them like an artifact).
 
 **Example**
 
@@ -188,7 +191,6 @@ Passing an empty array can be used to tell `turbo` that a task is a side-effect 
     "test": {
       // "Don't cache any artifacts of `test` tasks (aside from
       // logs)"
-      "outputs": [],
       "dependsOn": ["build"]
     },
     "test:ci": {
@@ -221,7 +223,6 @@ Defaults to `true`. Whether or not to cache the task [`outputs`](#outputs). Sett
       "dependsOn": ["^build"]
     },
     "test": {
-      "outputs": [],
       "dependsOn": ["build"]
     },
     "dev": {
@@ -286,7 +287,6 @@ Set type of output logging.
       "outputMode": "new-only"
     },
     "test": {
-      "outputs": [],
       "dependsOn": ["build"]
     }
   }
