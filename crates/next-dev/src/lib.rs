@@ -290,7 +290,7 @@ async fn source(
         })
         .collect();
 
-    let middleware_loader = create_middleware_loader(project_path, dev_server_root, output_root);
+    let middleware_loader = create_middleware_loader(project_path, output_root);
 
     let web_source = create_web_entry_source(
         project_path,
@@ -311,6 +311,7 @@ async fn source(
         &browserslist_query,
         next_config,
         server_addr,
+        middleware_loader,
     );
     let app_source = create_app_source(
         project_path,
@@ -340,7 +341,6 @@ async fn source(
         app_source,
         page_source,
         web_source,
-        middleware_loader,
     ]);
     let introspect = IntrospectionSource {
         roots: HashSet::from([main_source.into()]),

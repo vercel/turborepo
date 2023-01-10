@@ -45,6 +45,7 @@ use crate::{
     embed_js::{next_js_file, wrap_with_next_js_fs},
     env::env_for_js,
     fallback::get_fallback_page,
+    middleware_loader::MiddlewareAssetVc,
     next_client::{
         context::{
             get_client_assets_path, get_client_chunking_context, get_client_environment,
@@ -124,6 +125,7 @@ pub async fn create_page_source(
     browserslist_query: &str,
     next_config: NextConfigVc,
     server_addr: ServerAddrVc,
+    middleware_loader: MiddlewareAssetVc,
 ) -> Result<ContentSourceVc> {
     let project_path = wrap_with_next_js_fs(project_root);
 
@@ -216,11 +218,11 @@ pub async fn create_page_source(
     )
     .into();
 
-    let server_runtime_entries =
-        vec![
-            ProcessEnvAssetVc::new(project_path, env_for_js(env, false, next_config))
-                .as_ecmascript_chunk_placeable(),
-        ];
+    let server_runtime_entries = vec![
+        ProcessEnvAssetVc::new(project_path, env_for_js(env, false, next_config))
+            .as_ecmascript_chunk_placeable(),
+        middleware_loader.as_ecmascript_chunk_placeable(),
+    ];
 
     let fallback_page = get_fallback_page(
         project_path,
