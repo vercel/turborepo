@@ -452,3 +452,42 @@ func (c *Context) InternalDependencies(start []string) ([]string, error) {
 
 	return targets, nil
 }
+
+// ChangedPackages returns a list of changed packages based on the contents of a previous lockfile
+// This assumes that none of the package.json in the workspace change, it is
+// the responsibility of the caller to verify this.
+func (c *Context) ChangedPackages(previousLockfile lockfile.Lockfile) ([]string, error) {
+	if previousLockfile == nil || c.Lockfile == nil {
+		return nil, fmt.Errorf("Cannot detect changed packages without previous and current lockfile")
+	}
+	changedPkgs := make([]string, 0, len(c.WorkspaceInfos))
+
+	// check if prev and current have "global" changes e.g. lockfile bump
+	if c.Lockfile.GlobalChange(previousLockfile) {
+		for pkgName := range c.WorkspaceInfos {
+			changedPkgs = append(changedPkgs, pkgName)
+		}
+		sort.Strings(changedPkgs)
+		return changedPkgs, nil
+	}
+
+	for pkgName, pkg := range c.WorkspaceInfos {
+		previousDeps, err := TransitiveClosure(pkg, previousLockfile)
+		if err != nil {
+			changedPkgs = append(changedPkgs, pkgName)
+			continue
+		}
+
+		prevExternalDeps := make([]lockfile.Package, 0, previousDeps.Cardinality())
+		for _, d := range previousDeps.ToSlice() {
+			prevExternalDeps = append(prevExternalDeps, d.(lockfile.Package))
+		}
+		sort.Sort(lockfile.ByKey(prevExternalDeps))
+
+		oldHash, err := fs.HashObject(prevExternalDeps)
+		if err != nil || oldHash != pkg.ExternalDepsHash {
+			changedPkgs = append(changedPkgs, pkgName)
+		}
+	}
+	return c.InternalDependencies(changedPkgs)
+}

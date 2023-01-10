@@ -3,6 +3,7 @@ package lockfile
 import (
 	"fmt"
 	"io"
+	"reflect"
 
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -296,6 +297,15 @@ func (p *PnpmLockfile) Patches() []turbopath.AnchoredUnixPath {
 		i++
 	}
 	return patches
+}
+
+func (p *PnpmLockfile) GlobalChange(other Lockfile) bool {
+	o, ok := other.(*PnpmLockfile)
+	return !ok ||
+		p.Version != o.Version ||
+		p.PackageExtensionsChecksum != o.PackageExtensionsChecksum ||
+		!reflect.DeepEqual(p.Overrides, o.Overrides) ||
+		!reflect.DeepEqual(p.PatchedDependencies, o.PatchedDependencies)
 }
 
 func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath, name string, specifier string) (string, bool, error) {

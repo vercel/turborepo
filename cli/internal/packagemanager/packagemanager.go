@@ -181,7 +181,14 @@ func (pm PackageManager) ReadLockfile(projectDirectory turbopath.AbsoluteSystemP
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", pm.Lockfile, err)
 	}
+	return pm.UnmarshalLockfile(contents)
+}
 
+// UnmarshalLockfile parses bytes to a package manager's lockfile format
+func (pm PackageManager) UnmarshalLockfile(contents []byte) (lockfile.Lockfile, error) {
+	if pm.readLockfile == nil {
+		return nil, nil
+	}
 	return pm.readLockfile(contents)
 }
 

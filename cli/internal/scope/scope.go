@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/go-hclog"
@@ -11,7 +12,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/context"
 	"github.com/vercel/turbo/cli/internal/graph"
-	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/scm"
 	scope_filter "github.com/vercel/turbo/cli/internal/scope/filter"
 	"github.com/vercel/turbo/cli/internal/turbostate"
@@ -118,7 +118,7 @@ func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, 
 		Graph:                  &ctx.WorkspaceGraph,
 		WorkspaceInfos:         ctx.WorkspaceInfos,
 		Cwd:                    cwd,
-		PackagesChangedInRange: opts.getPackageChangeFunc(scm, cwd, ctx.WorkspaceInfos, ctx.PackageManager),
+		PackagesChangedInRange: opts.getPackageChangeFunc(scm, cwd, ctx),
 	}
 	filterPatterns := opts.FilterPatterns
 	legacyFilterPatterns := opts.LegacyFilter.asFilterPatterns()
@@ -139,7 +139,7 @@ func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, 
 	return filteredPkgs, isAllPackages, nil
 }
 
-func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos graph.WorkspaceInfos, packageManager *packagemanager.PackageManager) scope_filter.PackagesChangedInRange {
+func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, ctx *context.Context) scope_filter.PackagesChangedInRange {
 	return func(fromRef string, toRef string) (util.Set, error) {
 		// We could filter changed files at the git level, since it's possible
 		// that the changes we're interested in are scoped, but we need to handle
@@ -151,37 +151,82 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos graph.
 			if err != nil {
 				return nil, err
 			}
+			sort.Strings(scmChangedFiles)
 			changedFiles = scmChangedFiles
 		}
-		if hasRepoGlobalFileChanged, err := repoGlobalFileHasChanged(o, getDefaultGlobalDeps(packageManager), changedFiles); err != nil {
-			return nil, err
-		} else if hasRepoGlobalFileChanged {
+		makeAllPkgs := func() util.Set {
 			allPkgs := make(util.Set)
-			for pkg := range packageInfos {
+			for pkg := range ctx.WorkspaceInfos {
 				allPkgs.Add(pkg)
 			}
-			return allPkgs, nil
+			return allPkgs
 		}
+		if hasRepoGlobalFileChanged, err := repoGlobalFileHasChanged(o, getDefaultGlobalDeps(), changedFiles); err != nil {
+			return nil, err
+		} else if hasRepoGlobalFileChanged {
+			return makeAllPkgs(), nil
+		}
+
 		filteredChangedFiles, err := filterIgnoredFiles(o, changedFiles)
 		if err != nil {
 			return nil, err
 		}
-		changedPkgs := getChangedPackages(filteredChangedFiles, packageInfos)
+		// need to verify that if packages/a/package.json is changed it'll show up in this list always
+		changedPkgs := getChangedPackages(filteredChangedFiles, ctx.WorkspaceInfos)
+
+		if lockfileChanges, fullChanges := getChangesFromLockfile(scm, ctx, changedFiles, fromRef); !fullChanges {
+			for _, pkg := range lockfileChanges {
+				changedPkgs.Add(pkg)
+			}
+		} else {
+			return makeAllPkgs(), nil
+		}
+
 		return changedPkgs, nil
 	}
 }
 
-func getDefaultGlobalDeps(packageManager *packagemanager.PackageManager) []string {
-	// include turbo.json, root package.json, and root lockfile as implicit global dependencies
+func getChangesFromLockfile(scm scm.SCM, ctx *context.Context, changedFiles []string, fromRef string) ([]string, bool) {
+	lockfileFilter, err := filter.Compile([]string{ctx.PackageManager.Lockfile})
+	if err != nil {
+		panic(fmt.Sprintf("Lockfile is invalid glob: %v", err))
+	}
+	match := false
+	for _, file := range changedFiles {
+		if lockfileFilter.Match(file) {
+			match = true
+			break
+		}
+	}
+	if !match {
+		return nil, false
+	}
+
+	prevContents, err := scm.PreviousContent(fromRef, ctx.PackageManager.Lockfile)
+	if err != nil {
+		// unable to reconstruct old lockfile, assume everything changed
+		return nil, true
+	}
+	prevLockfile, err := ctx.PackageManager.UnmarshalLockfile(prevContents)
+	if err != nil {
+		// unable to parse old lockfile, assume everything changed
+		return nil, true
+	}
+	additionalPkgs, err := ctx.ChangedPackages(prevLockfile)
+	if err != nil {
+		// missing at least one lockfile, assume everything changed
+		return nil, true
+	}
+
+	return additionalPkgs, false
+}
+
+func getDefaultGlobalDeps() []string {
+	// include turbo.json and root package.json as implicit global dependencies
 	defaultGlobalDeps := []string{
 		"turbo.json",
 		"package.json",
 	}
-	if packageManager != nil {
-		// TODO: we should be smarter here and determine if the lockfile changes actually impact the given scope
-		defaultGlobalDeps = append(defaultGlobalDeps, packageManager.Lockfile)
-	}
-
 	return defaultGlobalDeps
 }
 

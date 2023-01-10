@@ -242,6 +242,13 @@ func DecodeNpmLockfile(content []byte) (*NpmLockfile, error) {
 	return &lockfile, nil
 }
 
+func (l *NpmLockfile) GlobalChange(other Lockfile) bool {
+	o, ok := other.(*NpmLockfile)
+	return !ok ||
+		l.LockfileVersion != o.LockfileVersion ||
+		l.Requires != o.Requires
+}
+
 // returns a list of possible keys for a dependency of package key
 func possibleNpmDeps(key string, dep string) []string {
 	possibleDeps := []string{fmt.Sprintf("%s/node_modules/%s", key, dep)}

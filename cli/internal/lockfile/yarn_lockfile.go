@@ -106,6 +106,11 @@ func DecodeYarnLockfile(contents []byte) (*YarnLockfile, error) {
 	return &YarnLockfile{lockfile, hasCRLF}, nil
 }
 
+func (l *YarnLockfile) GlobalChange(other Lockfile) bool {
+	_, ok := other.(*YarnLockfile)
+	return !ok
+}
+
 func yarnPossibleKeys(name string, version string) []string {
 	return []string{
 		fmt.Sprintf("%v@%v", name, version),

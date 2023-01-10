@@ -20,6 +20,9 @@ type Lockfile interface {
 	Encode(w io.Writer) error
 	// Patches return a list of patches used in the lockfile
 	Patches() []turbopath.AnchoredUnixPath
+	// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
+	// the cache.
+	GlobalChange(other Lockfile) bool
 }
 
 // Package Structure representing a possible Pack
