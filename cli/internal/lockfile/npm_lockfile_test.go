@@ -11,11 +11,11 @@ import (
 	"gotest.tools/v3/assert/cmp"
 )
 
-func getNpmLockfile(t *testing.T) *NpmLockfile {
-	content, err := getFixture(t, "npm-lock.json")
-	assert.NilError(t, err, "reading npm-lock.json")
+func getNpmLockfile(t *testing.T, file string) *NpmLockfile {
+	content, err := getFixture(t, file)
+	assert.NilError(t, err, "reading {}", file)
 	lockfile, err := DecodeNpmLockfile(content)
-	assert.NilError(t, err, "parsing npm-lock.json")
+	assert.NilError(t, err, "parsing {}", file)
 	return lockfile
 }
 
@@ -46,6 +46,11 @@ func Test_NpmPathParent(t *testing.T) {
 	for _, tc := range testCases {
 		assert.Equal(t, npmPathParent(tc.key), tc.parent, tc.key)
 	}
+}
+
+func Test_NpmResolvesAlternateWorkspaceFormat(t *testing.T) {
+	lockfile := getNpmLockfile(t, "npm-lock-workspace-variation.json")
+	assert.Equal(t, lockfile.Name, "npm-prune-workspace-variation")
 }
 
 func Test_PossibleNpmDeps(t *testing.T) {
@@ -145,7 +150,7 @@ func Test_NpmResolvePackage(t *testing.T) {
 		},
 	}
 
-	lockfile := getNpmLockfile(t)
+	lockfile := getNpmLockfile(t, "npm-lock.json")
 	for _, tc := range testCases {
 		workspace := turbopath.AnchoredUnixPath(tc.workspace)
 		pkg, err := lockfile.ResolvePackage(workspace, tc.name, "")
@@ -190,7 +195,7 @@ func Test_NpmAllDependencies(t *testing.T) {
 		},
 	}
 
-	lockfile := getNpmLockfile(t)
+	lockfile := getNpmLockfile(t, "npm-lock.json")
 	for _, tc := range testCases {
 		deps, ok := lockfile.AllDependencies(tc.key)
 		assert.Assert(t, ok, tc.name)
@@ -209,7 +214,7 @@ func Test_NpmAllDependencies(t *testing.T) {
 func Test_NpmPeerDependenciesMeta(t *testing.T) {
 	var buf bytes.Buffer
 
-	lockfile := getNpmLockfile(t)
+	lockfile := getNpmLockfile(t, "npm-lock.json")
 	if err := lockfile.Encode(&buf); err != nil {
 		t.Error(err)
 	}
