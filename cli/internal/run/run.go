@@ -207,7 +207,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		} else {
 			location = "in `pipeline` in \"turbo.json\""
 		}
-		return fmt.Errorf("%s %s", err, location)
+		return fmt.Errorf("%s %s. Are you sure you added it?", err, location)
 	}
 
 	scmInstance, err := scm.FromInRepo(r.base.RepoRoot)
