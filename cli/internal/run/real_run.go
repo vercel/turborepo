@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -88,17 +89,41 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
 
+	exitCode := 0
+
+	var preHashMutex sync.RWMutex
+	preHashes := make(map[string]string)
+
+	hashFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+		// deps here are passed in to calculate the task hash
+		hash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, ec.repoRoot, ec.logger, ec.rs.ArgsForTask(packageTask.Task))
+
+		preHashMutex.Lock()
+		preHashes[packageTask.TaskID] = hash
+		preHashMutex.Unlock()
+
+		return err
+	}
+	hashVisitorFn := g.GetPackageTaskVisitor(ctx, hashFunc)
+	hashErrs := engine.Execute(hashVisitorFn, execOpts)
+
+	for _, err := range hashErrs {
+		exitCode = 1
+		base.UI.Error(err.Error())
+	}
+
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		// deps here are passed in to calculate the task hash
-		return ec.exec(ctx, packageTask, deps)
+		preHash := preHashes[packageTask.TaskID]
+		return ec.exec(ctx, packageTask, deps, preHash)
 	}
 
 	visitorFn := g.GetPackageTaskVisitor(ctx, execFunc)
 	errs := engine.Execute(visitorFn, execOpts)
 
 	// Track if we saw any child with a non-zero exit code
-	exitCode := 0
 	exitCodeErr := &process.ChildExit{}
 
 	for _, err := range errs {
@@ -148,7 +173,7 @@ func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
 	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) error {
+func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set, hash string) error {
 	cmdTime := time.Now()
 
 	prefix := packageTask.OutputPrefix(ec.isSinglePackage)
@@ -161,8 +186,15 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	tracer := ec.runState.Run(packageTask.TaskID)
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
-	hash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, ec.repoRoot, ec.logger, passThroughArgs)
-	ec.logger.Debug("task hash", "value", hash)
+	jitHash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, ec.repoRoot, ec.logger, passThroughArgs)
+
+	if hash != jitHash {
+		ec.logger.Error("INPUTS MUTATED")
+	}
+
+	ec.logger.Debug("before run hash value %v", hash)
+	ec.logger.Debug("before task hash value %v", jitHash)
+
 	if err != nil {
 		ec.ui.Error(fmt.Sprintf("Hashing error: %v", err))
 		// @TODO probably should abort fatally???
