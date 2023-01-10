@@ -271,6 +271,14 @@
 <span id="271">271</span>
 <span id="272">272</span>
 <span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -314,6 +322,7 @@
     <span class="kw">pub </span>env: <span class="prelude-ty">Option</span>&lt;HashMap&lt;String, String&gt;&gt;,
     <span class="kw">pub </span>compiler: <span class="prelude-ty">Option</span>&lt;CompilerConfig&gt;,
     <span class="kw">pub </span>images: ImageConfig,
+    <span class="kw">pub </span>transpile_packages: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
 }
 
 <span class="attr">#[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
@@ -473,6 +482,13 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>image_config(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ImageConfigVc&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.images.clone().cell())
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>transpile_packages(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringsVc&gt; {
+        <span class="prelude-val">Ok</span>(StringsVc::cell(
+            <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.transpile_packages.clone().unwrap_or_default(),
+        ))
     }
 }
 

@@ -92,10 +92,34 @@
 <span id="92">92</span>
 <span id="93">93</span>
 <span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span class="kw">use </span>turbopack::condition::ContextCondition;
 <span class="kw">use </span>turbopack_node::path_regex::{PathRegexBuilder, PathRegexVc};
+
+<span class="kw">use </span><span class="kw">crate</span>::next_config::NextConfigVc;
 
 <span class="doccomment">/// Converts a filename within the server root into a next pathname.
 </span><span class="attr">#[turbo_tasks::function]
@@ -185,6 +209,24 @@
     } <span class="kw">else </span>{
         <span class="macro">format!</span>(<span class="string">&quot;{}{}&quot;</span>, route, ext)
     }
+}
+
+<span class="kw">pub async fn </span>foreign_code_context_condition(next_config: NextConfigVc) -&gt; <span class="prelude-ty">Result</span>&lt;ContextCondition&gt; {
+    <span class="kw">let </span>transpile_packages = next_config.transpile_packages().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>result = <span class="kw">if </span>transpile_packages.is_empty() {
+        ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string())
+    } <span class="kw">else </span>{
+        ContextCondition::all(<span class="macro">vec!</span>[
+            ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+            ContextCondition::not(ContextCondition::any(
+                transpile_packages
+                    .iter()
+                    .map(|package| ContextCondition::InDirectory(<span class="macro">format!</span>(<span class="string">&quot;node_modules/{package}&quot;</span>)))
+                    .collect(),
+            )),
+        ])
+    };
+    <span class="prelude-val">Ok</span>(result)
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="next_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

@@ -353,7 +353,7 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveOptionsVc&gt; {
     <span class="kw">let </span>parent = context.parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">if </span>parent != context {
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(resolve_options(parent, options_context));
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(base_resolve_options(parent, options_context));
     }
     <span class="kw">let </span>context_value = context.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>opt = options_context.<span class="kw">await</span><span class="question-mark">?</span>;

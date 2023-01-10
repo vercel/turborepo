@@ -263,6 +263,14 @@
 <span id="263">263</span>
 <span id="264">264</span>
 <span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
 </pre><pre class="rust"><code><span class="kw">use </span>core::{default::Default, result::Result::Ok};
 <span class="kw">use </span>std::collections::HashMap;
 
@@ -271,7 +279,6 @@
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack::{
-    condition::ContextCondition,
     module_options::{
         module_options_context::{ModuleOptionsContext, ModuleOptionsContextVc},
         ModuleRule, ModuleRuleCondition, ModuleRuleEffect, PostCssTransformOptions,
@@ -302,6 +309,7 @@
         get_next_client_resolved_map,
     },
     react_refresh::assert_can_resolve_react_refresh,
+    util::foreign_code_context_condition,
 };
 
 <span class="attr">#[turbo_tasks::function]
@@ -330,10 +338,11 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub fn </span>get_client_resolve_options_context(
+</span><span class="kw">pub async fn </span>get_client_resolve_options_context(
     project_path: FileSystemPathVc,
     ty: Value&lt;ClientContextType&gt;,
-) -&gt; ResolveOptionsContextVc {
+    next_config: NextConfigVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveOptionsContextVc&gt; {
     <span class="kw">let </span>next_client_import_map = get_next_client_import_map(project_path, ty);
     <span class="kw">let </span>next_client_fallback_import_map = get_next_client_fallback_import_map(ty);
     <span class="kw">let </span>next_client_resolved_map = get_next_client_resolved_map(project_path, project_path);
@@ -347,16 +356,16 @@
         module: <span class="bool-val">true</span>,
         ..Default::default()
     };
-    ResolveOptionsContext {
+    <span class="prelude-val">Ok</span>(ResolveOptionsContext {
         enable_typescript: <span class="bool-val">true</span>,
         enable_react: <span class="bool-val">true</span>,
         rules: <span class="macro">vec!</span>[(
-            ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+            foreign_code_context_condition(next_config).<span class="kw">await</span><span class="question-mark">?</span>,
             module_options_context.clone().cell(),
         )],
         ..module_options_context
     }
-    .cell()
+    .cell())
 }
 
 <span class="attr">#[turbo_tasks::function]
@@ -365,8 +374,9 @@
     execution_context: ExecutionContextVc,
     env: EnvironmentVc,
     ty: Value&lt;ClientContextType&gt;,
+    next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleOptionsContextVc&gt; {
-    <span class="kw">let </span>resolve_options_context = get_client_resolve_options_context(project_path, ty);
+    <span class="kw">let </span>resolve_options_context = get_client_resolve_options_context(project_path, ty, next_config);
     <span class="kw">let </span>enable_react_refresh =
         assert_can_resolve_react_refresh(project_path, resolve_options_context)
             .<span class="kw">await</span><span class="question-mark">?
@@ -392,7 +402,7 @@
         }),
         enable_typescript_transform: <span class="bool-val">true</span>,
         rules: <span class="macro">vec!</span>[(
-            ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+            foreign_code_context_condition(next_config).<span class="kw">await</span><span class="question-mark">?</span>,
             module_options_context.clone().cell(),
         )],
         ..module_options_context
@@ -439,11 +449,17 @@
     execution_context: ExecutionContextVc,
     browserslist_query: <span class="kw-2">&amp;</span>str,
     ty: Value&lt;ClientContextType&gt;,
+    next_config: NextConfigVc,
 ) -&gt; AssetContextVc {
     <span class="kw">let </span>environment = get_client_environment(browserslist_query);
-    <span class="kw">let </span>resolve_options_context = get_client_resolve_options_context(project_path, ty);
-    <span class="kw">let </span>module_options_context =
-        get_client_module_options_context(project_path, execution_context, environment, ty);
+    <span class="kw">let </span>resolve_options_context = get_client_resolve_options_context(project_path, ty, next_config);
+    <span class="kw">let </span>module_options_context = get_client_module_options_context(
+        project_path,
+        execution_context,
+        environment,
+        ty,
+        next_config,
+    );
 
     <span class="kw">let </span>context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
@@ -497,7 +513,7 @@
     ty: Value&lt;ClientContextType&gt;,
     next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;RuntimeEntriesVc&gt; {
-    <span class="kw">let </span>resolve_options_context = get_client_resolve_options_context(project_root, ty);
+    <span class="kw">let </span>resolve_options_context = get_client_resolve_options_context(project_root, ty, next_config);
     <span class="kw">let </span>enable_react_refresh =
         assert_can_resolve_react_refresh(project_root, resolve_options_context)
             .<span class="kw">await</span><span class="question-mark">?

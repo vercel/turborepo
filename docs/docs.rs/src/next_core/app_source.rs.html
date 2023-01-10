@@ -698,6 +698,24 @@
 <span id="698">698</span>
 <span id="699">699</span>
 <span id="700">700</span>
+<span id="701">701</span>
+<span id="702">702</span>
+<span id="703">703</span>
+<span id="704">704</span>
+<span id="705">705</span>
+<span id="706">706</span>
+<span id="707">707</span>
+<span id="708">708</span>
+<span id="709">709</span>
+<span id="710">710</span>
+<span id="711">711</span>
+<span id="712">712</span>
+<span id="713">713</span>
+<span id="714">714</span>
+<span id="715">715</span>
+<span id="716">716</span>
+<span id="717">717</span>
+<span id="718">718</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
@@ -774,17 +792,27 @@
     app_dir: FileSystemPathVc,
     server_root: FileSystemPathVc,
     browserslist_query: <span class="kw-2">&amp;</span>str,
+    next_config: NextConfigVc,
 ) -&gt; TransitionVc {
     <span class="kw">let </span>ty = Value::new(ClientContextType::App { app_dir });
     <span class="kw">let </span>client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
     <span class="kw">let </span>client_environment = get_client_environment(browserslist_query);
 
-    <span class="kw">let </span>client_module_options_context =
-        get_client_module_options_context(project_path, execution_context, client_environment, ty);
+    <span class="kw">let </span>client_module_options_context = get_client_module_options_context(
+        project_path,
+        execution_context,
+        client_environment,
+        ty,
+        next_config,
+    );
     NextClientChunksTransition {
         client_chunking_context,
         client_module_options_context,
-        client_resolve_options_context: get_client_resolve_options_context(project_path, ty),
+        client_resolve_options_context: get_client_resolve_options_context(
+            project_path,
+            ty,
+            next_config,
+        ),
         client_environment,
         server_root,
     }
@@ -805,10 +833,16 @@
     <span class="kw">let </span>ty = Value::new(ClientContextType::App { app_dir });
     <span class="kw">let </span>client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
     <span class="kw">let </span>client_environment = get_client_environment(browserslist_query);
-    <span class="kw">let </span>client_module_options_context =
-        get_client_module_options_context(project_path, execution_context, client_environment, ty);
+    <span class="kw">let </span>client_module_options_context = get_client_module_options_context(
+        project_path,
+        execution_context,
+        client_environment,
+        ty,
+        next_config,
+    );
     <span class="kw">let </span>client_runtime_entries = get_client_runtime_entries(project_path, env, ty, next_config);
-    <span class="kw">let </span>client_resolve_options_context = get_client_resolve_options_context(project_path, ty);
+    <span class="kw">let </span>client_resolve_options_context =
+        get_client_resolve_options_context(project_path, ty, next_config);
 
     <span class="prelude-val">Ok</span>(NextClientTransition {
         is_app: <span class="bool-val">true</span>,
@@ -838,6 +872,7 @@
             project_path,
             execution_context,
             ty,
+            next_config,
         ),
         ssr_resolve_options_context: get_server_resolve_options_context(
             project_path,
@@ -865,7 +900,7 @@
     <span class="kw">let </span>rsc_resolve_options_context =
         get_server_resolve_options_context(project_path, ty, next_config);
     <span class="kw">let </span>rsc_module_options_context =
-        get_server_module_options_context(project_path, execution_context, ty);
+        get_server_module_options_context(project_path, execution_context, ty, next_config);
 
     NextLayoutEntryTransition {
         rsc_environment,
@@ -929,6 +964,7 @@
             app_dir,
             server_root,
             browserslist_query,
+            next_config,
         ),
     );
     transitions.insert(
@@ -947,7 +983,7 @@
     ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(transitions),
         get_server_environment(ssr_ty, env, server_addr),
-        get_server_module_options_context(project_path, execution_context, ssr_ty),
+        get_server_module_options_context(project_path, execution_context, ssr_ty, next_config),
         get_server_resolve_options_context(project_path, ssr_ty, next_config),
     )
     .into()

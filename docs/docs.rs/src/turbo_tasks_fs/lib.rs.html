@@ -1619,6 +1619,11 @@
 <span id="1619">1619</span>
 <span id="1620">1620</span>
 <span id="1621">1621</span>
+<span id="1622">1622</span>
+<span id="1623">1623</span>
+<span id="1624">1624</span>
+<span id="1625">1625</span>
+<span id="1626">1626</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -1885,8 +1890,13 @@
     }
 
     <span class="kw">pub async fn </span>to_sys_path(<span class="kw-2">&amp;</span><span class="self">self</span>, fs_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;PathBuf&gt; {
-        <span class="kw">let </span>path = Path::new(<span class="kw-2">&amp;</span><span class="self">self</span>.root).join(<span class="kw-2">&amp;*</span>unix_to_sys(<span class="kw-2">&amp;</span>fs_path.<span class="kw">await</span><span class="question-mark">?</span>.path));
-        <span class="prelude-val">Ok</span>(path)
+        <span class="kw">let </span>path = Path::new(<span class="kw-2">&amp;</span><span class="self">self</span>.root);
+        <span class="kw">let </span>fs_path = fs_path.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="kw">if </span>fs_path.path.is_empty() {
+            path.to_path_buf()
+        } <span class="kw">else </span>{
+            path.join(<span class="kw-2">&amp;*</span>unix_to_sys(<span class="kw-2">&amp;</span>fs_path.path))
+        })
     }
 }
 

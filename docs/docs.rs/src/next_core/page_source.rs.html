@@ -562,6 +562,19 @@
 <span id="562">562</span>
 <span id="563">563</span>
 <span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
+<span id="572">572</span>
+<span id="573">573</span>
+<span id="574">574</span>
+<span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -633,9 +646,15 @@
     execution_context: ExecutionContextVc,
     client_environment: EnvironmentVc,
     ty: Value&lt;ClientContextType&gt;,
+    next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleOptionsContextVc&gt; {
-    <span class="kw">let </span>client_module_options_context =
-        get_client_module_options_context(project_path, execution_context, client_environment, ty);
+    <span class="kw">let </span>client_module_options_context = get_client_module_options_context(
+        project_path,
+        execution_context,
+        client_environment,
+        ty,
+        next_config,
+    );
 
     <span class="kw">let </span>client_module_options_context = <span class="kw">match </span>ty.into_value() {
         ClientContextType::Pages { pages_dir } =&gt; add_next_transforms_to_pages(
@@ -662,10 +681,11 @@
     execution_context: ExecutionContextVc,
     pages_dir: FileSystemPathVc,
     ssr_ty: Value&lt;PageSsrType&gt;,
+    next_config: NextConfigVc,
 ) -&gt; ModuleOptionsContextVc {
     <span class="kw">let </span>server_ty = Value::new(ServerContextType::Pages { pages_dir });
     <span class="kw">let </span>server_module_options_context =
-        get_server_module_options_context(project_path, execution_context, server_ty);
+        get_server_module_options_context(project_path, execution_context, server_ty, next_config);
 
     <span class="kw">match </span>ssr_ty.into_value() {
         PageSsrType::Ssr =&gt; server_module_options_context,
@@ -710,13 +730,15 @@
         execution_context,
         client_environment,
         ty,
+        next_config,
     );
     <span class="kw">let </span>client_module_options_context = add_next_transforms_to_pages(
         client_module_options_context,
         pages_dir,
         Value::new(PageTransformType::Client),
     );
-    <span class="kw">let </span>client_resolve_options_context = get_client_resolve_options_context(project_path, ty);
+    <span class="kw">let </span>client_resolve_options_context =
+        get_client_resolve_options_context(project_path, ty, next_config);
     <span class="kw">let </span>client_context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
         client_environment,
@@ -741,6 +763,8 @@
     .cell()
     .into();
 
+    <span class="kw">let </span><span class="kw-2">mut </span>transitions = HashMap::new();
+    transitions.insert(<span class="string">&quot;next-client&quot;</span>.to_string(), next_client_transition);
     <span class="kw">let </span>server_environment = get_server_environment(server_ty, env, server_addr);
     <span class="kw">let </span>server_resolve_options_context =
         get_server_resolve_options_context(project_path, server_ty, next_config);
@@ -750,6 +774,7 @@
         execution_context,
         pages_dir,
         Value::new(PageSsrType::Ssr),
+        next_config,
     );
     <span class="kw">let </span>server_transitions = TransitionsByNameVc::cell(
         [(<span class="string">&quot;next-client&quot;</span>.to_string(), next_client_transition)]
@@ -770,6 +795,7 @@
         execution_context,
         pages_dir,
         Value::new(PageSsrType::SsrData),
+        next_config,
     );
 
     <span class="kw">let </span>server_data_context: AssetContextVc = ModuleAssetContextVc::new(

@@ -197,11 +197,13 @@
 <span id="197">197</span>
 <span id="198">198</span>
 <span id="199">199</span>
-</pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
+<span id="200">200</span>
+<span id="201">201</span>
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack::{
-    condition::ContextCondition,
     module_options::{ModuleOptionsContext, ModuleOptionsContextVc, PostCssTransformOptions},
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
 };
@@ -216,6 +218,7 @@
     next_client::context::add_next_font_transform,
     next_config::NextConfigVc,
     next_import_map::{get_next_build_import_map, get_next_server_import_map},
+    util::foreign_code_context_condition,
 };
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
@@ -227,13 +230,13 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub fn </span>get_server_resolve_options_context(
+</span><span class="kw">pub async fn </span>get_server_resolve_options_context(
     project_path: FileSystemPathVc,
     ty: Value&lt;ServerContextType&gt;,
     next_config: NextConfigVc,
-) -&gt; ResolveOptionsContextVc {
+) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveOptionsContextVc&gt; {
     <span class="kw">let </span>next_server_import_map = get_next_server_import_map(project_path, ty, next_config);
-    <span class="kw">match </span>ty.into_value() {
+    <span class="prelude-val">Ok</span>(<span class="kw">match </span>ty.into_value() {
         ServerContextType::Pages { .. } | ServerContextType::AppSSR { .. } =&gt; {
             <span class="kw">let </span>resolve_options_context = ResolveOptionsContext {
                 enable_node_modules: <span class="bool-val">true</span>,
@@ -248,7 +251,7 @@
                 enable_typescript: <span class="bool-val">true</span>,
                 enable_react: <span class="bool-val">true</span>,
                 rules: <span class="macro">vec!</span>[(
-                    ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+                    foreign_code_context_condition(next_config).<span class="kw">await</span><span class="question-mark">?</span>,
                     resolve_options_context.clone().cell(),
                 )],
                 ..resolve_options_context
@@ -268,14 +271,14 @@
                 enable_typescript: <span class="bool-val">true</span>,
                 enable_react: <span class="bool-val">true</span>,
                 rules: <span class="macro">vec!</span>[(
-                    ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+                    foreign_code_context_condition(next_config).<span class="kw">await</span><span class="question-mark">?</span>,
                     resolve_options_context.clone().cell(),
                 )],
                 ..resolve_options_context
             }
         }
     }
-    .cell()
+    .cell())
 }
 
 <span class="attr">#[turbo_tasks::function]
@@ -297,11 +300,12 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub fn </span>get_server_module_options_context(
+</span><span class="kw">pub async fn </span>get_server_module_options_context(
     project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
     ty: Value&lt;ServerContextType&gt;,
-) -&gt; ModuleOptionsContextVc {
+    next_config: NextConfigVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleOptionsContextVc&gt; {
     <span class="kw">let </span>module_options_context = <span class="kw">match </span>ty.into_value() {
         ServerContextType::Pages { .. } =&gt; {
             <span class="kw">let </span>module_options_context = ModuleOptionsContext {
@@ -317,7 +321,7 @@
                 }),
                 enable_typescript_transform: <span class="bool-val">true</span>,
                 rules: <span class="macro">vec!</span>[(
-                    ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+                    foreign_code_context_condition(next_config).<span class="kw">await</span><span class="question-mark">?</span>,
                     module_options_context.clone().cell(),
                 )],
                 ..module_options_context
@@ -337,7 +341,7 @@
                 }),
                 enable_typescript_transform: <span class="bool-val">true</span>,
                 rules: <span class="macro">vec!</span>[(
-                    ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+                    foreign_code_context_condition(next_config).<span class="kw">await</span><span class="question-mark">?</span>,
                     module_options_context.clone().cell(),
                 )],
                 ..module_options_context
@@ -359,7 +363,7 @@
                 }),
                 enable_typescript_transform: <span class="bool-val">true</span>,
                 rules: <span class="macro">vec!</span>[(
-                    ContextCondition::InDirectory(<span class="string">&quot;node_modules&quot;</span>.to_string()),
+                    foreign_code_context_condition(next_config).<span class="kw">await</span><span class="question-mark">?</span>,
                     module_options_context.clone().cell(),
                 )],
                 ..module_options_context
@@ -368,7 +372,7 @@
     }
     .cell();
 
-    add_next_font_transform(module_options_context)
+    <span class="prelude-val">Ok</span>(add_next_font_transform(module_options_context))
 }
 
 <span class="attr">#[turbo_tasks::function]

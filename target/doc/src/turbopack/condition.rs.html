@@ -20,19 +20,63 @@
 <span id="20">20</span>
 <span id="21">21</span>
 <span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
 </pre><pre class="rust"><code><span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPath;
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, TraceRawVcs, PartialEq, Eq)]
 </span><span class="kw">pub enum </span>ContextCondition {
+    All(Vec&lt;ContextCondition&gt;),
+    Any(Vec&lt;ContextCondition&gt;),
+    Not(Box&lt;ContextCondition&gt;),
     InDirectory(String),
 }
 
 <span class="kw">impl </span>ContextCondition {
+    <span class="doccomment">/// Creates a condition that matches if all of the given conditions match.
+    </span><span class="kw">pub fn </span>all(conditions: Vec&lt;ContextCondition&gt;) -&gt; ContextCondition {
+        ContextCondition::All(conditions)
+    }
+
+    <span class="doccomment">/// Creates a condition that matches if any of the given conditions match.
+    </span><span class="kw">pub fn </span>any(conditions: Vec&lt;ContextCondition&gt;) -&gt; ContextCondition {
+        ContextCondition::Any(conditions)
+    }
+
+    <span class="doccomment">/// Creates a condition that matches if the given condition does not match.
+    </span><span class="attr">#[allow(clippy::should_implement_trait)]
+    </span><span class="kw">pub fn </span>not(condition: ContextCondition) -&gt; ContextCondition {
+        ContextCondition::Not(Box::new(condition))
+    }
+
     <span class="doccomment">/// Returns true if the condition matches the context.
     </span><span class="kw">pub fn </span>matches(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>FileSystemPath) -&gt; bool {
         <span class="kw">match </span><span class="self">self </span>{
+            ContextCondition::All(conditions) =&gt; conditions.iter().all(|c| c.matches(context)),
+            ContextCondition::Any(conditions) =&gt; conditions.iter().any(|c| c.matches(context)),
+            ContextCondition::Not(condition) =&gt; !condition.matches(context),
             ContextCondition::InDirectory(dir) =&gt; {
                 context.path.starts_with(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{dir}/&quot;</span>))
                     || context.path.contains(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;/{dir}/&quot;</span>))
