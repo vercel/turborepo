@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/yaml"
 	"gotest.tools/v3/assert"
@@ -17,10 +16,7 @@ func getFixture(t *testing.T, name string) ([]byte, error) {
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
 	}
-	cwd, err := fs.CheckedToAbsoluteSystemPath(defaultCwd)
-	if err != nil {
-		t.Fatalf("cwd is not an absolute directory %v: %v", defaultCwd, err)
-	}
+	cwd := turbopath.AbsoluteSystemPath(defaultCwd)
 	lockfilePath := cwd.UntypedJoin("testdata", name)
 	if !lockfilePath.FileExists() {
 		return nil, errors.Errorf("unable to find 'testdata/%s'", name)

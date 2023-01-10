@@ -3,6 +3,7 @@ package lockfile
 
 import (
 	"io"
+	"sort"
 
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
@@ -30,3 +31,19 @@ type Package struct {
 	// Set to true iff Key and Version are set
 	Found bool
 }
+
+type ByKey []Package
+
+func (p ByKey) Len() int {
+	return len(p)
+}
+
+func (p ByKey) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
+
+func (p ByKey) Less(i, j int) bool {
+	return p[i].Key < p[j].Key
+}
+
+var _ (sort.Interface) = (*ByKey)(nil)

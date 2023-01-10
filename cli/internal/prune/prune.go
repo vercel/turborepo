@@ -127,7 +127,9 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 	p.base.Logger.Trace("targets", "value", targets)
 
 	lockfileKeys := make([]string, 0, len(rootPackageJSON.TransitiveDeps))
-	lockfileKeys = append(lockfileKeys, rootPackageJSON.TransitiveDeps...)
+	for _, pkg := range rootPackageJSON.TransitiveDeps {
+		lockfileKeys = append(lockfileKeys, pkg.Key)
+	}
 
 	for _, internalDep := range targets {
 		if internalDep == ctx.RootNode {
@@ -158,7 +160,9 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 			}
 		}
 
-		lockfileKeys = append(lockfileKeys, ctx.WorkspaceInfos[internalDep].TransitiveDeps...)
+		for _, pkg := range ctx.WorkspaceInfos[internalDep].TransitiveDeps {
+			lockfileKeys = append(lockfileKeys, pkg.Key)
+		}
 
 		p.base.UI.Output(fmt.Sprintf(" - Added %v", ctx.WorkspaceInfos[internalDep].Name))
 	}
