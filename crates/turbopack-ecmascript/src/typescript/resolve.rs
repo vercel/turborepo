@@ -21,7 +21,7 @@ use turbopack_core::{
         origin::ResolveOriginVc,
         parse::{Request, RequestVc},
         pattern::QueryMapVc,
-        resolve, AliasPattern, ResolveResult, ResolveResultVc,
+        resolve, AliasPattern, ResolveResultVc,
     },
     source_asset::SourceAssetVc,
 };
@@ -72,8 +72,9 @@ pub async fn read_tsconfigs(
                         RequestVc::parse(Value::new(extends.to_string().into())),
                         resolve_options,
                     )
+                    .primary_assets()
                     .await?;
-                    if let ResolveResult::Single(asset, _) = *result {
+                    if let Some(&asset) = result.iter().next() {
                         data = asset.content().parse_json_with_comments();
                         tsconfig = asset;
                     } else {
