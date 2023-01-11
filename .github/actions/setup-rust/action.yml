@@ -54,3 +54,11 @@ runs:
         key: ${{ inputs.cache-key }}
         # the cache is huge and we only get 10gb max, so we only save on master
         save-if: ${{ github.ref == 'refs/heads/main' && inputs.save-cache || 'false' }}
+
+    - name: "Install cargo-sweep"
+      uses: baptiste0928/cargo-install@v1
+      with:
+        crate: cargo-sweep
+
+    - name: "Run cargo-sweep"
+      uses: ./.github/actions/cargo-sweep
