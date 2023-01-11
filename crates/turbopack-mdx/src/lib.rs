@@ -1,11 +1,10 @@
 #![feature(min_specialization)]
 
-use anyhow::{anyhow, Result};
-use mdxjs::compile;
+use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
-use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPathVc};
+use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
-    asset::{Asset, AssetContent, AssetContentVc, AssetVc},
+    asset::{Asset, AssetContentVc, AssetVc},
     chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
     context::AssetContextVc,
     reference::AssetReferencesVc,
@@ -20,11 +19,16 @@ use turbopack_ecmascript::{
     AnalyzeEcmascriptModuleResultVc, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
     EcmascriptModuleAssetVc,
 };
+use turbopack_node::{
+    execution_context::ExecutionContextVc,
+    run_loaders::{run_loaders, LoadersVc},
+};
 
 #[turbo_tasks::value]
 #[derive(Clone, Copy)]
 pub struct MdxModuleAsset {
     source: AssetVc,
+    execution_context: ExecutionContextVc,
     context: AssetContextVc,
     transforms: EcmascriptInputTransformsVc,
 }
@@ -37,24 +41,30 @@ pub struct MdxModuleAsset {
 async fn into_ecmascript_module_asset(
     current_context: &MdxModuleAssetVc,
 ) -> Result<EcmascriptModuleAssetVc> {
-    let content = current_context.content();
+    // let content = current_context.content();
     let this = current_context.await?;
 
-    let AssetContent::File(file) = &*content.await? else {
-        anyhow::bail!("Unexpected mdx asset content");
-    };
+    // let AssetContent::File(file) = &*content.await? else {
+    //     anyhow::bail!("Unexpected mdx asset content");
+    // };
 
-    let FileContent::Content(file) = &*file.await? else {
-        anyhow::bail!("Not able to read mdx file content");
-    };
+    // let FileContent::Content(file) = &*file.await? else {
+    //     anyhow::bail!("Not able to read mdx file content");
+    // };
 
     // TODO: upstream mdx currently bubbles error as string
-    let mdx_jsx_component =
-        compile(&file.content().to_str()?, &Default::default()).map_err(|e| anyhow!("{}", e))?;
+    // let mdx_jsx_component =
+    //     compile(&file.content().to_str()?, &Default::default()).map_err(|e|
+    // anyhow!("{}", e))?;
 
     let source = VirtualAssetVc::new(
         this.source.path(),
-        File::from(Rope::from(mdx_jsx_component)).into(),
+        run_loaders(
+            this.execution_context,
+            this.source.path(),
+            this.context,
+            LoadersVc::cell(vec![]),
+        ),
     );
     Ok(EcmascriptModuleAssetVc::new(
         source.into(),
@@ -70,11 +80,13 @@ impl MdxModuleAssetVc {
     #[turbo_tasks::function]
     pub fn new(
         source: AssetVc,
+        execution_context: ExecutionContextVc,
         context: AssetContextVc,
         transforms: EcmascriptInputTransformsVc,
     ) -> Self {
         Self::cell(MdxModuleAsset {
             source,
+            execution_context,
             context,
             transforms,
         })

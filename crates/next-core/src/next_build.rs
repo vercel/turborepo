@@ -47,3 +47,17 @@ pub async fn get_postcss_package_mapping(
     ])
     .cell())
 }
+
+#[turbo_tasks::function]
+pub async fn get_mdxjs_loader_package_mapping(
+    project_path: FileSystemPathVc,
+) -> Result<ImportMappingVc> {
+    Ok(
+        ImportMapping::Alternatives(vec![ImportMapping::PrimaryAlternative(
+            "@mdx-js/loader".to_string(),
+            Some(project_path),
+        )
+        .cell()])
+        .cell(),
+    )
+}

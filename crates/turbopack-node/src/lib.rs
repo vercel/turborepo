@@ -39,6 +39,7 @@ mod node_entry;
 pub mod path_regex;
 mod pool;
 pub mod render;
+pub mod run_loaders;
 pub mod source_map;
 pub mod transforms;
 

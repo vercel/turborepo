@@ -13,7 +13,7 @@ use std::{
     mem::swap,
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use css::{CssModuleAssetVc, ModuleCssModuleAssetVc};
 use ecmascript::{
     typescript::resolve::TypescriptTypesAssetReferenceVc, EcmascriptModuleAssetType,
@@ -151,7 +151,16 @@ async fn apply_module_type(
         }
         ModuleType::Static => StaticModuleAssetVc::new(source, context.into()).into(),
         ModuleType::Mdx(transforms) => {
-            MdxModuleAssetVc::new(source, context.into(), *transforms).into()
+            let module_options_context = context.module_options_context().await?;
+            MdxModuleAssetVc::new(
+                source,
+                module_options_context
+                    .execution_context
+                    .context("execution_context required for mdx")?,
+                context.into(),
+                *transforms,
+            )
+            .into()
         }
         ModuleType::Custom(_) => todo!(),
     })
