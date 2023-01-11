@@ -40,7 +40,7 @@ This repo is configured to be built with Docker, and Docker compose. To build al
 docker network create app_network
 
 # Build prod using new BuildKit engine
-COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose -f docker-compose.yml build --parallel
+COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose -f docker-compose.yml build
 
 # Start prod in detached mode
 docker-compose -f docker-compose.yml up -d

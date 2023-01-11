@@ -58,3 +58,6 @@ Make sure exit code is 2 when no args are passed
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
   [1]
+  $ ${TURBO} run
+  Turbo error: at least one task must be specified
+  [1]
