@@ -40,7 +40,7 @@ Update today by running `npm install turbo@latest`, or by [installing globally](
 
 ## Schedule your long-running tasks with confidence
 
-You can now tell Turborepo about tasks that start long-running processes with a `persistent: true` config. When this config is set, Turborepo will throw an error on invalid task dependency graphs. This is useful for `dev` tasks or test runners with `--watch` flags.
+You can now tell Turborepo about tasks that start long-running processes with a `persistent: true` [configuration option](/repo/docs/reference/configuration#persistent). When this config is set, Turborepo will throw an error on invalid task dependency graphs. This is useful for `dev` tasks or test runners with `--watch` flags.
 
 ```diff
 {
@@ -130,7 +130,8 @@ Also note that you will no longer need to specify `outputs: []` because not cach
 
 ## “Error only” output mode for quieter logs
 
-To bring visibility to errors, community member [@dobsev](https://github.com/dobesv) contributed [a solution to only show errors that result from a task pipeline](https://github.com/vercel/turbo/pull/2588). While debugging a pipeline, `--output-logs=error-only` can be used to keep your signal-to-noise ratio high so you can focus on ensuring successful runs for your pipelines.
+To bring visibility to errors, community member [@dobsev](https://github.com/dobesv) contributed [a solution to only show errors instead of all logs from a task run](https://github.com/vercel/turbo/pull/2588). While debugging a pipeline, `--output-logs=error-only` can be used to keep your signal-to-noise ratio high so you can focus on ensuring successful runs for your pipelines.
+This can be used as a [configuration option](/repo/docs/reference/configuration#outputmode) or as a [CLI flag](/repo/docs/reference/command-line-reference#--output-logs)
 
 ```bash
 turbo build --output-logs=error-only
