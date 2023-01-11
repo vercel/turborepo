@@ -260,7 +260,7 @@ func (e *Engine) AddDep(fromTaskID string, toTaskID string) error {
 		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskID)
 	}
 
-	if _, ok := e.PackageTaskDeps[fromTaskID]; !ok {
+	if _, ok := e.PackageTaskDeps[toTaskID]; !ok {
 		e.PackageTaskDeps[toTaskID] = []string{}
 	}
 

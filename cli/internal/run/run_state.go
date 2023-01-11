@@ -2,6 +2,7 @@ package run
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -151,6 +152,11 @@ func (r *RunState) Close(terminal cli.Ui) error {
 	if r.Cached == r.Attempted && r.Attempted > 0 {
 		maybeFullTurbo = ui.Rainbow(">>> FULL TURBO")
 	}
+
+	if r.Attempted == 0 {
+		terminal.Output("") // Clear the line
+		terminal.Warn("No tasks were executed as part of this run.")
+	}
 	terminal.Output("") // Clear the line
 	terminal.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", r.Cached+r.Success, r.Attempted))
 	terminal.Output(util.Sprintf("${BOLD}Cached:    %v cached${RESET}${GRAY}, %v total${RESET}", r.Cached, r.Attempted))
@@ -173,7 +179,11 @@ func writeChrometracing(filename string, terminal cli.Ui) error {
 	if err := chrometracing.Close(); err != nil {
 		terminal.Warn(fmt.Sprintf("Failed to flush tracing data: %v", err))
 	}
-	root, err := fs.GetCwd()
+	cwdRaw, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	root, err := fs.GetCwd(cwdRaw)
 	if err != nil {
 		return err
 	}

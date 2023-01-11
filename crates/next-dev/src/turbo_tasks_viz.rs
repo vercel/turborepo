@@ -1,8 +1,8 @@
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
-use mime::Mime;
-use turbo_tasks::{get_invalidator, TurboTasks, Value};
+use mime::TEXT_HTML_UTF_8;
+use turbo_tasks::{get_invalidator, TurboTasks, TurboTasksBackendApi, Value};
 use turbo_tasks_fs::File;
 use turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
@@ -11,7 +11,7 @@ use turbo_tasks_memory::{
 use turbopack_core::asset::AssetContentVc;
 use turbopack_dev_server::source::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataFilter,
-    ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
+    ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc, NeededData,
 };
 
 #[turbo_tasks::value(serialization = "none", eq = "manual", cell = "new", into = "new")]
@@ -53,7 +53,11 @@ impl ContentSource for TurboTasksSource {
                     stats.add_id(b, task);
                 });
                 let tree = stats.treeify(ReferenceType::Dependency);
-                let graph = viz::graph::visualize_stats_tree(tree, ReferenceType::Dependency);
+                let graph = viz::graph::visualize_stats_tree(
+                    tree,
+                    ReferenceType::Dependency,
+                    tt.stats_type(),
+                );
                 viz::graph::wrap_html(&graph)
             }
             "call-graph" => {
@@ -63,7 +67,8 @@ impl ContentSource for TurboTasksSource {
                     stats.add_id(b, task);
                 });
                 let tree = stats.treeify(ReferenceType::Child);
-                let graph = viz::graph::visualize_stats_tree(tree, ReferenceType::Child);
+                let graph =
+                    viz::graph::visualize_stats_tree(tree, ReferenceType::Child, tt.stats_type());
                 viz::graph::wrap_html(&graph)
             }
             "table" => {
@@ -71,26 +76,25 @@ impl ContentSource for TurboTasksSource {
                     let mut stats = Stats::new();
                     let b = tt.backend();
                     let active_only = query.contains_key("active");
+                    let include_unloaded = query.contains_key("unloaded");
                     b.with_all_cached_tasks(|task| {
                         stats.add_id_conditional(b, task, |_, info| {
-                            info.executions > 0 && (!active_only || info.active)
+                            (include_unloaded || !info.unloaded) && (!active_only || info.active)
                         });
                     });
                     let tree = stats.treeify(ReferenceType::Dependency);
-                    let table = viz::table::create_table(tree);
+                    let table = viz::table::create_table(tree, tt.stats_type());
                     viz::table::wrap_html(&table)
                 } else {
                     return Ok(ContentSourceResultVc::exact(
-                        ContentSourceContent::NeedData {
+                        ContentSourceContent::NeedData(NeededData {
                             source: self_vc.into(),
                             path: path.to_string(),
                             vary: ContentSourceDataVary {
-                                query: Some(ContentSourceDataFilter::Subset(
-                                    ["active".to_string()].into(),
-                                )),
+                                query: Some(ContentSourceDataFilter::All),
                                 ..Default::default()
                             },
-                        }
+                        })
                         .cell(),
                     ));
                 }
@@ -106,10 +110,7 @@ impl ContentSource for TurboTasksSource {
         };
         Ok(ContentSourceResultVc::exact(
             ContentSourceContent::Static(
-                AssetContentVc::from(
-                    File::from(html).with_content_type(Mime::from_str("text/html")?),
-                )
-                .into(),
+                AssetContentVc::from(File::from(html).with_content_type(TEXT_HTML_UTF_8)).into(),
             )
             .cell(),
         ))

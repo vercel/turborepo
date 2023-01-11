@@ -3,7 +3,11 @@ use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     reference::{AssetReference, AssetReferenceVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResult, ResolveResultVc},
+    reference_type::{ReferenceType, TypeScriptReferenceSubType},
+    resolve::{
+        origin::ResolveOriginVc, parse::RequestVc, pattern::QueryMapVc, ResolveResult,
+        ResolveResultVc,
+    },
     source_asset::SourceAssetVc,
 };
 
@@ -76,9 +80,12 @@ impl AssetReference for TsReferencePathAssetReference {
                 .await?
             {
                 ResolveResult::Single(
-                    self.origin
-                        .context()
-                        .process(SourceAssetVc::new(*path).into()),
+                    self.origin.context().process(
+                        SourceAssetVc::new(*path).into(),
+                        Value::new(ReferenceType::TypeScript(
+                            TypeScriptReferenceSubType::Undefined,
+                        )),
+                    ),
                     Vec::new(),
                 )
                 .into()
@@ -121,7 +128,11 @@ impl AssetReference for TsReferenceTypeAssetReference {
     fn resolve_reference(&self) -> ResolveResultVc {
         type_resolve(
             self.origin,
-            RequestVc::module(self.module.clone(), Value::new("".to_string().into())),
+            RequestVc::module(
+                self.module.clone(),
+                Value::new("".to_string().into()),
+                QueryMapVc::none(),
+            ),
         )
     }
 }

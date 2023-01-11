@@ -204,7 +204,7 @@ __turbopack_export_value__((__turbopack_import__) => {
     return getOrInstantiateModuleFromParent(id, sourceModule).exports;
   }
 
-  function externalRequire(id) {
+  function externalRequire(id, esm) {
     let raw;
     try {
       raw = require(id);
@@ -213,10 +213,9 @@ __turbopack_export_value__((__turbopack_import__) => {
       // an external module we don't provide a shim for (e.g. querystring, url).
       // For now, we fail semi-silently, but in the future this should be a
       // compilation error.
-      console.error(`Failed to load external module ${id}: ${err}`);
-      return undefined;
+      throw new Error(`Failed to load external module ${id}: ${err}`);
     }
-    if (raw.__esModule) {
+    if (!esm || raw.__esModule) {
       return raw;
     }
     const ns = {};
@@ -532,9 +531,9 @@ __turbopack_export_value__((__turbopack_import__) => {
    * @returns {ModuleFactory}
    * @private
    */
-  function _eval(factory) {
-    let code = factory.code;
-    if (factory.map) code += `\n\n//# sourceMappingURL=${factory.map}`;
+  function _eval({ code, url, map }) {
+    code += `\n\n//# sourceURL=${location.origin}${url}`;
+    if (map) code += `\n//# sourceMappingURL=${map}`;
     return eval(code);
   }
 

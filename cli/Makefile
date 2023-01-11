@@ -1,8 +1,10 @@
 TURBO_VERSION = $(shell cat ../version.txt | sed -n '1 p')
 TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
+EXT :=
 ifeq ($(OS),Windows_NT)
 	UNAME := Windows
+	EXT = ".exe"
 else
 	UNAME := $(shell uname -s)
 endif
@@ -19,17 +21,11 @@ GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
-turbo: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	CGO_ENABLED=1 go build $(GO_FLAGS) ./cmd/turbo
+turbo: go-turbo$(EXT)
+	cargo build --manifest-path ../crates/turborepo/Cargo.toml
 
-shim: libturbo.a
-	cargo build --manifest-path ../shim/Cargo.toml
-
-libturbo.a: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	go build -buildmode=c-archive -o libturbo.a  ./cmd/turbo/...
-
-turbo.lib: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	go build -buildmode=c-archive -o turbo.lib  ./cmd/turbo/...
+go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod
+	CGO_ENABLED=1 go build $(GO_FLAGS) -o go-turbo$(EXT) ./cmd/turbo
 
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
@@ -81,6 +77,11 @@ corepack:
 e2e: corepack install turbo
 	node -r esbuild-register scripts/e2e/e2e.ts
 
+# Expects turbo to be built and up to date
+# Only should be used by CI
+e2e-prebuilt: corepack install
+	node -r esbuild-register scripts/e2e/e2e.ts
+
 cmd/turbo/version.go: ../version.txt
 	# Update this atomically to avoid issues with this being overwritten during use
 	node -e 'console.log(`package main\n\nconst turboVersion = "$(TURBO_VERSION)"`)' > cmd/turbo/version.go.txt
@@ -111,10 +112,6 @@ snapshot-turbo-cross:
 snapshot-turbo-darwin:
 	goreleaser release --snapshot --rm-dist -f darwin-release.yml
 
-.PHONY: snapshot-turbo
-snapshot-turbo: clean
-	goreleaser release --snapshot --rm-dist -f combined-release.yml
-
 .PHONY: snapshot-lib-turbo-darwin
 snapshot-lib-turbo-darwin:
 	goreleaser release --snapshot --rm-dist -f darwin-lib.yml
@@ -126,6 +123,14 @@ snapshot-lib-turbo-cross:
 .PHONY: build-lib-turbo-darwin
 build-lib-turbo-darwin:
 	goreleaser release --rm-dist -f darwin-lib.yml
+
+.PHONY: build-go-turbo-darwin
+build-go-turbo-darwin:
+	goreleaser release --rm-dist -f darwin-release.yml
+
+.PHONY: build-go-turbo-cross
+build-go-turbo-cross:
+	goreleaser release --rm-dist -f cross-release.yml
 
 .PHONY: build-lib-turbo-cross
 build-lib-turbo-cross:
@@ -184,8 +189,8 @@ publish: clean build
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
 
-.PHONY: snapshot-shim
-snapshot-shim:
+.PHONY: snapshot-turbo
+snapshot-turbo:
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 
@@ -198,14 +203,14 @@ snapshot-shim:
 	goreleaser release --rm-dist -f combined-shim.yml --snapshot
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
-	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
+	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/dist/
+	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/dist/
+	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/dist/
+	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/dist/
 
 
-.PHONY: publish-shim
-publish-shim:
+.PHONY: publish-turbo
+publish-turbo: clean build
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 
@@ -219,14 +224,12 @@ publish-shim:
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
 	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/../
 	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/../
 	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
 
 	# Publish the remaining JS packages in order to avoid race conditions.
 	cd $(CLI_DIR)/../
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
-	# npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
 
@@ -258,7 +261,10 @@ bench/turbo: demo/turbo turbo
 
 bench: bench/lerna bench/lage bench/nx bench/turbo
 
-clean: clean-go clean-build clean-demo
+clean: clean-go clean-build clean-demo clean-rust
+
+clean-rust:
+	cargo clean
 
 clean-build:
 	rm -f turbo
@@ -277,10 +283,10 @@ $(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
 
 INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
 
-integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack shim
+integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
 
-integration-tests-interactive: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack shim
+integration-tests-interactive: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` -i $(INTEGRATION_TEST_FILES)
 
 # use target testbed-<some directory under integration_tests> to set up the testbed directory

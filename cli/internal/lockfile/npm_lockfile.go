@@ -61,7 +61,7 @@ type NpmPackage struct {
 	OS  []string `json:"os,omitempty"`
 
 	// Only used for root level package
-	Workspaces []string `json:"workspaces,omitempty"`
+	Workspaces Workspaces `json:"workspaces,omitempty"`
 }
 
 // NpmDependency Legacy representation of dependencies
@@ -74,6 +74,29 @@ type NpmDependency struct {
 	Optional     bool                     `json:"optional,omitempty"`
 	Requires     map[string]string        `json:"requires,omitempty"`
 	Dependencies map[string]NpmDependency `json:"dependencies,omitempty"`
+}
+
+// Workspaces represents the standard workspaces field in package.json
+type Workspaces []string
+
+// WorkspacesAlt represents the alternate workspaces field (nested) package.json
+type WorkspacesAlt struct {
+	Packages []string `json:"packages,omitempty"`
+}
+
+// UnmarshalJSON determines the correct format of the workspaces field to unmarshal
+func (r *Workspaces) UnmarshalJSON(data []byte) error {
+	var tmp = &WorkspacesAlt{}
+	if err := json.Unmarshal(data, tmp); err == nil {
+		*r = Workspaces(tmp.Packages)
+		return nil
+	}
+	var tempstr = []string{}
+	if err := json.Unmarshal(data, &tempstr); err != nil {
+		return err
+	}
+	*r = tempstr
+	return nil
 }
 
 var _ Lockfile = (*NpmLockfile)(nil)

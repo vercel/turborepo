@@ -53,6 +53,8 @@ pub mod primitives;
 mod raw_vc;
 mod read_ref;
 pub mod registry;
+pub mod small_duration;
+mod state;
 mod task_input;
 mod timed_future;
 pub mod trace;
@@ -70,14 +72,15 @@ pub use id::{
 };
 pub use join_iter_ext::{JoinIterExt, TryJoinIterExt};
 pub use manager::{
-    dynamic_call, emit, get_invalidator, run_once, spawn_blocking, spawn_thread, trait_call,
-    turbo_tasks, Invalidator, TaskIdProvider, TurboTasks, TurboTasksApi, TurboTasksBackendApi,
-    TurboTasksCallApi,
+    dynamic_call, emit, get_invalidator, mark_stateful, run_once, spawn_blocking, spawn_thread,
+    trait_call, turbo_tasks, Invalidator, StatsType, TaskIdProvider, TurboTasks, TurboTasksApi,
+    TurboTasksBackendApi, TurboTasksCallApi,
 };
 pub use native_function::{NativeFunction, NativeFunctionVc};
 pub use nothing::{Nothing, NothingVc};
-pub use raw_vc::{CollectiblesFuture, RawVc, ReadRawVcFuture, ResolveTypeError};
+pub use raw_vc::{CellId, CollectiblesFuture, RawVc, ReadRawVcFuture, ResolveTypeError};
 pub use read_ref::ReadRef;
+pub use state::State;
 pub use task_input::{FromTaskInput, SharedReference, SharedValue, TaskInput};
 pub use turbo_tasks_macros::{function, value, value_impl, value_trait};
 pub use value::{TransientInstance, TransientValue, Value};
@@ -89,11 +92,11 @@ pub use value_type::{
 pub mod macro_helpers {
     pub use once_cell::sync::{Lazy, OnceCell};
 
-    pub use super::manager::{find_cell_by_key, find_cell_by_type};
+    pub use super::manager::find_cell_by_type;
 }
 
 pub mod test_helpers {
-    pub use super::manager::with_turbo_tasks_for_testing;
+    pub use super::manager::{current_task_for_testing, with_turbo_tasks_for_testing};
 }
 
 pub fn register() {

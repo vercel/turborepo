@@ -694,7 +694,7 @@ function getImmutableInstallForPackageManager(ws: PackageManager): string[] {
 function getCommandOutputAsArray(
   results: execa.ExecaSyncReturnValue<string>
 ): string[] {
-  return (results.stdout + results.stderr)
+  return (results.stdout + "\n" + results.stderr)
     .split("\n")
     .map((line) => line.replace("\r", ""));
 }

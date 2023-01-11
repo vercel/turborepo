@@ -10,13 +10,13 @@
     "lint": "TIMING=1 eslint \"src/**/*.ts\""
   },
   "dependencies": {
-    "ui": "*"
+    "ui": "workspace:*"
   },
   "devDependencies": {
     "eslint": "^7.32.0",
-    "eslint-config-custom": "*",
-    "tsconfig": "*",
-    "typescript": "^4.6.4",
-    "vite": "^3.0.0"
+    "eslint-config-custom": "workspace:*",
+    "tsconfig": "workspace:*",
+    "typescript": "^4.9.4",
+    "vite": "^4.0.3"
   }
 }

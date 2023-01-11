@@ -419,3 +419,32 @@ func (c *Context) resolveDepGraph(wg *errgroup.Group, workspace *fs.PackageJSON,
 		})
 	}
 }
+
+// InternalDependencies finds all dependencies required by the slice of starting
+// packages, as well as the starting packages themselves.
+func (c *Context) InternalDependencies(start []string) ([]string, error) {
+	vertices := make(dag.Set)
+	for _, v := range start {
+		vertices.Add(v)
+	}
+	s := make(dag.Set)
+	memoFunc := func(v dag.Vertex, d int) error {
+		s.Add(v)
+		return nil
+	}
+
+	if err := c.WorkspaceGraph.DepthFirstWalk(vertices, memoFunc); err != nil {
+		return nil, err
+	}
+
+	// Use for loop so we can coerce to string
+	// .List() returns a list of interface{} types, but
+	// we know they are strings.
+	targets := make([]string, 0, s.Len())
+	for _, dep := range s.List() {
+		targets = append(targets, dep.(string))
+	}
+	sort.Strings(targets)
+
+	return targets, nil
+}

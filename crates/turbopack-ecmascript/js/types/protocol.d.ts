@@ -30,6 +30,7 @@ export type EcmascriptChunkUpdate = {
 
 export type HmrUpdateEntry = {
   code: ModuleFactoryString;
+  url: string;
   map?: string;
 };
 
@@ -38,9 +39,15 @@ type ResourceIdentifier = {
   headers?: { [string]: string };
 };
 
-export type ClientMessage = {
+export type ClientMessageSubscribe = {
   type: "subscribe";
 } & ResourceIdentifier;
+
+export type ClientMessageUnsubscribe = {
+  type: "unsubscribe";
+} & ResourceIdentifier;
+
+export type ClientMessage = ClientMessageSubscribe | ClientMessageUnsubscribe;
 
 export type IssueSeverity =
   | "bug"
@@ -71,9 +78,12 @@ export type Issue = {
   severity: IssueSeverity;
   context: string;
   category: string;
+
   title: string;
   description: string;
+  detail: string;
   documentation_link: string;
+
   source: IssueSource | null;
   sub_issues: Issue[];
   formatted: string;

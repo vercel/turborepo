@@ -32,6 +32,6 @@ Run the following command:
 ```sh
 npx degit vercel/turbo/examples/with-create-react-app with-create-react-app
 cd with-create-react-app
-yarn install
+pnpm install
 git init . && git add . && git commit -m "Init"
 ```

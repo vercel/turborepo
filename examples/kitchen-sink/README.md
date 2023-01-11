@@ -35,6 +35,6 @@ Run the following command:
 ```sh
 npx degit vercel/turbo/examples/kitchen-sink kitchen-sink
 cd kitchen-sink
-yarn install
+pnpm install
 git init . && git add . && git commit -m "Init"
 ```

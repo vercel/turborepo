@@ -121,9 +121,15 @@ var _frameworks = []Framework{
 }
 
 func (m matcher) match(pkg *fs.PackageJSON) bool {
+	deps := pkg.UnresolvedExternalDeps
+	// only check dependencies if we're in a non-monorepo
+	if pkg.Workspaces != nil && len(pkg.Workspaces) == 0 {
+		deps = pkg.Dependencies
+	}
+
 	if m.strategy == all {
 		for _, dependency := range m.dependencies {
-			_, exists := pkg.UnresolvedExternalDeps[dependency]
+			_, exists := deps[dependency]
 			if !exists {
 				return false
 			}
@@ -133,7 +139,7 @@ func (m matcher) match(pkg *fs.PackageJSON) bool {
 
 	// m.strategy == some
 	for _, dependency := range m.dependencies {
-		_, exists := pkg.UnresolvedExternalDeps[dependency]
+		_, exists := deps[dependency]
 		if exists {
 			return true
 		}

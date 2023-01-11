@@ -8,6 +8,7 @@ use std::{
     collections::HashSet,
     env::current_dir,
     future::{join, Future},
+    io::{stdout, Write},
     net::{IpAddr, SocketAddr},
     path::MAIN_SEPARATOR,
     sync::Arc,
@@ -17,34 +18,47 @@ use std::{
 use anyhow::{anyhow, Context, Result};
 use devserver_options::DevServerOptions;
 use next_core::{
-    create_app_source, create_server_rendered_source, create_web_entry_source, env::load_env,
-    source_map::NextSourceMapTraceContentSourceVc,
+    create_app_source, create_page_source, create_web_entry_source, env::load_env,
+    manifest::DevManifestContentSource, next_config::load_next_config,
+    next_image::NextImageContentSourceVc, source_map::NextSourceMapTraceContentSourceVc,
 };
 use owo_colors::OwoColorize;
+use turbo_malloc::TurboMalloc;
 use turbo_tasks::{
-    primitives::StringsVc, util::FormatDuration, RawVc, TransientInstance, TransientValue,
-    TurboTasks, Value,
+    util::{FormatBytes, FormatDuration},
+    RawVc, StatsType, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack_cli_utils::issue::{ConsoleUi, ConsoleUiVc, LogOptions};
-use turbopack_core::{issue::IssueSeverity, resolve::parse::RequestVc};
+use turbopack_core::{
+    environment::ServerAddr,
+    issue::IssueSeverity,
+    resolve::{parse::RequestVc, pattern::QueryMapVc},
+};
 use turbopack_dev_server::{
     fs::DevServerFileSystemVc,
     introspect::IntrospectionSource,
     source::{
-        combined::CombinedContentSource, router::RouterContentSource,
-        static_assets::StaticAssetsContentSourceVc, ContentSourceVc,
+        combined::CombinedContentSourceVc, router::RouterContentSource,
+        source_maps::SourceMapContentSourceVc, static_assets::StaticAssetsContentSourceVc,
+        ContentSourceVc,
     },
-    DevServer,
+    DevServer, DevServerBuilder,
 };
+use turbopack_node::execution_context::ExecutionContextVc;
+
+#[derive(Clone)]
+pub enum EntryRequest {
+    Relative(String),
+    Module(String, String),
+}
 
 pub struct NextDevServerBuilder {
     turbo_tasks: Arc<TurboTasks<MemoryBackend>>,
     project_dir: String,
     root_dir: String,
-    entry_requests: Vec<String>,
-    server_component_externals: Vec<String>,
+    entry_requests: Vec<EntryRequest>,
     eager_compile: bool,
     hostname: Option<IpAddr>,
     port: Option<u16>,
@@ -66,7 +80,6 @@ impl NextDevServerBuilder {
             project_dir,
             root_dir,
             entry_requests: vec![],
-            server_component_externals: vec![],
             eager_compile: false,
             hostname: None,
             port: None,
@@ -80,13 +93,8 @@ impl NextDevServerBuilder {
         }
     }
 
-    pub fn entry_request(mut self, entry_asset_path: String) -> NextDevServerBuilder {
+    pub fn entry_request(mut self, entry_asset_path: EntryRequest) -> NextDevServerBuilder {
         self.entry_requests.push(entry_asset_path);
-        self
-    }
-
-    pub fn server_component_external(mut self, external: String) -> NextDevServerBuilder {
-        self.server_component_externals.push(external);
         self
     }
 
@@ -130,13 +138,55 @@ impl NextDevServerBuilder {
         self
     }
 
-    pub async fn build(self) -> Result<DevServer> {
-        let turbo_tasks = self.turbo_tasks;
+    /// Attempts to find an open port to bind.
+    fn find_port(&self, host: IpAddr, port: u16, max_attempts: u16) -> Result<DevServerBuilder> {
+        // max_attempts of 1 means we loop 0 times.
+        let max_attempts = max_attempts - 1;
+        let mut attempts = 0;
+        loop {
+            let current_port = port + attempts;
+            let addr = SocketAddr::new(host, current_port);
+            let listen_result = DevServer::listen(addr);
 
+            if let Err(e) = &listen_result {
+                if self.allow_retry && attempts < max_attempts {
+                    // Returned error from `listen` is not `std::io::Error` but `anyhow::Error`,
+                    // so we need to access its source to check if it is
+                    // `std::io::ErrorKind::AddrInUse`.
+                    let should_retry = e
+                        .source()
+                        .and_then(|e| {
+                            e.downcast_ref::<std::io::Error>()
+                                .map(|e| e.kind() == std::io::ErrorKind::AddrInUse)
+                        })
+                        .unwrap_or(false);
+
+                    if should_retry {
+                        println!(
+                            "{} - Port {} is in use, trying {} instead",
+                            "warn ".yellow(),
+                            current_port,
+                            current_port + 1
+                        );
+                        attempts += 1;
+                        continue;
+                    }
+                }
+            }
+
+            return listen_result;
+        }
+    }
+
+    pub async fn build(self) -> Result<DevServer> {
+        let port = self.port.context("port must be set")?;
+        let host = self.hostname.context("hostname must be set")?;
+
+        let server = self.find_port(host, port, 10)?;
+
+        let turbo_tasks = self.turbo_tasks;
         let project_dir = self.project_dir;
         let root_dir = self.root_dir;
-        let entry_requests = self.entry_requests;
-        let server_component_externals = self.server_component_externals;
         let eager_compile = self.eager_compile;
         let show_all = self.show_all;
         let log_detail = self.log_detail;
@@ -147,81 +197,25 @@ impl NextDevServerBuilder {
             log_detail,
             log_level: self.log_level,
         };
+        let entry_requests = Arc::new(self.entry_requests);
         let console_ui = Arc::new(ConsoleUi::new(log_options));
         let console_ui_to_dev_server = console_ui.clone();
-
-        let start_port = self.port.context("port must be set")?;
-        let host = self.hostname.context("hostname must be set")?;
-
-        let mut err: Option<anyhow::Error> = None;
-
+        let server_addr = Arc::new(server.addr);
         let tasks = turbo_tasks.clone();
         let source = move || {
             source(
                 root_dir.clone(),
                 project_dir.clone(),
-                entry_requests.clone(),
+                entry_requests.clone().into(),
                 eager_compile,
                 turbo_tasks.clone().into(),
                 console_ui.clone().into(),
                 browserslist_query.clone(),
-                server_component_externals.clone(),
+                server_addr.clone().into(),
             )
         };
 
-        // Retry to listen on the different port if the port is already in use.
-        for retry_count in 0..10 {
-            let current_port = start_port + retry_count;
-            let addr = SocketAddr::new(host, current_port);
-
-            let listen_result = DevServer::listen(
-                tasks.clone(),
-                source.clone(),
-                addr,
-                console_ui_to_dev_server.clone(),
-            );
-
-            match listen_result {
-                Ok(server) => {
-                    return Ok(server);
-                }
-                Err(e) => {
-                    let should_retry = if self.allow_retry {
-                        // Returned error from `listen` is not `std::io::Error` but `anyhow::Error`,
-                        // so we need to access its source to check if it is
-                        // `std::io::ErrorKind::AddrInUse`.
-                        e.source()
-                            .map(|e| {
-                                e.source()
-                                    .map(|e| {
-                                        e.downcast_ref::<std::io::Error>()
-                                            .map(|e| e.kind() == std::io::ErrorKind::AddrInUse)
-                                            == Some(true)
-                                    })
-                                    .unwrap_or_else(|| false)
-                            })
-                            .unwrap_or_else(|| false)
-                    } else {
-                        false
-                    };
-
-                    if !should_retry {
-                        return Err(e);
-                    } else {
-                        println!(
-                            "{} - Port {} is in use, trying {} instead",
-                            "warn ".yellow(),
-                            current_port,
-                            current_port + 1
-                        );
-                    }
-
-                    err = Some(e);
-                }
-            }
-        }
-
-        Err(err.expect("Should have an error if we get here"))
+        Ok(server.serve(tasks, source, console_ui_to_dev_server))
     }
 }
 
@@ -253,16 +247,17 @@ async fn output_fs(project_dir: &str, console_ui: ConsoleUiVc) -> Result<FileSys
     Ok(disk_fs.into())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[turbo_tasks::function]
 async fn source(
     root_dir: String,
     project_dir: String,
-    entry_requests: Vec<String>,
+    entry_requests: TransientInstance<Vec<EntryRequest>>,
     eager_compile: bool,
     turbo_tasks: TransientInstance<TurboTasks<MemoryBackend>>,
     console_ui: TransientInstance<ConsoleUi>,
     browserslist_query: String,
-    server_component_externals: Vec<String>,
+    server_addr: TransientInstance<SocketAddr>,
 ) -> Result<ContentSourceVc> {
     let console_ui = (*console_ui).clone().cell();
     let output_fs = output_fs(&project_dir, console_ui);
@@ -274,37 +269,56 @@ async fn source(
     let project_path = fs.root().join(project_relative);
 
     let env = load_env(project_path);
+    let build_output_root = output_fs.root().join(".next/build");
 
-    let output_root = output_fs.root().join("/.next/server");
+    let execution_context = ExecutionContextVc::new(project_path, build_output_root);
+
+    let next_config = load_next_config(execution_context.join("next_config"));
+
+    let output_root = output_fs.root().join(".next/server");
+    let server_addr = ServerAddr::new(*server_addr).cell();
 
     let dev_server_fs = DevServerFileSystemVc::new().as_file_system();
     let dev_server_root = dev_server_fs.root();
+    let entry_requests = entry_requests
+        .iter()
+        .map(|r| match r {
+            EntryRequest::Relative(p) => RequestVc::relative(Value::new(p.clone().into()), false),
+            EntryRequest::Module(m, p) => {
+                RequestVc::module(m.clone(), Value::new(p.clone().into()), QueryMapVc::none())
+            }
+        })
+        .collect();
 
     let web_source = create_web_entry_source(
         project_path,
-        entry_requests
-            .iter()
-            .map(|a| RequestVc::relative(Value::new(a.to_string().into()), false))
-            .collect(),
+        execution_context,
+        entry_requests,
         dev_server_root,
         env,
         eager_compile,
         &browserslist_query,
+        next_config,
     );
-    let rendered_source = create_server_rendered_source(
+    let page_source = create_page_source(
         project_path,
+        execution_context,
         output_root.join("pages"),
         dev_server_root,
         env,
         &browserslist_query,
+        next_config,
+        server_addr,
     );
     let app_source = create_app_source(
         project_path,
+        execution_context,
         output_root.join("app"),
         dev_server_root,
         env,
         &browserslist_query,
-        StringsVc::cell(server_component_externals),
+        next_config,
+        server_addr,
     );
     let viz = turbo_tasks_viz::TurboTasksSource {
         turbo_tasks: turbo_tasks.into(),
@@ -313,16 +327,30 @@ async fn source(
     .into();
     let static_source =
         StaticAssetsContentSourceVc::new(String::new(), project_path.join("public")).into();
-    let main_source = CombinedContentSource {
-        sources: vec![static_source, app_source, rendered_source, web_source],
+    let manifest_source = DevManifestContentSource {
+        page_roots: vec![app_source, page_source],
     }
-    .cell();
+    .cell()
+    .into();
+    let main_source = CombinedContentSourceVc::new(vec![
+        manifest_source,
+        static_source,
+        app_source,
+        page_source,
+        web_source,
+    ]);
     let introspect = IntrospectionSource {
         roots: HashSet::from([main_source.into()]),
     }
     .cell()
     .into();
-    let source_map_trace = NextSourceMapTraceContentSourceVc::new(main_source.into()).into();
+    let main_source = main_source.into();
+    let source_maps = SourceMapContentSourceVc::new(main_source).into();
+    let source_map_trace = NextSourceMapTraceContentSourceVc::new(main_source).into();
+    let img_source = NextImageContentSourceVc::new(
+        CombinedContentSourceVc::new(vec![static_source, page_source]).into(),
+    )
+    .into();
     let source = RouterContentSource {
         routes: vec![
             ("__turbopack__/".to_string(), introspect),
@@ -331,15 +359,18 @@ async fn source(
                 "__nextjs_original-stack-frame".to_string(),
                 source_map_trace,
             ),
+            // TODO: Load path from next.config.js
+            ("_next/image".to_string(), img_source),
+            ("__turbopack_sourcemap__/".to_string(), source_maps),
         ],
-        fallback: main_source.into(),
+        fallback: main_source,
     }
     .cell()
     .into();
 
     handle_issues(dev_server_fs, console_ui).await?;
     handle_issues(web_source, console_ui).await?;
-    handle_issues(rendered_source, console_ui).await?;
+    handle_issues(page_source, console_ui).await?;
 
     Ok(source)
 }
@@ -378,11 +409,18 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
     };
 
     let tt = TurboTasks::new(MemoryBackend::new());
+
+    let stats_type = match options.full_stats {
+        true => StatsType::Full,
+        false => StatsType::Essential,
+    };
+    tt.set_stats_type(stats_type);
+
     let tt_clone = tt.clone();
 
     #[allow(unused_mut)]
     let mut server = NextDevServerBuilder::new(tt, dir, root_dir)
-        .entry_request("src/index".into())
+        .entry_request(EntryRequest::Relative("src/index".into()))
         .eager_compile(options.eager_compile)
         .hostname(options.hostname)
         .port(options.port)
@@ -397,20 +435,12 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
     #[cfg(feature = "serializable")]
     {
         server = server.allow_retry(options.allow_retry);
-
-        for package in options.server_components_external_packages.iter() {
-            server = server.server_component_external(package.to_string());
-        }
     }
 
     let server = server.build().await?;
 
     {
-        let index_uri = if server.addr.ip().is_loopback() || server.addr.ip().is_unspecified() {
-            format!("http://localhost:{}", server.addr.port())
-        } else {
-            format!("http://{}", server.addr)
-        };
+        let index_uri = ServerAddr::new(server.addr).to_string()?;
         println!(
             "{} - started server on {}:{}, url: {}",
             "ready".green(),
@@ -424,24 +454,61 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
     }
 
     let stats_future = async move {
-        println!(
-            "{event_type} - initial compilation {start}",
-            event_type = "event".purple(),
-            start = FormatDuration(start.elapsed()),
-        );
+        if options.log_detail {
+            println!(
+                "{event_type} - initial compilation {start} ({memory})",
+                event_type = "event".purple(),
+                start = FormatDuration(start.elapsed()),
+                memory = FormatBytes(TurboMalloc::memory_usage())
+            );
+        } else {
+            println!(
+                "{event_type} - initial compilation {start}",
+                event_type = "event".purple(),
+                start = FormatDuration(start.elapsed()),
+            );
+        }
 
+        let mut progress_counter = 0;
         loop {
             let update_future = profile_timeout(
                 tt_clone.as_ref(),
-                tt_clone.get_or_wait_update_info(Duration::from_millis(100)),
+                tt_clone.update_info(Duration::from_millis(100), Duration::MAX),
             );
 
-            let (elapsed, _count) = update_future.await;
-            println!(
-                "{event_type} - updated in {elapsed}",
-                event_type = "event".purple(),
-                elapsed = FormatDuration(elapsed),
-            );
+            if let Some((elapsed, count)) = update_future.await {
+                progress_counter = 0;
+                if options.log_detail {
+                    println!(
+                        "\x1b[2K{event_type} - updated in {elapsed} ({tasks} tasks, {memory})",
+                        event_type = "event".purple(),
+                        elapsed = FormatDuration(elapsed),
+                        tasks = count,
+                        memory = FormatBytes(TurboMalloc::memory_usage())
+                    );
+                } else {
+                    println!(
+                        "\x1b[2K{event_type} - updated in {elapsed}",
+                        event_type = "event".purple(),
+                        elapsed = FormatDuration(elapsed),
+                    );
+                }
+            } else {
+                progress_counter += 1;
+                if options.log_detail {
+                    print!(
+                        "\x1b[2K{event_type} - updating for {progress_counter}s... ({memory})\r",
+                        event_type = "event".purple(),
+                        memory = FormatBytes(TurboMalloc::memory_usage())
+                    );
+                } else {
+                    print!(
+                        "\x1b[2K{event_type} - updating for {progress_counter}s...\r",
+                        event_type = "event".purple(),
+                    );
+                }
+                let _ = stdout().lock().flush();
+            }
         }
     };
 

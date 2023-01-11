@@ -24,9 +24,12 @@ pub struct DevServerOptions {
     pub root: Option<PathBuf>,
 
     /// The port number on which to start the application
+    /// Note: setting env PORT allows to configure port without explicit cli
+    /// args. However, this is temporary measure to conform with existing
+    /// next.js devserver and can be removed in the future.
     #[cfg_attr(
         feature = "cli",
-        clap(short, long, value_parser, default_value_t = 3000)
+        clap(short, long, value_parser, default_value_t = 3000, env = "PORT")
     )]
     #[cfg_attr(feature = "serializable", serde(default = "default_port"))]
     pub port: u16,
@@ -45,50 +48,62 @@ pub struct DevServerOptions {
     #[cfg_attr(feature = "serializable", serde(default))]
     pub eager_compile: bool,
 
+    /// Display version of the binary. Noop if used in library mode.
+    #[cfg_attr(feature = "cli", clap(long))]
+    #[cfg_attr(feature = "serializable", serde(default))]
+    pub display_version: bool,
+
     /// Don't open the browser automatically when the dev server has started.
     #[cfg_attr(feature = "cli", clap(long))]
     #[cfg_attr(feature = "serializable", serde(default))]
     pub no_open: bool,
 
+    /// Filter by issue severity.
     #[cfg_attr(feature = "cli", clap(short, long))]
     #[cfg_attr(feature = "serializable", serde(default))]
-    /// Filter by issue severity.
     pub log_level: Option<IssueSeverityCliOption>,
 
+    /// Show all log messages without limit.
     #[cfg_attr(feature = "cli", clap(long))]
     #[cfg_attr(feature = "serializable", serde(default))]
-    /// Show all log messages without limit.
     pub show_all: bool,
 
+    /// Expand the log details.
     #[cfg_attr(feature = "cli", clap(long))]
     #[cfg_attr(feature = "serializable", serde(default))]
-    /// Expand the log details.
     pub log_detail: bool,
 
-    // Inherited options from next-dev, need revisit later.
+    /// Whether to enable full task stats recording in Turbo Engine.
     #[cfg_attr(feature = "cli", clap(long))]
     #[cfg_attr(feature = "serializable", serde(default))]
+    pub full_stats: bool,
+
+    // ==
+    // = Inherited options from next-dev, need revisit later.
+    // ==
     /// If port is not explicitly specified, use different port if it's already
     /// in use.
+    #[cfg_attr(feature = "cli", clap(long))]
+    #[cfg_attr(feature = "serializable", serde(default))]
     pub allow_retry: bool,
+
+    /// Internal for next.js, no specific usage yet.
     #[cfg_attr(feature = "cli", clap(long))]
     #[cfg_attr(feature = "serializable", serde(default))]
-    /// Internal for next.js, no specific usage yet.
     pub dev: bool,
-    #[cfg_attr(feature = "cli", clap(long))]
-    #[cfg_attr(feature = "serializable", serde(default))]
+
     /// Internal for next.js, no specific usage yet.
-    pub is_next_dev_command: bool,
     #[cfg_attr(feature = "cli", clap(long))]
     #[cfg_attr(feature = "serializable", serde(default))]
-    /// Specify server component external packages explicitly. This is an
-    /// experimental flag.
-    pub server_components_external_packages: Vec<String>,
+    pub is_next_dev_command: bool,
 }
 
 #[cfg(feature = "serializable")]
 fn default_port() -> u16 {
-    3000
+    std::env::var("PORT")
+        .ok()
+        .and_then(|port| port.parse().ok())
+        .unwrap_or(3000)
 }
 
 #[cfg(feature = "serializable")]

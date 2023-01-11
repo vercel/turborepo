@@ -20,10 +20,10 @@ use turbopack_core::{
 use crate::{
     chunk::{
         CssChunkItem, CssChunkItemContent, CssChunkItemContentVc, CssChunkItemVc,
-        CssChunkPlaceable, CssChunkPlaceableVc, CssChunkVc,
+        CssChunkPlaceable, CssChunkPlaceableVc, CssChunkVc, CssImport,
     },
     code_gen::CodeGenerateableVc,
-    parse::{parse, ParseResult, ParseResultVc},
+    parse::{parse, ParseResult, ParseResultSourceMap, ParseResultVc},
     path_visitor::ApplyVisitors,
     references::{analyze_css_stylesheet, import::ImportAssetReferenceVc},
     transform::CssInputTransformsVc,
@@ -170,7 +170,10 @@ impl CssChunkItem for ModuleChunkItem {
             if let Some(import) = ImportAssetReferenceVc::resolve_from(reference).await? {
                 for asset in &*import.resolve_reference().primary_assets().await? {
                     if let Some(placeable) = CssChunkPlaceableVc::resolve_from(asset).await? {
-                        imports.push((import, placeable.as_chunk_item(context)));
+                        imports.push(CssImport::Internal(
+                            import,
+                            placeable.as_chunk_item(context),
+                        ));
                     }
                 }
             }
@@ -189,6 +192,10 @@ impl CssChunkItem for ModuleChunkItem {
         let mut visitors = Vec::new();
         let mut root_visitors = Vec::new();
         for code_gen in code_gens {
+            for import in &code_gen.imports {
+                imports.push(import.clone());
+            }
+
             for (path, visitor) in code_gen.visitors.iter() {
                 if path.is_empty() {
                     root_visitors.push(&**visitor);
@@ -200,7 +207,12 @@ impl CssChunkItem for ModuleChunkItem {
 
         let parsed = self.module.parse().await?;
 
-        if let ParseResult::Ok { stylesheet, .. } = &*parsed {
+        if let ParseResult::Ok {
+            stylesheet,
+            source_map,
+            ..
+        } = &*parsed
+        {
             let mut stylesheet = stylesheet.clone();
 
             let globals = Globals::new();
@@ -227,19 +239,22 @@ impl CssChunkItem for ModuleChunkItem {
                 )
             });
 
-            let mut code_string = format!("/* {} */\n", self.module.path().to_string().await?);
+            let mut code_string = String::new();
+            let mut srcmap = vec![];
 
-            // TODO: pass sourcemap somehow (second param in the css writer)?
             let mut code_gen = CodeGenerator::new(
-                BasicCssWriter::new(&mut code_string, None, Default::default()),
+                BasicCssWriter::new(&mut code_string, Some(&mut srcmap), Default::default()),
                 Default::default(),
             );
 
             code_gen.emit(&stylesheet)?;
 
+            let srcmap = ParseResultSourceMap::new(source_map.clone(), srcmap).cell();
+
             Ok(CssChunkItemContent {
-                inner_code: code_string,
+                inner_code: code_string.into(),
                 imports,
+                source_map: Some(srcmap),
             }
             .into())
         } else {
@@ -247,10 +262,17 @@ impl CssChunkItem for ModuleChunkItem {
                 inner_code: format!(
                     "/* unparseable {} */",
                     self.module.path().to_string().await?
-                ),
+                )
+                .into(),
                 imports: vec![],
+                source_map: None,
             }
             .into())
         }
+    }
+
+    #[turbo_tasks::function]
+    fn chunking_context(&self) -> ChunkingContextVc {
+        self.context
     }
 }

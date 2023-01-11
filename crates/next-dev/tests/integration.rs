@@ -8,14 +8,14 @@ use std::{
     time::Duration,
 };
 
-use anyhow::Context;
+use anyhow::{anyhow, Context, Result};
 use chromiumoxide::{
     browser::{Browser, BrowserConfig},
     error::CdpError::Ws,
 };
 use futures::StreamExt;
 use lazy_static::lazy_static;
-use next_dev::{register, NextDevServerBuilder};
+use next_dev::{register, EntryRequest, NextDevServerBuilder};
 use owo_colors::OwoColorize;
 use serde::Deserialize;
 use test_generator::test_resources;
@@ -48,10 +48,16 @@ lazy_static! {
 #[test_resources("crates/next-dev/tests/integration/*/*/*")]
 #[tokio::main(flavor = "current_thread")]
 async fn test(resource: &str) {
-    if resource.ends_with("__skipped__") {
+    if resource.ends_with("__skipped__") || resource.ends_with("__flakey__") {
         // "Skip" directories named `__skipped__`, which include test directories to
         // skip. These tests are not considered truly skipped by `cargo test`, but they
         // are not run.
+        //
+        // All current `__flakey__` tests need longer timeouts, but the current
+        // build of `jest-circus-browser` does not support configuring this.
+        //
+        // TODO(WEB-319): Update the version of `jest-circus` in `jest-circus-browser`,
+        // which supports configuring this. Or explore an alternative.
         return;
     }
 
@@ -118,29 +124,31 @@ async fn run_test(resource: &str) -> JestRunResult {
         path.to_str().unwrap()
     );
 
-    let test_entry = path.join("index.js");
-    assert!(
-        test_entry.exists(),
-        "Test entry {} must exist.",
-        test_entry.to_str().unwrap()
-    );
+    // Count the number of dirs _under_ crates/next-dev/tests
+    let test_entry = Path::new(resource).join("index.js");
     let package_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace_root = package_root.parent().unwrap().parent().unwrap();
-    let project_dir = workspace_root.join("crates/next-dev/tests");
-    let workspace_root = workspace_root.to_string_lossy().to_string();
+    let project_dir = workspace_root.join(resource);
     let requested_addr = get_free_local_addr().unwrap();
+
     let server = NextDevServerBuilder::new(
         TurboTasks::new(MemoryBackend::new()),
-        project_dir.to_string_lossy().to_string(),
-        workspace_root,
+        sys_to_unix(&project_dir.to_string_lossy()).to_string(),
+        sys_to_unix(&workspace_root.to_string_lossy()).to_string(),
     )
-    .entry_request("harness.js".into())
-    .entry_request(
-        sys_to_unix(test_entry.strip_prefix("tests").unwrap().to_str().unwrap()).to_string(),
-    )
+    .entry_request(EntryRequest::Module(
+        "@turbo/pack-test-harness".to_string(),
+        "".to_string(),
+    ))
+    .entry_request(EntryRequest::Relative(
+        sys_to_unix(test_entry.strip_prefix(resource).unwrap().to_str().unwrap()).to_string(),
+    ))
     .eager_compile(false)
     .hostname(requested_addr.ip())
     .port(requested_addr.port())
+    .log_level(turbopack_core::issue::IssueSeverity::Warning)
+    .log_detail(true)
+    .show_all(true)
     .build()
     .await
     .unwrap();
@@ -152,14 +160,12 @@ async fn run_test(resource: &str) -> JestRunResult {
     );
 
     tokio::select! {
-        r = run_browser(server.addr) => r.unwrap(),
+        r = run_browser(server.addr) => r.expect("error while running browser"),
         _ = server.future => panic!("Never resolves"),
     }
 }
 
-async fn create_browser(
-    is_debugging: bool,
-) -> Result<(Browser, JoinHandle<()>), Box<dyn std::error::Error>> {
+async fn create_browser(is_debugging: bool) -> Result<(Browser, JoinHandle<()>)> {
     let mut config_builder = BrowserConfig::builder();
     if is_debugging {
         config_builder = config_builder
@@ -168,7 +174,7 @@ async fn create_browser(
     }
 
     let (browser, mut handler) = retry_async(
-        config_builder.build()?,
+        config_builder.build().map_err(|s| anyhow!(s))?,
         |c| {
             let c = c.clone();
             Browser::launch(c)
@@ -191,7 +197,7 @@ async fn create_browser(
     Ok((browser, thread_handle))
 }
 
-async fn run_browser(addr: SocketAddr) -> Result<JestRunResult, Box<dyn std::error::Error>> {
+async fn run_browser(addr: SocketAddr) -> Result<JestRunResult> {
     if *DEBUG_BROWSER {
         run_debug_browser(addr).await?;
     }
@@ -199,7 +205,7 @@ async fn run_browser(addr: SocketAddr) -> Result<JestRunResult, Box<dyn std::err
     run_test_browser(addr).await
 }
 
-async fn run_debug_browser(addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
+async fn run_debug_browser(addr: SocketAddr) -> Result<()> {
     let (browser, handle) = create_browser(true).await?;
     let page = browser.new_page(format!("http://{}", addr)).await?;
 
@@ -218,12 +224,23 @@ async fn run_debug_browser(addr: SocketAddr) -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
-async fn run_test_browser(addr: SocketAddr) -> Result<JestRunResult, Box<dyn std::error::Error>> {
+async fn run_test_browser(addr: SocketAddr) -> Result<JestRunResult> {
     let (browser, _) = create_browser(false).await?;
-    let page = browser.new_page(format!("http://{}", addr)).await?;
-    page.wait_for_navigation().await?;
 
-    Ok(page.evaluate("__jest__.run()").await?.into_value()?)
+    // `browser.new_page()` opens a tab, navigates to the destination, and waits for
+    // the page to load. chromiumoxide/Chrome DevTools Protocol has been flakey,
+    // returning `ChannelSendError`s (WEB-259). Retry if necessary.
+    let page = retry_async(
+        (),
+        |_| browser.new_page(format!("http://{}", addr)),
+        5,
+        Duration::from_millis(100),
+    )
+    .await
+    .context("Failed to create new browser page")?;
+
+    let value = page.evaluate("globalThis.waitForTests?.() ?? __jest__.run()");
+    Ok(value.await?.into_value()?)
 }
 
 fn get_free_local_addr() -> Result<SocketAddr, std::io::Error> {

@@ -10,7 +10,7 @@ use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use turbo_tasks::{
-    primitives::{BoolVc, StringVc},
+    primitives::{BoolVc, StringVc, StringsVc},
     trace::TraceRawVcs,
     TryJoinIterExt, Value, ValueToString, ValueToStringVc,
 };
@@ -27,6 +27,7 @@ use self::{
     },
     origin::ResolveOriginVc,
     parse::{Request, RequestVc},
+    pattern::QueryMapVc,
 };
 use crate::{
     asset::{AssetVc, AssetsVc},
@@ -35,6 +36,7 @@ use crate::{
         resolve::{ResolvingIssue, ResolvingIssueVc},
     },
     reference::{AssetReference, AssetReferenceVc},
+    reference_type::ReferenceType,
     resolve::{
         options::{ConditionValue, ResolveOptions},
         pattern::{read_matches, Pattern, PatternMatch, PatternVc},
@@ -93,7 +95,7 @@ impl ResolveResult {
         }
     }
 
-    fn get_references(&self) -> &Vec<AssetReferenceVc> {
+    pub fn get_references(&self) -> &Vec<AssetReferenceVc> {
         match self {
             ResolveResult::Single(_, list)
             | ResolveResult::Keyed(_, list)
@@ -384,6 +386,11 @@ async fn exports_field(
     }
 }
 
+#[turbo_tasks::function]
+pub fn package_json() -> StringsVc {
+    StringsVc::cell(vec!["package.json".to_string()])
+}
+
 #[turbo_tasks::value(shared)]
 pub enum FindContextFileResult {
     Found(FileSystemPathVc, Vec<AssetReferenceVc>),
@@ -393,22 +400,24 @@ pub enum FindContextFileResult {
 #[turbo_tasks::function]
 pub async fn find_context_file(
     context: FileSystemPathVc,
-    name: &str,
+    names: StringsVc,
 ) -> Result<FindContextFileResultVc> {
     let mut refs = Vec::new();
     let context_value = context.await?;
-    let fs_path = context.join(name);
-    if let Some(fs_path) = exists(fs_path, &mut refs).await? {
-        return Ok(FindContextFileResult::Found(fs_path, refs).into());
+    for name in &*names.await? {
+        let fs_path = context.join(name);
+        if let Some(fs_path) = exists(fs_path, &mut refs).await? {
+            return Ok(FindContextFileResult::Found(fs_path, refs).into());
+        }
     }
     if context_value.is_root() {
         return Ok(FindContextFileResult::NotFound(refs).into());
     }
     if refs.is_empty() {
         // Tailcall
-        Ok(find_context_file(context.parent(), name))
+        Ok(find_context_file(context.parent(), names))
     } else {
-        let parent_result = find_context_file(context.parent(), name).await?;
+        let parent_result = find_context_file(context.parent(), names).await?;
         Ok(match &*parent_result {
             FindContextFileResult::Found(p, r) => {
                 refs.extend(r.iter().copied());
@@ -649,9 +658,11 @@ pub async fn resolve(
                 options,
             )
         }
-        Request::Module { module, path } => {
-            resolve_module_request(context, options, options_value, module, path).await?
-        }
+        Request::Module {
+            module,
+            path,
+            query,
+        } => resolve_module_request(context, options, options_value, module, path, query).await?,
         Request::ServerRelative { path } => {
             let mut new_pat = path.clone();
             new_pat.push_front(".".to_string().into());
@@ -662,7 +673,11 @@ pub async fn resolve(
                 request,
                 context,
                 resolve_options: options,
-                error_message: Some("server relative imports are not implemented yet".to_string()),
+                error_message: Some(
+                    "server relative imports are not implemented yet. Please try an import \
+                     relative to the file you are importing from."
+                        .to_string(),
+                ),
             }
             .into();
             issue.as_issue().emit();
@@ -696,20 +711,13 @@ pub async fn resolve(
             ResolveResult::unresolveable().into()
         }
         Request::Uri {
-            protocol: _,
-            remainder: _,
-        } => {
-            let issue: ResolvingIssueVc = ResolvingIssue {
-                request_type: "URI imports: not implemented yet".to_string(),
-                request,
-                context,
-                resolve_options: options,
-                error_message: Some("URI imports are not implemented yet".to_string()),
-            }
-            .into();
-            issue.as_issue().emit();
-            ResolveResult::unresolveable().into()
-        }
+            protocol,
+            remainder,
+        } => ResolveResult::Special(
+            SpecialType::OriginalReferenceTypeExternal(format!("{}{}", protocol, remainder)),
+            Vec::new(),
+        )
+        .into(),
         Request::Unknown { path } => {
             let issue: ResolvingIssueVc = ResolvingIssue {
                 request_type: format!("unknown import: `{}`", path),
@@ -810,6 +818,7 @@ async fn resolve_module_request(
     options_value: &ResolveOptions,
     module: &str,
     path: &Pattern,
+    _: &QueryMapVc,
 ) -> Result<ResolveResultVc> {
     let result = find_package(
         context,
@@ -914,6 +923,15 @@ async fn resolve_import_map_result(
             if request.resolve().await? == original_request
                 && context.resolve().await? == original_context
             {
+                let issue: ResolvingIssueVc = ResolvingIssue {
+                    context: original_context,
+                    request_type: format!("import map alias to {}", request.to_string().await?),
+                    request: original_request,
+                    resolve_options: options,
+                    error_message: Some("cycle during resolving".to_string()),
+                }
+                .cell();
+                issue.as_issue().emit();
                 ResolveResult::unresolveable().cell()
             } else {
                 resolve(context, request, options)
@@ -1000,7 +1018,7 @@ async fn resolved(
         match resolve_in {
             ResolveInPackage::AliasField(field) => {
                 if let FindContextFileResult::Found(package_json, refs) =
-                    &*find_context_file(fs_path.parent(), "package.json").await?
+                    &*find_context_file(fs_path.parent(), package_json()).await?
                 {
                     if let FileJsonContent::Content(package) = &*package_json.read_json().await? {
                         if let Some(field_value) = package[field].as_object() {
@@ -1028,7 +1046,7 @@ async fn resolved(
         }
     }
     if let Some(resolved_map) = resolved_map {
-        let result = resolved_map.lookup(*path).await?;
+        let result = resolved_map.lookup(*path, original_request).await?;
         if !matches!(&*result, ImportMapResult::NoEntry) {
             return resolve_import_map_result(
                 &result,
@@ -1127,7 +1145,7 @@ impl ValueToString for AffectingResolvingAssetReference {
 
 pub async fn handle_resolve_error(
     result: ResolveResultVc,
-    request_type: &str,
+    reference_type: Value<ReferenceType>,
     origin: ResolveOriginVc,
     request: RequestVc,
     resolve_options: ResolveOptionsVc,
@@ -1137,7 +1155,7 @@ pub async fn handle_resolve_error(
             if *unresolveable {
                 let issue: ResolvingIssueVc = ResolvingIssue {
                     context: origin.origin_path(),
-                    request_type: request_type.to_string(),
+                    request_type: format!("{} request", reference_type.into_value()),
                     request,
                     resolve_options,
                     error_message: None,
@@ -1150,7 +1168,7 @@ pub async fn handle_resolve_error(
         Err(err) => {
             let issue: ResolvingIssueVc = ResolvingIssue {
                 context: origin.origin_path(),
-                request_type: request_type.to_string(),
+                request_type: format!("{} request", reference_type.into_value()),
                 request,
                 resolve_options,
                 error_message: Some(err.to_string()),

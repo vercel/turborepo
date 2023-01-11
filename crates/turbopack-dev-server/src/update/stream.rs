@@ -1,10 +1,10 @@
-use std::{pin::Pin, sync::Mutex};
+use std::pin::Pin;
 
 use anyhow::{bail, Result};
 use futures::{prelude::*, Stream};
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
-use turbo_tasks::{get_invalidator, CollectiblesSource, Invalidator, TransientInstance, Value};
+use turbo_tasks::{CollectiblesSource, State, TransientInstance, Value};
 use turbopack_core::{
     issue::{IssueVc, PlainIssueReadRef},
     version::{
@@ -43,12 +43,10 @@ async fn get_content_wrapper(
     get_content: TransientInstance<GetContentFn>,
 ) -> Result<ContentSourceResultVc> {
     let mut content = get_content();
-    while let ContentSourceContent::NeedData { source, path, vary } =
-        &*content.await?.content.await?
-    {
-        content = source.get(
-            path,
-            Value::new(resource_to_data(resource.clone().into_value(), vary)),
+    while let ContentSourceContent::NeedData(data) = &*content.await?.content.await? {
+        content = data.source.get(
+            &data.path,
+            Value::new(resource_to_data(resource.clone().into_value(), &data.vary)),
         );
     }
     Ok(content)
@@ -63,7 +61,7 @@ async fn resolve_static_content(
             panic!("HTTP proxying is not supported in UpdateStream")
         }
         ContentSourceContent::Static(content) => Some(content),
-        ContentSourceContent::NeedData { .. } => {
+        ContentSourceContent::NeedData(_) => {
             bail!("this might only happen temporary as get_content_wrapper resolves the data")
         }
     })
@@ -134,10 +132,9 @@ async fn compute_update_stream(
     Ok(())
 }
 
-#[turbo_tasks::value(serialization = "none", eq = "manual", cell = "new")]
+#[turbo_tasks::value]
 struct VersionState {
-    #[turbo_tasks(debug_ignore)]
-    inner: Mutex<(VersionVc, Option<Invalidator>)>,
+    inner: State<VersionVc>,
 }
 
 #[turbo_tasks::value_impl]
@@ -145,9 +142,8 @@ impl VersionStateVc {
     #[turbo_tasks::function]
     async fn get(self) -> Result<VersionVc> {
         let this = self.await?;
-        let mut lock = this.inner.lock().unwrap();
-        lock.1 = Some(get_invalidator());
-        Ok(lock.0)
+        let version = *this.inner.get();
+        Ok(version)
     }
 }
 
@@ -155,17 +151,14 @@ impl VersionStateVc {
     async fn new(inner: VersionVc) -> Result<Self> {
         let inner = inner.cell_local().await?;
         Ok(Self::cell(VersionState {
-            inner: Mutex::new((inner, None)),
+            inner: State::new(inner),
         }))
     }
 
     async fn set(&self, new_inner: VersionVc) -> Result<()> {
         let this = self.await?;
         let new_inner = new_inner.cell_local().await?;
-        let mut lock = this.inner.lock().unwrap();
-        if let (_, Some(invalidator)) = std::mem::replace(&mut *lock, (new_inner, None)) {
-            invalidator.invalidate();
-        }
+        this.inner.set(new_inner);
         Ok(())
     }
 }

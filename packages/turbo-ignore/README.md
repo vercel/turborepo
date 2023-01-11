@@ -25,10 +25,27 @@ field of the "package.json" located at the current working directory.
 
 Flags:
   --fallback=<ref>    On Vercel, if no previously deployed SHA is available to compare against,
-                      fallback to comparing against the provided ref, or use "false" to
-                      disable [default: HEAD^]
+                      fallback to comparing against the provided ref [default: None]
   --help, -h          Show this help message
   --version, -v       Show the version of this script
+
+---
+
+turbo-ignore will also check for special commit messages to indicate if a build should be skipped or not.
+
+Skip turbo-ignore check and automatically ignore:
+  - [skip ci]
+  - [ci skip]
+  - [no ci]
+  - [skip vercel]
+  - [vercel skip]
+  - [vercel skip <workspace>]
+
+Skip turbo-ignore check and automatically deploy:
+  - [vercel deploy]
+  - [vercel build]
+  - [vercel deploy <workspace>]
+  - [vercel build <workspace>]
 ```
 
 ### Examples
@@ -37,7 +54,7 @@ Flags:
 npx turbo-ignore
 ```
 
-> Only build if there are changes to the workspace in the current working directory, or any of it's dependencies. On Vercel, compare against the last successful deployment for the current branch. If this does not exist (first deploy of the branch), compare against the previous commit. When not on Vercel, always compare against the previous commit.
+> Only build if there are changes to the workspace in the current working directory, or any of it's dependencies. On Vercel, compare against the last successful deployment for the current branch. When not on Vercel, compare against the parent commit (`HEAD^`).
 
 ---
 
@@ -45,15 +62,7 @@ npx turbo-ignore
 npx turbo-ignore docs
 ```
 
-> Only build if there are changes to the `docs` workspace, or any of it's dependencies. On Vercel, compare against the last successful deployment for the current branch. If this does not exist (first deploy of the branch), compare against the previous commit. When not on Vercel, always compare against the previous commit.
-
----
-
-```sh
-npx turbo-ignore --fallback=false
-```
-
-> Only build if there are changes to the workspace in the current working directory, or any of it's dependencies. On Vercel, compare against the last successful deployment for the current branch. If this does not exist, (first deploy of the branch), the build will proceed. When not on Vercel, always compare against the previous commit.
+> Only build if there are changes to the `docs` workspace, or any of its dependencies. On Vercel, compare against the last successful deployment for the current branch. When not on Vercel compare against the parent commit (`HEAD^`).
 
 ---
 
@@ -61,15 +70,15 @@ npx turbo-ignore --fallback=false
 npx turbo-ignore --fallback=HEAD~10
 ```
 
-> Only build if there are changes to the workspace in the current working directory, or any of it's dependencies. On Vercel, compare against the last successful deployment for the current branch. If this does not exist (first deploy of the branch), compare against the previous 10 commits. When not on Vercel, always compare against the previous commit.
+> Only build if there are changes to the workspace in the current working directory, or any of it's dependencies. On Vercel, compare against the last successful deployment for the current branch. If this does not exist (first deploy of the branch), compare against the previous 10 commits. When not on Vercel, always compare against the parent commit (`HEAD^`).
 
 ---
 
 ```sh
-npx turbo-ignore app --fallback=develop
+npx turbo-ignore --fallback=HEAD^
 ```
 
-> Only build if there are changes to the `app` workspace, or any of it's dependencies. On Vercel, compare against the last successful deployment for the current branch. If this does not exist (first deploy of the branch), compare against the `develop` branch. When not on Vercel, always compare against the previous commit.
+> Only build if there are changes to the workspace in the current working directory, or any of it's dependencies. On Vercel, compare against the last successful deployment for the current branch. If this does not exist (first deploy of the branch), compare against the parent commit (`HEAD^`). When not on Vercel, always compare against the parent commit (`HEAD^`).
 
 ## How it Works
 
@@ -83,7 +92,7 @@ Next, it uses `turbo run build --dry` to determine if the given workspace, _or a
 
 When deploying on [Vercel](https://vercel.com), `turbo-ignore` can make a more accurate decision by comparing between the current commit, and the last successfully deployed commit for the current branch.
 
-**NOTE:** By default on Vercel, if the branch has not been deployed, `turbo-ignore` will fall back to comparing against the previous commit. To always deploy the first commit of a new branch, this fallback behavior can be disabled with `--fallback=false`, or customized by providing the `ref` to compare against (defaults to `HEAD^1`).
+**NOTE:** By default on Vercel, `turbo-ignore` will always deploy the first commit of a new branch. This behavior can be changed by providing the `ref` to compare against to the `--fallback` flag. See the [Examples](#Examples) section for more details.
 
 ## Releasing
 

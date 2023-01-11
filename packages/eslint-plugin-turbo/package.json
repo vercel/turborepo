@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-turbo",
-  "version": "0.0.4",
+  "version": "0.0.7",
   "description": "ESLint plugin for Turborepo",
   "keywords": [
     "turbo",
@@ -34,15 +34,16 @@
     "@types/jest": "^27.4.0",
     "@types/node": "^16.11.12",
     "jest": "^27.4.3",
+    "json5": "^2.2.1",
     "ts-jest": "^27.1.1",
     "tsconfig": "workspace:*",
     "tsup": "^6.2.0",
-    "turbo-utils": "workspace:*",
     "turbo-types": "workspace:*",
+    "turbo-utils": "workspace:*",
     "typescript": "^4.7.4"
   },
   "peerDependencies": {
-    "eslint": "^7.23.0 || ^8.0.0"
+    "eslint": ">6.6.0"
   },
   "license": "MPL-2.0"
 }

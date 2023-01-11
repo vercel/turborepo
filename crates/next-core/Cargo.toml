@@ -10,18 +10,17 @@ bench = false
 
 [dependencies]
 anyhow = "1.0.47"
-futures = "0.3.21"
+auto-hash-map = { path = "../auto-hash-map" }
 indexmap = { workspace = true, features = ["serde"] }
+indoc = "1.0"
 mime = "0.3.16"
-rand = "0.8.5"
-regex = "1.6.0"
+once_cell = "1.13.0"
+qstring = "0.7.2"
 serde = "1.0.136"
 serde_json = "1.0.85"
-serde_qs = "0.10.1"
-sourcemap = "6.0.1"
-tokio = { version = "1.11.0", features = ["full"] }
 turbo-tasks = { path = "../turbo-tasks" }
 turbo-tasks-env = { path = "../turbo-tasks-env" }
+turbo-tasks-fetch = { path = "../turbo-tasks-fetch" }
 turbo-tasks-fs = { path = "../turbo-tasks-fs" }
 turbo-tasks-hash = { path = "../turbo-tasks-hash" }
 turbopack = { path = "../turbopack" }
@@ -29,7 +28,12 @@ turbopack-core = { path = "../turbopack-core" }
 turbopack-dev-server = { path = "../turbopack-dev-server" }
 turbopack-ecmascript = { path = "../turbopack-ecmascript" }
 turbopack-env = { path = "../turbopack-env" }
-url = "2.2.2"
+turbopack-node = { path = "../turbopack-node" }
 
 [build-dependencies]
 turbo-tasks-build = { path = "../turbo-tasks-build" }
+
+[features]
+next-font-local = []
+native-tls = ["turbo-tasks-fetch/native-tls"]
+rustls-tls = ["turbo-tasks-fetch/rustls-tls"]

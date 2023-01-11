@@ -1,17 +1,18 @@
 use std::{
     borrow::Cow,
-    collections::HashSet,
     fmt::{Debug, Display},
+    mem::take,
 };
 
 use anyhow::{anyhow, Error, Result};
+use auto_hash_map::AutoSet;
 use turbo_tasks::{util::SharedError, RawVc, TaskId, TurboTasksBackendApi};
 
 #[derive(Default, Debug)]
 pub struct Output {
     pub(crate) content: OutputContent,
     updates: u32,
-    pub(crate) dependent_tasks: HashSet<TaskId>,
+    pub(crate) dependent_tasks: AutoSet<TaskId>,
 }
 
 #[derive(Clone, Debug)]
@@ -58,10 +59,6 @@ impl Output {
         }
     }
 
-    pub fn track_read(&mut self, reader: TaskId) {
-        self.dependent_tasks.insert(reader);
-    }
-
     pub fn link(&mut self, target: RawVc, turbo_tasks: &dyn TurboTasksBackendApi) {
         let change;
         let mut _type_change = false;
@@ -96,7 +93,7 @@ impl Output {
         self.updates += 1;
         // notify
         if !self.dependent_tasks.is_empty() {
-            turbo_tasks.schedule_notify_tasks_set(&self.dependent_tasks);
+            turbo_tasks.schedule_notify_tasks_set(&take(&mut self.dependent_tasks));
         }
     }
 
@@ -109,7 +106,7 @@ impl Output {
         self.updates += 1;
         // notify
         if !self.dependent_tasks.is_empty() {
-            turbo_tasks.schedule_notify_tasks_set(&self.dependent_tasks);
+            turbo_tasks.schedule_notify_tasks_set(&take(&mut self.dependent_tasks));
         }
     }
 
@@ -118,7 +115,7 @@ impl Output {
         self.updates += 1;
         // notify
         if !self.dependent_tasks.is_empty() {
-            turbo_tasks.schedule_notify_tasks_set(&self.dependent_tasks);
+            turbo_tasks.schedule_notify_tasks_set(&take(&mut self.dependent_tasks));
         }
     }
 }

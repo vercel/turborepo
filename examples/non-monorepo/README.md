@@ -13,7 +13,7 @@ Run the following command:
 ```sh
 npx degit vercel/turbo/examples/non-monorepo non-monorepo
 cd non-monorepo
-yarn install
+pnpm install
 git init . && git add . && git commit -m "Init"
 ```
 

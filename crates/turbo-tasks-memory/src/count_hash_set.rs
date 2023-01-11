@@ -1,16 +1,28 @@
 use std::{
-    collections::{
-        hash_map::{Entry, IntoIter, Iter, RandomState},
-        HashMap,
-    },
+    collections::hash_map::RandomState,
+    fmt::{Debug, Formatter},
     hash::{BuildHasher, Hash},
     iter::FilterMap,
 };
 
-#[derive(Clone, Debug)]
+use auto_hash_map::{
+    map::{Entry, IntoIter, Iter},
+    AutoMap,
+};
+
+#[derive(Clone)]
 pub struct CountHashSet<T, H = RandomState> {
-    inner: HashMap<T, isize, H>,
+    inner: AutoMap<T, isize, H>,
     negative_entries: usize,
+}
+
+impl<T: Debug, H> Debug for CountHashSet<T, H> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CountHashSet")
+            .field("inner", &self.inner)
+            .field("negative_entries", &self.negative_entries)
+            .finish()
+    }
 }
 
 impl<T: Eq + Hash, H: BuildHasher + Default, const N: usize> From<[T; N]> for CountHashSet<T, H> {
@@ -39,16 +51,25 @@ impl<T, H: Default> CountHashSet<T, H> {
 }
 
 impl<T, H> CountHashSet<T, H> {
+    /// Get the number of positive entries
     pub fn len(&self) -> usize {
         self.inner.len() - self.negative_entries
     }
 
+    /// Checks if the set looks empty from outside. It might still have negative
+    /// entries, but they should be treated as not existing.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    /// Checks if this set is equal to a fresh created set, meaning it has no
+    /// positive but also no negative entries.
+    pub fn is_unset(&self) -> bool {
+        self.inner.is_empty()
+    }
 }
 
-impl<T: Eq + Hash, H: BuildHasher> CountHashSet<T, H> {
+impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
     /// Returns true, when the value has become visible from outside
     pub fn add_count(&mut self, item: T, count: usize) -> bool {
         match self.inner.entry(item) {
@@ -131,6 +152,10 @@ impl<T: Eq + Hash, H: BuildHasher> CountHashSet<T, H> {
 
     pub fn into_counts(self) -> IntoIter<T, isize> {
         self.inner.into_iter()
+    }
+
+    pub fn counts(&self) -> Iter<'_, T, isize> {
+        self.inner.iter()
     }
 }
 

@@ -11,6 +11,15 @@ declare global {
     | [isBootStrap: 0]
     | [isNotBootstrap: 1, responsePartial: string]
   )[];
+  var next: {
+    version: string;
+    appDir: boolean;
+  };
+
+  function __turbopack_load_page_chunks__(
+    page: string,
+    paths: string[]
+  ): unknown;
 }
 
 export {};

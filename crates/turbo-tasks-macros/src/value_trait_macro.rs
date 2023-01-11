@@ -126,7 +126,7 @@ pub fn value_trait(args: TokenStream, input: TokenStream) -> TokenStream {
 
             if let Some(block) = default.take() {
                 default_method_registers.push(quote! {
-                    trait_type.register_default_trait_method(stringify!(#method_ident).to_string(), *#function_id_ident);
+                    trait_type.register_default_trait_method(stringify!(#method_ident).into(), *#function_id_ident);
                 });
                 native_functions.push(quote! {
                     impl #ref_ident {
@@ -215,13 +215,6 @@ pub fn value_trait(args: TokenStream, input: TokenStream) -> TokenStream {
             /// see [turbo_tasks::RawVc::cell_local]
             pub async fn cell_local(self) -> turbo_tasks::Result<Self> {
                 Ok(Self { node: self.node.cell_local().await? })
-            }
-
-            /// see [turbo_tasks::RawVc::keyed_cell_local]
-            pub async fn keyed_cell_local<
-                K: std::fmt::Debug + std::cmp::Eq + std::cmp::Ord + std::hash::Hash + turbo_tasks::Typed + turbo_tasks::TypedForInput + Send + Sync + 'static,
-            >(self, key: K) -> turbo_tasks::Result<Self> {
-                Ok(Self { node: self.node.keyed_cell_local(key).await? })
             }
 
             pub async fn resolve_from(super_trait_vc: impl std::convert::Into<turbo_tasks::RawVc>) -> Result<Option<Self>, turbo_tasks::ResolveTypeError> {

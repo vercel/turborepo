@@ -23,7 +23,7 @@ function getEnvVarDependencies({
   cwd,
   turboConfig,
 }: {
-  cwd: string;
+  cwd: string | undefined;
   turboConfig?: Schema;
 }): Set<string> | null {
   const turboJsonContent = turboConfig || findTurboConfig({ cwd });

@@ -36,9 +36,10 @@ use turbopack_core::{
     asset::AssetVc,
     environment::EnvironmentVc,
     reference::{AssetReferenceVc, AssetReferencesVc, SourceMapVc},
+    reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
-        find_context_file, origin::ResolveOriginVc, parse::RequestVc, pattern::Pattern, resolve,
-        FindContextFileResult, ResolveResult,
+        find_context_file, origin::ResolveOriginVc, package_json, parse::RequestVc,
+        pattern::Pattern, resolve, FindContextFileResult, ResolveResult,
     },
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
@@ -51,7 +52,7 @@ use self::{
     cjs::CjsAssetReferenceVc,
     esm::{
         export::EsmExport, EsmAssetReferenceVc, EsmAsyncAssetReferenceVc, EsmExports,
-        EsmModuleItemVc,
+        EsmModuleItemVc, ImportMetaBindingVc, ImportMetaRefVc, UrlAssetReferenceVc,
     },
     node::{DirAssetReferenceVc, PackageJsonReferenceVc},
     raw::SourceAssetReferenceVc,
@@ -90,6 +91,7 @@ use crate::{
         },
         esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
     },
+    typescript::resolve::tsconfig,
     EcmascriptInputTransformsVc,
 };
 
@@ -138,25 +140,28 @@ impl AnalyzeEcmascriptModuleResultBuilder {
         self.exports = exports;
     }
 
-    /// Builds the final analysis result.
-    pub fn build(self) -> AnalyzeEcmascriptModuleResultVc {
-        AnalyzeEcmascriptModuleResultVc::cell(AnalyzeEcmascriptModuleResult {
-            references: AssetReferencesVc::cell(self.references),
-            code_generation: CodeGenerateablesVc::cell(self.code_gens),
-            exports: self.exports.into(),
-        })
+    /// Builds the final analysis result. Resolves internal Vcs for performance
+    /// in using them.
+    pub async fn build(mut self) -> Result<AnalyzeEcmascriptModuleResultVc> {
+        for r in self.references.iter_mut() {
+            *r = r.resolve().await?;
+        }
+        for c in self.code_gens.iter_mut() {
+            *c = c.resolve().await?;
+        }
+        Ok(AnalyzeEcmascriptModuleResultVc::cell(
+            AnalyzeEcmascriptModuleResult {
+                references: AssetReferencesVc::cell(self.references),
+                code_generation: CodeGenerateablesVc::cell(self.code_gens),
+                exports: self.exports.into(),
+            },
+        ))
     }
 }
 
 impl Default for AnalyzeEcmascriptModuleResultBuilder {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl From<AnalyzeEcmascriptModuleResultBuilder> for AnalyzeEcmascriptModuleResultVc {
-    fn from(builder: AnalyzeEcmascriptModuleResultBuilder) -> Self {
-        builder.build()
     }
 }
 
@@ -171,23 +176,24 @@ pub(crate) async fn analyze_ecmascript_module(
     let mut analysis = AnalyzeEcmascriptModuleResultBuilder::new();
     let path = source.path();
 
-    let is_typescript = match &*ty {
-        EcmascriptModuleAssetType::Typescript
+    // Is this a typescript file that requires analzying type references?
+    let analyze_types = match &*ty {
+        EcmascriptModuleAssetType::TypescriptWithTypes
         | EcmascriptModuleAssetType::TypescriptDeclaration => true,
-        EcmascriptModuleAssetType::Ecmascript => false,
+        EcmascriptModuleAssetType::Typescript | EcmascriptModuleAssetType::Ecmascript => false,
     };
 
     let parsed = parse(source, ty, transforms);
 
-    match &*find_context_file(path.parent(), "package.json").await? {
+    match &*find_context_file(path.parent(), package_json()).await? {
         FindContextFileResult::Found(package_json, _) => {
             analysis.add_reference(PackageJsonReferenceVc::new(*package_json));
         }
         FindContextFileResult::NotFound(_) => {}
     };
 
-    if is_typescript {
-        match &*find_context_file(path.parent(), "tsconfig.json").await? {
+    if analyze_types {
+        match &*find_context_file(path.parent(), tsconfig()).await? {
             FindContextFileResult::Found(tsconfig, _) => {
                 analysis.add_reference(TsConfigReferenceVc::new(origin, *tsconfig));
             }
@@ -210,7 +216,7 @@ pub(crate) async fn analyze_ecmascript_module(
             let mut import_references = Vec::new();
 
             let pos = program.span().lo;
-            if is_typescript {
+            if analyze_types {
                 if let Some(comments) = comments.leading.get(&pos) {
                     for comment in comments.iter() {
                         if let CommentKind::Line = comment.kind {
@@ -273,6 +279,25 @@ pub(crate) async fn analyze_ecmascript_module(
                     title: None,
                 },
             );
+            let var_graph = HANDLER.set(&handler, || {
+                GLOBALS.set(globals, || create_graph(program, eval_context))
+            });
+
+            for (src, annotations) in eval_context.imports.references() {
+                let r = EsmAssetReferenceVc::new(
+                    origin,
+                    RequestVc::parse(Value::new(src.to_string().into())),
+                    Value::new(annotations.clone()),
+                );
+                import_references.push(r);
+            }
+            for r in import_references.iter_mut() {
+                // Resolving these references here avoids many resolve wrapper tasks when
+                // passing that to other turbo tasks functions later.
+                *r = r.resolve().await?;
+                analysis.add_reference(*r);
+            }
+
             let (
                 mut var_graph,
                 webpack_runtime,
@@ -282,18 +307,6 @@ pub(crate) async fn analyze_ecmascript_module(
                 esm_star_exports,
             ) = HANDLER.set(&handler, || {
                 GLOBALS.set(globals, || {
-                    let var_graph = create_graph(program, eval_context);
-
-                    for (src, annotations) in eval_context.imports.references() {
-                        let r = EsmAssetReferenceVc::new(
-                            origin,
-                            RequestVc::parse(Value::new(src.to_string().into())),
-                            Value::new(annotations.clone()),
-                        );
-                        import_references.push(r);
-                        analysis.add_reference(r);
-                    }
-
                     // TODO migrate to effects
                     let mut visitor = AssetReferencesVisitor::new(
                         eval_context,
@@ -410,7 +423,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 this: JsValue,
                 args: Vec<JsValue>,
                 link_value: &'a F,
-                is_typescript: bool,
+                analyze_types: bool,
                 analysis: &'a mut AnalyzeEcmascriptModuleResultBuilder,
                 environment: EnvironmentVc,
             ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
@@ -424,7 +437,7 @@ pub(crate) async fn analyze_ecmascript_module(
                     this,
                     args,
                     link_value,
-                    is_typescript,
+                    analyze_types,
                     analysis,
                     environment,
                 ))
@@ -443,7 +456,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 this: JsValue,
                 args: Vec<JsValue>,
                 link_value: &F,
-                is_typescript: bool,
+                analyze_types: bool,
                 analysis: &mut AnalyzeEcmascriptModuleResultBuilder,
                 environment: EnvironmentVc,
             ) -> Result<()> {
@@ -464,7 +477,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 this.clone(),
                                 args.clone(),
                                 link_value,
-                                is_typescript,
+                                analyze_types,
                                 analysis,
                                 environment,
                             )
@@ -490,7 +503,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                             JsValue::Unknown(None, "no this provided"),
                                             args,
                                             link_value,
-                                            is_typescript,
+                                            analyze_types,
                                             analysis,
                                             environment,
                                         )
@@ -1062,6 +1075,9 @@ pub(crate) async fn analyze_ecmascript_module(
             let linker = |value| value_visitor(source, origin, value, environment);
             let effects = take(&mut var_graph.effects);
             let link_value = |value| link(&var_graph, value, &linker, &cache);
+            // There can be many references to import.meta, but only the first should hoist
+            // the object allocation.
+            let mut first_import_meta = true;
 
             for effect in effects.into_iter() {
                 match effect {
@@ -1088,7 +1104,7 @@ pub(crate) async fn analyze_ecmascript_module(
                             JsValue::Unknown(None, "no this provided"),
                             args,
                             &link_value,
-                            is_typescript,
+                            analyze_types,
                             &mut analysis,
                             environment,
                         )
@@ -1119,7 +1135,7 @@ pub(crate) async fn analyze_ecmascript_module(
                             obj,
                             args,
                             &link_value,
-                            is_typescript,
+                            analyze_types,
                             &mut analysis,
                             environment,
                         )
@@ -1157,14 +1173,36 @@ pub(crate) async fn analyze_ecmascript_module(
                             }
                         }
                     }
-                    Effect::ImportMeta { span, ast_path: _ } => {
-                        handler.span_warn_with_code(
-                            span,
-                            "import.meta is not yet supported",
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::IMPORT_META.to_string(),
-                            ),
-                        );
+                    Effect::ImportMeta { ast_path, span: _ } => {
+                        if first_import_meta {
+                            first_import_meta = false;
+                            analysis.add_code_gen(ImportMetaBindingVc::new(source.path()));
+                        }
+
+                        analysis.add_code_gen(ImportMetaRefVc::new(AstPathVc::cell(ast_path)));
+                    }
+                    Effect::Url {
+                        input,
+                        ast_path,
+                        span,
+                    } => {
+                        let pat = js_value_to_pattern(&input);
+                        if !pat.has_constant_parts() {
+                            handler.span_warn_with_code(
+                                span,
+                                &format!("new URL({input}, import.meta.url) is very dynamic"),
+                                DiagnosticId::Lint(
+                                    errors::failed_to_analyse::ecmascript::NEW_URL_IMPORT_META
+                                        .to_string(),
+                                ),
+                            )
+                        }
+                        analysis.add_reference(UrlAssetReferenceVc::new(
+                            origin,
+                            RequestVc::parse(Value::new(pat)),
+                            environment.rendering(),
+                            AstPathVc::cell(ast_path),
+                        ));
                     }
                 }
             }
@@ -1172,7 +1210,7 @@ pub(crate) async fn analyze_ecmascript_module(
         ParseResult::Unparseable | ParseResult::NotFound => {}
     };
 
-    Ok(analysis.build())
+    analysis.build().await
 }
 
 fn analyze_amd_define(
@@ -1327,7 +1365,18 @@ fn analyze_amd_define_with_deps(
     ));
 }
 
-async fn as_abs_path(path: FileSystemPathVc) -> Result<JsValue> {
+/// Used to generate the "root" path to a __filename/__dirname/import.meta.url
+/// reference.
+pub async fn as_abs_path(path: FileSystemPathVc) -> Result<JsValue> {
+    // TODO: This should be updated to generate a real system path on the fly
+    // during runtime, so that the generated code is constant between systems
+    // but the runtime evaluation can take into account the project's
+    // actual root directory.
+    require_resolve(path).await
+}
+
+/// Generates an absolute path usable for `require.resolve()` calls.
+async fn require_resolve(path: FileSystemPathVc) -> Result<JsValue> {
     Ok(format!("/ROOT/{}", path.await?.path.as_str()).into())
 }
 
@@ -1360,11 +1409,11 @@ async fn value_visitor_inner(
                     let request = RequestVc::parse(Value::new(pat.clone()));
                     let resolved = cjs_resolve(origin, request).await?;
                     match &*resolved {
-                        ResolveResult::Single(asset, _) => as_abs_path(asset.path()).await?,
+                        ResolveResult::Single(asset, _) => require_resolve(asset.path()).await?,
                         ResolveResult::Alternatives(assets, _) => JsValue::alternatives(
                             assets
                                 .iter()
-                                .map(|asset| as_abs_path(asset.path()))
+                                .map(|asset| require_resolve(asset.path()))
                                 .try_join()
                                 .await?,
                         ),
@@ -1863,7 +1912,8 @@ async fn resolve_as_webpack_runtime(
     request: RequestVc,
     transforms: EcmascriptInputTransformsVc,
 ) -> Result<WebpackRuntimeVc> {
-    let options = origin.resolve_options();
+    let ty = Value::new(ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined));
+    let options = origin.resolve_options(ty.clone());
 
     let options = apply_cjs_specific_options(options);
 

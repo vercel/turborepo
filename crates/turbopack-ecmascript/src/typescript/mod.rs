@@ -4,11 +4,15 @@ pub mod resolve;
 use anyhow::Result;
 use serde_json::Value as JsonValue;
 use turbo_tasks::{primitives::StringVc, Value};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks_fs::{DirectoryContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResult, ResolveResultVc},
+    reference_type::{CommonJsReferenceSubType, ReferenceType},
+    resolve::{
+        origin::ResolveOriginVc, parse::RequestVc, pattern::QueryMapVc, ResolveResult,
+        ResolveResultVc,
+    },
 };
 
 use self::resolve::{read_from_tsconfigs, read_tsconfigs, type_resolve};
@@ -47,7 +51,9 @@ impl Asset for TsConfigModuleAsset {
         let configs = read_tsconfigs(
             self.source.content().parse_json_with_comments(),
             self.source,
-            apply_cjs_specific_options(self.origin.resolve_options()),
+            apply_cjs_specific_options(self.origin.resolve_options(Value::new(
+                ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined),
+            ))),
         )
         .await?;
         for (_, config_asset) in configs[1..].iter() {
@@ -109,12 +115,40 @@ impl Asset for TsConfigModuleAsset {
                 }
             })
             .await?;
-            let types = types.unwrap_or_else(|| vec![(self.source, "node".to_string())]);
+            let types = if let Some(types) = types {
+                types
+            } else {
+                let mut all_types = Vec::new();
+                let mut current = self.source.path().parent().resolve().await?;
+                loop {
+                    if let DirectoryContent::Entries(entries) =
+                        &*current.join("node_modules/@types").read_dir().await?
+                    {
+                        all_types.extend(entries.iter().filter_map(|(name, _)| {
+                            if name.starts_with('.') {
+                                None
+                            } else {
+                                Some((self.source, name.to_string()))
+                            }
+                        }));
+                    }
+                    let parent = current.parent().resolve().await?;
+                    if parent == current {
+                        break;
+                    }
+                    current = parent;
+                }
+                all_types
+            };
             for (_, name) in types {
                 references.push(
                     TsConfigTypesReferenceVc::new(
                         self.origin,
-                        RequestVc::module(name, Value::new("".to_string().into())),
+                        RequestVc::module(
+                            name,
+                            Value::new("".to_string().into()),
+                            QueryMapVc::none(),
+                        ),
                     )
                     .into(),
                 );

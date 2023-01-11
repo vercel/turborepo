@@ -3,13 +3,21 @@ build/
 dist/
 node_modules/
 target/
+coverage/
+snapshot/
+generated/
+pnpm-lock.yaml
 
-/crates/turbopack-tests/tests/snapshot/**/output/
+__generated__/
+/docs/public/schema.json
+/packages/eslint-plugin-turbo/__tests__/fixtures/
+/docs/components/pages/pack-home/benchmark-data/data.json
 /examples/with-svelte
 
-pnpm-lock.yaml
+# crates
 crates/next-core/js/src/compiled
+crates/turbopack-node/js/src/compiled
 crates/turbopack/bench.json
-
 # This file has intentional trailing commas
 crates/turbopack/tests/node-file-trace/integration/ts-package/tsconfig.json
+crates/next-transform-strip-page-exports/tests/fixtures

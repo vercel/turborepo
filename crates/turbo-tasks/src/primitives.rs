@@ -1,6 +1,7 @@
-use std::{collections::HashSet, ops::Deref};
+use std::ops::Deref;
 
 use anyhow::Result;
+use auto_hash_map::AutoSet;
 
 use crate::{self as turbo_tasks, RawVc, ValueToString, ValueToStringVc};
 
@@ -14,6 +15,12 @@ impl StringVc {
         Self::cell("".to_string())
     }
 }
+
+#[turbo_tasks::value(transparent)]
+pub struct OptionU16(Option<u16>);
+
+#[turbo_tasks::value(transparent)]
+pub struct U32(u32);
 
 #[turbo_tasks::value(transparent)]
 pub struct U64(u64);
@@ -42,7 +49,7 @@ pub struct Bool(bool);
 pub struct Usize(usize);
 
 #[turbo_tasks::value(transparent)]
-pub struct RawVcSet(HashSet<RawVc>);
+pub struct RawVcSet(AutoSet<RawVc>);
 
 #[turbo_tasks::value(transparent)]
 pub struct JsonValue(serde_json::Value);

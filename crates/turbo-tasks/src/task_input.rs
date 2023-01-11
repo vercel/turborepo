@@ -19,7 +19,7 @@ use crate::{
     registry, turbo_tasks,
     value::{TransientInstance, TransientValue, Value},
     value_type::TypedForInput,
-    RawVc, TaskId, TraitType, Typed, ValueTypeId,
+    CellId, RawVc, TaskId, TraitType, Typed, ValueTypeId,
 };
 
 #[derive(Clone)]
@@ -325,7 +325,7 @@ impl<'de> Deserialize<'de> for SharedValue {
 #[derive(Debug, Hash, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum TaskInput {
     TaskOutput(TaskId),
-    TaskCell(TaskId, usize),
+    TaskCell(TaskId, CellId),
     List(Vec<TaskInput>),
     String(String),
     Bool(bool),
@@ -401,7 +401,7 @@ impl TaskInput {
             TaskInput::SharedValue(SharedValue(ty, _))
             | TaskInput::SharedReference(SharedReference(ty, _)) => {
                 if let Some(ty) = *ty {
-                    let key = (trait_type, name.into_owned());
+                    let key = (trait_type, name);
                     if let Some(func) = registry::get_value_type(ty).get_trait_method(&key) {
                         Ok(*func)
                     } else if let Some(func) = registry::get_trait(trait_type)
@@ -410,7 +410,7 @@ impl TaskInput {
                     {
                         Ok(*func)
                     } else {
-                        Err(Cow::Owned(key.1))
+                        Err(key.1)
                     }
                 } else {
                     Err(name)

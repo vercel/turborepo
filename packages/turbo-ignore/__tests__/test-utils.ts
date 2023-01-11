@@ -12,40 +12,43 @@ export function mockEnv() {
 }
 
 export function validateLogs(
-  logs: Array<string | (() => boolean)>,
+  logs: Array<string | (() => boolean | Array<any>)>,
   mockConsole: SpyConsole["log"] | SpyConsole["error"]
 ) {
   logs.forEach((log, idx) => {
-    expect(mockConsole).toHaveBeenNthCalledWith(
-      idx + 1,
-      "≫  ",
-      typeof log === "function" ? log() : log
-    );
+    if (typeof log === "function") {
+      const expected = log();
+      expect(mockConsole).toHaveBeenNthCalledWith(
+        idx + 1,
+        ...(Array.isArray(expected) ? expected : [expected])
+      );
+    } else {
+      expect(mockConsole).toHaveBeenNthCalledWith(idx + 1, "≫  ", log);
+    }
   });
 }
 
-type SpyConsole = { log?: any; error?: any };
+type SpyConsole = { log?: any; error?: any; warn?: any };
 
-export function spyConsole({ quiet = true } = {}) {
+export function spyConsole() {
   let spy: SpyConsole = {};
 
   beforeEach(() => {
-    spy.log = jest
-      .spyOn(console, "log")
-      .mockImplementation((...args) => !quiet && console.warn(...args));
-    spy.error = jest
-      .spyOn(console, "error")
-      .mockImplementation((...args) => !quiet && console.warn(...args));
+    spy.log = jest.spyOn(console, "log").mockImplementation(() => {});
+    spy.error = jest.spyOn(console, "error").mockImplementation(() => {});
+    spy.warn = jest.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   afterEach(() => {
     spy.log.mockClear();
     spy.error.mockClear();
+    spy.warn.mockClear();
   });
 
   afterAll(() => {
     spy.log.mockRestore();
     spy.error.mockRestore();
+    spy.warn.mockRestore();
   });
 
   return spy;

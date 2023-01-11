@@ -20,6 +20,7 @@ use turbo_tasks_fs::{
 use turbo_tasks_hash::encode_hex;
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
+    condition::ContextCondition,
     ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc},
     module_options::ModuleOptionsContext,
     resolve_options_context::ResolveOptionsContext,
@@ -33,6 +34,7 @@ use turbopack_core::{
     environment::{BrowserEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment},
     issue::IssueVc,
     reference::all_referenced_assets,
+    reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
 };
 use turbopack_env::ProcessEnvAssetVc;
@@ -158,9 +160,17 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
         TransitionsByNameVc::cell(HashMap::new()),
         env,
         ModuleOptionsContext {
+            enable_jsx: true,
             enable_emotion: true,
             enable_styled_components: true,
             preset_env_versions: Some(env),
+            rules: vec![(
+                ContextCondition::InDirectory("node_modules".to_string()),
+                ModuleOptionsContext {
+                    ..Default::default()
+                }
+                .cell(),
+            )],
             ..Default::default()
         }
         .into(),
@@ -169,6 +179,15 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
             enable_react: true,
             enable_node_modules: true,
             custom_conditions: vec!["development".to_string()],
+            rules: vec![(
+                ContextCondition::InDirectory("node_modules".to_string()),
+                ResolveOptionsContext {
+                    enable_node_modules: true,
+                    custom_conditions: vec!["development".to_string()],
+                    ..Default::default()
+                }
+                .cell(),
+            )],
             ..Default::default()
         }
         .cell(),
@@ -187,10 +206,12 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
         .copied()
         .collect();
 
-    let modules = entry_paths
-        .into_iter()
-        .map(SourceAssetVc::new)
-        .map(|p| context.process(p.into()));
+    let modules = entry_paths.into_iter().map(SourceAssetVc::new).map(|p| {
+        context.process(
+            p.into(),
+            Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
+        )
+    });
 
     let chunks = modules
         .map(|module| async move {
@@ -211,7 +232,7 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
         .await?;
 
     let mut seen = HashSet::new();
-    let mut queue = VecDeque::new();
+    let mut queue = VecDeque::with_capacity(32);
     for chunk in chunks {
         queue.push_back(chunk.as_asset());
     }

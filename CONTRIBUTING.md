@@ -27,7 +27,7 @@ Dependencies
 
    On macOS: `brew install sponge jq`
 
-1. Install [turbo/shim](https://github.com/vercel/turbo/blob/main/shim/README.md) build requirements
+1. Install [turborepo crate](https://github.com/vercel/turbo/blob/main/crates/turborepo/README.md) build requirements
 
 1. Run `pnpm install` at root
 
@@ -90,7 +90,11 @@ To manually run a release:
 
 Turbopack uses [Cargo workspaces][workspaces] in the Turbo monorepo. You'll find
 several workspaces inside the `crates/` directory. In order to run a particular
-crate, you can use the `cargo run -p [CRATE_NAME]` command.
+crate, you can use the `cargo run -p [CRATE_NAME]` command. For example, to test the Next.js development server, run `cargo run -p next-dev`.
+
+### Turbopack Architecture
+
+A high-level introduction to Turbopack's architecture, workspace crates, and Turbo engine (the turbo-tasks crates) is available at [crates/turbopack/architecture.md](crates/turbopack/architecture.md).
 
 ### Testing Turbopack
 

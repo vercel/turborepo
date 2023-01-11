@@ -3,92 +3,46 @@ package daemon
 import (
 	"context"
 	"fmt"
-	"github.com/vercel/turbo/cli/internal/config"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/daemon/connector"
 	"github.com/vercel/turbo/cli/internal/turbodprotocol"
 )
 
-func addStartCmd(root *cobra.Command, helper *cmdutil.Helper) {
-	cmd := &cobra.Command{
-		Use:           "start",
-		Short:         "Ensures that the turbo daemon is running",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			flags := config.FlagSet{FlagSet: cmd.Flags()}
-			base, err := helper.GetCmdBase(flags)
-			if err != nil {
-				return err
-			}
-			l := &lifecycle{
-				base,
-			}
-			if err := l.ensureStarted(cmd.Context()); err != nil {
-				l.logError(err)
-				return err
-			}
-			return nil
-		},
+// RunLifecycle executes the lifecycle commands `start`, `stop`, `restart`.
+func RunLifecycle(ctx context.Context, helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
+	base, err := helper.GetCmdBase(args)
+	if err != nil {
+		return err
 	}
-	root.AddCommand(cmd)
-}
+	l := &lifecycle{
+		base,
+	}
 
-func addStopCmd(root *cobra.Command, helper *cmdutil.Helper) {
-	cmd := &cobra.Command{
-		Use:           "stop",
-		Short:         "Stop the turbo daemon",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			flags := config.FlagSet{FlagSet: cmd.Flags()}
-			base, err := helper.GetCmdBase(flags)
-			if err != nil {
-				return err
-			}
-			l := &lifecycle{
-				base,
-			}
-			if err := l.ensureStopped(cmd.Context()); err != nil {
-				l.logError(err)
-				return err
-			}
-			return nil
-		},
+	if args.Command.Daemon.Command == "Restart" {
+		if err := l.ensureStopped(ctx); err != nil {
+			l.logError(err)
+			return err
+		}
+		if err := l.ensureStarted(ctx); err != nil {
+			l.logError(err)
+			return err
+		}
+	} else if args.Command.Daemon.Command == "Start" {
+		if err := l.ensureStarted(ctx); err != nil {
+			l.logError(err)
+			return err
+		}
+	} else if args.Command.Daemon.Command == "Stop" {
+		if err := l.ensureStopped(ctx); err != nil {
+			l.logError(err)
+			return err
+		}
 	}
-	root.AddCommand(cmd)
-}
 
-func addRestartCmd(root *cobra.Command, helper *cmdutil.Helper) {
-	cmd := &cobra.Command{
-		Use:           "restart",
-		Short:         "Restart the turbo daemon",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			flags := config.FlagSet{FlagSet: cmd.Flags()}
-			base, err := helper.GetCmdBase(flags)
-			if err != nil {
-				return err
-			}
-			l := &lifecycle{
-				base,
-			}
-			if err := l.ensureStopped(cmd.Context()); err != nil {
-				l.logError(err)
-				return err
-			}
-			if err := l.ensureStarted(cmd.Context()); err != nil {
-				l.logError(err)
-				return err
-			}
-			return nil
-		},
-	}
-	root.AddCommand(cmd)
+	return nil
 }
 
 type lifecycle struct {
