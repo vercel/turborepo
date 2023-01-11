@@ -31,9 +31,12 @@ runs:
       shell: bash
       run: echo "toolchain=$(cat ./rust-toolchain)" >> $GITHUB_OUTPUT
 
-    - name: "Enable sparse registry"
+    - name: "Set rust default environment"
       shell: bash
       run: |
+        echo "CARGO_INCREMENTAL=0" >> $GITHUB_ENV
+        echo "CARGO_TERM_COLOR=always" >> $GITHUB_ENV
+        echo "RUST_BACKTRACE=short" >> $GITHUB_ENV
         # Enable faster sparse index on nightly
         # https://internals.rust-lang.org/t/call-for-testing-cargo-sparse-registry/16862
         echo "CARGO_UNSTABLE_SPARSE_REGISTRY=true" >> $GITHUB_ENV
