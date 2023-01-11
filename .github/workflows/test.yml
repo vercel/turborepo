@@ -1006,8 +1006,8 @@ jobs:
       - rust_test
       - rust_test_bench
       - rust_build_release
+      - rust_bench
       - node_lint
-      - rust_bench_commit
       # rust_bench_pr is not included
       # since we don't want block the result on that
     if: always()
