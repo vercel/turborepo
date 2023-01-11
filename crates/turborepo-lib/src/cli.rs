@@ -151,8 +151,25 @@ impl Args {
     pub fn new() -> Result<Self> {
         let mut clap_args = match Args::try_parse() {
             Ok(args) => args,
+            // Don't use error logger when displaying help text
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+                ) =>
+            {
+                let _ = e.print();
+                process::exit(1);
+            }
             Err(e) if e.use_stderr() => {
-                error!("{}", e.to_string());
+                let err_str = e.to_string();
+                // A cleaner solution would be to implement our own clap::error::ErrorFormatter
+                // but that would require copying the default formatter just to remove this
+                // line: https://docs.rs/clap/latest/src/clap/error/format.rs.html#100
+                error!(
+                    "{}",
+                    err_str.strip_prefix("error: ").unwrap_or(err_str.as_str())
+                );
                 process::exit(1);
             }
             // If the clap error shouldn't be printed to stderr it indicates help text
