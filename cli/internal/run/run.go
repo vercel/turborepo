@@ -201,7 +201,13 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	pipeline := turboJSON.Pipeline
 	if err := validateTasks(pipeline, targets); err != nil {
-		return err
+		location := ""
+		if r.opts.runOpts.singlePackage {
+			location = "in `scripts` in \"package.json\""
+		} else {
+			location = "in `pipeline` in \"turbo.json\""
+		}
+		return fmt.Errorf("%s %s. Are you sure you added it?", err, location)
 	}
 
 	scmInstance, err := scm.FromInRepo(r.base.RepoRoot)
@@ -312,6 +318,14 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	// Dry Run
 	if rs.Opts.runOpts.dryRun {
+		// dryRunSummary contains information that is statically analyzable about
+		// the tasks that we expect to run based on the user command.
+		// Currently, we only emit this on dry runs, but it may be useful for real runs later also.
+		summary := &dryRunSummary{
+			Packages: packagesInScope,
+			Tasks:    []taskSummary{},
+		}
+
 		return DryRun(
 			ctx,
 			g,
@@ -319,13 +333,14 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			engine,
 			tracker,
 			turboCache,
-			packagesInScope,
 			r.base,
+			summary,
 		)
 	}
 
+	// RunState captures the runtime results for this run (e.g. timings of each task and profile)
+	runState := NewRunState(startAt, r.opts.runOpts.profile)
 	// Regular run
-
 	return RealRun(
 		ctx,
 		g,
@@ -337,8 +352,8 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		r.base,
 		// Extra arg only for regular runs, dry-run doesn't get this
 		packageManager,
-		startAt,
 		r.processes,
+		runState,
 	)
 }
 
@@ -436,7 +451,7 @@ const (
 func validateTasks(pipeline fs.Pipeline, tasks []string) error {
 	for _, task := range tasks {
 		if !pipeline.HasTask(task) {
-			return fmt.Errorf("task `%v` not found in turbo `pipeline` in \"turbo.json\". Are you sure you added it?", task)
+			return fmt.Errorf("task `%v` not found", task)
 		}
 	}
 	return nil
