@@ -73,14 +73,4 @@ We configure the `outputs` so that we can enable [caching](/repo/docs/core-conce
 
 </Callout>
 
-Now, add a script to your root `package.json`:
-
-```json filename="package.json"
-{
-  "scripts": {
-    "build": "turbo run build"
-  }
-}
-```
-
-This means that running `build` from root using your package manager will build all of the apps in the repository. Thanks to Turborepo's task cache, you can end up with extremely fast build times.
+This means that running `turbo build` from root will build all of the apps in the repository. Thanks to Turborepo's task cache, you can end up with extremely fast build times.

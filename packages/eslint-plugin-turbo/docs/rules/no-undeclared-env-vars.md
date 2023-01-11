@@ -21,9 +21,7 @@ Examples of **incorrect** code for this rule:
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**"]
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "dev": {
       "cache": false
     }
@@ -41,9 +39,7 @@ Examples of **correct** code for this rule:
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**"]
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "dev": {
       "cache": false
     }
@@ -59,9 +55,7 @@ Examples of **correct** code for this rule:
       "env": ["MY_API_TOKEN"],
       "outputs": ["dist/**", ".next/**"]
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "dev": {
       "cache": false
     }

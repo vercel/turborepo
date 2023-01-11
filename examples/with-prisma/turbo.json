@@ -6,23 +6,16 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**"]
     },
-    "db:migrate:deploy": {
-      "outputs": []
-    },
-    "db:push": {
-      "outputs": []
-    },
-    "db:seed": {
-      "outputs": []
-    },
+    "db:migrate:deploy": {},
+    "db:push": {},
+    "db:seed": {},
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     },
     "generate": {
       "dependsOn": ["^generate"]
     },
-    "lint": {
-      "outputs": []
-    }
+    "lint": {}
   }
 }

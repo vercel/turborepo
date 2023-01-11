@@ -6,11 +6,10 @@
       "dependsOn": ["^build"]
     },
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "clean": {
       "cache": false
     }
