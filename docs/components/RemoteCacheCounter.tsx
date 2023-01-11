@@ -38,7 +38,9 @@ export default function RemoteCacheCounter() {
         </animated.p>
         <div className="text-xs">Total Compute Minutes Saved</div>
 
-        <div className="text-xs mt-4 group-hover:underline">Get Started With Remote Caching →</div>
+        <div className="text-xs mt-4 group-hover:underline">
+          Get Started With Remote Caching →
+        </div>
       </div>
     </Link>
   );
