@@ -52,7 +52,7 @@ runs:
 
     - name: "Add cargo problem matchers"
       shell: bash
-      run: echo "::add-matcher::.github/actions/setup-rust/matchers.json"
+      run: echo "::add-matcher::${{ github.action_path }}/matchers.json"
 
     - name: "Setup Rust Cache"
       uses: Swatinem/rust-cache@v2

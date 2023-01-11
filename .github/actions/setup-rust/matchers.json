@@ -4,13 +4,13 @@
       "owner": "cargo-common",
       "pattern": [
         {
-          "regexp": "^(warning|warn|error)(:?\\[(\\S*)\\])?: (.*)$",
+          "regexp": "^(warning|warn|error)(?:\\[(\\S*)\\])?: (.*)$",
           "severity": 1,
           "code": 2,
           "message": 3
         },
         {
-          "regexp": "^\\s+-->\\s(\\S+):(\\d+):(\\d+)$",
+          "regexp": "^(?:[\\s->=]*(.*):(\\d*):(\\d*)|.*)$",
           "file": 1,
           "line": 2,
           "column": 3
@@ -30,7 +30,7 @@
       ]
     },
     {
-      "owner": "cargo-fmt",
+      "owner": "rustfmt",
       "pattern": [
         {
           "regexp": "^(Diff in (\\S+)) at line (\\d+):",
