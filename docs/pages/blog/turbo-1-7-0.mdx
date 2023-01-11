@@ -31,16 +31,16 @@ import Date from "../../components/blog/Date";
 
 Turborepo 1.7 focuses on improving developer experience by bringing more clarity to your tasks:
 
-- [**Long-running task support**](#schedule-your-long-running-tasks-with-confidence): Use `persistent: true` to mark non-terminating tasks so that `turbo` can alert you if you have dependencies on them.
-- [**Better clarity for outputs**](#declare-your-outputs-for-improved-clarity): You'll always need to declare your outputs, improving transparency to what your tasks will cache.
-- [**Globally installable**](#global-turbo): Install once, use everywhere.
+- [**Improved support for long running tasks**](#schedule-your-long-running-tasks-with-confidence): Use `persistent: true` to mark non-terminating tasks so that `turbo` can alert you if you have dependencies on them.
+- [**Better clarity for outputs**](#declare-your-outputs-for-improved-clarity): You'll now always need to declare your tasks outputs, improving transparency to what your tasks will cache.
+- [**Globally installable**](#global-turbo): Install once, use everywhere. Turborepo can now be installed globally, and ran from any directory.
 - [**“Error only” output mode**](#error-only-output-mode-for-quieter-logs): Quiet your output logs to only show when a task fails.
 
 Update today by running `npm install turbo@latest`, or by [installing globally](#global-turbo) <Badge>NEW</Badge> and running the [`set-default-outputs`](/repo/docs/reference/codemods#set-default-outputs) codemod.
 
 ## Schedule your long-running tasks with confidence
 
-You can now tell Turborepo about tasks that start long-running processes with a `persistent: true` [configuration option](/repo/docs/reference/configuration#persistent). When this config is set, Turborepo will throw an error on invalid task dependency graphs. This is useful for `dev` tasks or test runners with `--watch` flags.
+To avoid misconfigurations that could result in tasks that never run, you can now tell Turborepo about tasks that won't exist on their own (like `dev` scripts) with a `persistent: true` [configuration option](/repo/docs/reference/configuration#persistent). When this config is set for a task, Turborepo will ensure no other task can depend on this task. This is useful for `dev` tasks or test runners with `--watch` flags.
 
 ```diff
 {
@@ -54,9 +54,9 @@ You can now tell Turborepo about tasks that start long-running processes with a 
 
 Previously, if `Task B` depended on a persistent `Task A`, `Task B` would never execute, because `Task A` never exited. By declaring `Task A` as `persistent`, Turborepo will prevent this error scenario from happening.
 
-Up to this 1.7 release, we had been recommending the use of `turbo run <task> --parallel` for persistent tasks. With `--parallel`, `turbo` would ignore your dependency graph and execute all your tasks at once.
+Before this release, we had been recommending the use of `turbo run <task> --parallel` for persistent tasks. With `--parallel`, `turbo` would ignore your dependency graph and execute all your tasks at once.
 
-While `--parallel` did solve many problems with possible user misconfigurations, it means that users have to tell Turborepo **_how_** to run their tasks rather than declaring **_what_** a task is.
+While `--parallel` did provide a helpful escape hatch, it meant that users had to tell Turborepo **_how_** to run their tasks rather than declaring **_what_** a task is.
 
 Rather than throwing away your entire topological dependency graph, it's much more precise for Turborepo to keep your dependency graph while guaranteeing that you don't depend on a process that won't exit with `persistent: true`.
 
