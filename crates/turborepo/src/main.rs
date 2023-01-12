@@ -30,7 +30,7 @@ fn run_go_binary(args: Args) -> Result<i32> {
 // This function should not expanded. Please add any logic to
 // `turborepo_lib::main` instead
 fn main() -> Result<()> {
-    let exit_code = match turborepo_lib::main()? {
+    let exit_code = match turborepo_lib::main() {
         Payload::Rust(res) => res.unwrap_or(1),
         Payload::Go(state) => run_go_binary(*state)?,
     };
