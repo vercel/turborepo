@@ -1,0 +1,38 @@
+name: sccache test
+
+on:
+  push:
+
+jobs:
+  build_cache:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            # myb use 16 core, idk
+            runner: ubuntu-latest-16-core-oss
+
+    runs-on: ${{ matrix.os.runner }}
+    name: Building next-dev for ${{ matrix.os.name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          shared-cache-key: sccache
+          save-cache: false
+
+      - name: "Setup Rust Cache"
+        uses: metalbear-co/sccache-action@v1.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache-from: sccache-${{ runner.os }}-
+          cache-to: sccache-${{ runner.os }}-${{ github.sha }}
+
+      - name: Compile dependencies
+        run: |
+          cargo build -p next-dev --release
