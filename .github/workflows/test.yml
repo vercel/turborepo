@@ -792,6 +792,7 @@ jobs:
         if: needs.determine_jobs.outputs.main_push == 'true'
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
+          file_pattern: data/**
           commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})
 
   next_js_integration:
