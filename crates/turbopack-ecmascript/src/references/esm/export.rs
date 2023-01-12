@@ -7,15 +7,11 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use swc_core::{
     common::DUMMY_SP,
-    ecma::{
-        ast::{
-            CallExpr, ComputedPropName, Expr, ExprStmt, Ident, KeyValueProp, Lit, MemberExpr,
-            MemberProp, Module, ModuleItem, ObjectLit, Program, Prop, PropName, PropOrSpread,
-            Script, SpreadElement, Stmt, Str,
-        },
-        utils::{quote_ident, ExprFactory},
+    ecma::ast::{
+        ComputedPropName, Expr, ExprStmt, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, Module,
+        ModuleItem, ObjectLit, Program, Prop, PropName, PropOrSpread, Script, Stmt, Str,
     },
-    quote,
+    quote, quote_expr,
 };
 use turbo_tasks::{
     primitives::{StringVc, StringsVc},
@@ -142,7 +138,7 @@ impl CodeGenerateable for EsmExports {
             .map(|(k, v)| (Cow::<str>::Borrowed(k), Cow::Borrowed(v)))
             .collect();
         let mut props = Vec::new();
-        let mut cjs_exports = Vec::new();
+        let mut cjs_exports = Vec::<Box<Expr>>::new();
 
         for esm_ref in this.star_exports.iter() {
             if let ReferencedAsset::Some(asset) = &*esm_ref.get_referenced_asset().await? {
@@ -159,13 +155,10 @@ impl CodeGenerateable for EsmExports {
                 if let EcmascriptExports::CommonJs = &*asset.get_exports().await? {
                     let ident = ReferencedAsset::get_ident_from_placeable(asset).await?;
 
-                    cjs_exports.push(PropOrSpread::Spread(SpreadElement {
-                        dot3_token: DUMMY_SP,
-                        expr: Box::new(quote!(
-                            "($cjs)" as Expr,
-                            cjs: Expr = Ident::new(ident.into(), DUMMY_SP).into()
-                        )),
-                    }));
+                    cjs_exports.push(quote_expr!(
+                        "__turbopack__cjs__($arg)",
+                        arg: Expr = Ident::new(ident.into(), DUMMY_SP).into()
+                    ));
                 }
             }
         }
@@ -226,16 +219,7 @@ impl CodeGenerateable for EsmExports {
         let cjs_stmt = if !cjs_exports.is_empty() {
             Some(Stmt::Expr(ExprStmt {
                 span: DUMMY_SP,
-                expr: box Expr::Call(CallExpr {
-                    span: DUMMY_SP,
-                    callee: quote_ident!("__turbopack__cjs__").as_callee(),
-                    args: vec![ObjectLit {
-                        span: DUMMY_SP,
-                        props: cjs_exports,
-                    }
-                    .as_arg()],
-                    type_args: Default::default(),
-                }),
+                expr: Expr::from_exprs(cjs_exports),
             }))
         } else {
             None
