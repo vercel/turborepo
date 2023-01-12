@@ -80,22 +80,6 @@ func TestEngineDefault(t *testing.T) {
 	}
 }
 
-func TestUnknownDependency(t *testing.T) {
-	g := &dag.AcyclicGraph{}
-	g.Add("a")
-	g.Add("b")
-	g.Add("c")
-	p := NewEngine(g)
-	err := p.AddDep("unknown#custom", "build")
-	if err == nil {
-		t.Error("expected error for unknown package, got nil")
-	}
-	err = p.AddDep("a#custom", "build")
-	if err != nil {
-		t.Errorf("expected no error for package task with known package, got %v", err)
-	}
-}
-
 func TestDependenciesOnUnspecifiedPackages(t *testing.T) {
 	// app1 -> libA
 	//              \
@@ -304,10 +288,8 @@ func TestDependOnRootTask(t *testing.T) {
 		TopoDeps: make(util.Set),
 		Deps:     make(util.Set),
 	})
-	err := p.AddDep("//#root-task", "libA#build")
-	assert.NilError(t, err, "AddDep")
 
-	err = p.Prepare(&EngineBuildingOptions{
+	err := p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{"app1"},
 		TaskNames: []string{"build"},
 	})
@@ -344,10 +326,8 @@ func TestDependOnMissingRootTask(t *testing.T) {
 		TopoDeps: dependOnBuild,
 		Deps:     make(util.Set),
 	})
-	err := p.AddDep("//#root-task", "libA#build")
-	assert.NilError(t, err, "AddDep")
 
-	err = p.Prepare(&EngineBuildingOptions{
+	err := p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{"app1"},
 		TaskNames: []string{"build"},
 	})
@@ -376,13 +356,8 @@ func TestDependOnMultiplePackageTasks(t *testing.T) {
 		TopoDeps: dependOnBuild,
 		Deps:     make(util.Set),
 	})
-	err := p.AddDep("app1#build", "libA#build")
-	assert.NilError(t, err, "AddDep")
 
-	err = p.AddDep("app1#compile", "libA#build")
-	assert.NilError(t, err, "AddDep")
-
-	err = p.Prepare(&EngineBuildingOptions{
+	err := p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{"app1"},
 		TaskNames: []string{"build"},
 	})
@@ -423,10 +398,8 @@ func TestDependOnUnenabledRootTask(t *testing.T) {
 		TopoDeps: make(util.Set),
 		Deps:     make(util.Set),
 	})
-	err := p.AddDep("//#foo", "libA#build")
-	assert.NilError(t, err, "AddDep")
 
-	err = p.Prepare(&EngineBuildingOptions{
+	err := p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{"app1"},
 		TaskNames: []string{"build"},
 	})

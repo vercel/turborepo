@@ -170,10 +170,6 @@ func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
 	// └── workspace-b#dev
 
 	// workspace-a#dev specifically dependsOn workspace-b#dev
-	// Note: AddDep() is necessary in addition to AddTask() to set up this dependency
-	err := engine.AddDep("workspace-b#dev", "workspace-a#dev")
-	assert.NilError(t, err, "Failed to prepare engine")
-
 	engine.AddTask(&Task{
 		Name:       "workspace-a#dev",
 		TopoDeps:   make(util.Set), // empty
@@ -374,9 +370,6 @@ func TestPrepare_PersistentDependencies_Topological_WithALittleExtra(t *testing.
 	})
 
 	// workspace-c#build also depends on workspace-z#dev
-	// Note: AddDep() is necessary in addition to AddTask() to set up this dependency
-	err := engine.AddDep("workspace-z#dev", "workspace-c#build")
-	assert.NilError(t, err, "Failed to prepare engine")
 	engine.AddTask(&Task{
 		Name:     "workspace-c#build",
 		TopoDeps: make(util.Set),
@@ -421,14 +414,6 @@ func TestPrepare_PersistentDependencies_CrossWorkspace_DownstreamPersistent(t *t
 	// 		 └── workspace-c#build
 	// 		 		 └── workspace-z#dev // this one is persistent
 	//
-
-	// Note: AddDep() is necessary in addition to AddTask() to set up this dependency
-	err1 := engine.AddDep("workspace-b#build", "workspace-a#build") // a#build dependsOn b#build
-	assert.NilError(t, err1, "Failed to prepare engine")
-	err2 := engine.AddDep("workspace-c#build", "workspace-b#build") // b#build dependsOn c#build
-	assert.NilError(t, err2, "Failed to prepare engine")
-	err3 := engine.AddDep("workspace-z#dev", "workspace-c#build") // c#build dependsOn z#dev
-	assert.NilError(t, err3, "Failed to prepare engine")
 
 	// The default build command has no deps, it just exists to have a baseline
 	engine.AddTask(&Task{
