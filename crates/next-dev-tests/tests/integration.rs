@@ -114,7 +114,7 @@ async fn run_test(resource: &str) -> JestRunResult {
     let path = Path::new(resource)
         // test_resources matches and returns relative paths from the workspace root,
         // but pwd in cargo tests is the crate under test.
-        .strip_prefix("crates/next-dev")
+        .strip_prefix("crates/next-dev-tests")
         .unwrap();
     assert!(path.exists(), "{} does not exist", resource);
 
