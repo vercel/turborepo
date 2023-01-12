@@ -61,7 +61,7 @@ impl WebpackLoadersVc {
 impl SourceTransform for WebpackLoaders {
     #[turbo_tasks::function]
     fn transform(&self, source: AssetVc) -> AssetVc {
-        WebpackLoadersedAsset {
+        WebpackLoadersProcessedAsset {
             evaluate_context: self.evaluate_context,
             execution_context: self.execution_context,
             loaders: self.loaders,
@@ -73,7 +73,7 @@ impl SourceTransform for WebpackLoaders {
 }
 
 #[turbo_tasks::value]
-struct WebpackLoadersedAsset {
+struct WebpackLoadersProcessedAsset {
     evaluate_context: AssetContextVc,
     execution_context: ExecutionContextVc,
     loaders: StringsVc,
@@ -81,14 +81,14 @@ struct WebpackLoadersedAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl Asset for WebpackLoadersedAsset {
+impl Asset for WebpackLoadersProcessedAsset {
     #[turbo_tasks::function]
     fn path(&self) -> FileSystemPathVc {
         self.source.path()
     }
 
     #[turbo_tasks::function]
-    async fn content(self_vc: WebpackLoadersedAssetVc) -> Result<AssetContentVc> {
+    async fn content(self_vc: WebpackLoadersProcessedAssetVc) -> Result<AssetContentVc> {
         Ok(self_vc.process().await?.content)
     }
 }
@@ -116,7 +116,7 @@ fn webpack_loaders_executor(project_root: FileSystemPathVc, context: AssetContex
 }
 
 #[turbo_tasks::value_impl]
-impl WebpackLoadersedAssetVc {
+impl WebpackLoadersProcessedAssetVc {
     #[turbo_tasks::function]
     async fn process(self) -> Result<ProcessWebpackLoadersResultVc> {
         let this = self.await?;

@@ -218,10 +218,7 @@ impl NextConfigVc {
     #[turbo_tasks::function]
     pub async fn webpack_loaders_options(self) -> Result<WebpackLoadersOptionsVc> {
         let this = self.await?;
-        let Some(experimental) = this.experimental.as_ref() else {
-            return Ok(WebpackLoadersOptionsVc::cell(WebpackLoadersOptions::default()));
-        };
-        let Some(turbopack_webpack_loaders) = experimental.turbopack_webpack_loaders.as_ref() else {
+        let Some(turbopack_webpack_loaders) = this.experimental.as_ref().and_then(|experimental| experimental.turbopack_webpack_loaders.as_ref()) else {
             return Ok(WebpackLoadersOptionsVc::cell(WebpackLoadersOptions::default()));
         };
         let mut extension_to_loaders = IndexMap::new();
