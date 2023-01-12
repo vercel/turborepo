@@ -314,8 +314,8 @@ pub struct RunArgs {
     /// task hashes. Use "new-only" to show only new output with
     /// only hashes for cached tasks. Use "none" to hide process
     /// output. (default full)
-    #[clap(long, value_enum)]
-    pub output_logs: Option<OutputLogsMode>,
+    #[clap(long, value_enum, default_value_t = OutputLogsMode::Full)]
+    pub output_logs: OutputLogsMode,
     #[clap(long, hide = true)]
     pub only: bool,
     /// Execute all tasks in parallel.
