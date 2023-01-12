@@ -37,7 +37,7 @@ pub enum ReferencedAsset {
 impl ReferencedAsset {
     pub async fn get_ident(&self) -> Result<Option<String>> {
         Ok(match self {
-            ReferencedAsset::Some(asset) => Some(Self::get_ident_from_chunk(asset).await?),
+            ReferencedAsset::Some(asset) => Some(Self::get_ident_from_placeable(asset).await?),
             ReferencedAsset::OriginalReferenceTypeExternal(request) => {
                 Some(magic_identifier::encode(&format!("external {}", request)))
             }
@@ -45,7 +45,9 @@ impl ReferencedAsset {
         })
     }
 
-    pub(crate) async fn get_ident_from_chunk(asset: &EcmascriptChunkPlaceableVc) -> Result<String> {
+    pub(crate) async fn get_ident_from_placeable(
+        asset: &EcmascriptChunkPlaceableVc,
+    ) -> Result<String> {
         let path = asset.path().to_string().await?;
         Ok(magic_identifier::encode(&format!(
             "imported module {}",

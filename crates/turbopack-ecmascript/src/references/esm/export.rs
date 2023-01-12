@@ -143,7 +143,7 @@ impl CodeGenerateable for EsmExports {
                 }
 
                 if let EcmascriptExports::CommonJs = &*asset.get_exports().await? {
-                    let ident = ReferencedAsset::get_ident_from_chunk(asset).await?;
+                    let ident = ReferencedAsset::get_ident_from_placeable(asset).await?;
 
                     cjs_exports.push(PropOrSpread::Spread(SpreadElement {
                         dot3_token: DUMMY_SP,
