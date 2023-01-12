@@ -415,6 +415,7 @@ mod test {
     fn get_default_run_args() -> RunArgs {
         RunArgs {
             cache_workers: 10,
+            output_logs: None,
             ..RunArgs::default()
         }
     }
