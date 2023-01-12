@@ -97,9 +97,23 @@ async fn expand_star_exports(root_asset: EcmascriptChunkPlaceableVc) -> Result<S
             .cell()
             .as_issue()
             .emit(),
-            EcmascriptExports::CommonJs => {
-                // We can now handle cjs modules
+            EcmascriptExports::CommonJs => AnalyzeIssue {
+                code: None,
+                category: StringVc::cell("analyze".to_string()),
+                message: StringVc::cell(format!(
+                    "export * used with module {} which is a CommonJS module with exports only \
+                     available at runtime\nList all export names manually (`export {{ a, b, c }} \
+                     from \"...\") or rewrite the module to ESM.`",
+                    asset.path().to_string().await?
+                )),
+                path: asset.path(),
+                severity: IssueSeverity::Warning.into(),
+                source: None,
+                title: StringVc::cell("unexpected export *".to_string()),
             }
+            .cell()
+            .as_issue()
+            .emit(),
         }
     }
     Ok(StringsVc::cell(set.into_iter().collect()))
