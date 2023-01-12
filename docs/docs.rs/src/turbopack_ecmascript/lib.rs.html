@@ -380,6 +380,7 @@
 <span id="380">380</span>
 <span id="381">381</span>
 <span id="382">382</span>
+<span id="383">383</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -700,6 +701,7 @@
                 <span class="kw">for </span>visitor <span class="kw">in </span>root_visitors {
                     program.visit_mut_with(<span class="kw-2">&amp;mut </span>visitor.create());
                 }
+                program.visit_mut_with(<span class="kw-2">&amp;mut </span>swc_core::ecma::transforms::base::hygiene::hygiene());
                 program.visit_mut_with(<span class="kw-2">&amp;mut </span>swc_core::ecma::transforms::base::fixer::fixer(<span class="prelude-val">None</span>));
             });
 
