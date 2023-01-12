@@ -32,7 +32,6 @@ type Engine struct {
 	TaskGraph *dag.AcyclicGraph
 	// Tasks are a map of tasks in the engine
 	Tasks            map[string]*Task
-	PackageTaskDeps  map[string][]string
 	rootEnabledTasks util.Set
 }
 
@@ -42,7 +41,6 @@ func NewEngine(topologicalGraph *dag.AcyclicGraph) *Engine {
 		Tasks:            make(map[string]*Task),
 		TopologicGraph:   topologicalGraph,
 		TaskGraph:        &dag.AcyclicGraph{},
-		PackageTaskDeps:  map[string][]string{},
 		rootEnabledTasks: make(util.Set),
 	}
 }
@@ -185,14 +183,6 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		// E.g. `build: { dependsOn: [dev] }`
 		hasDeps := task.Deps.Len() > 0
 
-		// hasPackageTaskDeps will be true if this is a workspace-specific task, and
-		// it depends on another workspace-specific tasks
-		// E.g. `my-package#build: { dependsOn: [my-package#beforebuild] }`.
-		hasPackageTaskDeps := false
-		if _, ok := e.PackageTaskDeps[toTaskID]; ok {
-			hasPackageTaskDeps = true
-		}
-
 		if hasTopoDeps {
 			depPkgs := e.TopologicGraph.DownEdges(pkg)
 			for _, from := range task.TopoDeps.UnsafeListOfStrings() {
@@ -217,19 +207,8 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 			}
 		}
 
-		if hasPackageTaskDeps {
-			if pkgTaskDeps, ok := e.PackageTaskDeps[toTaskID]; ok {
-				for _, fromTaskID := range pkgTaskDeps {
-					e.TaskGraph.Add(fromTaskID)
-					e.TaskGraph.Add(toTaskID)
-					e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
-					traversalQueue = append(traversalQueue, fromTaskID)
-				}
-			}
-		}
-
 		// Add the root node into the graph
-		if !hasDeps && !hasTopoDeps && !hasPackageTaskDeps {
+		if !hasDeps && !hasTopoDeps {
 			e.TaskGraph.Add(ROOT_NODE_NAME)
 			e.TaskGraph.Add(toTaskID)
 			e.TaskGraph.Connect(dag.BasicEdge(toTaskID, ROOT_NODE_NAME))
@@ -251,22 +230,6 @@ func (e *Engine) AddTask(task *Task) *Engine {
 	}
 	e.Tasks[task.Name] = task
 	return e
-}
-
-// AddDep adds tuples from+to task ID combos in tuple format so they can be looked up later.
-func (e *Engine) AddDep(fromTaskID string, toTaskID string) error {
-	fromPkg, _ := util.GetPackageTaskFromId(fromTaskID)
-	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !e.TopologicGraph.HasVertex(fromPkg) {
-		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskID)
-	}
-
-	if _, ok := e.PackageTaskDeps[toTaskID]; !ok {
-		e.PackageTaskDeps[toTaskID] = []string{}
-	}
-
-	e.PackageTaskDeps[toTaskID] = append(e.PackageTaskDeps[toTaskID], fromTaskID)
-
-	return nil
 }
 
 // ValidatePersistentDependencies checks if any task dependsOn persistent tasks and throws
