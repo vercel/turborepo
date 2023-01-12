@@ -4,11 +4,13 @@ use anyhow::{anyhow, Result};
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use serde::Serialize;
+use termcolor::ColorChoice;
 
 use crate::{
-    commands::bin,
+    commands::{bin, logout},
     get_version,
     shim::{RepoMode, RepoState},
+    ui::UI,
     Payload,
 };
 
@@ -364,9 +366,13 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
+        Command::Logout { .. } => {
+            logout::logout(clap_args.ui())?;
+
+            Ok(Payload::Rust(Ok(0)))
+        }
         Command::Login { .. }
         | Command::Link { .. }
-        | Command::Logout { .. }
         | Command::Unlink { .. }
         | Command::Daemon { .. }
         | Command::Prune { .. }
@@ -376,6 +382,28 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
+    }
+}
+
+impl Args {
+    fn color_choice(&self) -> ColorChoice {
+        if self.no_color {
+            ColorChoice::Never
+        } else if self.color {
+            ColorChoice::Always
+        } else if let Ok(force_color) = std::env::var("FORCE_COLOR") {
+            match force_color.as_str() {
+                "false" | "0" => ColorChoice::Never,
+                "true" | "1" | "2" | "3" => ColorChoice::Always,
+                _ => ColorChoice::Auto,
+            }
+        } else {
+            ColorChoice::Auto
+        }
+    }
+
+    fn ui(&self) -> UI {
+        UI::new(self.color_choice())
     }
 }
 
