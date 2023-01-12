@@ -90,7 +90,7 @@ async fn test(resource: &str) {
     };
 }
 
-#[test_resources("crates/next-dev/tests/integration/*/*/__skipped__/*")]
+#[test_resources("crates/next-dev-tests/tests/integration/*/*/__skipped__/*")]
 #[should_panic]
 #[tokio::main]
 async fn test_skipped_fails(resource: &str) {
