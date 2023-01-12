@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "pnpm -- turbo run build --filter=docs",
+    "build:turbo": "cd cli && make && cd ..",
     "build:ts": "tsc -b tsconfig.project.json",
     "check:prettier": "prettier -c .",
     "check:toml": "taplo format --check",
@@ -12,7 +13,7 @@
     "format:rs": "cargo fmt --all",
     "format:toml": "taplo format",
     "lint": "eslint . --ext js,jsx,ts,tsx",
-    "turbo": "cd cli && make turbo && cd .. && node turbow.js",
+    "turbo": "pnpm run build:turbo && node turbow.js",
     "turbo-prebuilt": "node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
     "run-example": "./scripts/run-example.sh",
