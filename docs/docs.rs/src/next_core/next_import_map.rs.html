@@ -292,6 +292,21 @@
 <span id="292">292</span>
 <span id="293">293</span>
 <span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
@@ -358,6 +373,25 @@
         ClientContextType::Fallback =&gt; {}
         ClientContextType::Other =&gt; {}
     }
+
+    <span class="kw">match </span>ty.into_value() {
+        ClientContextType::Pages {
+            pages_dir: context_dir,
+        }
+        | ClientContextType::App {
+            app_dir: context_dir,
+        } =&gt; {
+            <span class="kw">for </span>(original, alias) <span class="kw">in </span>NEXT_ALIASES {
+                import_map.insert_exact_alias(
+                    <span class="macro">format!</span>(<span class="string">&quot;node:{original}&quot;</span>),
+                    request_to_import_mapping(context_dir, alias),
+                );
+            }
+        }
+        ClientContextType::Fallback =&gt; {}
+        ClientContextType::Other =&gt; {}
+    }
+
     import_map.cell()
 }
 
@@ -396,10 +430,6 @@
             <span class="kw">for </span>(original, alias) <span class="kw">in </span>NEXT_ALIASES {
                 import_map
                     .insert_exact_alias(original, request_to_import_mapping(context_dir, alias));
-                import_map.insert_exact_alias(
-                    <span class="macro">format!</span>(<span class="string">&quot;node:{original}&quot;</span>),
-                    request_to_import_mapping(context_dir, alias),
-                );
             }
         }
         ClientContextType::Fallback =&gt; {}

@@ -2144,6 +2144,10 @@
 <span id="2144">2144</span>
 <span id="2145">2145</span>
 <span id="2146">2146</span>
+<span id="2147">2147</span>
+<span id="2148">2148</span>
+<span id="2149">2149</span>
+<span id="2150">2150</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::Ordering,
     fmt::Display,
@@ -4150,6 +4154,7 @@
         <span class="kw">crate</span>::register();
         <span class="kw">let </span>graph_snapshot_path = input.with_file_name(<span class="string">&quot;graph.snapshot&quot;</span>);
         <span class="kw">let </span>graph_explained_snapshot_path = input.with_file_name(<span class="string">&quot;graph-explained.snapshot&quot;</span>);
+        <span class="kw">let </span>graph_effects_snapshot_path = input.with_file_name(<span class="string">&quot;graph-effects.snapshot&quot;</span>);
         <span class="kw">let </span>resolved_explained_snapshot_path = input.with_file_name(<span class="string">&quot;resolved-explained.snapshot&quot;</span>);
 
         run_test(<span class="bool-val">false</span>, |cm, handler| {
@@ -4210,6 +4215,9 @@
                         .unwrap();
                     NormalizedOutput::from(explain_all(<span class="kw-2">&amp;</span>named_values))
                         .compare_to_file(<span class="kw-2">&amp;</span>graph_explained_snapshot_path)
+                        .unwrap();
+                    NormalizedOutput::from(<span class="macro">format!</span>(<span class="string">&quot;{:#?}&quot;</span>, var_graph.effects))
+                        .compare_to_file(<span class="kw-2">&amp;</span>graph_effects_snapshot_path)
                         .unwrap();
                 }
 

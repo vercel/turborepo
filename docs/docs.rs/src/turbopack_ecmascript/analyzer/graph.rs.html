@@ -1310,6 +1310,7 @@
 <span id="1310">1310</span>
 <span id="1311">1311</span>
 <span id="1312">1312</span>
+<span id="1313">1313</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, iter, mem::replace, sync::Arc};
 
 <span class="kw">use </span>swc_core::{
@@ -2195,7 +2196,7 @@
         <span class="kw">let </span>value = <span class="self">self</span>.current_value.take();
         <span class="kw">for </span>(index, p) <span class="kw">in </span>n.iter().enumerate() {
             <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(JsValue::Argument(index));
-            p.visit_children_with_path(<span class="self">self</span>, ast_path);
+            ast_path.with_index(index, |ast_path| p.visit_children_with_path(<span class="self">self</span>, ast_path));
         }
         <span class="self">self</span>.current_value = value;
     }
@@ -2414,6 +2415,7 @@
                 <span class="kw">match </span><span class="kw-2">&amp;</span>value {
                     <span class="prelude-val">Some</span>(current_value) =&gt; {
                         <span class="self">self</span>.visit_pat_with_value(pat, obj, current_value, ast_path);
+
                         <span class="comment">// We should not call visit_children_with
                         </span><span class="kw">return</span>;
                     }
