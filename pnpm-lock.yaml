@@ -125,6 +125,7 @@ importers:
     specifiers:
       '@turbo/pack-test-harness': '*'
       autoprefixer: ^10.4.13
+      loader-runner: ^4.3.0
       next: 13.0.8-canary.2
       postcss: ^8.4.20
       react: ^18.2.0
@@ -135,6 +136,7 @@ importers:
     devDependencies:
       '@turbo/pack-test-harness': link:../test-harness
       autoprefixer: 10.4.13_postcss@8.4.20
+      loader-runner: 4.3.0
       next: 13.0.8-canary.2_biqbaboplfbrettd7655fr4n2y
       postcss: 8.4.20
       react: 18.2.0
@@ -150,6 +152,17 @@ importers:
     dependencies:
       '@next/react-refresh-utils': 13.0.6_react-refresh@0.12.0
     devDependencies:
+      '@types/node': 18.11.11
+
+  crates/turbopack-node/js:
+    specifiers:
+      '@types/loader-runner': ^2.2.4
+      '@types/node': ^18.11.11
+      loader-runner: ^4.3.0
+    dependencies:
+      loader-runner: 4.3.0
+    devDependencies:
+      '@types/loader-runner': 2.2.4
       '@types/node': 18.11.11
 
   docs:
@@ -2331,6 +2344,12 @@ packages:
 
   /@types/json5/0.0.29:
     resolution: {integrity: sha512-dRLjCWHYg4oaA77cxO64oO+7JwCwnIzkZPdrrC71jQmQtlhM556pwKo5bUzqvZndkVbeFLIIi+9TC40JNF5hNQ==}
+    dev: true
+
+  /@types/loader-runner/2.2.4:
+    resolution: {integrity: sha512-loD63p9KWQPgTvMBbhu9nD/2AeLqzP7ey/h1cWUK3wzLtilRO1kcCtlJvGrT/LEtOM7bjzaFSX1hxXaOdZdt8g==}
+    dependencies:
+      '@types/node': 18.11.11
     dev: true
 
   /@types/mdast/3.0.10:
@@ -7562,7 +7581,6 @@ packages:
   /loader-runner/4.3.0:
     resolution: {integrity: sha512-3R/1M+yS3j5ou80Me59j7F9IMs4PXs3VqRrm0TU3AbKPxlmpoY1TNscJV/oGJXo8qCatFGTfDbY6W6ipGOYXfg==}
     engines: {node: '>=6.11.5'}
-    dev: true
 
   /localforage/1.10.0:
     resolution: {integrity: sha512-14/H1aX7hzBBmmh7sGPd+AOMkkIrHM3Z1PAyGgZigA1H1p5O5ANnMyWzvpAETtG68/dC4pC0ncy3+PPGzXZHPg==}
