@@ -45,7 +45,7 @@ lazy_static! {
     static ref DEBUG_BROWSER: bool = env::var("TURBOPACK_DEBUG_BROWSER").is_ok();
 }
 
-#[test_resources("crates/next-dev/tests/integration/*/*/*")]
+#[test_resources("crates/next-dev-tests/tests/integration/*/*/*")]
 #[tokio::main(flavor = "current_thread")]
 async fn test(resource: &str) {
     if resource.ends_with("__skipped__") || resource.ends_with("__flakey__") {
