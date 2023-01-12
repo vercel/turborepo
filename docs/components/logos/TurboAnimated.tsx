@@ -40,10 +40,10 @@ const TurboAnimated = ({ height = 32, className = "" }: LogoProps) => {
           <stop offset="1" stopColor="#FF1E56" />
         </linearGradient>
         <linearGradient id="gradient">
-          <stop offset="0%" stop-color="#000000" />
-          <stop offset="25%" stop-color="#ffffff" />
-          <stop offset="85%" stop-color="#ffffff" />
-          <stop offset="100%" stop-color="#000000" />
+          <stop offset="0%" stopColor="#000000" />
+          <stop offset="25%" stopColor="#ffffff" />
+          <stop offset="85%" stopColor="#ffffff" />
+          <stop offset="100%" stopColor="#000000" />
         </linearGradient>
         <mask id="logo-mask">
           <rect

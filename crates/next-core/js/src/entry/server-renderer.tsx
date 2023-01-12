@@ -139,6 +139,7 @@ async function runOperation(
       previewModeSigningKey: "",
     },
     basePath: "",
+    resolvedUrl: renderData.url,
     optimizeFonts: false,
     optimizeCss: false,
     nextScriptWorkers: false,
