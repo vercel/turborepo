@@ -6,13 +6,14 @@ use turbo_tasks::{NothingVc, TurboTasks, Value};
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, NullFileSystem, NullFileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
-    emit_with_completion, rebase::RebasedAssetVc, register,
+    emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAssetVc, register,
     resolve_options_context::ResolveOptionsContext, transition::TransitionsByNameVc,
     ModuleAssetContextVc,
 };
 use turbopack_core::{
     context::AssetContext,
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    reference_type::ReferenceType,
     source_asset::SourceAssetVc,
 };
 
@@ -86,14 +87,18 @@ fn bench_emit(b: &mut Bencher, bench_input: &BenchInput) {
                 let context = ModuleAssetContextVc::new(
                     TransitionsByNameVc::cell(HashMap::new()),
                     environment,
-                    Default::default(),
+                    ModuleOptionsContext {
+                        enable_types: true,
+                        ..Default::default()
+                    }
+                    .cell(),
                     ResolveOptionsContext {
                         emulate_environment: Some(environment),
                         ..Default::default()
                     }
                     .cell(),
                 );
-                let module = context.process(source.into());
+                let module = context.process(source.into(), Value::new(ReferenceType::Undefined));
                 let rebased = RebasedAssetVc::new(module, input_dir, output_dir);
 
                 emit_with_completion(rebased.into(), output_dir).await?;

@@ -1,0 +1,24 @@
+name: Update Google font-data.json
+
+on:
+  schedule:
+    - cron: "15 0 * * *" # Run every day at 00:15
+  workflow_dispatch:
+
+jobs:
+  update_font_data:
+    name: Update Google font-data.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-node
+      - run: node --experimental-fetch ./scripts/fetch-google-font-data.js > crates/next-core/src/next_font_google/__generated__/font-data.json
+      - run: echo "PR_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+      - uses: peter-evans/create-pull-request@v4
+        with:
+          title: Update Google font-data.json (${{ env.PR_DATE }})
+          commit-message: Update Google font-data.json (${{ github.sha }})
+          add-paths: crates/next-core/src/next_font_google/__generated__/font-data.json
+          labels: |
+            automated
+            pr: automerge

@@ -13,7 +13,7 @@ use turbo_tasks::{
     ValueToString, ValueToStringVc,
 };
 use turbo_tasks_fs::FileSystemPathVc;
-use turbo_tasks_hash::{encode_hex, DeterministicHash, Xxh3Hash64Hasher};
+use turbo_tasks_hash::DeterministicHash;
 
 use self::optimize::optimize;
 use crate::{
@@ -32,13 +32,11 @@ pub enum ModuleId {
 }
 
 impl ModuleId {
-    /// Returns a truncated hash of the module id.
-    pub fn to_truncated_hash(&self) -> String {
-        let mut hasher = Xxh3Hash64Hasher::new();
-        hasher.write_ref(self);
-        let mut hash = encode_hex(hasher.finish());
-        hash.truncate(6);
-        hash
+    pub fn parse(id: &str) -> Result<ModuleId> {
+        Ok(match id.parse::<u32>() {
+            Ok(i) => ModuleId::Number(i),
+            Err(_) => ModuleId::String(id.to_string()),
+        })
     }
 }
 
@@ -346,7 +344,7 @@ async fn chunk_content_internal<I: FromChunkableAsset>(
     let mut chunks = Vec::new();
     let mut async_chunk_groups = Vec::new();
     let mut external_asset_references = Vec::new();
-    let mut queue = VecDeque::new();
+    let mut queue = VecDeque::with_capacity(32);
 
     let chunk_item = I::from_asset(context, entry).await?.unwrap();
     queue.push_back(ChunkContentWorkItem::AssetReferences(
@@ -458,8 +456,6 @@ async fn chunk_content_internal<I: FromChunkableAsset>(
                                 inner_chunk_items.push(manifest_loader_item);
                                 inner_chunk_groups
                                     .push(ChunkGroupVc::from_asset(manifest_chunk, context));
-                                inner_chunk_groups
-                                    .push(ChunkGroupVc::from_asset(chunkable_asset, context));
                             } else {
                                 external_asset_references.push(reference);
                                 continue 'outer;

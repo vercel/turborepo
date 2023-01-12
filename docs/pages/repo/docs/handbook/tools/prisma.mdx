@@ -1,0 +1,207 @@
+import { Tabs, Tab } from '../../../../../components/Tabs'
+import Callout from '../../../../../components/Callout'
+
+# Using Prisma with Turborepo
+
+[Prisma](https://www.prisma.io/) is an extremely popular ORM with automated migrations, type safety and integrated tooling. Using it with Turborepo can cut time you spend generating code, and easily make sure your generated Prisma code is always up-to-date.
+
+## Guide
+
+This guide shows you how to:
+
+1. Set up Prisma in a monorepo
+2. Handle migration and code generation scripts
+3. Cache those scripts with Turborepo
+4. Ensure that they're always run whenever `dev` or `build` is run
+
+If you've already got Prisma set up in your database, you can skip to [step 4](#4-setting-up-the-scripts).
+
+### 1. Create your monorepo
+
+If you don't have an existing project, use our [quickstart](/repo/docs/getting-started/create-new) to create a new monorepo.
+
+### 2. Add a new `database` package
+
+Create a new folder called `database` inside packages with a `package.json` inside:
+
+```json filename="packages/database/package.json"
+{
+  "name": "database",
+  "dependencies": {
+    "@prisma/client": "latest"
+  },
+  "devDependencies": {
+    // Replace "latest" with the latest version
+    "prisma": "latest"
+  }
+}
+```
+
+If you're using `pnpm`, you should add a file at the root called `.npmrc`:
+
+```txt filename=".npmrc"
+public-hoist-pattern[]=*prisma*
+```
+
+Run your package manager's install step to install the new dependencies.
+
+### 3. Run `prisma init`
+
+`cd` into `packages/database`:
+
+```bash
+cd packages/database
+```
+
+Run `npx prisma init`.
+
+This should create several files inside `packages/database`:
+
+```
+prisma/schema.prisma
+.gitignore
+.env
+```
+
+- `schema.prisma` is where your [Prisma schema](https://www.prisma.io/docs/concepts/components/prisma-schema) lives. Here, you'll be able to modify the shape of your database.
+- `.gitignore` adds some ignored files to git
+- `.env` lets you manually specify your `DATABASE_URL` for prisma.
+
+At this point, you should refer to the Prisma docs for [connecting your database to Prisma](https://www.prisma.io/docs/getting-started/setup-prisma/start-from-scratch/relational-databases/connect-your-database-typescript-postgres).
+
+Once you've got a database connected, you can move on.
+
+### 4. Setting up the scripts
+
+Let's add some scripts to the `package.json` inside `packages/database`:
+
+```json filename="packages/database/package.json"
+{
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push --skip-generate"
+  }
+}
+```
+
+Let's also add these scripts to `turbo.json` in the root:
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "db:generate": {
+      "cache": false
+    },
+    "db:push": {
+      "cache": false
+    }
+  }
+}
+```
+
+We can now run `turbo db:push db:generate` from the root of our repository to automatically migrate our database and generate our type safe Prisma client.
+
+<Callout type="info">
+  We use the `--skip-generate` flag on `db:push` to ensure it doesn't automatically run `prisma generate` after migrating the database. This ends up being faster when using Turborepo because we automatically parallelize the tasks.
+</Callout>
+
+### 5. Exporting your client
+
+Next, we need to export the `@prisma/client` so we can use it in our applications. Let's add a new file to `packages/database`:
+
+```ts filename="packages/database/index.ts"
+export * from '@prisma/client';
+```
+
+Following the [internal packages pattern](/repo/docs/handbook/sharing-code/internal-packages), we'll also need to add `index.ts` to `main` and `types` inside `packages/database/package.json`.
+
+```json filename="packages/database/package.json"
+{
+  "main": "./index.ts",
+  "types": "./index.ts"
+}
+```
+
+#### Importing `database`
+
+Let's now import our database package into one of our apps to test it out. Let's say you have an app at `apps/web`. Add the dependency to `apps/web/package.json`:
+
+<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+  <Tab>
+    ```json filename="apps/web/package.json"
+    {
+      "dependencies": {
+        "database": "*"
+      }
+    }
+    ```
+  </Tab>
+  <Tab>
+    ```json filename="apps/web/package.json"
+    {
+      "dependencies": {
+        "database": "*"
+      }
+    }
+    ```
+  </Tab>
+  <Tab>
+    ```json filename="apps/web/package.json"
+    {
+      "dependencies": {
+        "database": "workspace:*"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+Run your package manager's install command.
+
+You can now import `PrismaClient` from `database` anywhere in your app:
+
+```ts
+import { PrismaClient } from 'database'
+
+const client = new PrismaClient();
+```
+
+<Callout>
+  You may also need to do some configuration inside your application to allow it to run an internal package. Check out our [internal packages docs](/repo/docs/handbook/sharing-code/internal-packages#6-configuring-your-app) for more info.
+</Callout>
+
+### 6. Figuring out the scripts
+
+We're now in a pretty good position. We have a reusable `database` module that we can import into any of our applications. We've got a `turbo db:push` script we can use to push our changes to the database.
+
+However, our `db:generate` scripts aren't optimized yet. They provide crucial code to our `dev` and `build` tasks. If a new developer runs `dev` on an application without running `db:generate` first, they'll get errors.
+
+So, let's make sure that `db:generate` is always run _before_ the user runs `dev`:
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "dev": {
+      "dependsOn": ["^db:generate"],
+      "cache": false
+    },
+    "build": {
+      "dependsOn": ["^db:generate"],
+      "outputs": ["your-outputs-here"]
+    },
+    "db:generate": {
+      "cache": false
+    }
+  }
+}
+```
+
+Check out the section on [running tasks](/repo/docs/core-concepts/monorepos/running-tasks) to learn more about the `^db:generate` syntax.
+
+### 7. Caching the results of `prisma generate`
+
+`prisma generate` outputs files to the filesystem, usually inside `node_modules`. In theory, it should be possible to cache the output of `prisma generate` with Turborepo to save a few seconds.
+
+However, Prisma behaves differently with different package managers. This can lead to unpredictable results, which might lead to broken deployments in some situations. Instead of documenting the intricacies of each approach, we recommend _not_ caching the results of `prisma generate`. Since `prisma generate` usually only takes 5-6 seconds, and tends not to take longer with larger `schema` files, this seems like a fine trade-off.
+
+You may wish to experiment with this yourself. If you find a solution that you feel works, feel free to [add an issue](https://github.com/vercel/turbo/issues/new/choose) and we can update this section.

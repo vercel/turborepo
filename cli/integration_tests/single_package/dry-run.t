@@ -23,6 +23,10 @@ Check
       {
         "task": "build",
         "hash": "7bf32e1dedb04a5d",
+        "cacheState": {
+          "local": false,
+          "remote": false
+        },
         "command": "echo 'building' \u003e foo",
         "outputs": [
           "foo"

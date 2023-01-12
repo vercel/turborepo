@@ -1,4 +1,4 @@
-import type Image from "next/future/image";
+import type Image from "next/image";
 import EcosystemIconDark from "../public/images/docs/shared/feature-icons/ecosystem-dark.svg";
 import EcosystemIconLight from "../public/images/docs/shared/feature-icons/ecosystem-light.svg";
 import LightningIconDark from "../public/images/docs/shared/feature-icons/lightning-dark.svg";

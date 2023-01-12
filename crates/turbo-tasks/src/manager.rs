@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     future::Future,
     hash::Hash,
     panic::AssertUnwindSafe,
@@ -15,6 +15,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use auto_hash_map::AutoSet;
 use futures::FutureExt;
 use nohash_hasher::BuildNoHashHasher;
 use serde::{de::Visitor, Deserialize, Serialize};
@@ -26,11 +27,12 @@ use crate::{
     id::{BackendJobId, FunctionId, TraitTypeId},
     id_factory::IdFactory,
     raw_vc::{CellId, RawVc},
+    registry,
     task_input::{SharedReference, TaskInput},
     timed_future::{self, TimedFuture},
     trace::TraceRawVcs,
     util::FormatDuration,
-    Nothing, NothingVc, TaskId, ValueTraitVc, ValueTypeId,
+    Completion, CompletionVc, TaskId, ValueTraitVc, ValueTypeId,
 };
 
 pub trait TurboTasksCallApi: Sync + Send {
@@ -92,11 +94,11 @@ pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
         &self,
         task: TaskId,
         trait_id: TraitTypeId,
-    ) -> Result<Result<HashSet<RawVc>, EventListener>>;
+    ) -> Result<Result<AutoSet<RawVc>, EventListener>>;
 
     fn emit_collectible(&self, trait_type: TraitTypeId, collectible: RawVc);
     fn unemit_collectible(&self, trait_type: TraitTypeId, collectible: RawVc);
-    fn unemit_collectibles(&self, trait_type: TraitTypeId, collectibles: &HashSet<RawVc>);
+    fn unemit_collectibles(&self, trait_type: TraitTypeId, collectibles: &AutoSet<RawVc>);
 
     /// INVALIDATION: Be careful with this, it will not track dependencies, so
     /// using it could break cache invalidation.
@@ -108,6 +110,18 @@ pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
 
     fn read_current_task_cell(&self, index: CellId) -> Result<CellContent>;
     fn update_current_task_cell(&self, index: CellId, content: CellContent);
+}
+
+/// The type of stats reporting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatsType {
+    /// Only report stats essential to Turbo Tasks' operation.
+    Essential,
+    /// Full stats reporting.
+    ///
+    /// This is useful for debugging, but it has a slight memory and performance
+    /// impact.
+    Full,
 }
 
 pub trait TaskIdProvider {
@@ -143,7 +157,26 @@ pub trait TurboTasksBackendApi: TaskIdProvider + TurboTasksCallApi + Sync + Send
 
     /// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `invalidate_tasks()` on all tasks.
-    fn schedule_notify_tasks_set(&self, tasks: &HashSet<TaskId>);
+    fn schedule_notify_tasks_set(&self, tasks: &AutoSet<TaskId>);
+
+    /// Returns the stats reporting type.
+    fn stats_type(&self) -> StatsType;
+    /// Sets the stats reporting type.
+    fn set_stats_type(&self, stats_type: StatsType);
+    /// Returns the duration from the start of the program to the given instant.
+    fn program_duration_until(&self, instant: Instant) -> Duration;
+}
+
+impl StatsType {
+    /// Returns `true` if the stats type is `Essential`.
+    pub fn is_essential(self) -> bool {
+        matches!(self, Self::Essential)
+    }
+
+    /// Returns `true` if the stats type is `Full`.
+    pub fn is_full(self) -> bool {
+        matches!(self, Self::Full)
+    }
 }
 
 impl TaskIdProvider for &dyn TurboTasksBackendApi {
@@ -178,8 +211,13 @@ pub struct TurboTasks<B: Backend + 'static> {
     start: Mutex<Option<Instant>>,
     aggregated_update: Mutex<Option<(Duration, usize)>>,
     event: Event,
+    event_start: Event,
     event_foreground: Event,
     event_background: Event,
+    // NOTE(alexkirsz) We use an atomic bool instead of a lock around `StatsType` to avoid the
+    // locking overhead.
+    enable_full_stats: AtomicBool,
+    program_start: Instant,
 }
 
 // TODO implement our own thread pool and make these thread locals instead
@@ -218,8 +256,11 @@ impl<B: Backend> TurboTasks<B> {
             start: Default::default(),
             aggregated_update: Default::default(),
             event: Event::new(|| "TurboTasks::event".to_string()),
+            event_start: Event::new(|| "TurboTasks::event_start".to_string()),
             event_foreground: Event::new(|| "TurboTasks::event_foreground".to_string()),
             event_background: Event::new(|| "TurboTasks::event_background".to_string()),
+            enable_full_stats: AtomicBool::new(false),
+            program_start: Instant::now(),
         });
         this.backend.startup(&*this);
         this
@@ -247,6 +288,7 @@ impl<B: Backend> TurboTasks<B> {
     // TODO make sure that all dependencies settle before reading them
     /// Creates a new root task, that is only executed once.
     /// Dependencies will not invalidate the task.
+    #[track_caller]
     pub fn spawn_once_task(
         &self,
         future: impl Future<Output = Result<RawVc>> + Send + 'static,
@@ -267,12 +309,13 @@ impl<B: Backend> TurboTasks<B> {
             let result = future.await?;
             tx.send(result)
                 .map_err(|_| anyhow!("unable to send result"))?;
-            Ok(NothingVc::new().into())
+            Ok(CompletionVc::new().into())
         });
         // INVALIDATION: A Once task will never invalidate, therefore we don't need to
         // track a dependency
         let raw_result = read_task_output_untracked(self, task_id, false).await?;
-        raw_result.into_read_untracked::<Nothing>(self).await?;
+        raw_result.into_read_untracked::<Completion>(self).await?;
+
         Ok(rx.await?)
     }
 
@@ -305,9 +348,23 @@ impl<B: Backend> TurboTasks<B> {
     pub fn trait_call(
         &self,
         trait_type: TraitTypeId,
-        trait_fn_name: Cow<'static, str>,
+        mut trait_fn_name: Cow<'static, str>,
         inputs: Vec<TaskInput>,
     ) -> RawVc {
+        // avoid creating a wrapper task if self is already resolved
+        // for resolved cells we already know the value type so we can lookup the
+        // function
+        let first_input = inputs.first().expect("trait call without self argument");
+        if let &TaskInput::TaskCell(_, CellId { type_id, .. }) = first_input {
+            let value_type = registry::get_value_type(type_id);
+            let key = (trait_type, trait_fn_name);
+            if let Some(native_fn) = value_type.get_trait_method(&key) {
+                return self.dynamic_call(*native_fn, inputs);
+            }
+            trait_fn_name = key.1;
+        }
+
+        // create a wrapper task to resolve all inputs
         RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
             PersistentTaskType::ResolveTrait(trait_type, trait_fn_name, inputs),
             current_task("turbo_function calls"),
@@ -315,6 +372,7 @@ impl<B: Backend> TurboTasks<B> {
         ))
     }
 
+    #[track_caller]
     pub(crate) fn schedule(&self, task_id: TaskId) {
         self.begin_primary_job();
         self.scheduled_tasks.fetch_add(1, Ordering::AcqRel);
@@ -330,12 +388,12 @@ impl<B: Backend> TurboTasks<B> {
                 }
                 if let Some(execution) = this.backend.try_start_task_execution(task_id, &*this) {
                     // Setup thread locals
-                    let (result, duration) = CELL_COUNTERS
+                    let (result, duration, instant) = CELL_COUNTERS
                         .scope(Default::default(), async {
-                            let (result, duration) =
+                            let (result, duration, instant) =
                                 TimedFuture::new(AssertUnwindSafe(execution.future).catch_unwind())
                                     .await;
-                            (result, duration)
+                            (result, duration, instant)
                         })
                         .await;
                     if cfg!(feature = "log_function_stats") && duration.as_millis() > 1000 {
@@ -356,7 +414,7 @@ impl<B: Backend> TurboTasks<B> {
                     this.notify_scheduled_tasks_internal();
                     let reexecute = this
                         .backend
-                        .task_execution_completed(task_id, duration, &*this);
+                        .task_execution_completed(task_id, duration, instant, &*this);
                     if !reexecute {
                         break;
                     }
@@ -380,7 +438,10 @@ impl<B: Backend> TurboTasks<B> {
         );
 
         #[cfg(feature = "tokio_tracing")]
-        tokio::task::Builder::new().name(&description).spawn(future);
+        tokio::task::Builder::new()
+            .name(&description)
+            .spawn(future)
+            .unwrap();
         #[cfg(not(feature = "tokio_tracing"))]
         tokio::task::spawn(future);
     }
@@ -392,6 +453,7 @@ impl<B: Backend> TurboTasks<B> {
             == 0
         {
             *self.start.lock().unwrap() = Some(Instant::now());
+            self.event_start.notify(usize::MAX);
         }
     }
 
@@ -465,29 +527,63 @@ impl<B: Backend> TurboTasks<B> {
     }
 
     pub async fn get_or_wait_update_info(&self, aggregation: Duration) -> (Duration, usize) {
-        let listener = self.event.listen();
-        if aggregation.is_zero() {
-            if let Some(info) = *self.aggregated_update.lock().unwrap() {
-                return info;
+        self.update_info(aggregation, Duration::MAX).await.unwrap()
+    }
+
+    pub async fn update_info(
+        &self,
+        aggregation: Duration,
+        timeout: Duration,
+    ) -> Option<(Duration, usize)> {
+        let listener = self
+            .event
+            .listen_with_note(|| "wait for update info".to_string());
+        let wait_for_finish = {
+            let mut update = self.aggregated_update.lock().unwrap();
+            if update.is_some() {
+                if aggregation.is_zero() {
+                    return update.take();
+                }
+                false
+            } else {
+                true
             }
-            listener.await;
-        } else {
-            if self.aggregated_update.lock().unwrap().is_none() {
+        };
+        if wait_for_finish {
+            if timeout == Duration::MAX {
+                // wait for finish
                 listener.await;
+            } else {
+                // wait for start, then wait for finish or timeout
+                let start_listener = self
+                    .event_start
+                    .listen_with_note(|| "wait for update info".to_string());
+                if self.currently_scheduled_tasks.load(Ordering::Acquire) == 0 {
+                    start_listener.await;
+                } else {
+                    drop(start_listener);
+                }
+                if timeout.is_zero()
+                    || matches!(tokio::time::timeout(timeout, listener).await, Err(_))
+                {
+                    // Timeout
+                    return None;
+                }
             }
+        }
+        if !aggregation.is_zero() {
             loop {
                 select! {
                     () = tokio::time::sleep(aggregation) => {
                         break;
                     }
-                    () = self.event.listen() => {
+                    () = self.event.listen_with_note(|| "wait for update info".to_string()) => {
                         // Resets the sleep
                     }
                 }
             }
         }
-        // TODO(alexkirsz) The take unwrap crashed on me.
-        return self.aggregated_update.lock().unwrap().take().unwrap();
+        return self.aggregated_update.lock().unwrap().take();
     }
 
     pub async fn wait_background_done(&self) {
@@ -504,7 +600,7 @@ impl<B: Backend> TurboTasks<B> {
     pub async fn stop_and_wait(&self) {
         self.stopped.store(true, Ordering::Release);
         {
-            let listener = self.event.listen();
+            let listener = self.event.listen_with_note(|| "wait for stop".to_string());
             if self.currently_scheduled_tasks.load(Ordering::Acquire) != 0 {
                 listener.await;
             }
@@ -522,6 +618,7 @@ impl<B: Backend> TurboTasks<B> {
         self.backend.stop(self);
     }
 
+    #[track_caller]
     pub(crate) fn schedule_background_job<
         T: FnOnce(Arc<TurboTasks<B>>) -> F + Send + 'static,
         F: Future<Output = ()> + Send + 'static,
@@ -534,7 +631,9 @@ impl<B: Backend> TurboTasks<B> {
             .fetch_add(1, Ordering::AcqRel);
         tokio::spawn(TURBO_TASKS.scope(this.clone(), async move {
             while this.currently_scheduled_tasks.load(Ordering::Acquire) != 0 {
-                let listener = this.event.listen();
+                let listener = this
+                    .event
+                    .listen_with_note(|| "background job waiting for execution".to_string());
                 if this.currently_scheduled_tasks.load(Ordering::Acquire) != 0 {
                     listener.await;
                 }
@@ -553,6 +652,7 @@ impl<B: Backend> TurboTasks<B> {
         }));
     }
 
+    #[track_caller]
     pub(crate) fn schedule_foreground_job<
         T: FnOnce(Arc<TurboTasks<B>>) -> F + Send + 'static,
         F: Future<Output = ()> + Send + 'static,
@@ -601,16 +701,18 @@ impl<B: Backend> TurboTasksCallApi for TurboTasks<B> {
         self.trait_call(trait_type, trait_fn_name, inputs)
     }
 
+    #[track_caller]
     fn run_once(
         &self,
         future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
     ) -> TaskId {
         self.spawn_once_task(async move {
             future.await?;
-            Ok(NothingVc::new().into())
+            Ok(CompletionVc::new().into())
         })
     }
 
+    #[track_caller]
     fn run_once_process(
         &self,
         future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
@@ -620,7 +722,7 @@ impl<B: Backend> TurboTasksCallApi for TurboTasks<B> {
             this.finish_primary_job();
             future.await?;
             this.begin_primary_job();
-            Ok(NothingVc::new().into())
+            Ok(CompletionVc::new().into())
         })
     }
 }
@@ -692,7 +794,7 @@ impl<B: Backend> TurboTasksApi for TurboTasks<B> {
         &self,
         task: TaskId,
         trait_id: TraitTypeId,
-    ) -> Result<Result<HashSet<RawVc>, EventListener>> {
+    ) -> Result<Result<AutoSet<RawVc>, EventListener>> {
         self.backend.try_read_task_collectibles(
             task,
             trait_id,
@@ -719,7 +821,7 @@ impl<B: Backend> TurboTasksApi for TurboTasks<B> {
         );
     }
 
-    fn unemit_collectibles(&self, trait_type: TraitTypeId, collectibles: &HashSet<RawVc>) {
+    fn unemit_collectibles(&self, trait_type: TraitTypeId, collectibles: &AutoSet<RawVc>) {
         for collectible in collectibles {
             self.backend.unemit_collectible(
                 trait_type,
@@ -749,11 +851,13 @@ impl<B: Backend> TurboTasksBackendApi for TurboTasks<B> {
     fn pin(&self) -> Arc<dyn TurboTasksBackendApi> {
         self.pin()
     }
+    #[track_caller]
     fn schedule_backend_background_job(&self, id: BackendJobId) {
         self.schedule_background_job(move |this| async move {
             this.backend.run_backend_job(id, &*this).await;
         })
     }
+    #[track_caller]
     fn schedule_backend_foreground_job(&self, id: BackendJobId) {
         self.schedule_foreground_job(move |this| async move {
             this.backend.run_backend_job(id, &*this).await;
@@ -793,7 +897,7 @@ impl<B: Backend> TurboTasksBackendApi for TurboTasks<B> {
 
     /// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `dependent_cell_updated()` on all tasks.
-    fn schedule_notify_tasks_set(&self, tasks: &HashSet<TaskId>) {
+    fn schedule_notify_tasks_set(&self, tasks: &AutoSet<TaskId>) {
         let result = TASKS_TO_NOTIFY.try_with(|tasks_list| {
             let mut list = tasks_list.borrow_mut();
             list.extend(tasks.iter());
@@ -804,8 +908,27 @@ impl<B: Backend> TurboTasksBackendApi for TurboTasks<B> {
         };
     }
 
+    #[track_caller]
     fn schedule(&self, task: TaskId) {
         self.schedule(task)
+    }
+
+    fn stats_type(&self) -> StatsType {
+        match self.enable_full_stats.load(Ordering::Acquire) {
+            true => StatsType::Full,
+            false => StatsType::Essential,
+        }
+    }
+
+    fn set_stats_type(&self, stats_type: StatsType) {
+        match stats_type {
+            StatsType::Full => self.enable_full_stats.store(true, Ordering::Release),
+            StatsType::Essential => self.enable_full_stats.store(false, Ordering::Release),
+        }
+    }
+
+    fn program_duration_until(&self, instant: Instant) -> Duration {
+        instant - self.program_start
     }
 }
 
@@ -923,7 +1046,7 @@ pub async fn run_once<T: Send + 'static>(
     // INVALIDATION: A Once task will never invalidate, therefore we don't need to
     // track a dependency
     let raw_result = read_task_output_untracked(&*tt, task_id, false).await?;
-    raw_result.into_read_untracked::<Nothing>(&*tt).await?;
+    raw_result.into_read_untracked::<Completion>(&*tt).await?;
 
     Ok(rx.await?)
 }
@@ -978,6 +1101,12 @@ pub fn get_invalidator() -> Invalidator {
         turbo_tasks: weak_turbo_tasks(),
         handle,
     }
+}
+
+/// Marks the current task as stateful. This prevents the tasks from being
+/// dropped without persisting the state.
+pub fn mark_stateful() {
+    // TODO pass this to the backend
 }
 
 pub fn emit<T: ValueTraitVc>(collectible: T) {
@@ -1065,7 +1194,7 @@ pub(crate) async fn read_task_collectibles(
     this: &dyn TurboTasksApi,
     id: TaskId,
     trait_id: TraitTypeId,
-) -> Result<HashSet<RawVc>> {
+) -> Result<AutoSet<RawVc>> {
     loop {
         match this.try_read_task_collectibles(id, trait_id)? {
             Ok(result) => return Ok(result),

@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{BinaryHeap, HashMap, HashSet},
+    collections::{BinaryHeap, HashMap},
     fmt::Debug,
     future::Future,
     mem::{replace, take},
@@ -9,10 +9,11 @@ use std::{
         atomic::{AtomicU32, AtomicUsize, Ordering},
         Mutex, MutexGuard,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, Result};
+use auto_hash_map::AutoSet;
 use concurrent_queue::ConcurrentQueue;
 use dashmap::{mapref::entry::Entry, DashMap, DashSet};
 use turbo_tasks::{
@@ -68,11 +69,11 @@ struct MemoryTaskState {
     need_persist: bool,
     has_changes: bool,
     freshness: TaskFreshness,
-    cells: HashMap<CellId, (TaskCell, HashSet<TaskId>)>,
+    cells: HashMap<CellId, (TaskCell, AutoSet<TaskId>)>,
     output: Option<Result<RawVc, SharedError>>,
-    output_dependent: HashSet<TaskId>,
-    dependencies: HashSet<RawVc>,
-    children: HashSet<TaskId>,
+    output_dependent: AutoSet<TaskId>,
+    dependencies: AutoSet<RawVc>,
+    children: AutoSet<TaskId>,
     event: Event,
     event_cells: Event,
 }
@@ -270,10 +271,10 @@ impl<P: PersistedGraph> MemoryBackendWithPersistedGraph<P> {
                     cells: data
                         .cells
                         .into_iter()
-                        .map(|(k, s)| (k, (s, HashSet::new())))
+                        .map(|(k, s)| (k, (s, AutoSet::new())))
                         .collect(),
                     output: Some(Ok(data.output)),
-                    output_dependent: HashSet::new(),
+                    output_dependent: AutoSet::new(),
                     dependencies: data.dependencies.into_iter().collect(),
                     children: data.children.into_iter().collect(),
                     need_persist: Default::default(),
@@ -1094,7 +1095,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
             mem_state.output = Some(result.map_err(SharedError::new));
             take(&mut mem_state.output_dependent)
         } else {
-            HashSet::new()
+            AutoSet::new()
         };
 
         drop(state);
@@ -1108,6 +1109,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         &self,
         task: TaskId,
         duration: Duration,
+        _instant: Instant,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool {
         #[cfg(feature = "log_running_tasks")]
@@ -1270,23 +1272,6 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         Ok(Ok(mem_state.output.as_ref().unwrap().clone()?))
     }
 
-    fn track_read_task_output(
-        &self,
-        task: TaskId,
-        reader: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
-    ) {
-        let (mut state, _) = self.mem_state_mut(task, turbo_tasks);
-        let mem_state = state.memory.as_mut().unwrap();
-        let need_dependency = mem_state.output_dependent.insert(reader);
-        drop(state);
-        if need_dependency {
-            let (mut state, _) = self.mem_state_mut(reader, turbo_tasks);
-            let mem_state = state.memory.as_mut().unwrap();
-            mem_state.dependencies.insert(RawVc::TaskOutput(task));
-        }
-    }
-
     fn try_read_task_cell(
         &self,
         task: TaskId,
@@ -1409,33 +1394,13 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         }
     }
 
-    fn track_read_task_cell(
-        &self,
-        task: TaskId,
-        index: CellId,
-        reader: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
-    ) {
-        let (mut state, _) = self.mem_state_mut(task, turbo_tasks);
-        let mem_state = state.memory.as_mut().unwrap();
-        if let Some((_, dependent)) = mem_state.cells.get_mut(&index) {
-            let need_dependency = dependent.insert(reader);
-            drop(state);
-            if need_dependency {
-                let (mut state, _) = self.mem_state_mut(reader, turbo_tasks);
-                let mem_state = state.memory.as_mut().unwrap();
-                mem_state.dependencies.insert(RawVc::TaskCell(task, index));
-            }
-        }
-    }
-
     fn try_read_task_collectibles(
         &self,
         _task: TaskId,
         _trait_id: TraitTypeId,
         _reader: TaskId,
         _turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> Result<Result<HashSet<RawVc>, EventListener>> {
+    ) -> Result<Result<AutoSet<RawVc>, EventListener>> {
         todo!()
     }
 

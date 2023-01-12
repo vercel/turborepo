@@ -2,12 +2,16 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use serde_json::Value as JsonValue;
-use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
+use turbo_tasks::{
+    primitives::{StringVc, StringsVc},
+    Value, ValueToString, ValueToStringVc,
+};
 use turbo_tasks_fs::{FileJsonContent, FileJsonContentVc, FileSystemPathVc};
 use turbopack_core::{
     asset::AssetVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     reference::{AssetReference, AssetReferenceVc},
+    reference_type::{ReferenceType, TypeScriptReferenceSubType},
     resolve::{
         handle_resolve_error,
         options::{
@@ -16,6 +20,7 @@ use turbopack_core::{
         },
         origin::ResolveOriginVc,
         parse::{Request, RequestVc},
+        pattern::QueryMapVc,
         resolve, AliasPattern, ResolveResult, ResolveResultVc,
     },
     source_asset::SourceAssetVc,
@@ -206,6 +211,11 @@ pub async fn tsconfig_resolve_options(
 }
 
 #[turbo_tasks::function]
+pub fn tsconfig() -> StringsVc {
+    StringsVc::cell(vec!["tsconfig.json".to_string()])
+}
+
+#[turbo_tasks::function]
 pub async fn apply_tsconfig_resolve_options(
     resolve_options: ResolveOptionsVc,
     tsconfig_resolve_options: TsConfigResolveOptionsVc,
@@ -232,10 +242,18 @@ pub async fn apply_tsconfig_resolve_options(
 
 #[turbo_tasks::function]
 pub async fn type_resolve(origin: ResolveOriginVc, request: RequestVc) -> Result<ResolveResultVc> {
+    let ty = Value::new(ReferenceType::TypeScript(
+        TypeScriptReferenceSubType::Undefined,
+    ));
     let context_path = origin.origin_path().parent();
-    let options = origin.resolve_options();
+    let options = origin.resolve_options(ty.clone());
     let options = apply_typescript_types_options(options);
-    let types_request = if let Request::Module { module: m, path: p } = &*request.await? {
+    let types_request = if let Request::Module {
+        module: m,
+        path: p,
+        query: _,
+    } = &*request.await?
+    {
         let m = if let Some(stripped) = m.strip_prefix('@') {
             stripped.replace('/', "__")
         } else {
@@ -244,6 +262,7 @@ pub async fn type_resolve(origin: ResolveOriginVc, request: RequestVc) -> Result
         Some(RequestVc::module(
             format!("@types/{m}"),
             Value::new(p.clone()),
+            QueryMapVc::none(),
         ))
     } else {
         None
@@ -258,8 +277,8 @@ pub async fn type_resolve(origin: ResolveOriginVc, request: RequestVc) -> Result
     } else {
         resolve(context_path, request, options)
     };
-    let result = origin.context().process_resolve_result(result);
-    handle_resolve_error(result, "type request", origin, request, options).await
+    let result = origin.context().process_resolve_result(result, ty.clone());
+    handle_resolve_error(result, ty, origin, request, options).await
 }
 
 #[turbo_tasks::value]

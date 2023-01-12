@@ -20,7 +20,7 @@ Each task in your codebase has **inputs** and **outputs**.
 
 Let's say you run a `build` task with Turborepo using `turbo run build`:
 
-![](../../../../public/images/docs/cache-miss.png)
+![](/images/docs/cache-miss.png)
 
 1. Turborepo will **evaluate the inputs to your task** (by default all non-gitignored files in the workspace folder) and **turn them into a hash** (e.g. `78awdk123`).
 
@@ -40,7 +40,7 @@ Let's say you run a `build` task with Turborepo using `turbo run build`:
 
 Let's say that you run the task again without changing any of its inputs:
 
-![](../../../../public/images/docs/cache-hit.png)
+![](/images/docs/cache-hit.png)
 
 1. The **hash will be the same** because **the inputs haven't changed** (e.g. `78awdk123`)
 
@@ -65,7 +65,6 @@ To override the default cache output behavior, pass an array of globs to a [`pip
       "dependsOn": ["^build"]
     },
     "test": {
-      "outputs": [], // leave empty to only cache logs
       "dependsOn": ["build"]
     }
   }
@@ -102,7 +101,6 @@ in the `src/` and `test/` subdirectories has changed since the last execution.
       // A workspace's `test` task depends on that workspace's
       // own `build` task being completed first.
       "dependsOn": ["build"],
-      "outputs": [],
       // A workspace's `test` task should only be rerun when
       // either a `.tsx` or `.ts` file has changed.
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
@@ -118,7 +116,7 @@ Sometimes you really don't want to write the cache output (e.g. when you're usin
 ```shell
 # Run `dev` npm script in all workspaces in parallel,
 # but don't cache the output
-turbo run dev --parallel --no-cache
+turbo run dev --no-cache
 ```
 
 Note that `--no-cache` disables cache writes but does not disable cache reads. If you want to disable cache reads, use the `--force` flag.
@@ -130,7 +128,8 @@ You can also disable caching on specific tasks by setting the [`pipeline.<task>.
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
@@ -149,7 +148,6 @@ determining a cache hit on the `test` task:
   "pipeline": {
     // ...other tasks
     "test": {
-      "outputs": [], // leave empty to only cache logs
       "dependsOn": ["build"],
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     }
@@ -174,7 +172,6 @@ If you want _all_ tasks to depend on certain files, you can declare this depende
   "pipeline": {
     // ...other tasks
     "test": {
-      "outputs": [], // leave empty to only cache logs
       "dependsOn": ["build"],
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
     }

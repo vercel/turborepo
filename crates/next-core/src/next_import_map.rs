@@ -1,29 +1,31 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringsVc, Value};
+use turbo_tasks::Value;
 use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
-use turbopack_core::resolve::options::{
-    ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap, ResolvedMapVc,
+use turbopack_core::resolve::{
+    options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap, ResolvedMapVc},
+    AliasPattern,
 };
 
 use crate::{
     embed_js::{attached_next_js_package_path, VIRTUAL_PACKAGE_NAME},
-    next_client::context::ContextType,
-    next_server::ServerContextType,
+    next_client::context::ClientContextType,
+    next_config::NextConfigVc,
+    next_font_google::{NextFontGoogleCssModuleReplacerVc, NextFontGoogleReplacerVc},
+    next_server::context::ServerContextType,
 };
 
 /// Computes the Next-specific client import map.
 #[turbo_tasks::function]
 pub fn get_next_client_import_map(
     project_path: FileSystemPathVc,
-    ty: Value<ContextType>,
+    ty: Value<ClientContextType>,
 ) -> ImportMapVc {
     let mut import_map = ImportMap::empty();
-    let package_root = attached_next_js_package_path(project_path);
 
-    insert_next_shared_aliases(&mut import_map, package_root);
+    insert_next_shared_aliases(&mut import_map, project_path);
 
     match ty.into_value() {
-        ContextType::Pages { pages_dir } => {
+        ClientContextType::Pages { pages_dir } => {
             insert_alias_to_alternatives(
                 &mut import_map,
                 format!("{VIRTUAL_PACKAGE_NAME}/pages/_app"),
@@ -41,7 +43,7 @@ pub fn get_next_client_import_map(
                 ],
             );
         }
-        ContextType::App { app_dir } => {
+        ClientContextType::App { app_dir } => {
             import_map.insert_exact_alias(
                 "react",
                 request_to_import_mapping(app_dir, "next/dist/compiled/react"),
@@ -59,23 +61,42 @@ pub fn get_next_client_import_map(
                 request_to_import_mapping(app_dir, "next/dist/compiled/react-dom/*"),
             );
         }
-        ContextType::Fallback => {}
-        ContextType::Other => {}
+        ClientContextType::Fallback => {}
+        ClientContextType::Other => {}
     }
+    import_map.cell()
+}
+
+/// Computes the Next-specific client import map.
+#[turbo_tasks::function]
+pub fn get_next_build_import_map(project_path: FileSystemPathVc) -> ImportMapVc {
+    let mut import_map = ImportMap::empty();
+
+    let package_root = attached_next_js_package_path(project_path);
+
+    insert_package_alias(
+        &mut import_map,
+        &format!("{VIRTUAL_PACKAGE_NAME}/"),
+        package_root,
+    );
+
+    import_map.insert_exact_alias("next", ImportMapping::External(None).into());
+    import_map.insert_wildcard_alias("next/", ImportMapping::External(None).into());
+
     import_map.cell()
 }
 
 /// Computes the Next-specific client fallback import map, which provides
 /// polyfills to Node.js externals.
 #[turbo_tasks::function]
-pub fn get_next_client_fallback_import_map(ty: Value<ContextType>) -> ImportMapVc {
+pub fn get_next_client_fallback_import_map(ty: Value<ClientContextType>) -> ImportMapVc {
     let mut import_map = ImportMap::empty();
 
     match ty.into_value() {
-        ContextType::Pages {
+        ClientContextType::Pages {
             pages_dir: context_dir,
         }
-        | ContextType::App {
+        | ClientContextType::App {
             app_dir: context_dir,
         } => {
             for (original, alias) in NEXT_ALIASES {
@@ -87,8 +108,8 @@ pub fn get_next_client_fallback_import_map(ty: Value<ContextType>) -> ImportMapV
                 );
             }
         }
-        ContextType::Fallback => {}
-        ContextType::Other => {}
+        ClientContextType::Fallback => {}
+        ClientContextType::Other => {}
     }
 
     import_map.cell()
@@ -99,12 +120,11 @@ pub fn get_next_client_fallback_import_map(ty: Value<ContextType>) -> ImportMapV
 pub async fn get_next_server_import_map(
     project_path: FileSystemPathVc,
     ty: Value<ServerContextType>,
-    externals: StringsVc,
+    next_config: NextConfigVc,
 ) -> Result<ImportMapVc> {
     let mut import_map = ImportMap::empty();
-    let package_root = attached_next_js_package_path(project_path);
 
-    insert_next_shared_aliases(&mut import_map, package_root);
+    insert_next_shared_aliases(&mut import_map, project_path);
 
     match ty.into_value() {
         ServerContextType::Pages { pages_dir } => {
@@ -153,7 +173,7 @@ pub async fn get_next_server_import_map(
                 request_to_import_mapping(app_dir, "next/dist/compiled/react-dom/*"),
             );
 
-            for external in externals.await?.iter() {
+            for external in next_config.server_component_externals().await?.iter() {
                 import_map.insert_exact_alias(external, ImportMapping::External(None).into());
                 import_map.insert_wildcard_alias(
                     format!("{external}/"),
@@ -178,7 +198,7 @@ pub fn get_next_client_resolved_map(
                 "**/*/next/dist/client/components/react-dev-overlay/hot-reloader-client.js",
             ),
             ImportMapping::PrimaryAlternative(
-                "@vercel/turbopack-next/dev/hot-reloader".to_string(),
+                "@vercel/turbopack-next/dev/hot-reloader.tsx".to_string(),
                 Some(root),
             )
             .into(),
@@ -216,18 +236,31 @@ static NEXT_ALIASES: [(&str, &str); 23] = [
     ("setImmediate", "next/dist/compiled/setimmediate"),
 ];
 
-pub fn insert_next_shared_aliases(import_map: &mut ImportMap, package_root: FileSystemPathVc) {
+pub fn insert_next_shared_aliases(import_map: &mut ImportMap, project_path: FileSystemPathVc) {
+    let package_root = attached_next_js_package_path(project_path);
+
     // we use the next.js hydration code, so we replace the error overlay with our
     // own
     import_map.insert_exact_alias(
         "next/dist/compiled/@next/react-dev-overlay/dist/client",
-        request_to_import_mapping(package_root, "./overlay/client"),
+        request_to_import_mapping(package_root, "./overlay/client.ts"),
     );
 
     insert_package_alias(
         import_map,
         &format!("{VIRTUAL_PACKAGE_NAME}/"),
         package_root,
+    );
+
+    import_map.insert_alias(
+        // Request path from js via next-font swc transform
+        AliasPattern::exact("@next/font/google/target.css"),
+        ImportMapping::Dynamic(NextFontGoogleReplacerVc::new(project_path).into()).into(),
+    );
+
+    import_map.insert_alias(
+        AliasPattern::exact("@vercel/turbopack-next/internal/font/google/cssmodule.module.css"),
+        ImportMapping::Dynamic(NextFontGoogleCssModuleReplacerVc::new(project_path).into()).into(),
     );
 }
 

@@ -1,5 +1,5 @@
 import { HeroText } from "../home-shared/Headings";
-import Image from "next/future/image";
+import Image from "next/image";
 import cn from "classnames";
 import gradients from "../home-shared/gradients.module.css";
 import { FadeIn } from "../home-shared/FadeIn";

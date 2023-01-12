@@ -1,6 +1,9 @@
 {
   "$schema": "./docs/public/schema.json",
   "pipeline": {
+    "eslint-plugin-turbo#test": {
+      "dependsOn": ["build"]
+    },
     "test": {
       "outputs": ["coverage/**/*"],
       "dependsOn": ["^build"]
@@ -63,7 +66,18 @@
         "cli/**/*.go",
         "cli/go.mod",
         "cli/go.sum",
-        "cli/scripts/e2e/e2e.ts"
+        "cli/scripts/e2e/e2e.ts",
+        "shim/**/*.rs"
+      ]
+    },
+    "cli#e2e-prebuilt": {
+      "outputs": [],
+      "inputs": [
+        "cli/**/*.go",
+        "cli/go.mod",
+        "cli/go.sum",
+        "cli/scripts/e2e/e2e.ts",
+        "shim/**/*.rs"
       ]
     },
     "cli#integration-tests": {

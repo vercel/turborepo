@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt::{Debug, Display},
     hash::Hash,
     mem::take,
@@ -7,6 +7,7 @@ use std::{
     sync::atomic::{AtomicIsize, AtomicUsize, Ordering},
 };
 
+use auto_hash_map::{map::Entry, AutoMap, AutoSet};
 use nohash_hasher::BuildNoHashHasher;
 use parking_lot::Mutex;
 use turbo_tasks::{
@@ -111,6 +112,7 @@ impl<'a> Iterator for TaskScopesIterator<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct TaskScope {
     #[cfg(feature = "print_scope_updates")]
     pub id: TaskScopeId,
@@ -128,6 +130,7 @@ pub struct TaskScope {
     pub state: Mutex<TaskScopeState>,
 }
 
+#[derive(Debug)]
 pub struct TaskScopeState {
     #[cfg(feature = "print_scope_updates")]
     pub id: TaskScopeId,
@@ -136,7 +139,7 @@ pub struct TaskScopeState {
     active: isize,
     /// When not active, this list contains all dirty tasks.
     /// When the scope becomes active, these need to be scheduled.
-    dirty_tasks: HashSet<TaskId>,
+    dirty_tasks: AutoSet<TaskId>,
     /// All child scopes, when the scope becomes active, child scopes need to
     /// become active too
     children: CountHashSet<TaskScopeId, BuildNoHashHasher<TaskScopeId>>,
@@ -146,12 +149,12 @@ pub struct TaskScopeState {
     /// done
     event: Event,
     /// All parent scopes
-    parents: CountHashSet<TaskScopeId, BuildNoHashHasher<TaskScopeId>>,
+    pub parents: CountHashSet<TaskScopeId, BuildNoHashHasher<TaskScopeId>>,
     /// Tasks that have read children
     /// When they change these tasks are invalidated
-    dependent_tasks: HashSet<TaskId>,
+    dependent_tasks: AutoSet<TaskId>,
     /// Emitted collectibles with count and dependent_tasks by trait type
-    collectibles: HashMap<TraitTypeId, (CountHashSet<RawVc>, HashSet<TaskId>)>,
+    collectibles: AutoMap<TraitTypeId, (CountHashSet<RawVc>, AutoSet<TaskId>)>,
 }
 
 impl TaskScope {
@@ -166,10 +169,10 @@ impl TaskScope {
                 #[cfg(feature = "print_scope_updates")]
                 id,
                 active: 0,
-                dirty_tasks: HashSet::new(),
+                dirty_tasks: AutoSet::new(),
                 children: CountHashSet::new(),
-                collectibles: HashMap::new(),
-                dependent_tasks: HashSet::new(),
+                collectibles: AutoMap::new(),
+                dependent_tasks: AutoSet::new(),
                 event: Event::new(|| {
                     #[cfg(feature = "print_scope_updates")]
                     return format!("TaskScope({id})::event");
@@ -193,10 +196,10 @@ impl TaskScope {
                 #[cfg(feature = "print_scope_updates")]
                 id,
                 active: 1,
-                dirty_tasks: HashSet::new(),
+                dirty_tasks: AutoSet::new(),
                 children: CountHashSet::new(),
-                collectibles: HashMap::new(),
-                dependent_tasks: HashSet::new(),
+                collectibles: AutoMap::new(),
+                dependent_tasks: AutoSet::new(),
                 event: Event::new(|| {
                     #[cfg(feature = "print_scope_updates")]
                     return format!("TaskScope({id})::event");
@@ -265,12 +268,15 @@ impl TaskScope {
         });
     }
 
-    pub fn remove_parent(&self, parent: TaskScopeId, backend: &MemoryBackend) {
-        {
+    /// Removes a parent from this scope, returns true if the scope parents are
+    /// now empty and unset
+    pub fn remove_parent(&self, parent: TaskScopeId, backend: &MemoryBackend) -> bool {
+        let result = {
             let mut state = self.state.lock();
             if !state.parents.remove(parent) || !state.has_unfinished_tasks {
-                return;
+                return state.parents.is_unset();
             }
+            state.parents.is_unset()
         };
         // As we removed a parent while having unfinished tasks we need to decrement the
         // unfinished task count and potentially update the state
@@ -281,6 +287,7 @@ impl TaskScope {
                 parent.update_unfinished_state(backend);
             }
         });
+        result
     }
 
     fn update_unfinished_state(&self, backend: &MemoryBackend) {
@@ -324,7 +331,7 @@ impl TaskScope {
         trait_id: TraitTypeId,
         reader: TaskId,
         backend: &MemoryBackend,
-    ) -> HashSet<RawVc> {
+    ) -> AutoSet<RawVc> {
         let collectibles = self.read_collectibles_recursive(
             self_id,
             trait_id,
@@ -332,7 +339,7 @@ impl TaskScope {
             backend,
             &mut HashMap::with_hasher(BuildNoHashHasher::default()),
         );
-        HashSet::from_iter(collectibles.iter().copied())
+        AutoSet::from_iter(collectibles.iter().copied())
     }
 
     fn read_collectibles_recursive(
@@ -386,21 +393,25 @@ impl TaskScope {
         reader: TaskId,
     ) {
         let mut state = self.state.lock();
-        if let Some((_, dependent_tasks)) = state.collectibles.get_mut(&trait_type) {
+        if let Entry::Occupied(mut entry) = state.collectibles.entry(trait_type) {
+            let (collectibles, dependent_tasks) = entry.get_mut();
             dependent_tasks.remove(&reader);
+            if collectibles.is_unset() && dependent_tasks.is_empty() {
+                entry.remove();
+            }
         }
     }
 }
 
 pub struct ScopeChildChangeEffect {
-    pub notify: HashSet<TaskId>,
+    pub notify: AutoSet<TaskId>,
     pub active: bool,
     /// `true` when the child to parent relationship needs to be updated
     pub parent: bool,
 }
 
 pub struct ScopeCollectibleChangeEffect {
-    pub notify: HashSet<TaskId>,
+    pub notify: AutoSet<TaskId>,
 }
 
 impl TaskScopeState {
@@ -411,7 +422,10 @@ impl TaskScopeState {
     /// scheduled and list of child scope that need to be incremented after
     /// releasing the scope lock
     #[must_use]
-    pub fn increment_active(&mut self, more_jobs: &mut Vec<TaskScopeId>) -> Option<Vec<TaskId>> {
+    pub fn increment_active(
+        &mut self,
+        more_jobs: &mut Vec<TaskScopeId>,
+    ) -> Option<AutoSet<TaskId>> {
         self.increment_active_by(1, more_jobs)
     }
     /// increments the active counter, returns list of tasks that need to be
@@ -422,12 +436,12 @@ impl TaskScopeState {
         &mut self,
         count: usize,
         more_jobs: &mut Vec<TaskScopeId>,
-    ) -> Option<Vec<TaskId>> {
+    ) -> Option<AutoSet<TaskId>> {
         let was_zero = self.active <= 0;
         self.active += count as isize;
         if self.active > 0 && was_zero {
             more_jobs.extend(self.children.iter().copied());
-            Some(self.dirty_tasks.iter().copied().collect())
+            Some(take(&mut self.dirty_tasks))
         } else {
             None
         }
@@ -511,6 +525,23 @@ impl TaskScopeState {
         log_scope_update!("remove_dirty_task {} -> {}", *self.id, *id);
     }
 
+    /// Takes all children or collectibles dependent tasks and returns them for
+    /// notification.
+    pub fn take_all_dependent_tasks(&mut self) -> AutoSet<TaskId> {
+        let mut set = self.take_dependent_tasks();
+        self.collectibles = take(&mut self.collectibles)
+            .into_iter()
+            .map(|(key, (collectibles, mut dependent_tasks))| {
+                set.extend(take(&mut dependent_tasks));
+                (key, (collectibles, dependent_tasks))
+            })
+            .filter(|(_, (collectibles, dependent_tasks))| {
+                !collectibles.is_unset() || !dependent_tasks.is_empty()
+            })
+            .collect();
+        set
+    }
+
     /// Adds a colletible to the scope.
     /// Returns true when it was initially added and dependent_tasks should be
     /// notified.
@@ -534,14 +565,32 @@ impl TaskScopeState {
         collectible: RawVc,
         count: usize,
     ) -> Option<ScopeCollectibleChangeEffect> {
-        let (collectibles, dependent_tasks) = self.collectibles.entry(trait_id).or_default();
-        if collectibles.add_count(collectible, count) {
-            log_scope_update!("add_collectible {} -> {}", *self.id, collectible);
-            Some(ScopeCollectibleChangeEffect {
-                notify: take(dependent_tasks),
-            })
-        } else {
-            None
+        match self.collectibles.entry(trait_id) {
+            Entry::Occupied(mut entry) => {
+                let (collectibles, dependent_tasks) = entry.get_mut();
+                if collectibles.add_count(collectible, count) {
+                    log_scope_update!("add_collectible {} -> {}", *self.id, collectible);
+                    Some(ScopeCollectibleChangeEffect {
+                        notify: take(dependent_tasks),
+                    })
+                } else {
+                    if collectibles.is_unset() && dependent_tasks.is_empty() {
+                        entry.remove();
+                    }
+                    None
+                }
+            }
+            Entry::Vacant(entry) => {
+                let result = entry
+                    .insert(Default::default())
+                    .0
+                    .add_count(collectible, count);
+                debug_assert!(result, "this must be always a new entry");
+                log_scope_update!("add_collectible {} -> {}", *self.id, collectible);
+                Some(ScopeCollectibleChangeEffect {
+                    notify: AutoSet::new(),
+                })
+            }
         }
     }
 
@@ -567,18 +616,33 @@ impl TaskScopeState {
         collectible: RawVc,
         count: usize,
     ) -> Option<ScopeCollectibleChangeEffect> {
-        let (collectibles, dependent_tasks) = self.collectibles.entry(trait_id).or_default();
-        if collectibles.remove_count(collectible, count) {
-            log_scope_update!("remove_collectible {} -> {}", *self.id, collectible);
-            Some(ScopeCollectibleChangeEffect {
-                notify: take(dependent_tasks),
-            })
-        } else {
-            None
+        match self.collectibles.entry(trait_id) {
+            Entry::Occupied(mut entry) => {
+                let (collectibles, dependent_tasks) = entry.get_mut();
+                if collectibles.remove_count(collectible, count) {
+                    let notify = take(dependent_tasks);
+                    if collectibles.is_unset() {
+                        entry.remove();
+                    }
+                    log_scope_update!("remove_collectible {} -> {}", *self.id, collectible);
+                    Some(ScopeCollectibleChangeEffect { notify })
+                } else {
+                    None
+                }
+            }
+            Entry::Vacant(e) => {
+                let result = e
+                    .insert(Default::default())
+                    .0
+                    .remove_count(collectible, count);
+
+                debug_assert!(!result, "this must never be visible from outside");
+                None
+            }
         }
     }
 
-    pub fn take_dependent_tasks(&mut self) -> HashSet<TaskId> {
+    pub fn take_dependent_tasks(&mut self) -> AutoSet<TaskId> {
         take(&mut self.dependent_tasks)
     }
 }

@@ -33,6 +33,10 @@ Check
       {
         "task": "build",
         "hash": "8fc80cfff3b64237",
+        "cacheState": {
+          "local": false,
+          "remote": false
+        },
         "command": "echo 'building' \u003e foo",
         "outputs": [
           "foo"
@@ -47,6 +51,10 @@ Check
       {
         "task": "test",
         "hash": "c71366ccd6a86465",
+        "cacheState": {
+          "local": false,
+          "remote": false
+        },
         "command": "[[ ( -f foo ) \u0026\u0026 $(cat foo) == 'building' ]]",
         "outputs": null,
         "excludedOutputs": null,

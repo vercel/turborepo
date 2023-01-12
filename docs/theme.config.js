@@ -4,6 +4,7 @@ import { useConfig, useTheme } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
 import Navigation from "./components/Navigation";
 import HeaderLogo from "./components/HeaderLogo";
+import ExtraContent from "./components/ExtraContent";
 import { Discord, Github } from "./components/Social";
 
 const SITE_ROOT = "https://turbo.build";
@@ -12,14 +13,11 @@ const SITE_ROOT = "https://turbo.build";
  * @type {import('nextra-theme-docs').DocsThemeConfig}
  */
 const theme = {
-  project: {
-    icon: Github,
-  },
-  chat: {
-    icon: Discord,
+  sidebar: {
+    defaultMenuCollapseLevel: Number.POSITIVE_INFINITY,
   },
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
-  getNextSeoProps: function SEO() {
+  useNextSeoProps: function SEO() {
     const router = useRouter();
     const { frontMatter } = useConfig();
 
@@ -65,6 +63,7 @@ const theme = {
   unstable_staticImage: true,
   toc: {
     float: true,
+    extraContent: ExtraContent,
   },
   font: false,
   feedback: {
@@ -151,7 +150,15 @@ const theme = {
   editLink: {
     text: "Edit this page on GitHub",
   },
-  navbar: Navigation,
+  navbar: {
+    component: Navigation,
+    extraContent: (
+      <>
+        <Github />
+        <Discord />
+      </>
+    ),
+  },
   search: {
     placeholder: "Search documentation…",
   },

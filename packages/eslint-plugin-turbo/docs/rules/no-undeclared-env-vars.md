@@ -21,9 +21,7 @@ Examples of **incorrect** code for this rule:
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**"]
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "dev": {
       "cache": false
     }
@@ -35,15 +33,13 @@ Examples of **correct** code for this rule:
 
 ```json
 {
-  "globalDependencies": ["$MY_API_TOKEN"]
+  "globalEnv": ["MY_API_TOKEN"],
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**"]
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "dev": {
       "cache": false
     }
@@ -55,12 +51,11 @@ Examples of **correct** code for this rule:
 {
   "pipeline": {
     "build": {
-      "dependsOn": ["^build", "$MY_API_TOKEN"],
+      "dependsOn": ["^build"],
+      "env": ["MY_API_TOKEN"],
       "outputs": ["dist/**", ".next/**"]
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "dev": {
       "cache": false
     }

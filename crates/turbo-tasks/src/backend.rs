@@ -1,15 +1,15 @@
 use std::{
     any::Any,
     borrow::Cow,
-    collections::HashSet,
     fmt::{Debug, Display},
     future::Future,
     pin::Pin,
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, Result};
+use auto_hash_map::AutoSet;
 use serde::{Deserialize, Serialize};
 
 pub use crate::id::BackendJobId;
@@ -76,6 +76,14 @@ pub enum PersistentTaskType {
 }
 
 impl PersistentTaskType {
+    pub fn shrink_to_fit(&mut self) {
+        match self {
+            Self::Native(_, inputs) => inputs.shrink_to_fit(),
+            Self::ResolveNative(_, inputs) => inputs.shrink_to_fit(),
+            Self::ResolveTrait(_, _, inputs) => inputs.shrink_to_fit(),
+        }
+    }
+
     pub fn len(&self) -> usize {
         match self {
             PersistentTaskType::Native(_, v)
@@ -111,7 +119,7 @@ pub struct TaskExecutionSpec {
 
 // TODO technically CellContent is already indexed by the ValueTypeId, so we
 // don't need to store it here
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CellContent(pub Option<SharedReference>);
 
 impl Display for CellContent {
@@ -192,6 +200,7 @@ pub trait Backend: Sync + Send {
         &self,
         task: TaskId,
         duration: Duration,
+        instant: Instant,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> bool;
 
@@ -217,13 +226,6 @@ pub trait Backend: Sync + Send {
         strongly_consistent: bool,
         turbo_tasks: &dyn TurboTasksBackendApi,
     ) -> Result<Result<RawVc, EventListener>>;
-
-    fn track_read_task_output(
-        &self,
-        task: TaskId,
-        reader: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
-    );
 
     fn try_read_task_cell(
         &self,
@@ -256,21 +258,13 @@ pub trait Backend: Sync + Send {
         }
     }
 
-    fn track_read_task_cell(
-        &self,
-        task: TaskId,
-        index: CellId,
-        reader: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
-    );
-
     fn try_read_task_collectibles(
         &self,
         task: TaskId,
         trait_id: TraitTypeId,
         reader: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> Result<Result<HashSet<RawVc>, EventListener>>;
+    ) -> Result<Result<AutoSet<RawVc>, EventListener>>;
 
     fn emit_collectible(
         &self,
