@@ -719,7 +719,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    output_logs: OutputLogsMode::Full,
+                    output_logs: Some(OutputLogsMode::Full),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
@@ -731,7 +731,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    output_logs: OutputLogsMode::None,
+                    output_logs: Some(OutputLogsMode::None),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
@@ -743,7 +743,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    output_logs: OutputLogsMode::HashOnly,
+                    output_logs: Some(OutputLogsMode::HashOnly),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
