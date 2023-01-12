@@ -662,7 +662,6 @@ impl EcmascriptChunkContentVc {
             };
 
             code += indoc! { r#"
-                globalThis.TURBOPACK = { push: registerChunk };
                 })();
             "# };
         }

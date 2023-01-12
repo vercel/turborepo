@@ -22,11 +22,3 @@ export type ModuleEffect =
       moduleId: ModuleId;
       outdatedModules: Set<ModuleId>;
     };
-
-declare global {
-  interface Window extends TurbopackGlobals, RefreshRuntimeGlobals {}
-
-  interface NodeModule {
-    hot: Hot;
-  }
-}

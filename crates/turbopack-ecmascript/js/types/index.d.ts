@@ -23,10 +23,6 @@ export type ChunkRegistration = [
   ...run: Runnable[]
 ];
 
-export interface ChunkRegistrations {
-  push: (registration: ChunkRegistration) => void;
-}
-
 interface Module {
   exports: Exports;
   loaded: boolean;
@@ -80,12 +76,7 @@ interface Runtime {
 }
 
 interface RuntimeBackend {
-  loadChunk: (
-    chunkPath: ChunkPath,
-    from: ModuleId,
-    onLoad: () => void,
-    onError: (msg?: string) => void
-  ) => void;
+  loadChunk: (chunkPath: ChunkPath, from: ModuleId) => Promise<void>;
 
   restart: () => void;
 }
@@ -103,3 +94,20 @@ export interface TurbopackGlobals {
 }
 
 export type GetFirstModuleChunk = (moduleId: ModuleId) => ChunkPath | null;
+
+declare global {
+  var TURBOPACK: ChunkRegistration[];
+  var TURBOPACK_CHUNK_UPDATE_LISTENERS:
+    | ChunkUpdateProvider
+    | [ChunkPath, UpdateCallback][]
+    | undefined;
+
+  var $RefreshHelpers$: RefreshRuntimeGlobals["$RefreshHelpers$"];
+  var $RefreshReg$: RefreshRuntimeGlobals["$RefreshReg$"];
+  var $RefreshSig$: RefreshRuntimeGlobals["$RefreshSig$"];
+  var $RefreshInterceptModuleExecution$: RefreshRuntimeGlobals["$RefreshInterceptModuleExecution$"];
+
+  interface NodeModule {
+    hot: Hot;
+  }
+}

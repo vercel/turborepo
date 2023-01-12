@@ -26,8 +26,6 @@
 /** @typedef {import('../types/runtime').Loader} Loader */
 /** @typedef {import('../types/runtime').ModuleEffect} ModuleEffect */
 
-/** @type {ChunkRegistration[]} */
-const chunksToRegister = globalThis.TURBOPACK;
 /** @type {Array<Runnable>} */
 let runnable = [];
 /** @type {Object.<ModuleId, ModuleFactory>} */
@@ -221,9 +219,13 @@ function getOrCreateChunkLoader(chunkPath, from) {
     reject = innerReject;
   });
 
-  const onError = (msg) => {
+  const onError = (error) => {
     chunkLoaders.delete(chunkPath);
-    reject(new Error(`Failed to load chunk from ${chunkPath}: ${msg}`));
+    reject(
+      new Error(
+        `Failed to load chunk from ${chunkPath}${error ? `: ${error}` : ""}`
+      )
+    );
   };
 
   const onLoad = () => {
@@ -238,15 +240,7 @@ function getOrCreateChunkLoader(chunkPath, from) {
   };
   chunkLoaders.set(chunkPath, chunkLoader);
 
-  const moduleChunkPaths = moduleChunksMap.get(from);
-  if (moduleChunkPaths == null) {
-    onError(
-      `Module ${from} that requested chunk ${chunkPath} has been removed`
-    );
-    return;
-  }
-
-  BACKEND.loadChunk(chunkPath, from, onLoad, onError);
+  BACKEND.loadChunk(chunkPath, from).then(onLoad, onError);
 
   return chunkLoader;
 }
@@ -986,4 +980,8 @@ function registerChunk([chunkPath, chunkModules, ...run]) {
 
 globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS =
   globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS || [];
-chunksToRegister.forEach(registerChunk);
+
+globalThis.TURBOPACK.forEach(registerChunk);
+globalThis.TURBOPACK = {
+  push: registerChunk,
+};
