@@ -69,7 +69,7 @@ pub enum ChunkLoading {
     #[default]
     None,
     /// CommonJS in Node.js
-    Cjs,
+    NodeJs,
     /// <script> and <link> tags in the browser
     Dom,
 }
@@ -249,7 +249,7 @@ impl EnvironmentVc {
         Ok(match env.execution {
             ExecutionEnvironment::NodeJsBuildTime(_)
             | ExecutionEnvironment::NodeJsLambda(_)
-            | ExecutionEnvironment::EdgeFunction(_) => ChunkLoading::Cjs.cell(),
+            | ExecutionEnvironment::EdgeFunction(_) => ChunkLoading::NodeJs.cell(),
             ExecutionEnvironment::Browser(_) => ChunkLoading::Dom.cell(),
             _ => ChunkLoading::None.cell(),
         })

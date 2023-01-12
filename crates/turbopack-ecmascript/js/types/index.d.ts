@@ -17,7 +17,7 @@ interface Exports {
 
 export type ChunkModule = () => void;
 export type Runnable = (...args: any[]) => boolean;
-export declare type ChunkRegistration = [
+export type ChunkRegistration = [
   chunkPath: ChunkPath,
   chunkModules: ChunkModule[],
   ...run: Runnable[]
@@ -79,22 +79,27 @@ interface Runtime {
   instantiateRuntimeModule: (moduleId: ModuleId) => Module;
 }
 
+interface RuntimeBackend {
+  loadChunk: (
+    chunkPath: ChunkPath,
+    from: ModuleId,
+    onLoad: () => void,
+    onError: (msg?: string) => void
+  ) => void;
+
+  restart: () => void;
+}
+
 export type UpdateCallback = (update: ServerMessage) => void;
 export type ChunkUpdateProvider = {
   push: (registration: [ChunkPath, UpdateCallback]) => void;
 };
 
 export interface TurbopackGlobals {
-  TURBOPACK?: ChunkRegistrations | ChunkRegistration[];
+  TURBOPACK?: ChunkRegistration[];
   TURBOPACK_CHUNK_UPDATE_LISTENERS?:
     | ChunkUpdateProvider
     | [ChunkPath, UpdateCallback][];
 }
 
-declare global {
-  interface Window extends TurbopackGlobals, RefreshRuntimeGlobals {}
-
-  interface NodeModule {
-    hot: Hot;
-  }
-}
+export type GetFirstModuleChunk = (moduleId: ModuleId) => ChunkPath | null;

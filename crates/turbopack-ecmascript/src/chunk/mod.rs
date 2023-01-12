@@ -6,6 +6,7 @@ use std::{fmt::Write, io::Write as _, slice::Iter};
 
 use anyhow::{anyhow, bail, Result};
 use indexmap::{IndexMap, IndexSet};
+use indoc::indoc;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     primitives::{JsonValueVc, StringReadRef, StringVc, StringsVc, UsizeVc},
@@ -628,15 +629,42 @@ impl EcmascriptChunkContentVc {
         }
         code += "]);\n";
         if this.evaluate.is_some() {
-            let runtime_code = match *this.environment.chunk_loading().await? {
+            // When a chunk is executed, it will either register itself with the current
+            // instance of the runtime, or it will push itself onto the list of pending
+            // chunks (`self.TURBOPACK`).
+            //
+            // When the runtime executes, it will pick up and register all pending chunks,
+            // and replace the list of pending chunks with itself so later chunks can
+            // register directly with it.
+            code += indoc! { r#"
+                (() => {
+                if (!Array.isArray(globalThis.TURBOPACK)) {
+                    return;
+                }
+            "# };
+
+            let specific_runtime_code = match *this.environment.chunk_loading().await? {
                 ChunkLoading::None => return Err(anyhow!("unsupported environment")),
-                ChunkLoading::Cjs => embed_file!("js/src/runtime.cjs.js").await?,
+                ChunkLoading::NodeJs => embed_file!("js/src/runtime.nodejs.js").await?,
                 ChunkLoading::Dom => embed_file!("js/src/runtime.dom.js").await?,
             };
-            match &*runtime_code {
-                FileContent::NotFound => return Err(anyhow!("runtime code is not found")),
+
+            match &*specific_runtime_code {
+                FileContent::NotFound => return Err(anyhow!("specific runtime code is not found")),
                 FileContent::Content(file) => code.push_source(file.content(), None),
             };
+
+            let shared_runtime_code = embed_file!("js/src/runtime.js").await?;
+
+            match &*shared_runtime_code {
+                FileContent::NotFound => return Err(anyhow!("shared runtime code is not found")),
+                FileContent::Content(file) => code.push_source(file.content(), None),
+            };
+
+            code += indoc! { r#"
+                globalThis.TURBOPACK = { push: registerChunk };
+                })();
+            "# };
         }
 
         if code.has_source_map() {

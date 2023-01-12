@@ -1,4 +1,6 @@
 import { ModuleId } from "./index";
+import { RuntimeBackend, TurbopackGlobals } from "types";
+import { RefreshRuntimeGlobals } from "@next/react-refresh-utils/dist/runtime";
 
 export interface Loader {
   promise: Promise<undefined>;
@@ -20,3 +22,11 @@ export type ModuleEffect =
       moduleId: ModuleId;
       outdatedModules: Set<ModuleId>;
     };
+
+declare global {
+  interface Window extends TurbopackGlobals, RefreshRuntimeGlobals {}
+
+  interface NodeModule {
+    hot: Hot;
+  }
+}
