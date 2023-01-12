@@ -2,18 +2,26 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "runOptions": { "runOn": "folderOpen" },
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
       "label": "Compile protobufs",
       "type": "shell",
       "options": {
         "cwd": "${workspaceRoot}/cli"
+      },
+      "presentation": {
+        "reveal": "silent"
       },
       "command": "make compile-protos"
     },
     {
       "type": "shell",
       "label": "prepare e2e",
-      "dependsOn": ["make turbo", "make install"]
+      "dependsOn": [
+        "make turbo",
+        "make install"
+      ]
     },
     {
       "type": "shell",
