@@ -279,16 +279,42 @@
 <span id="279">279</span>
 <span id="280">280</span>
 <span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
     primitives::{BoolVc, StringsVc},
     trace::TraceRawVcs,
     Value,
 };
-<span class="kw">use </span>turbopack::evaluate_context::node_evaluate_asset_context;
+<span class="kw">use </span>turbopack::{
+    evaluate_context::node_evaluate_asset_context,
+    module_options::{WebpackLoadersOptions, WebpackLoadersOptionsVc},
+};
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
     reference_type::{EntryReferenceSubType, ReferenceType},
@@ -408,11 +434,12 @@
     Https,
 }
 
-<span class="attr">#[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
+<span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">pub struct </span>ExperimentalConfig {
     <span class="kw">pub </span>server_components_external_packages: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
     <span class="kw">pub </span>app_dir: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+    <span class="kw">pub </span>turbopack_webpack_loaders: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, Vec&lt;String&gt;&gt;&gt;,
 }
 
 <span class="attr">#[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
@@ -489,6 +516,23 @@
         <span class="prelude-val">Ok</span>(StringsVc::cell(
             <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.transpile_packages.clone().unwrap_or_default(),
         ))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>webpack_loaders_options(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;WebpackLoadersOptionsVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="prelude-val">Some</span>(turbopack_webpack_loaders) = this.experimental.as_ref().and_then(|experimental| experimental.turbopack_webpack_loaders.as_ref()) <span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(WebpackLoadersOptionsVc::cell(WebpackLoadersOptions::default()));
+        };
+        <span class="kw">let </span><span class="kw-2">mut </span>extension_to_loaders = IndexMap::new();
+        <span class="kw">for </span>(ext, loaders) <span class="kw">in </span>turbopack_webpack_loaders {
+            extension_to_loaders.insert(ext.clone(), StringsVc::cell(loaders.clone()));
+        }
+        <span class="prelude-val">Ok</span>(WebpackLoadersOptions {
+            extension_to_loaders,
+            ..Default::default()
+        }
+        .cell())
     }
 }
 

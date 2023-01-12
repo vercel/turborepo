@@ -583,9 +583,9 @@
     environment::ServerAddr,
     issue::IssueSeverity,
     resolve::{parse::RequestVc, pattern::QueryMapVc},
+    server_fs::ServerFileSystemVc,
 };
 <span class="kw">use </span>turbopack_dev_server::{
-    fs::DevServerFileSystemVc,
     introspect::IntrospectionSource,
     source::{
         combined::CombinedContentSourceVc, router::RouterContentSource,
@@ -827,7 +827,7 @@
     <span class="kw">let </span>output_root = output_fs.root().join(<span class="string">&quot;.next/server&quot;</span>);
     <span class="kw">let </span>server_addr = ServerAddr::new(<span class="kw-2">*</span>server_addr).cell();
 
-    <span class="kw">let </span>dev_server_fs = DevServerFileSystemVc::new().as_file_system();
+    <span class="kw">let </span>dev_server_fs = ServerFileSystemVc::new().as_file_system();
     <span class="kw">let </span>dev_server_root = dev_server_fs.root();
     <span class="kw">let </span>entry_requests = entry_requests
         .iter()

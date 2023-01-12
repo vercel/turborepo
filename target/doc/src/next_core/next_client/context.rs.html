@@ -272,6 +272,7 @@
 <span id="272">272</span>
 <span id="273">273</span>
 <span id="274">274</span>
+<span id="275">275</span>
 </pre><pre class="rust"><code><span class="kw">use </span>core::{default::Default, result::Result::Ok};
 <span class="kw">use </span>std::collections::HashMap;
 
@@ -401,6 +402,7 @@
             postcss_package: <span class="prelude-val">Some</span>(get_postcss_package_mapping(project_path)),
             ..Default::default()
         }),
+        enable_webpack_loaders: next_config.webpack_loaders_options().<span class="kw">await</span><span class="question-mark">?</span>.clone_if(),
         enable_typescript_transform: <span class="bool-val">true</span>,
         rules: <span class="macro">vec!</span>[(
             foreign_code_context_condition(next_config).<span class="kw">await</span><span class="question-mark">?</span>,

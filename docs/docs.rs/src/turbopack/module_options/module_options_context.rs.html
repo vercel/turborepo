@@ -49,8 +49,32 @@
 <span id="49">49</span>
 <span id="50">50</span>
 <span id="51">51</span>
-</pre><pre class="rust"><code><span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+</pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>turbo_tasks::{primitives::StringsVc, trace::TraceRawVcs};
 <span class="kw">use </span>turbopack_core::{environment::EnvironmentVc, resolve::options::ImportMappingVc};
 <span class="kw">use </span>turbopack_ecmascript::EcmascriptInputTransform;
 <span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
@@ -65,6 +89,27 @@
 }
 
 <span class="attr">#[turbo_tasks::value(shared)]
+#[derive(Default, Clone, Debug)]
+</span><span class="kw">pub struct </span>WebpackLoadersOptions {
+    <span class="kw">pub </span>extension_to_loaders: IndexMap&lt;String, StringsVc&gt;,
+    <span class="kw">pub </span>placeholder_for_future_extensions: (),
+}
+
+<span class="kw">impl </span>WebpackLoadersOptions {
+    <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.extension_to_loaders.is_empty()
+    }
+
+    <span class="kw">pub fn </span>clone_if(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;WebpackLoadersOptions&gt; {
+        <span class="kw">if </span><span class="self">self</span>.is_empty() {
+            <span class="prelude-val">None
+        </span>} <span class="kw">else </span>{
+            <span class="prelude-val">Some</span>(<span class="self">self</span>.clone())
+        }
+    }
+}
+
+<span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
 </span><span class="kw">pub struct </span>ModuleOptionsContext {
     <span class="kw">pub </span>enable_jsx: bool,
@@ -73,6 +118,7 @@
     <span class="kw">pub </span>enable_styled_components: bool,
     <span class="kw">pub </span>enable_styled_jsx: bool,
     <span class="kw">pub </span>enable_postcss_transform: <span class="prelude-ty">Option</span>&lt;PostCssTransformOptions&gt;,
+    <span class="kw">pub </span>enable_webpack_loaders: <span class="prelude-ty">Option</span>&lt;WebpackLoadersOptions&gt;,
     <span class="kw">pub </span>enable_types: bool,
     <span class="kw">pub </span>enable_typescript_transform: bool,
     <span class="kw">pub </span>preset_env_versions: <span class="prelude-ty">Option</span>&lt;EnvironmentVc&gt;,
