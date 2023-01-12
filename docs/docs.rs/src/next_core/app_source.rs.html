@@ -716,6 +716,9 @@
 <span id="716">716</span>
 <span id="717">717</span>
 <span id="718">718</span>
+<span id="719">719</span>
+<span id="720">720</span>
+<span id="721">721</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
@@ -795,8 +798,9 @@
     next_config: NextConfigVc,
 ) -&gt; TransitionVc {
     <span class="kw">let </span>ty = Value::new(ClientContextType::App { app_dir });
-    <span class="kw">let </span>client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
     <span class="kw">let </span>client_environment = get_client_environment(browserslist_query);
+    <span class="kw">let </span>client_chunking_context =
+        get_client_chunking_context(project_path, server_root, client_environment, ty);
 
     <span class="kw">let </span>client_module_options_context = get_client_module_options_context(
         project_path,
@@ -831,8 +835,9 @@
     next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;TransitionVc&gt; {
     <span class="kw">let </span>ty = Value::new(ClientContextType::App { app_dir });
-    <span class="kw">let </span>client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
     <span class="kw">let </span>client_environment = get_client_environment(browserslist_query);
+    <span class="kw">let </span>client_chunking_context =
+        get_client_chunking_context(project_path, server_root, client_environment, ty);
     <span class="kw">let </span>client_module_options_context = get_client_module_options_context(
         project_path,
         execution_context,
@@ -1360,6 +1365,7 @@ import BOOTSTRAP from {};
             intermediate_output_path,
             intermediate_output_path.join(<span class="string">&quot;chunks&quot;</span>),
             this.server_root.join(<span class="string">&quot;_next/static/assets&quot;</span>),
+            context.environment(),
         )
         .layer(<span class="string">&quot;ssr&quot;</span>)
         .css_chunk_root_path(this.server_root.join(<span class="string">&quot;_next/static/chunks&quot;</span>))

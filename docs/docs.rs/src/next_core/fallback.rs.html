@@ -80,6 +80,7 @@
 <span id="80">80</span>
 <span id="81">81</span>
 <span id="82">82</span>
+<span id="83">83</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -126,7 +127,8 @@
         ty,
         next_config,
     );
-    <span class="kw">let </span>chunking_context = get_client_chunking_context(project_path, dev_server_root, ty);
+    <span class="kw">let </span>chunking_context =
+        get_client_chunking_context(project_path, dev_server_root, environment, ty);
     <span class="kw">let </span>entries = get_client_runtime_entries(project_path, env, ty, next_config);
 
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();

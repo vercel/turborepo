@@ -575,6 +575,10 @@
 <span id="575">575</span>
 <span id="576">576</span>
 <span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -747,7 +751,8 @@
     )
     .into();
 
-    <span class="kw">let </span>client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
+    <span class="kw">let </span>client_chunking_context =
+        get_client_chunking_context(project_path, server_root, client_environment, ty);
 
     <span class="kw">let </span>client_runtime_entries = get_client_runtime_entries(project_path, env, ty, next_config);
 
@@ -882,6 +887,7 @@
             server_root,
             Value::new(ClientContextType::Pages { pages_dir }),
         ),
+        server_context.environment(),
     )
     .build();
 
@@ -895,12 +901,14 @@
             server_root,
             Value::new(ClientContextType::Pages { pages_dir }),
         ),
+        server_context.environment(),
     )
     .build();
 
     <span class="kw">let </span>client_chunking_context = get_client_chunking_context(
         context_path,
         server_root,
+        client_context.environment(),
         Value::new(ClientContextType::Pages { pages_dir }),
     );
 

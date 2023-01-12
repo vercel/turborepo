@@ -194,6 +194,15 @@
 <span id="194">194</span>
 <span id="195">195</span>
 <span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{BoolVc, StringVc},
@@ -203,7 +212,7 @@
 <span class="kw">use </span>turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
 
 <span class="kw">use super</span>::{ChunkingContext, ChunkingContextVc};
-<span class="kw">use </span><span class="kw">crate</span>::asset::AssetVc;
+<span class="kw">use crate</span>::{asset::AssetVc, environment::EnvironmentVc};
 
 <span class="kw">pub struct </span>DevChunkingContextBuilder {
     context: DevChunkingContext,
@@ -252,6 +261,8 @@
     </span>layer: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="doccomment">/// Enable HMR for this chunking
     </span>enable_hot_module_replacement: bool,
+    <span class="doccomment">/// The environment chunks will be evaluated in.
+    </span>environment: EnvironmentVc,
 }
 
 <span class="kw">impl </span>DevChunkingContextVc {
@@ -260,6 +271,7 @@
         output_root_path: FileSystemPathVc,
         chunk_root_path: FileSystemPathVc,
         asset_root_path: FileSystemPathVc,
+        environment: EnvironmentVc,
     ) -&gt; DevChunkingContextBuilder {
         DevChunkingContextBuilder {
             context: DevChunkingContext {
@@ -270,6 +282,7 @@
                 asset_root_path,
                 layer: <span class="prelude-val">None</span>,
                 enable_hot_module_replacement: <span class="bool-val">false</span>,
+                environment,
             },
         }
     }
@@ -288,6 +301,11 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>output_root(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
         <span class="self">self</span>.output_root_path
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>environment(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EnvironmentVc {
+        <span class="self">self</span>.environment
     }
 
     <span class="attr">#[turbo_tasks::function]

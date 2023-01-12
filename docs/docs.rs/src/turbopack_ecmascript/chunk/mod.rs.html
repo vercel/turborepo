@@ -1232,6 +1232,40 @@
 <span id="1232">1232</span>
 <span id="1233">1233</span>
 <span id="1234">1234</span>
+<span id="1235">1235</span>
+<span id="1236">1236</span>
+<span id="1237">1237</span>
+<span id="1238">1238</span>
+<span id="1239">1239</span>
+<span id="1240">1240</span>
+<span id="1241">1241</span>
+<span id="1242">1242</span>
+<span id="1243">1243</span>
+<span id="1244">1244</span>
+<span id="1245">1245</span>
+<span id="1246">1246</span>
+<span id="1247">1247</span>
+<span id="1248">1248</span>
+<span id="1249">1249</span>
+<span id="1250">1250</span>
+<span id="1251">1251</span>
+<span id="1252">1252</span>
+<span id="1253">1253</span>
+<span id="1254">1254</span>
+<span id="1255">1255</span>
+<span id="1256">1256</span>
+<span id="1257">1257</span>
+<span id="1258">1258</span>
+<span id="1259">1259</span>
+<span id="1260">1260</span>
+<span id="1261">1261</span>
+<span id="1262">1262</span>
+<span id="1263">1263</span>
+<span id="1264">1264</span>
+<span id="1265">1265</span>
+<span id="1266">1266</span>
+<span id="1267">1267</span>
+<span id="1268">1268</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>loader;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub mod </span>source_map;
@@ -1240,6 +1274,7 @@
 
 <span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::{IndexMap, IndexSet};
+<span class="kw">use </span>indoc::indoc;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
     primitives::{JsonValueVc, StringReadRef, StringVc, StringsVc, UsizeVc},
@@ -1260,6 +1295,7 @@
         FromChunkableAsset, ModuleId, ModuleIdReadRef, ModuleIdVc, ModuleIdsVc,
     },
     code_builder::{Code, CodeBuilder, CodeReadRef, CodeVc},
+    environment::{ChunkLoading, EnvironmentVc},
     introspect::{
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
@@ -1577,6 +1613,7 @@
     chunk_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
     evaluate: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkContentEvaluateVc&gt;,
+    environment: EnvironmentVc,
 }
 
 <span class="attr">#[turbo_tasks::value(transparent)]
@@ -1686,6 +1723,7 @@
             chunk_path,
             output_root,
             evaluate,
+            environment: context.environment(),
         }
         .cell())
     }
@@ -1859,11 +1897,41 @@
         }
         code += <span class="string">&quot;]);\n&quot;</span>;
         <span class="kw">if </span>this.evaluate.is_some() {
-            <span class="kw">let </span>runtime_code = <span class="macro">embed_file!</span>(<span class="string">&quot;js/src/runtime.js&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">match </span><span class="kw-2">&amp;*</span>runtime_code {
-                FileContent::NotFound =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;runtime code is not found&quot;</span>)),
+            <span class="comment">// When a chunk is executed, it will either register itself with the current
+            // instance of the runtime, or it will push itself onto the list of pending
+            // chunks (`self.TURBOPACK`).
+            //
+            // When the runtime executes, it will pick up and register all pending chunks,
+            // and replace the list of pending chunks with itself so later chunks can
+            // register directly with it.
+            </span>code += <span class="macro">indoc! </span>{ <span class="string">r#&quot;
+                (() =&gt; {
+                if (!Array.isArray(globalThis.TURBOPACK)) {
+                    return;
+                }
+            &quot;# </span>};
+
+            <span class="kw">let </span>specific_runtime_code = <span class="kw">match </span><span class="kw-2">*</span>this.environment.chunk_loading().<span class="kw">await</span><span class="question-mark">? </span>{
+                ChunkLoading::None =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;unsupported environment&quot;</span>)),
+                ChunkLoading::NodeJs =&gt; <span class="macro">embed_file!</span>(<span class="string">&quot;js/src/runtime.nodejs.js&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>,
+                ChunkLoading::Dom =&gt; <span class="macro">embed_file!</span>(<span class="string">&quot;js/src/runtime.dom.js&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>,
+            };
+
+            <span class="kw">match </span><span class="kw-2">&amp;*</span>specific_runtime_code {
+                FileContent::NotFound =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;specific runtime code is not found&quot;</span>)),
                 FileContent::Content(file) =&gt; code.push_source(file.content(), <span class="prelude-val">None</span>),
             };
+
+            <span class="kw">let </span>shared_runtime_code = <span class="macro">embed_file!</span>(<span class="string">&quot;js/src/runtime.js&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">match </span><span class="kw-2">&amp;*</span>shared_runtime_code {
+                FileContent::NotFound =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;shared runtime code is not found&quot;</span>)),
+                FileContent::Content(file) =&gt; code.push_source(file.content(), <span class="prelude-val">None</span>),
+            };
+
+            code += <span class="macro">indoc! </span>{ <span class="string">r#&quot;
+                })();
+            &quot;# </span>};
         }
 
         <span class="kw">if </span>code.has_source_map() {

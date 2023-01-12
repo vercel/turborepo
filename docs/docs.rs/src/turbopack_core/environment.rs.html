@@ -329,6 +329,29 @@
 <span id="329">329</span>
 <span id="330">330</span>
 <span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     net::SocketAddr,
     process::{Command, Stdio},
@@ -392,6 +415,17 @@
     <span class="kw">pub fn </span>is_none(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="macro">matches!</span>(<span class="self">self</span>, Rendering::None)
     }
+}
+
+<span class="attr">#[derive(Default)]
+#[turbo_tasks::value]
+</span><span class="kw">pub enum </span>ChunkLoading {
+    <span class="attr">#[default]
+    </span><span class="prelude-val">None</span>,
+    <span class="doccomment">/// CommonJS in Node.js
+    </span>NodeJs,
+    <span class="doccomment">/// &lt;script&gt; and &lt;link&gt; tags in the browser
+    </span>Dom,
 }
 
 <span class="attr">#[turbo_tasks::value]
@@ -560,6 +594,18 @@
             }
             ExecutionEnvironment::Browser(<span class="kw">_</span>) =&gt; Rendering::Client.cell(),
             <span class="kw">_ </span>=&gt; Rendering::None.cell(),
+        })
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>chunk_loading(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkLoadingVc&gt; {
+        <span class="kw">let </span>env = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="kw">match </span>env.execution {
+            ExecutionEnvironment::NodeJsBuildTime(<span class="kw">_</span>)
+            | ExecutionEnvironment::NodeJsLambda(<span class="kw">_</span>)
+            | ExecutionEnvironment::EdgeFunction(<span class="kw">_</span>) =&gt; ChunkLoading::NodeJs.cell(),
+            ExecutionEnvironment::Browser(<span class="kw">_</span>) =&gt; ChunkLoading::Dom.cell(),
+            <span class="kw">_ </span>=&gt; ChunkLoading::None.cell(),
         })
     }
 }

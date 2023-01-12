@@ -510,6 +510,9 @@
 <span id="510">510</span>
 <span id="511">511</span>
 <span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>dev;
 <span class="kw">pub mod </span>optimize;
 
@@ -530,6 +533,7 @@
 <span class="kw">use </span><span class="self">self</span>::optimize::optimize;
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetVc, AssetsVc},
+    environment::EnvironmentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{ResolveResult, ResolveResultVc},
 };
@@ -560,6 +564,8 @@
 </span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>ChunkingContext {
     <span class="kw">fn </span>output_root(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc;
+
+    <span class="kw">fn </span>environment(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EnvironmentVc;
 
     <span class="kw">fn </span>chunk_path(<span class="kw-2">&amp;</span><span class="self">self</span>, path: FileSystemPathVc, extension: <span class="kw-2">&amp;</span>str) -&gt; FileSystemPathVc;
 
