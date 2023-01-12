@@ -221,6 +221,7 @@
 <span id="221">221</span>
 <span id="222">222</span>
 <span id="223">223</span>
+<span id="224">224</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashSet},
@@ -286,8 +287,9 @@
                 category: StringVc::cell(<span class="string">&quot;analyze&quot;</span>.to_string()),
                 message: StringVc::cell(<span class="macro">format!</span>(
                     <span class="string">&quot;export * used with module {} which has no exports\nTypescript only: Did you \
-                     want to import only types with `export type * from \&quot;...\&quot;`?&quot;</span>,
-                    asset.path().to_string().<span class="kw">await</span><span class="question-mark">?
+                     want to export only types with `export type {{ ... }} from \&quot;...\&quot;`?&quot;</span>,
+                    <span class="comment">// TODO recommend export type * from &quot;...&quot; once https://github.com/microsoft/TypeScript/issues/37238 is implemented
+                    </span>asset.path().to_string().<span class="kw">await</span><span class="question-mark">?
                 </span>)),
                 path: asset.path(),
                 severity: IssueSeverity::Warning.into(),

@@ -230,6 +230,18 @@
 <span id="230">230</span>
 <span id="231">231</span>
 <span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -241,7 +253,7 @@
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
-    resolve::options::{ImportMap, ImportMapping},
+    resolve::options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc},
     source_transform::SourceTransformsVc,
 };
 <span class="kw">use </span>turbopack_css::{CssInputTransform, CssInputTransformsVc};
@@ -249,6 +261,23 @@
 <span class="kw">use </span>turbopack_node::transforms::postcss::PostCssTransformVc;
 
 <span class="kw">use </span><span class="kw">crate</span>::evaluate_context::node_evaluate_asset_context;
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>postcss_import_map_from_import_mapping(postcss_package: ImportMappingVc) -&gt; ImportMapVc {
+    <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::default();
+    import_map.insert_exact_alias(<span class="string">&quot;@vercel/turbopack/postcss&quot;</span>, postcss_package);
+    import_map.cell()
+}
+
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">fn </span>postcss_import_map_from_context(context_path: FileSystemPathVc) -&gt; ImportMapVc {
+    <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::default();
+    import_map.insert_exact_alias(
+        <span class="string">&quot;@vercel/turbopack/postcss&quot;</span>,
+        ImportMapping::PrimaryAlternative(<span class="string">&quot;postcss&quot;</span>.to_string(), <span class="prelude-val">Some</span>(context_path)).cell(),
+    );
+    import_map.cell()
+}
 
 <span class="attr">#[turbo_tasks::value(cell = <span class="string">&quot;new&quot;</span>, eq = <span class="string">&quot;manual&quot;</span>)]
 </span><span class="kw">pub struct </span>ModuleOptions {
@@ -356,19 +385,14 @@
                             .context(<span class="string">&quot;execution_context is required for the postcss_transform&quot;</span>)<span class="question-mark">?
                             </span>.join(<span class="string">&quot;postcss&quot;</span>);
 
-                        <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::default();
-                        import_map.insert_exact_alias(
-                            <span class="string">&quot;@vercel/turbopack/postcss&quot;</span>,
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>(postcss) = options.postcss_package {
-                                postcss
-                            } <span class="kw">else </span>{
-                                ImportMapping::PrimaryAlternative(<span class="string">&quot;postcss&quot;</span>.to_string(), <span class="prelude-val">Some</span>(path))
-                                    .cell()
-                            },
-                        );
+                        <span class="kw">let </span>import_map = <span class="kw">if let </span><span class="prelude-val">Some</span>(postcss_package) = options.postcss_package {
+                            postcss_import_map_from_import_mapping(postcss_package)
+                        } <span class="kw">else </span>{
+                            postcss_import_map_from_context(path)
+                        };
                         <span class="prelude-val">Some</span>(ModuleRuleEffect::SourceTransforms(
                             SourceTransformsVc::cell(<span class="macro">vec!</span>[PostCssTransformVc::new(
-                                node_evaluate_asset_context(<span class="prelude-val">Some</span>(import_map.cell())),
+                                node_evaluate_asset_context(<span class="prelude-val">Some</span>(import_map)),
                                 execution_context,
                             )
                             .into()]),

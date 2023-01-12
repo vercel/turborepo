@@ -213,12 +213,12 @@
                 <span class="prelude-val">Some</span>(swc_core::ecma::visit::AstParentKind::Prop(PropField::Shorthand)) =&gt; {
                     ast_path.pop();
                     visitors.push(
-                        <span class="macro">create_visitor!</span>(ast_path, visit_mut_prop(prop: <span class="kw-2">&amp;mut </span>Prop) {
+                        <span class="macro">create_visitor!</span>(exact ast_path, visit_mut_prop(prop: <span class="kw-2">&amp;mut </span>Prop) {
                             <span class="kw">if let </span>Prop::Shorthand(ident) = prop {
-                              <span class="comment">// TODO: Merge with the above condition when https://rust-lang.github.io/rfcs/2497-if-let-chains.html lands.
-                              </span><span class="kw">if let </span><span class="prelude-val">Some</span>(imported_ident) = imported_module.as_deref() {
-                                <span class="kw-2">*</span>prop = Prop::KeyValue(KeyValueProp { key: PropName::Ident(ident.clone()), value: <span class="kw">box </span>make_expr(imported_ident, this.export.as_deref())});
-                              }
+                                <span class="comment">// TODO: Merge with the above condition when https://rust-lang.github.io/rfcs/2497-if-let-chains.html lands.
+                                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(imported_ident) = imported_module.as_deref() {
+                                    <span class="kw-2">*</span>prop = Prop::KeyValue(KeyValueProp { key: PropName::Ident(ident.clone()), value: <span class="kw">box </span>make_expr(imported_ident, this.export.as_deref())});
+                                }
                             }
                         }),
                     );
