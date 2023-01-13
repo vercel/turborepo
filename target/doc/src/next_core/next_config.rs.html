@@ -301,6 +301,26 @@
 <span id="301">301</span>
 <span id="302">302</span>
 <span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -313,7 +333,9 @@
 };
 <span class="kw">use </span>turbopack::{
     evaluate_context::node_evaluate_asset_context,
-    module_options::{WebpackLoadersOptions, WebpackLoadersOptionsVc},
+    module_options::{
+        ResolveAliasOptions, ResolveAliasOptionsVc, WebpackLoadersOptions, WebpackLoadersOptionsVc,
+    },
 };
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
@@ -440,6 +462,7 @@
     <span class="kw">pub </span>server_components_external_packages: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
     <span class="kw">pub </span>app_dir: <span class="prelude-ty">Option</span>&lt;bool&gt;,
     <span class="kw">pub </span>turbopack_webpack_loaders: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, Vec&lt;String&gt;&gt;&gt;,
+    <span class="kw">pub </span>resolve_alias: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, Vec&lt;String&gt;&gt;&gt;,
 }
 
 <span class="attr">#[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
@@ -530,6 +553,23 @@
         }
         <span class="prelude-val">Ok</span>(WebpackLoadersOptions {
             extension_to_loaders,
+            ..Default::default()
+        }
+        .cell())
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>resolve_alias_options(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveAliasOptionsVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="prelude-val">Some</span>(resolve_alias) = this.experimental.as_ref().and_then(|experimental| experimental.resolve_alias.as_ref()) <span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveAliasOptionsVc::cell(ResolveAliasOptions::default()));
+        };
+        <span class="kw">let </span><span class="kw-2">mut </span>alias_map = IndexMap::new();
+        <span class="kw">for </span>(ext, mappings) <span class="kw">in </span>resolve_alias {
+            alias_map.insert(ext.clone(), StringsVc::cell(mappings.clone()));
+        }
+        <span class="prelude-val">Ok</span>(ResolveAliasOptions {
+            alias_map,
             ..Default::default()
         }
         .cell())

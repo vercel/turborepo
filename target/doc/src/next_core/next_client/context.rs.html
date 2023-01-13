@@ -345,7 +345,7 @@
     ty: Value&lt;ClientContextType&gt;,
     next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveOptionsContextVc&gt; {
-    <span class="kw">let </span>next_client_import_map = get_next_client_import_map(project_path, ty);
+    <span class="kw">let </span>next_client_import_map = get_next_client_import_map(project_path, ty, next_config);
     <span class="kw">let </span>next_client_fallback_import_map = get_next_client_fallback_import_map(ty);
     <span class="kw">let </span>next_client_resolved_map = get_next_client_resolved_map(project_path, project_path);
     <span class="kw">let </span>module_options_context = ResolveOptionsContext {

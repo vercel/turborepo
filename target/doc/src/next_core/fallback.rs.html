@@ -81,6 +81,11 @@
 <span id="81">81</span>
 <span id="82">82</span>
 <span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -132,7 +137,12 @@
     <span class="kw">let </span>entries = get_client_runtime_entries(project_path, env, ty, next_config);
 
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();
-    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path);
+    insert_next_shared_aliases(
+        <span class="kw-2">&amp;mut </span>import_map,
+        project_path,
+        next_config.resolve_alias_options(),
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),

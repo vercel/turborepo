@@ -307,9 +307,42 @@
 <span id="307">307</span>
 <span id="308">308</span>
 <span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
+<span class="kw">use </span>turbopack::module_options::ResolveAliasOptionsVc;
 <span class="kw">use </span>turbopack_core::resolve::{
     options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap, ResolvedMapVc},
     AliasPattern,
@@ -325,13 +358,19 @@
 
 <span class="doccomment">/// Computes the Next-specific client import map.
 </span><span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub fn </span>get_next_client_import_map(
+</span><span class="kw">pub async fn </span>get_next_client_import_map(
     project_path: FileSystemPathVc,
     ty: Value&lt;ClientContextType&gt;,
-) -&gt; ImportMapVc {
+    next_config: NextConfigVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();
 
-    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path);
+    insert_next_shared_aliases(
+        <span class="kw-2">&amp;mut </span>import_map,
+        project_path,
+        next_config.resolve_alias_options(),
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">match </span>ty.into_value() {
         ClientContextType::Pages { pages_dir } =&gt; {
@@ -392,7 +431,7 @@
         ClientContextType::Other =&gt; {}
     }
 
-    import_map.cell()
+    <span class="prelude-val">Ok</span>(import_map.cell())
 }
 
 <span class="doccomment">/// Computes the Next-specific client import map.
@@ -448,7 +487,12 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();
 
-    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path);
+    insert_next_shared_aliases(
+        <span class="kw-2">&amp;mut </span>import_map,
+        project_path,
+        next_config.resolve_alias_options(),
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">match </span>ty.into_value() {
         ServerContextType::Pages { pages_dir } =&gt; {
@@ -560,7 +604,11 @@
     (<span class="string">&quot;setImmediate&quot;</span>, <span class="string">&quot;next/dist/compiled/setimmediate&quot;</span>),
 ];
 
-<span class="kw">pub fn </span>insert_next_shared_aliases(import_map: <span class="kw-2">&amp;mut </span>ImportMap, project_path: FileSystemPathVc) {
+<span class="kw">pub async fn </span>insert_next_shared_aliases(
+    import_map: <span class="kw-2">&amp;mut </span>ImportMap,
+    project_path: FileSystemPathVc,
+    alias_options: ResolveAliasOptionsVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="kw">let </span>package_root = attached_next_js_package_path(project_path);
 
     <span class="comment">// we use the next.js hydration code, so we replace the error overlay with our
@@ -586,6 +634,22 @@
         AliasPattern::exact(<span class="string">&quot;@vercel/turbopack-next/internal/font/google/cssmodule.module.css&quot;</span>),
         ImportMapping::Dynamic(NextFontGoogleCssModuleReplacerVc::new(project_path).into()).into(),
     );
+
+    <span class="kw">for </span>(alias, mappings_vc) <span class="kw">in </span><span class="kw-2">&amp;</span>alias_options.<span class="kw">await</span><span class="question-mark">?</span>.alias_map {
+        <span class="kw">let </span>mappings = mappings_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+        import_map.insert_alias(
+            AliasPattern::exact(alias),
+            ImportMapping::Alternatives(
+                mappings
+                    .iter()
+                    .map(|m| ImportMapping::PrimaryAlternative(m.clone(), <span class="prelude-val">None</span>).cell())
+                    .collect::&lt;Vec&lt;ImportMappingVc&gt;&gt;(),
+            )
+            .cell(),
+        );
+    }
+
+    <span class="prelude-val">Ok</span>(())
 }
 
 <span class="doccomment">/// Inserts an alias to an alternative of import mappings into an import map.
