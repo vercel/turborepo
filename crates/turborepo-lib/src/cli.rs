@@ -397,8 +397,10 @@ impl Args {
                 "true" | "1" | "2" | "3" => ColorChoice::Always,
                 _ => ColorChoice::Auto,
             }
-        } else {
+        } else if atty::is(atty::Stream::Stdout) {
             ColorChoice::Auto
+        } else {
+            ColorChoice::Never
         }
     }
 
