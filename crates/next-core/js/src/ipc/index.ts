@@ -142,3 +142,17 @@ export const IPC = createIpc<unknown, unknown>(parseInt(PORT, 10));
 process.on("uncaughtException", (err) => {
   IPC.sendError(err);
 });
+
+const addStackTrace = (name: string) => {
+  // @ts-ignore
+  const original = console[name];
+  // @ts-ignore
+  console[name] = (...args: any[]) => {
+    const stack = new Error().stack?.replace(/^.+\n.+\n/, "");
+    original(...args);
+    original(stack);
+  };
+};
+
+addStackTrace("error");
+addStackTrace("warn");
