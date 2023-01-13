@@ -406,6 +406,7 @@ function instantiateModule(id, sourceType, sourceId) {
       p: _process,
       g: globalThis,
       __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
+    });
   });
 
   module.loaded = true;
