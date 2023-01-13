@@ -17,18 +17,15 @@ fn syntax() -> Syntax {
     })
 }
 
-#[fixture("tests/webpack/errors/**/input.js")]
-fn next_dynamic_webpack_errors(input: PathBuf) {
-    next_dynamic_errors(&input, NextDynamicMode::Webpack);
+#[fixture("tests/errors/**/input.js")]
+fn next_dynamic_errors(input: PathBuf) {
+    next_dynamic_errors_run(&input, "output-webpack.js", NextDynamicMode::Webpack);
+
+    next_dynamic_errors_run(&input, "output-turbo.js", NextDynamicMode::Turbo);
 }
 
-#[fixture("tests/turbo/errors/**/input.js")]
-fn next_dynamic_turbo_errors(input: PathBuf) {
-    next_dynamic_errors(&input, NextDynamicMode::Turbo);
-}
-
-fn next_dynamic_errors(input: &Path, mode: NextDynamicMode) {
-    let output = input.parent().unwrap().join("output.js");
+fn next_dynamic_errors_run(input: &Path, output: &str, mode: NextDynamicMode) {
+    let output = input.parent().unwrap().join(output);
     test_fixture(
         syntax(),
         &|_tr| {

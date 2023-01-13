@@ -17,48 +17,45 @@ fn syntax() -> Syntax {
     })
 }
 
-#[fixture("tests/webpack/fixture/**/input.js")]
-fn next_dynamic_webpack_fixture(input: PathBuf) {
-    next_dynamic_fixture(
+#[fixture("tests/fixture/**/input.js")]
+fn next_dynamic_fixture(input: PathBuf) {
+    next_dynamic_fixture_run(
         &input,
-        "output-dev.js",
+        "output-webpack-dev.js",
         true,
         false,
         false,
         NextDynamicMode::Webpack,
     );
-    next_dynamic_fixture(
+    next_dynamic_fixture_run(
         &input,
-        "output-prod.js",
+        "output-webpack-prod.js",
         false,
         false,
         false,
         NextDynamicMode::Webpack,
     );
-    next_dynamic_fixture(
+    next_dynamic_fixture_run(
         &input,
-        "output-server.js",
+        "output-webpack-server.js",
         false,
         true,
         false,
         NextDynamicMode::Webpack,
     );
-}
 
-#[fixture("tests/turbo/fixture/**/input.js")]
-fn next_dynamic_turbo_fixture(input: PathBuf) {
     // TODO(alexkirsz) Also test production once implemented.
-    next_dynamic_fixture(
+    next_dynamic_fixture_run(
         &input,
-        "output-dev-client.js",
+        "output-turbo-dev-client.js",
         true,
         false,
         false,
         NextDynamicMode::Turbo,
     );
-    next_dynamic_fixture(
+    next_dynamic_fixture_run(
         &input,
-        "output-dev-server.js",
+        "output-turbo-dev-server.js",
         true,
         true,
         false,
@@ -66,7 +63,7 @@ fn next_dynamic_turbo_fixture(input: PathBuf) {
     );
 }
 
-fn next_dynamic_fixture(
+fn next_dynamic_fixture_run(
     input: &Path,
     output: &str,
     is_development: bool,
