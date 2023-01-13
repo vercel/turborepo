@@ -1,8 +1,8 @@
+use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::{
-    condition::ContextCondition,
     module_options::{ModuleOptionsContext, ModuleOptionsContextVc, PostCssTransformOptions},
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
 };
@@ -12,30 +12,35 @@ use turbopack_core::environment::{
 use turbopack_ecmascript::EcmascriptInputTransform;
 use turbopack_node::execution_context::ExecutionContextVc;
 
+use super::transforms::get_next_server_transforms_rules;
 use crate::{
     next_build::get_postcss_package_mapping,
-    next_client::context::add_next_font_transform,
     next_config::NextConfigVc,
     next_import_map::{get_next_build_import_map, get_next_server_import_map},
+    util::foreign_code_context_condition,
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Debug, Copy, Clone, Hash, PartialOrd, Ord)]
 pub enum ServerContextType {
     Pages { pages_dir: FileSystemPathVc },
+    PagesData { pages_dir: FileSystemPathVc },
     AppSSR { app_dir: FileSystemPathVc },
     AppRSC { app_dir: FileSystemPathVc },
 }
 
 #[turbo_tasks::function]
-pub fn get_server_resolve_options_context(
+pub async fn get_server_resolve_options_context(
     project_path: FileSystemPathVc,
     ty: Value<ServerContextType>,
     next_config: NextConfigVc,
-) -> ResolveOptionsContextVc {
+) -> Result<ResolveOptionsContextVc> {
     let next_server_import_map = get_next_server_import_map(project_path, ty, next_config);
-    match ty.into_value() {
-        ServerContextType::Pages { .. } | ServerContextType::AppSSR { .. } => {
+
+    Ok(match ty.into_value() {
+        ServerContextType::Pages { .. }
+        | ServerContextType::PagesData { .. }
+        | ServerContextType::AppSSR { .. } => {
             let resolve_options_context = ResolveOptionsContext {
                 enable_node_modules: true,
                 enable_node_externals: true,
@@ -49,7 +54,7 @@ pub fn get_server_resolve_options_context(
                 enable_typescript: true,
                 enable_react: true,
                 rules: vec![(
-                    ContextCondition::InDirectory("node_modules".to_string()),
+                    foreign_code_context_condition(next_config).await?,
                     resolve_options_context.clone().cell(),
                 )],
                 ..resolve_options_context
@@ -69,14 +74,14 @@ pub fn get_server_resolve_options_context(
                 enable_typescript: true,
                 enable_react: true,
                 rules: vec![(
-                    ContextCondition::InDirectory("node_modules".to_string()),
+                    foreign_code_context_condition(next_config).await?,
                     resolve_options_context.clone().cell(),
                 )],
                 ..resolve_options_context
             }
         }
     }
-    .cell()
+    .cell())
 }
 
 #[turbo_tasks::function]
@@ -90,7 +95,9 @@ pub fn get_server_environment(
             NodeJsEnvironmentVc::current(process_env, server_addr),
         )),
         match ty.into_value() {
-            ServerContextType::Pages { .. } => Value::new(EnvironmentIntention::ServerRendering),
+            ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } => {
+                Value::new(EnvironmentIntention::ServerRendering)
+            }
             ServerContextType::AppSSR { .. } => Value::new(EnvironmentIntention::Prerendering),
             ServerContextType::AppRSC { .. } => Value::new(EnvironmentIntention::ServerRendering),
         },
@@ -98,13 +105,16 @@ pub fn get_server_environment(
 }
 
 #[turbo_tasks::function]
-pub fn get_server_module_options_context(
+pub async fn get_server_module_options_context(
     project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
     ty: Value<ServerContextType>,
-) -> ModuleOptionsContextVc {
+    next_config: NextConfigVc,
+) -> Result<ModuleOptionsContextVc> {
+    let custom_rules = get_next_server_transforms_rules(ty.into_value()).await?;
+
     let module_options_context = match ty.into_value() {
-        ServerContextType::Pages { .. } => {
+        ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } => {
             let module_options_context = ModuleOptionsContext {
                 execution_context: Some(execution_context),
                 ..Default::default()
@@ -116,11 +126,13 @@ pub fn get_server_module_options_context(
                     postcss_package: Some(get_postcss_package_mapping(project_path)),
                     ..Default::default()
                 }),
+                enable_webpack_loaders: next_config.webpack_loaders_options().await?.clone_if(),
                 enable_typescript_transform: true,
                 rules: vec![(
-                    ContextCondition::InDirectory("node_modules".to_string()),
+                    foreign_code_context_condition(next_config).await?,
                     module_options_context.clone().cell(),
                 )],
+                custom_rules,
                 ..module_options_context
             }
         }
@@ -136,11 +148,13 @@ pub fn get_server_module_options_context(
                     postcss_package: Some(get_postcss_package_mapping(project_path)),
                     ..Default::default()
                 }),
+                enable_webpack_loaders: next_config.webpack_loaders_options().await?.clone_if(),
                 enable_typescript_transform: true,
                 rules: vec![(
-                    ContextCondition::InDirectory("node_modules".to_string()),
+                    foreign_code_context_condition(next_config).await?,
                     module_options_context.clone().cell(),
                 )],
+                custom_rules,
                 ..module_options_context
             }
         }
@@ -158,18 +172,20 @@ pub fn get_server_module_options_context(
                     postcss_package: Some(get_postcss_package_mapping(project_path)),
                     ..Default::default()
                 }),
+                enable_webpack_loaders: next_config.webpack_loaders_options().await?.clone_if(),
                 enable_typescript_transform: true,
                 rules: vec![(
-                    ContextCondition::InDirectory("node_modules".to_string()),
+                    foreign_code_context_condition(next_config).await?,
                     module_options_context.clone().cell(),
                 )],
+                custom_rules,
                 ..module_options_context
             }
         }
     }
     .cell();
 
-    add_next_font_transform(module_options_context)
+    Ok(module_options_context)
 }
 
 #[turbo_tasks::function]
