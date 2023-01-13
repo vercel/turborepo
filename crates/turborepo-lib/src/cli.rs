@@ -314,8 +314,8 @@ pub struct RunArgs {
     /// task hashes. Use "new-only" to show only new output with
     /// only hashes for cached tasks. Use "none" to hide process
     /// output. (default full)
-    #[clap(long, value_enum, default_value_t = OutputLogsMode::Full)]
-    pub output_logs: OutputLogsMode,
+    #[clap(long, value_enum)]
+    pub output_logs: Option<OutputLogsMode>,
     #[clap(long, hide = true)]
     pub only: bool,
     /// Execute all tasks in parallel.
@@ -415,6 +415,7 @@ mod test {
     fn get_default_run_args() -> RunArgs {
         RunArgs {
             cache_workers: 10,
+            output_logs: None,
             ..RunArgs::default()
         }
     }
@@ -451,10 +452,12 @@ mod test {
         }
     }
 
+    use anyhow::Result;
+
     use crate::cli::{Args, Command, DryRunMode, OutputLogsMode, RunArgs, Verbosity};
 
     #[test]
-    fn test_parse_run() {
+    fn test_parse_run() -> Result<()> {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
             Args {
@@ -714,12 +717,19 @@ mod test {
             }
         );
 
+        // Test that ouput-logs is not serialized by default
+        assert_eq!(
+            serde_json::to_string(&Args::try_parse_from(["turbo", "run", "build"]).unwrap())?
+                .contains("\"output_logs\":null"),
+            true
+        );
+
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--output-logs", "full"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    output_logs: OutputLogsMode::Full,
+                    output_logs: Some(OutputLogsMode::Full),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
@@ -731,7 +741,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    output_logs: OutputLogsMode::None,
+                    output_logs: Some(OutputLogsMode::None),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
@@ -743,7 +753,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    output_logs: OutputLogsMode::HashOnly,
+                    output_logs: Some(OutputLogsMode::HashOnly),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
@@ -832,6 +842,8 @@ mod test {
                 ..Args::default()
             }
         );
+
+        Ok(())
     }
 
     #[test]
