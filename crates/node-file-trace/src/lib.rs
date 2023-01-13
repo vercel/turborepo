@@ -259,6 +259,7 @@ async fn input_to_modules<'a>(
         env,
         ModuleOptionsContext {
             enable_types: true,
+            enable_mdx: false,
             ..Default::default()
         }
         .cell(),

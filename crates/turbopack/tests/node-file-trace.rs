@@ -405,6 +405,7 @@ fn node_file_trace<B: Backend + 'static>(
                     ),
                     ModuleOptionsContext {
                         enable_types: true,
+                        enable_mdx: false,
                         ..Default::default()
                     }
                     .cell(),
