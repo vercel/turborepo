@@ -38,7 +38,7 @@ fn next_dynamic_errors_run(input: &Path, output: &str, mode: NextDynamicMode) {
                 Some("/some-project/src".into()),
             )
         },
-        &input,
+        input,
         &output,
         FixtureTestConfig {
             allow_error: true,

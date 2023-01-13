@@ -84,7 +84,7 @@ fn next_dynamic_fixture_run(
                 Some("/some-project/src".into()),
             )
         },
-        &input,
+        input,
         &output,
         Default::default(),
     );

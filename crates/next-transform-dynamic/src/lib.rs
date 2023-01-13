@@ -121,12 +121,11 @@ impl Fold for NextDynamicPatcher {
             if let Callee::Import(..) = &expr.callee {
                 match &*expr.args[0].expr {
                     Expr::Lit(Lit::Str(Str { value, span, .. })) => {
-                        self.dynamically_imported_specifier =
-                            Some((value.to_string(), span.clone()));
+                        self.dynamically_imported_specifier = Some((value.to_string(), *span));
                     }
                     Expr::Tpl(Tpl { exprs, quasis, .. }) if exprs.is_empty() => {
                         self.dynamically_imported_specifier =
-                            Some((quasis[0].raw.to_string(), quasis[0].span.clone()));
+                            Some((quasis[0].raw.to_string(), quasis[0].span));
                     }
                     _ => {}
                 }
@@ -202,7 +201,7 @@ impl Fold for NextDynamicPatcher {
                                         rel_filename(self.pages_dir.as_deref(), &self.filename)
                                     )
                                     .into(),
-                                    right: Expr = dynamically_imported_specifier.clone().into(),
+                                    right: Expr = dynamically_imported_specifier.into(),
                                 ),
                                 NextDynamicMode::Turbo => {
                                     let id_ident =
@@ -284,7 +283,6 @@ impl Fold for NextDynamicPatcher {
                                                 args: vec![ExprOrSpread {
                                                     expr: Box::new(Expr::Lit(Lit::Str(Str {
                                                         value: dynamically_imported_specifier
-                                                            .clone()
                                                             .into(),
                                                         span: DUMMY_SP,
                                                         raw: None,
@@ -462,7 +460,7 @@ impl NextDynamicPatcher {
             }
         }
 
-        new_items.extend(items.drain(..));
+        new_items.append(items);
 
         std::mem::swap(&mut new_items, items)
     }
