@@ -81,9 +81,11 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	opts.runcacheOpts.SkipReads = runPayload.Force
 	opts.runcacheOpts.SkipWrites = runPayload.NoCache
 
-	err := opts.runcacheOpts.SetTaskOutputMode(runPayload.OutputLogs)
-	if err != nil {
-		return nil, err
+	if runPayload.OutputLogs != "" {
+		err := opts.runcacheOpts.SetTaskOutputMode(runPayload.OutputLogs)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Run flags
