@@ -74,6 +74,9 @@ pub async fn read_tsconfigs(
                     )
                     .primary_assets()
                     .await?;
+                    // There might be multiple alternatives like
+                    // "some/path/node_modules/xyz/abc.json" and "some/node_modules/xyz/abc.json".
+                    // We only want to use the first one.
                     if let Some(&asset) = result.iter().next() {
                         data = asset.content().parse_json_with_comments();
                         tsconfig = asset;
