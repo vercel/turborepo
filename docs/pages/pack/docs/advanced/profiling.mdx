@@ -1,5 +1,5 @@
 ---
-title: Profiling 
+title: Profiling
 description: Learn how to profile Turbopack
 ---
 
@@ -50,6 +50,26 @@ Once the program exits, the profiler will open the trace file in Instruments. Re
   captionSpacing={24}
   caption="An example trace from the time profiler."
 />
+
+## Linux
+
+### Memory usage
+
+``` sh
+# Install `heaptrack` and `heaptrack_gui`
+sudo apt install heaptrack heaptrack_gui
+
+# Compile with debug info but without the alternative allocator:
+CARGO_PROFILE_RELEASE_DEBUG=1 cargo build --bin next-dev --release --no-default-features --features cli
+
+# Run the binary with heaptrack (it will be much slower than usual)
+heaptrack target/release/next-dev [...]
+
+# Stop it anytime
+
+# Open the GUI and open the heaptrack.next-dev.XXX.gz file
+heaptrack_gui
+```
 
 ## On other platforms
 
