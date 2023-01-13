@@ -2,6 +2,7 @@ package filter
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -28,7 +29,11 @@ func setMatches(t *testing.T, name string, s util.Set, expected []string) {
 }
 
 func Test_filter(t *testing.T) {
-	root, err := fs.GetCwd()
+	rawCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	root, err := fs.GetCwd(rawCwd)
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
@@ -285,10 +290,10 @@ func Test_filter(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
 			r := &Resolver{
-				Graph:        graph,
-				PackageInfos: packageJSONs,
-				Cwd:          root,
-				Inference:    tc.PackageInference,
+				Graph:          graph,
+				WorkspaceInfos: packageJSONs,
+				Cwd:            root,
+				Inference:      tc.PackageInference,
 			}
 			pkgs, err := r.getFilteredPackages(tc.Selectors)
 			if err != nil {
@@ -300,9 +305,9 @@ func Test_filter(t *testing.T) {
 
 	t.Run("report unmatched filters", func(t *testing.T) {
 		r := &Resolver{
-			Graph:        graph,
-			PackageInfos: packageJSONs,
-			Cwd:          root,
+			Graph:          graph,
+			WorkspaceInfos: packageJSONs,
+			Cwd:            root,
 		}
 		pkgs, err := r.getFilteredPackages([]*TargetSelector{
 			{
@@ -324,7 +329,11 @@ func Test_filter(t *testing.T) {
 }
 
 func Test_matchScopedPackage(t *testing.T) {
-	root, err := fs.GetCwd()
+	rawCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	root, err := fs.GetCwd(rawCwd)
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
@@ -353,7 +362,11 @@ func Test_matchScopedPackage(t *testing.T) {
 }
 
 func Test_matchExactPackages(t *testing.T) {
-	root, err := fs.GetCwd()
+	rawCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	root, err := fs.GetCwd(rawCwd)
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
@@ -387,7 +400,11 @@ func Test_matchExactPackages(t *testing.T) {
 }
 
 func Test_matchMultipleScopedPackages(t *testing.T) {
-	root, err := fs.GetCwd()
+	rawCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	root, err := fs.GetCwd(rawCwd)
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
@@ -421,7 +438,11 @@ func Test_matchMultipleScopedPackages(t *testing.T) {
 }
 
 func Test_SCM(t *testing.T) {
-	root, err := fs.GetCwd()
+	rawCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	root, err := fs.GetCwd(rawCwd)
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}

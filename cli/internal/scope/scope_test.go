@@ -2,6 +2,7 @@ package scope
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -9,12 +10,12 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/context"
+	"github.com/vercel/turbo/cli/internal/fs"
 	internalGraph "github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/ui"
 	"github.com/vercel/turbo/cli/internal/util"
-	"github.com/vercel/turborepo/cli/internal/fs"
 )
 
 type mockSCM struct {
@@ -26,7 +27,11 @@ func (m *mockSCM) ChangedFiles(_fromCommit string, _toCommit string, _includeUnt
 }
 
 func TestResolvePackages(t *testing.T) {
-	root, err := fs.GetCwd()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("cwd: %v", err)
+	}
+	root, err := fs.GetCwd(cwd)
 	if err != nil {
 		t.Fatalf("cwd: %v", err)
 	}

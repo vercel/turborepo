@@ -14,6 +14,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/scm"
 	scope_filter "github.com/vercel/turbo/cli/internal/scope/filter"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/util/filter"
@@ -73,7 +74,7 @@ func OptsFromArgs(opts *Opts, args *turbostate.ParsedArgsFromRust) {
 	opts.FilterPatterns = args.Command.Run.Filter
 	opts.IgnorePatterns = args.Command.Run.Ignore
 	opts.GlobalDepPatterns = args.Command.Run.GlobalDeps
-	flags.StringVar(&opts.PackageInferenceRoot, "infer-filter-root", "", "Use the given monorepo-relative path as the basis for inferring tasks")
+	opts.PackageInferenceRoot = args.Command.Run.InferFilterRoot
 	addLegacyFlagsFromArgs(&opts.LegacyFilter, args)
 }
 
@@ -117,16 +118,16 @@ func (l *LegacyFilter) asFilterPatterns() []string {
 // the selected tasks. Returns the selected packages and whether or not the selected
 // packages represents a default "all packages".
 func ResolvePackages(opts *Opts, repoRoot turbopath.AbsoluteSystemPath, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, bool, error) {
-	inferenceBase, err := calculateInference(repoRoot, opts.PackageInferenceRoot, ctx.PackageInfos)
+	inferenceBase, err := calculateInference(repoRoot, opts.PackageInferenceRoot, ctx.WorkspaceInfos)
 	if err != nil {
 		return nil, false, err
 	}
 	filterResolver := &scope_filter.Resolver{
 		Graph:                  &ctx.WorkspaceGraph,
 		WorkspaceInfos:         ctx.WorkspaceInfos,
-		Cwd:                    cwd,
+		Cwd:                    repoRoot,
 		Inference:              inferenceBase,
-		PackagesChangedInRange: opts.getPackageChangeFunc(scm, cwd, ctx.PackageInfos, ctx.PackageManager),
+		PackagesChangedInRange: opts.getPackageChangeFunc(scm, repoRoot, ctx.WorkspaceInfos, ctx.PackageManager),
 	}
 	filterPatterns := opts.FilterPatterns
 	legacyFilterPatterns := opts.LegacyFilter.asFilterPatterns()
@@ -147,7 +148,7 @@ func ResolvePackages(opts *Opts, repoRoot turbopath.AbsoluteSystemPath, scm scm.
 	return filteredPkgs, isAllPackages, nil
 }
 
-func calculateInference(repoRoot turbopath.AbsoluteSystemPath, rawPkgInferenceDir string, packageInfos map[interface{}]*fs.PackageJSON) (*scope_filter.PackageInference, error) {
+func calculateInference(repoRoot turbopath.AbsoluteSystemPath, rawPkgInferenceDir string, packageInfos graph.WorkspaceInfos) (*scope_filter.PackageInference, error) {
 	if rawPkgInferenceDir == "" {
 		// No inference specified, no need to calculate anything
 		return nil, nil
@@ -187,7 +188,7 @@ func calculateInference(repoRoot turbopath.AbsoluteSystemPath, rawPkgInferenceDi
 	}, nil
 }
 
-func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos graph.WorkspaceInfos, packageManager *packagemanager.PackageManager) scope_filter.PackagesChangedInRange {
+func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd turbopath.AbsoluteSystemPath, packageInfos graph.WorkspaceInfos, packageManager *packagemanager.PackageManager) scope_filter.PackagesChangedInRange {
 	return func(fromRef string, toRef string) (util.Set, error) {
 		// We could filter changed files at the git level, since it's possible
 		// that the changes we're interested in are scoped, but we need to handle
@@ -195,7 +196,7 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos graph.
 		// scope changed files more deeply if we know there are no global dependencies.
 		var changedFiles []string
 		if fromRef != "" {
-			scmChangedFiles, err := scm.ChangedFiles(fromRef, toRef, true, cwd)
+			scmChangedFiles, err := scm.ChangedFiles(fromRef, toRef, true, cwd.ToStringDuringMigration())
 			if err != nil {
 				return nil, err
 			}

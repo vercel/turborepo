@@ -6,10 +6,10 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/pyr-sh/dag"
+	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/graph"
-	"github.com/vercel/turborepo/cli/internal/doublestar"
-	"github.com/vercel/turborepo/cli/internal/turbopath"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 type SelectedPackages struct {
@@ -37,7 +37,7 @@ type PackageInference struct {
 type Resolver struct {
 	Graph                  *dag.AcyclicGraph
 	WorkspaceInfos         graph.WorkspaceInfos
-	Cwd                    string
+	Cwd                    turbopath.AbsoluteSystemPath
 	Inference              *PackageInference
 	PackagesChangedInRange PackagesChangedInRange
 }
@@ -287,7 +287,7 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 		if parentDir == "." {
 			entryPackages.Add(util.RootPkgName)
 		} else {
-			for name, pkg := range r.PackageInfos {
+			for name, pkg := range r.WorkspaceInfos {
 				if matches, err := doublestar.PathMatch(r.Cwd.Join(parentDir).ToString(), pkg.Dir.RestoreAnchor(r.Cwd).ToString()); err != nil {
 					return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
 				} else if matches {
