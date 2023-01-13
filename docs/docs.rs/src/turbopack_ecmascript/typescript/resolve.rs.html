@@ -377,6 +377,10 @@
 <span id="377">377</span>
 <span id="378">378</span>
 <span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -400,7 +404,7 @@
         origin::ResolveOriginVc,
         parse::{Request, RequestVc},
         pattern::QueryMapVc,
-        resolve, AliasPattern, ResolveResult, ResolveResultVc,
+        resolve, AliasPattern, ResolveResultVc,
     },
     source_asset::SourceAssetVc,
 };
@@ -451,8 +455,12 @@
                         RequestVc::parse(Value::new(extends.to_string().into())),
                         resolve_options,
                     )
+                    .primary_assets()
                     .<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">if let </span>ResolveResult::Single(asset, <span class="kw">_</span>) = <span class="kw-2">*</span>result {
+                    <span class="comment">// There might be multiple alternatives like
+                    // &quot;some/path/node_modules/xyz/abc.json&quot; and &quot;some/node_modules/xyz/abc.json&quot;.
+                    // We only want to use the first one.
+                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>asset) = result.iter().next() {
                         data = asset.content().parse_json_with_comments();
                         tsconfig = asset;
                     } <span class="kw">else </span>{
