@@ -8,6 +8,7 @@ Thanks for your interest in contributing to Turbo!
   - [Contributing to Turborepo](#contributing-to-turborepo)
     - [Building Turborepo](#building-turborepo)
     - [Running Turborepo Tests](#running-turborepo-tests)
+      - [Go Tests](#go-tests)
       - [Rust Tests](#rust-tests)
   - [Debugging Turborepo](#debugging-turborepo)
   - [Benchmarking Turborepo](#benchmarking-turborepo)
@@ -41,6 +42,8 @@ Building
 
 ### Running Turborepo Tests
 
+#### Go Tests
+
 From the root directory, you can
 
 - run unit tests with `pnpm run --filter=cli test`
@@ -51,8 +54,10 @@ To run a single Go test, you can run `go test ./[path/to/package/]`. See more [i
 
 #### Rust Tests
 
-You can run `cargo test -p turborepo-lib`, or [install nextest](https://nexte.st/book/pre-built-binaries.html)
-and run `cargo nextest run -p turborepo-lib`. CI uses `nextest`.
+The recommended way to run tests is: `cargo nextest run -p turborepo-lib`.
+You'll have to [install it first](https://nexte.st/book/pre-built-binaries.html).
+
+You can also use the built in [`cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html) directly `cargo test -p turborepo-lib`.
 
 ## Debugging Turborepo
 
