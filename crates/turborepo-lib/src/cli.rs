@@ -452,10 +452,12 @@ mod test {
         }
     }
 
+    use anyhow::Result;
+
     use crate::cli::{Args, Command, DryRunMode, OutputLogsMode, RunArgs, Verbosity};
 
     #[test]
-    fn test_parse_run() {
+    fn test_parse_run() -> Result<()> {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
             Args {
@@ -715,6 +717,13 @@ mod test {
             }
         );
 
+        // Test that ouput-logs is not serialized by default
+        assert_eq!(
+            serde_json::to_string(&Args::try_parse_from(["turbo", "run", "build"]).unwrap())?
+                .contains("\"output_logs\":null"),
+            true
+        );
+
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--output-logs", "full"]).unwrap(),
             Args {
@@ -833,6 +842,8 @@ mod test {
                 ..Args::default()
             }
         );
+
+        Ok(())
     }
 
     #[test]
