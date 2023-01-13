@@ -341,6 +341,32 @@ jobs:
     needs: [determine_jobs, rust_prepare]
     if: needs.determine_jobs.outputs.rust == 'true'
     name: Rust linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          components: rustfmt
+
+      - name: Run cargo fmt check
+        run: |
+          cargo fmt --check
+
+      - name: Check Cargo.toml formatting (taplo)
+        run: npx @taplo/cli format --check
+
+      - name: Check licenses
+        uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check licenses
+
+  rust_check:
+    needs: [determine_jobs, rust_prepare]
+    if: needs.determine_jobs.outputs.rust == 'true'
+    name: Rust check / clippy
     runs-on: ubuntu-latest-16-core-oss
     steps:
       - name: Checkout
@@ -349,9 +375,8 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
-          components: clippy,rustfmt
+          components: clippy
           targets: wasm32-unknown-unknown
-          save-cache: true
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
@@ -369,13 +394,13 @@ jobs:
           # next-swc/wasm
           cargo check -p next-binding --features __swc_core_binding_wasm,__swc_core_binding_wasm_plugin,__feature_mdx_rs --target wasm32-unknown-unknown
 
+      - name: Run cargo check release
+        run: |
+          cargo check --workspace --all-targets --release
+
       - name: Run cargo clippy
         run: |
           cargo clippy --workspace --all-targets
-
-      - name: Run cargo fmt check
-        run: |
-          cargo fmt --check
 
       - name: Count clippy warnings
         run: |
@@ -427,18 +452,6 @@ jobs:
               exit 1
             fi
           fi
-
-      - name: Check Cargo.toml formatting (taplo)
-        run: npx @taplo/cli format --check
-
-      - name: Check licenses
-        uses: EmbarkStudios/cargo-deny-action@v1
-        with:
-          command: check licenses
-
-      - name: Run cargo check release
-        run: |
-          cargo check --workspace --all-targets --release
 
   rust_test:
     needs: [determine_jobs, rust_prepare]
@@ -989,6 +1002,7 @@ jobs:
       - go_unit
       - go_examples
       - rust_lint
+      - rust_check
       - rust_test
       - rust_test_bench
       - rust_build_release
@@ -1004,7 +1018,7 @@ jobs:
     steps:
       - name: Check cancellation
         id: cancelled
-        if: needs.rust_lint.result == 'cancelled' || needs.rust_test.result == 'cancelled' || needs.rust_test_bench.result == 'cancelled' || needs.rust_build_release.result == 'cancelled' || needs.node_lint.result == 'cancelled' || needs.rust_bench_commit.result == 'cancelled'
+        if: needs.rust_lint.result == 'cancelled' || needs.rust_check.result == 'cancelled' || needs.rust_test.result == 'cancelled' || needs.rust_test_bench.result == 'cancelled' || needs.rust_build_release.result == 'cancelled' || needs.node_lint.result == 'cancelled' || needs.rust_bench.result == 'cancelled'
         run: echo "cancelled=true" >> $GITHUB_OUTPUT
 
       - name: Start summary
@@ -1042,6 +1056,12 @@ jobs:
           echo "- Rust lints" >> failures.md
           exit 1
 
+      - name: Rust Checking failed
+        if: always() && needs.rust_check.result != 'success' && needs.rust_check.result != 'skipped'
+        run: |
+          echo "- Rust checks / clippy" >> failures.md
+          exit 1
+
       - name: Rust Testing failed
         if: always() && needs.rust_test.result != 'success' && needs.rust_test.result != 'skipped'
         run: |
@@ -1061,7 +1081,7 @@ jobs:
           exit 1
 
       - name: Rust benchmarks
-        if: always() && needs.rust_bench_commit.result != 'success' && needs.rust_bench_commit.result != 'skipped'
+        if: always() && needs.rust_bench.result != 'success' && needs.rust_bench.result != 'skipped'
         run: |
           echo "- Rust benchmarks" >> failures.md
           exit 1
