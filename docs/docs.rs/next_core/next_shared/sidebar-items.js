@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["transforms",""]]};
+window.SIDEBAR_ITEMS = {};

@@ -307,6 +307,7 @@
 <span id="307">307</span>
 <span id="308">308</span>
 <span id="309">309</span>
+<span id="310">310</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -578,6 +579,7 @@
                 source_map: <span class="kw-2">&amp;</span>source_map,
                 top_level_mark,
                 unresolved_mark,
+                file_path_str: <span class="kw-2">&amp;</span>fs_path.path,
                 file_name_str: fs_path.file_name(),
                 file_name_hash: file_path_hash,
             };

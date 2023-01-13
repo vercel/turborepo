@@ -243,47 +243,17 @@
 <span id="243">243</span>
 <span id="244">244</span>
 <span id="245">245</span>
-<span id="246">246</span>
-<span id="247">247</span>
-<span id="248">248</span>
-<span id="249">249</span>
-<span id="250">250</span>
-<span id="251">251</span>
-<span id="252">252</span>
-<span id="253">253</span>
-<span id="254">254</span>
-<span id="255">255</span>
-<span id="256">256</span>
-<span id="257">257</span>
-<span id="258">258</span>
-<span id="259">259</span>
-<span id="260">260</span>
-<span id="261">261</span>
-<span id="262">262</span>
-<span id="263">263</span>
-<span id="264">264</span>
-<span id="265">265</span>
-<span id="266">266</span>
-<span id="267">267</span>
-<span id="268">268</span>
-<span id="269">269</span>
-<span id="270">270</span>
-<span id="271">271</span>
-<span id="272">272</span>
-<span id="273">273</span>
-<span id="274">274</span>
-<span id="275">275</span>
 </pre><pre class="rust"><code><span class="kw">use </span>core::{default::Default, result::Result::Ok};
 <span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>turbo_tasks::{primitives::StringsVc, Value};
+<span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack::{
     module_options::{
         module_options_context::{ModuleOptionsContext, ModuleOptionsContextVc},
-        ModuleRule, ModuleRuleCondition, ModuleRuleEffect, PostCssTransformOptions,
+        PostCssTransformOptions,
     },
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
     transition::TransitionsByNameVc,
@@ -293,13 +263,12 @@
     chunk::{dev::DevChunkingContextVc, ChunkingContextVc},
     context::AssetContextVc,
     environment::{BrowserEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment},
-    reference_type::{ReferenceType, UrlReferenceSubType},
     resolve::{parse::RequestVc, pattern::Pattern},
 };
-<span class="kw">use </span>turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
 <span class="kw">use </span>turbopack_env::ProcessEnvAssetVc;
 <span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
 
+<span class="kw">use </span><span class="kw">super</span>::transforms::get_next_client_transforms_rules;
 <span class="kw">use crate</span>::{
     embed_js::attached_next_js_package_path,
     env::env_for_js,
@@ -378,6 +347,7 @@
     ty: Value&lt;ClientContextType&gt;,
     next_config: NextConfigVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleOptionsContextVc&gt; {
+    <span class="kw">let </span>custom_rules = get_next_client_transforms_rules(ty.into_value()).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>resolve_options_context = get_client_resolve_options_context(project_path, ty, next_config);
     <span class="kw">let </span>enable_react_refresh =
         assert_can_resolve_react_refresh(project_path, resolve_options_context)
@@ -408,42 +378,12 @@
             foreign_code_context_condition(next_config).<span class="kw">await</span><span class="question-mark">?</span>,
             module_options_context.clone().cell(),
         )],
+        custom_rules,
         ..module_options_context
-    };
+    }
+    .cell();
 
-    <span class="prelude-val">Ok</span>(add_next_font_transform(module_options_context.cell()))
-}
-
-<span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub async fn </span>add_next_font_transform(
-    module_options_context: ModuleOptionsContextVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleOptionsContextVc&gt; {
-    <span class="attr">#[allow(unused_mut)] </span><span class="comment">// This is mutated when next-font-local is enabled
-    </span><span class="kw">let </span><span class="kw-2">mut </span>font_loaders = <span class="macro">vec!</span>[<span class="string">&quot;@next/font/google&quot;</span>.to_owned()];
-    <span class="attr">#[cfg(feature = <span class="string">&quot;next-font-local&quot;</span>)]
-    </span>font_loaders.push(<span class="string">&quot;@next/font/local&quot;</span>.to_owned());
-
-    <span class="kw">let </span><span class="kw-2">mut </span>module_options_context = module_options_context.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
-    module_options_context.custom_rules.push(ModuleRule::new(
-        <span class="comment">// TODO: Only match in pages (not pages/api), app/, etc.
-        </span>ModuleRuleCondition::all(<span class="macro">vec!</span>[
-            ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(ReferenceType::Url(
-                UrlReferenceSubType::Undefined,
-            ))),
-            ModuleRuleCondition::any(<span class="macro">vec!</span>[
-                ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.js&quot;</span>.to_string()),
-                ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.jsx&quot;</span>.to_string()),
-                ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.ts&quot;</span>.to_string()),
-                ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.tsx&quot;</span>.to_string()),
-            ]),
-        ]),
-        <span class="macro">vec!</span>[ModuleRuleEffect::AddEcmascriptTransforms(
-            EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::NextJsFont(
-                StringsVc::cell(font_loaders),
-            )]),
-        )],
-    ));
-    <span class="prelude-val">Ok</span>(module_options_context.cell())
+    <span class="prelude-val">Ok</span>(module_options_context)
 }
 
 <span class="attr">#[turbo_tasks::function]

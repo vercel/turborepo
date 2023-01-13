@@ -510,11 +510,6 @@
 <span id="510">510</span>
 <span id="511">511</span>
 <span id="512">512</span>
-<span id="513">513</span>
-<span id="514">514</span>
-<span id="515">515</span>
-<span id="516">516</span>
-<span id="517">517</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>dev;
 <span class="kw">pub mod </span>optimize;
 
@@ -677,13 +672,14 @@
 <span class="doccomment">/// Specifies how a chunk interacts with other chunks when building a chunk
 /// group
 </span><span class="attr">#[derive(
-    Copy, Clone, Hash, TraceRawVcs, Serialize, Deserialize, Eq, PartialEq, ValueDebugFormat,
+    Copy, Default, Clone, Hash, TraceRawVcs, Serialize, Deserialize, Eq, PartialEq, ValueDebugFormat,
 )]
 </span><span class="kw">pub enum </span>ChunkingType {
     <span class="doccomment">/// Asset is always placed into the referencing chunk and loaded with it.
     </span>Placed,
     <span class="doccomment">/// A heuristic determines if the asset is placed into the referencing chunk
     /// or in a separate chunk that is loaded in parallel.
+    </span><span class="attr">#[default]
     </span>PlacedOrParallel,
     <span class="doccomment">/// Asset is always placed in a separate chunk that is loaded in parallel.
     </span>Parallel,
@@ -692,15 +688,9 @@
     /// Note: Separate chunks need to be loaded by something external to current
     /// reference.
     </span>Separate,
-    <span class="doccomment">/// A async loader is placed into the referencing chunk and loads the
+    <span class="doccomment">/// An async loader is placed into the referencing chunk and loads the
     /// separate chunk group in which the asset is placed.
     </span>SeparateAsync,
-}
-
-<span class="kw">impl </span>Default <span class="kw">for </span>ChunkingType {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        ChunkingType::PlacedOrParallel
-    }
 }
 
 <span class="attr">#[turbo_tasks::value(transparent)]

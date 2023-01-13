@@ -1,0 +1,82 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/next-core/src/next_client/transforms.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>transforms.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../../normalize.css"><link rel="stylesheet" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../../ayu.css" disabled><link rel="stylesheet" href="../../../dark.css" disabled><link rel="stylesheet" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../main.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><div class="width-limiter"><nav class="sub"><a class="sub-logo-container" href="../../../next_core/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>turbopack::module_options::ModuleRule;
+<span class="kw">use </span>turbopack_ecmascript::NextJsPageExportFilter;
+
+<span class="kw">use crate</span>::{
+    next_client::context::ClientContextType,
+    next_shared::transforms::{
+        get_next_dynamic_transform_rule, get_next_font_transform_rule,
+        get_next_pages_transforms_rule,
+    },
+};
+
+<span class="doccomment">/// Returns a list of module rules which apply client-side, Next.js-specific
+/// transforms.
+</span><span class="kw">pub async fn </span>get_next_client_transforms_rules(
+    context_ty: ClientContextType,
+) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ModuleRule&gt;&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>rules = <span class="macro">vec!</span>[];
+
+    rules.push(get_next_font_transform_rule());
+
+    <span class="kw">let </span>pages_dir = <span class="kw">match </span>context_ty {
+        ClientContextType::Pages { pages_dir } =&gt; {
+            rules.push(
+                get_next_pages_transforms_rule(pages_dir, NextJsPageExportFilter::StripDataExports)
+                    .<span class="kw">await</span><span class="question-mark">?</span>,
+            );
+            <span class="prelude-val">Some</span>(pages_dir)
+        }
+        ClientContextType::App { .. } | ClientContextType::Fallback | ClientContextType::Other =&gt; {
+            <span class="prelude-val">None
+        </span>}
+    };
+
+    rules.push(get_next_dynamic_transform_rule(
+        <span class="bool-val">true</span>, <span class="bool-val">false</span>, <span class="bool-val">false</span>, pages_dir,
+    ));
+
+    <span class="prelude-val">Ok</span>(rules)
+}
+</code></pre></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="next_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>
