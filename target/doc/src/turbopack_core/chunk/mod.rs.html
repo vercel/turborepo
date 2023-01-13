@@ -513,6 +513,8 @@
 <span id="513">513</span>
 <span id="514">514</span>
 <span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>dev;
 <span class="kw">pub mod </span>optimize;
 
@@ -674,7 +676,9 @@
 
 <span class="doccomment">/// Specifies how a chunk interacts with other chunks when building a chunk
 /// group
-</span><span class="attr">#[derive(Copy, Clone, TraceRawVcs, Serialize, Deserialize, Eq, PartialEq, ValueDebugFormat)]
+</span><span class="attr">#[derive(
+    Copy, Clone, Hash, TraceRawVcs, Serialize, Deserialize, Eq, PartialEq, ValueDebugFormat,
+)]
 </span><span class="kw">pub enum </span>ChunkingType {
     <span class="doccomment">/// Asset is always placed into the referencing chunk and loaded with it.
     </span>Placed,
@@ -869,7 +873,7 @@
         chunk_item.references(),
     ));
     chunk_items.push(chunk_item);
-    processed_assets.insert(entry);
+    processed_assets.insert((ChunkingType::Placed, entry));
 
     <span class="kw">if let </span><span class="prelude-val">Some</span>(additional_entries) = additional_entries {
         <span class="kw">for </span>entry <span class="kw">in </span><span class="kw-2">&amp;*</span>additional_entries.<span class="kw">await</span><span class="question-mark">? </span>{
@@ -878,7 +882,7 @@
                 chunk_item.references(),
             ));
             chunk_items.push(chunk_item);
-            processed_assets.insert(<span class="kw-2">*</span>entry);
+            processed_assets.insert((ChunkingType::Placed, <span class="kw-2">*</span>entry));
         }
     }
 
@@ -922,7 +926,7 @@
                 <span class="kw">for </span>asset <span class="kw">in </span>assets
                     .<span class="kw">await</span><span class="question-mark">?
                     </span>.iter()
-                    .filter(|asset| processed_assets.insert(<span class="kw-2">**</span>asset))
+                    .filter(|asset| processed_assets.insert((chunking_type, <span class="kw-2">**</span>asset)))
                 {
                     <span class="kw">let </span>asset: <span class="kw-2">&amp;</span>AssetVc = asset;
 
