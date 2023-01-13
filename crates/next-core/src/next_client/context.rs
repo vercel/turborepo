@@ -127,6 +127,7 @@ pub async fn get_client_module_options_context(
             postcss_package: Some(get_postcss_package_mapping(project_path)),
             ..Default::default()
         }),
+        enable_webpack_loaders: next_config.webpack_loaders_options().await?.clone_if(),
         enable_typescript_transform: true,
         rules: vec![(
             foreign_code_context_condition(next_config).await?,
@@ -174,11 +175,10 @@ pub async fn add_next_font_transform(
 pub fn get_client_asset_context(
     project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
-    browserslist_query: &str,
+    environment: EnvironmentVc,
     ty: Value<ClientContextType>,
     next_config: NextConfigVc,
 ) -> AssetContextVc {
-    let environment = get_client_environment(browserslist_query);
     let resolve_options_context = get_client_resolve_options_context(project_path, ty, next_config);
     let module_options_context = get_client_module_options_context(
         project_path,
@@ -203,6 +203,7 @@ pub fn get_client_asset_context(
 pub fn get_client_chunking_context(
     project_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
+    environment: EnvironmentVc,
     ty: Value<ClientContextType>,
 ) -> ChunkingContextVc {
     DevChunkingContextVc::builder(
@@ -215,6 +216,7 @@ pub fn get_client_chunking_context(
             ClientContextType::Fallback | ClientContextType::Other => server_root.join("/_chunks"),
         },
         get_client_assets_path(server_root, ty),
+        environment,
     )
     .hot_module_replacement()
     .build()

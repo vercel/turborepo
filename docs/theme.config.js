@@ -4,6 +4,7 @@ import { useConfig, useTheme } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
 import Navigation from "./components/Navigation";
 import HeaderLogo from "./components/HeaderLogo";
+import ExtraContent from "./components/ExtraContent";
 import { Discord, Github } from "./components/Social";
 
 const SITE_ROOT = "https://turbo.build";
@@ -62,6 +63,7 @@ const theme = {
   unstable_staticImage: true,
   toc: {
     float: true,
+    extraContent: ExtraContent,
   },
   font: false,
   feedback: {

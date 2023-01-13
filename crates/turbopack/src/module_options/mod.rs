@@ -9,14 +9,31 @@ pub use rule_condition::*;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
-    resolve::options::{ImportMap, ImportMapping},
+    resolve::options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc},
     source_transform::SourceTransformsVc,
 };
 use turbopack_css::{CssInputTransform, CssInputTransformsVc};
 use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
-use turbopack_node::transforms::postcss::PostCssTransformVc;
+use turbopack_node::transforms::{postcss::PostCssTransformVc, webpack::WebpackLoadersVc};
 
 use crate::evaluate_context::node_evaluate_asset_context;
+
+#[turbo_tasks::function]
+fn postcss_import_map_from_import_mapping(postcss_package: ImportMappingVc) -> ImportMapVc {
+    let mut import_map = ImportMap::default();
+    import_map.insert_exact_alias("@vercel/turbopack/postcss", postcss_package);
+    import_map.cell()
+}
+
+#[turbo_tasks::function]
+fn postcss_import_map_from_context(context_path: FileSystemPathVc) -> ImportMapVc {
+    let mut import_map = ImportMap::default();
+    import_map.insert_exact_alias(
+        "@vercel/turbopack/postcss",
+        ImportMapping::PrimaryAlternative("postcss".to_string(), Some(context_path)).cell(),
+    );
+    import_map.cell()
+}
 
 #[turbo_tasks::value(cell = "new", eq = "manual")]
 pub struct ModuleOptions {
@@ -39,6 +56,7 @@ impl ModuleOptionsVc {
             enable_types,
             enable_typescript_transform,
             ref enable_postcss_transform,
+            ref enable_webpack_loaders,
             preset_env_versions,
             ref custom_ecmascript_app_transforms,
             ref custom_ecmascript_transforms,
@@ -124,19 +142,14 @@ impl ModuleOptionsVc {
                             .context("execution_context is required for the postcss_transform")?
                             .join("postcss");
 
-                        let mut import_map = ImportMap::default();
-                        import_map.insert_exact_alias(
-                            "@vercel/turbopack/postcss",
-                            if let Some(postcss) = options.postcss_package {
-                                postcss
-                            } else {
-                                ImportMapping::PrimaryAlternative("postcss".to_string(), Some(path))
-                                    .cell()
-                            },
-                        );
+                        let import_map = if let Some(postcss_package) = options.postcss_package {
+                            postcss_import_map_from_import_mapping(postcss_package)
+                        } else {
+                            postcss_import_map_from_context(path)
+                        };
                         Some(ModuleRuleEffect::SourceTransforms(
                             SourceTransformsVc::cell(vec![PostCssTransformVc::new(
-                                node_evaluate_asset_context(Some(import_map.cell())),
+                                node_evaluate_asset_context(Some(import_map)),
                                 execution_context,
                             )
                             .into()]),
@@ -224,6 +237,28 @@ impl ModuleOptionsVc {
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Static)],
             ),
         ];
+
+        if let Some(webpack_loaders_options) = enable_webpack_loaders {
+            let execution_context = execution_context
+                .context("execution_context is required for webpack_loaders")?
+                .join("webpack_loaders");
+            for (ext, loaders) in webpack_loaders_options.extension_to_loaders.iter() {
+                rules.push(ModuleRule::new(
+                    ModuleRuleCondition::ResourcePathEndsWith(ext.to_string()),
+                    vec![
+                        ModuleRuleEffect::ModuleType(ModuleType::Ecmascript(app_transforms)),
+                        ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(vec![
+                            WebpackLoadersVc::new(
+                                node_evaluate_asset_context(None),
+                                execution_context,
+                                *loaders,
+                            )
+                            .into(),
+                        ])),
+                    ],
+                ));
+            }
+        }
 
         rules.extend(custom_rules.iter().cloned());
 
