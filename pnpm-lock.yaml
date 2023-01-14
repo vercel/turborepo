@@ -125,6 +125,7 @@ importers:
     specifiers:
       '@turbo/pack-test-harness': '*'
       autoprefixer: ^10.4.13
+      loader-runner: ^4.3.0
       next: 13.0.8-canary.2
       postcss: ^8.4.20
       react: ^18.2.0
@@ -135,6 +136,7 @@ importers:
     devDependencies:
       '@turbo/pack-test-harness': link:../test-harness
       autoprefixer: 10.4.13_postcss@8.4.20
+      loader-runner: 4.3.0
       next: 13.0.8-canary.2_biqbaboplfbrettd7655fr4n2y
       postcss: 8.4.20
       react: 18.2.0
@@ -152,6 +154,17 @@ importers:
     devDependencies:
       '@types/node': 18.11.11
 
+  crates/turbopack-node/js:
+    specifiers:
+      '@types/loader-runner': ^2.2.4
+      '@types/node': ^18.11.11
+      loader-runner: ^4.3.0
+    dependencies:
+      loader-runner: 4.3.0
+    devDependencies:
+      '@types/loader-runner': 2.2.4
+      '@types/node': 18.11.11
+
   docs:
     specifiers:
       '@babel/core': 7.20.5
@@ -159,6 +172,7 @@ importers:
       '@heroicons/react': 1.0.6
       '@mdx-js/react': ^2.1.4
       '@react-aria/ssr': 3.3.0
+      '@react-spring/web': ^9.6.1
       '@sentry/nextjs': ^7.17.3
       '@types/node': ^16.11.12
       '@types/react': 18.0.21
@@ -196,6 +210,7 @@ importers:
       '@heroicons/react': 1.0.6_react@18.2.0
       '@mdx-js/react': 2.1.5_react@18.2.0
       '@react-aria/ssr': 3.3.0_react@18.2.0
+      '@react-spring/web': 9.6.1_biqbaboplfbrettd7655fr4n2y
       '@sentry/nextjs': 7.17.3_next@13.0.3+react@18.2.0
       '@vercel/analytics': 0.1.1_react@18.2.0
       '@vercel/og': 0.0.20
@@ -1902,6 +1917,60 @@ packages:
       react: 18.2.0
     dev: false
 
+  /@react-spring/animated/9.6.1_react@18.2.0:
+    resolution: {integrity: sha512-ls/rJBrAqiAYozjLo5EPPLLOb1LM0lNVQcXODTC1SMtS6DbuBCPaKco5svFUQFMP2dso3O+qcC4k9FsKc0KxMQ==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0
+    dependencies:
+      '@react-spring/shared': 9.6.1_react@18.2.0
+      '@react-spring/types': 9.6.1
+      react: 18.2.0
+    dev: false
+
+  /@react-spring/core/9.6.1_react@18.2.0:
+    resolution: {integrity: sha512-3HAAinAyCPessyQNNXe5W0OHzRfa8Yo5P748paPcmMowZ/4sMfaZ2ZB6e5x5khQI8NusOHj8nquoutd6FRY5WQ==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0
+    dependencies:
+      '@react-spring/animated': 9.6.1_react@18.2.0
+      '@react-spring/rafz': 9.6.1
+      '@react-spring/shared': 9.6.1_react@18.2.0
+      '@react-spring/types': 9.6.1
+      react: 18.2.0
+    dev: false
+
+  /@react-spring/rafz/9.6.1:
+    resolution: {integrity: sha512-v6qbgNRpztJFFfSE3e2W1Uz+g8KnIBs6SmzCzcVVF61GdGfGOuBrbjIcp+nUz301awVmREKi4eMQb2Ab2gGgyQ==}
+    dev: false
+
+  /@react-spring/shared/9.6.1_react@18.2.0:
+    resolution: {integrity: sha512-PBFBXabxFEuF8enNLkVqMC9h5uLRBo6GQhRMQT/nRTnemVENimgRd+0ZT4yFnAQ0AxWNiJfX3qux+bW2LbG6Bw==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0
+    dependencies:
+      '@react-spring/rafz': 9.6.1
+      '@react-spring/types': 9.6.1
+      react: 18.2.0
+    dev: false
+
+  /@react-spring/types/9.6.1:
+    resolution: {integrity: sha512-POu8Mk0hIU3lRXB3bGIGe4VHIwwDsQyoD1F394OK7STTiX9w4dG3cTLljjYswkQN+hDSHRrj4O36kuVa7KPU8Q==}
+    dev: false
+
+  /@react-spring/web/9.6.1_biqbaboplfbrettd7655fr4n2y:
+    resolution: {integrity: sha512-X2zR6q2Z+FjsWfGAmAXlQaoUHbPmfuCaXpuM6TcwXPpLE1ZD4A1eys/wpXboFQmDkjnrlTmKvpVna1MjWpZ5Hw==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0
+    dependencies:
+      '@react-spring/animated': 9.6.1_react@18.2.0
+      '@react-spring/core': 9.6.1_react@18.2.0
+      '@react-spring/shared': 9.6.1_react@18.2.0
+      '@react-spring/types': 9.6.1
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
+    dev: false
+
   /@resvg/resvg-wasm/2.0.0-alpha.4:
     resolution: {integrity: sha512-pWIG9a/x1ky8gXKRhPH1OPKpHFoMN1ISLbJ+O+gPXQHIAKhNd5I28RlWf7q576hAOQA9JZTlo3p/M2uyLzJmmw==}
     engines: {node: '>= 10'}
@@ -2275,6 +2344,12 @@ packages:
 
   /@types/json5/0.0.29:
     resolution: {integrity: sha512-dRLjCWHYg4oaA77cxO64oO+7JwCwnIzkZPdrrC71jQmQtlhM556pwKo5bUzqvZndkVbeFLIIi+9TC40JNF5hNQ==}
+    dev: true
+
+  /@types/loader-runner/2.2.4:
+    resolution: {integrity: sha512-loD63p9KWQPgTvMBbhu9nD/2AeLqzP7ey/h1cWUK3wzLtilRO1kcCtlJvGrT/LEtOM7bjzaFSX1hxXaOdZdt8g==}
+    dependencies:
+      '@types/node': 18.11.11
     dev: true
 
   /@types/mdast/3.0.10:
@@ -7506,7 +7581,6 @@ packages:
   /loader-runner/4.3.0:
     resolution: {integrity: sha512-3R/1M+yS3j5ou80Me59j7F9IMs4PXs3VqRrm0TU3AbKPxlmpoY1TNscJV/oGJXo8qCatFGTfDbY6W6ipGOYXfg==}
     engines: {node: '>=6.11.5'}
-    dev: true
 
   /localforage/1.10.0:
     resolution: {integrity: sha512-14/H1aX7hzBBmmh7sGPd+AOMkkIrHM3Z1PAyGgZigA1H1p5O5ANnMyWzvpAETtG68/dC4pC0ncy3+PPGzXZHPg==}
