@@ -202,15 +202,15 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	}
 
 	pipeline := turboJSON.Pipeline
-	if err := validateTasks(pipeline, targets); err != nil {
-		location := ""
-		if r.opts.runOpts.singlePackage {
-			location = "in `scripts` in \"package.json\""
-		} else {
-			location = "in `pipeline` in \"turbo.json\""
-		}
-		return fmt.Errorf("%s %s. Are you sure you added it?", err, location)
-	}
+	// if err := validateTasks(pipeline, targets); err != nil {
+	// 	location := ""
+	// 	if r.opts.runOpts.singlePackage {
+	// 		location = "in `scripts` in \"package.json\""
+	// 	} else {
+	// 		location = "in `pipeline` in \"turbo.json\""
+	// 	}
+	// 	return fmt.Errorf("%s %s. Are you sure you added it?", err, location)
+	// }
 
 	scmInstance, err := scm.FromInRepo(r.base.RepoRoot)
 	if err != nil {
@@ -224,6 +224,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to resolve packages to run")
 	}
+
 	if isAllPackages {
 		// if there is a root task for any of our targets, we need to add it
 		for _, target := range targets {
@@ -413,6 +414,7 @@ func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, er
 		}
 
 		topoDeps := util.SetFromStrings(taskDefinition.TopologicalDependencies)
+		fmt.Printf("[debug] adding task %#v\n", taskName)
 		engine.AddTask(&core.Task{
 			Name:       taskName,
 			TopoDeps:   topoDeps,

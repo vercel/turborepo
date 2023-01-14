@@ -94,45 +94,47 @@ type TaskDefinition struct {
 }
 
 // LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
-func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON, includeSynthesizedFromRootPackageJSON bool) (*TurboJSON, error) {
+func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON, singlePackage bool) (*TurboJSON, error) {
 	var turboJSON *TurboJSON
 	turboFromFiles, err := ReadTurboConfig(rootPath, rootPackageJSON)
-	if !includeSynthesizedFromRootPackageJSON && err != nil {
-		// There was an error, and we don't have any chance of recovering
-		// because we aren't synthesizing anything
-		return nil, err
-	} else if !includeSynthesizedFromRootPackageJSON {
-		// We're not synthesizing anything and there was no error, we're done
-		return turboFromFiles, nil
-	} else if errors.Is(err, os.ErrNotExist) {
-		// turbo.json doesn't exist, but we're going try to synthesize something
-		turboJSON = &TurboJSON{
-			Pipeline: make(Pipeline),
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
 		}
-	} else if err != nil {
-		// some other happened, we can't recover
-		return nil, err
+
+		// create a stub if the file was missing
+		turboJSON = &TurboJSON{
+			Pipeline:           make(Pipeline),
+			RemoteCacheOptions: RemoteCacheOptions{},
+		}
 	} else {
-		// we're synthesizing, but we have a starting point
-		// Note: this will have to change to support task inference in a monorepo
-		// for now, we're going to error on any "root" tasks and turn non-root tasks into root tasks
+		// If there was no error, we'll assign the turboJSON we loaded into our real turboJSON
+		turboJSON = turboFromFiles
+	}
+
+	// Some special handling for single package repos
+	if singlePackage {
+		// For single package repos, we need to replace the Pipeline with tasks that have been root-ified
+		// This makes it easier to use them downstream, as they're essentially the same as root tasks in monorepos.
 		pipeline := make(Pipeline)
-		for taskID, taskDefinition := range turboFromFiles.Pipeline {
+		for taskID, taskDefinition := range turboJSON.Pipeline {
 			if util.IsPackageTask(taskID) {
 				return nil, fmt.Errorf("Package tasks (<package>#<task>) are not allowed in single-package repositories: found %v", taskID)
 			}
 			pipeline[util.RootTaskID(taskID)] = taskDefinition
 		}
-		turboJSON = turboFromFiles
 		turboJSON.Pipeline = pipeline
-	}
-
-	for scriptName := range rootPackageJSON.Scripts {
-		if !turboJSON.Pipeline.HasTask(scriptName) {
-			taskName := util.RootTaskID(scriptName)
-			turboJSON.Pipeline[taskName] = TaskDefinition{}
+		// For single packge repos, we will also copy over scripts from the root package.json
+		// making it so we don't need them to be re-specified in turbo.json.
+		// TODO(mehulkar): Should we enable this for monorepos too?
+		for scriptName := range rootPackageJSON.Scripts {
+			if !turboJSON.Pipeline.HasTask(scriptName) {
+				taskName := util.RootTaskID(scriptName)
+				turboJSON.Pipeline[taskName] = TaskDefinition{}
+			}
 		}
 	}
+
 	return turboJSON, nil
 }
 

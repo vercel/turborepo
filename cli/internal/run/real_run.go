@@ -91,6 +91,7 @@ func RealRun(
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		// deps here are passed in to calculate the task hash
+		fmt.Printf("[debug] packageTask %#v\n", packageTask)
 		return ec.exec(ctx, packageTask, deps)
 	}
 
