@@ -7,14 +7,18 @@ Thanks for your interest in contributing to Turbo!
 - [Contributing to Turbo](#contributing-to-turbo)
   - [Contributing to Turborepo](#contributing-to-turborepo)
     - [Building Turborepo](#building-turborepo)
-    - [Testing Turborepo](#testing-turborepo)
+    - [Running Turborepo Tests](#running-turborepo-tests)
+      - [Go Tests](#go-tests)
+      - [Rust Tests](#rust-tests)
   - [Debugging Turborepo](#debugging-turborepo)
   - [Benchmarking Turborepo](#benchmarking-turborepo)
   - [Updating `turbo`](#updating-turbo)
   - [Publishing `turbo` to the npm registry](#publishing-turbo-to-the-npm-registry)
   - [Contributing to Turbopack](#contributing-to-turbopack)
+    - [Turbopack Architecture](#turbopack-architecture)
     - [Testing Turbopack](#testing-turbopack)
     - [Benchmarking Turbopack](#benchmarking-turbopack)
+    - [Profiling Turbopack](#profiling-turbopack)
   - [Troubleshooting](#troubleshooting)
 
 ## Contributing to Turborepo
@@ -36,14 +40,24 @@ Building
 - Building `turbo` CLI: In `cli` run `make turbo`
 - Using `turbo` to build `turbo` CLI: `./turbow.js`
 
-### Testing Turborepo
+### Running Turborepo Tests
 
-From the `cli/` directory, you can
+#### Go Tests
 
-- run smoke tests with `make e2e`
-- run unit tests with `make test-go`
+From the root directory, you can
 
-To run a single test, you can run `go test ./[path/to/package/]`. See more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages).
+- run unit tests with `pnpm run --filter=cli test`
+- run integration tests with `pnpm run --filter=cli integration-tests`
+- run e2e tests with `pnpm run --filter=cli e2e`
+
+To run a single Go test, you can run `go test ./[path/to/package/]`. See more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages).
+
+#### Rust Tests
+
+The recommended way to run tests is: `cargo nextest run -p turborepo-lib`.
+You'll have to [install it first](https://nexte.st/book/pre-built-binaries.html).
+
+You can also use the built in [`cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html) directly `cargo test -p turborepo-lib`.
 
 ## Debugging Turborepo
 

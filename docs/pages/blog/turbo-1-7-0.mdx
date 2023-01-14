@@ -128,13 +128,13 @@ npx @turbo/codemod set-default-outputs
 
 Also note that you will no longer need to specify `outputs: []` because not caching anything is now the default behavior. The codemod will also remove this configuration from your tasks.
 
-## “Error only” output mode for quieter logs
+## “Errors only” output mode for quieter logs
 
-To bring visibility to errors, community member [@dobsev](https://github.com/dobesv) contributed [a solution to only show errors instead of all logs from a task run](https://github.com/vercel/turbo/pull/2588). While debugging a pipeline, `--output-logs=error-only` can be used to keep your signal-to-noise ratio high so you can focus on ensuring successful runs for your pipelines.
+To bring visibility to errors, community member [@dobsev](https://github.com/dobesv) contributed [a solution to only show errors instead of all logs from a task run](https://github.com/vercel/turbo/pull/2588). While debugging a pipeline, `--output-logs=errors-only` can be used to keep your signal-to-noise ratio high so you can focus on ensuring successful runs for your pipelines.
 This can be used as a [configuration option](/repo/docs/reference/configuration#outputmode) or as a [CLI flag](/repo/docs/reference/command-line-reference#--output-logs)
 
 ```bash
-turbo build --output-logs=error-only
+turbo build --output-logs=errors-only
 ```
 
 ## Community
