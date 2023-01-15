@@ -104,7 +104,7 @@ func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
 	// do the validation
 	actualErr := engine.ValidatePersistentDependencies(completeGraph)
 
-	// Note: this regex is not perfect, becase it doesn't validate that the a|b|c is the same in both positions,
+	// Note: this regex is not perfect, because it doesn't validate that the a|b|c is the same in both positions,
 	// but that's ok. It is unlikely that the error message will be wrong here. (And even if it is,
 	// the feature that is being tested would still be working)
 	expected := regexp.MustCompile("\"workspace-[a|b|c]#dev\" is a persistent task, \"workspace-[a|b|c]#build\" cannot depend on it")
