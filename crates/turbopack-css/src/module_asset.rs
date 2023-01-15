@@ -1,7 +1,10 @@
-use std::fmt::Write;
+use std::{fmt::Write, sync::Arc};
 
 use anyhow::Result;
-use swc_core::css::modules::CssClassName;
+use swc_core::{
+    common::{BytePos, FileName, LineCol, SourceMap},
+    css::modules::CssClassName,
+};
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
@@ -25,6 +28,7 @@ use turbopack_ecmascript::{
         EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
     },
     utils::stringify_str,
+    ParseResultSourceMap, ParseResultSourceMapVc,
 };
 
 use crate::{parse::ParseResult, transform::CssInputTransformsVc, CssModuleAssetVc};
@@ -193,21 +197,37 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                 }
                 code += "});\n";
                 EcmascriptChunkItemContent {
-                    inner_code: code.into(),
-                    // TODO: We generate a minimal map for runtime code so that the filename is
+                    inner_code: code.clone().into(),
+                    // We generate a minimal map for runtime code so that the filename is
                     // displayed in dev tools.
+                    source_map: Some(generate_minimal_source_map(
+                        format!("{}.js", self.module.path().to_string().await?),
+                        code,
+                    )),
                     ..Default::default()
                 }
             }
             ParseResult::NotFound | ParseResult::Unparseable => {
+                let code = "__turbopack_export_value__({});\n";
                 EcmascriptChunkItemContent {
-                    inner_code: "__turbopack_export_value__({});\n".into(),
-                    // TODO: We generate a minimal map for runtime code so that the filename is
+                    inner_code: code.into(),
+                    // We generate a minimal map for runtime code so that the filename is
                     // displayed in dev tools.
+                    source_map: Some(generate_minimal_source_map(
+                        format!("{}.js", self.module.path().to_string().await?),
+                        code.into(),
+                    )),
                     ..Default::default()
                 }
             }
         }
         .cell())
     }
+}
+
+fn generate_minimal_source_map(filename: String, source: String) -> ParseResultSourceMapVc {
+    let sm: Arc<SourceMap> = Default::default();
+    sm.new_source_file(FileName::Custom(filename), source);
+    let map = ParseResultSourceMap::new(sm, vec![(BytePos(1), LineCol { line: 0, col: 0 })]);
+    map.cell()
 }
