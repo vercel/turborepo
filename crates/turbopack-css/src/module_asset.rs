@@ -201,7 +201,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                     // We generate a minimal map for runtime code so that the filename is
                     // displayed in dev tools.
                     source_map: Some(generate_minimal_source_map(
-                        format!("{}.js", self.module.path().to_string().await?),
+                        format!("{}.js", self.module.path().await?.path),
                         code,
                     )),
                     ..Default::default()
@@ -214,7 +214,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                     // We generate a minimal map for runtime code so that the filename is
                     // displayed in dev tools.
                     source_map: Some(generate_minimal_source_map(
-                        format!("{}.js", self.module.path().to_string().await?),
+                        format!("{}.js", self.module.path().await?.path),
                         code.into(),
                     )),
                     ..Default::default()
