@@ -257,17 +257,15 @@ function handleSocketMessage(msg: ServerMessage) {
 
   if (hasIssues) return;
 
+  const runHooks = chunksWithUpdates.size === 0;
+
   if (aggregatedMsg.type !== "issues") {
-    onBeforeRefresh();
+    if (runHooks) onBeforeRefresh();
     triggerUpdate(aggregatedMsg);
-    if (chunksWithUpdates.size === 0) {
-      onRefresh();
-    }
+    if (runHooks) onRefresh();
   }
 
-  if (chunksWithUpdates.size === 0) {
-    onBuildOk();
-  }
+  if (runHooks) onBuildOk();
 }
 
 export function subscribeToChunkUpdate(
