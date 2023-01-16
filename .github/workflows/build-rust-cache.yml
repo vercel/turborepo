@@ -27,15 +27,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          components: clippy
+          shared-cache-key: dependencies
+          save-cache: true
+
       - name: Install cargo-chef
         uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-chef
-
-      - name: Install cargo-sweep
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-sweep
 
   build_cache:
     strategy:
@@ -43,7 +45,7 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            # myb use 16 core, idk
+            # myb use 8 core, idk
             runner: ubuntu-latest-16-core-oss
           - name: macos
             runner: macos-latest
@@ -75,51 +77,23 @@ jobs:
         with:
           crate: cargo-chef
 
-      - name: Install cargo-sweep
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-sweep
-
       - name: Install nextest
         uses: taiki-e/install-action@nextest
 
       - name: Compile dependencies
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo sweep -s
           cargo chef prepare
           cargo chef cook --workspace --all-targets
           cargo chef cook --workspace --all-targets --release
+
+      - name: Compile check / clippy dependencies
+        if: matrix.os.name == 'ubuntu'
+        run: |
           cargo chef cook --workspace --all-targets --check
           cargo chef cook --workspace --all-targets --check --release
           cargo chef cook --workspace --all-targets --clippy
-          cargo nextest run --no-run --release --workspace --exclude turbo
-          cargo sweep -f
 
-#  # TODO: remove this after testing
-#  cleanup:
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Check out code
-#        uses: actions/checkout@v3
-#
-#      - name: Cleanup
-#        env:
-#          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#        run: |
-#          gh extension install actions/gh-actions-cache
-#
-#          REPO=${{ github.repository }}
-#          BRANCH=${{ github.ref }}
-#
-#          echo "Fetching list of cache key"
-#          cacheKeysForPR=$(gh actions-cache list -R $REPO -B $BRANCH | cut -f 1 )
-#
-#          ## Setting this to not fail the workflow while deleting cache keys.
-#          set +e
-#          echo "Deleting caches..."
-#          for cacheKey in $cacheKeysForPR
-#          do
-#              gh actions-cache delete $cacheKey -R $REPO -B $BRANCH --confirm
-#          done
-#          echo "Done"
+      - name: Compile nextest dependencies
+        run: |
+          cargo nextest run --no-run --release --workspace --exclude turbo
