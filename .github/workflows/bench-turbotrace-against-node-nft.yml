@@ -14,10 +14,6 @@ on:
     # Runs on PRs from bench/ prefixed branches
     branches: [main]
 
-env:
-  CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
-
 jobs:
   bench_vs_node_nft:
     if: github.event_name == 'push' || startsWith(github.head_ref, 'bench/')
