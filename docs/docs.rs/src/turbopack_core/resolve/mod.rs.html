@@ -1520,7 +1520,7 @@
     ty: FileSystemEntryType,
     refs: <span class="kw-2">&amp;mut </span>Vec&lt;AssetReferenceVc&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;&gt; {
-    <span class="kw">let </span>result = fs_path.realpath_with_links().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>result = fs_path.resolve().<span class="kw">await</span><span class="question-mark">?</span>.realpath_with_links().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">for </span>path <span class="kw">in </span>result.symlinks.iter() {
         refs.push(AffectingResolvingAssetReferenceVc::new(<span class="kw-2">*</span>path).into());
     }
@@ -1645,7 +1645,7 @@
                             }
                         }
                     }
-                    context = context.parent();
+                    context = context.parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">let </span>new_context_value = context.<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">if </span><span class="kw-2">*</span>new_context_value == <span class="kw-2">*</span>context_value {
                         <span class="kw">break</span>;
