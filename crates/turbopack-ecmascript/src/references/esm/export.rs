@@ -13,11 +13,7 @@ use swc_core::{
     },
     quote, quote_expr,
 };
-use turbo_tasks::{
-    primitives::{StringVc, StringsVc},
-    trace::TraceRawVcs,
-    ValueToString,
-};
+use turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, ValueToString};
 use turbopack_core::{
     asset::Asset,
     chunk::ChunkingContextVc,
@@ -40,9 +36,16 @@ pub enum EsmExport {
     Error,
 }
 
+#[turbo_tasks::value]
+struct ExpandResults {
+    star_exports: Vec<String>,
+    has_cjs_exports: bool,
+}
+
 #[turbo_tasks::function]
-async fn expand_star_exports(root_asset: EcmascriptChunkPlaceableVc) -> Result<StringsVc> {
+async fn expand_star_exports(root_asset: EcmascriptChunkPlaceableVc) -> Result<ExpandResultsVc> {
     let mut set = HashSet::new();
+    let mut has_cjs_exports = false;
     let mut checked_assets = HashSet::new();
     checked_assets.insert(root_asset);
     let mut queue = vec![(root_asset, root_asset.get_exports())];
@@ -93,26 +96,32 @@ async fn expand_star_exports(root_asset: EcmascriptChunkPlaceableVc) -> Result<S
             .cell()
             .as_issue()
             .emit(),
-            EcmascriptExports::CommonJs => AnalyzeIssue {
-                code: None,
-                category: StringVc::cell("analyze".to_string()),
-                message: StringVc::cell(format!(
-                    "export * used with module {} which is a CommonJS module with exports only \
-                     available at runtime\nList all export names manually (`export {{ a, b, c }} \
-                     from \"...\") or rewrite the module to ESM.`",
-                    asset.path().to_string().await?
-                )),
-                path: asset.path(),
-                severity: IssueSeverity::Warning.into(),
-                source: None,
-                title: StringVc::cell("unexpected export *".to_string()),
+            EcmascriptExports::CommonJs => {
+                has_cjs_exports = true;
+                AnalyzeIssue {
+                    code: None,
+                    category: StringVc::cell("analyze".to_string()),
+                    message: StringVc::cell(format!(
+                        "export * used with module {} which is a CommonJS module with exports \
+                         only available at runtime\nList all export names manually (`export {{ a, \
+                         b, c }} from \"...\") or rewrite the module to ESM.`",
+                        asset.path().to_string().await?
+                    )),
+                    path: asset.path(),
+                    severity: IssueSeverity::Warning.into(),
+                    source: None,
+                    title: StringVc::cell("unexpected export *".to_string()),
+                }
+                .cell()
+                .as_issue()
+                .emit()
             }
-            .cell()
-            .as_issue()
-            .emit(),
         }
     }
-    Ok(StringsVc::cell(set.into_iter().collect()))
+    Ok(ExpandResultsVc::cell(ExpandResults {
+        star_exports: set.into_iter().collect(),
+        has_cjs_exports,
+    }))
 }
 
 #[turbo_tasks::value(shared)]
