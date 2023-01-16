@@ -526,11 +526,27 @@
 <span id="526">526</span>
 <span id="527">527</span>
 <span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
     primitives::{BoolVc, StringVc},
+    trace::TraceRawVcs,
     Value,
 };
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
@@ -818,7 +834,7 @@
             SsrEntry {
                 context: server_context,
                 entry_asset,
-                is_api_path,
+                ty: SsrType::Api,
                 chunking_context: server_chunking_context,
                 intermediate_output_path,
             }
@@ -836,7 +852,7 @@
         <span class="kw">let </span>ssr_entry = SsrEntry {
             context: server_context,
             entry_asset,
-            is_api_path,
+            ty: SsrType::Html,
             chunking_context: server_chunking_context,
             intermediate_output_path,
         }
@@ -846,7 +862,7 @@
         <span class="kw">let </span>ssr_data_entry = SsrEntry {
             context: server_data_context,
             entry_asset: data_asset,
-            is_api_path,
+            ty: SsrType::Data,
             chunking_context: server_data_chunking_context,
             intermediate_output_path: data_intermediate_output_path,
         }
@@ -1001,12 +1017,21 @@
     .cell())
 }
 
+<span class="attr">#[derive(
+    Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, PartialOrd, Ord, TraceRawVcs,
+)]
+</span><span class="kw">enum </span>SsrType {
+    Api,
+    Html,
+    Data,
+}
+
 <span class="doccomment">/// The node.js renderer for SSR of pages.
 </span><span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>SsrEntry {
     context: AssetContextVc,
     entry_asset: AssetVc,
-    is_api_path: BoolVc,
+    ty: SsrType,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
 }
@@ -1016,16 +1041,19 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>entry(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;NodeRenderingEntryVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>virtual_asset = <span class="kw">if </span><span class="kw-2">*</span>this.is_api_path.<span class="kw">await</span><span class="question-mark">? </span>{
-            VirtualAssetVc::new(
+        <span class="kw">let </span>virtual_asset = <span class="kw">match </span>this.ty {
+            SsrType::Api =&gt; VirtualAssetVc::new(
                 this.entry_asset.path().join(<span class="string">&quot;server-api.tsx&quot;</span>),
                 next_js_file(<span class="string">&quot;entry/server-api.tsx&quot;</span>).into(),
-            )
-        } <span class="kw">else </span>{
-            VirtualAssetVc::new(
+            ),
+            SsrType::Data =&gt; VirtualAssetVc::new(
+                this.entry_asset.path().join(<span class="string">&quot;server-data.tsx&quot;</span>),
+                next_js_file(<span class="string">&quot;entry/server-data.tsx&quot;</span>).into(),
+            ),
+            SsrType::Html =&gt; VirtualAssetVc::new(
                 this.entry_asset.path().join(<span class="string">&quot;server-renderer.tsx&quot;</span>),
                 next_js_file(<span class="string">&quot;entry/server-renderer.tsx&quot;</span>).into(),
-            )
+            ),
         };
 
         <span class="prelude-val">Ok</span>(NodeRenderingEntry {
