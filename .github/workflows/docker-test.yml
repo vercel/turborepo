@@ -1,0 +1,12 @@
+on:
+  pull_request:
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker://mcr.microsoft.com/playwright:v1.28.1-focal
+        with:
+          entrypoint: bash
+          args: |
+            -c "pwd && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION}"
