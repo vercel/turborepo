@@ -1937,6 +1937,16 @@ pub struct AstPath(#[turbo_tasks(trace_ignore)] Vec<AstParentKind>);
 fn has_cjs_export(p: &Program) -> bool {
     use swc_core::ecma::visit::{visit_obj_and_computed, Visit, VisitWith};
 
+    match p {
+        Program::Module(m) => {
+            // Check for imports/exports
+            if m.body.iter().any(ModuleItem::is_module_decl) {
+                return false;
+            }
+        }
+        Program::Script(_) => {}
+    }
+
     struct Visitor {
         found: bool,
     }
