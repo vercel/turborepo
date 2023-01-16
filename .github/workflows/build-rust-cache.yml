@@ -8,7 +8,7 @@ on:
     branches: [main]
 
 jobs:
-  build-cache-tools:
+  build_cache_tools:
     strategy:
       fail-fast: false
       matrix:
@@ -40,6 +40,9 @@ jobs:
           crate: cargo-chef
 
   build_cache:
+    name: Building Rust cache for ${{ matrix.os.name }}
+    needs: [build_cache_tools]
+
     strategy:
       fail-fast: false
       matrix:
@@ -53,7 +56,6 @@ jobs:
             runner: windows-latest
 
     runs-on: ${{ matrix.os.runner }}
-    name: Building Rust cache for ${{ matrix.os.name }}
 
     steps:
       - name: Checkout
@@ -97,3 +99,10 @@ jobs:
       - name: Compile nextest dependencies
         run: |
           cargo nextest run --no-run --release --workspace --exclude turbo
+
+  cleanup:
+    name: Cleanup
+    needs: [build_cache]
+    if: always()
+    uses: ./.github/workflows/pr-clean-caches.yml
+    secrets: inherit
