@@ -174,8 +174,10 @@ export function Errors({ issues, errors }: ErrorsProps) {
   const [readyErrors, isLoading] = useResolvedErrors(errors);
 
   const hasIssues = issues.length !== 0;
-  const hasIssueWithError = issues.some((issue) =>
-    ["bug", "fatal", "error"].includes(issue.severity)
+  const hasIssueWithError = issues.some(
+    (issue) =>
+      ["bug", "fatal", "error"].includes(issue.severity) &&
+      !(issue.severity === "error" && issue.category === "resolve")
   );
 
   const hasErrors = errors.length !== 0;
@@ -192,10 +194,10 @@ export function Errors({ issues, errors }: ErrorsProps) {
   const [selectedTab, setSelectedTab] = React.useState<string>(defaultTab);
 
   React.useEffect(() => {
-    if (defaultTab === TabId.TurbopackIssues) {
+    if (defaultTab === TabId.TurbopackIssues && hasIssueWithError) {
       setSelectedTab(TabId.TurbopackIssues);
     }
-  }, [defaultTab]);
+  }, [defaultTab, hasIssueWithError]);
 
   const onlyHasWarnings = !hasErrors && !hasIssueWithError;
 
