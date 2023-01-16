@@ -107,7 +107,7 @@ type AggregatedUpdates = {
 };
 
 // we aggregate all updates until the issues are resolved
-const chunksWithUpdates: Map<ChunkPath, AggregatedUpdates> = new Map();
+const chunksWithUpdates: Map<ResourceKey, AggregatedUpdates> = new Map();
 
 function aggregateUpdates(
   msg: ServerMessage,
@@ -115,6 +115,15 @@ function aggregateUpdates(
 ): ServerMessage {
   const key = resourceKey(msg.resource);
   const aggregated = chunksWithUpdates.get(key);
+
+  if (msg.type === "issues" && aggregated == null && hasIssues) {
+    // add an empty record to make sure we don't call `onBuildOk`
+    chunksWithUpdates.set(key, {
+      added: {},
+      modified: {},
+      deleted: new Set(),
+    });
+  }
 
   if (msg.type === "issues" && aggregated != null) {
     if (!hasIssues) {
