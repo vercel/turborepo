@@ -104,7 +104,8 @@ async fn expand_star_exports(root_asset: EcmascriptChunkPlaceableVc) -> Result<E
                     message: StringVc::cell(format!(
                         "export * used with module {} which is a CommonJS module with exports \
                          only available at runtime\nList all export names manually (`export {{ a, \
-                         b, c }} from \"...\") or rewrite the module to ESM, to avoid the additional runtime code.`",
+                         b, c }} from \"...\") or rewrite the module to ESM, to avoid the \
+                         additional runtime code.`",
                         asset.path().to_string().await?
                     )),
                     path: asset.path(),
