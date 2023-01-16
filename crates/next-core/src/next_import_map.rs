@@ -1,10 +1,14 @@
+use std::collections::{BTreeMap, HashMap};
+
 use anyhow::Result;
 use turbo_tasks::Value;
 use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
-use turbopack::module_options::ResolveAliasOptionsVc;
 use turbopack_core::resolve::{
-    options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap, ResolvedMapVc},
-    AliasPattern,
+    options::{
+        ConditionValue, ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap,
+        ResolvedMapVc,
+    },
+    AliasPattern, ExportsValue, ResolveAliasMapVc,
 };
 
 use crate::{
@@ -28,6 +32,7 @@ pub async fn get_next_client_import_map(
         &mut import_map,
         project_path,
         next_config.resolve_alias_options(),
+        true,
     )
     .await?;
 
@@ -150,6 +155,7 @@ pub async fn get_next_server_import_map(
         &mut import_map,
         project_path,
         next_config.resolve_alias_options(),
+        false,
     )
     .await?;
 
@@ -266,7 +272,8 @@ static NEXT_ALIASES: [(&str, &str); 23] = [
 pub async fn insert_next_shared_aliases(
     import_map: &mut ImportMap,
     project_path: FileSystemPathVc,
-    alias_options: ResolveAliasOptionsVc,
+    alias_options: ResolveAliasMapVc,
+    is_client: bool,
 ) -> Result<()> {
     let package_root = attached_next_js_package_path(project_path);
 
@@ -294,21 +301,49 @@ pub async fn insert_next_shared_aliases(
         ImportMapping::Dynamic(NextFontGoogleCssModuleReplacerVc::new(project_path).into()).into(),
     );
 
-    for (alias, mappings_vc) in &alias_options.await?.alias_map {
-        let mappings = mappings_vc.await?;
-        import_map.insert_alias(
-            AliasPattern::exact(alias),
-            ImportMapping::Alternatives(
-                mappings
-                    .iter()
-                    .map(|m| ImportMapping::PrimaryAlternative(m.clone(), None).cell())
-                    .collect::<Vec<ImportMappingVc>>(),
-            )
-            .cell(),
-        );
+    let conditions = if is_client {
+        BTreeMap::from([("browser".to_string(), ConditionValue::Set)])
+    } else {
+        BTreeMap::new()
+    };
+    for (alias, value) in &alias_options.await? {
+        if let Some(mapping) = export_value_to_import_mapping(value, &conditions, project_path) {
+            import_map.insert_alias(alias, mapping);
+        }
     }
 
     Ok(())
+}
+
+fn export_value_to_import_mapping(
+    value: &ExportsValue,
+    conditions: &BTreeMap<String, ConditionValue>,
+    project_path: FileSystemPathVc,
+) -> Option<ImportMappingVc> {
+    let mut result = Vec::new();
+    value.add_results(
+        conditions,
+        &ConditionValue::Unset,
+        &mut HashMap::new(),
+        &mut result,
+    );
+    if result.is_empty() {
+        None
+    } else {
+        Some(if result.len() == 1 {
+            ImportMapping::PrimaryAlternative(result[0].to_string(), Some(project_path)).cell()
+        } else {
+            ImportMapping::Alternatives(
+                result
+                    .iter()
+                    .map(|m| {
+                        ImportMapping::PrimaryAlternative(m.to_string(), Some(project_path)).cell()
+                    })
+                    .collect(),
+            )
+            .cell()
+        })
+    }
 }
 
 /// Inserts an alias to an alternative of import mappings into an import map.

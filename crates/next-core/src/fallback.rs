@@ -53,6 +53,7 @@ pub async fn get_fallback_page(
         &mut import_map,
         project_path,
         next_config.resolve_alias_options(),
+        true,
     )
     .await?;
 
