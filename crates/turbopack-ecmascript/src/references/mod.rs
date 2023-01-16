@@ -1945,7 +1945,7 @@ fn has_cjs_export(p: &Program) -> bool {
         visit_obj_and_computed!();
 
         fn visit_ident(&mut self, i: &Ident) {
-            if &*i.sym == "module" {
+            if &*i.sym == "module" || &*i.sym == "exports" {
                 self.found = true;
             }
         }
