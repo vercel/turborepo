@@ -163,14 +163,12 @@ impl CodeGenerateable for EsmExports {
                 }
 
                 if export_info.has_cjs_exports {
-                    if let EcmascriptExports::CommonJs = &*asset.get_exports().await? {
-                        let ident = ReferencedAsset::get_ident_from_placeable(asset).await?;
+                    let ident = ReferencedAsset::get_ident_from_placeable(asset).await?;
 
-                        cjs_exports.push(quote_expr!(
-                            "__turbopack__cjs__($arg)",
-                            arg: Expr = Ident::new(ident.into(), DUMMY_SP).into()
-                        ));
-                    }
+                    cjs_exports.push(quote_expr!(
+                        "__turbopack__cjs__($arg)",
+                        arg: Expr = Ident::new(ident.into(), DUMMY_SP).into()
+                    ));
                 }
             }
         }
