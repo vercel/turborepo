@@ -415,7 +415,7 @@ async fn handle_issues(source: FileSystemPathVc) -> Result<()> {
         // We replace "*" because it's not allowed for filename on Windows.
         let path = issues_path.join(&format!(
             "{}-{}.txt",
-            plain_issue.await?.title.replace("*", "__star__"),
+            plain_issue.await?.title.replace('*', "__star__"),
             &hash[0..6]
         ));
         seen.insert(path);
