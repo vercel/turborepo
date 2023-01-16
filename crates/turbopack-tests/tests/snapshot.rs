@@ -412,7 +412,11 @@ async fn handle_issues(source: FileSystemPathVc) -> Result<()> {
         let plain_issue = issue.into_plain();
         let hash = encode_hex(*plain_issue.internal_hash().await?);
 
-        let path = issues_path.join(&format!("{}-{}.txt", plain_issue.await?.title, &hash[0..6]));
+        let path = issues_path.join(&format!(
+            "{}-{}.txt",
+            plain_issue.await?.title.replace("*", "__star__"),
+            &hash[0..6]
+        ));
         seen.insert(path);
 
         // Annoyingly, the PlainIssue.source -> PlainIssueSource.asset ->
