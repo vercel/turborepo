@@ -31,13 +31,17 @@ struct UserConfigInner {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UserConfig {
+    // The configuration that comes from the disk
+    // We keep this as a separate value to avoid saving values that come from
+    // environment variables or command line flags.
     disk_config: UserConfigInner,
     config: UserConfigInner,
     path: PathBuf,
 }
 
 impl UserConfig {
-    /// Loads the user config from the given path,
+    /// Loads the user config from the given path, with token as an optional
+    /// override that the user might provide via the command line.
     pub fn load(path: &Path, token: Option<&str>) -> Result<Self> {
         // We load just the disk config to make sure we don't write a config
         // value that comes from a flag or environment variable.
