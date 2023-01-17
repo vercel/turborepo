@@ -28,13 +28,13 @@ pub async fn get_next_client_import_map(
 ) -> Result<ImportMapVc> {
     let mut import_map = ImportMap::empty();
 
-    insert_next_shared_aliases(
+    insert_next_shared_aliases(&mut import_map, project_path).await?;
+
+    insert_alias_option(
         &mut import_map,
-        project_path,
         next_config.resolve_alias_options(),
-        true,
-    )
-    .await?;
+        ["browser"],
+    );
 
     match ty.into_value() {
         ClientContextType::Pages { pages_dir } => {
@@ -151,13 +151,9 @@ pub async fn get_next_server_import_map(
 ) -> Result<ImportMapVc> {
     let mut import_map = ImportMap::empty();
 
-    insert_next_shared_aliases(
-        &mut import_map,
-        project_path,
-        next_config.resolve_alias_options(),
-        false,
-    )
-    .await?;
+    insert_next_shared_aliases(&mut import_map, project_path).await?;
+
+    insert_alias_option(&mut import_map, next_config.resolve_alias_options(), []);
 
     match ty.into_value() {
         ServerContextType::Pages { pages_dir } | ServerContextType::PagesData { pages_dir } => {
@@ -272,8 +268,6 @@ static NEXT_ALIASES: [(&str, &str); 23] = [
 pub async fn insert_next_shared_aliases(
     import_map: &mut ImportMap,
     project_path: FileSystemPathVc,
-    alias_options: ResolveAliasMapVc,
-    is_client: bool,
 ) -> Result<()> {
     let package_root = attached_next_js_package_path(project_path);
 
@@ -301,18 +295,20 @@ pub async fn insert_next_shared_aliases(
         ImportMapping::Dynamic(NextFontGoogleCssModuleReplacerVc::new(project_path).into()).into(),
     );
 
-    let conditions = if is_client {
-        BTreeMap::from([("browser".to_string(), ConditionValue::Set)])
-    } else {
-        BTreeMap::new()
-    };
+    Ok(())
+}
+
+fn insert_alias_option<N: usize>(
+    import_map: &mut ImportMap,
+    alias_options: ResolveAliasMapVc,
+    conditions: [&'static str; N],
+) {
+    let conditions = BTreeMap::from(conditions.map(|c| (c.to_string(), ConditionValue::Set)));
     for (alias, value) in &alias_options.await? {
         if let Some(mapping) = export_value_to_import_mapping(value, &conditions, project_path) {
             import_map.insert_alias(alias, mapping);
         }
     }
-
-    Ok(())
 }
 
 fn export_value_to_import_mapping(
