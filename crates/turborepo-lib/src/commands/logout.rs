@@ -14,6 +14,9 @@ pub fn logout(ui: UI) -> Result<()> {
         return Err(err);
     }
 
-    ui.info(">>> Logged out", Some(&GREY))?;
+    println!(
+        "{}",
+        ui.process_ansi(&GREY.apply_to(">>> Logged out").to_string())
+    );
     Ok(())
 }

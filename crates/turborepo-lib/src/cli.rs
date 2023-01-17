@@ -5,7 +5,6 @@ use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use log::error;
 use serde::Serialize;
-use termcolor::ColorChoice;
 
 use crate::{
     commands::{bin, logout},
@@ -404,26 +403,14 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 }
 
 impl Args {
-    fn color_choice(&self) -> ColorChoice {
-        if self.no_color {
-            ColorChoice::Never
-        } else if self.color {
-            ColorChoice::Always
-        } else if let Ok(force_color) = std::env::var("FORCE_COLOR") {
-            match force_color.as_str() {
-                "false" | "0" => ColorChoice::Never,
-                "true" | "1" | "2" | "3" => ColorChoice::Always,
-                _ => ColorChoice::Auto,
-            }
-        } else if atty::is(atty::Stream::Stdout) {
-            ColorChoice::Auto
-        } else {
-            ColorChoice::Never
-        }
-    }
-
     fn ui(&self) -> UI {
-        UI::new(self.color_choice())
+        if self.no_color {
+            UI::new(true)
+        } else if self.color {
+            UI::new(false)
+        } else {
+            UI::infer()
+        }
     }
 }
 
