@@ -9,7 +9,7 @@ use crate::{
 pub fn logout(ui: UI) -> Result<()> {
     let mut config = UserConfig::load(
         &default_user_config_path()
-            .ok_or_else(|| anyhow::anyhow!("Unable to find default config path"))?,
+            .context("Unable to find default config path")?,
         None,
     )?;
 
