@@ -321,9 +321,11 @@
 <span id="321">321</span>
 <span id="322">322</span>
 <span id="323">323</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
-
-<span class="kw">use </span>anyhow::Result;
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
@@ -331,6 +333,7 @@
     trace::TraceRawVcs,
     Value,
 };
+<span class="kw">use </span>turbo_tasks_env::EnvMapVc;
 <span class="kw">use </span>turbopack::{
     evaluate_context::node_evaluate_asset_context,
     module_options::{
@@ -367,7 +370,7 @@
     <span class="kw">pub </span>typescript: <span class="prelude-ty">Option</span>&lt;TypeScriptConfig&gt;,
     <span class="kw">pub </span>react_strict_mode: <span class="prelude-ty">Option</span>&lt;bool&gt;,
     <span class="kw">pub </span>experimental: <span class="prelude-ty">Option</span>&lt;ExperimentalConfig&gt;,
-    <span class="kw">pub </span>env: <span class="prelude-ty">Option</span>&lt;HashMap&lt;String, String&gt;&gt;,
+    <span class="kw">pub </span>env: IndexMap&lt;String, String&gt;,
     <span class="kw">pub </span>compiler: <span class="prelude-ty">Option</span>&lt;CompilerConfig&gt;,
     <span class="kw">pub </span>images: ImageConfig,
     <span class="kw">pub </span>transpile_packages: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
@@ -527,6 +530,11 @@
                 .cloned()
                 .unwrap_or_default(),
         ))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>env(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EnvMapVc&gt; {
+        <span class="prelude-val">Ok</span>(EnvMapVc::cell(<span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.env.clone()))
     }
 
     <span class="attr">#[turbo_tasks::function]
