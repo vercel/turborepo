@@ -1,19 +1,21 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use config::{Config, Environment};
+#[cfg(not(windows))]
+use dirs_next::config_dir;
 // Go's xdg implementation uses FOLDERID_LocalAppData for config home
 // https://github.com/adrg/xdg/blob/master/paths_windows.go#L28
 // Rust xdg implementations uses FOLDERID_RoamingAppData for config home
 // We use cache_dir so we can find the config dir that the Go code uses
 #[cfg(windows)]
 use dirs_next::data_local_dir as config_dir;
-#[cfg(not(windows))]
-use dirs_next::config_dir;
 use serde::{Deserialize, Serialize};
 
 pub fn default_user_config_path() -> Result<PathBuf> {
-    config_dir().map(|p| p.join("turborepo").join("config.json")).context("default config path not found")
+    config_dir()
+        .map(|p| p.join("turborepo").join("config.json"))
+        .context("default config path not found")
 }
 
 #[allow(dead_code)]
