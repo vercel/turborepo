@@ -31,7 +31,9 @@ tokio = { version = "1.21.2", features = ["full"] }
 # For matching on errors from chromiumoxide. Keep in
 # sync with chromiumoxide's tungstenite requirement.
 tungstenite = "0.17.3"
-turbo-malloc = { path = "../turbo-malloc", default-features = false, features = ["custom_allocator"] }
+turbo-malloc = { path = "../turbo-malloc", default-features = false, features = [
+  "custom_allocator",
+] }
 turbo-tasks = { path = "../turbo-tasks" }
 turbo-tasks-fs = { path = "../turbo-tasks-fs" }
 turbo-tasks-memory = { path = "../turbo-tasks-memory" }
