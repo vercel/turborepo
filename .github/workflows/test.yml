@@ -843,9 +843,9 @@ jobs:
       NEXT_TELEMETRY_DISABLED: 1
       NEXT_TEST_JOB: 1
       # Path to the next-dev binary located in **docker container** image.
-      # NEXT_DEV_BIN: /work/next-dev
+      NEXT_DEV_BIN: /work/next-dev
       # Glob pattern to run specific tests with --turbo.
-      NEXT_DEV_TEST_GLOB: ""
+      NEXT_DEV_TEST_GLOB: "*"
       # pnpm version should match to what upstream next.js uses
       PNPM_VERSION: 7.24.3
 
