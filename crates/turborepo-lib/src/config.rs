@@ -7,7 +7,7 @@ use config::{Config, Environment};
 // Rust xdg implementations uses FOLDERID_RoamingAppData for config home
 // We use cache_dir so we can find the config dir that the Go code uses
 #[cfg(windows)]
-use dirs_next::cache_dir as config_dir;
+use dirs_next::data_local_dir as config_dir;
 #[cfg(not(windows))]
 use dirs_next::config_dir;
 use serde::{Deserialize, Serialize};
