@@ -1933,6 +1933,48 @@
 <span id="1933">1933</span>
 <span id="1934">1934</span>
 <span id="1935">1935</span>
+<span id="1936">1936</span>
+<span id="1937">1937</span>
+<span id="1938">1938</span>
+<span id="1939">1939</span>
+<span id="1940">1940</span>
+<span id="1941">1941</span>
+<span id="1942">1942</span>
+<span id="1943">1943</span>
+<span id="1944">1944</span>
+<span id="1945">1945</span>
+<span id="1946">1946</span>
+<span id="1947">1947</span>
+<span id="1948">1948</span>
+<span id="1949">1949</span>
+<span id="1950">1950</span>
+<span id="1951">1951</span>
+<span id="1952">1952</span>
+<span id="1953">1953</span>
+<span id="1954">1954</span>
+<span id="1955">1955</span>
+<span id="1956">1956</span>
+<span id="1957">1957</span>
+<span id="1958">1958</span>
+<span id="1959">1959</span>
+<span id="1960">1960</span>
+<span id="1961">1961</span>
+<span id="1962">1962</span>
+<span id="1963">1963</span>
+<span id="1964">1964</span>
+<span id="1965">1965</span>
+<span id="1966">1966</span>
+<span id="1967">1967</span>
+<span id="1968">1968</span>
+<span id="1969">1969</span>
+<span id="1970">1970</span>
+<span id="1971">1971</span>
+<span id="1972">1972</span>
+<span id="1973">1973</span>
+<span id="1974">1974</span>
+<span id="1975">1975</span>
+<span id="1976">1976</span>
+<span id="1977">1977</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>esm;
@@ -2336,10 +2378,10 @@
                 .into();
                 analysis.add_code_gen(esm_exports);
                 EcmascriptExports::EsmExports(esm_exports)
-            } <span class="kw">else if let </span>Program::Module(<span class="kw">_</span>) = program {
-                EcmascriptExports::None
-            } <span class="kw">else </span>{
+            } <span class="kw">else if </span>has_cjs_export(program) {
                 EcmascriptExports::CommonJs
+            } <span class="kw">else </span>{
+                EcmascriptExports::None
             };
 
             analysis.set_exports(exports);
@@ -3868,5 +3910,47 @@
 <span class="comment">// TODO enable serialization
 </span><span class="attr">#[turbo_tasks::value(transparent, serialization = <span class="string">&quot;none&quot;</span>)]
 </span><span class="kw">pub struct </span>AstPath(<span class="attr">#[turbo_tasks(trace_ignore)] </span>Vec&lt;AstParentKind&gt;);
+
+<span class="kw">fn </span>has_cjs_export(p: <span class="kw-2">&amp;</span>Program) -&gt; bool {
+    <span class="kw">use </span>swc_core::ecma::visit::{visit_obj_and_computed, Visit, VisitWith};
+
+    <span class="kw">if let </span>Program::Module(m) = p {
+        <span class="comment">// Check for imports/exports
+        </span><span class="kw">if </span>m.body.iter().any(ModuleItem::is_module_decl) {
+            <span class="kw">return </span><span class="bool-val">false</span>;
+        }
+    }
+
+    <span class="kw">struct </span>Visitor {
+        found: bool,
+    }
+
+    <span class="kw">impl </span>Visit <span class="kw">for </span>Visitor {
+        <span class="macro">visit_obj_and_computed!</span>();
+
+        <span class="kw">fn </span>visit_ident(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;</span>Ident) {
+            <span class="kw">if </span><span class="kw-2">&amp;*</span>i.sym == <span class="string">&quot;module&quot; </span>|| <span class="kw-2">&amp;*</span>i.sym == <span class="string">&quot;exports&quot; </span>{
+                <span class="self">self</span>.found = <span class="bool-val">true</span>;
+            }
+        }
+        <span class="kw">fn </span>visit_expr(<span class="kw-2">&amp;mut </span><span class="self">self</span>, n: <span class="kw-2">&amp;</span>Expr) {
+            <span class="kw">if </span><span class="self">self</span>.found {
+                <span class="kw">return</span>;
+            }
+            n.visit_children_with(<span class="self">self</span>);
+        }
+
+        <span class="kw">fn </span>visit_stmt(<span class="kw-2">&amp;mut </span><span class="self">self</span>, n: <span class="kw-2">&amp;</span>Stmt) {
+            <span class="kw">if </span><span class="self">self</span>.found {
+                <span class="kw">return</span>;
+            }
+            n.visit_children_with(<span class="self">self</span>);
+        }
+    }
+
+    <span class="kw">let </span><span class="kw-2">mut </span>v = Visitor { found: <span class="bool-val">false </span>};
+    p.visit_with(<span class="kw-2">&amp;mut </span>v);
+    v.found
+}
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="turbopack_ecmascript" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

@@ -222,6 +222,40 @@
 <span id="222">222</span>
 <span id="223">223</span>
 <span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashSet},
@@ -232,16 +266,12 @@
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
     ecma::ast::{
-        ComputedPropName, Expr, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, Module,
-        ModuleItem, ObjectLit, Program, Prop, PropName, PropOrSpread, Script, Str,
+        ComputedPropName, Expr, ExprStmt, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, Module,
+        ModuleItem, ObjectLit, Program, Prop, PropName, PropOrSpread, Script, Stmt, Str,
     },
-    quote,
+    quote, quote_expr,
 };
-<span class="kw">use </span>turbo_tasks::{
-    primitives::{StringVc, StringsVc},
-    trace::TraceRawVcs,
-    ValueToString,
-};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, ValueToString};
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
     chunk::ChunkingContextVc,
@@ -253,6 +283,7 @@
     chunk::{EcmascriptChunkPlaceableVc, EcmascriptExports},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
+    references::esm::base::insert_hoisted_stmt,
 };
 
 <span class="attr">#[derive(Clone, Hash, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
@@ -263,9 +294,16 @@
     Error,
 }
 
+<span class="attr">#[turbo_tasks::value]
+</span><span class="kw">struct </span>ExpandResults {
+    star_exports: Vec&lt;String&gt;,
+    has_cjs_exports: bool,
+}
+
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>expand_star_exports(root_asset: EcmascriptChunkPlaceableVc) -&gt; <span class="prelude-ty">Result</span>&lt;StringsVc&gt; {
+</span><span class="kw">async fn </span>expand_star_exports(root_asset: EcmascriptChunkPlaceableVc) -&gt; <span class="prelude-ty">Result</span>&lt;ExpandResultsVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>set = HashSet::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>has_cjs_exports = <span class="bool-val">false</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>checked_assets = HashSet::new();
     checked_assets.insert(root_asset);
     <span class="kw">let </span><span class="kw-2">mut </span>queue = <span class="macro">vec!</span>[(root_asset, root_asset.get_exports())];
@@ -316,26 +354,33 @@
             .cell()
             .as_issue()
             .emit(),
-            EcmascriptExports::CommonJs =&gt; AnalyzeIssue {
-                code: <span class="prelude-val">None</span>,
-                category: StringVc::cell(<span class="string">&quot;analyze&quot;</span>.to_string()),
-                message: StringVc::cell(<span class="macro">format!</span>(
-                    <span class="string">&quot;export * used with module {} which is a CommonJS module with exports only \
-                     available at runtime\nList all export names manually (`export {{ a, b, c }} \
-                     from \&quot;...\&quot;) or rewrite the module to ESM.`&quot;</span>,
-                    asset.path().to_string().<span class="kw">await</span><span class="question-mark">?
-                </span>)),
-                path: asset.path(),
-                severity: IssueSeverity::Warning.into(),
-                source: <span class="prelude-val">None</span>,
-                title: StringVc::cell(<span class="string">&quot;unexpected export *&quot;</span>.to_string()),
+            EcmascriptExports::CommonJs =&gt; {
+                has_cjs_exports = <span class="bool-val">true</span>;
+                AnalyzeIssue {
+                    code: <span class="prelude-val">None</span>,
+                    category: StringVc::cell(<span class="string">&quot;analyze&quot;</span>.to_string()),
+                    message: StringVc::cell(<span class="macro">format!</span>(
+                        <span class="string">&quot;export * used with module {} which is a CommonJS module with exports \
+                         only available at runtime\nList all export names manually (`export {{ a, \
+                         b, c }} from \&quot;...\&quot;) or rewrite the module to ESM, to avoid the \
+                         additional runtime code.`&quot;</span>,
+                        asset.path().to_string().<span class="kw">await</span><span class="question-mark">?
+                    </span>)),
+                    path: asset.path(),
+                    severity: IssueSeverity::Warning.into(),
+                    source: <span class="prelude-val">None</span>,
+                    title: StringVc::cell(<span class="string">&quot;unexpected export *&quot;</span>.to_string()),
+                }
+                .cell()
+                .as_issue()
+                .emit()
             }
-            .cell()
-            .as_issue()
-            .emit(),
         }
     }
-    <span class="prelude-val">Ok</span>(StringsVc::cell(set.into_iter().collect()))
+    <span class="prelude-val">Ok</span>(ExpandResultsVc::cell(ExpandResults {
+        star_exports: set.into_iter().collect(),
+        has_cjs_exports,
+    }))
 }
 
 <span class="attr">#[turbo_tasks::value(shared)]
@@ -361,9 +406,12 @@
             .map(|(k, v)| (Cow::&lt;str&gt;::Borrowed(k), Cow::Borrowed(v)))
             .collect();
         <span class="kw">let </span><span class="kw-2">mut </span>props = Vec::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>cjs_exports = Vec::&lt;Box&lt;Expr&gt;&gt;::new();
+
         <span class="kw">for </span>esm_ref <span class="kw">in </span>this.star_exports.iter() {
             <span class="kw">if let </span>ReferencedAsset::Some(asset) = <span class="kw-2">&amp;*</span>esm_ref.get_referenced_asset().<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="kw">let </span>export_names = expand_star_exports(<span class="kw-2">*</span>asset).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>export_info = expand_star_exports(<span class="kw-2">*</span>asset).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>export_names = <span class="kw-2">&amp;</span>export_info.star_exports;
                 <span class="kw">for </span>export <span class="kw">in </span>export_names.iter() {
                     <span class="kw">if </span>!all_exports.contains_key(<span class="kw-2">&amp;</span>Cow::&lt;str&gt;::Borrowed(export)) {
                         all_exports.insert(
@@ -371,6 +419,15 @@
                             Cow::Owned(EsmExport::ImportedBinding(<span class="kw-2">*</span>esm_ref, export.to_string())),
                         );
                     }
+                }
+
+                <span class="kw">if </span>export_info.has_cjs_exports {
+                    <span class="kw">let </span>ident = ReferencedAsset::get_ident_from_placeable(asset).<span class="kw">await</span><span class="question-mark">?</span>;
+
+                    cjs_exports.push(<span class="macro">quote_expr!</span>(
+                        <span class="string">&quot;__turbopack__cjs__($arg)&quot;</span>,
+                        arg: Expr = Ident::new(ident.into(), DUMMY_SP).into()
+                    ));
                 }
             }
         }
@@ -428,6 +485,14 @@
             span: DUMMY_SP,
             props,
         });
+        <span class="kw">let </span>cjs_stmt = <span class="kw">if </span>!cjs_exports.is_empty() {
+            <span class="prelude-val">Some</span>(Stmt::Expr(ExprStmt {
+                span: DUMMY_SP,
+                expr: Expr::from_exprs(cjs_exports),
+            }))
+        } <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>};
 
         visitors.push(<span class="macro">create_visitor!</span>(visit_mut_program(program: <span class="kw-2">&amp;mut </span>Program) {
             <span class="kw">let </span>stmt = <span class="macro">quote!</span>(<span class="string">&quot;__turbopack_esm__($getters);&quot; </span><span class="kw">as </span>Stmt,
@@ -440,6 +505,9 @@
                 Program::Script(Script { body, .. }) =&gt; {
                     body.insert(<span class="number">0</span>, stmt);
                 }
+            }
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(cjs_stmt) = cjs_stmt.clone() {
+                insert_hoisted_stmt(program, cjs_stmt);
             }
         }));
 
