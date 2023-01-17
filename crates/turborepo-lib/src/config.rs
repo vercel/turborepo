@@ -12,8 +12,8 @@ use dirs_next::cache_dir as config_dir;
 use dirs_next::config_dir;
 use serde::{Deserialize, Serialize};
 
-pub fn default_user_config_path() -> Option<PathBuf> {
-    config_dir().map(|p| p.join("turborepo").join("config.json"))
+pub fn default_user_config_path() -> Result<PathBuf> {
+    config_dir().map(|p| p.join("turborepo").join("config.json")).context("default config path not found")
 }
 
 #[allow(dead_code)]
