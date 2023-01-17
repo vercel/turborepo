@@ -100,6 +100,27 @@ pub async fn get_evaluate_pool(
     let (Some(cwd), Some(entrypoint)) = (to_sys_path(cwd).await?, to_sys_path(path).await?) else {
         panic!("can only evaluate from a disk filesystem");
     };
+
+    let runtime_entries = {
+        let globals_module = EcmascriptModuleAssetVc::new(
+            SourceAssetVc::new(embed_file_path("globals.ts")).into(),
+            context,
+            Value::new(EcmascriptModuleAssetType::Typescript),
+            EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
+            context.compile_time_info(),
+        )
+        .as_ecmascript_chunk_placeable();
+
+        let mut entries = vec![globals_module];
+        if let Some(other_entries) = runtime_entries {
+            for entry in &*other_entries.await? {
+                entries.push(*entry)
+            }
+        };
+
+        Some(EcmascriptChunkPlaceablesVc::cell(entries))
+    };
+
     let bootstrap = NodeJsBootstrapAsset {
         path,
         chunk_group: ChunkGroupVc::from_chunk(
