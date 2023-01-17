@@ -3,8 +3,6 @@ Setup
 
 Test help flag
   $ ${TURBO} -h
-  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
-  Running command as global turbo
   The build system that makes ship happen
   
   Usage: turbo [OPTIONS] [COMMAND]
@@ -53,7 +51,7 @@ Test help flag
         --no-cache                       Avoid saving task results to the cache. Useful for development/watch tasks
         --no-daemon                      Run without using turbo's daemon process
         --no-deps                        Exclude dependent task consumers from execution
-        --output-logs <OUTPUT_LOGS>      Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [default: full] [possible values: full, none, hash-only, new-only, errors-only]
+        --output-logs <OUTPUT_LOGS>      Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
         --parallel                       Execute all tasks in parallel
         --profile <PROFILE>              File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
         --remote-only                    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
@@ -66,8 +64,6 @@ Test help flag
 
 
   $ ${TURBO} --help
-  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
-  Running command as global turbo
   The build system that makes ship happen
   
   Usage: turbo [OPTIONS] [COMMAND]
@@ -116,7 +112,7 @@ Test help flag
         --no-cache                       Avoid saving task results to the cache. Useful for development/watch tasks
         --no-daemon                      Run without using turbo's daemon process
         --no-deps                        Exclude dependent task consumers from execution
-        --output-logs <OUTPUT_LOGS>      Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [default: full] [possible values: full, none, hash-only, new-only, errors-only]
+        --output-logs <OUTPUT_LOGS>      Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
         --parallel                       Execute all tasks in parallel
         --profile <PROFILE>              File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
         --remote-only                    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
@@ -125,8 +121,6 @@ Test help flag
 
 Test help flag for link command
   $ ${TURBO} link -h
-  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
-  Running command as global turbo
   Link your local directory to a Vercel organization and enable remote caching
   
   Usage: turbo link [OPTIONS]
@@ -154,8 +148,6 @@ Test help flag for link command
 
 Test help flag for unlink command
   $ ${TURBO} unlink -h
-  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
-  Running command as global turbo
   Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Usage: turbo unlink [OPTIONS]
@@ -182,8 +174,6 @@ Test help flag for unlink command
 
 Test help flag for login command
   $ ${TURBO} login -h
-  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
-  Running command as global turbo
   Login to your Vercel account
   
   Usage: turbo login [OPTIONS]
@@ -211,8 +201,6 @@ Test help flag for login command
 
 Test help flag for logout command
   $ ${TURBO} logout -h
-  Repository inference failed: Unable to find `turbo.json` or `package.json` in current path
-  Running command as global turbo
   Logout to your Vercel account
   
   Usage: turbo logout [OPTIONS]

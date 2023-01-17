@@ -95,25 +95,10 @@ func Test_ReadTurboConfig_Legacy(t *testing.T) {
 		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
 	}
 
-	turboJSON, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+	_, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
 
-	if turboJSONReadErr != nil {
-		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
-	}
-
-	pipelineExpected := map[string]TaskDefinition{
-		"build": {
-			Outputs:                 TaskOutputs{},
-			TopologicalDependencies: []string{},
-			EnvVarDependencies:      []string{},
-			TaskDependencies:        []string{},
-			ShouldCache:             true,
-			OutputMode:              util.FullTaskOutput,
-		},
-	}
-
-	validateOutput(t, turboJSON, pipelineExpected)
-	assert.Empty(t, turboJSON.RemoteCacheOptions)
+	expectedErrorMsg := "Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist"
+	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
 }
 
 func Test_ReadTurboConfig_BothCorrectAndLegacy(t *testing.T) {

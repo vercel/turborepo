@@ -9,10 +9,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/muhammadmuzzammil1998/jsonc"
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
-	"muzzammil.xyz/jsonc"
 )
 
 const (
@@ -169,7 +169,6 @@ func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 		}
 
 		// If pkg.Turbo exists, log a warning and delete it from the representation
-		// TODO: turn off this warning eventually
 		if hasLegacyConfig {
 			log.Printf("[WARNING] Ignoring \"turbo\" key in package.json, using %s instead.", configFile)
 			rootPackageJSON.LegacyTurboConfig = nil
@@ -178,11 +177,9 @@ func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 		return turboJSON, nil
 	}
 
-	// Use pkg.Turbo if the configFile doesn't exist and we want the fallback feature
-	// TODO: turn this fallback off eventually
+	// If the configFile doesn't exist, but a legacy config does, log that it's deprecated and return an error
 	if hasLegacyConfig {
 		log.Printf("[DEPRECATED] \"turbo\" in package.json is deprecated. Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile)
-		return rootPackageJSON.LegacyTurboConfig, nil
 	}
 
 	// If there's no turbo.json and no turbo key in package.json, return an error.

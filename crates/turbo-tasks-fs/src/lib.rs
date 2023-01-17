@@ -264,8 +264,13 @@ impl DiskFileSystem {
     }
 
     pub async fn to_sys_path(&self, fs_path: FileSystemPathVc) -> Result<PathBuf> {
-        let path = Path::new(&self.root).join(&*unix_to_sys(&fs_path.await?.path));
-        Ok(path)
+        let path = Path::new(&self.root);
+        let fs_path = fs_path.await?;
+        Ok(if fs_path.path.is_empty() {
+            path.to_path_buf()
+        } else {
+            path.join(&*unix_to_sys(&fs_path.path))
+        })
     }
 }
 
@@ -825,9 +830,9 @@ impl FileSystemPathVc {
     pub async fn try_join(self, path: &str) -> Result<FileSystemPathOptionVc> {
         let this = self.await?;
         if let Some(path) = join_path(&this.path, path) {
-            Ok(FileSystemPathOptionVc::cell(Some(Self::new_normalized(
-                this.fs, path,
-            ))))
+            Ok(FileSystemPathOptionVc::cell(Some(
+                Self::new_normalized(this.fs, path).resolve().await?,
+            )))
         } else {
             Ok(FileSystemPathOptionVc::cell(None))
         }
@@ -840,9 +845,9 @@ impl FileSystemPathVc {
         let this = self.await?;
         if let Some(path) = join_path(&this.path, path) {
             if path.starts_with(&this.path) {
-                return Ok(FileSystemPathOptionVc::cell(Some(Self::new_normalized(
-                    this.fs, path,
-                ))));
+                return Ok(FileSystemPathOptionVc::cell(Some(
+                    Self::new_normalized(this.fs, path).resolve().await?,
+                )));
             }
         }
         Ok(FileSystemPathOptionVc::cell(None))
@@ -1027,19 +1032,21 @@ impl FileSystemPathVc {
             .into());
         }
         let segments = this.path.split('/');
-        let mut current = self.root();
+        let mut current = self.root().resolve().await?;
         let mut symlinks = Vec::new();
         for segment in segments {
-            current = current.join(segment);
+            current = current.join(segment).resolve().await?;
             while let FileSystemEntryType::Symlink = &*current.get_type().await? {
                 if let LinkContent::Link { target, link_type } = &*current.read_link().await? {
                     symlinks.push(current.resolve().await?);
                     current = if link_type.contains(LinkType::ABSOLUTE) {
-                        current.root()
+                        current.root().resolve().await?
                     } else {
-                        current.parent()
+                        current.parent().resolve().await?
                     }
-                    .join(target);
+                    .join(target)
+                    .resolve()
+                    .await?;
                 } else {
                     break;
                 }
