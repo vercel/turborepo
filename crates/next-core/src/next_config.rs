@@ -1,13 +1,18 @@
-use std::collections::HashMap;
-
 use anyhow::Result;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     primitives::{BoolVc, StringsVc},
     trace::TraceRawVcs,
     Value,
 };
-use turbopack::evaluate_context::node_evaluate_asset_context;
+use turbo_tasks_env::EnvMapVc;
+use turbopack::{
+    evaluate_context::node_evaluate_asset_context,
+    module_options::{
+        ResolveAliasOptions, ResolveAliasOptionsVc, WebpackLoadersOptions, WebpackLoadersOptionsVc,
+    },
+};
 use turbopack_core::{
     asset::Asset,
     reference_type::{EntryReferenceSubType, ReferenceType},
@@ -38,7 +43,7 @@ pub struct NextConfig {
     pub typescript: Option<TypeScriptConfig>,
     pub react_strict_mode: Option<bool>,
     pub experimental: Option<ExperimentalConfig>,
-    pub env: Option<HashMap<String, String>>,
+    pub env: IndexMap<String, String>,
     pub compiler: Option<CompilerConfig>,
     pub images: ImageConfig,
     pub transpile_packages: Option<Vec<String>>,
@@ -127,11 +132,13 @@ pub enum RemotePatternProtocal {
     Https,
 }
 
-#[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalConfig {
     pub server_components_external_packages: Option<Vec<String>>,
     pub app_dir: Option<bool>,
+    pub turbopack_webpack_loaders: Option<IndexMap<String, Vec<String>>>,
+    pub resolve_alias: Option<IndexMap<String, Vec<String>>>,
 }
 
 #[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
@@ -199,6 +206,11 @@ impl NextConfigVc {
     }
 
     #[turbo_tasks::function]
+    pub async fn env(self) -> Result<EnvMapVc> {
+        Ok(EnvMapVc::cell(self.await?.env.clone()))
+    }
+
+    #[turbo_tasks::function]
     pub async fn image_config(self) -> Result<ImageConfigVc> {
         Ok(self.await?.images.clone().cell())
     }
@@ -208,6 +220,40 @@ impl NextConfigVc {
         Ok(StringsVc::cell(
             self.await?.transpile_packages.clone().unwrap_or_default(),
         ))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn webpack_loaders_options(self) -> Result<WebpackLoadersOptionsVc> {
+        let this = self.await?;
+        let Some(turbopack_webpack_loaders) = this.experimental.as_ref().and_then(|experimental| experimental.turbopack_webpack_loaders.as_ref()) else {
+            return Ok(WebpackLoadersOptionsVc::cell(WebpackLoadersOptions::default()));
+        };
+        let mut extension_to_loaders = IndexMap::new();
+        for (ext, loaders) in turbopack_webpack_loaders {
+            extension_to_loaders.insert(ext.clone(), StringsVc::cell(loaders.clone()));
+        }
+        Ok(WebpackLoadersOptions {
+            extension_to_loaders,
+            ..Default::default()
+        }
+        .cell())
+    }
+
+    #[turbo_tasks::function]
+    pub async fn resolve_alias_options(self) -> Result<ResolveAliasOptionsVc> {
+        let this = self.await?;
+        let Some(resolve_alias) = this.experimental.as_ref().and_then(|experimental| experimental.resolve_alias.as_ref()) else {
+            return Ok(ResolveAliasOptionsVc::cell(ResolveAliasOptions::default()));
+        };
+        let mut alias_map = IndexMap::new();
+        for (ext, mappings) in resolve_alias {
+            alias_map.insert(ext.clone(), StringsVc::cell(mappings.clone()));
+        }
+        Ok(ResolveAliasOptions {
+            alias_map,
+            ..Default::default()
+        }
+        .cell())
     }
 }
 

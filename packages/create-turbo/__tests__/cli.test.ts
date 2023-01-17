@@ -45,13 +45,13 @@ describe("create-turbo cli", () => {
     if (!fs.existsSync(createTurbo)) {
       // TODO: Consider running the build here instead of throwing
       throw new Error(
-        `Cannot run Turbrepo CLI tests without building create-turbo`
+        `Cannot run Turborepo CLI tests without building create-turbo`
       );
     }
   });
 
   afterAll(() => {
-    // clean up after the whole test suite just in case any excptions prevented beforeEach callback from running
+    // clean up after the whole test suite just in case any exceptions prevented beforeEach callback from running
     cleanupTestDir();
   });
 

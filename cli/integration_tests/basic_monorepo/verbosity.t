@@ -94,9 +94,10 @@ Verbosity level 2
 
 Make sure users can only use one verbosity flag
   $ ${TURBO} build -v --verbosity=1
-  error: The argument '-v...' cannot be used with '--verbosity <COUNT>'
+  ERROR The argument '-v...' cannot be used with '--verbosity <COUNT>'
   
   Usage: turbo [OPTIONS] [COMMAND]
   
   For more information try '--help'
+  
   [1]

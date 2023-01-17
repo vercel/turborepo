@@ -3,6 +3,8 @@ use std::{env, io, mem, path::PathBuf, process};
 use anyhow::{anyhow, Result};
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
+use dunce::canonicalize as fs_canonicalize;
+use log::error;
 use serde::Serialize;
 
 use crate::{
@@ -150,8 +152,25 @@ impl Args {
     pub fn new() -> Result<Self> {
         let mut clap_args = match Args::try_parse() {
             Ok(args) => args,
-            Err(e) if e.use_stderr() => {
+            // Don't use error logger when displaying help text
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+                ) =>
+            {
                 let _ = e.print();
+                process::exit(1);
+            }
+            Err(e) if e.use_stderr() => {
+                let err_str = e.to_string();
+                // A cleaner solution would be to implement our own clap::error::ErrorFormatter
+                // but that would require copying the default formatter just to remove this
+                // line: https://docs.rs/clap/latest/src/clap/error/format.rs.html#100
+                error!(
+                    "{}",
+                    err_str.strip_prefix("error: ").unwrap_or(err_str.as_str())
+                );
                 process::exit(1);
             }
             // If the clap error shouldn't be printed to stderr it indicates help text
@@ -296,8 +315,8 @@ pub struct RunArgs {
     /// task hashes. Use "new-only" to show only new output with
     /// only hashes for cached tasks. Use "none" to hide process
     /// output. (default full)
-    #[clap(long, value_enum, default_value_t = OutputLogsMode::Full)]
-    pub output_logs: OutputLogsMode,
+    #[clap(long, value_enum)]
+    pub output_logs: Option<OutputLogsMode>,
     #[clap(long, hide = true)]
     pub only: bool,
     /// Execute all tasks in parallel.
@@ -358,6 +377,10 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
         clap_args.cwd = Some(repo_state.root);
     }
 
+    if let Some(cwd) = &clap_args.cwd {
+        clap_args.cwd = Some(fs_canonicalize(cwd)?);
+    }
+
     match clap_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
             bin::run()?;
@@ -397,6 +420,7 @@ mod test {
     fn get_default_run_args() -> RunArgs {
         RunArgs {
             cache_workers: 10,
+            output_logs: None,
             ..RunArgs::default()
         }
     }
@@ -433,10 +457,12 @@ mod test {
         }
     }
 
+    use anyhow::Result;
+
     use crate::cli::{Args, Command, DryRunMode, OutputLogsMode, RunArgs, Verbosity};
 
     #[test]
-    fn test_parse_run() {
+    fn test_parse_run() -> Result<()> {
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
             Args {
@@ -696,12 +722,19 @@ mod test {
             }
         );
 
+        // Test that ouput-logs is not serialized by default
+        assert_eq!(
+            serde_json::to_string(&Args::try_parse_from(["turbo", "run", "build"]).unwrap())?
+                .contains("\"output_logs\":null"),
+            true
+        );
+
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--output-logs", "full"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    output_logs: OutputLogsMode::Full,
+                    output_logs: Some(OutputLogsMode::Full),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
@@ -713,7 +746,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    output_logs: OutputLogsMode::None,
+                    output_logs: Some(OutputLogsMode::None),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
@@ -725,7 +758,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    output_logs: OutputLogsMode::HashOnly,
+                    output_logs: Some(OutputLogsMode::HashOnly),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
@@ -814,6 +847,8 @@ mod test {
                 ..Args::default()
             }
         );
+
+        Ok(())
     }
 
     #[test]
