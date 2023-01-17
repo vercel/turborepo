@@ -265,6 +265,10 @@
 <span id="265">265</span>
 <span id="266">266</span>
 <span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -322,6 +326,7 @@
             enable_styled_components,
             enable_types,
             enable_typescript_transform,
+            enable_mdx,
             <span class="kw-2">ref </span>enable_postcss_transform,
             <span class="kw-2">ref </span>enable_webpack_loaders,
             preset_env_versions,
@@ -394,12 +399,6 @@
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.json&quot;</span>.to_string()),
                 <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Json)],
-            ),
-            ModuleRule::new(
-                ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.mdx&quot;</span>.to_string()),
-                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Mdx(
-                    mdx_transforms,
-                ))],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.css&quot;</span>.to_string()),
@@ -504,6 +503,15 @@
                 <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Static)],
             ),
         ];
+
+        <span class="kw">if </span>enable_mdx {
+            rules.push(ModuleRule::new(
+                ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.mdx&quot;</span>.to_string()),
+                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Mdx(
+                    mdx_transforms,
+                ))],
+            ));
+        }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(webpack_loaders_options) = enable_webpack_loaders {
             <span class="kw">let </span>execution_context = execution_context

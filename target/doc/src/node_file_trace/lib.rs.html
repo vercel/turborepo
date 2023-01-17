@@ -594,6 +594,14 @@
 <span id="594">594</span>
 <span id="595">595</span>
 <span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>nft_json;
@@ -721,6 +729,11 @@
     </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(short, long))]
     #[cfg_attr(feature = <span class="string">&quot;node-api&quot;</span>, serde(default))]
     </span>exact: bool,
+
+    <span class="doccomment">/// Whether to enable mdx parsing while tracing dependencies
+    </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(short, long))]
+    #[cfg_attr(feature = <span class="string">&quot;node-api&quot;</span>, serde(default))]
+    </span>enable_mdx: bool,
 }
 
 <span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, derive(Parser))]
@@ -826,6 +839,7 @@
     input: Vec&lt;String&gt;,
     process_cwd: <span class="prelude-ty">Option</span>&lt;String&gt;,
     exact: bool,
+    enable_mdx: bool,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsVc&gt; {
     <span class="kw">let </span>root = fs.root();
     <span class="kw">let </span>env = EnvironmentVc::new(
@@ -855,6 +869,7 @@
         env,
         ModuleOptionsContext {
             enable_types: <span class="bool-val">true</span>,
+            enable_mdx,
             ..Default::default()
         }
         .cell(),
@@ -1109,6 +1124,7 @@
         <span class="kw-2">ref </span>input,
         watch,
         exact,
+        enable_mdx,
         <span class="kw-2">ref </span>context_directory,
         <span class="kw-2">ref </span>process_cwd,
         ..
@@ -1122,7 +1138,7 @@
             <span class="kw">let </span>input = process_input(<span class="kw-2">&amp;</span>dir, <span class="kw-2">&amp;</span>context, input).unwrap();
             <span class="kw">let </span><span class="kw-2">mut </span>result = BTreeSet::new();
             <span class="kw">let </span>fs = create_fs(<span class="string">&quot;context directory&quot;</span>, <span class="kw-2">&amp;</span>context, watch).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>modules = input_to_modules(fs, input, process_cwd, exact).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>modules = input_to_modules(fs, input, process_cwd, exact, enable_mdx).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">for </span>module <span class="kw">in </span>modules.iter() {
                 <span class="kw">let </span>set = all_assets(<span class="kw-2">*</span>module);
                 IssueVc::attach_context(module.path(), <span class="string">&quot;gathering list of assets&quot;</span>.to_string(), set)
@@ -1140,7 +1156,7 @@
             <span class="kw">let </span>fs = create_fs(<span class="string">&quot;context directory&quot;</span>, <span class="kw-2">&amp;</span>context, watch).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>output_nft_assets = Vec::new();
             <span class="kw">let </span><span class="kw-2">mut </span>emits = Vec::new();
-            <span class="kw">for </span>module <span class="kw">in </span>input_to_modules(fs, input, process_cwd, exact)
+            <span class="kw">for </span>module <span class="kw">in </span>input_to_modules(fs, input, process_cwd, exact, enable_mdx)
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.iter()
             {
@@ -1166,7 +1182,7 @@
             <span class="kw">let </span>input_dir = fs.root();
             <span class="kw">let </span>output_dir = out_fs.root();
             <span class="kw">let </span><span class="kw-2">mut </span>emits = Vec::new();
-            <span class="kw">for </span>module <span class="kw">in </span>input_to_modules(fs, input, process_cwd, exact)
+            <span class="kw">for </span>module <span class="kw">in </span>input_to_modules(fs, input, process_cwd, exact, enable_mdx)
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.iter()
             {

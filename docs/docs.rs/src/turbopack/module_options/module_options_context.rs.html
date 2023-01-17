@@ -79,6 +79,7 @@
 <span id="79">79</span>
 <span id="80">80</span>
 <span id="81">81</span>
+<span id="82">82</span>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{primitives::StringsVc, trace::TraceRawVcs};
@@ -135,6 +136,7 @@
     <span class="kw">pub </span>enable_webpack_loaders: <span class="prelude-ty">Option</span>&lt;WebpackLoadersOptions&gt;,
     <span class="kw">pub </span>enable_types: bool,
     <span class="kw">pub </span>enable_typescript_transform: bool,
+    <span class="kw">pub </span>enable_mdx: bool,
     <span class="kw">pub </span>preset_env_versions: <span class="prelude-ty">Option</span>&lt;EnvironmentVc&gt;,
     <span class="kw">pub </span>custom_ecmascript_app_transforms: Vec&lt;EcmascriptInputTransform&gt;,
     <span class="kw">pub </span>custom_ecmascript_transforms: Vec&lt;EcmascriptInputTransform&gt;,
