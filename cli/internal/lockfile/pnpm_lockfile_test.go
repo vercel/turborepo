@@ -131,8 +131,9 @@ func Test_PnpmLockfilePatches(t *testing.T) {
 	assert.NilError(t, err)
 
 	patches := lockfile.Patches()
-	assert.Equal(t, len(patches), 1)
-	assert.Equal(t, patches[0], turbopath.AnchoredUnixPath("patches/is-odd@3.0.1.patch"))
+	assert.Equal(t, len(patches), 2)
+	assert.Equal(t, patches[0], turbopath.AnchoredUnixPath("patches/@babel__core@7.20.12.patch"))
+	assert.Equal(t, patches[1], turbopath.AnchoredUnixPath("patches/is-odd@3.0.1.patch"))
 }
 
 func Test_PnpmPrunePatches(t *testing.T) {
@@ -142,8 +143,11 @@ func Test_PnpmPrunePatches(t *testing.T) {
 	lockfile, err := DecodePnpmLockfile(contents)
 	assert.NilError(t, err)
 
-	prunedLockfile, err := lockfile.Subgraph([]turbopath.AnchoredSystemPath{turbopath.AnchoredSystemPath("packages/dependency")}, []string{"/is-odd/3.0.1_nrrwwz7lemethtlvvm75r5bmhq", "/is-number/6.0.0"})
+	prunedLockfile, err := lockfile.Subgraph(
+		[]turbopath.AnchoredSystemPath{turbopath.AnchoredSystemPath("packages/dependency")},
+		[]string{"/is-odd/3.0.1_nrrwwz7lemethtlvvm75r5bmhq", "/is-number/6.0.0", "/@babel-core/7.20.12_3hyn7hbvzkemudbydlwjmrb65y"},
+	)
 	assert.NilError(t, err)
 
-	assert.Equal(t, len(prunedLockfile.Patches()), 1)
+	assert.Equal(t, len(prunedLockfile.Patches()), 2)
 }
