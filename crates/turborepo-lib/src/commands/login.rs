@@ -1,14 +1,8 @@
-use std::{
-    cell::{Cell, RefCell},
-    net::SocketAddr,
-    rc::Rc,
-    sync::Arc,
-};
+use std::{net::SocketAddr, sync::Arc};
 
 use axum::{routing::get, Router};
-use axum_server::Handle;
 use log::{debug, info, warn};
-use tokio::sync::Mutex;
+use tokio::sync::OnceCell;
 
 use crate::{config::RepoConfig, get_version};
 
@@ -27,9 +21,9 @@ pub async fn login(repo_config: RepoConfig) {
     info!(">>> Opening browser to {login_url}");
     direct_user_to_url(&login_url);
 
-    let query = Arc::new(Mutex::new(Cell::new(String::new())));
+    let query = Arc::new(OnceCell::new());
     new_one_shot_server(DEFAULT_PORT, query.clone()).await;
-    println!("{}", query.lock().await.take());
+    println!("{}", query.get().unwrap());
 }
 
 fn direct_user_to_url(url: &str) {
@@ -38,7 +32,7 @@ fn direct_user_to_url(url: &str) {
     }
 }
 
-async fn new_one_shot_server(port: u16, query: Arc<Mutex<Cell<String>>>) {
+async fn new_one_shot_server(port: u16, query: Arc<OnceCell<String>>) {
     let handle = axum_server::Handle::new();
     let route_handle = handle.clone();
     let app = Router::new()
@@ -46,8 +40,7 @@ async fn new_one_shot_server(port: u16, query: Arc<Mutex<Cell<String>>>) {
         .route(
             "/",
             get(|| async move {
-                let q = query.lock().await;
-                q.set("hello".to_string());
+                let _ = query.set("hello friends".to_string());
                 route_handle.shutdown();
             }),
         );
