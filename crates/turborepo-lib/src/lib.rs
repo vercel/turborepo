@@ -1,7 +1,9 @@
 mod cli;
 mod commands;
+mod config;
 mod package_manager;
 mod shim;
+mod ui;
 
 use anyhow::Result;
 use log::error;
