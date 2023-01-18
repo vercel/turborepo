@@ -1,9 +1,12 @@
 mod cli;
 mod commands;
+mod config;
 mod package_manager;
 mod shim;
+mod ui;
 
 use anyhow::Result;
+use log::error;
 
 pub use crate::cli::Args;
 use crate::package_manager::PackageManager;
@@ -23,6 +26,12 @@ pub fn get_version() -> &'static str {
         .0
 }
 
-pub fn main() -> Result<Payload> {
-    shim::run()
+pub fn main() -> Payload {
+    match shim::run() {
+        Ok(payload) => payload,
+        Err(err) => {
+            error!("{}", err.to_string());
+            Payload::Rust(Err(err))
+        }
+    }
 }

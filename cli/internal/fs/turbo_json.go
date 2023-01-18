@@ -9,10 +9,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/muhammadmuzzammil1998/jsonc"
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
-	"muzzammil.xyz/jsonc"
 )
 
 const (
