@@ -23,7 +23,7 @@ func ValidateGraph(graph *dag.AcyclicGraph) error {
 			}
 			cycleLines[i] = "\t" + strings.Join(vertices, ",")
 		}
-		return fmt.Errorf("cyclic dependency detected:\n%s", strings.Join(cycleLines, "\n"))
+		return fmt.Errorf("cyclical dependency detected:\n%s", strings.Join(cycleLines, "\n"))
 	}
 
 	for _, e := range graph.Edges() {
