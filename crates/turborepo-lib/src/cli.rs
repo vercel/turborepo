@@ -3,6 +3,7 @@ use std::{env, io, mem, path::PathBuf, process};
 use anyhow::{anyhow, Result};
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
+use dunce::canonicalize as fs_canonicalize;
 use log::error;
 use serde::Serialize;
 
@@ -375,6 +376,10 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             run_args.single_package = matches!(repo_state.mode, RepoMode::SinglePackage);
         }
         clap_args.cwd = Some(repo_state.root);
+    }
+
+    if let Some(cwd) = &clap_args.cwd {
+        clap_args.cwd = Some(fs_canonicalize(cwd)?);
     }
 
     match clap_args.command.as_ref().unwrap() {
