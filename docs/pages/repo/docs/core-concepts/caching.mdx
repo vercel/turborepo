@@ -71,7 +71,7 @@ To override the default cache output behavior, pass an array of globs to a [`pip
 }
 ```
 
-If your task does not emit any files (e.g. unit tests with Jest), Turborepo will automatically cache the logs for you.
+Turborepo automatically records and caches the logs of every task. You do not need to specify anything to get this behavior. If your task does not emit any files (e.g. unit tests with Jest) you can simply omit `outputs`.
 
 When you run `turbo run build test`, Turborepo will execute your build and test scripts,
 and cache their `output`s in `./node_modules/.cache/turbo`.
