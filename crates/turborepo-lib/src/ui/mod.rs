@@ -1,6 +1,4 @@
-use std::borrow::Cow;
-
-use console::{strip_ansi_codes, Style};
+use console::{Style, StyledObject};
 use lazy_static::lazy_static;
 
 /// Helper struct to apply any necessary formatting to UI output
@@ -28,16 +26,14 @@ impl UI {
         Self { should_strip_ansi }
     }
 
-    /// Format the given string based on the color choice of the UI structure
+    /// Apply the UI color mode to the given styled object
     ///
-    /// If color is enabled than the string will be returned unaltered, but if
-    /// disabled then ansi codes will be striped from the string.
-    pub fn process_ansi<'a>(&self, s: &'a str) -> Cow<'a, str> {
-        if self.should_strip_ansi {
-            strip_ansi_codes(s)
-        } else {
-            Cow::Borrowed(s)
-        }
+    /// This is required to match the Go turborepo coloring logic which differs
+    /// from console's coloring detection.
+    pub fn apply<D>(&self, obj: StyledObject<D>) -> StyledObject<D> {
+        // Setting this to false will skip emitting any ansi codes associated
+        // with the style when the object is displayed.
+        obj.force_styling(!self.should_strip_ansi)
     }
 }
 
@@ -52,14 +48,14 @@ mod test {
     #[test]
     fn test_ui_strips_ansi() {
         let ui = UI::new(true);
-        let grey_str = GREY.apply_to("gray").to_string();
-        assert_eq!(ui.process_ansi(&grey_str), "gray");
+        let grey_str = GREY.apply_to("gray");
+        assert_eq!(format!("{}", ui.apply(grey_str)), "gray");
     }
 
     #[test]
     fn test_ui_resets_term() {
         let ui = UI::new(false);
-        let grey_str = GREY.apply_to("gray").to_string();
-        assert_eq!(ui.process_ansi(&grey_str), "\u{1b}[2mgray\u{1b}[0m");
+        let grey_str = GREY.apply_to("gray");
+        assert_eq!(format!("{}", ui.apply(grey_str)), "\u{1b}[2mgray\u{1b}[0m");
     }
 }
