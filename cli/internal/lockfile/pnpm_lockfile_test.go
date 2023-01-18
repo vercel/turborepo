@@ -58,7 +58,8 @@ func Test_SpecifierResolution(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	lockfile, err := DecodePnpmLockfile(contents)
+	untypedLockfile, err := DecodePnpmLockfile(contents)
+	lockfile := untypedLockfile.(*PnpmLockfile)
 	if err != nil {
 		t.Errorf("failure decoding lockfile: %v", err)
 	}
