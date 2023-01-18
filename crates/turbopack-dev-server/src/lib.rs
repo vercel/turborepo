@@ -9,7 +9,6 @@ pub mod update;
 
 use std::{
     borrow::Cow,
-    collections::{btree_map::Entry, BTreeMap},
     future::Future,
     net::{SocketAddr, TcpListener},
     pin::Pin,
@@ -28,8 +27,12 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Request, Response, Server,
 };
+use indexmap::map::Entry;
 use mime_guess::mime;
-use source::{Body, Bytes};
+use source::{
+    headers::{HeaderValue, Headers},
+    Body, Bytes,
+};
 use turbo_tasks::{
     run_once, trace::TraceRawVcs, util::FormatDuration, RawVc, TransientValue, TurboTasksApi, Value,
 };
@@ -44,7 +47,7 @@ use self::{
     },
     update::{protocol::ResourceIdentifier, UpdateServer},
 };
-use crate::source::{ContentSourceData, HeaderValue};
+use crate::source::ContentSourceData;
 
 pub trait SourceProvider: Send + Clone + 'static {
     /// must call a turbo-tasks function internally
@@ -396,7 +399,7 @@ async fn request_to_data(
         }
     }
     if let Some(filter) = vary.headers.as_ref() {
-        let mut headers = BTreeMap::new();
+        let mut headers = Headers::default();
         for (header_name, header_value) in request.headers().iter() {
             if !filter.contains(header_name.as_str()) {
                 continue;
@@ -444,24 +447,8 @@ pub(crate) fn resource_to_data(
     if vary.query.is_some() {
         data.query = Some(Query::default())
     }
-    if let Some(filter) = vary.headers.as_ref() {
-        let mut headers = BTreeMap::new();
-        if let Some(resource_headers) = resource.headers {
-            for (header_name, header_value) in resource_headers {
-                if !filter.contains(header_name.as_str()) {
-                    continue;
-                }
-                match headers.entry(header_name) {
-                    Entry::Vacant(e) => {
-                        e.insert(HeaderValue::SingleString(header_value));
-                    }
-                    Entry::Occupied(mut e) => {
-                        e.get_mut().extend_with_string(header_value);
-                    }
-                }
-            }
-        }
-        data.headers = Some(headers);
+    if vary.headers.is_some() {
+        data.headers = Some(Headers::default())
     }
     if vary.cache_buster {
         data.cache_buster = CACHE_BUSTER.fetch_add(1, Ordering::SeqCst);
