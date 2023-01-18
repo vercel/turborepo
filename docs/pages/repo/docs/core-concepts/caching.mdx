@@ -387,7 +387,7 @@ Frameworks commonly use [dotenv][3] to automatically load environment variables 
 starts or when creating a build. This makes it hard for Turborepo to understand the environment of your task by default:
 
 - dotenv stores environment variables in a _file_ rather than in the environment
-- this file is laoded _after_ Turborepo has already started execution of the task
+- this file is loaded _after_ Turborepo has already started execution of the task
 - sometimes the file is git-ignored, so even if `inputs` are not specified, Turborepo won't be able to detect changes
 
 To ensure you end up with the correct caching behavior for your task, add these `.env` files to the `globalDependencies` key:
