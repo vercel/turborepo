@@ -29,7 +29,7 @@ func getFixture(t *testing.T, name string) ([]byte, error) {
 }
 
 func Test_Roundtrip(t *testing.T) {
-	lockfiles := []string{"pnpm6-workspace.yaml", "pnpm7-workspace.yaml"}
+	lockfiles := []string{"pnpm6-workspace.yaml", "pnpm7-workspace.yaml", "pnpm8.yaml"}
 
 	for _, lockfilePath := range lockfiles {
 		lockfileContent, err := getFixture(t, lockfilePath)
