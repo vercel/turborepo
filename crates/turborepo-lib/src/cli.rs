@@ -8,7 +8,8 @@ use log::error;
 use serde::Serialize;
 
 use crate::{
-    commands::{bin, logout},
+    commands::{bin, login, logout},
+    config::RepoConfig,
     get_version,
     shim::{RepoMode, RepoState},
     ui::UI,
@@ -393,8 +394,18 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Login { .. }
-        | Command::Link { .. }
+        Command::Login { sso_team } => {
+            // We haven't implemented sso_team yet so we delegate to Go
+            if sso_team.is_some() {
+                return Ok(Payload::Go(Box::new(clap_args)));
+            }
+
+            let repo_config = RepoConfig::new(&clap_args)?;
+            login::login(repo_config);
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Link { .. }
         | Command::Unlink { .. }
         | Command::Daemon { .. }
         | Command::Prune { .. }
