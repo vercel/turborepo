@@ -360,7 +360,8 @@ pub struct RunArgs {
 /// we use it here to modify clap's arguments.
 ///
 /// returns: Result<Payload, Error>
-pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
+#[tokio::main]
+pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
     let mut clap_args = Args::new()?;
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
@@ -401,7 +402,7 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             }
 
             let repo_config = RepoConfig::new(&clap_args)?;
-            login::login(repo_config);
+            login::login(repo_config).await;
 
             Ok(Payload::Rust(Ok(0)))
         }
