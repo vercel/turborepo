@@ -94,6 +94,44 @@ func Test_SpecifierResolution(t *testing.T) {
 	}
 }
 
+func Test_SpecifierResolutionV6(t *testing.T) {
+	contents, err := getFixture(t, "pnpm8.yaml")
+	if err != nil {
+		t.Error(err)
+	}
+	untypedLockfile, err := DecodePnpmLockfile(contents)
+	lockfile := untypedLockfile.(*PnpmLockfileV6)
+	if err != nil {
+		t.Errorf("failure decoding lockfile: %v", err)
+	}
+
+	type Case struct {
+		workspacePath turbopath.AnchoredUnixPath
+		pkg           string
+		specifier     string
+		version       string
+		found         bool
+		err           string
+	}
+
+	cases := []Case{
+		{workspacePath: "packages/a", pkg: "c", specifier: "workspace:*", version: "link:../c", found: true},
+		{workspacePath: "packages/a", pkg: "is-odd", specifier: "^3.0.1", version: "3.0.1", found: true},
+		{workspacePath: "packages/b", pkg: "is-odd", specifier: "^3.0.1", version: "3.0.1", err: "Unable to find resolved version for is-odd@^3.0.1 in packages/b"},
+		{workspacePath: "apps/bad_workspace", pkg: "turbo", specifier: "latest", version: "1.4.6", err: "no workspace 'apps/bad_workspace' found in lockfile"},
+	}
+
+	for _, testCase := range cases {
+		actualVersion, actualFound, err := lockfile.resolveSpecifier(testCase.workspacePath, testCase.pkg, testCase.specifier)
+		if testCase.err != "" {
+			assert.Error(t, err, testCase.err)
+		} else {
+			assert.Equal(t, actualFound, testCase.found, "%s@%s", testCase.pkg, testCase.version)
+			assert.Equal(t, actualVersion, testCase.version, "%s@%s", testCase.pkg, testCase.version)
+		}
+	}
+}
+
 func Test_SubgraphInjectedPackages(t *testing.T) {
 	contents, err := getFixture(t, "pnpm7-workspace.yaml")
 	if err != nil {
