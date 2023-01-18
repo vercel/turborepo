@@ -27,13 +27,17 @@ You should specify your `dev` task like this in your `turbo.json`.
 {
   "pipeline": {
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
 ```
 
-Since `dev` tasks don't produce outputs, `outputs` is empty. `dev` tasks are also unique in that you rarely want to [cache](/repo/docs/core-concepts/caching) them, so we set `cache` as `false`.
+Since `dev` tasks don't produce outputs, `outputs` is empty. `dev` tasks are also unique in that you
+rarely want to [cache](/repo/docs/core-concepts/caching) them, so we set `cache` as `false`.
+We also set `persistent` to `true`, because `dev` tasks are long-running tasks, and we want to ensure
+that it doesn't block any other task from executing.
 
 ### Setting up `package.json`
 

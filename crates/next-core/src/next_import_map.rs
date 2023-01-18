@@ -1,6 +1,7 @@
 use anyhow::Result;
 use turbo_tasks::Value;
 use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
+use turbopack::module_options::ResolveAliasOptionsVc;
 use turbopack_core::resolve::{
     options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap, ResolvedMapVc},
     AliasPattern,
@@ -16,13 +17,19 @@ use crate::{
 
 /// Computes the Next-specific client import map.
 #[turbo_tasks::function]
-pub fn get_next_client_import_map(
+pub async fn get_next_client_import_map(
     project_path: FileSystemPathVc,
     ty: Value<ClientContextType>,
-) -> ImportMapVc {
+    next_config: NextConfigVc,
+) -> Result<ImportMapVc> {
     let mut import_map = ImportMap::empty();
 
-    insert_next_shared_aliases(&mut import_map, project_path);
+    insert_next_shared_aliases(
+        &mut import_map,
+        project_path,
+        next_config.resolve_alias_options(),
+    )
+    .await?;
 
     match ty.into_value() {
         ClientContextType::Pages { pages_dir } => {
@@ -64,7 +71,26 @@ pub fn get_next_client_import_map(
         ClientContextType::Fallback => {}
         ClientContextType::Other => {}
     }
-    import_map.cell()
+
+    match ty.into_value() {
+        ClientContextType::Pages {
+            pages_dir: context_dir,
+        }
+        | ClientContextType::App {
+            app_dir: context_dir,
+        } => {
+            for (original, alias) in NEXT_ALIASES {
+                import_map.insert_exact_alias(
+                    format!("node:{original}"),
+                    request_to_import_mapping(context_dir, alias),
+                );
+            }
+        }
+        ClientContextType::Fallback => {}
+        ClientContextType::Other => {}
+    }
+
+    Ok(import_map.cell())
 }
 
 /// Computes the Next-specific client import map.
@@ -102,10 +128,6 @@ pub fn get_next_client_fallback_import_map(ty: Value<ClientContextType>) -> Impo
             for (original, alias) in NEXT_ALIASES {
                 import_map
                     .insert_exact_alias(original, request_to_import_mapping(context_dir, alias));
-                import_map.insert_exact_alias(
-                    format!("node:{original}"),
-                    request_to_import_mapping(context_dir, alias),
-                );
             }
         }
         ClientContextType::Fallback => {}
@@ -124,10 +146,15 @@ pub async fn get_next_server_import_map(
 ) -> Result<ImportMapVc> {
     let mut import_map = ImportMap::empty();
 
-    insert_next_shared_aliases(&mut import_map, project_path);
+    insert_next_shared_aliases(
+        &mut import_map,
+        project_path,
+        next_config.resolve_alias_options(),
+    )
+    .await?;
 
     match ty.into_value() {
-        ServerContextType::Pages { pages_dir } => {
+        ServerContextType::Pages { pages_dir } | ServerContextType::PagesData { pages_dir } => {
             insert_alias_to_alternatives(
                 &mut import_map,
                 format!("{VIRTUAL_PACKAGE_NAME}/pages/_app"),
@@ -236,7 +263,11 @@ static NEXT_ALIASES: [(&str, &str); 23] = [
     ("setImmediate", "next/dist/compiled/setimmediate"),
 ];
 
-pub fn insert_next_shared_aliases(import_map: &mut ImportMap, project_path: FileSystemPathVc) {
+pub async fn insert_next_shared_aliases(
+    import_map: &mut ImportMap,
+    project_path: FileSystemPathVc,
+    alias_options: ResolveAliasOptionsVc,
+) -> Result<()> {
     let package_root = attached_next_js_package_path(project_path);
 
     // we use the next.js hydration code, so we replace the error overlay with our
@@ -262,6 +293,22 @@ pub fn insert_next_shared_aliases(import_map: &mut ImportMap, project_path: File
         AliasPattern::exact("@vercel/turbopack-next/internal/font/google/cssmodule.module.css"),
         ImportMapping::Dynamic(NextFontGoogleCssModuleReplacerVc::new(project_path).into()).into(),
     );
+
+    for (alias, mappings_vc) in &alias_options.await?.alias_map {
+        let mappings = mappings_vc.await?;
+        import_map.insert_alias(
+            AliasPattern::exact(alias),
+            ImportMapping::Alternatives(
+                mappings
+                    .iter()
+                    .map(|m| ImportMapping::PrimaryAlternative(m.clone(), None).cell())
+                    .collect::<Vec<ImportMappingVc>>(),
+            )
+            .cell(),
+        );
+    }
+
+    Ok(())
 }
 
 /// Inserts an alias to an alternative of import mappings into an import map.

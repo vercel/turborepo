@@ -197,7 +197,7 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
     let chunk_root_path = path.join("output");
     let static_root_path = path.join("static");
     let chunking_context =
-        DevChunkingContextVc::builder(project_root, path, chunk_root_path, static_root_path)
+        DevChunkingContextVc::builder(project_root, path, chunk_root_path, static_root_path, env)
             .build();
 
     let expected_paths = expected(chunk_root_path)
@@ -412,7 +412,12 @@ async fn handle_issues(source: FileSystemPathVc) -> Result<()> {
         let plain_issue = issue.into_plain();
         let hash = encode_hex(*plain_issue.internal_hash().await?);
 
-        let path = issues_path.join(&format!("{}-{}.txt", plain_issue.await?.title, &hash[0..6]));
+        // We replace "*" because it's not allowed for filename on Windows.
+        let path = issues_path.join(&format!(
+            "{}-{}.txt",
+            plain_issue.await?.title.replace('*', "__star__"),
+            &hash[0..6]
+        ));
         seen.insert(path);
 
         // Annoyingly, the PlainIssue.source -> PlainIssueSource.asset ->

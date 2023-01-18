@@ -54,8 +54,8 @@ use crate::{
         },
         transition::NextClientTransition,
     },
+    next_client_chunks::client_chunks_transition::NextClientChunksTransitionVc,
     next_client_component::{
-        client_chunks_transition::NextClientChunksTransition,
         server_to_client_transition::NextServerToClientTransition,
         ssr_client_module_transition::NextSSRClientModuleTransition,
     },
@@ -68,41 +68,6 @@ use crate::{
 };
 
 #[turbo_tasks::function]
-fn next_client_chunks_transition(
-    project_path: FileSystemPathVc,
-    execution_context: ExecutionContextVc,
-    app_dir: FileSystemPathVc,
-    server_root: FileSystemPathVc,
-    browserslist_query: &str,
-    next_config: NextConfigVc,
-) -> TransitionVc {
-    let ty = Value::new(ClientContextType::App { app_dir });
-    let client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
-    let client_environment = get_client_environment(browserslist_query);
-
-    let client_module_options_context = get_client_module_options_context(
-        project_path,
-        execution_context,
-        client_environment,
-        ty,
-        next_config,
-    );
-    NextClientChunksTransition {
-        client_chunking_context,
-        client_module_options_context,
-        client_resolve_options_context: get_client_resolve_options_context(
-            project_path,
-            ty,
-            next_config,
-        ),
-        client_environment,
-        server_root,
-    }
-    .cell()
-    .into()
-}
-
-#[turbo_tasks::function]
 async fn next_client_transition(
     project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
@@ -113,8 +78,9 @@ async fn next_client_transition(
     next_config: NextConfigVc,
 ) -> Result<TransitionVc> {
     let ty = Value::new(ClientContextType::App { app_dir });
-    let client_chunking_context = get_client_chunking_context(project_path, server_root, ty);
     let client_environment = get_client_environment(browserslist_query);
+    let client_chunking_context =
+        get_client_chunking_context(project_path, server_root, client_environment, ty);
     let client_module_options_context = get_client_module_options_context(
         project_path,
         execution_context,
@@ -238,16 +204,18 @@ fn app_context(
             next_config,
         ),
     );
+    let client_ty = Value::new(ClientContextType::App { app_dir });
     transitions.insert(
         "next-client-chunks".to_string(),
-        next_client_chunks_transition(
+        NextClientChunksTransitionVc::new(
             project_path,
             execution_context,
-            app_dir,
+            client_ty,
             server_root,
             browserslist_query,
             next_config,
-        ),
+        )
+        .into(),
     );
     transitions.insert(
         "next-ssr-client-module".to_string(),
@@ -642,6 +610,7 @@ import BOOTSTRAP from {};
             intermediate_output_path,
             intermediate_output_path.join("chunks"),
             this.server_root.join("_next/static/assets"),
+            context.environment(),
         )
         .layer("ssr")
         .css_chunk_root_path(this.server_root.join("_next/static/chunks"))
