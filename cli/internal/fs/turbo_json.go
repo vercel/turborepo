@@ -96,7 +96,21 @@ type TaskDefinition struct {
 // LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
 func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON, includeSynthesizedFromRootPackageJSON bool) (*TurboJSON, error) {
 	var turboJSON *TurboJSON
-	turboFromFiles, err := ReadTurboConfig(rootPath, rootPackageJSON)
+	turboJSONPath := rootPath.UntypedJoin(configFile)
+	turboFromFiles, err := ReadTurboConfig(turboJSONPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, errors.Wrapf(os.ErrNotExist, "Could not find %s. Follow directions at https://turbo.build/repo/docs to create one", configFile)
+		}
+		return nil, err
+	}
+
+	// Before returning, check if `turbo` key in package.json exists and log a warning
+	if rootPackageJSON.LegacyTurboConfig != nil {
+		log.Printf("[WARNING] \"turbo\" in package.json is no longer supported. Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile)
+		rootPackageJSON.LegacyTurboConfig = nil
+	}
+
 	if !includeSynthesizedFromRootPackageJSON && err != nil {
 		// There was an error, and we don't have any chance of recovering
 		// because we aren't synthesizing anything
@@ -153,14 +167,8 @@ func (to TaskOutputs) Sort() TaskOutputs {
 	return TaskOutputs{Inclusions: inclusions, Exclusions: exclusions}
 }
 
-// ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
-func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
-
-	turboJSONPath := rootPath.UntypedJoin(configFile)
-
-	// Check if turbo key in package.json exists
-	hasLegacyConfig := rootPackageJSON.LegacyTurboConfig != nil
-
+// ReadTurboConfig reads turbo.json from a provided path
+func ReadTurboConfig(turboJSONPath turbopath.AbsoluteSystemPath) (*TurboJSON, error) {
 	// If the configFile exists, use that
 	if turboJSONPath.FileExists() {
 		turboJSON, err := readTurboJSON(turboJSONPath)
@@ -168,22 +176,11 @@ func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 			return nil, fmt.Errorf("%s: %w", configFile, err)
 		}
 
-		// If pkg.Turbo exists, log a warning and delete it from the representation
-		if hasLegacyConfig {
-			log.Printf("[WARNING] Ignoring \"turbo\" key in package.json, using %s instead.", configFile)
-			rootPackageJSON.LegacyTurboConfig = nil
-		}
-
 		return turboJSON, nil
 	}
 
-	// If the configFile doesn't exist, but a legacy config does, log that it's deprecated and return an error
-	if hasLegacyConfig {
-		log.Printf("[DEPRECATED] \"turbo\" in package.json is deprecated. Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile)
-	}
-
-	// If there's no turbo.json and no turbo key in package.json, return an error.
-	return nil, errors.Wrapf(os.ErrNotExist, "Could not find %s. Follow directions at https://turbo.build/repo/docs to create one", configFile)
+	// If there's no turbo.json, return an error.
+	return nil, errors.Wrapf(os.ErrNotExist, "Could not find %s", configFile)
 }
 
 // readTurboJSON reads the configFile in to a struct

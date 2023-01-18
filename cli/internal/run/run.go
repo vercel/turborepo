@@ -160,6 +160,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
+
 	turboJSON, err := fs.LoadTurboConfig(r.base.RepoRoot, rootPackageJSON, r.opts.runOpts.singlePackage)
 	if err != nil {
 		return err

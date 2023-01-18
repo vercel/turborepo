@@ -27,8 +27,22 @@ func assertIsSorted(t *testing.T, arr []string, msg string) {
 	}
 }
 
-func Test_ReadTurboConfig(t *testing.T) {
-	testDir := getTestDir(t, "correct")
+func Test_LoadTurboConfig_Legacy(t *testing.T) {
+	testDir := getTestDir(t, "legacy-only")
+	packageJSONPath := testDir.UntypedJoin("package.json")
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+
+	if pkgJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
+	}
+
+	_, turboJSONReadErr := LoadTurboConfig(testDir, rootPackageJSON, false)
+	expectedErrorMsg := "Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist"
+	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
+}
+
+func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
+	testDir := getTestDir(t, "both")
 
 	packageJSONPath := testDir.UntypedJoin("package.json")
 	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
@@ -37,7 +51,32 @@ func Test_ReadTurboConfig(t *testing.T) {
 		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
 	}
 
-	turboJSON, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+	turboJSON, turboJSONReadErr := LoadTurboConfig(testDir, rootPackageJSON, false)
+
+	if turboJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
+	}
+
+	pipelineExpected := map[string]TaskDefinition{
+		"build": {
+			Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
+			TopologicalDependencies: []string{"build"},
+			EnvVarDependencies:      []string{},
+			TaskDependencies:        []string{},
+			ShouldCache:             true,
+			OutputMode:              util.NewTaskOutput,
+		},
+	}
+
+	validateOutput(t, turboJSON, pipelineExpected)
+
+	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true}
+	assert.EqualValues(t, remoteCacheOptionsExpected, turboJSON.RemoteCacheOptions)
+}
+
+func Test_ReadTurboConfig(t *testing.T) {
+	testDir := getTestDir(t, "correct")
+	turboJSON, turboJSONReadErr := ReadTurboConfig(testDir.UntypedJoin("turbo.json"))
 
 	if turboJSONReadErr != nil {
 		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
@@ -80,124 +119,35 @@ func Test_ReadTurboConfig(t *testing.T) {
 	}
 
 	validateOutput(t, turboJSON, pipelineExpected)
-
 	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true}
 	assert.EqualValues(t, remoteCacheOptionsExpected, turboJSON.RemoteCacheOptions)
-}
-
-func Test_ReadTurboConfig_Legacy(t *testing.T) {
-	testDir := getTestDir(t, "legacy-only")
-
-	packageJSONPath := testDir.UntypedJoin("package.json")
-	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
-
-	if pkgJSONReadErr != nil {
-		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
-	}
-
-	_, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
-
-	expectedErrorMsg := "Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist"
-	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
-}
-
-func Test_ReadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
-	testDir := getTestDir(t, "both")
-
-	packageJSONPath := testDir.UntypedJoin("package.json")
-	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
-
-	if pkgJSONReadErr != nil {
-		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
-	}
-
-	turboJSON, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
-
-	if turboJSONReadErr != nil {
-		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
-	}
-
-	pipelineExpected := map[string]TaskDefinition{
-		"build": {
-			Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
-			TopologicalDependencies: []string{"build"},
-			EnvVarDependencies:      []string{},
-			TaskDependencies:        []string{},
-			ShouldCache:             true,
-			OutputMode:              util.NewTaskOutput,
-		},
-	}
-
-	validateOutput(t, turboJSON, pipelineExpected)
-
-	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true}
-	assert.EqualValues(t, remoteCacheOptionsExpected, turboJSON.RemoteCacheOptions)
-
-	assert.Equal(t, rootPackageJSON.LegacyTurboConfig == nil, true)
 }
 
 func Test_ReadTurboConfig_InvalidEnvDeclarations1(t *testing.T) {
 	testDir := getTestDir(t, "invalid-env-1")
-
-	packageJSONPath := testDir.UntypedJoin("package.json")
-	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
-
-	if pkgJSONReadErr != nil {
-		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
-	}
-
-	_, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+	_, turboJSONReadErr := ReadTurboConfig(testDir.UntypedJoin("turbo.json"))
 
 	expectedErrorMsg := "turbo.json: You specified \"$A\" in the \"env\" key. You should not prefix your environment variables with \"$\""
-
 	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
 }
 
 func Test_ReadTurboConfig_InvalidEnvDeclarations2(t *testing.T) {
 	testDir := getTestDir(t, "invalid-env-2")
-
-	packageJSONPath := testDir.UntypedJoin("package.json")
-	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
-
-	if pkgJSONReadErr != nil {
-		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
-	}
-
-	_, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
-
+	_, turboJSONReadErr := ReadTurboConfig(testDir.UntypedJoin("turbo.json"))
 	expectedErrorMsg := "turbo.json: You specified \"$A\" in the \"env\" key. You should not prefix your environment variables with \"$\""
-
 	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
 }
 
 func Test_ReadTurboConfig_InvalidGlobalEnvDeclarations(t *testing.T) {
 	testDir := getTestDir(t, "invalid-global-env")
-
-	packageJSONPath := testDir.UntypedJoin("package.json")
-	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
-
-	if pkgJSONReadErr != nil {
-		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
-	}
-
-	_, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
-
+	_, turboJSONReadErr := ReadTurboConfig(testDir.UntypedJoin("turbo.json"))
 	expectedErrorMsg := "turbo.json: You specified \"$QUX\" in the \"env\" key. You should not prefix your environment variables with \"$\""
-
 	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
 }
 
 func Test_ReadTurboConfig_EnvDeclarations(t *testing.T) {
 	testDir := getTestDir(t, "legacy-env")
-
-	packageJSONPath := testDir.UntypedJoin("package.json")
-	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
-
-	if pkgJSONReadErr != nil {
-		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
-	}
-
-	turboJSON, turboJSONReadErr := ReadTurboConfig(testDir, rootPackageJSON)
+	turboJSON, turboJSONReadErr := ReadTurboConfig(testDir.UntypedJoin("turbo.json"))
 
 	if turboJSONReadErr != nil {
 		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
