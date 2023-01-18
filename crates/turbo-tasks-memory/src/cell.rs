@@ -10,50 +10,32 @@ use turbo_tasks::{
     TaskId, TurboTasksBackendApi,
 };
 
-#[derive(Debug)]
-pub(crate) enum FullCell {
-    UpdatedValue {
-        content: CellContent,
-        updates: u32,
-        dependent_tasks: AutoSet<TaskId>,
-    },
-    /// Someone wanted to read the content and it was not available. The content
-    /// is now being recomputed.
-    /// This is used when there are dependent tasks
-    Recomputing {
-        event: Event,
-        updates: u32,
-        dependent_tasks: AutoSet<TaskId>,
-    },
-}
-
 #[derive(Default, Debug)]
 pub(crate) enum Cell {
     /// No content has been set yet, or it was removed for memory pressure
     /// reasons.
+    /// Assigning a value will transition to the Value state.
+    /// Reading this cell will transition to the Recomputing state.
     #[default]
     Empty,
     /// The content has been removed for memory pressure reasons, but the
     /// tracking is still active. Any update will invalidate dependent tasks.
-    TrackedValueless {
-        dependent_tasks: AutoSet<TaskId>,
-        updates: u32,
-    },
+    /// Assigning a value will transition to the Value state.
+    /// Reading this cell will transition to the Recomputing state.
+    TrackedValueless { dependent_tasks: AutoSet<TaskId> },
     /// Someone wanted to read the content and it was not available. The content
     /// is now being recomputed.
-    /// This is only used when there are no dependent tasks
+    /// Assigning a value will transition to the Value state.
     Recomputing {
+        dependent_tasks: AutoSet<TaskId>,
         event: Event,
-        updates: u32,
     },
     /// The content was set only once and is tracked.
-    InitialValue {
-        content: CellContent,
+    /// GC operation will transition to the TrackedValueless state.
+    Value {
         dependent_tasks: AutoSet<TaskId>,
+        content: CellContent,
     },
-    // This is in a box so we don't need the updates counter for most cells that are only written
-    // once.
-    Full(Box<FullCell>),
 }
 
 #[derive(Debug)]
@@ -63,33 +45,27 @@ pub struct RecomputingCell {
 }
 
 impl Cell {
-    pub fn is_available(&self) -> bool {
+    pub fn has_value(&self) -> bool {
         match self {
             Cell::Empty => false,
-            Cell::Recomputing { .. } | Cell::Full(box FullCell::Recomputing { .. }) => false,
+            Cell::Recomputing { .. } => false,
             Cell::TrackedValueless { .. } => false,
-            Cell::InitialValue { .. } => true,
-            Cell::Full(box FullCell::UpdatedValue { .. }) => true,
+            Cell::Value { .. } => true,
         }
     }
 
     pub fn remove_dependent_task(&mut self, task: TaskId) {
         match self {
-            Cell::Empty | Cell::Recomputing { .. } => {}
-            Cell::InitialValue {
+            Cell::Empty => {}
+            Cell::Value {
                 dependent_tasks, ..
             }
             | Cell::TrackedValueless {
                 dependent_tasks, ..
             }
-            | Cell::Full(
-                box (FullCell::Recomputing {
-                    dependent_tasks, ..
-                }
-                | FullCell::UpdatedValue {
-                    dependent_tasks, ..
-                }),
-            ) => {
+            | Cell::Recomputing {
+                dependent_tasks, ..
+            } => {
                 dependent_tasks.remove(&task);
             }
         }
@@ -97,59 +73,49 @@ impl Cell {
 
     pub fn has_dependent_tasks(&self) -> bool {
         match self {
-            Cell::Empty
-            | Cell::Recomputing { .. }
-            | Cell::Full(box FullCell::Recomputing { .. }) => false,
-            Cell::InitialValue {
+            Cell::Empty => false,
+            Cell::Recomputing {
+                dependent_tasks, ..
+            }
+            | Cell::Value {
                 dependent_tasks, ..
             }
             | Cell::TrackedValueless {
                 dependent_tasks, ..
-            }
-            | Cell::Full(box FullCell::UpdatedValue {
-                dependent_tasks, ..
-            }) => !dependent_tasks.is_empty(),
+            } => !dependent_tasks.is_empty(),
         }
     }
 
     pub fn dependent_tasks(&self) -> impl Iterator<Item = TaskId> + '_ {
         match self {
-            Cell::Empty
-            | Cell::Recomputing { .. }
-            | Cell::Full(box FullCell::Recomputing { .. }) => {
+            Cell::Empty => {
                 static EMPTY: AutoSet<TaskId> = AutoSet::new();
                 EMPTY.iter().copied()
             }
-            Cell::InitialValue {
+            Cell::Value {
                 dependent_tasks, ..
             }
             | Cell::TrackedValueless {
                 dependent_tasks, ..
             }
-            | Cell::Full(box FullCell::UpdatedValue {
+            | Cell::Recomputing {
                 dependent_tasks, ..
-            }) => dependent_tasks.iter().copied(),
+            } => dependent_tasks.iter().copied(),
         }
     }
 
     fn recompute(
         &mut self,
-        updates: u32,
         dependent_tasks: AutoSet<TaskId>,
         description: impl Fn() -> String + Sync + Send + 'static,
         note: impl Fn() -> String + Sync + Send + 'static,
     ) -> EventListener {
         let event = Event::new(move || (description)() + " -> Cell::Recomputing::event");
         let listener = event.listen_with_note(note);
-        if dependent_tasks.is_empty() {
-            *self = Cell::Recomputing { event, updates };
-        } else {
-            *self = Cell::Full(box FullCell::Recomputing {
-                event,
-                updates,
-                dependent_tasks,
-            });
-        }
+        *self = Cell::Recomputing {
+            event,
+            dependent_tasks,
+        };
         listener
     }
 
@@ -161,14 +127,13 @@ impl Cell {
     ) -> Result<CellContent, RecomputingCell> {
         match self {
             Cell::Empty => {
-                let listener = self.recompute(1, AutoSet::new(), description, note);
+                let listener = self.recompute(AutoSet::new(), description, note);
                 Err(RecomputingCell {
                     listener,
                     schedule: true,
                 })
             }
-            Cell::Recomputing { event, .. }
-            | Cell::Full(box FullCell::Recomputing { event, .. }) => {
+            Cell::Recomputing { event, .. } => {
                 let listener = event.listen_with_note(note);
                 Err(RecomputingCell {
                     listener,
@@ -177,25 +142,19 @@ impl Cell {
             }
             &mut Cell::TrackedValueless {
                 ref mut dependent_tasks,
-                updates,
             } => {
                 let dependent_tasks = take(dependent_tasks);
-                let listener = self.recompute(updates, dependent_tasks, description, note);
+                let listener = self.recompute(dependent_tasks, description, note);
                 Err(RecomputingCell {
                     listener,
                     schedule: true,
                 })
             }
-            Cell::InitialValue {
+            Cell::Value {
                 content,
                 dependent_tasks,
                 ..
-            }
-            | Cell::Full(box FullCell::UpdatedValue {
-                content,
-                dependent_tasks,
-                ..
-            }) => {
+            } => {
                 dependent_tasks.insert(reader);
                 Ok(content.clone())
             }
@@ -211,14 +170,13 @@ impl Cell {
     ) -> Result<CellContent, RecomputingCell> {
         match self {
             Cell::Empty => {
-                let listener = self.recompute(1, AutoSet::new(), description, note);
+                let listener = self.recompute(AutoSet::new(), description, note);
                 Err(RecomputingCell {
                     listener,
                     schedule: true,
                 })
             }
-            Cell::Recomputing { event, .. }
-            | Cell::Full(box FullCell::Recomputing { event, .. }) => {
+            Cell::Recomputing { event, .. } => {
                 let listener = event.listen_with_note(note);
                 Err(RecomputingCell {
                     listener,
@@ -227,17 +185,15 @@ impl Cell {
             }
             &mut Cell::TrackedValueless {
                 ref mut dependent_tasks,
-                updates,
             } => {
                 let dependent_tasks = take(dependent_tasks);
-                let listener = self.recompute(updates, dependent_tasks, description, note);
+                let listener = self.recompute(dependent_tasks, description, note);
                 Err(RecomputingCell {
                     listener,
                     schedule: true,
                 })
             }
-            Cell::InitialValue { content, .. }
-            | Cell::Full(box FullCell::UpdatedValue { content, .. }) => Ok(content.clone()),
+            Cell::Value { content, .. } => Ok(content.clone()),
         }
     }
 
@@ -245,109 +201,53 @@ impl Cell {
     /// using it could break cache invalidation.
     pub fn read_own_content_untracked(&self) -> CellContent {
         match self {
-            Cell::Empty
-            | Cell::Recomputing { .. }
-            | Cell::TrackedValueless { .. }
-            | Cell::Full(box FullCell::Recomputing { .. }) => CellContent(None),
-            Cell::InitialValue { content, .. }
-            | Cell::Full(box FullCell::UpdatedValue { content, .. }) => content.clone(),
+            Cell::Empty | Cell::Recomputing { .. } | Cell::TrackedValueless { .. } => {
+                CellContent(None)
+            }
+            Cell::Value { content, .. } => content.clone(),
         }
     }
 
     pub fn assign(&mut self, content: CellContent, turbo_tasks: &dyn TurboTasksBackendApi) {
         match self {
             Cell::Empty => {
-                *self = Cell::InitialValue {
+                *self = Cell::Value {
                     content,
                     dependent_tasks: AutoSet::new(),
                 };
             }
             &mut Cell::Recomputing {
                 ref mut event,
-                updates,
+                ref mut dependent_tasks,
             } => {
                 event.notify(usize::MAX);
-                if updates == 1 {
-                    *self = Cell::InitialValue {
-                        content,
-                        dependent_tasks: AutoSet::new(),
-                    };
-                } else {
-                    *self = Cell::Full(box FullCell::UpdatedValue {
-                        content,
-                        dependent_tasks: AutoSet::new(),
-                        updates,
-                    });
-                }
-            }
-            &mut Cell::Full(box ref mut cell @ FullCell::Recomputing { .. }) => {
-                let FullCell::Recomputing {
-                    ref mut event,
-                    updates,
-                    ref mut dependent_tasks,
-                } = *cell else {
-                    unreachable!()
+                *self = Cell::Value {
+                    content,
+                    dependent_tasks: take(dependent_tasks),
                 };
-                event.notify(usize::MAX);
-                if updates == 1 {
-                    *self = Cell::InitialValue {
-                        content,
-                        dependent_tasks: take(dependent_tasks),
-                    };
-                } else {
-                    *cell = FullCell::UpdatedValue {
-                        content,
-                        dependent_tasks: take(dependent_tasks),
-                        updates,
-                    };
-                }
             }
             &mut Cell::TrackedValueless {
                 ref mut dependent_tasks,
-                updates,
             } => {
+                // Assigning to a cell will invalidate all dependent tasks as the content might
+                // have changed.
                 if !dependent_tasks.is_empty() {
                     turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
                 }
-                if updates == 1 {
-                    *self = Cell::InitialValue {
-                        content,
-                        dependent_tasks: AutoSet::new(),
-                    };
-                } else {
-                    *self = Cell::Full(box FullCell::UpdatedValue {
-                        content,
-                        dependent_tasks: AutoSet::new(),
-                        updates,
-                    });
-                }
+                *self = Cell::Value {
+                    content,
+                    dependent_tasks: AutoSet::new(),
+                };
             }
-            Cell::InitialValue {
-                content: old_content,
+            Cell::Value {
+                content: ref mut cell_content,
                 dependent_tasks,
             } => {
-                if content != *old_content {
-                    if !dependent_tasks.is_empty() {
-                        turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
-                    }
-                    *self = Cell::Full(box FullCell::UpdatedValue {
-                        content,
-                        updates: 2,
-                        dependent_tasks: AutoSet::new(),
-                    });
-                }
-            }
-            Cell::Full(box FullCell::UpdatedValue {
-                content: cell_content,
-                updates,
-                dependent_tasks,
-            }) => {
                 if content != *cell_content {
                     if !dependent_tasks.is_empty() {
                         turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
                         dependent_tasks.clear();
                     }
-                    *updates += 1;
                     *cell_content = content;
                 }
             }
@@ -356,21 +256,16 @@ impl Cell {
 
     pub fn shrink_to_fit(&mut self) {
         match self {
-            Cell::Empty | Cell::Recomputing { .. } => {}
+            Cell::Empty => {}
             Cell::TrackedValueless {
                 dependent_tasks, ..
             }
-            | Cell::InitialValue {
+            | Cell::Recomputing {
                 dependent_tasks, ..
             }
-            | Cell::Full(
-                box (FullCell::Recomputing {
-                    dependent_tasks, ..
-                }
-                | FullCell::UpdatedValue {
-                    dependent_tasks, ..
-                }),
-            ) => {
+            | Cell::Value {
+                dependent_tasks, ..
+            } => {
                 dependent_tasks.shrink_to_fit();
             }
         }
@@ -381,29 +276,13 @@ impl Cell {
     #[must_use]
     pub fn gc_content(&mut self) -> Option<CellContent> {
         match self {
-            Cell::Empty
-            | Cell::Recomputing { .. }
-            | Cell::Full(box FullCell::Recomputing { .. })
-            | Cell::TrackedValueless { .. } => None,
-            Cell::InitialValue {
+            Cell::Empty | Cell::Recomputing { .. } | Cell::TrackedValueless { .. } => None,
+            Cell::Value {
                 dependent_tasks, ..
             } => {
                 let dependent_tasks = take(dependent_tasks);
-                let Cell::InitialValue{ content, .. } = replace(self, Cell::TrackedValueless {
+                let Cell::Value { content, .. } = replace(self, Cell::TrackedValueless {
                     dependent_tasks,
-                    updates: 1,
-                }) else { unreachable!() };
-                Some(content)
-            }
-            &mut Cell::Full(box FullCell::UpdatedValue {
-                ref mut dependent_tasks,
-                updates,
-                ..
-            }) => {
-                let dependent_tasks = take(dependent_tasks);
-                let Cell::Full(box FullCell::UpdatedValue{ content, .. }) = replace(self, Cell::TrackedValueless {
-                    dependent_tasks,
-                    updates,
                 }) else { unreachable!() };
                 Some(content)
             }
@@ -413,15 +292,11 @@ impl Cell {
     pub fn gc_drop(self, turbo_tasks: &dyn TurboTasksBackendApi) {
         match self {
             Cell::Empty => {}
-            Cell::Recomputing { event, .. } => {
-                event.notify(usize::MAX);
-            }
-            Cell::Full(box FullCell::Recomputing {
+            Cell::Recomputing {
                 event,
                 dependent_tasks,
                 ..
-            }) => {
-                // notify
+            } => {
                 event.notify(usize::MAX);
                 if !dependent_tasks.is_empty() {
                     turbo_tasks.schedule_notify_tasks_set(&dependent_tasks);
@@ -430,13 +305,9 @@ impl Cell {
             Cell::TrackedValueless {
                 dependent_tasks, ..
             }
-            | Cell::InitialValue {
+            | Cell::Value {
                 dependent_tasks, ..
-            }
-            | Cell::Full(box FullCell::UpdatedValue {
-                dependent_tasks, ..
-            }) => {
-                // notify
+            } => {
                 if !dependent_tasks.is_empty() {
                     turbo_tasks.schedule_notify_tasks_set(&dependent_tasks);
                 }

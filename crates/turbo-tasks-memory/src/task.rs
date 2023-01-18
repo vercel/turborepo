@@ -2032,7 +2032,7 @@ impl Task {
                 let has_unused_cells = state.cells.values().any(|cells| {
                     cells
                         .iter()
-                        .any(|cell| cell.is_available() && !cell.has_dependent_tasks())
+                        .any(|cell| cell.has_value() && !cell.has_dependent_tasks())
                 });
 
                 let empty_unused_priority = if active {
@@ -2090,7 +2090,7 @@ impl Task {
                     let mut has_used_cells = false;
                     for cells in state.cells.values_mut() {
                         for cell in cells.iter_mut() {
-                            if cell.is_available() && cell.has_dependent_tasks() {
+                            if cell.has_value() && cell.has_dependent_tasks() {
                                 has_used_cells = true;
                                 for task_id in cell.dependent_tasks() {
                                     if included_tasks.insert(task_id) {
@@ -2160,7 +2160,7 @@ impl Task {
                                 let cells = take(&mut state.cells);
                                 for cells in cells.into_values() {
                                     for mut cell in cells {
-                                        if cell.is_available() {
+                                        if cell.has_value() {
                                             cells_to_drop.extend(cell.gc_content());
                                         }
                                     }
