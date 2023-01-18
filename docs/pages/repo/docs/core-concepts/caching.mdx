@@ -22,7 +22,7 @@ Let's say you run a `build` task with Turborepo using `turbo run build`:
 
 ![](/images/docs/cache-miss.png)
 
-1. Turborepo will **evaluate the inputs to your task** (by default all non-gitignored files in the workspace folder) and **turn them into a hash** (e.g. `78awdk123`).
+1. Turborepo will **evaluate the inputs to your task** (by default all non-git-ignored files in the workspace folder) and **turn them into a hash** (e.g. `78awdk123`).
 
 2. **Check the local filesystem cache** for a folder named with the hash (e.g.`./node_modules/.cache/turbo/78awdk123`).
 
@@ -352,20 +352,61 @@ The plugin will warn you if you are using non-framework-related environment vari
 
 ### Invisible Environment Variables
 
-Since Turborepo runs _before_ your tasks, it is possible for your tasks to create or mutate environment variables after `turbo` has already calculated the hash for a particular task. For example, consider this `package.json`:
+Since Turborepo runs _before_ your tasks, it is possible for your tasks to create or mutate environment
+variables after `turbo` has already calculated the hash for a particular task. For example, consider this `package.json`:
 
 ```json
 {
   "scripts": {
-    "build": "NEXT_PUBLIC_GA_ID=UA-00000000-0 next build",
-    "test": "node -r dotenv/config test.js"
+    "build": "NEXT_PUBLIC_GA_ID=UA-00000000-0 next build"
   }
 }
 ```
 
-`turbo`, having calculated a task hash prior to invoking the `build` script, will be unable to discover the `NEXT_PUBLIC_GA_ID=UA-00000000-0` environment variable and thus unable to partition the cache based upon that, or any environment variable configured by `dotenv`.
+`turbo`, having calculated a task hash prior to executing the `build` script, will be unable to discover
+the `NEXT_PUBLIC_GA_ID` environment variable, and thus unable to partition the cache based
+on its value. Be careful to ensure that all of your environment variables are configured prior to
+invoking `turbo`!
 
-Be careful to ensure that all of your environment variables are configured prior to invoking `turbo`!
+```jsonc
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "env": ["SOME_ENV_VAR"],
+      "outputs": [".next/**"],
+    },
+  }
+}
+```
+
+### Using dotenv
+
+Frameworks commonly use [dotenv][3] to automatically load environment variables when the dev server
+starts or when creating a build. This makes it hard for Turborepo to understand the environment of your task by default:
+
+- dotenv stores environment variables in a _file_ rather than in the environment
+- this file is laoded _after_ Turborepo has already started execution of the task
+- sometimes the file is git-ignored, so even if `inputs` are not specified, Turborepo won't be able to detect changes
+
+To ensure you end up with the correct caching behavior for your task, add these `.env` files to the `globalDependencies` key:
+
+```diff
+{
+  "$schema": "https://turborepo.org/schema.json",
++  "globalDependencies": ["**/.env.*local"],
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "env": ["SOME_ENV_VAR"],
+      "outputs": [".next/**"],
+    },
+  }
+}
+```
+
+Alternatively, you can add specific environment variables to the `inputs` key for specific tasks.
 
 ## Force overwrite cache
 
@@ -415,3 +456,4 @@ The hash of a given task is injected at execution time as an environment variabl
 
 [1]: https://nextjs.org/docs/basic-features/environment-variables#exposing-environment-variables-to-the-browser
 [2]: https://create-react-app.dev/docs/adding-custom-environment-variables/
+[3]: https://github.com/motdotla/dotenv
