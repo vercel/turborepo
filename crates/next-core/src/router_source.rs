@@ -15,6 +15,7 @@ use turbopack_dev_server::source::{
 #[derive(Deserialize)]
 struct RoutingResult {
     url: String,
+    #[allow(dead_code)]
     res_headers: IndexMap<String, String>,
 }
 
@@ -118,21 +119,22 @@ impl ContentSource for NextRouterContentSource {
                 .get(&result.url, Value::new(ContentSourceData::default())));
         }
 
+        let headers = res
+            .headers()
+            .iter()
+            .filter_map(|(key, value)| {
+                value
+                    .to_str()
+                    .ok()
+                    .map(|v| [key.as_str().to_string(), v.to_string()])
+            })
+            .flatten()
+            .collect();
         Ok(ContentSourceResultVc::exact(
             ContentSourceContent::HttpProxy(
                 ProxyResult {
                     status: res.status().as_u16(),
-                    headers: res
-                        .headers()
-                        .iter()
-                        .filter_map(|(key, value)| {
-                            value
-                                .to_str()
-                                .ok()
-                                .map(|v| [key.as_str().to_string(), v.to_string()])
-                        })
-                        .flatten()
-                        .collect(),
+                    headers,
                     // TODO: We need proper streaming support.
                     body: res.bytes().await?.into(),
                 }
