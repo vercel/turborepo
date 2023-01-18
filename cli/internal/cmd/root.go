@@ -70,8 +70,6 @@ func RunWithArgs(args turbostate.ParsedArgsFromRust, turboVersion string) int {
 			execErr = login.ExecuteLink(helper, &args)
 		} else if command.Login != nil {
 			execErr = login.ExecuteLogin(ctx, helper, &args)
-		} else if command.Logout != nil {
-			execErr = auth.ExecuteLogout(helper, &args)
 		} else if command.Unlink != nil {
 			execErr = auth.ExecuteUnlink(helper, &args)
 		} else if command.Daemon != nil {
