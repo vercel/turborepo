@@ -1,7 +1,7 @@
 import { transformer } from "../src/transforms/add-package-manager";
 import { setupTestFixtures } from "./test-utils";
 import fs from "fs-extra";
-import * as workspaceImplementation from "../src/utils/getWorkspaceImplementation";
+import * as getPackageManager from "../src/utils/getPackageManager";
 import * as getPackageManagerVersion from "../src/utils/getPackageManagerVersion";
 
 describe("add-package-manager", () => {
@@ -18,8 +18,8 @@ describe("add-package-manager", () => {
       .spyOn(getPackageManagerVersion, "default")
       .mockReturnValue(packageManagerVersion);
 
-    const mockGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
+    const mockGetPackageManager = jest
+      .spyOn(getPackageManager, "default")
       .mockReturnValue(packageManager);
 
     // package manager should not exist
@@ -32,10 +32,7 @@ describe("add-package-manager", () => {
       options: { force: false, dry: false, print: false },
     });
 
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalled();
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalledWith(root);
-
-    expect(mockGetPackageManagerVersion).toHaveBeenCalled();
+    expect(mockGetPackageManager).toHaveBeenCalledWith({ directory: root });
     expect(mockGetPackageManagerVersion).toHaveBeenCalledWith(
       packageManager,
       root
@@ -57,7 +54,7 @@ describe("add-package-manager", () => {
     `);
 
     mockGetPackageManagerVersion.mockRestore();
-    mockGetWorkspaceImplementation.mockRestore();
+    mockGetPackageManager.mockRestore();
   });
 
   test("no package manager - repeat run", () => {
@@ -72,8 +69,8 @@ describe("add-package-manager", () => {
       .spyOn(getPackageManagerVersion, "default")
       .mockReturnValue(packageManagerVersion);
 
-    const mockGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
+    const mockGetPackageManager = jest
+      .spyOn(getPackageManager, "default")
       .mockReturnValue(packageManager);
 
     // package manager should not exist
@@ -86,9 +83,7 @@ describe("add-package-manager", () => {
       options: { force: false, dry: false, print: false },
     });
 
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalled();
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalledWith(root);
-
+    expect(mockGetPackageManager).toHaveBeenCalledWith({ directory: root });
     expect(mockGetPackageManagerVersion).toHaveBeenCalled();
     expect(mockGetPackageManagerVersion).toHaveBeenCalledWith(
       packageManager,
@@ -128,7 +123,7 @@ describe("add-package-manager", () => {
   `);
 
     mockGetPackageManagerVersion.mockRestore();
-    mockGetWorkspaceImplementation.mockRestore();
+    mockGetPackageManager.mockRestore();
   });
 
   test("no package manager - dry", () => {
@@ -142,9 +137,8 @@ describe("add-package-manager", () => {
     const mockGetPackageManagerVersion = jest
       .spyOn(getPackageManagerVersion, "default")
       .mockReturnValue(packageManagerVersion);
-
-    const mockGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
+    const mockGetPackageManager = jest
+      .spyOn(getPackageManager, "default")
       .mockReturnValue(packageManager);
 
     // package manager should not exist
@@ -157,10 +151,7 @@ describe("add-package-manager", () => {
       options: { force: false, dry: true, print: false },
     });
 
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalled();
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalledWith(root);
-
-    expect(mockGetPackageManagerVersion).toHaveBeenCalled();
+    expect(mockGetPackageManager).toHaveBeenCalledWith({ directory: root });
     expect(mockGetPackageManagerVersion).toHaveBeenCalledWith(
       packageManager,
       root
@@ -182,7 +173,6 @@ describe("add-package-manager", () => {
     `);
 
     mockGetPackageManagerVersion.mockRestore();
-    mockGetWorkspaceImplementation.mockRestore();
   });
 
   test("no package manager - print", () => {
@@ -197,8 +187,8 @@ describe("add-package-manager", () => {
       .spyOn(getPackageManagerVersion, "default")
       .mockReturnValue(packageManagerVersion);
 
-    const mockGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
+    const mockGetPackageManager = jest
+      .spyOn(getPackageManager, "default")
       .mockReturnValue(packageManager);
 
     // package manager should not exist
@@ -211,10 +201,7 @@ describe("add-package-manager", () => {
       options: { force: false, dry: false, print: true },
     });
 
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalled();
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalledWith(root);
-
-    expect(mockGetPackageManagerVersion).toHaveBeenCalled();
+    expect(mockGetPackageManager).toHaveBeenCalledWith({ directory: root });
     expect(mockGetPackageManagerVersion).toHaveBeenCalledWith(
       packageManager,
       root
@@ -235,7 +222,6 @@ describe("add-package-manager", () => {
     `);
 
     mockGetPackageManagerVersion.mockRestore();
-    mockGetWorkspaceImplementation.mockRestore();
   });
 
   test("no package manager - dry & print", () => {
@@ -250,8 +236,8 @@ describe("add-package-manager", () => {
       .spyOn(getPackageManagerVersion, "default")
       .mockReturnValue(packageManagerVersion);
 
-    const mockGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
+    const mockGetPackageManager = jest
+      .spyOn(getPackageManager, "default")
       .mockReturnValue(packageManager);
 
     // package manager should not exist
@@ -264,10 +250,7 @@ describe("add-package-manager", () => {
       options: { force: false, dry: true, print: true },
     });
 
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalled();
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalledWith(root);
-
-    expect(mockGetPackageManagerVersion).toHaveBeenCalled();
+    expect(mockGetPackageManager).toHaveBeenCalledWith({ directory: root });
     expect(mockGetPackageManagerVersion).toHaveBeenCalledWith(
       packageManager,
       root
@@ -289,7 +272,7 @@ describe("add-package-manager", () => {
     `);
 
     mockGetPackageManagerVersion.mockRestore();
-    mockGetWorkspaceImplementation.mockRestore();
+    mockGetPackageManager.mockRestore();
   });
 
   test("package manager already exists", () => {
@@ -303,8 +286,8 @@ describe("add-package-manager", () => {
       .spyOn(getPackageManagerVersion, "default")
       .mockReturnValue(packageManagerVersion);
 
-    const mockGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
+    const mockGetPackageManager = jest
+      .spyOn(getPackageManager, "default")
       .mockReturnValue(packageManager);
 
     // package manager should exist
@@ -317,10 +300,7 @@ describe("add-package-manager", () => {
       options: { force: false, dry: false, print: false },
     });
 
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalled();
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalledWith(root);
-
-    expect(mockGetPackageManagerVersion).toHaveBeenCalled();
+    expect(mockGetPackageManager).toHaveBeenCalledWith({ directory: root });
     expect(mockGetPackageManagerVersion).toHaveBeenCalledWith(
       packageManager,
       root
@@ -342,7 +322,7 @@ describe("add-package-manager", () => {
     `);
 
     mockGetPackageManagerVersion.mockRestore();
-    mockGetWorkspaceImplementation.mockRestore();
+    mockGetPackageManager.mockRestore();
   });
 
   test("package manager exists but is wrong", () => {
@@ -357,8 +337,8 @@ describe("add-package-manager", () => {
       .spyOn(getPackageManagerVersion, "default")
       .mockReturnValue(packageManagerVersion);
 
-    const mockGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
+    const mockGetPackageManager = jest
+      .spyOn(getPackageManager, "default")
       .mockReturnValue(packageManager);
 
     // package manager should exist
@@ -371,10 +351,7 @@ describe("add-package-manager", () => {
       options: { force: false, dry: false, print: false },
     });
 
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalled();
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalledWith(root);
-
-    expect(mockGetPackageManagerVersion).toHaveBeenCalled();
+    expect(mockGetPackageManager).toHaveBeenCalledWith({ directory: root });
     expect(mockGetPackageManagerVersion).toHaveBeenCalledWith(
       packageManager,
       root
@@ -396,15 +373,15 @@ describe("add-package-manager", () => {
     `);
 
     mockGetPackageManagerVersion.mockRestore();
-    mockGetWorkspaceImplementation.mockRestore();
+    mockGetPackageManager.mockRestore();
   });
 
   test("errors when unable to determine workspace manager", () => {
     // load the fixture for the test
     const { root, read } = useFixture({ fixture: "no-package-manager" });
 
-    const mockGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
+    const mockGetPackageManager = jest
+      .spyOn(getPackageManager, "default")
       .mockReturnValue(undefined);
 
     // package manager should not exist
@@ -417,8 +394,8 @@ describe("add-package-manager", () => {
       options: { force: false, dry: false, print: false },
     });
 
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalledTimes(1);
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalledWith(root);
+    expect(mockGetPackageManager).toHaveBeenCalledTimes(1);
+    expect(mockGetPackageManager).toHaveBeenCalledWith({ directory: root });
 
     // result should be correct
     // result should be correct
@@ -426,7 +403,7 @@ describe("add-package-manager", () => {
       /Unable to determine package manager for .*?/
     );
 
-    mockGetWorkspaceImplementation.mockRestore();
+    mockGetPackageManager.mockRestore();
   });
 
   test("errors when unable to determine package manager", () => {
@@ -471,8 +448,8 @@ describe("add-package-manager", () => {
       .spyOn(getPackageManagerVersion, "default")
       .mockReturnValue(packageManagerVersion);
 
-    const mockGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
+    const mockGetPackageManager = jest
+      .spyOn(getPackageManager, "default")
       .mockReturnValue(packageManager);
 
     const mockWriteJsonSync = jest
@@ -491,10 +468,7 @@ describe("add-package-manager", () => {
       options: { force: false, dry: false, print: false },
     });
 
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalled();
-    expect(mockGetWorkspaceImplementation).toHaveBeenCalledWith(root);
-
-    expect(mockGetPackageManagerVersion).toHaveBeenCalled();
+    expect(mockGetPackageManager).toHaveBeenCalledWith({ directory: root });
     expect(mockGetPackageManagerVersion).toHaveBeenCalledWith(
       packageManager,
       root
@@ -522,6 +496,6 @@ describe("add-package-manager", () => {
 
     mockWriteJsonSync.mockRestore();
     mockGetPackageManagerVersion.mockRestore();
-    mockGetWorkspaceImplementation.mockRestore();
+    mockGetPackageManager.mockRestore();
   });
 });

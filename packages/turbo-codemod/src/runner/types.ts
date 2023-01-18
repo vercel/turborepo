@@ -1,7 +1,7 @@
 import { Change } from "diff";
 
 export interface FileResult {
-  action: 'skipped' | 'modified' | 'unchanged' | 'error';
+  action: "skipped" | "modified" | "unchanged" | "error";
   error?: Error;
   additions: number;
   deletions: number;

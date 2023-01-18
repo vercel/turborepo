@@ -1,9 +1,8 @@
-
 import chalk from "chalk";
-import checkForUpdate from 'update-check';
+import checkForUpdate from "update-check";
 
-import cliPkgJson from '../../package.json';
-import getWorkspaceImplementation from './getWorkspaceImplementation';
+import cliPkgJson from "../../package.json";
+import getWorkspaceImplementation from "./getPackageManager";
 
 const update = checkForUpdate(cliPkgJson).catch(() => null);
 

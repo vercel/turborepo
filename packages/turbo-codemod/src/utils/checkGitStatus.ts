@@ -1,11 +1,17 @@
 import chalk from "chalk";
 import isGitClean from "is-git-clean";
 
-export default function checkGitStatus(force: boolean) {
+export default function checkGitStatus({
+  directory,
+  force,
+}: {
+  directory?: string;
+  force: boolean;
+}) {
   let clean = false;
   let errorMessage = "Unable to determine if git directory is clean";
   try {
-    clean = isGitClean.sync(process.cwd());
+    clean = isGitClean.sync(directory || process.cwd());
     errorMessage = "Git directory is not clean";
   } catch (err: any) {
     if (err && err.stderr && err.stderr.indexOf("not a git repository") >= 0) {
@@ -15,7 +21,9 @@ export default function checkGitStatus(force: boolean) {
 
   if (!clean) {
     if (force) {
-      console.log(`${chalk.yellow('WARNING')}: ${errorMessage}. Forcibly continuing...`);
+      console.log(
+        `${chalk.yellow("WARNING")}: ${errorMessage}. Forcibly continuing...`
+      );
     } else {
       console.log("Thank you for using @turbo/codemod!");
       console.log(

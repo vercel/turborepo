@@ -303,7 +303,7 @@ describe("set-default-outputs", () => {
 
     expect(result.fatalError).toBeDefined();
     expect(result.fatalError?.message).toMatch(
-      'turbo" key detected in package.json. Run `npx @turbo/codemod create-turbo-config` first'
+      'turbo" key detected in package.json. Run `npx @turbo/codemod transform create-turbo-config` first'
     );
   });
 });

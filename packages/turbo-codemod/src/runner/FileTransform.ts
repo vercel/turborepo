@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import { diffLines, Change, diffJson } from "diff";
 import fs from "fs-extra";
-import os from 'os';
+import os from "os";
 import path from "path";
 
 import type { FileTransformArgs, LogFileArgs } from "./types";

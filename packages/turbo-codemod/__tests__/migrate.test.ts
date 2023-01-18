@@ -6,7 +6,7 @@ import * as checkGitStatus from "../src/utils/checkGitStatus";
 import * as getCurrentVersion from "../src/commands/migrate/steps/getCurrentVersion";
 import * as getLatestVersion from "../src/commands/migrate/steps/getLatestVersion";
 import * as getTurboUpgradeCommand from "../src/commands/migrate/steps/getTurboUpgradeCommand";
-import * as workspaceImplementation from "../src/utils/getWorkspaceImplementation";
+import * as workspaceImplementation from "../src/utils/getPackageManager";
 import * as getPackageManagerVersion from "../src/utils/getPackageManagerVersion";
 
 describe("migrate", () => {
@@ -88,6 +88,65 @@ describe("migrate", () => {
     mockedGetWorkspaceImplementation.mockRestore();
   });
 
+  it("migrates from 1.0.0 to 1.2.0 (dry run)", async () => {
+    const { root, readJson } = useFixture({
+      fixture: "old-turbo",
+    });
+
+    const packageManager = "pnpm";
+    const packageManagerVersion = "1.2.3";
+
+    // setup mocks
+    const mockedCheckGitStatus = jest
+      .spyOn(checkGitStatus, "default")
+      .mockReturnValue(undefined);
+    const mockedGetCurrentVersion = jest
+      .spyOn(getCurrentVersion, "default")
+      .mockReturnValue("1.0.0");
+    const mockedGetLatestVersion = jest
+      .spyOn(getLatestVersion, "default")
+      .mockResolvedValue("1.2.0");
+    const mockedGetTurboUpgradeCommand = jest
+      .spyOn(getTurboUpgradeCommand, "default")
+      .mockReturnValue("pnpm install -g turbo@latest");
+    const mockedGetPackageManagerVersion = jest
+      .spyOn(getPackageManagerVersion, "default")
+      .mockReturnValue(packageManagerVersion);
+    const mockedGetWorkspaceImplementation = jest
+      .spyOn(workspaceImplementation, "default")
+      .mockReturnValue(packageManager);
+
+    const packageJson = readJson("package.json");
+    const turboJson = readJson("turbo.json");
+
+    await migrate(root as MigrateCommandArgument, {
+      force: false,
+      dry: true,
+      print: false,
+      install: true,
+    });
+
+    // make sure nothing changed
+    expect(readJson("package.json")).toStrictEqual(packageJson);
+    expect(readJson("turbo.json")).toStrictEqual(turboJson);
+
+    // verify mocks were called
+    expect(mockedCheckGitStatus).not.toHaveBeenCalled();
+    expect(mockedGetCurrentVersion).toHaveBeenCalled();
+    expect(mockedGetLatestVersion).toHaveBeenCalled();
+    expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
+    expect(mockedGetPackageManagerVersion).toHaveBeenCalled();
+    expect(mockedGetWorkspaceImplementation).toHaveBeenCalled();
+
+    // restore mocks
+    mockedCheckGitStatus.mockRestore();
+    mockedGetCurrentVersion.mockRestore();
+    mockedGetLatestVersion.mockRestore();
+    mockedGetTurboUpgradeCommand.mockRestore();
+    mockedGetPackageManagerVersion.mockRestore();
+    mockedGetWorkspaceImplementation.mockRestore();
+  });
+
   it("next version can be passed as an option", async () => {
     const { root, readJson } = useFixture({
       fixture: "old-turbo",
@@ -103,6 +162,9 @@ describe("migrate", () => {
     const mockedGetCurrentVersion = jest
       .spyOn(getCurrentVersion, "default")
       .mockReturnValue("1.0.0");
+    const mockedGetLatestVersion = jest
+      .spyOn(getLatestVersion, "default")
+      .mockResolvedValue("1.7.0");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "default")
       .mockReturnValue("pnpm install -g turbo@latest");
@@ -147,6 +209,7 @@ describe("migrate", () => {
     // verify mocks were called
     expect(mockedCheckGitStatus).toHaveBeenCalled();
     expect(mockedGetCurrentVersion).toHaveBeenCalled();
+    expect(mockedGetLatestVersion).toHaveBeenCalled();
     expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
     expect(mockedGetPackageManagerVersion).toHaveBeenCalled();
     expect(mockedGetWorkspaceImplementation).toHaveBeenCalled();
@@ -154,6 +217,7 @@ describe("migrate", () => {
     // restore mocks
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
+    mockedGetLatestVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
     mockedGetPackageManagerVersion.mockRestore();
     mockedGetWorkspaceImplementation.mockRestore();
@@ -232,7 +296,7 @@ describe("migrate", () => {
   });
 
   it("exits if the current version is the same as the new version", async () => {
-    const { root, readJson } = useFixture({
+    const { root } = useFixture({
       fixture: "old-turbo",
     });
 
@@ -276,6 +340,12 @@ describe("migrate", () => {
     const mockedCheckGitStatus = jest
       .spyOn(checkGitStatus, "default")
       .mockReturnValue(undefined);
+    const mockedGetCurrentVersion = jest
+      .spyOn(getCurrentVersion, "default")
+      .mockReturnValue("1.3.0");
+    const mockedGetLatestVersion = jest
+      .spyOn(getLatestVersion, "default")
+      .mockResolvedValue("1.3.1");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "default")
       .mockReturnValue("npm install turbo@1.3.1");
@@ -288,12 +358,12 @@ describe("migrate", () => {
       dry: false,
       print: false,
       install: true,
-      from: '1.3.0',
-      to: '1.3.1'
     });
 
     // verify mocks were called
     expect(mockedCheckGitStatus).toHaveBeenCalled();
+    expect(mockedGetCurrentVersion).toHaveBeenCalled();
+    expect(mockedGetLatestVersion).toHaveBeenCalled();
     expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
     expect(mockExecSync).toHaveBeenCalledWith("npm install turbo@1.3.1", {
       cwd: root,
@@ -301,6 +371,8 @@ describe("migrate", () => {
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
+    mockedGetCurrentVersion.mockRestore();
+    mockedGetLatestVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
     mockExecSync.mockRestore();
   });
@@ -537,6 +609,91 @@ describe("migrate", () => {
     mockedGetLatestVersion.mockRestore();
   });
 
+  it("exits if latest version throws", async () => {
+    const { root } = useFixture({
+      fixture: "old-turbo",
+    });
+
+    // setup mocks
+    const mockedCheckGitStatus = jest
+      .spyOn(checkGitStatus, "default")
+      .mockReturnValue(undefined);
+    const mockedGetCurrentVersion = jest
+      .spyOn(getCurrentVersion, "default")
+      .mockReturnValue("1.5.0");
+    const mockedGetLatestVersion = jest
+      .spyOn(getLatestVersion, "default")
+      .mockRejectedValue(new Error("failed to fetch version"));
+
+    await migrate(root as MigrateCommandArgument, {
+      force: false,
+      dry: false,
+      print: false,
+      install: false,
+    });
+
+    expect(mockExit.exit).toHaveBeenCalledWith(1);
+
+    // verify mocks were called
+    expect(mockedCheckGitStatus).toHaveBeenCalled();
+    expect(mockedGetCurrentVersion).toHaveBeenCalled();
+    expect(mockedGetLatestVersion).toHaveBeenCalled();
+
+    // restore mocks
+    mockedCheckGitStatus.mockRestore();
+    mockedGetCurrentVersion.mockRestore();
+    mockedGetLatestVersion.mockRestore();
+  });
+
+  it("exits if any transforms encounter an error", async () => {
+    const { root } = useFixture({
+      fixture: "old-turbo",
+    });
+
+    const packageManager = "pnpm";
+    const packageManagerVersion = "1.2.3";
+
+    // setup mocks
+    const mockedCheckGitStatus = jest
+      .spyOn(checkGitStatus, "default")
+      .mockReturnValue(undefined);
+    const mockedGetCurrentVersion = jest
+      .spyOn(getCurrentVersion, "default")
+      .mockReturnValue("1.0.0");
+    const mockedGetLatestVersion = jest
+      .spyOn(getLatestVersion, "default")
+      .mockResolvedValue("1.7.0");
+    const mockedGetPackageManagerVersion = jest
+      .spyOn(getPackageManagerVersion, "default")
+      .mockReturnValue(packageManagerVersion);
+    const mockedGetWorkspaceImplementation = jest
+      .spyOn(workspaceImplementation, "default")
+      .mockReturnValue(packageManager);
+
+    await migrate(root as MigrateCommandArgument, {
+      force: false,
+      dry: true,
+      print: false,
+      install: true,
+    });
+
+    expect(mockExit.exit).toHaveBeenCalledWith(1);
+
+    // verify mocks were called
+    expect(mockedCheckGitStatus).not.toHaveBeenCalled();
+    expect(mockedGetCurrentVersion).toHaveBeenCalled();
+    expect(mockedGetLatestVersion).toHaveBeenCalled();
+    expect(mockedGetPackageManagerVersion).toHaveBeenCalled();
+    expect(mockedGetWorkspaceImplementation).toHaveBeenCalled();
+
+    // restore mocks
+    mockedCheckGitStatus.mockRestore();
+    mockedGetCurrentVersion.mockRestore();
+    mockedGetLatestVersion.mockRestore();
+    mockedGetPackageManagerVersion.mockRestore();
+    mockedGetWorkspaceImplementation.mockRestore();
+  });
+
   it("exits if invalid directory is passed", async () => {
     const { root } = useFixture({
       fixture: "old-turbo",
@@ -548,6 +705,32 @@ describe("migrate", () => {
       .mockReturnValue(undefined);
 
     await migrate("~/path/that/does/not/exist" as MigrateCommandArgument, {
+      force: false,
+      dry: false,
+      print: false,
+      install: false,
+    });
+
+    expect(mockExit.exit).toHaveBeenCalledWith(1);
+
+    // verify mocks were called
+    expect(mockedCheckGitStatus).toHaveBeenCalled();
+
+    // restore mocks
+    mockedCheckGitStatus.mockRestore();
+  });
+
+  it("exits if directory with no repo is passed", async () => {
+    const { root } = useFixture({
+      fixture: "no-repo",
+    });
+
+    // setup mocks
+    const mockedCheckGitStatus = jest
+      .spyOn(checkGitStatus, "default")
+      .mockReturnValue(undefined);
+
+    await migrate(root as MigrateCommandArgument, {
       force: false,
       dry: false,
       print: false,

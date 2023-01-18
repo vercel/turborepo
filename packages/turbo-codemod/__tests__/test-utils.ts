@@ -57,14 +57,13 @@ function setupTestFixtures({ test }: { test: string }) {
       } catch (e) {
         return undefined;
       }
-    }
+    };
 
     return { root: testDirectory, read, readJson };
   };
 
   return { useFixture };
 }
-
 
 export type SpyExit = { exit?: any };
 

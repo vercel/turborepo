@@ -11,6 +11,7 @@ import directoryInfo from "../../utils/directoryInfo";
 import getTurboUpgradeCommand from "./steps/getTurboUpgradeCommand";
 import Runner from "../../runner/Runner";
 import type { MigrateCommandArgument, MigrateCommandOptions } from "./types";
+import looksLikeRepo from "../../utils/looksLikeRepo";
 
 function endMigration({
   message,
@@ -34,7 +35,7 @@ function endMigration({
   return process.exit(1);
 }
 
-/*
+/**
 Migration is done in 4 steps:
   -- gather information
   1. find the version (x) of turbo to migrate from (if not specified)
@@ -43,15 +44,14 @@ Migration is done in 4 steps:
   -- action
   4. execute the codemods (serially, and in order)
   5. update the turbo version (optionally)
-
-*/
+**/
 export default async function migrate(
   directory: MigrateCommandArgument,
   options: MigrateCommandOptions
 ) {
   // check git status
   if (!options.dry) {
-    checkGitStatus(options.force);
+    checkGitStatus({ directory, force: options.force });
   }
 
   const answers = await inquirer.prompt<{
@@ -60,7 +60,7 @@ export default async function migrate(
     {
       type: "input",
       name: "directoryInput",
-      message: "Where is the root of the repo where the transform should run?",
+      message: "Where is the root of the repo to migrate?",
       when: !directory,
       default: ".",
       validate: (directory: string) => {
@@ -86,6 +86,15 @@ export default async function migrate(
     });
   }
 
+  if (!looksLikeRepo({ directory: root })) {
+    return endMigration({
+      success: false,
+      message: `Directory (${chalk.dim(
+        root
+      )}) does not appear to be a repository`,
+    });
+  }
+
   // step 1
   const fromVersion = getCurrentVersion(selectedDirectory, options);
   if (!fromVersion) {
@@ -96,7 +105,20 @@ export default async function migrate(
   }
 
   // step 2
-  const toVersion = await getLatestVersion(options);
+  let toVersion = options.to;
+  try {
+    toVersion = await getLatestVersion(options);
+  } catch (err) {
+    let message = "UNKNOWN_ERROR";
+    if (err instanceof Error) {
+      message = err.message;
+    }
+    return endMigration({
+      success: false,
+      message,
+    });
+  }
+
   if (!toVersion) {
     return endMigration({
       success: false,
@@ -114,7 +136,7 @@ export default async function migrate(
   }
 
   // step 3
-  const codemods = await getCodemodsForMigration({ fromVersion, toVersion });
+  const codemods = getCodemodsForMigration({ fromVersion, toVersion });
   if (codemods.length === 0) {
     console.log(
       `No codemods required to migrate from ${fromVersion} to ${toVersion}`,
@@ -126,7 +148,13 @@ export default async function migrate(
   console.log(
     `Upgrading turbo from ${chalk.bold(fromVersion)} to ${chalk.bold(
       toVersion
-    )}`,
+    )} (${
+      codemods.length === 0
+        ? "no codemods required"
+        : `${codemods.length} required codemod${
+            codemods.length === 1 ? "" : "s"
+          }`
+    })`,
     os.EOL
   );
   const results = codemods.map((codemod, idx) => {
@@ -169,7 +197,12 @@ export default async function migrate(
 
   if (options.install) {
     if (options.dry) {
-      console.log(`Upgrading turbo with ${chalk.bold(upgradeCommand)} ${chalk.dim('(dry run)')}`, os.EOL);
+      console.log(
+        `Upgrading turbo with ${chalk.bold(upgradeCommand)} ${chalk.dim(
+          "(dry run)"
+        )}`,
+        os.EOL
+      );
     } else {
       console.log(`Upgrading turbo with ${chalk.bold(upgradeCommand)}`, os.EOL);
       execSync(upgradeCommand, { cwd: selectedDirectory });

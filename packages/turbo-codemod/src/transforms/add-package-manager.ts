@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs-extra";
 
-import getWorkspaceImplementation from "../utils/getWorkspaceImplementation";
+import getPackageManager from "../utils/getPackageManager";
 import getPackageManagerVersion from "../utils/getPackageManagerVersion";
 import getTransformerHelpers from "../utils/getTransformerHelpers";
 import { TransformerResults } from "../runner";
@@ -23,7 +23,7 @@ export function transformer({
   });
 
   log.info(`Set "packageManager" key in root "package.json" file...`);
-  const packageManager = getWorkspaceImplementation(root);
+  const packageManager = getPackageManager({ directory: root });
   if (!packageManager) {
     return runner.abortTransform({
       reason: `Unable to determine package manager for ${root}`,

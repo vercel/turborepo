@@ -15,7 +15,7 @@ export default async function transform(
   directory: TransformCommandArgument,
   options: TransformCommandOptions
 ) {
-  const transforms = await loadTransformers();
+  const transforms = loadTransformers();
   if (options.list) {
     console.log(
       transforms
@@ -27,7 +27,7 @@ export default async function transform(
 
   // check git status
   if (!options.dry) {
-    checkGitStatus(options.force);
+    checkGitStatus({ directory, force: options.force });
   }
 
   const answers = await inquirer.prompt<{

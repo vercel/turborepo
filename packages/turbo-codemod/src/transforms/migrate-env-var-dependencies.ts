@@ -118,9 +118,24 @@ export function transformer({
     `Migrating environment variable dependencies from "globalDependencies" and "dependsOn" to "env" in "turbo.json"...`
   );
   const turboConfigPath = path.join(root, "turbo.json");
+  const packageJsonPath = path.join(root, "package.json");
   if (!fs.existsSync(turboConfigPath)) {
     return runner.abortTransform({
       reason: `No turbo.json found at ${root}. Is the path correct?`,
+    });
+  }
+
+  let packageJSON = {};
+  try {
+    packageJSON = fs.readJSONSync(packageJsonPath);
+  } catch (e) {
+    // readJSONSync probably failed because the file doesn't exist
+  }
+
+  if ("turbo" in packageJSON) {
+    return runner.abortTransform({
+      reason:
+        '"turbo" key detected in package.json. Run `npx @turbo/codemod transform create-turbo-config` first',
     });
   }
 

@@ -34,5 +34,3 @@ To use the TransformRunner:
 1. Transform each file in memory (do not write it back to disk `TransformRunner` takes care of this depending on the options passed in by the user), and pass to `TransformRunner.modifyFile` method.
 2. If the transform encounters an unrecoverable error, pass it to the `TransformRunner.abortTransform` method.
 3. When all files have been modified and passed to `TransformRunner.modifyFile`, call `TransformRunner.finish` method to write the files to disk (when not running in `dry` mode) and log the results.
-
-

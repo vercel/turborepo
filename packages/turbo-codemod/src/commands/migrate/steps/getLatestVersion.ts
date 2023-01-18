@@ -1,23 +1,31 @@
 import axios from "axios";
 
-import { MigrateCommandOptions } from "../types";
+import type { MigrateCommandOptions } from "../types";
 
 const REGISTRY = "https://registry.npmjs.org";
 
-async function getLatestVersion({
-  to,
-}: MigrateCommandOptions): Promise<string | undefined> {
-  if (to) {
-    return Promise.resolve(to);
-  }
-
+async function getPackageDetails({ packageName }: { packageName: string }) {
   try {
-    const result = await axios.get(`${REGISTRY}/turbo`);
-    const versions = result.data["dist-tags"];
-    return versions.latest as string
+    const result = await axios.get(`${REGISTRY}/${packageName}`);
+    return result.data;
   } catch (err) {
-    return undefined;
+    throw new Error(`Unable to fetch the latest version of ${packageName}`);
   }
 }
 
-export default getLatestVersion;
+export default async function getLatestVersion({
+  to,
+}: MigrateCommandOptions): Promise<string | undefined> {
+  const packageDetails = await getPackageDetails({ packageName: "turbo" });
+  const versions = packageDetails["dist-tags"];
+
+  if (to) {
+    if (packageDetails[to]) {
+      return to;
+    } else {
+      throw new Error(`turbo@${to} does not exist`);
+    }
+  }
+
+  return versions.latest as string;
+}

@@ -38,7 +38,7 @@ export function transformer({
   if ("turbo" in packageJSON) {
     return runner.abortTransform({
       reason:
-        '"turbo" key detected in package.json. Run `npx @turbo/codemod create-turbo-config` first',
+        '"turbo" key detected in package.json. Run `npx @turbo/codemod transform create-turbo-config` first',
     });
   }
 

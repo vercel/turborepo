@@ -1,5 +1,5 @@
 import path from "path";
-import fs from "fs";
+import fs from "fs-extra";
 import type { Transformer } from "../types";
 
 // transforms/ is a sibling when built in in dist/
@@ -8,8 +8,8 @@ export const transformerDirectory =
     ? path.join(__dirname, "../transforms")
     : path.join(__dirname, "./transforms");
 
-export default async function loadTransformers(): Promise<Array<Transformer>> {
-  const transformerFiles = await fs.promises.readdir(transformerDirectory);
+export default function loadTransformers(): Array<Transformer> {
+  const transformerFiles = fs.readdirSync(transformerDirectory);
   return transformerFiles
     .map((transformerFilename) => {
       const transformerPath = path.join(

@@ -1,7 +1,6 @@
 import merge from "deepmerge";
 import {
   hasLegacyEnvVarDependencies,
-  migrateDependencies,
   migratePipeline,
   migrateConfig,
   transformer,
@@ -646,6 +645,24 @@ describe("migrate-env-var-dependencies", () => {
       expect(result.fatalError).toBeDefined();
       expect(result.fatalError?.message).toMatch(
         /No turbo\.json found at .*?\. Is the path correct\?/
+      );
+    });
+
+    it("errors if package.json config exists and has not been migrated", async () => {
+      // load the fixture for the test
+      const { root } = useFixture({
+        fixture: "old-config",
+      });
+
+      // run the transformer
+      const result = transformer({
+        root,
+        options: { force: false, dry: false, print: false },
+      });
+
+      expect(result.fatalError).toBeDefined();
+      expect(result.fatalError?.message).toMatch(
+        'turbo" key detected in package.json. Run `npx @turbo/codemod transform create-turbo-config` first'
       );
     });
   });

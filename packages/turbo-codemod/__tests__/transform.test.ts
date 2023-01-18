@@ -2,7 +2,7 @@ import transform from "../src/commands/transform";
 import { MigrateCommandArgument } from "../src/commands";
 import { setupTestFixtures, spyExit } from "./test-utils";
 import * as checkGitStatus from "../src/utils/checkGitStatus";
-import * as workspaceImplementation from "../src/utils/getWorkspaceImplementation";
+import * as getPackageManager from "../src/utils/getPackageManager";
 import * as getPackageManagerVersion from "../src/utils/getPackageManagerVersion";
 
 describe("transform", () => {
@@ -24,8 +24,8 @@ describe("transform", () => {
     const mockedGetPackageManagerVersion = jest
       .spyOn(getPackageManagerVersion, "default")
       .mockReturnValue(packageManagerVersion);
-    const mockedGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
+    const mockedGetPackageManager = jest
+      .spyOn(getPackageManager, "default")
       .mockReturnValue(packageManager);
 
     await transform(
@@ -52,12 +52,12 @@ describe("transform", () => {
     // verify mocks were called
     expect(mockedCheckGitStatus).toHaveBeenCalled();
     expect(mockedGetPackageManagerVersion).toHaveBeenCalled();
-    expect(mockedGetWorkspaceImplementation).toHaveBeenCalled();
+    expect(mockedGetPackageManager).toHaveBeenCalled();
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
     mockedGetPackageManagerVersion.mockRestore();
-    mockedGetWorkspaceImplementation.mockRestore();
+    mockedGetPackageManager.mockRestore();
   });
 
   it("runs the selected transform - dry & print", async () => {
@@ -75,8 +75,8 @@ describe("transform", () => {
     const mockedGetPackageManagerVersion = jest
       .spyOn(getPackageManagerVersion, "default")
       .mockReturnValue(packageManagerVersion);
-    const mockedGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
+    const mockedGetPackageManager = jest
+      .spyOn(getPackageManager, "default")
       .mockReturnValue(packageManager);
 
     await transform(
@@ -102,12 +102,12 @@ describe("transform", () => {
     // verify mocks were called
     expect(mockedCheckGitStatus).not.toHaveBeenCalled();
     expect(mockedGetPackageManagerVersion).toHaveBeenCalled();
-    expect(mockedGetWorkspaceImplementation).toHaveBeenCalled();
+    expect(mockedGetPackageManager).toHaveBeenCalled();
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
     mockedGetPackageManagerVersion.mockRestore();
-    mockedGetWorkspaceImplementation.mockRestore();
+    mockedGetPackageManager.mockRestore();
   });
 
   it("lists transforms", async () => {

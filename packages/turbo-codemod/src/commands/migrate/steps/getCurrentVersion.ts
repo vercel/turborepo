@@ -1,8 +1,8 @@
 import path from "path";
 import { existsSync } from "fs-extra";
 
-import getWorkspaceImplementation from "../../../utils/getWorkspaceImplementation";
-import { exec } from '../utils'
+import getPackageManager from "../../../utils/getPackageManager";
+import { exec } from "../utils";
 import type { MigrateCommandOptions } from "../types";
 
 function getCurrentVersion(
@@ -22,7 +22,7 @@ function getCurrentVersion(
   }
 
   // try to use the package manager to find the version
-  const packageManager = getWorkspaceImplementation(directory);
+  const packageManager = getPackageManager({ directory });
   if (packageManager) {
     if (packageManager === "yarn") {
       return exec(`yarn turbo --version`, { cwd: directory });
