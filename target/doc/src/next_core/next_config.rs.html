@@ -464,7 +464,7 @@
 </span><span class="kw">pub struct </span>ExperimentalConfig {
     <span class="kw">pub </span>server_components_external_packages: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
     <span class="kw">pub </span>app_dir: <span class="prelude-ty">Option</span>&lt;bool&gt;,
-    <span class="kw">pub </span>turbopack_webpack_loaders: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, Vec&lt;String&gt;&gt;&gt;,
+    <span class="kw">pub </span>turbopack_loaders: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, Vec&lt;String&gt;&gt;&gt;,
     <span class="kw">pub </span>resolve_alias: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, Vec&lt;String&gt;&gt;&gt;,
 }
 
@@ -552,11 +552,11 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>webpack_loaders_options(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;WebpackLoadersOptionsVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="prelude-val">Some</span>(turbopack_webpack_loaders) = this.experimental.as_ref().and_then(|experimental| experimental.turbopack_webpack_loaders.as_ref()) <span class="kw">else </span>{
+        <span class="kw">let </span><span class="prelude-val">Some</span>(turbopack_loaders) = this.experimental.as_ref().and_then(|experimental| experimental.turbopack_loaders.as_ref()) <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(WebpackLoadersOptionsVc::cell(WebpackLoadersOptions::default()));
         };
         <span class="kw">let </span><span class="kw-2">mut </span>extension_to_loaders = IndexMap::new();
-        <span class="kw">for </span>(ext, loaders) <span class="kw">in </span>turbopack_webpack_loaders {
+        <span class="kw">for </span>(ext, loaders) <span class="kw">in </span>turbopack_loaders {
             extension_to_loaders.insert(ext.clone(), StringsVc::cell(loaders.clone()));
         }
         <span class="prelude-val">Ok</span>(WebpackLoadersOptions {
