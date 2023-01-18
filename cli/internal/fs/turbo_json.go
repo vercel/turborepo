@@ -95,21 +95,15 @@ type TaskDefinition struct {
 
 // LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
 func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON, includeSynthesizedFromRootPackageJSON bool) (*TurboJSON, error) {
-	var turboJSON *TurboJSON
-	turboJSONPath := rootPath.UntypedJoin(configFile)
-	turboFromFiles, err := ReadTurboConfig(turboJSONPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, errors.Wrapf(os.ErrNotExist, "Could not find %s. Follow directions at https://turbo.build/repo/docs to create one", configFile)
-		}
-		return nil, err
-	}
-
 	// If the root package.json stil has a `turbo` key, log a warning and remove it.
 	if rootPackageJSON.LegacyTurboConfig != nil {
 		log.Printf("[WARNING] \"turbo\" in package.json is no longer supported. Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile)
 		rootPackageJSON.LegacyTurboConfig = nil
 	}
+
+	var turboJSON *TurboJSON
+	turboJSONPath := rootPath.UntypedJoin(configFile)
+	turboFromFiles, err := ReadTurboConfig(turboJSONPath)
 
 	if !includeSynthesizedFromRootPackageJSON && err != nil {
 		// There was an error, and we don't have any chance of recovering
