@@ -40,6 +40,7 @@ Verbosity level 2
   $ ${TURBO} build -vv --filter=util --force
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .+node_modules/\.bin/turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "" (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\["VERCEL_ANALYTICS_ID"] (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=c1fb8f74a026cdb8 (re)
@@ -66,6 +67,7 @@ Verbosity level 2
   $ ${TURBO} build --verbosity=2 --filter=util --force
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .+node_modules/\.bin/turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "" (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\["VERCEL_ANALYTICS_ID"] (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=c1fb8f74a026cdb8 (re)
