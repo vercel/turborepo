@@ -1,9 +1,12 @@
 import merge from "deepmerge";
 import {
   hasLegacyEnvVarDependencies,
+  migrateDependencies,
   migratePipeline,
   migrateConfig,
+  transformer,
 } from "../src/transforms/migrate-env-var-dependencies";
+import { setupTestFixtures } from "./test-utils";
 import type { Schema } from "turbo-types";
 
 const getTestTurboConfig = (override: Schema = { pipeline: {} }): Schema => {
@@ -34,7 +37,7 @@ const getTestTurboConfig = (override: Schema = { pipeline: {} }): Schema => {
 };
 
 describe("migrate-env-var-dependencies", () => {
-  describe("hasLegacyEnvVarDependencies", () => {
+  describe("hasLegacyEnvVarDependencies - utility", () => {
     it("finds env keys in legacy turbo.json - has keys", async () => {
       const config = getTestTurboConfig();
       const { hasKeys, envVars } = hasLegacyEnvVarDependencies(config);
@@ -74,9 +77,21 @@ describe("migrate-env-var-dependencies", () => {
       expect(hasKeys).toEqual(false);
       expect(envVars).toMatchInlineSnapshot(`Array []`);
     });
+
+    it("finds env keys in turbo.json - no global", async () => {
+      const { hasKeys, envVars } = hasLegacyEnvVarDependencies({
+        pipeline: { build: { dependsOn: ["$cool"] } },
+      });
+      expect(hasKeys).toEqual(true);
+      expect(envVars).toMatchInlineSnapshot(`
+        Array [
+          "$cool",
+        ]
+      `);
+    });
   });
 
-  describe("migratePipeline", () => {
+  describe("migratePipeline - utility", () => {
     it("migrates pipeline with env var dependencies", async () => {
       const config = getTestTurboConfig();
       const { build } = config.pipeline;
@@ -171,14 +186,13 @@ describe("migrate-env-var-dependencies", () => {
     });
   });
 
-  describe("migrateConfig", () => {
+  describe("migrateConfig - utility", () => {
     it("migrates config with env var dependencies", async () => {
       const config = getTestTurboConfig();
       const pipeline = migrateConfig(config);
       expect(pipeline).toMatchInlineSnapshot(`
         Object {
           "$schema": "./docs/public/schema.json",
-          "globalDependencies": Array [],
           "globalEnv": Array [
             "GLOBAL_ENV_KEY",
           ],
@@ -226,7 +240,6 @@ describe("migrate-env-var-dependencies", () => {
       expect(pipeline).toMatchInlineSnapshot(`
         Object {
           "$schema": "./docs/public/schema.json",
-          "globalDependencies": Array [],
           "pipeline": Object {
             "build": Object {
               "dependsOn": Array [
@@ -266,7 +279,6 @@ describe("migrate-env-var-dependencies", () => {
       expect(pipeline).toMatchInlineSnapshot(`
         Object {
           "$schema": "./docs/public/schema.json",
-          "globalDependencies": Array [],
           "globalEnv": Array [
             "GLOBAL_ENV_KEY",
           ],
@@ -317,7 +329,6 @@ describe("migrate-env-var-dependencies", () => {
       expect(pipeline).toMatchInlineSnapshot(`
         Object {
           "$schema": "./docs/public/schema.json",
-          "globalDependencies": Array [],
           "globalEnv": Array [
             "GLOBAL_ENV_KEY",
           ],
@@ -356,6 +367,286 @@ describe("migrate-env-var-dependencies", () => {
           },
         }
       `);
+    });
+  });
+
+  describe("transform", () => {
+    const { useFixture } = setupTestFixtures({
+      test: "migrate-env-var-dependencies",
+    });
+
+    it("migrates turbo.json env var dependencies - basic", async () => {
+      // load the fixture for the test
+      const { root, read } = useFixture({
+        fixture: "env-dependencies",
+      });
+
+      // run the transformer
+      const result = transformer({
+        root,
+        options: { force: false, dry: false, print: false },
+      });
+
+      expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+        $schema: "https://turbo.build/schema.json",
+        globalDependencies: [".env"],
+        globalEnv: ["NEXT_PUBLIC_API_KEY", "STRIPE_API_KEY"],
+        pipeline: {
+          build: {
+            dependsOn: ["^build"],
+            env: ["PROD_API_KEY"],
+            outputs: [".next/**"],
+          },
+          dev: {
+            cache: false,
+          },
+          lint: {
+            dependsOn: [],
+            env: ["IS_CI"],
+            outputs: [],
+          },
+          test: {
+            dependsOn: ["test"],
+            env: ["IS_CI"],
+            outputs: [],
+          },
+        },
+      });
+
+      expect(result.fatalError).toBeUndefined();
+      expect(result.changes).toMatchInlineSnapshot(`
+        Object {
+          "turbo.json": Object {
+            "action": "modified",
+            "additions": 4,
+            "deletions": 4,
+          },
+        }
+      `);
+    });
+
+    it("migrates turbo.json env var dependencies - repeat run", async () => {
+      // load the fixture for the test
+      const { root, read } = useFixture({
+        fixture: "env-dependencies",
+      });
+
+      // run the transformer
+      const result = transformer({
+        root,
+        options: { force: false, dry: false, print: false },
+      });
+
+      expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+        $schema: "https://turbo.build/schema.json",
+        globalDependencies: [".env"],
+        globalEnv: ["NEXT_PUBLIC_API_KEY", "STRIPE_API_KEY"],
+        pipeline: {
+          build: {
+            dependsOn: ["^build"],
+            env: ["PROD_API_KEY"],
+            outputs: [".next/**"],
+          },
+          dev: {
+            cache: false,
+          },
+          lint: {
+            dependsOn: [],
+            env: ["IS_CI"],
+            outputs: [],
+          },
+          test: {
+            dependsOn: ["test"],
+            env: ["IS_CI"],
+            outputs: [],
+          },
+        },
+      });
+
+      expect(result.fatalError).toBeUndefined();
+      expect(result.changes).toMatchInlineSnapshot(`
+        Object {
+          "turbo.json": Object {
+            "action": "modified",
+            "additions": 4,
+            "deletions": 4,
+          },
+        }
+      `);
+
+      // run the transformer
+      const repeatResult = transformer({
+        root,
+        options: { force: false, dry: false, print: false },
+      });
+
+      expect(repeatResult.fatalError).toBeUndefined();
+      expect(repeatResult.changes).toMatchInlineSnapshot(`
+        Object {
+          "turbo.json": Object {
+            "action": "unchanged",
+            "additions": 0,
+            "deletions": 0,
+          },
+        }
+      `);
+    });
+
+    it("migrates turbo.json env var dependencies - dry", async () => {
+      // load the fixture for the test
+      const { root, read } = useFixture({
+        fixture: "env-dependencies",
+      });
+
+      const turboJson = JSON.parse(read("turbo.json") || "{}");
+
+      // run the transformer
+      const result = transformer({
+        root,
+        options: { force: false, dry: true, print: false },
+      });
+
+      // make sure it didn't change
+      expect(JSON.parse(read("turbo.json") || "{}")).toEqual(turboJson);
+
+      expect(result.fatalError).toBeUndefined();
+      expect(result.changes).toMatchInlineSnapshot(`
+        Object {
+          "turbo.json": Object {
+            "action": "skipped",
+            "additions": 4,
+            "deletions": 4,
+          },
+        }
+      `);
+    });
+
+    it("migrates turbo.json env var dependencies - print", async () => {
+      // load the fixture for the test
+      const { root, read } = useFixture({
+        fixture: "env-dependencies",
+      });
+
+      // run the transformer
+      const result = transformer({
+        root,
+        options: { force: false, dry: false, print: true },
+      });
+
+      expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+        $schema: "https://turbo.build/schema.json",
+        globalEnv: ["NEXT_PUBLIC_API_KEY", "STRIPE_API_KEY"],
+        globalDependencies: [".env"],
+        pipeline: {
+          build: {
+            dependsOn: ["^build"],
+            env: ["PROD_API_KEY"],
+            outputs: [".next/**"],
+          },
+          dev: {
+            cache: false,
+          },
+          lint: {
+            dependsOn: [],
+            env: ["IS_CI"],
+            outputs: [],
+          },
+          test: {
+            dependsOn: ["test"],
+            env: ["IS_CI"],
+            outputs: [],
+          },
+        },
+      });
+
+      expect(result.fatalError).toBeUndefined();
+      expect(result.changes).toMatchInlineSnapshot(`
+        Object {
+          "turbo.json": Object {
+            "action": "modified",
+            "additions": 4,
+            "deletions": 4,
+          },
+        }
+      `);
+    });
+
+    it("migrates turbo.json env var dependencies - dry & print", async () => {
+      // load the fixture for the test
+      const { root, read } = useFixture({
+        fixture: "env-dependencies",
+      });
+
+      const turboJson = JSON.parse(read("turbo.json") || "{}");
+
+      // run the transformer
+      const result = transformer({
+        root,
+        options: { force: false, dry: true, print: true },
+      });
+
+      // make sure it didn't change
+      expect(JSON.parse(read("turbo.json") || "{}")).toEqual(turboJson);
+
+      expect(result.fatalError).toBeUndefined();
+      expect(result.changes).toMatchInlineSnapshot(`
+        Object {
+          "turbo.json": Object {
+            "action": "skipped",
+            "additions": 4,
+            "deletions": 4,
+          },
+        }
+      `);
+    });
+
+    it("does not change turbo.json if already migrated", async () => {
+      // load the fixture for the test
+      const { root, read } = useFixture({
+        fixture: "migrated-env-dependencies",
+      });
+
+      const turboJson = JSON.parse(read("turbo.json") || "{}");
+
+      // run the transformer
+      const result = transformer({
+        root,
+        options: { force: false, dry: false, print: false },
+      });
+
+      expect(JSON.parse(read("turbo.json") || "{}")).toEqual(turboJson);
+
+      expect(result.fatalError).toBeUndefined();
+      expect(result.changes).toMatchInlineSnapshot(`
+        Object {
+          "turbo.json": Object {
+            "action": "unchanged",
+            "additions": 0,
+            "deletions": 0,
+          },
+        }
+      `);
+    });
+
+    it("errors if no turbo.json can be found", async () => {
+      // load the fixture for the test
+      const { root, read } = useFixture({
+        fixture: "no-turbo-json",
+      });
+
+      expect(read("turbo.json")).toBeUndefined();
+
+      // run the transformer
+      const result = transformer({
+        root,
+        options: { force: false, dry: false, print: false },
+      });
+
+      expect(read("turbo.json")).toBeUndefined();
+      expect(result.fatalError).toBeDefined();
+      expect(result.fatalError?.message).toMatch(
+        /No turbo\.json found at .*?\. Is the path correct\?/
+      );
     });
   });
 });
