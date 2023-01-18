@@ -1,10 +1,15 @@
-use std::{env, io, mem, path::PathBuf, process};
+use std::{
+    env::{self, current_dir},
+    io, mem,
+    path::{Path, PathBuf},
+    process,
+};
 
 use anyhow::{anyhow, Result};
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use dunce::canonicalize as fs_canonicalize;
-use log::error;
+use log::{debug, error};
 use serde::Serialize;
 
 use crate::{
@@ -14,6 +19,8 @@ use crate::{
     ui::UI,
     Payload,
 };
+
+pub const INVOCATION_DIR_ENV_VAR: &'static str = "TURBO_INVOCATION_DIR";
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum OutputLogsMode {
@@ -323,6 +330,8 @@ pub struct RunArgs {
     /// Execute all tasks in parallel.
     #[clap(long)]
     pub parallel: bool,
+    #[clap(long, hide = true, default_missing_value = "")]
+    pub pkg_inference_root: Option<String>,
     /// File to write turbo's performance profile output into.
     /// You can load the file up in chrome://tracing to see
     /// which parts of your build were slow.
@@ -352,6 +361,12 @@ pub struct RunArgs {
 /// Runs the CLI by parsing arguments with clap, then either calling Rust code
 /// directly or returning a payload for the Go code to use.
 ///
+/// Scenarios:
+/// 1. inference failed, we're running this global turbo. no repo state
+/// 2. --skip-infer was passed, assume we're local turbo and run. no repo state
+/// 3. There is no local turbo, we're running the global one. repo state exists
+/// 4. turbo binary path is set, and it's this one. repo state exists
+///
 /// # Arguments
 ///
 /// * `repo_state`: If we have done repository inference and NOT executed
@@ -371,6 +386,33 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
         }
     };
 
+    // If this is a run command, and we know the actual invocation path, set the
+    // inference root, as long as the user hasn't overridden the cwd
+    if clap_args.cwd.is_none() {
+        if let Some(Command::Run(run_args)) = &mut clap_args.command {
+            if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
+                let invocation_path = Path::new(&invocation_dir);
+
+                // If repo state doesn't exist, we're either local turbo running at the root
+                // (current_dir), or inference failed If repo state does exist,
+                // we're global turbo, and want to calculate package inference based on the repo
+                // root
+                let this_dir = current_dir()?;
+                let repo_root = repo_state.as_ref().map(|r| &r.root).unwrap_or(&this_dir);
+                if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
+                    debug!(
+                        "pkg_inference_root set to {}",
+                        relative_path.to_string_lossy()
+                    );
+                    run_args.pkg_inference_root = Some(relative_path.to_string_lossy().to_string());
+                }
+            } else {
+                debug!("{} not set", INVOCATION_DIR_ENV_VAR);
+            }
+        }
+    }
+
+    // Do this after the above, since we're now always setting cwd.
     if let Some(repo_state) = repo_state {
         if let Some(Command::Run(run_args)) = &mut clap_args.command {
             run_args.single_package = matches!(repo_state.mode, RepoMode::SinglePackage);

@@ -118,7 +118,7 @@ func (l *LegacyFilter) asFilterPatterns() []string {
 // the selected tasks. Returns the selected packages and whether or not the selected
 // packages represents a default "all packages".
 func ResolvePackages(opts *Opts, repoRoot turbopath.AbsoluteSystemPath, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, bool, error) {
-	inferenceBase, err := calculateInference(repoRoot, opts.PackageInferenceRoot, ctx.WorkspaceInfos)
+	inferenceBase, err := calculateInference(repoRoot, opts.PackageInferenceRoot, ctx.WorkspaceInfos, logger)
 	if err != nil {
 		return nil, false, err
 	}
@@ -148,7 +148,7 @@ func ResolvePackages(opts *Opts, repoRoot turbopath.AbsoluteSystemPath, scm scm.
 	return filteredPkgs, isAllPackages, nil
 }
 
-func calculateInference(repoRoot turbopath.AbsoluteSystemPath, rawPkgInferenceDir string, packageInfos graph.WorkspaceInfos) (*scope_filter.PackageInference, error) {
+func calculateInference(repoRoot turbopath.AbsoluteSystemPath, rawPkgInferenceDir string, packageInfos graph.WorkspaceInfos, logger hclog.Logger) (*scope_filter.PackageInference, error) {
 	if rawPkgInferenceDir == "" {
 		// No inference specified, no need to calculate anything
 		return nil, nil
@@ -157,6 +157,7 @@ func calculateInference(repoRoot turbopath.AbsoluteSystemPath, rawPkgInferenceDi
 	if err != nil {
 		return nil, err
 	}
+	logger.Debug(fmt.Sprintf("Using %v as a basis for selecting packages", pkgInferencePath))
 	fullInferencePath := repoRoot.Join(pkgInferencePath)
 	for _, pkgInfo := range packageInfos {
 		pkgPath := pkgInfo.Dir.RestoreAnchor(repoRoot)

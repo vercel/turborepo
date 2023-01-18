@@ -69,7 +69,7 @@ type RunPayload struct {
 	Since               string   `json:"since"`
 	SinglePackage       bool     `json:"single_package"`
 	Tasks               []string `json:"tasks"`
-	InferFilterRoot     string   `json:"infer_filter_root"`
+	InferFilterRoot     string   `json:"pkg_inference_root"`
 }
 
 // Command consists of the data necessary to run a command.
