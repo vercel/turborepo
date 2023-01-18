@@ -1,9 +1,16 @@
 import fs from "fs-extra";
 import path from "path";
-import { Flags } from "../types";
 import type { Schema, Pipeline } from "turbo-types";
-import chalk from "chalk";
-import { skip, ok, error } from "../logger";
+
+import getTransformerHelpers from "../utils/getTransformerHelpers";
+import { TransformerResults } from "../runner";
+import type { TransformerArgs } from "../types";
+
+// transformer details
+const TRANSFORMER = "migrate-env-var-dependencies";
+const DESCRIPTION =
+  'Migrate environment variable dependencies from "dependsOn" to "env" in `turbo.json`';
+const INTRODUCED_IN = "1.5.0";
 
 export function hasLegacyEnvVarDependencies(config: Schema) {
   const dependsOn = [
@@ -26,7 +33,7 @@ export function migrateDependencies({
   const envDeps: Set<string> = new Set(env);
   const otherDeps: string[] = [];
   deps?.forEach((dep) => {
-    if (dep?.startsWith("$")) {
+    if (dep.startsWith("$")) {
       envDeps.add(dep.slice(1));
     } else {
       otherDeps.push(dep);
@@ -68,7 +75,7 @@ export function migrateGlobal(config: Schema) {
     deps: config.globalDependencies,
   });
   const migratedConfig = { ...config };
-  if (globalDependencies) {
+  if (globalDependencies && globalDependencies.length) {
     migratedConfig.globalDependencies = globalDependencies;
   } else {
     delete migratedConfig.globalDependencies;
@@ -85,8 +92,9 @@ export function migrateGlobal(config: Schema) {
 export function migrateConfig(config: Schema) {
   let migratedConfig = migrateGlobal(config);
   Object.keys(config.pipeline).forEach((pipelineKey) => {
-    if (migratedConfig.pipeline && config.pipeline?.[pipelineKey]) {
-      const pipeline = migratedConfig.pipeline?.[pipelineKey];
+    config.pipeline;
+    if (migratedConfig.pipeline && config.pipeline[pipelineKey]) {
+      const pipeline = migratedConfig.pipeline[pipelineKey];
       migratedConfig.pipeline[pipelineKey] = {
         ...pipeline,
         ...migratePipeline(pipeline),
@@ -96,56 +104,44 @@ export function migrateConfig(config: Schema) {
   return migratedConfig;
 }
 
-export default function migrateEnvVarDependencies(
-  files: string[],
-  flags: Flags
-) {
-  if (files.length === 1) {
-    const dir = files[0];
-    const root = path.resolve(process.cwd(), dir);
-    console.log(
-      `Migrating environment variable dependencies from "globalDependencies" and "dependsOn" to "env" in "turbo.json"...`
-    );
-    const turboConfigPath = path.join(root, "turbo.json");
-    let modifiedCount = 0;
-    let skippedCount = 0;
-    let unmodifiedCount = 1;
-    if (!fs.existsSync(turboConfigPath)) {
-      error(`No turbo.json found at ${root}. Is the path correct?`);
-      process.exit(1);
-    }
+export function transformer({
+  root,
+  options,
+}: TransformerArgs): TransformerResults {
+  const { log, runner } = getTransformerHelpers({
+    transformer: TRANSFORMER,
+    rootPath: root,
+    options,
+  });
 
-    const rootTurboJson = fs.readJsonSync(turboConfigPath);
-    if (hasLegacyEnvVarDependencies(rootTurboJson).hasKeys) {
-      if (flags.dry) {
-        if (flags.print) {
-          console.log(JSON.stringify(migrateConfig(rootTurboJson), null, 2));
-        }
-        skip("turbo.json", chalk.dim("(dry run)"));
-        skippedCount += 1;
-      } else {
-        if (flags.print) {
-          console.log(JSON.stringify(migrateConfig(rootTurboJson), null, 2));
-        }
-        ok("turbo.json");
-        fs.writeJsonSync(turboConfigPath, migrateConfig(rootTurboJson), {
-          spaces: 2,
-        });
-        modifiedCount += 1;
-        unmodifiedCount -= 1;
-      }
-    } else {
-      ok(
-        'no unmigrated environment variable dependencies found in "turbo.json"'
-      );
-      process.exit(0);
-    }
-
-    console.log("All done.");
-    console.log("Results:");
-    console.log(chalk.red(`0 errors`));
-    console.log(chalk.yellow(`${skippedCount} skipped`));
-    console.log(chalk.yellow(`${unmodifiedCount} unmodified`));
-    console.log(chalk.green(`${modifiedCount} modified`));
+  log.info(
+    `Migrating environment variable dependencies from "globalDependencies" and "dependsOn" to "env" in "turbo.json"...`
+  );
+  const turboConfigPath = path.join(root, "turbo.json");
+  if (!fs.existsSync(turboConfigPath)) {
+    return runner.abortTransform({
+      reason: `No turbo.json found at ${root}. Is the path correct?`,
+    });
   }
+
+  let turboJson: Schema = fs.readJsonSync(turboConfigPath);
+  if (hasLegacyEnvVarDependencies(turboJson).hasKeys) {
+    turboJson = migrateConfig(turboJson);
+  }
+
+  runner.modifyFile({
+    filePath: turboConfigPath,
+    after: turboJson,
+  });
+
+  return runner.finish();
 }
+
+const transformerMeta = {
+  name: `${TRANSFORMER}: ${DESCRIPTION}`,
+  value: TRANSFORMER,
+  introducedIn: INTRODUCED_IN,
+  transformer,
+};
+
+export default transformerMeta;

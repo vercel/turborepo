@@ -55,7 +55,7 @@ export function getWorkspaceImplementationAndLockFile(
   return cache[cwd];
 }
 
-export function getWorkspaceImplementation(
+export default function getWorkspaceImplementation(
   cwd: string
 ): WorkspaceImplementations | undefined {
   return getWorkspaceImplementationAndLockFile(cwd)?.implementation;

@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import isGitClean from "is-git-clean";
 
-export function checkGitStatus(force: boolean) {
+export default function checkGitStatus(force: boolean) {
   let clean = false;
   let errorMessage = "Unable to determine if git directory is clean";
   try {
@@ -15,7 +15,7 @@ export function checkGitStatus(force: boolean) {
 
   if (!clean) {
     if (force) {
-      console.log(`WARNING: ${errorMessage}. Forcibly continuing...`);
+      console.log(`${chalk.yellow('WARNING')}: ${errorMessage}. Forcibly continuing...`);
     } else {
       console.log("Thank you for using @turbo/codemod!");
       console.log(
