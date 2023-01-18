@@ -105,7 +105,8 @@ func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 		return nil, err
 	}
 
-	// Before returning, check if `turbo` key in package.json exists and log a warning
+	// If the root package.json stil has a `turbo` key, log a warning and remove it.
+	// TODO(mehulkar): move this to unmarshalling step?
 	if rootPackageJSON.LegacyTurboConfig != nil {
 		log.Printf("[WARNING] \"turbo\" in package.json is no longer supported. Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile)
 		rootPackageJSON.LegacyTurboConfig = nil
