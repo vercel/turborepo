@@ -8,6 +8,8 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
@@ -296,6 +298,12 @@ func GetClient(ctx context.Context, repoRoot turbopath.AbsoluteSystemPath, logge
 	bin, err := os.Executable()
 	if err != nil {
 		return nil, err
+	}
+	// The Go binary can no longer be called directly, so we need to route back to the rust wrapper
+	if strings.HasSuffix(bin, "go-turbo") {
+		bin = filepath.Join(filepath.Dir(bin), "turbo")
+	} else if strings.HasSuffix(bin, "go-turbo.exe") {
+		bin = filepath.Join(filepath.Dir(bin), "turbo.exe")
 	}
 	c := &connector.Connector{
 		Logger:       logger.Named("TurbodClient"),

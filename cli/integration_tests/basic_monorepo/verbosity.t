@@ -38,6 +38,8 @@ Verbosity level 1
 
 Verbosity level 2
   $ ${TURBO} build -vv --filter=util --force
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .+node_modules/\.bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\["VERCEL_ANALYTICS_ID"] (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=c1fb8f74a026cdb8 (re)
@@ -62,6 +64,8 @@ Verbosity level 2
     Time:\s*[\.0-9]+m?s  (re)
   
   $ ${TURBO} build --verbosity=2 --filter=util --force
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .+node_modules/\.bin/turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\["VERCEL_ANALYTICS_ID"] (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=c1fb8f74a026cdb8 (re)
@@ -90,9 +94,10 @@ Verbosity level 2
 
 Make sure users can only use one verbosity flag
   $ ${TURBO} build -v --verbosity=1
-  error: The argument '-v...' cannot be used with '--verbosity <COUNT>'
+  ERROR The argument '-v...' cannot be used with '--verbosity <COUNT>'
   
   Usage: turbo [OPTIONS] [COMMAND]
   
   For more information try '--help'
+  
   [1]

@@ -39,7 +39,9 @@ use swc_core::{
         visit::{VisitMutWith, VisitMutWithPath},
     },
 };
-pub use transform::{EcmascriptInputTransform, EcmascriptInputTransformsVc};
+pub use transform::{
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, NextJsPageExportFilter,
+};
 use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
@@ -316,6 +318,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                 for visitor in root_visitors {
                     program.visit_mut_with(&mut visitor.create());
                 }
+                program.visit_mut_with(&mut swc_core::ecma::transforms::base::hygiene::hygiene());
                 program.visit_mut_with(&mut swc_core::ecma::transforms::base::fixer::fixer(None));
             });
 

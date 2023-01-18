@@ -1,19 +1,19 @@
-#[cfg(not(windows))]
-use std::fs::canonicalize as fs_canonicalize;
 use std::{
     env,
     env::current_dir,
     fs::{self, File},
+    io::Write,
     path::{Path, PathBuf},
     process,
     process::Stdio,
-    str::FromStr,
     time::Duration,
 };
 
 use anyhow::{anyhow, Result};
-#[cfg(windows)]
+use chrono::offset::Local;
 use dunce::canonicalize as fs_canonicalize;
+use env_logger::{fmt::Color, Builder, Env, WriteStyle};
+use log::{debug, Level, LevelFilter};
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
@@ -41,6 +41,7 @@ static SUPPORTS_SKIP_INFER_SEMVER: &str = ">=1.7.0-canary.0";
 struct ShimArgs {
     cwd: PathBuf,
     skip_infer: bool,
+    verbosity: usize,
     force_update_check: bool,
     remaining_turbo_args: Vec<String>,
     forwarded_args: Vec<String>,
@@ -51,6 +52,8 @@ impl ShimArgs {
         let mut found_cwd_flag = false;
         let mut cwd: Option<PathBuf> = None;
         let mut skip_infer = false;
+        let mut found_verbosity_flag = false;
+        let mut verbosity = 0;
         let mut force_update_check = false;
         let mut remaining_turbo_args = Vec::new();
         let mut forwarded_args = Vec::new();
@@ -67,6 +70,20 @@ impl ShimArgs {
             } else if arg == "--" {
                 // If we've hit `--` we've reached the args forwarded to tasks.
                 is_forwarded_args = true;
+            } else if arg == "--verbosity" {
+                // If we see `--verbosity` we expect the next arg to be a number.
+                found_verbosity_flag = true
+            } else if arg.starts_with("--verbosity=") || found_verbosity_flag {
+                let verbosity_count = if found_verbosity_flag {
+                    found_verbosity_flag = false;
+                    &arg
+                } else {
+                    arg.strip_prefix("--verbosity=").unwrap_or("0")
+                };
+
+                verbosity = verbosity_count.parse::<usize>().unwrap_or(0);
+            } else if arg == "-v" || arg.starts_with("-vv") {
+                verbosity = arg[1..].len();
             } else if found_cwd_flag {
                 // We've seen a `--cwd` and therefore set the cwd to this arg.
                 cwd = Some(arg.into());
@@ -101,6 +118,7 @@ impl ShimArgs {
             Ok(ShimArgs {
                 cwd,
                 skip_infer,
+                verbosity,
                 force_update_check,
                 remaining_turbo_args,
                 forwarded_args,
@@ -146,10 +164,53 @@ struct PackageJson {
     version: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LocalTurboState {
+    bin_path: PathBuf,
+    version: String,
+}
+
+impl LocalTurboState {
+    pub fn infer(repo_root: &Path) -> Option<Self> {
+        let local_turbo_path = repo_root.join("node_modules").join(".bin").join({
+            #[cfg(windows)]
+            {
+                "turbo.cmd"
+            }
+            #[cfg(not(windows))]
+            {
+                "turbo"
+            }
+        });
+
+        if !local_turbo_path.exists() {
+            debug!(
+                "No local turbo binary found at: {}",
+                local_turbo_path.display()
+            );
+            return None;
+        }
+
+        let local_turbo_package_path = repo_root
+            .join("node_modules")
+            .join("turbo")
+            .join("package.json");
+
+        let package_json: PackageJson =
+            serde_json::from_reader(File::open(local_turbo_package_path).ok()?).ok()?;
+
+        Some(Self {
+            bin_path: local_turbo_path,
+            version: package_json.version,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct RepoState {
     pub root: PathBuf,
     pub mode: RepoMode,
+    pub local_turbo_state: Option<LocalTurboState>,
 }
 
 impl RepoState {
@@ -181,9 +242,12 @@ impl RepoState {
                 RepoMode::SinglePackage
             };
 
+            let local_turbo_state = LocalTurboState::infer(root_path);
+
             return Ok(Self {
                 root: root_path.to_path_buf(),
                 mode,
+                local_turbo_state,
             });
         }
 
@@ -206,9 +270,12 @@ impl RepoState {
                 pnpm.get_workspace_globs(dir).is_ok() || npm.get_workspace_globs(dir).is_ok();
 
             if is_workspace {
+                let local_turbo_state = LocalTurboState::infer(dir);
+
                 return Ok(Self {
                     root: dir.to_path_buf(),
                     mode: RepoMode::MultiPackage,
+                    local_turbo_state,
                 });
             }
         }
@@ -224,9 +291,11 @@ impl RepoState {
             })?
             .to_path_buf();
 
+        let local_turbo_state = LocalTurboState::infer(&root);
         Ok(Self {
             root,
             mode: RepoMode::SinglePackage,
+            local_turbo_state,
         })
     }
 
@@ -241,60 +310,56 @@ impl RepoState {
     ///
     /// returns: Result<i32, Error>
     fn run_correct_turbo(self, shim_args: ShimArgs) -> Result<Payload> {
-        let local_turbo_path = self.root.join("node_modules").join(".bin").join({
-            #[cfg(windows)]
-            {
-                "turbo.cmd"
-            }
-            #[cfg(not(windows))]
-            {
-                "turbo"
-            }
-        });
-
-        if local_turbo_path.exists() {
-            let canonical_local_turbo = fs_canonicalize(&local_turbo_path)?;
-            // Otherwise we spawn the local turbo process.
+        if let Some(LocalTurboState { bin_path, version }) = &self.local_turbo_state {
+            try_check_for_updates(&shim_args, version, false);
+            let canonical_local_turbo = fs_canonicalize(bin_path)?;
             Ok(Payload::Rust(
                 self.spawn_local_turbo(&canonical_local_turbo, shim_args),
             ))
         } else {
+            try_check_for_updates(&shim_args, get_version(), true);
+            debug!("Running command as global turbo");
             cli::run(Some(self))
         }
     }
 
-    fn local_turbo_supports_skip_infer(&self) -> Result<bool> {
-        let local_turbo_package_path = self
-            .root
-            .join("node_modules")
-            .join("turbo")
-            .join("package.json");
-        let package_json: PackageJson =
-            serde_json::from_reader(File::open(local_turbo_package_path)?)?;
-        let version = Version::from_str(&package_json.version)?;
+    fn local_turbo_supports_skip_infer_and_single_package(&self) -> Result<bool> {
         let skip_infer_versions = VersionReq::parse(SUPPORTS_SKIP_INFER_SEMVER).unwrap();
-        Ok(skip_infer_versions.matches(&version))
+        if let Some(LocalTurboState { version, .. }) = &self.local_turbo_state {
+            let version = Version::parse(version)?;
+            Ok(skip_infer_versions.matches(&version))
+        } else {
+            Ok(false)
+        }
     }
 
     fn spawn_local_turbo(&self, local_turbo_path: &Path, mut shim_args: ShimArgs) -> Result<i32> {
-        println!(
+        debug!(
             "Running local turbo binary in {}\n",
             local_turbo_path.display()
         );
 
+        let supports_skip_infer_and_single_package =
+            self.local_turbo_supports_skip_infer_and_single_package()?;
+        let already_has_single_package_flag = shim_args
+            .remaining_turbo_args
+            .contains(&"--single-package".to_string());
+        let should_add_single_package_flag = self.mode == RepoMode::SinglePackage
+            && !already_has_single_package_flag
+            && supports_skip_infer_and_single_package;
+
         let cwd = fs_canonicalize(&self.root)?;
-        let mut raw_args: Vec<_> = if self.local_turbo_supports_skip_infer()? {
+        let mut raw_args: Vec<_> = if supports_skip_infer_and_single_package {
             vec!["--skip-infer".to_string()]
         } else {
             Vec::new()
         };
 
-        let has_single_package_flag = shim_args
-            .remaining_turbo_args
-            .contains(&"--single-package".to_string());
-
         raw_args.append(&mut shim_args.remaining_turbo_args);
-        if self.mode == RepoMode::SinglePackage && !has_single_package_flag {
+
+        // We add this flag after the raw args to avoid accidentally passing it
+        // as a global flag instead of as a run flag.
+        if should_add_single_package_flag {
             raw_args.push("--single-package".to_string());
         }
 
@@ -325,12 +390,73 @@ fn is_turbo_binary_path_set() -> bool {
     env::var("TURBO_BINARY_PATH").is_ok()
 }
 
-pub fn run() -> Result<Payload> {
-    let args = ShimArgs::parse()?;
-    // If skip_infer is passed, we're probably running local turbo with
-    // global turbo having handled the inference. We can run without any
-    // concerns.
+fn init_env_logger(verbosity: usize) {
+    // configure logger
+    let level = match verbosity {
+        0 => LevelFilter::Warn,
+        1 => LevelFilter::Info,
+        2 => LevelFilter::Debug,
+        _ => LevelFilter::Trace,
+    };
 
+    let mut builder = Builder::new();
+    let env = Env::new().filter("TURBO_LOG_VERBOSITY");
+
+    builder
+        // set defaults
+        .filter_level(level)
+        .write_style(WriteStyle::Auto)
+        // override from env (if available)
+        .parse_env(env);
+
+    builder.format(|buf, record| match record.level() {
+        Level::Error => {
+            let mut level_style = buf.style();
+            let mut log_style = buf.style();
+            level_style.set_bg(Color::Red).set_color(Color::Black);
+            log_style.set_color(Color::Red);
+
+            writeln!(
+                buf,
+                "{} {}",
+                level_style.value(record.level()),
+                log_style.value(record.args())
+            )
+        }
+        Level::Warn => {
+            let mut level_style = buf.style();
+            let mut log_style = buf.style();
+            level_style.set_bg(Color::Yellow).set_color(Color::Black);
+            log_style.set_color(Color::Yellow);
+
+            writeln!(
+                buf,
+                "{} {}",
+                level_style.value(record.level()),
+                log_style.value(record.args())
+            )
+        }
+        Level::Info => writeln!(buf, "{}", record.args()),
+        // trace and debug use the same style
+        _ => {
+            let now = Local::now();
+            writeln!(
+                buf,
+                "{} [{}] {}: {}",
+                // build our own timestamp to match the hashicorp/go-hclog format used by the go
+                // binary
+                now.format("%Y-%m-%dT%H:%M:%S.%3f%z"),
+                record.level(),
+                record.target(),
+                record.args()
+            )
+        }
+    });
+
+    builder.init();
+}
+
+fn try_check_for_updates(args: &ShimArgs, current_version: &str, is_global_turbo: bool) {
     if args.should_check_for_update() {
         // custom footer for update message
         let footer = format!(
@@ -351,13 +477,23 @@ pub fn run() -> Result<Payload> {
             "turbo",
             "https://github.com/vercel/turbo",
             Some(&footer),
-            get_version(),
+            current_version,
             // use default for timeout (800ms)
             None,
             interval,
+            is_global_turbo,
         );
     }
+}
 
+pub fn run() -> Result<Payload> {
+    let args = ShimArgs::parse()?;
+
+    init_env_logger(args.verbosity);
+
+    // If skip_infer is passed, we're probably running local turbo with
+    // global turbo having handled the inference. We can run without any
+    // concerns.
     if args.skip_infer {
         return cli::run(None);
     }
@@ -375,8 +511,8 @@ pub fn run() -> Result<Payload> {
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global
             // commands like login/logout/link/unlink to still work
-            eprintln!("Repository inference failed: {}", err);
-            eprintln!("Running command as global turbo");
+            debug!("Repository inference failed: {}", err);
+            debug!("Running command as global turbo");
             cli::run(None)
         }
     }

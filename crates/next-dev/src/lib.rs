@@ -18,9 +18,9 @@ use std::{
 use anyhow::{anyhow, Context, Result};
 use devserver_options::DevServerOptions;
 use next_core::{
-    create_app_source, create_server_rendered_source, create_web_entry_source, env::load_env,
+    create_app_source, create_page_source, create_web_entry_source, env::load_env,
     manifest::DevManifestContentSource, next_config::load_next_config,
-    next_image::NextImageContentSourceVc,
+    next_image::NextImageContentSourceVc, source_map::NextSourceMapTraceContentSourceVc,
 };
 use owo_colors::OwoColorize;
 use turbo_malloc::TurboMalloc;
@@ -35,9 +35,9 @@ use turbopack_core::{
     environment::ServerAddr,
     issue::IssueSeverity,
     resolve::{parse::RequestVc, pattern::QueryMapVc},
+    server_fs::ServerFileSystemVc,
 };
 use turbopack_dev_server::{
-    fs::DevServerFileSystemVc,
     introspect::IntrospectionSource,
     source::{
         combined::CombinedContentSourceVc, router::RouterContentSource,
@@ -46,9 +46,7 @@ use turbopack_dev_server::{
     },
     DevServer, DevServerBuilder,
 };
-use turbopack_node::{
-    execution_context::ExecutionContextVc, source_map::NextSourceMapTraceContentSourceVc,
-};
+use turbopack_node::execution_context::ExecutionContextVc;
 
 #[derive(Clone)]
 pub enum EntryRequest {
@@ -267,8 +265,9 @@ async fn source(
     let project_relative = project_dir.strip_prefix(&root_dir).unwrap();
     let project_relative = project_relative
         .strip_prefix(MAIN_SEPARATOR)
-        .unwrap_or(project_relative);
-    let project_path = fs.root().join(project_relative);
+        .unwrap_or(project_relative)
+        .replace(MAIN_SEPARATOR, "/");
+    let project_path = fs.root().join(&project_relative);
 
     let env = load_env(project_path);
     let build_output_root = output_fs.root().join(".next/build");
@@ -280,7 +279,7 @@ async fn source(
     let output_root = output_fs.root().join(".next/server");
     let server_addr = ServerAddr::new(*server_addr).cell();
 
-    let dev_server_fs = DevServerFileSystemVc::new().as_file_system();
+    let dev_server_fs = ServerFileSystemVc::new().as_file_system();
     let dev_server_root = dev_server_fs.root();
     let entry_requests = entry_requests
         .iter()
@@ -302,7 +301,7 @@ async fn source(
         &browserslist_query,
         next_config,
     );
-    let rendered_source = create_server_rendered_source(
+    let page_source = create_page_source(
         project_path,
         execution_context,
         output_root.join("pages"),
@@ -330,7 +329,7 @@ async fn source(
     let static_source =
         StaticAssetsContentSourceVc::new(String::new(), project_path.join("public")).into();
     let manifest_source = DevManifestContentSource {
-        page_roots: vec![app_source, rendered_source],
+        page_roots: vec![app_source, page_source],
     }
     .cell()
     .into();
@@ -338,7 +337,7 @@ async fn source(
         manifest_source,
         static_source,
         app_source,
-        rendered_source,
+        page_source,
         web_source,
     ]);
     let introspect = IntrospectionSource {
@@ -350,7 +349,7 @@ async fn source(
     let source_maps = SourceMapContentSourceVc::new(main_source).into();
     let source_map_trace = NextSourceMapTraceContentSourceVc::new(main_source).into();
     let img_source = NextImageContentSourceVc::new(
-        CombinedContentSourceVc::new(vec![static_source, rendered_source]).into(),
+        CombinedContentSourceVc::new(vec![static_source, page_source]).into(),
     )
     .into();
     let source = RouterContentSource {
@@ -372,7 +371,7 @@ async fn source(
 
     handle_issues(dev_server_fs, console_ui).await?;
     handle_issues(web_source, console_ui).await?;
-    handle_issues(rendered_source, console_ui).await?;
+    handle_issues(page_source, console_ui).await?;
 
     Ok(source)
 }

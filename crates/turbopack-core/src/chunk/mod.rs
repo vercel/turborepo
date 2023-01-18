@@ -18,6 +18,7 @@ use turbo_tasks_hash::DeterministicHash;
 use self::optimize::optimize;
 use crate::{
     asset::{Asset, AssetVc, AssetsVc},
+    environment::EnvironmentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{ResolveResult, ResolveResultVc},
 };
@@ -48,6 +49,8 @@ pub struct ModuleIds(Vec<ModuleIdVc>);
 #[turbo_tasks::value_trait]
 pub trait ChunkingContext {
     fn output_root(&self) -> FileSystemPathVc;
+
+    fn environment(&self) -> EnvironmentVc;
 
     fn chunk_path(&self, path: FileSystemPathVc, extension: &str) -> FileSystemPathVc;
 
@@ -156,12 +159,15 @@ pub trait ParallelChunkReference: AssetReference + ValueToString {
 
 /// Specifies how a chunk interacts with other chunks when building a chunk
 /// group
-#[derive(Copy, Clone, TraceRawVcs, Serialize, Deserialize, Eq, PartialEq, ValueDebugFormat)]
+#[derive(
+    Copy, Default, Clone, Hash, TraceRawVcs, Serialize, Deserialize, Eq, PartialEq, ValueDebugFormat,
+)]
 pub enum ChunkingType {
     /// Asset is always placed into the referencing chunk and loaded with it.
     Placed,
     /// A heuristic determines if the asset is placed into the referencing chunk
     /// or in a separate chunk that is loaded in parallel.
+    #[default]
     PlacedOrParallel,
     /// Asset is always placed in a separate chunk that is loaded in parallel.
     Parallel,
@@ -170,15 +176,9 @@ pub enum ChunkingType {
     /// Note: Separate chunks need to be loaded by something external to current
     /// reference.
     Separate,
-    /// A async loader is placed into the referencing chunk and loads the
+    /// An async loader is placed into the referencing chunk and loads the
     /// separate chunk group in which the asset is placed.
     SeparateAsync,
-}
-
-impl Default for ChunkingType {
-    fn default() -> Self {
-        ChunkingType::PlacedOrParallel
-    }
 }
 
 #[turbo_tasks::value(transparent)]
@@ -351,7 +351,7 @@ async fn chunk_content_internal<I: FromChunkableAsset>(
         chunk_item.references(),
     ));
     chunk_items.push(chunk_item);
-    processed_assets.insert(entry);
+    processed_assets.insert((ChunkingType::Placed, entry));
 
     if let Some(additional_entries) = additional_entries {
         for entry in &*additional_entries.await? {
@@ -360,7 +360,7 @@ async fn chunk_content_internal<I: FromChunkableAsset>(
                 chunk_item.references(),
             ));
             chunk_items.push(chunk_item);
-            processed_assets.insert(*entry);
+            processed_assets.insert((ChunkingType::Placed, *entry));
         }
     }
 
@@ -404,7 +404,7 @@ async fn chunk_content_internal<I: FromChunkableAsset>(
                 for asset in assets
                     .await?
                     .iter()
-                    .filter(|asset| processed_assets.insert(**asset))
+                    .filter(|asset| processed_assets.insert((chunking_type, **asset)))
                 {
                     let asset: &AssetVc = asset;
 

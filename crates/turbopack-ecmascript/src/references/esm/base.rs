@@ -37,18 +37,22 @@ pub enum ReferencedAsset {
 impl ReferencedAsset {
     pub async fn get_ident(&self) -> Result<Option<String>> {
         Ok(match self {
-            ReferencedAsset::Some(asset) => {
-                let path = asset.path().to_string().await?;
-                Some(magic_identifier::encode(&format!(
-                    "imported module {}",
-                    path
-                )))
-            }
+            ReferencedAsset::Some(asset) => Some(Self::get_ident_from_placeable(asset).await?),
             ReferencedAsset::OriginalReferenceTypeExternal(request) => {
                 Some(magic_identifier::encode(&format!("external {}", request)))
             }
             ReferencedAsset::None => None,
         })
+    }
+
+    pub(crate) async fn get_ident_from_placeable(
+        asset: &EcmascriptChunkPlaceableVc,
+    ) -> Result<String> {
+        let path = asset.path().to_string().await?;
+        Ok(magic_identifier::encode(&format!(
+            "imported module {}",
+            path
+        )))
     }
 }
 
@@ -149,17 +153,18 @@ impl ValueToString for EsmAssetReference {
 impl ChunkableAssetReference for EsmAssetReference {
     #[turbo_tasks::function]
     fn chunking_type(&self, _context: ChunkingContextVc) -> Result<ChunkingTypeOptionVc> {
-        Ok(
+        Ok(ChunkingTypeOptionVc::cell(
             if let Some(chunking_type) = self.annotations.chunking_type() {
                 match chunking_type {
-                    "separate" => ChunkingTypeOptionVc::cell(Some(ChunkingType::Separate)),
-                    "parallel" => ChunkingTypeOptionVc::cell(Some(ChunkingType::Parallel)),
+                    "separate" => Some(ChunkingType::Separate),
+                    "parallel" => Some(ChunkingType::Parallel),
+                    "none" => None,
                     _ => return Err(anyhow!("unknown chunking_type: {}", chunking_type)),
                 }
             } else {
-                ChunkingTypeOptionVc::cell(Some(ChunkingType::default()))
+                Some(ChunkingType::default())
             },
-        )
+        ))
     }
 }
 

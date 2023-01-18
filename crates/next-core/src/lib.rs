@@ -9,21 +9,24 @@ mod fallback;
 pub mod manifest;
 mod next_build;
 pub mod next_client;
+mod next_client_chunks;
 mod next_client_component;
 pub mod next_config;
 mod next_font_google;
 pub mod next_image;
 mod next_import_map;
 pub mod next_server;
+pub mod next_shared;
 mod page_loader;
+mod page_source;
 pub mod react_refresh;
 mod runtime;
-mod server_rendered_source;
 mod util;
 mod web_entry_source;
 
 pub use app_source::create_app_source;
-pub use server_rendered_source::create_server_rendered_source;
+pub use page_source::create_page_source;
+pub use turbopack_node::source_map;
 pub use web_entry_source::create_web_entry_source;
 
 pub fn register() {
