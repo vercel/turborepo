@@ -1,0 +1,45 @@
+import { TransformerArgs } from "../types";
+import { TransformerResults } from "../runner";
+import getTransformerHelpers from "../utils/getTransformerHelpers";
+
+// transformer details
+const TRANSFORMER = "{{ name }}";
+const DESCRIPTION = "{{ description }}";
+const INTRODUCED_IN = "{{ introducedIn }}";
+
+export function transformer({
+  root,
+  options,
+}: TransformerArgs): TransformerResults {
+  const { log, runner } = getTransformerHelpers({
+    transformer: TRANSFORMER,
+    rootPath: root,
+    options,
+  });
+
+  log.info("Short description about {{ name }}")
+
+  /*
+    Make changes to required files, and track each modified file with:
+
+    runner.modifyFile({
+      filePath: packageJsonPath,   // absolute path to file
+      after: transformedFile,      // file after modifications have been made
+    });
+
+    This automatically handles all cases of print / dry etc.
+  */
+
+  return runner.finish();
+}
+
+const transformerMeta = {
+  name: `${TRANSFORMER}: ${DESCRIPTION}`,
+  value: TRANSFORMER,
+  introducedIn: INTRODUCED_IN,
+  transformer,
+};
+
+export default transformerMeta;
+
+
