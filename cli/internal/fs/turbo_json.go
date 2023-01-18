@@ -102,8 +102,7 @@ func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 	}
 
 	var turboJSON *TurboJSON
-	turboJSONPath := rootPath.UntypedJoin(configFile)
-	turboFromFiles, err := ReadTurboConfig(turboJSONPath)
+	turboFromFiles, err := ReadTurboConfig(rootPath.UntypedJoin(configFile))
 
 	if !includeSynthesizedFromRootPackageJSON && err != nil {
 		// There was an error, and we don't have any chance of recovering
