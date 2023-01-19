@@ -3,6 +3,7 @@ package lockfile
 
 import (
 	"io"
+	"reflect"
 	"sort"
 
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -23,6 +24,11 @@ type Lockfile interface {
 	// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
 	// the cache.
 	GlobalChange(other Lockfile) bool
+}
+
+// IsNil checks if lockfile is nil
+func IsNil(l Lockfile) bool {
+	return l == nil || reflect.ValueOf(l).IsNil()
 }
 
 // Package Structure representing a possible Pack

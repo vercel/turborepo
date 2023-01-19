@@ -374,15 +374,15 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 }
 
 // TransitiveClosure the set of all lockfile keys that pkg depends on
-func TransitiveClosure(pkg *fs.PackageJSON, lockfile lockfile.Lockfile) (mapset.Set, error) {
-	if lockfile == nil {
+func TransitiveClosure(pkg *fs.PackageJSON, lockFile lockfile.Lockfile) (mapset.Set, error) {
+	if lockfile.IsNil(lockFile) {
 		return nil, fmt.Errorf("No lockfile available to do analysis on")
 	}
 
 	resolvedPkgs := mapset.NewSet()
 	lockfileEg := &errgroup.Group{}
 
-	transitiveClosureHelper(lockfileEg, pkg, lockfile, pkg.UnresolvedExternalDeps, resolvedPkgs)
+	transitiveClosureHelper(lockfileEg, pkg, lockFile, pkg.UnresolvedExternalDeps, resolvedPkgs)
 
 	if err := lockfileEg.Wait(); err != nil {
 		return nil, err
@@ -457,25 +457,14 @@ func (c *Context) InternalDependencies(start []string) ([]string, error) {
 // This assumes that none of the package.json in the workspace change, it is
 // the responsibility of the caller to verify this.
 func (c *Context) ChangedPackages(previousLockfile lockfile.Lockfile) ([]string, error) {
-	if previousLockfile == nil || c.Lockfile == nil {
+	if lockfile.IsNil(previousLockfile) || lockfile.IsNil(c.Lockfile) {
 		return nil, fmt.Errorf("Cannot detect changed packages without previous and current lockfile")
 	}
-	changedPkgs := make([]string, 0, len(c.WorkspaceInfos))
 
-	// check if prev and current have "global" changes e.g. lockfile bump
-	if c.Lockfile.GlobalChange(previousLockfile) {
-		for pkgName := range c.WorkspaceInfos {
-			changedPkgs = append(changedPkgs, pkgName)
-		}
-		sort.Strings(changedPkgs)
-		return changedPkgs, nil
-	}
-
-	for pkgName, pkg := range c.WorkspaceInfos {
+	didPackageChange := func(pkgName string, pkg *fs.PackageJSON) bool {
 		previousDeps, err := TransitiveClosure(pkg, previousLockfile)
-		if err != nil {
-			changedPkgs = append(changedPkgs, pkgName)
-			continue
+		if err != nil || previousDeps.Cardinality() != len(pkg.TransitiveDeps) {
+			return true
 		}
 
 		prevExternalDeps := make([]lockfile.Package, 0, previousDeps.Cardinality())
@@ -484,10 +473,41 @@ func (c *Context) ChangedPackages(previousLockfile lockfile.Lockfile) ([]string,
 		}
 		sort.Sort(lockfile.ByKey(prevExternalDeps))
 
-		oldHash, err := fs.HashObject(prevExternalDeps)
-		if err != nil || oldHash != pkg.ExternalDepsHash {
-			changedPkgs = append(changedPkgs, pkgName)
+		for i := range prevExternalDeps {
+			if prevExternalDeps[i] != pkg.TransitiveDeps[i] {
+				return true
+			}
+		}
+		return false
+	}
+
+	changedPkgs := make([]string, 0, len(c.WorkspaceInfos))
+
+	// check if prev and current have "global" changes e.g. lockfile bump
+	globalChange := c.Lockfile.GlobalChange(previousLockfile)
+
+	for pkgName, pkg := range c.WorkspaceInfos {
+		if globalChange {
+			break
+		}
+		if didPackageChange(pkgName, pkg) {
+			if pkgName == util.RootPkgName {
+				globalChange = true
+			} else {
+				changedPkgs = append(changedPkgs, pkgName)
+			}
 		}
 	}
-	return c.InternalDependencies(changedPkgs)
+
+	if globalChange {
+		changedPkgs = make([]string, 0, len(c.WorkspaceInfos))
+		for pkgName := range c.WorkspaceInfos {
+			changedPkgs = append(changedPkgs, pkgName)
+		}
+		sort.Strings(changedPkgs)
+		return changedPkgs, nil
+	}
+
+	sort.Strings(changedPkgs)
+	return changedPkgs, nil
 }

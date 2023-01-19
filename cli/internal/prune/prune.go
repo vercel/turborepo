@@ -8,6 +8,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/context"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/ui"
@@ -95,7 +96,7 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 	if !canPrune {
 		return errors.Errorf("this command is not yet implemented for %s", ctx.PackageManager.Name)
 	}
-	if ctx.Lockfile == nil {
+	if lockfile.IsNil(ctx.Lockfile) {
 		return errors.New("Cannot prune without parsed lockfile")
 	}
 

@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/context"
 	"github.com/vercel/turbo/cli/internal/graph"
+	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/scm"
 	scope_filter "github.com/vercel/turbo/cli/internal/scope/filter"
 	"github.com/vercel/turbo/cli/internal/turbostate"
@@ -171,7 +172,6 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, ctx *context.Contex
 		if err != nil {
 			return nil, err
 		}
-		// need to verify that if packages/a/package.json is changed it'll show up in this list always
 		changedPkgs := getChangedPackages(filteredChangedFiles, ctx.WorkspaceInfos)
 
 		if lockfileChanges, fullChanges := getChangesFromLockfile(scm, ctx, changedFiles, fromRef); !fullChanges {
@@ -200,6 +200,10 @@ func getChangesFromLockfile(scm scm.SCM, ctx *context.Context, changedFiles []st
 	}
 	if !match {
 		return nil, false
+	}
+
+	if lockfile.IsNil(ctx.Lockfile) {
+		return nil, true
 	}
 
 	prevContents, err := scm.PreviousContent(fromRef, ctx.PackageManager.Lockfile)
