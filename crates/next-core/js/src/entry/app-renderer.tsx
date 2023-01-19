@@ -29,10 +29,12 @@ import type { RenderData } from "types/turbopack";
 
 import "next/dist/server/node-polyfill-fetch";
 import "next/dist/server/node-polyfill-web-streams";
+import "@vercel/turbopack-next/polyfill/async-local-storage";
 import { RenderOpts, renderToHTMLOrFlight } from "next/dist/server/app-render";
 import { PassThrough } from "stream";
 import { ServerResponseShim } from "@vercel/turbopack-next/internal/http";
 import { ParsedUrlQuery } from "node:querystring";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 globalThis.__next_require__ = (data) => {
   const [, , ssr_id] = JSON.parse(data);
