@@ -105,6 +105,11 @@ func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 	turboFromFiles, err := ReadTurboConfig(rootPath.UntypedJoin(configFile))
 
 	if !includeSynthesizedFromRootPackageJSON && err != nil {
+		// If the file didn't exist, throw a custom error here instead of propagating
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("Could not find %s. Follow directions at https://turbo.build/repo/docs to create one: file does not exist", configFile)
+		}
+
 		// There was an error, and we don't have any chance of recovering
 		// because we aren't synthesizing anything
 		return nil, err
