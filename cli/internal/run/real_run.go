@@ -3,6 +3,7 @@ package run
 import (
 	gocontext "context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -18,6 +19,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/colorcache"
 	"github.com/vercel/turbo/cli/internal/core"
+	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/logstreamer"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -161,7 +163,30 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	tracer := ec.runState.Run(packageTask.TaskID)
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
-	hash, err := ec.taskHashes.CalculateTaskHash(packageTask, deps, ec.logger, passThroughArgs)
+
+	var dynamicHash string
+	taskDefinition := packageTask.TaskDefinition
+	if taskDefinition.Volatile && taskDefinition.Hash != "" {
+		hashCommand := strings.Split(taskDefinition.Hash, " ")
+		cmd := exec.Command(hashCommand[0], hashCommand[1:]...)
+		cmd.Dir = ec.repoRoot.ToString()
+		cmd.Env = os.Environ()
+
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		execErr := cmd.Run()
+		if execErr != nil {
+			log.Fatal(execErr)
+		}
+
+		bytes, _ := io.ReadAll(stdout)
+		dynamicHash, _ = fs.HashObject(bytes)
+	}
+
+	hash, err := ec.taskHashes.CalculateTaskHash(packageTask, dynamicHash, deps, ec.logger, passThroughArgs)
 	ec.logger.Debug("task hash", "value", hash)
 	if err != nil {
 		ec.ui.Error(fmt.Sprintf("Hashing error: %v", err))

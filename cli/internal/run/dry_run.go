@@ -97,7 +97,18 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
 		passThroughArgs := rs.ArgsForTask(packageTask.Task)
-		hash, err := taskHashes.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
+
+		var dynamicHash string
+		// taskDefinition := packageTask.TaskDefinition
+		// if taskDefinition.Volatile && taskDefinition.Hash != "" {
+		// 	cmd := exec.Command(taskDefinition.Hash)
+		// 	cmd.Dir = base.RepoRoot.ToString()
+		// 	cmd.Env = os.Environ()
+
+		// 	dynamicHash, _ = fs.HashObject("asdf")
+		// }
+
+		hash, err := taskHashes.CalculateTaskHash(packageTask, dynamicHash, deps, base.Logger, passThroughArgs)
 		if err != nil {
 			return err
 		}

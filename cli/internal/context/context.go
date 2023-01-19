@@ -225,6 +225,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 		return nil, fmt.Errorf("failed to resolve dependencies for root package: %v", err)
 	}
 	c.WorkspaceInfos[util.RootPkgName] = rootPackageJSON
+	c.WorkspaceInfos["~"] = &fs.PackageJSON{}
 
 	return c, warnings.errorOrNil()
 }

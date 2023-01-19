@@ -307,6 +307,11 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			// Parse the taskID of this dependency task
 			packageName, taskName := util.GetPackageTaskFromId(depTaskID)
 
+			// If it's a synthesized task, we can also skip it.
+			if packageName == "~" {
+				return nil
+			}
+
 			// Get the Task Definition so we can check if it is Persistent
 			depTaskDefinition, taskExists := e.getTaskDefinition(packageName, taskName, depTaskID)
 			if taskExists != nil {

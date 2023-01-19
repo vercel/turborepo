@@ -56,6 +56,8 @@ type rawTask struct {
 	OutputMode util.TaskOutputMode `json:"outputMode,omitempty"`
 	Env        []string            `json:"env,omitempty"`
 	Persistent bool                `json:"persistent,omitempty"`
+	Volatile   bool                `json:"volatile,omitempty"`
+	Target     string              `json:"target,omitempty"`
 }
 
 // Pipeline is a struct for deserializing .pipeline in configFile
@@ -91,6 +93,10 @@ type TaskDefinition struct {
 	// Persistent indicates whether the Task is expected to exit or not
 	// Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
 	Persistent bool
+
+	Target   string
+	Volatile bool
+	Hash     string
 }
 
 // LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
@@ -272,6 +278,12 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	c.TopologicalDependencies = []string{} // TODO @mehulkar: this should be a set
 	c.TaskDependencies = []string{}        // TODO @mehulkar: this should be a set
 
+	// Synthesize the target dependency node, leave a marker for later.
+	c.Target = task.Target
+	if task.Target == "node" {
+		c.TaskDependencies = append(c.TaskDependencies, "~#node")
+	}
+
 	for _, dependency := range task.DependsOn {
 		if strings.HasPrefix(dependency, envPipelineDelimiter) {
 			log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
@@ -340,6 +352,19 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 	sort.Strings(c.GlobalEnv)
 	c.GlobalDeps = globalFileDependencies.UnsafeListOfStrings()
 	sort.Strings(c.GlobalDeps)
+
+	// Synthesize the task.
+	for _, task := range raw.Pipeline {
+		if task.Target == "node" {
+			syntheticTask := TaskDefinition{
+				ShouldCache: true,
+				Volatile:    true,
+				Hash:        "node -e \"console.log(JSON.stringify({a:1,arch:process.arch,platform:process.platform,version:process.version}))\"",
+			}
+			raw.Pipeline["~#node"] = syntheticTask
+			break
+		}
+	}
 
 	// copy these over, we don't need any changes here.
 	c.Pipeline = raw.Pipeline

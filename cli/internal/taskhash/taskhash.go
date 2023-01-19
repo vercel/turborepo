@@ -230,6 +230,7 @@ type taskHashInputs struct {
 	outputs              fs.TaskOutputs
 	passThruArgs         []string
 	hashableEnvPairs     []string
+	dynamicHash          string
 	globalHash           string
 	taskDependencyHashes []string
 }
@@ -265,7 +266,7 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // CalculateTaskHash calculates the hash for package-task combination. It is threadsafe, provided
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
-func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, logger hclog.Logger, args []string) (string, error) {
+func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dynamicHash string, dependencySet dag.Set, logger hclog.Logger, args []string) (string, error) {
 	pfs := specFromPackageTask(packageTask)
 	pkgFileHashKey := pfs.ToKey()
 
@@ -299,6 +300,7 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 		outputs:              outputs.Sort(),
 		passThruArgs:         args,
 		hashableEnvPairs:     hashableEnvPairs,
+		dynamicHash:          dynamicHash,
 		globalHash:           th.globalHash,
 		taskDependencyHashes: taskDependencyHashes,
 	})
