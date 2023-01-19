@@ -15,6 +15,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	fmt.Printf("args: %v", os.Args[1])
+
 	argsString := os.Args[1]
 	var args turbostate.ParsedArgsFromRust
 	err := json.Unmarshal([]byte(argsString), &args)
