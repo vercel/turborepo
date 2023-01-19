@@ -253,7 +253,7 @@ impl MemoryBackend {
 
             if idle {
                 if let Some((_collected, _count, _stats)) = collected {
-                    let job = self.create_backend_job(Job::GarbaggeCollection);
+                    let job = self.create_backend_job(Job::GarbageCollection);
                     turbo_tasks.schedule_backend_background_job(job);
                 } else {
                     self.idle_gc_active.store(false, Ordering::Release);
@@ -270,7 +270,7 @@ impl Backend for MemoryBackend {
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
         {
-            let job = self.create_backend_job(Job::GarbaggeCollection);
+            let job = self.create_backend_job(Job::GarbageCollection);
             turbo_tasks.schedule_backend_background_job(job);
         }
     }
@@ -598,7 +598,7 @@ pub(crate) enum Job {
     /// Unloads a previously used root scope after all other foreground tasks
     /// are done.
     UnloadRootScope(TaskScopeId),
-    GarbaggeCollection,
+    GarbageCollection,
 }
 
 impl Job {
@@ -667,7 +667,7 @@ impl Job {
                     backend.scope_id_factory.reuse(id);
                 }
             }
-            Job::GarbaggeCollection => {
+            Job::GarbageCollection => {
                 backend.run_gc(true, turbo_tasks);
             }
         }

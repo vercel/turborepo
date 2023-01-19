@@ -1940,7 +1940,7 @@ impl Task {
         let mut missing_durations = Vec::new();
         loop {
             // This might be slightly inaccurate as we don't hold the lock for the whole
-            // duration so it might be too large when concurrent modificiations
+            // duration so it might be too large when concurrent modifications
             // happen, but that's fine.
             let mut dependent_tasks_compute_duration = Duration::ZERO;
             let mut included_tasks = HashSet::with_hasher(BuildNoHashHasher::<TaskId>::default());
