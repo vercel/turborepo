@@ -252,46 +252,6 @@ pub fn get_next_client_resolved_map(
     .cell()
 }
 
-#[turbo_tasks::function]
-pub async fn get_next_server_resolved_map(
-    context: FileSystemPathVc,
-    ty: Value<ServerContextType>,
-    next_config: NextConfigVc,
-) -> Result<ResolvedMapVc> {
-    let glob_mappings = match ty.into_value() {
-        ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } => {
-            let mut glob_mappings = vec![(
-                context,
-                GlobVc::new("**/node_modules"),
-                ImportMapping::External(None).cell(),
-            )];
-
-            let transpiled_packages = next_config.transpile_packages().await?;
-            if !transpiled_packages.is_empty() {
-                glob_mappings.insert(
-                    0,
-                    (
-                        context,
-                        GlobVc::new(&format!(
-                            "**/node_modules/{{{}}}",
-                            transpiled_packages.join(",")
-                        )),
-                        ImportMapping::Empty.cell(),
-                    ),
-                );
-            }
-
-            glob_mappings
-        }
-        ServerContextType::AppSSR { .. } | ServerContextType::AppRSC { .. } => vec![],
-    };
-
-    Ok(ResolvedMap {
-        by_glob: glob_mappings,
-    }
-    .cell())
-}
-
 static NEXT_ALIASES: [(&str, &str); 23] = [
     ("asset", "next/dist/compiled/assert"),
     ("buffer", "next/dist/compiled/buffer"),

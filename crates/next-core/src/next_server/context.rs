@@ -12,13 +12,13 @@ use turbopack_core::environment::{
 use turbopack_ecmascript::EcmascriptInputTransform;
 use turbopack_node::execution_context::ExecutionContextVc;
 
-use super::transforms::get_next_server_transforms_rules;
+use super::{
+    resolve::ExternalCjsModulesResolvePluginVc, transforms::get_next_server_transforms_rules,
+};
 use crate::{
     next_build::get_postcss_package_mapping,
     next_config::NextConfigVc,
-    next_import_map::{
-        get_next_build_import_map, get_next_server_import_map, get_next_server_resolved_map,
-    },
+    next_import_map::{get_next_build_import_map, get_next_server_import_map},
     util::foreign_code_context_condition,
 };
 
@@ -39,20 +39,42 @@ pub async fn get_server_resolve_options_context(
 ) -> Result<ResolveOptionsContextVc> {
     let next_server_import_map = get_next_server_import_map(project_path, ty, next_config);
     let foreign_code_context_condition = foreign_code_context_condition(next_config).await?;
-    let next_client_resolved_map = get_next_server_resolved_map(project_path, ty, next_config);
 
     Ok(match ty.into_value() {
-        ServerContextType::Pages { .. }
-        | ServerContextType::PagesData { .. }
-        | ServerContextType::AppSSR { .. } => {
+        ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } => {
+            let external_cjs_modules_plugin = ExternalCjsModulesResolvePluginVc::new(
+                project_path,
+                next_config.transpile_packages(),
+            );
+
             let resolve_options_context = ResolveOptionsContext {
                 enable_node_modules: true,
                 enable_node_externals: true,
                 enable_node_native_modules: true,
+                module: true,
                 custom_conditions: vec!["development".to_string()],
                 import_map: Some(next_server_import_map),
-                resolved_map: Some(next_client_resolved_map),
+                plugins: vec![external_cjs_modules_plugin.into()],
+                ..Default::default()
+            };
+            ResolveOptionsContext {
+                enable_typescript: true,
+                enable_react: true,
+                rules: vec![(
+                    foreign_code_context_condition,
+                    resolve_options_context.clone().cell(),
+                )],
+                ..resolve_options_context
+            }
+        }
+        ServerContextType::AppSSR { .. } => {
+            let resolve_options_context = ResolveOptionsContext {
+                enable_node_modules: true,
+                enable_node_externals: true,
+                enable_node_native_modules: true,
                 module: true,
+                custom_conditions: vec!["development".to_string()],
+                import_map: Some(next_server_import_map),
                 ..Default::default()
             };
             ResolveOptionsContext {
@@ -70,10 +92,9 @@ pub async fn get_server_resolve_options_context(
                 enable_node_modules: true,
                 enable_node_externals: true,
                 enable_node_native_modules: true,
+                module: true,
                 custom_conditions: vec!["development".to_string(), "react-server".to_string()],
                 import_map: Some(next_server_import_map),
-                resolved_map: Some(next_client_resolved_map),
-                module: true,
                 ..Default::default()
             };
             ResolveOptionsContext {
