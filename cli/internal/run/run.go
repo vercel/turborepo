@@ -81,9 +81,11 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	opts.runcacheOpts.SkipReads = runPayload.Force
 	opts.runcacheOpts.SkipWrites = runPayload.NoCache
 
-	err := opts.runcacheOpts.SetTaskOutputMode(runPayload.OutputLogs)
-	if err != nil {
-		return nil, err
+	if runPayload.OutputLogs != "" {
+		err := opts.runcacheOpts.SetTaskOutputMode(runPayload.OutputLogs)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Run flags
@@ -318,6 +320,14 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	// Dry Run
 	if rs.Opts.runOpts.dryRun {
+		// dryRunSummary contains information that is statically analyzable about
+		// the tasks that we expect to run based on the user command.
+		// Currently, we only emit this on dry runs, but it may be useful for real runs later also.
+		summary := &dryRunSummary{
+			Packages: packagesInScope,
+			Tasks:    []taskSummary{},
+		}
+
 		return DryRun(
 			ctx,
 			g,
@@ -325,13 +335,14 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			engine,
 			tracker,
 			turboCache,
-			packagesInScope,
 			r.base,
+			summary,
 		)
 	}
 
+	// RunState captures the runtime results for this run (e.g. timings of each task and profile)
+	runState := NewRunState(startAt, r.opts.runOpts.profile)
 	// Regular run
-
 	return RealRun(
 		ctx,
 		g,
@@ -343,8 +354,8 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		r.base,
 		// Extra arg only for regular runs, dry-run doesn't get this
 		packageManager,
-		startAt,
 		r.processes,
+		runState,
 	)
 }
 

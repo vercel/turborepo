@@ -1,0 +1,17 @@
+{
+  "name": "cargo-sweep-action",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build:main": "ncc build src/main.js -o dist/main --source-map",
+    "build:post": "ncc build src/post.js -o dist/post --source-map",
+    "prepare": "npm run build:main && npm run build:post"
+  },
+  "dependencies": {
+    "@actions/core": "^1.10.0",
+    "@actions/exec": "^1.1.1"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.36.0"
+  }
+}

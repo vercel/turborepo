@@ -31,6 +31,16 @@ runs:
       shell: bash
       run: echo "toolchain=$(cat ./rust-toolchain)" >> $GITHUB_OUTPUT
 
+    - name: "Set rust default environment"
+      shell: bash
+      run: |
+        echo "CARGO_INCREMENTAL=0" >> $GITHUB_ENV
+        echo "CARGO_TERM_COLOR=always" >> $GITHUB_ENV
+        echo "RUST_BACKTRACE=short" >> $GITHUB_ENV
+        # Enable faster sparse index on nightly
+        # https://internals.rust-lang.org/t/call-for-testing-cargo-sparse-registry/16862
+        echo "CARGO_UNSTABLE_SPARSE_REGISTRY=true" >> $GITHUB_ENV
+
     - name: "Setup Rust toolchain"
       uses: dtolnay/rust-toolchain@master
       with:
@@ -45,7 +55,7 @@ runs:
 
     - name: "Add cargo problem matchers"
       shell: bash
-      run: echo "::add-matcher::.github/actions/setup-rust/matchers.json"
+      run: echo "::add-matcher::${{ github.action_path }}/matchers.json"
 
     - name: "Setup Rust Cache"
       uses: Swatinem/rust-cache@v2
@@ -54,3 +64,11 @@ runs:
         key: ${{ inputs.cache-key }}
         # the cache is huge and we only get 10gb max, so we only save on master
         save-if: ${{ github.ref == 'refs/heads/main' && inputs.save-cache || 'false' }}
+
+    - name: "Install cargo-sweep"
+      uses: baptiste0928/cargo-install@v1
+      with:
+        crate: cargo-sweep
+
+    - name: "Run cargo-sweep"
+      uses: ./.github/actions/cargo-sweep
