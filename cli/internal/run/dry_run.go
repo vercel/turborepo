@@ -19,6 +19,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/core"
+	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/taskhash"
@@ -142,18 +143,19 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 		}
 
 		taskIDs = append(taskIDs, taskSummary{
-			TaskID:          packageTask.TaskID,
-			Task:            packageTask.Task,
-			Package:         packageTask.PackageName,
-			Hash:            hash,
-			CacheState:      itemStatus,
-			Command:         command,
-			Dir:             packageTask.Pkg.Dir.ToString(),
-			Outputs:         packageTask.TaskDefinition.Outputs.Inclusions,
-			ExcludedOutputs: packageTask.TaskDefinition.Outputs.Exclusions,
-			LogFile:         packageTask.RepoRelativeLogFile(),
-			Dependencies:    stringAncestors,
-			Dependents:      stringDescendents,
+			TaskID:                 packageTask.TaskID,
+			Task:                   packageTask.Task,
+			Package:                packageTask.PackageName,
+			Hash:                   hash,
+			CacheState:             itemStatus,
+			Command:                command,
+			Dir:                    packageTask.Pkg.Dir.ToString(),
+			Outputs:                packageTask.TaskDefinition.Outputs.Inclusions, // TODO: remove this?
+			ExcludedOutputs:        packageTask.TaskDefinition.Outputs.Exclusions, // TODO: remove this?
+			LogFile:                packageTask.RepoRelativeLogFile(),
+			Dependencies:           stringAncestors,
+			Dependents:             stringDescendents,
+			ResolvedTaskDefinition: packageTask.TaskDefinition,
 		})
 		return nil
 	}
@@ -282,18 +284,19 @@ func commandLooksLikeTurbo(command string) bool {
 
 // TODO: put this somewhere else
 type taskSummary struct {
-	TaskID          string           `json:"taskId"`
-	Task            string           `json:"task"`
-	Package         string           `json:"package"`
-	Hash            string           `json:"hash"`
-	CacheState      cache.ItemStatus `json:"cacheState"`
-	Command         string           `json:"command"`
-	Outputs         []string         `json:"outputs"`
-	ExcludedOutputs []string         `json:"excludedOutputs"`
-	LogFile         string           `json:"logFile"`
-	Dir             string           `json:"directory"`
-	Dependencies    []string         `json:"dependencies"`
-	Dependents      []string         `json:"dependents"`
+	TaskID                 string             `json:"taskId"`
+	Task                   string             `json:"task"`
+	Package                string             `json:"package"`
+	Hash                   string             `json:"hash"`
+	CacheState             cache.ItemStatus   `json:"cacheState"`
+	Command                string             `json:"command"`
+	Outputs                []string           `json:"outputs"`
+	ExcludedOutputs        []string           `json:"excludedOutputs"`
+	LogFile                string             `json:"logFile"`
+	Dir                    string             `json:"directory"`
+	Dependencies           []string           `json:"dependencies"`
+	Dependents             []string           `json:"dependents"`
+	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
 }
 
 type singlePackageTaskSummary struct {

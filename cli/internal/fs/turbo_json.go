@@ -301,6 +301,56 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+type resolvedTaskDefinition struct {
+	Persistent bool                `json:"persistent"`
+	Cache      *bool               `json:"cache"`
+	OutputMode util.TaskOutputMode `json:"outputMode"`
+	Outputs    []string            `json:"outputs"`
+	Inputs     []string            `json:"inputs"`
+	DependsOn  []string            `json:"dependsOn"`
+	Env        []string            `json:"env"`
+}
+
+// MarshalJSON deserializes JSON into a TaskDefinition
+func (c *TaskDefinition) MarshalJSON() ([]byte, error) {
+	// Initialize with empty arrays, so we get empty arrays serialized into JSON
+	task := resolvedTaskDefinition{
+		Outputs:   []string{},
+		Inputs:    []string{},
+		Env:       []string{},
+		DependsOn: []string{},
+	}
+
+	task.Persistent = c.Persistent
+	task.Cache = &c.ShouldCache
+	task.OutputMode = c.OutputMode
+
+	if len(c.Inputs) > 0 {
+		task.Inputs = c.Inputs
+	}
+
+	if len(c.EnvVarDependencies) > 0 {
+		task.Env = append(task.Env, c.EnvVarDependencies...)
+	}
+
+	if len(c.Outputs.Inclusions) > 0 {
+		task.Outputs = append(task.Outputs, c.Outputs.Inclusions...)
+	}
+
+	for _, i := range c.Outputs.Exclusions {
+		task.Outputs = append(task.Outputs, "!"+i)
+	}
+
+	if len(c.TaskDependencies) > 0 {
+		task.DependsOn = append(task.DependsOn, c.TaskDependencies...)
+	}
+	for _, i := range c.TopologicalDependencies {
+		task.DependsOn = append(task.DependsOn, "^"+i)
+	}
+
+	return json.Marshal(task)
+}
+
 // UnmarshalJSON deserializes TurboJSON objects into struct
 func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 	raw := &rawTurboJSON{}
