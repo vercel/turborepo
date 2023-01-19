@@ -300,15 +300,16 @@ type taskSummary struct {
 }
 
 type singlePackageTaskSummary struct {
-	Task            string           `json:"task"`
-	Hash            string           `json:"hash"`
-	CacheState      cache.ItemStatus `json:"cacheState"`
-	Command         string           `json:"command"`
-	Outputs         []string         `json:"outputs"`
-	ExcludedOutputs []string         `json:"excludedOutputs"`
-	LogFile         string           `json:"logFile"`
-	Dependencies    []string         `json:"dependencies"`
-	Dependents      []string         `json:"dependents"`
+	Task                   string             `json:"task"`
+	Hash                   string             `json:"hash"`
+	CacheState             cache.ItemStatus   `json:"cacheState"`
+	Command                string             `json:"command"`
+	Outputs                []string           `json:"outputs"`
+	ExcludedOutputs        []string           `json:"excludedOutputs"`
+	LogFile                string             `json:"logFile"`
+	Dependencies           []string           `json:"dependencies"`
+	Dependents             []string           `json:"dependents"`
+	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
 }
 
 func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
@@ -320,14 +321,16 @@ func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
 	for i, dependent := range ht.Dependents {
 		dependents[i] = util.StripPackageName(dependent)
 	}
+
 	return singlePackageTaskSummary{
-		Task:         util.RootTaskTaskName(ht.TaskID),
-		Hash:         ht.Hash,
-		CacheState:   ht.CacheState,
-		Command:      ht.Command,
-		Outputs:      ht.Outputs,
-		LogFile:      ht.LogFile,
-		Dependencies: dependencies,
-		Dependents:   dependents,
+		Task:                   util.RootTaskTaskName(ht.TaskID),
+		Hash:                   ht.Hash,
+		CacheState:             ht.CacheState,
+		Command:                ht.Command,
+		Outputs:                ht.Outputs,
+		LogFile:                ht.LogFile,
+		Dependencies:           dependencies,
+		Dependents:             dependents,
+		ResolvedTaskDefinition: ht.ResolvedTaskDefinition,
 	}
 }
