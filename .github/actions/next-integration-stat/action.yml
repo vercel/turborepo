@@ -1,0 +1,11 @@
+name: "Next.js integration status"
+author: Turbopack team
+description: "Display next.js integration test failure status"
+
+inputs:
+  token:
+    default: ${{ github.token }}
+
+runs:
+  using: node16
+  main: index.js
