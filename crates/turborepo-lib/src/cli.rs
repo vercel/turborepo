@@ -20,7 +20,9 @@ use crate::{
     Payload,
 };
 
-pub const INVOCATION_DIR_ENV_VAR: &'static str = "TURBO_INVOCATION_DIR";
+// Global turbo sets this environment variable to its cwd so that local
+// turbo can use it for package inference.
+pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum OutputLogsMode {
