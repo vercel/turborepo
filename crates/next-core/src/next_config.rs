@@ -39,7 +39,7 @@ use crate::embed_js::next_asset;
 #[serde(rename_all = "camelCase")]
 pub struct NextConfig {
     pub cross_origin: Option<String>,
-    pub config_file: String,
+    pub config_file: Option<String>,
     pub config_file_name: String,
 
     pub react_strict_mode: Option<bool>,
