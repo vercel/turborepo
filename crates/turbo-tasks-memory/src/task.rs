@@ -1180,32 +1180,30 @@ impl Task {
                                         TaskMetaStateWriteGuard::Partial(s) => s.stats_type,
                                         TaskMetaStateWriteGuard::Unloaded(s) => s.stats_type,
                                     };
-                                    if let TaskMetaState::Partial(state) = replace(
+                                    let TaskMetaState::Partial(state) = replace(
                                         &mut *state.into_inner(),
                                         TaskMetaState::Unloaded(UnloadedTaskState { stats_type }),
-                                    ) {
-                                        child.decrement_tasks();
-                                        child.decrement_unfinished_tasks(backend);
-                                        let notify = {
-                                            // Partial tasks are always dirty
-                                            let mut child = child.state.lock();
-                                            child.remove_dirty_task(self.id);
-                                            child.take_all_dependent_tasks()
-                                        };
-                                        drop(state);
-                                        println!("unloading {} from {}", root, self.id);
-
-                                        turbo_tasks.schedule_notify_tasks_set(&notify);
-
-                                        // Now this root scope is eventually no longer referenced
-                                        // and we can unload it, once all foreground jobs are done
-                                        // since there might be ongoing add/remove scopes.
-                                        let job =
-                                            backend.create_backend_job(Job::UnloadRootScope(root));
-                                        turbo_tasks.schedule_backend_foreground_job(job);
-                                    } else {
+                                    ) else {
                                         unreachable!("partial is set so it must be Partial");
-                                    }
+                                    };
+                                    child.decrement_tasks();
+                                    child.decrement_unfinished_tasks(backend);
+                                    let notify = {
+                                        // Partial tasks are always dirty
+                                        let mut child = child.state.lock();
+                                        child.remove_dirty_task(self.id);
+                                        child.take_all_dependent_tasks()
+                                    };
+                                    drop(state);
+
+                                    turbo_tasks.schedule_notify_tasks_set(&notify);
+
+                                    // Now this root scope is eventually no longer referenced
+                                    // and we can unload it, once all foreground jobs are done
+                                    // since there might be ongoing add/remove scopes.
+                                    let job =
+                                        backend.create_backend_job(Job::UnloadRootScope(root));
+                                    turbo_tasks.schedule_backend_foreground_job(job);
                                 }
                             });
                         } else {
@@ -1942,7 +1940,7 @@ impl Task {
         let mut missing_durations = Vec::new();
         loop {
             // This might be slightly inaccurate as we don't hold the lock for the whole
-            // duration So it might be too large when concurrent modificiations
+            // duration so it might be too large when concurrent modificiations
             // happen, but that's fine.
             let mut dependent_tasks_compute_duration = Duration::ZERO;
             let mut included_tasks = HashSet::with_hasher(BuildNoHashHasher::<TaskId>::default());
@@ -2085,7 +2083,7 @@ impl Task {
                         for cell in cells.iter_mut() {
                             if cell.has_value() && cell.has_dependent_tasks() {
                                 has_used_cells = true;
-                                for task_id in cell.dependent_tasks() {
+                                for &task_id in cell.dependent_tasks() {
                                     if included_tasks.insert(task_id) {
                                         if let Some(duration) = task_duration_cache.get(&task_id) {
                                             dependent_tasks_compute_duration += *duration;
@@ -2099,7 +2097,7 @@ impl Task {
                     }
 
                     if !active {
-                        for task_id in state.output.dependent_tasks() {
+                        for &task_id in state.output.dependent_tasks() {
                             if included_tasks.insert(task_id) {
                                 if let Some(duration) = task_duration_cache.get(&task_id) {
                                     dependent_tasks_compute_duration += *duration;

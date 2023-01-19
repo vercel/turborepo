@@ -119,8 +119,8 @@ impl Output {
         }
     }
 
-    pub fn dependent_tasks(&self) -> impl Iterator<Item = TaskId> + '_ {
-        self.dependent_tasks.iter().copied()
+    pub fn dependent_tasks(&self) -> &AutoSet<TaskId> {
+        &self.dependent_tasks
     }
 
     pub fn gc_drop(self, turbo_tasks: &dyn TurboTasksBackendApi) {

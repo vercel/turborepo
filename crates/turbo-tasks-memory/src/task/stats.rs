@@ -74,7 +74,6 @@ impl TaskStats {
 
     /// Returns the last execution of the task relative to the start of the
     /// program.
-    #[allow(dead_code)] // NOTE(alexkirsz) This will be useful for GC.
     pub fn last_execution_relative_to_start(&self) -> Duration {
         match self {
             Self::Full(stats) => stats.last_execution_relative_to_start(),

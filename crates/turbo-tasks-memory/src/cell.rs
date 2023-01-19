@@ -45,6 +45,7 @@ pub struct RecomputingCell {
 }
 
 impl Cell {
+    /// Returns true if the cell has a value.
     pub fn has_value(&self) -> bool {
         match self {
             Cell::Empty => false,
@@ -54,6 +55,7 @@ impl Cell {
         }
     }
 
+    /// Removes a task from the list of dependent tasks.
     pub fn remove_dependent_task(&mut self, task: TaskId) {
         match self {
             Cell::Empty => {}
@@ -71,6 +73,7 @@ impl Cell {
         }
     }
 
+    /// Returns true if the cell has dependent tasks.
     pub fn has_dependent_tasks(&self) -> bool {
         match self {
             Cell::Empty => false,
@@ -86,11 +89,12 @@ impl Cell {
         }
     }
 
-    pub fn dependent_tasks(&self) -> impl Iterator<Item = TaskId> + '_ {
+    /// Returns the list of dependent tasks.
+    pub fn dependent_tasks(&self) -> &AutoSet<TaskId> {
         match self {
             Cell::Empty => {
                 static EMPTY: AutoSet<TaskId> = AutoSet::new();
-                EMPTY.iter().copied()
+                &EMPTY
             }
             Cell::Value {
                 dependent_tasks, ..
@@ -100,10 +104,11 @@ impl Cell {
             }
             | Cell::Recomputing {
                 dependent_tasks, ..
-            } => dependent_tasks.iter().copied(),
+            } => dependent_tasks,
         }
     }
 
+    /// Switch the cell to recomputing state.
     fn recompute(
         &mut self,
         dependent_tasks: AutoSet<TaskId>,
@@ -119,6 +124,9 @@ impl Cell {
         listener
     }
 
+    /// Read the content of the cell when avaiable. Registers the reader as
+    /// dependent task. Will trigger recomputation is no content is
+    /// available.
     pub fn read_content(
         &mut self,
         reader: TaskId,
@@ -138,8 +146,12 @@ impl Cell {
         self.read_content_untracked(description, note)
     }
 
-    /// INVALIDATION: Be careful with this, it will not track dependencies, so
-    /// using it could break cache invalidation.
+    /// Read the content of the cell when avaiable. Does not register the reader
+    /// as dependent task. Will trigger recomputation is no content is
+    /// available.
+    ///
+    /// INVALIDATION: Be careful with this, it will not
+    /// track dependencies, so using it could break cache invalidation.
     pub fn read_content_untracked(
         &mut self,
         description: impl Fn() -> String + Sync + Send + 'static,
@@ -174,8 +186,12 @@ impl Cell {
         }
     }
 
-    /// INVALIDATION: Be careful with this, it will not track dependencies, so
-    /// using it could break cache invalidation.
+    /// Read the content of the cell when avaiable. Does not register the reader
+    /// as dependent task. Will not start recomputing when content is not
+    /// available.
+    ///
+    /// INVALIDATION: Be careful with this, it will not track
+    /// dependencies, so using it could break cache invalidation.
     pub fn read_own_content_untracked(&self) -> CellContent {
         match self {
             Cell::Empty | Cell::Recomputing { .. } | Cell::TrackedValueless { .. } => {
@@ -231,6 +247,7 @@ impl Cell {
         }
     }
 
+    /// Reduces memory needs to the minimum.
     pub fn shrink_to_fit(&mut self) {
         match self {
             Cell::Empty => {}
@@ -266,6 +283,7 @@ impl Cell {
         }
     }
 
+    /// Drops the cell after GC. Will notify all dependent tasks and events.
     pub fn gc_drop(self, turbo_tasks: &dyn TurboTasksBackendApi) {
         match self {
             Cell::Empty => {}
