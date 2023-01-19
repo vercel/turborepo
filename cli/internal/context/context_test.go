@@ -9,6 +9,7 @@ import (
 	testifyAssert "github.com/stretchr/testify/assert"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
+	"gotest.tools/v3/assert"
 )
 
 func Test_isWorkspaceReference(t *testing.T) {
@@ -142,6 +143,21 @@ func TestBuildPackageGraph_DuplicateNames(t *testing.T) {
 	// We have to use regex because the actual error may be different depending on which workspace was
 	// added first and which one was second, causing the error.
 	testifyAssert.Regexp(t, regexp.MustCompile("^Failed to add workspace \"same-name\".+$"), actualErr)
+}
+
+func TestBuildPackageGraph_MissingNames(t *testing.T) {
+	path := getTestDir(t, "missing-workspace-names")
+	pkgJSON := &fs.PackageJSON{
+		Name:           "missing-workspace-names",
+		PackageManager: "pnpm@7.15.0",
+	}
+
+	context, err := BuildPackageGraph(path, pkgJSON)
+	if err != nil {
+		t.Fatalf("Should not have gotten an error, got: %#v", err)
+	}
+
+	assert.Equal(t, context.WorkspaceInfos[""].Name, "")
 }
 
 // This is duplicated from fs.turbo_json_test.go.
