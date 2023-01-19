@@ -48,23 +48,35 @@ pub enum GcPriority {
     Placeholder,
 }
 
+/// Statistics about actions performed during garbage collection.
 #[derive(Default, Debug)]
 pub struct GcStats {
+    /// How many tasks were unloaded.
     pub unloaded: usize,
+    /// How many unused cells were emptied.
     pub empty_unused: usize,
+    /// How many unused cells were emptied (on the fast path).
     pub empty_unused_fast: usize,
+    /// How many used cells were emptied.
     pub empty_cells: usize,
+    /// How often the priority of a task was updated.
     pub priority_updated: usize,
+    /// How often the priority of a task was updated (on the fast path).
     pub priority_updated_fast: usize,
+    /// How many tasks were checked but did not need to have any action taken.
     pub no_gc_needed: usize,
+    /// How many tasks were checked but were in a state where no action could be
+    /// taken.
     pub no_gc_possible: usize,
 }
 
+/// State about garbage collection for a task.
 #[derive(Debug, Default)]
 pub struct GcTaskState {
     pub inactive: bool,
 }
 
+/// The queue of actions that garbage collection should perform.
 pub struct GcQueue {
     /// Tasks that should be checked for inactive propagation.
     inactive_propagate_queue: ConcurrentQueue<TaskId>,
@@ -80,6 +92,7 @@ impl GcQueue {
         }
     }
 
+    /// Notify the GC queue that a task has been executed.
     pub fn task_executed(&self, task: TaskId, duration: Duration) {
         // A freshly executed task will start on EmptyUnusedCells, even while we are not
         // sure if there are unused cells.
@@ -88,12 +101,15 @@ impl GcQueue {
         self.queue.insert(task, value);
     }
 
+    /// Notify the GC queue that a task might become inactive.
     pub fn task_might_become_inactive(&self, task: TaskId) {
         let _ = self.inactive_propagate_queue.push(task);
     }
 
+    /// Notify the GC queue that a task has become inactive. This means the
+    /// [GcTaskState]::inactive has been set.
     pub fn task_flagged_inactive(&self, task: TaskId, compute_duration: Duration) {
-        self.queue.upsert(
+        self.queue.upsert_with(
             task,
             || {
                 // When there is no entry, we schedule the minimum priority.
@@ -129,6 +145,9 @@ impl GcQueue {
         );
     }
 
+    /// Run garbage collection on the queue. The `factor` parameter controls how
+    /// much work should be done. It's a value between 0 and 255, where 255
+    /// performs all the work possible.
     pub fn run_gc(
         &self,
         factor: u8,
@@ -140,6 +159,10 @@ impl GcQueue {
             backend.with_task(task, |task| {
                 task.gc_check_inactive(backend);
             });
+        }
+
+        if factor == 0 {
+            return None;
         }
 
         // Process through the gc queue.
@@ -163,12 +186,15 @@ impl GcQueue {
         result.map(|(p, c)| (p, c, stats))
     }
 
+    /// Select a number of tasks to run garbage collection on and run the
+    /// `execute` function on them.
     pub fn select_tasks(
         &self,
         factor: u8,
         mut execute: impl FnMut(TaskId, GcPriority, GcPriority) -> Option<GcPriority>,
     ) -> Option<(GcPriority, usize)> {
-        let jobs = self.queue.pop_factor(factor, 1000000);
+        const MAX_POP: usize = 1000000;
+        let jobs = self.queue.pop_factor(factor, MAX_POP);
         if jobs.is_empty() {
             return None;
         }
@@ -176,7 +202,7 @@ impl GcQueue {
         let len = jobs.len();
         for (task, Reverse(priority)) in jobs {
             if let Some(new_priority) = execute(task, priority, highest_priority) {
-                self.queue.upsert(
+                self.queue.upsert_with(
                     task,
                     || Reverse(new_priority),
                     |value| {
@@ -191,9 +217,10 @@ impl GcQueue {
     }
 }
 
+/// Converts a value to an logarithmic scale.
 pub fn to_exp_u8(value: u64) -> u8 {
     value
-        .checked_next_multiple_of(2)
+        .checked_next_power_of_two()
         .unwrap_or(0x7000_0000_0000_0000)
         .trailing_zeros() as u8
 }

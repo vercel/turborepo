@@ -6,7 +6,10 @@ use std::{
     future::Future,
     hash::BuildHasherDefault,
     pin::Pin,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
@@ -45,18 +48,20 @@ pub struct MemoryBackend {
     backend_jobs: NoMoveVec<Job>,
     backend_job_id_factory: IdFactory<BackendJobId>,
     task_cache: DashMap<Arc<PersistentTaskType>, TaskId, BuildHasherDefault<FxHasher>>,
-    gc_queue: GcQueue,
+    memory_limit: usize,
+    gc_queue: Option<GcQueue>,
+    idle_gc_active: AtomicBool,
     scope_add_remove_priority: PriorityPair,
 }
 
 impl Default for MemoryBackend {
     fn default() -> Self {
-        Self::new()
+        Self::new(usize::MAX)
     }
 }
 
 impl MemoryBackend {
-    pub fn new() -> Self {
+    pub fn new(memory_limit: usize) -> Self {
         let memory_task_scopes = NoMoveVec::new();
         let scope_id_factory = IdFactory::new();
         let initial_scope: TaskScopeId = scope_id_factory.get();
@@ -71,7 +76,9 @@ impl MemoryBackend {
             backend_jobs: NoMoveVec::new(),
             backend_job_id_factory: IdFactory::new(),
             task_cache: DashMap::default(),
-            gc_queue: GcQueue::new(),
+            memory_limit,
+            gc_queue: (memory_limit != usize::MAX).then(|| GcQueue::new()),
+            idle_gc_active: AtomicBool::new(false),
             scope_add_remove_priority: PriorityPair::new(),
         }
     }
@@ -193,7 +200,9 @@ impl MemoryBackend {
         let mut queue = Vec::new();
         self.with_scope(scope_id, |scope| {
             if scope.state.lock().decrement_active_by(count, &mut queue) {
-                self.gc_queue.task_might_become_inactive(task_id);
+                if let Some(gc_queue) = &self.gc_queue {
+                    gc_queue.task_might_become_inactive(task_id);
+                }
             }
         });
         while let Some(scope) = queue.pop() {
@@ -204,44 +213,51 @@ impl MemoryBackend {
     }
 
     pub fn on_task_might_become_inactive(&self, task: TaskId) {
-        self.gc_queue.task_might_become_inactive(task);
+        if let Some(gc_queue) = &self.gc_queue {
+            gc_queue.task_might_become_inactive(task);
+        }
     }
 
     pub fn on_task_flagged_inactive(&self, task: TaskId, compute_duration: Duration) {
-        self.gc_queue.task_flagged_inactive(task, compute_duration);
+        if let Some(gc_queue) = &self.gc_queue {
+            gc_queue.task_flagged_inactive(task, compute_duration);
+        }
     }
 
     pub fn run_gc(&self, idle: bool, turbo_tasks: &dyn TurboTasksBackendApi) {
-        const MAX_COLLECT_FACTOR: u8 = u8::MAX / 8;
-        const MB: usize = 1024 * 1024;
-        const GB: usize = 1024 * MB;
+        if let Some(gc_queue) = &self.gc_queue {
+            const MAX_COLLECT_FACTOR: u8 = u8::MAX / 8;
 
-        const LOWER_MEM_TARGET: usize = 4 * GB;
-        const IDLE_UPPER_MEM_TARGET: usize = 5 * GB;
-        const UPPER_MEM_TARGET: usize = 6 * GB;
-        const MEM_LIMIT: usize = 7 * GB;
+            let mem_limit = self.memory_limit;
 
-        let usage = turbo_malloc::TurboMalloc::memory_usage();
-        let target = if idle {
-            IDLE_UPPER_MEM_TARGET
-        } else {
-            UPPER_MEM_TARGET
-        };
-        if usage < target {
-            return;
-        }
+            let usage = turbo_malloc::TurboMalloc::memory_usage();
+            let target = if idle {
+                mem_limit * 3 / 4
+            } else {
+                mem_limit * 7 / 8
+            };
+            if usage < target {
+                if idle {
+                    // Always run propagation when idle
+                    gc_queue.run_gc(0, self, turbo_tasks);
+                }
+                return;
+            }
 
-        let collect_factor = min(
-            MAX_COLLECT_FACTOR as usize,
-            (usage - LOWER_MEM_TARGET) * u8::MAX as usize / (MEM_LIMIT - LOWER_MEM_TARGET),
-        ) as u8;
+            let collect_factor = min(
+                MAX_COLLECT_FACTOR as usize,
+                (usage - target) * u8::MAX as usize / (mem_limit - target),
+            ) as u8;
 
-        let collected = self.gc_queue.run_gc(collect_factor, self, turbo_tasks);
+            let collected = gc_queue.run_gc(collect_factor, self, turbo_tasks);
 
-        if let Some((_collected, _count, _stats)) = collected {
             if idle {
-                let job = self.create_backend_job(Job::GarbaggeCollection);
-                turbo_tasks.schedule_backend_background_job(job);
+                if let Some((_collected, _count, _stats)) = collected {
+                    let job = self.create_backend_job(Job::GarbaggeCollection);
+                    turbo_tasks.schedule_backend_background_job(job);
+                } else {
+                    self.idle_gc_active.store(false, Ordering::Release);
+                }
             }
         }
     }
@@ -249,8 +265,14 @@ impl MemoryBackend {
 
 impl Backend for MemoryBackend {
     fn idle_start(&self, turbo_tasks: &dyn TurboTasksBackendApi) {
-        let job = self.create_backend_job(Job::GarbaggeCollection);
-        turbo_tasks.schedule_backend_background_job(job);
+        if self
+            .idle_gc_active
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            let job = self.create_backend_job(Job::GarbaggeCollection);
+            turbo_tasks.schedule_backend_background_job(job);
+        }
     }
 
     fn invalidate_task(&self, task: TaskId, turbo_tasks: &dyn TurboTasksBackendApi) {
@@ -311,7 +333,9 @@ impl Backend for MemoryBackend {
         });
         if !reexecute {
             self.run_gc(false, turbo_tasks);
-            self.gc_queue.task_executed(task_id, duration);
+            if let Some(gc_queue) = &self.gc_queue {
+                gc_queue.task_executed(task_id, duration);
+            }
         }
         reexecute
     }

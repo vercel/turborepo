@@ -132,7 +132,7 @@ async fn run_test(resource: &str) -> JestRunResult {
     let requested_addr = get_free_local_addr().unwrap();
 
     let server = NextDevServerBuilder::new(
-        TurboTasks::new(MemoryBackend::new()),
+        TurboTasks::new(MemoryBackend::default()),
         sys_to_unix(&project_dir.to_string_lossy()).to_string(),
         sys_to_unix(&workspace_root.to_string_lossy()).to_string(),
     )

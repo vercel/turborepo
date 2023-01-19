@@ -9,6 +9,13 @@ use once_cell::sync::OnceCell;
 use parking_lot::{Mutex, MutexGuard};
 use priority_queue::PriorityQueue;
 
+// shard_amount and shift are stolen from the dashmap crate implementation:
+// https://github.com/xacrimon/dashmap/blob/0b2a2269b2d368494eeb41d4218da1b142da8e77/src/lib.rs#L64-L69
+// They are changed to use use 4 times the number of shards, since inserting
+// into a priority queue is more expensive than a hashmap. So creating more
+// shards will reduce contention.
+
+// Returns the number of shards to use.
 fn shard_amount() -> usize {
     static SHARD_AMOUNT: OnceCell<usize> = OnceCell::new();
     *SHARD_AMOUNT.get_or_init(|| {
@@ -16,6 +23,7 @@ fn shard_amount() -> usize {
     })
 }
 
+/// Returns the number of bits to shift a hash to get the shard index.
 fn shift() -> usize {
     static SHIFT: OnceCell<usize> = OnceCell::new();
     *SHIFT
@@ -51,6 +59,8 @@ impl<K: Hash + Eq, V: Ord + Clone + Debug, H: BuildHasher + Clone>
     fn shard(&self, key: &K) -> MutexGuard<PriorityQueue<K, V, H>> {
         let mut hash = self.hasher.build_hasher();
         key.hash(&mut hash);
+        // Leave the high 7 bits for the HashBrown SIMD tag.
+        // see https://github.com/xacrimon/dashmap/blob/0b2a2269b2d368494eeb41d4218da1b142da8e77/src/lib.rs#L374
         let index = ((hash.finish() as usize) << 7) >> shift();
         unsafe { self.shards.get_unchecked(index) }.lock()
     }
@@ -69,7 +79,7 @@ impl<K: Hash + Eq, V: Ord + Clone + Debug, H: BuildHasher + Clone>
         inner.push(key, value);
     }
 
-    pub fn upsert(
+    pub fn upsert_with(
         &self,
         key: K,
         default_value: impl FnOnce() -> V,
@@ -81,10 +91,10 @@ impl<K: Hash + Eq, V: Ord + Clone + Debug, H: BuildHasher + Clone>
         }
     }
 
-    /// Pops `min(factor / 256 * len, max_count)` items from the queue. Due to
-    /// concurrency, the actual amount of items may vary. The returned
-    /// vector is in any order, if you want items to be ordered you need to
-    /// sort it.
+    /// Pops at most `min(factor / 256 * len, max_count)` items from the queue.
+    /// Due to concurrency, the actual amount of items may vary. The
+    /// returned vector is in any order, if you want items to be ordered you
+    /// need to sort it.
     pub fn pop_factor(&self, factor: u8, max_count: usize) -> Vec<(K, V)> {
         struct ShardsQueueItem<V> {
             index: usize,
@@ -95,6 +105,8 @@ impl<K: Hash + Eq, V: Ord + Clone + Debug, H: BuildHasher + Clone>
             fn cmp(&self, other: &Self) -> std::cmp::Ordering {
                 self.value
                     .cmp(&other.value)
+                    // In case of equal priority we want to select the shard with the
+                    // largest number of items, so we balance the load on shards.
                     .then_with(|| self.len.cmp(&other.len))
             }
         }
@@ -110,6 +122,10 @@ impl<K: Hash + Eq, V: Ord + Clone + Debug, H: BuildHasher + Clone>
         }
         impl<V: Ord> Eq for ShardsQueueItem<V> {}
 
+        // We build a priority queue of the shards so we can select from the shards in
+        // correct order. But this is only a snapshot of the shards, so any
+        // concurrent change to the shard will not be respected, but we are fine with
+        // that.
         let mut shards_queue = BinaryHeap::with_capacity(self.shards.len());
         let mut total_len = 0;
         for (i, shard) in self.shards.iter().enumerate() {

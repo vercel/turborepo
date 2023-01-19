@@ -125,40 +125,17 @@ impl Cell {
         description: impl Fn() -> String + Sync + Send + 'static,
         note: impl Fn() -> String + Sync + Send + 'static,
     ) -> Result<CellContent, RecomputingCell> {
-        match self {
-            Cell::Empty => {
-                let listener = self.recompute(AutoSet::new(), description, note);
-                Err(RecomputingCell {
-                    listener,
-                    schedule: true,
-                })
-            }
-            Cell::Recomputing { event, .. } => {
-                let listener = event.listen_with_note(note);
-                Err(RecomputingCell {
-                    listener,
-                    schedule: false,
-                })
-            }
-            &mut Cell::TrackedValueless {
-                ref mut dependent_tasks,
-            } => {
-                let dependent_tasks = take(dependent_tasks);
-                let listener = self.recompute(dependent_tasks, description, note);
-                Err(RecomputingCell {
-                    listener,
-                    schedule: true,
-                })
-            }
-            Cell::Value {
-                content,
-                dependent_tasks,
-                ..
-            } => {
-                dependent_tasks.insert(reader);
-                Ok(content.clone())
-            }
+        if let Cell::Value {
+            content,
+            dependent_tasks,
+            ..
+        } = self
+        {
+            dependent_tasks.insert(reader);
+            return Ok(content.clone());
         }
+        // Same behavior for all other states, so we reuse the same code.
+        self.read_content_untracked(description, note)
     }
 
     /// INVALIDATION: Be careful with this, it will not track dependencies, so

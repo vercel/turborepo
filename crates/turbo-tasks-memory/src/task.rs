@@ -1914,13 +1914,6 @@ impl Task {
             if state.gc.inactive {
                 return;
             }
-            // let active = state
-            //     .scopes
-            //     .iter()
-            //     .any(|scope| backend.with_scope(scope, |scope|
-            // scope.state.lock().is_active())); if active {
-            //     return;
-            // }
             state.gc.inactive = true;
             backend.on_task_flagged_inactive(self.id, state.stats.last_duration());
             for &child in state.children.iter() {
