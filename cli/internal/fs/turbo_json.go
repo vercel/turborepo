@@ -48,14 +48,13 @@ type RemoteCacheOptions struct {
 }
 
 type rawTask struct {
-	Outputs *[]string `json:"outputs,omitempty"`
-
-	Cache      *bool               `json:"cache,omitempty"`
-	DependsOn  []string            `json:"dependsOn,omitempty"`
-	Inputs     []string            `json:"inputs,omitempty"`
-	OutputMode util.TaskOutputMode `json:"outputMode,omitempty"`
-	Env        []string            `json:"env,omitempty"`
-	Persistent bool                `json:"persistent,omitempty"`
+	Outputs    []string            `json:"outputs"`
+	Cache      *bool               `json:"cache"`
+	DependsOn  []string            `json:"dependsOn"`
+	Inputs     []string            `json:"inputs"`
+	OutputMode util.TaskOutputMode `json:"outputMode"`
+	Env        []string            `json:"env"`
+	Persistent bool                `json:"persistent"`
 }
 
 // Pipeline is a struct for deserializing .pipeline in configFile
@@ -240,7 +239,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	var exclusions []string
 
 	if task.Outputs != nil {
-		for _, glob := range *task.Outputs {
+		for _, glob := range task.Outputs {
 			if strings.HasPrefix(glob, "!") {
 				exclusions = append(exclusions, glob[1:])
 			} else {
@@ -301,20 +300,10 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-type resolvedTaskDefinition struct {
-	Persistent bool                `json:"persistent"`
-	Cache      *bool               `json:"cache"`
-	OutputMode util.TaskOutputMode `json:"outputMode"`
-	Outputs    []string            `json:"outputs"`
-	Inputs     []string            `json:"inputs"`
-	DependsOn  []string            `json:"dependsOn"`
-	Env        []string            `json:"env"`
-}
-
 // MarshalJSON deserializes JSON into a TaskDefinition
 func (c *TaskDefinition) MarshalJSON() ([]byte, error) {
 	// Initialize with empty arrays, so we get empty arrays serialized into JSON
-	task := resolvedTaskDefinition{
+	task := rawTask{
 		Outputs:   []string{},
 		Inputs:    []string{},
 		Env:       []string{},
