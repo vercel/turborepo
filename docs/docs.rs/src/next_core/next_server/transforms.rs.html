@@ -39,13 +39,19 @@
 <span id="39">39</span>
 <span id="40">40</span>
 <span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbopack::module_options::ModuleRule;
 <span class="kw">use </span>turbopack_ecmascript::NextJsPageExportFilter;
 
 <span class="kw">use crate</span>::{
     next_server::context::ServerContextType,
-    next_shared::transforms::{get_next_dynamic_transform_rule, get_next_pages_transforms_rule},
+    next_shared::transforms::{
+        get_next_dynamic_transform_rule, get_next_font_transform_rule,
+        get_next_pages_transforms_rule,
+    },
 };
 
 <span class="doccomment">/// Returns a list of module rules which apply server-side, Next.js-specific
@@ -53,7 +59,7 @@
 </span><span class="kw">pub async fn </span>get_next_server_transforms_rules(
     context_ty: ServerContextType,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ModuleRule&gt;&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>rules = <span class="macro">vec!</span>[];
+    <span class="kw">let </span><span class="kw-2">mut </span>rules = <span class="macro">vec!</span>[get_next_font_transform_rule()];
 
     <span class="kw">let </span>(is_server_components, pages_dir) = <span class="kw">match </span>context_ty {
         ServerContextType::Pages { pages_dir } =&gt; (<span class="bool-val">false</span>, <span class="prelude-val">Some</span>(pages_dir)),

@@ -351,11 +351,22 @@
 <span id="351">351</span>
 <span id="352">352</span>
 <span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>indoc::formatdoc;
 <span class="kw">use </span>once_cell::sync::Lazy;
 <span class="kw">use </span>turbo_tasks::primitives::{OptionStringVc, OptionU16Vc, StringVc, U32Vc};
+<span class="kw">use </span>turbo_tasks_env::{CommandLineProcessEnvVc, ProcessEnv};
 <span class="kw">use </span>turbo_tasks_fetch::fetch;
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
@@ -629,10 +640,19 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>get_stylesheet_url_from_options(options: NextFontGoogleOptionsVc) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
-    <span class="kw">let </span>options = options.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="attr">#[allow(unused_mut, unused_assignments)] </span><span class="comment">// This is used in test environments
+    </span><span class="kw">let </span><span class="kw-2">mut </span>css_url: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="prelude-val">None</span>;
+    <span class="attr">#[cfg(debug_assertions)]
+    </span>{
+        <span class="kw">let </span>env = CommandLineProcessEnvVc::new();
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(url) = <span class="kw-2">&amp;*</span>env.read(<span class="string">&quot;TURBOPACK_TEST_ONLY_MOCK_SERVER&quot;</span>).<span class="kw">await</span><span class="question-mark">? </span>{
+            css_url = <span class="prelude-val">Some</span>(<span class="macro">format!</span>(<span class="string">&quot;{}/css2&quot;</span>, url));
+        }
+    }
 
+    <span class="kw">let </span>options = options.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(StringVc::cell(get_stylesheet_url(
-        GOOGLE_FONTS_STYLESHEET_URL,
+        css_url.as_deref().unwrap_or(GOOGLE_FONTS_STYLESHEET_URL),
         <span class="kw-2">&amp;</span>options.font_family,
         <span class="kw-2">&amp;</span>get_font_axes(
             <span class="kw-2">&amp;</span>FONT_DATA,
