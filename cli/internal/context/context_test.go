@@ -132,7 +132,7 @@ func TestBuildPackageGraph_DuplicateNames(t *testing.T) {
 	path := getTestDir(t, "repo-with-dupe-workspaces")
 	pkgJSON := &fs.PackageJSON{
 		Name:           "repo-with-dupe-workspaces",
-		PackageManager: "npm@8.1.2",
+		PackageManager: "pnpm@7.15.0",
 	}
 
 	_, actualErr := BuildPackageGraph(path, pkgJSON)
