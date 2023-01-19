@@ -410,7 +410,7 @@ pub async fn start_server(options: &DevServerOptions) -> Result<()> {
     };
 
     let tt = TurboTasks::new(MemoryBackend::new(
-        options.memory_limit.map_or(usize::MAX, |l| l * 1024),
+        options.memory_limit.map_or(usize::MAX, |l| l * 1024 * 1024),
     ));
 
     let stats_type = match options.full_stats {
