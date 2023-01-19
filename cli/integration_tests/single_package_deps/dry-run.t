@@ -46,7 +46,18 @@ Check
         "dependencies": [],
         "dependents": [
           "test"
-        ]
+        ],
+        "resolvedTaskDefinition": {
+          "outputs": [
+            "foo"
+          ],
+          "cache": true,
+          "dependsOn": [],
+          "inputs": [],
+          "outputMode": 0,
+          "env": [],
+          "persistent": false
+        }
       },
       {
         "task": "test",
@@ -62,7 +73,18 @@ Check
         "dependencies": [
           "build"
         ],
-        "dependents": []
+        "dependents": [],
+        "resolvedTaskDefinition": {
+          "outputs": [],
+          "cache": true,
+          "dependsOn": [
+            "build"
+          ],
+          "inputs": [],
+          "outputMode": 0,
+          "env": [],
+          "persistent": false
+        }
       }
     ]
   }
