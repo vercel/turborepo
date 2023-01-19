@@ -44,19 +44,28 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 			return fmt.Errorf("cannot find package %v for task %v", packageName, taskID)
 		}
 
-		packageTask := &nodes.PackageTask{
-			TaskID:      taskID,
-			Task:        taskName,
-			PackageName: packageName,
-			Pkg:         pkg,
-		}
-
 		taskDefinition, err := g.getResolvedTaskDefinition(taskID, taskName)
 		if err != nil {
 			return err
 		}
 
-		packageTask.TaskDefinition = taskDefinition
+		packageTask := &nodes.PackageTask{
+			TaskID:          taskID,
+			Task:            taskName,
+			PackageName:     packageName,
+			Pkg:             pkg,
+			Dir:             pkg.Dir.ToString(),
+			TaskDefinition:  taskDefinition,
+			Outputs:         taskDefinition.Outputs.Inclusions,
+			ExcludedOutputs: taskDefinition.Outputs.Exclusions,
+		}
+
+		cmd, ok := pkg.Scripts[taskName]
+		if ok {
+			packageTask.Command = cmd
+		}
+
+		packageTask.LogFile = packageTask.RepoRelativeLogFile()
 
 		return visitor(ctx, packageTask)
 	}
