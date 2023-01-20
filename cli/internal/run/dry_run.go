@@ -150,8 +150,8 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			CacheState:             itemStatus,
 			Command:                command,
 			Dir:                    packageTask.Pkg.Dir.ToString(),
-			Outputs:                packageTask.TaskDefinition.Outputs.Inclusions, // TODO: remove this?
-			ExcludedOutputs:        packageTask.TaskDefinition.Outputs.Exclusions, // TODO: remove this?
+			Outputs:                packageTask.TaskDefinition.Outputs.Inclusions,
+			ExcludedOutputs:        packageTask.TaskDefinition.Outputs.Exclusions,
 			LogFile:                packageTask.RepoRelativeLogFile(),
 			Dependencies:           stringAncestors,
 			Dependents:             stringDescendents,
@@ -288,6 +288,9 @@ func commandLooksLikeTurbo(command string) bool {
 }
 
 // TODO: put this somewhere else
+// TODO(mehulkar): `Outputs` and `ExcludedOutputs` are slightly redundant
+// as the information is also available in ResolvedTaskDefinition. We could remove them
+// and favor a version of Outputs that is the fully expanded list of files.
 type taskSummary struct {
 	TaskID                 string             `json:"taskId"`
 	Task                   string             `json:"task"`
