@@ -50,10 +50,10 @@ We have a multi step release process for Turborepo right now.
 
 **NOTE**: The steps below _must_ be run serially, in the order specified.
 
-1. Create a release branch by triggering the [Create Release Branch](https://github.com/vercel/turbo/actions/workflows/stage.yml) workflow
+1. Create a release branch by triggering the [1. Turborepo Release (release branch)](https://github.com/vercel/turbo/actions/workflows/turborepo-release-step-1.yml) workflow
    1. Specify the semver increment using the SemVer Increment field
-2. Build the Go Library by triggering the [Build Go Library](https://github.com/vercel/turbo/actions/workflows/build_go_lib.yml) workflow.
+1. Build the Go Binary by triggering the [2. Turborepo Release (go binary)](https://github.com/vercel/turbo/actions/workflows/turborepo-release-step-2.yml) workflow.
    1. Specify the release branch (example: `staging-1.7.0-canary.1`) in _both_ the "use workflow from", and "Staging branch to release from" fields.
-3. Build the Rust Wrapper by triggering the [Build Rust Wrapper](https://github.com/vercel/turbo/actions/workflows/build_rust.yml) workflow.
+1. Build the Rust Wrapper by triggering the [3. Turborepo Release (rust binary & publish)](https://github.com/vercel/turbo/actions/workflows/turborepo-release-step-3.yml) workflow.
    1. Specify the release branch (example: `staging-1.7.0-canary.1`) in _both_ the "use workflow from", and "Staging branch to release from" fields. (this should match step 2.1 above)
-4. Open a PR and merge the release branch back into `main`
+1. After publish, open a PR to merge the release branch created in step 1 back into `main`
