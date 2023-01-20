@@ -337,6 +337,14 @@ func (c *TaskDefinition) MarshalJSON() ([]byte, error) {
 		task.DependsOn = append(task.DependsOn, "^"+i)
 	}
 
+	// These _should_ already be sorted when the TaskDefinition struct was unmarshaled,
+	// but we want to ensure they're sorted on the way out also, just in case something
+	// in the middle mutates the items.
+	sort.Strings(task.DependsOn)
+	sort.Strings(task.Outputs)
+	sort.Strings(task.Env)
+	sort.Strings(task.Inputs)
+
 	return json.Marshal(task)
 }
 
