@@ -39,24 +39,45 @@ impl ResolvePlugin for ExternalCjsModulesResolvePlugin {
         fs_path: FileSystemPathVc,
         _request: RequestVc,
     ) -> Result<ResolveResultOptionVc> {
-        let transpiled_glob = packages_glob(self.transpiled_packages).await?;
-
         // always bundle transpiled modules
+        let transpiled_glob = packages_glob(self.transpiled_packages).await?;
         if transpiled_glob.execute(&fs_path.await?.path) {
             return Ok(ResolveResultOptionVc::none());
         }
 
-        // check `package.json` for `"type": "module"`
-        if let FindContextFileResult::Found(package_json, _) =
-            &*find_context_file(fs_path.parent(), package_json()).await?
-        {
-            if let FileJsonContent::Content(package) = &*package_json.read_json().await? {
-                if let Some("module") = package["type"].as_str() {
-                    return Ok(ResolveResultOptionVc::none());
-                }
-            }
+        let FindContextFileResult::Found(package_json, _) =
+            *find_context_file(fs_path.parent(), package_json()).await?
+        else {
+            // can't find package.json
+            return Ok(ResolveResultOptionVc::none());
+        };
+        let FileJsonContent::Content(package) = &*package_json.read_json().await? else {
+            // can't parse package.json
+            return Ok(ResolveResultOptionVc::none());
+        };
+
+        // always bundle esm modules
+        if let Some("module") = package["type"].as_str() {
+            return Ok(ResolveResultOptionVc::none());
         }
 
+        // make sure we have a full package
+        let Some(package_name) = package["name"].as_str() else {
+            return Ok(ResolveResultOptionVc::none());
+        };
+
+        // check if we can resolve the package from the root dir (might be hidden by
+        // pnpm)
+        let FileJsonContent::Content(_) = *self
+            .root
+            .join(&format!("node_modules/{}/package.json", package_name))
+            .read_json()
+            .await?
+        else {
+            return Ok(ResolveResultOptionVc::none());
+        };
+
+        // mark as external
         Ok(ResolveResultOptionVc::some(
             ResolveResult::Special(SpecialType::OriginalReferenceExternal, Vec::new()).cell(),
         ))

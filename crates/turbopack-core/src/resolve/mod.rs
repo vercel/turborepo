@@ -126,17 +126,17 @@ impl ResolveResult {
             ResolveResult::Single(asset, list) => {
                 *self = ResolveResult::Alternatives(vec![*asset], take(list))
             }
-            ResolveResult::Keyed(_, list) | ResolveResult::Special(_, list) => {
+            ResolveResult::Keyed(_, list) => {
                 *self = ResolveResult::Unresolveable(take(list));
             }
-            ResolveResult::Alternatives(_, _) | ResolveResult::Unresolveable(_) => {
+            ResolveResult::Alternatives(_, _)
+            | ResolveResult::Special(_, _)
+            | ResolveResult::Unresolveable(_) => {
                 // already is appropriate type
             }
         }
         match self {
-            ResolveResult::Single(_, _)
-            | ResolveResult::Keyed(_, _)
-            | ResolveResult::Special(_, _) => {
+            ResolveResult::Single(_, _) | ResolveResult::Keyed(_, _) => {
                 unreachable!()
             }
             ResolveResult::Alternatives(assets, list) => match other {
@@ -154,6 +154,17 @@ impl ResolveResult {
                     list.extend(other.get_references().iter().cloned());
                 }
             },
+            ResolveResult::Special(special, list) => match other {
+                ResolveResult::Special(special2, list2) if special2 == special => {
+                    list.extend(list2.iter().cloned());
+                }
+                ResolveResult::Unresolveable(list2) => {
+                    list.extend(list2.iter().cloned());
+                }
+                _ => {
+                    *self = ResolveResult::Unresolveable(take(list));
+                }
+            },
             ResolveResult::Unresolveable(list) => match other {
                 ResolveResult::Single(asset, list2) => {
                     list.extend(list2.iter().cloned());
@@ -163,9 +174,11 @@ impl ResolveResult {
                     list.extend(list2.iter().cloned());
                     *self = ResolveResult::Alternatives(assets.clone(), take(list));
                 }
-                ResolveResult::Keyed(_, _)
-                | ResolveResult::Special(_, _)
-                | ResolveResult::Unresolveable(_) => {
+                ResolveResult::Special(special, list2) => {
+                    list.extend(list2.iter().cloned());
+                    *self = ResolveResult::Special(special.clone(), take(list));
+                }
+                ResolveResult::Keyed(_, _) | ResolveResult::Unresolveable(_) => {
                     list.extend(other.get_references().iter().cloned());
                 }
             },
@@ -1113,7 +1126,7 @@ fn handle_exports_field(
     let mut resolved_results = Vec::new();
     for path in results {
         if let Some(path) = normalize_path(path) {
-            let request = RequestVc::parse(Value::new(format!("./{}", path).into()));
+            let request = RequestVc::relative(Value::new(format!("./{}", path).into()), false);
             resolved_results.push(resolve(package_path, request, options));
         }
     }
