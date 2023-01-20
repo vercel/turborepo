@@ -303,6 +303,20 @@
 <span id="303">303</span>
 <span id="304">304</span>
 <span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     ptr::null_mut,
     slice::from_raw_parts_mut,
@@ -424,6 +438,20 @@
         buckets[<span class="number">0</span>] = allocate_bucket::&lt;INITIAL_CAPACITY_BITS, T&gt;(<span class="number">0</span>);
         <span class="kw">let </span>buckets = buckets.map(|p| (AtomicPtr::new(p), Mutex::new(())));
         NoMoveVec { buckets }
+    }
+
+    <span class="kw">pub fn </span>capacity(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.buckets
+            .iter()
+            .enumerate()
+            .map(|(i, (ptr, <span class="kw">_</span>))| {
+                <span class="kw">if </span>ptr.load(Ordering::Relaxed).is_null() {
+                    <span class="number">0
+                </span>} <span class="kw">else </span>{
+                    get_bucket_size::&lt;INITIAL_CAPACITY_BITS&gt;(i <span class="kw">as </span>u32)
+                }
+            })
+            .sum()
     }
 
     <span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, idx: usize) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>T&gt; {

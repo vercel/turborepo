@@ -62,6 +62,10 @@
 <span id="62">62</span>
 <span id="63">63</span>
 <span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ops::{Deref, DerefMut};
 
 <span class="kw">use </span>parking_lot::{RwLockReadGuard, RwLockWriteGuard};
@@ -106,6 +110,10 @@
             map,
             map_mut,
         }
+    }
+
+    <span class="kw">pub fn </span>into_inner(<span class="self">self</span>) -&gt; RwLockWriteGuard&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+        <span class="self">self</span>.inner
     }
 }
 

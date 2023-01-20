@@ -1003,7 +1003,7 @@
 
     run(
         args.clone(),
-        || TurboTasks::new(MemoryBackend::new()),
+        || TurboTasks::new(MemoryBackend::default()),
         |tt, root_task, <span class="kw">_</span>| <span class="kw">async move </span>{
             <span class="kw">if </span>visualize_graph {
                 <span class="kw">let </span><span class="kw-2">mut </span>stats = Stats::new();

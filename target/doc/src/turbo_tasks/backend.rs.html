@@ -383,6 +383,10 @@
 <span id="383">383</span>
 <span id="384">384</span>
 <span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Any,
     borrow::Cow,
@@ -552,6 +556,9 @@
     <span class="attr">#[allow(unused_variables)]
     </span><span class="kw">fn </span>stop(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {}
 
+    <span class="attr">#[allow(unused_variables)]
+    </span><span class="kw">fn </span>idle_start(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {}
+
     <span class="kw">fn </span>invalidate_task(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi);
 
     <span class="kw">fn </span>invalidate_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>, tasks: Vec&lt;TaskId&gt;, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi);
@@ -586,6 +593,7 @@
         task: TaskId,
         duration: Duration,
         instant: Instant,
+        stateful: bool,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; bool;
 

@@ -259,6 +259,21 @@
 <span id="259">259</span>
 <span id="260">260</span>
 <span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem::replace;
 
 <span class="kw">use </span>auto_hash_map::AutoSet;
@@ -279,6 +294,13 @@
 }
 
 <span class="kw">impl </span>TaskMetaState {
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>into_full(<span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;TaskState&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            <span class="self">Self</span>::Full(state) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>state),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+        }
+    }
+
     <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>into_partial(<span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;PartialTaskState&gt; {
         <span class="kw">match </span><span class="self">self </span>{
             <span class="self">Self</span>::Partial(state) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>state),
@@ -440,7 +462,7 @@
                 )
                 .into_partial()
                 .unwrap();
-                <span class="kw-2">*</span>guard = TaskMetaState::Full(<span class="kw">box </span>partial.into_full(task.id));
+                <span class="kw-2">*</span>guard = TaskMetaState::Full(<span class="kw">box </span>partial.into_full(task.get_event_description()));
             }
             TaskMetaState::Unloaded(<span class="kw">_</span>) =&gt; {
                 <span class="kw">let </span>unloaded = replace(
@@ -452,7 +474,7 @@
                 )
                 .into_unloaded()
                 .unwrap();
-                <span class="kw-2">*</span>guard = TaskMetaState::Full(<span class="kw">box </span>unloaded.into_full(task.id));
+                <span class="kw-2">*</span>guard = TaskMetaState::Full(<span class="kw">box </span>unloaded.into_full(task.get_event_description()));
             }
         }
         WriteGuard::new(guard, TaskMetaState::as_full, TaskMetaState::as_full_mut)
@@ -517,6 +539,14 @@
         <span class="kw">match </span><span class="self">self </span>{
             TaskMetaStateWriteGuard::Full(state) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;mut **</span>state),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+        }
+    }
+
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>into_inner(<span class="self">self</span>) -&gt; RwLockWriteGuard&lt;<span class="lifetime">&#39;a</span>, TaskMetaState&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            TaskMetaStateWriteGuard::Full(state) =&gt; state.into_inner(),
+            TaskMetaStateWriteGuard::Partial(state) =&gt; state.into_inner(),
+            TaskMetaStateWriteGuard::Unloaded(state) =&gt; state.into_inner(),
         }
     }
 }

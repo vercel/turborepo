@@ -706,7 +706,7 @@
 
 <span class="kw">impl</span>&lt;K, V&gt; AutoMap&lt;K, V, RandomState&gt; {
     <span class="doccomment">/// see [HashMap::new](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.new)
-    </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub const fn </span>new() -&gt; <span class="self">Self </span>{
         AutoMap::List(Vec::new())
     }
 

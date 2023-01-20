@@ -537,14 +537,154 @@
 <span id="537">537</span>
 <span id="538">538</span>
 <span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
+<span id="552">552</span>
+<span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
+<span id="556">556</span>
+<span id="557">557</span>
+<span id="558">558</span>
+<span id="559">559</span>
+<span id="560">560</span>
+<span id="561">561</span>
+<span id="562">562</span>
+<span id="563">563</span>
+<span id="564">564</span>
+<span id="565">565</span>
+<span id="566">566</span>
+<span id="567">567</span>
+<span id="568">568</span>
+<span id="569">569</span>
+<span id="570">570</span>
+<span id="571">571</span>
+<span id="572">572</span>
+<span id="573">573</span>
+<span id="574">574</span>
+<span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
+<span id="578">578</span>
+<span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
+<span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
+<span id="648">648</span>
+<span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
+<span id="668">668</span>
+<span id="669">669</span>
+<span id="670">670</span>
+<span id="671">671</span>
+<span id="672">672</span>
+<span id="673">673</span>
+<span id="674">674</span>
+<span id="675">675</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
+    cmp::min,
     collections::VecDeque,
     future::Future,
     hash::BuildHasherDefault,
     pin::Pin,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
@@ -565,7 +705,9 @@
 
 <span class="kw">use crate</span>::{
     cell::RecomputingCell,
+    gc::GcQueue,
     output::Output,
+    priority_pair::PriorityPair,
     scope::{TaskScope, TaskScopeId},
     task::{
         run_add_to_scope_queue, run_remove_from_scope_queue, Task, TaskDependency,
@@ -581,16 +723,20 @@
     backend_jobs: NoMoveVec&lt;Job&gt;,
     backend_job_id_factory: IdFactory&lt;BackendJobId&gt;,
     task_cache: DashMap&lt;Arc&lt;PersistentTaskType&gt;, TaskId, BuildHasherDefault&lt;FxHasher&gt;&gt;,
+    memory_limit: usize,
+    gc_queue: <span class="prelude-ty">Option</span>&lt;GcQueue&gt;,
+    idle_gc_active: AtomicBool,
+    scope_add_remove_priority: PriorityPair,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>MemoryBackend {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new()
+        <span class="self">Self</span>::new(usize::MAX)
     }
 }
 
 <span class="kw">impl </span>MemoryBackend {
-    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(memory_limit: usize) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>memory_task_scopes = NoMoveVec::new();
         <span class="kw">let </span>scope_id_factory = IdFactory::new();
         <span class="kw">let </span>initial_scope: TaskScopeId = scope_id_factory.get();
@@ -605,6 +751,10 @@
             backend_jobs: NoMoveVec::new(),
             backend_job_id_factory: IdFactory::new(),
             task_cache: DashMap::default(),
+            memory_limit,
+            gc_queue: (memory_limit != usize::MAX).then(|| GcQueue::new()),
+            idle_gc_active: AtomicBool::new(<span class="bool-val">false</span>),
+            scope_add_remove_priority: PriorityPair::new(),
         }
     }
 
@@ -620,6 +770,7 @@
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>create_backend_job(<span class="kw-2">&amp;</span><span class="self">self</span>, job: Job) -&gt; BackendJobId {
+        job.before_schedule(<span class="self">self</span>);
         <span class="kw">let </span>id = <span class="self">self</span>.backend_job_id_factory.get();
         <span class="comment">// SAFETY: This is a fresh id
         </span><span class="kw">unsafe </span>{
@@ -708,27 +859,97 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>decrease_scope_active(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         scope: TaskScopeId,
+        task_id: TaskId,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) {
-        <span class="self">self</span>.decrease_scope_active_by(scope, <span class="number">1</span>, turbo_tasks);
+        <span class="self">self</span>.decrease_scope_active_by(scope, task_id, <span class="number">1</span>, turbo_tasks);
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>decrease_scope_active_by(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        scope: TaskScopeId,
+        scope_id: TaskScopeId,
+        task_id: TaskId,
         count: usize,
         _turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) {
-        <span class="kw">let </span><span class="kw-2">mut </span>queue = <span class="macro">vec!</span>[scope];
+        <span class="kw">let </span><span class="kw-2">mut </span>queue = Vec::new();
+        <span class="self">self</span>.with_scope(scope_id, |scope| {
+            <span class="kw">if </span>scope.state.lock().decrement_active_by(count, <span class="kw-2">&amp;mut </span>queue) {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(gc_queue) = <span class="kw-2">&amp;</span><span class="self">self</span>.gc_queue {
+                    gc_queue.task_might_become_inactive(task_id);
+                }
+            }
+        });
         <span class="kw">while let </span><span class="prelude-val">Some</span>(scope) = queue.pop() {
             <span class="self">self</span>.with_scope(scope, |scope| {
                 scope.state.lock().decrement_active_by(count, <span class="kw-2">&amp;mut </span>queue)
             });
         }
     }
+
+    <span class="kw">pub fn </span>on_task_might_become_inactive(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(gc_queue) = <span class="kw-2">&amp;</span><span class="self">self</span>.gc_queue {
+            gc_queue.task_might_become_inactive(task);
+        }
+    }
+
+    <span class="kw">pub fn </span>on_task_flagged_inactive(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, compute_duration: Duration) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(gc_queue) = <span class="kw-2">&amp;</span><span class="self">self</span>.gc_queue {
+            gc_queue.task_flagged_inactive(task, compute_duration);
+        }
+    }
+
+    <span class="kw">pub fn </span>run_gc(<span class="kw-2">&amp;</span><span class="self">self</span>, idle: bool, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(gc_queue) = <span class="kw-2">&amp;</span><span class="self">self</span>.gc_queue {
+            <span class="kw">const </span>MAX_COLLECT_FACTOR: u8 = u8::MAX / <span class="number">8</span>;
+
+            <span class="kw">let </span>mem_limit = <span class="self">self</span>.memory_limit;
+
+            <span class="kw">let </span>usage = turbo_malloc::TurboMalloc::memory_usage();
+            <span class="kw">let </span>target = <span class="kw">if </span>idle {
+                mem_limit * <span class="number">3 </span>/ <span class="number">4
+            </span>} <span class="kw">else </span>{
+                mem_limit * <span class="number">7 </span>/ <span class="number">8
+            </span>};
+            <span class="kw">if </span>usage &lt; target {
+                <span class="kw">if </span>idle {
+                    <span class="comment">// Always run propagation when idle
+                    </span>gc_queue.run_gc(<span class="number">0</span>, <span class="self">self</span>, turbo_tasks);
+                }
+                <span class="kw">return</span>;
+            }
+
+            <span class="kw">let </span>collect_factor = min(
+                MAX_COLLECT_FACTOR <span class="kw">as </span>usize,
+                (usage - target) * u8::MAX <span class="kw">as </span>usize / (mem_limit - target),
+            ) <span class="kw">as </span>u8;
+
+            <span class="kw">let </span>collected = gc_queue.run_gc(collect_factor, <span class="self">self</span>, turbo_tasks);
+
+            <span class="kw">if </span>idle {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>((_collected, _count, _stats)) = collected {
+                    <span class="kw">let </span>job = <span class="self">self</span>.create_backend_job(Job::GarbageCollection);
+                    turbo_tasks.schedule_backend_background_job(job);
+                } <span class="kw">else </span>{
+                    <span class="self">self</span>.idle_gc_active.store(<span class="bool-val">false</span>, Ordering::Release);
+                }
+            }
+        }
+    }
 }
 
 <span class="kw">impl </span>Backend <span class="kw">for </span>MemoryBackend {
+    <span class="kw">fn </span>idle_start(<span class="kw-2">&amp;</span><span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+        <span class="kw">if </span><span class="self">self
+            </span>.idle_gc_active
+            .compare_exchange(<span class="bool-val">false</span>, <span class="bool-val">true</span>, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            <span class="kw">let </span>job = <span class="self">self</span>.create_backend_job(Job::GarbageCollection);
+            turbo_tasks.schedule_backend_background_job(job);
+        }
+    }
+
     <span class="kw">fn </span>invalidate_task(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
         <span class="self">self</span>.with_task(task, |task| task.invalidate(<span class="self">self</span>, turbo_tasks));
     }
@@ -776,14 +997,22 @@
 
     <span class="kw">fn </span>task_execution_completed(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        task: TaskId,
+        task_id: TaskId,
         duration: Duration,
         instant: Instant,
+        stateful: bool,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; bool {
-        <span class="self">self</span>.with_task(task, |task| {
-            task.execution_completed(duration, instant, <span class="self">self</span>, turbo_tasks)
-        })
+        <span class="kw">let </span>reexecute = <span class="self">self</span>.with_task(task_id, |task| {
+            task.execution_completed(duration, instant, stateful, <span class="self">self</span>, turbo_tasks)
+        });
+        <span class="kw">if </span>!reexecute {
+            <span class="self">self</span>.run_gc(<span class="bool-val">false</span>, turbo_tasks);
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(gc_queue) = <span class="kw-2">&amp;</span><span class="self">self</span>.gc_queue {
+                gc_queue.task_executed(task_id, duration);
+            }
+        }
+        reexecute
     }
 
     <span class="kw">fn </span>try_read_task_output(
@@ -847,7 +1076,7 @@
                     <span class="prelude-val">Ok</span>(content) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(content)),
                     <span class="prelude-val">Err</span>(RecomputingCell { listener, schedule }) =&gt; {
                         <span class="kw">if </span>schedule {
-                            task.invalidate(<span class="self">self</span>, turbo_tasks);
+                            task.recompute(<span class="self">self</span>, turbo_tasks);
                         }
                         <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(listener))
                     }
@@ -883,7 +1112,7 @@
                 <span class="prelude-val">Ok</span>(content) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(content)),
                 <span class="prelude-val">Err</span>(RecomputingCell { listener, schedule }) =&gt; {
                     <span class="kw">if </span>schedule {
-                        task.invalidate(<span class="self">self</span>, turbo_tasks);
+                        task.recompute(<span class="self">self</span>, turbo_tasks);
                     }
                     <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(listener))
                 }
@@ -1041,9 +1270,24 @@
     <span class="doccomment">/// Remove tasks from a scope. Scheduled by `run_remove_from_scope_queue` to
     /// split off work.
     </span>RemoveFromScopeQueue(VecDeque&lt;TaskId&gt;, TaskScopeId),
+    <span class="doccomment">/// Unloads a previously used root scope after all other foreground tasks
+    /// are done.
+    </span>UnloadRootScope(TaskScopeId),
+    GarbageCollection,
 }
 
 <span class="kw">impl </span>Job {
+    <span class="kw">fn </span>before_schedule(<span class="kw-2">&amp;</span><span class="self">self</span>, backend: <span class="kw-2">&amp;</span>MemoryBackend) {
+        <span class="kw">match </span><span class="self">self </span>{
+            Job::RemoveFromScopes(..)
+            | Job::RemoveFromScope(..)
+            | Job::RemoveFromScopeQueue(..) =&gt; {
+                backend.scope_add_remove_priority.start_high();
+            }
+            <span class="kw">_ </span>=&gt; {}
+        }
+    }
+
     <span class="kw">async fn </span>run(<span class="self">self</span>, backend: <span class="kw-2">&amp;</span>MemoryBackend, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
         <span class="kw">match </span><span class="self">self </span>{
             Job::RemoveFromScopes(tasks, scopes) =&gt; {
@@ -1052,6 +1296,7 @@
                         task.remove_from_scopes(scopes.iter().cloned(), backend, turbo_tasks)
                     });
                 }
+                backend.scope_add_remove_priority.finish_high();
             }
             Job::RemoveFromScope(tasks, scope) =&gt; {
                 <span class="kw">for </span>task <span class="kw">in </span>tasks {
@@ -1059,6 +1304,7 @@
                         task.remove_from_scope(scope, backend, turbo_tasks)
                     });
                 }
+                backend.scope_add_remove_priority.finish_high();
             }
             Job::ScheduleWhenDirtyFromScope(tasks) =&gt; {
                 <span class="kw">for </span>task <span class="kw">in </span>tasks.into_iter() {
@@ -1068,10 +1314,36 @@
                 }
             }
             Job::AddToScopeQueue(queue, id, is_optimization_scope) =&gt; {
-                run_add_to_scope_queue(queue, id, is_optimization_scope, backend, turbo_tasks);
+                backend
+                    .scope_add_remove_priority
+                    .run_low(<span class="kw">async </span>{
+                        run_add_to_scope_queue(
+                            queue,
+                            id,
+                            is_optimization_scope,
+                            backend,
+                            turbo_tasks,
+                        );
+                    })
+                    .<span class="kw">await</span>;
             }
             Job::RemoveFromScopeQueue(queue, id) =&gt; {
                 run_remove_from_scope_queue(queue, id, backend, turbo_tasks);
+                backend.scope_add_remove_priority.finish_high();
+            }
+            Job::UnloadRootScope(id) =&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(future) = turbo_tasks.wait_foreground_done_excluding_own() {
+                    future.<span class="kw">await</span>;
+                }
+                backend.with_scope(id, |scope| {
+                    scope.assert_unused();
+                });
+                <span class="kw">unsafe </span>{
+                    backend.scope_id_factory.reuse(id);
+                }
+            }
+            Job::GarbageCollection =&gt; {
+                backend.run_gc(<span class="bool-val">true</span>, turbo_tasks);
             }
         }
     }

@@ -280,7 +280,7 @@
 
 <span class="kw">impl</span>&lt;K&gt; AutoSet&lt;K, RandomState&gt; {
     <span class="doccomment">/// see [HashSet::new](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.new)
-    </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub const fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             map: AutoMap::new(),
         }

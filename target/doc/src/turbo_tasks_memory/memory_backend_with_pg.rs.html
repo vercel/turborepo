@@ -1842,6 +1842,7 @@
 <span id="1842">1842</span>
 <span id="1843">1843</span>
 <span id="1844">1844</span>
+<span id="1845">1845</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BinaryHeap, HashMap},
@@ -2954,6 +2955,7 @@
         task: TaskId,
         duration: Duration,
         _instant: Instant,
+        _stateful: bool,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) -&gt; bool {
         <span class="attr">#[cfg(feature = <span class="string">&quot;log_running_tasks&quot;</span>)]

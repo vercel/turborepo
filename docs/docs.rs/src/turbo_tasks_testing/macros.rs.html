@@ -42,7 +42,7 @@
         <span class="kw">use </span>turbo_tasks::TurboTasks;
         <span class="kw">use </span>turbo_tasks_memory::MemoryBackend;
         <span class="kw-2">*</span>REGISTER;
-        <span class="kw">let </span>tt = TurboTasks::new(MemoryBackend::new());
+        <span class="kw">let </span>tt = TurboTasks::new(MemoryBackend::default());
         tt.run_once(<span class="kw">async </span>{
             $(<span class="macro-nonterminal">$stmt</span>)+
             <span class="prelude-val">Ok</span>(())

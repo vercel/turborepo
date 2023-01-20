@@ -253,7 +253,67 @@
 <span id="253">253</span>
 <span id="254">254</span>
 <span id="255">255</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Debug, mem::take};
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{
+    fmt::Debug,
+    mem::{replace, take},
+};
 
 <span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>turbo_tasks::{
@@ -262,44 +322,32 @@
     TaskId, TurboTasksBackendApi,
 };
 
-<span class="attr">#[derive(Debug)]
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>FullCell {
-    UpdatedValue {
-        content: CellContent,
-        updates: u32,
-        dependent_tasks: AutoSet&lt;TaskId&gt;,
-    },
-    <span class="doccomment">/// Someone wanted to read the content and it was not available. The content
-    /// is now being recomputed.
-    /// This is used when there are dependent tasks
-    </span>Recomputing {
-        event: Event,
-        updates: u32,
-        dependent_tasks: AutoSet&lt;TaskId&gt;,
-    },
-}
-
 <span class="attr">#[derive(Default, Debug)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Cell {
     <span class="doccomment">/// No content has been set yet, or it was removed for memory pressure
     /// reasons.
+    /// Assigning a value will transition to the Value state.
+    /// Reading this cell will transition to the Recomputing state.
     </span><span class="attr">#[default]
     </span>Empty,
+    <span class="doccomment">/// The content has been removed for memory pressure reasons, but the
+    /// tracking is still active. Any update will invalidate dependent tasks.
+    /// Assigning a value will transition to the Value state.
+    /// Reading this cell will transition to the Recomputing state.
+    </span>TrackedValueless { dependent_tasks: AutoSet&lt;TaskId&gt; },
     <span class="doccomment">/// Someone wanted to read the content and it was not available. The content
     /// is now being recomputed.
-    /// This is only used when there are no dependent tasks
+    /// Assigning a value will transition to the Value state.
     </span>Recomputing {
+        dependent_tasks: AutoSet&lt;TaskId&gt;,
         event: Event,
-        updates: u32,
     },
     <span class="doccomment">/// The content was set only once and is tracked.
-    </span>InitialValue {
-        content: CellContent,
+    /// GC operation will transition to the TrackedValueless state.
+    </span>Value {
         dependent_tasks: AutoSet&lt;TaskId&gt;,
+        content: CellContent,
     },
-    <span class="comment">// This is in a box so we don&#39;t need the updates counter for most cells that are only written
-    // once.
-    </span>Full(Box&lt;FullCell&gt;),
 }
 
 <span class="attr">#[derive(Debug)]
@@ -309,86 +357,113 @@
 }
 
 <span class="kw">impl </span>Cell {
-    <span class="kw">pub fn </span>remove_dependent_task(<span class="kw-2">&amp;mut </span><span class="self">self</span>, task: TaskId) {
+    <span class="doccomment">/// Returns true if the cell has a value.
+    </span><span class="kw">pub fn </span>has_value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="kw">match </span><span class="self">self </span>{
-            Cell::Empty | Cell::Recomputing { .. } =&gt; {}
-            Cell::InitialValue {
+            Cell::Empty =&gt; <span class="bool-val">false</span>,
+            Cell::Recomputing { .. } =&gt; <span class="bool-val">false</span>,
+            Cell::TrackedValueless { .. } =&gt; <span class="bool-val">false</span>,
+            Cell::Value { .. } =&gt; <span class="bool-val">true</span>,
+        }
+    }
+
+    <span class="doccomment">/// Removes a task from the list of dependent tasks.
+    </span><span class="kw">pub fn </span>remove_dependent_task(<span class="kw-2">&amp;mut </span><span class="self">self</span>, task: TaskId) {
+        <span class="kw">match </span><span class="self">self </span>{
+            Cell::Empty =&gt; {}
+            Cell::Value {
                 dependent_tasks, ..
             }
-            | Cell::Full(
-                <span class="kw">box </span>(FullCell::Recomputing {
-                    dependent_tasks, ..
-                }
-                | FullCell::UpdatedValue {
-                    dependent_tasks, ..
-                }),
-            ) =&gt; {
+            | Cell::TrackedValueless {
+                dependent_tasks, ..
+            }
+            | Cell::Recomputing {
+                dependent_tasks, ..
+            } =&gt; {
                 dependent_tasks.remove(<span class="kw-2">&amp;</span>task);
             }
         }
     }
 
-    <span class="kw">fn </span>recompute(
+    <span class="doccomment">/// Returns true if the cell has dependent tasks.
+    </span><span class="kw">pub fn </span>has_dependent_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="kw">match </span><span class="self">self </span>{
+            Cell::Empty =&gt; <span class="bool-val">false</span>,
+            Cell::Recomputing {
+                dependent_tasks, ..
+            }
+            | Cell::Value {
+                dependent_tasks, ..
+            }
+            | Cell::TrackedValueless {
+                dependent_tasks, ..
+            } =&gt; !dependent_tasks.is_empty(),
+        }
+    }
+
+    <span class="doccomment">/// Returns the list of dependent tasks.
+    </span><span class="kw">pub fn </span>dependent_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>AutoSet&lt;TaskId&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            Cell::Empty =&gt; {
+                <span class="kw">static </span>EMPTY: AutoSet&lt;TaskId&gt; = AutoSet::new();
+                <span class="kw-2">&amp;</span>EMPTY
+            }
+            Cell::Value {
+                dependent_tasks, ..
+            }
+            | Cell::TrackedValueless {
+                dependent_tasks, ..
+            }
+            | Cell::Recomputing {
+                dependent_tasks, ..
+            } =&gt; dependent_tasks,
+        }
+    }
+
+    <span class="doccomment">/// Switch the cell to recomputing state.
+    </span><span class="kw">fn </span>recompute(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        updates: u32,
         dependent_tasks: AutoSet&lt;TaskId&gt;,
         description: <span class="kw">impl </span>Fn() -&gt; String + Sync + Send + <span class="lifetime">&#39;static</span>,
         note: <span class="kw">impl </span>Fn() -&gt; String + Sync + Send + <span class="lifetime">&#39;static</span>,
     ) -&gt; EventListener {
         <span class="kw">let </span>event = Event::new(<span class="kw">move </span>|| (description)() + <span class="string">&quot; -&gt; Cell::Recomputing::event&quot;</span>);
         <span class="kw">let </span>listener = event.listen_with_note(note);
-        <span class="kw">if </span>dependent_tasks.is_empty() {
-            <span class="kw-2">*</span><span class="self">self </span>= Cell::Recomputing { event, updates };
-        } <span class="kw">else </span>{
-            <span class="kw-2">*</span><span class="self">self </span>= Cell::Full(<span class="kw">box </span>FullCell::Recomputing {
-                event,
-                updates,
-                dependent_tasks,
-            });
-        }
+        <span class="kw-2">*</span><span class="self">self </span>= Cell::Recomputing {
+            event,
+            dependent_tasks,
+        };
         listener
     }
 
-    <span class="kw">pub fn </span>read_content(
+    <span class="doccomment">/// Read the content of the cell when avaiable. Registers the reader as
+    /// dependent task. Will trigger recomputation is no content is
+    /// available.
+    </span><span class="kw">pub fn </span>read_content(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         reader: TaskId,
         description: <span class="kw">impl </span>Fn() -&gt; String + Sync + Send + <span class="lifetime">&#39;static</span>,
         note: <span class="kw">impl </span>Fn() -&gt; String + Sync + Send + <span class="lifetime">&#39;static</span>,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent, RecomputingCell&gt; {
-        <span class="kw">match </span><span class="self">self </span>{
-            Cell::Empty =&gt; {
-                <span class="kw">let </span>listener = <span class="self">self</span>.recompute(<span class="number">1</span>, AutoSet::new(), description, note);
-                <span class="prelude-val">Err</span>(RecomputingCell {
-                    listener,
-                    schedule: <span class="bool-val">true</span>,
-                })
-            }
-            Cell::Recomputing { event, .. }
-            | Cell::Full(<span class="kw">box </span>FullCell::Recomputing { event, .. }) =&gt; {
-                <span class="kw">let </span>listener = event.listen_with_note(note);
-                <span class="prelude-val">Err</span>(RecomputingCell {
-                    listener,
-                    schedule: <span class="bool-val">false</span>,
-                })
-            }
-            Cell::InitialValue {
-                content,
-                dependent_tasks,
-                ..
-            }
-            | Cell::Full(<span class="kw">box </span>FullCell::UpdatedValue {
-                content,
-                dependent_tasks,
-                ..
-            }) =&gt; {
-                dependent_tasks.insert(reader);
-                <span class="prelude-val">Ok</span>(content.clone())
-            }
+        <span class="kw">if let </span>Cell::Value {
+            content,
+            dependent_tasks,
+            ..
+        } = <span class="self">self
+        </span>{
+            dependent_tasks.insert(reader);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(content.clone());
         }
+        <span class="comment">// Same behavior for all other states, so we reuse the same code.
+        </span><span class="self">self</span>.read_content_untracked(description, note)
     }
 
-    <span class="doccomment">/// INVALIDATION: Be careful with this, it will not track dependencies, so
-    /// using it could break cache invalidation.
+    <span class="doccomment">/// Read the content of the cell when avaiable. Does not register the reader
+    /// as dependent task. Will trigger recomputation is no content is
+    /// available.
+    ///
+    /// INVALIDATION: Be careful with this, it will not
+    /// track dependencies, so using it could break cache invalidation.
     </span><span class="kw">pub fn </span>read_content_untracked(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         description: <span class="kw">impl </span>Fn() -&gt; String + Sync + Send + <span class="lifetime">&#39;static</span>,
@@ -396,113 +471,152 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CellContent, RecomputingCell&gt; {
         <span class="kw">match </span><span class="self">self </span>{
             Cell::Empty =&gt; {
-                <span class="kw">let </span>listener = <span class="self">self</span>.recompute(<span class="number">1</span>, AutoSet::new(), description, note);
+                <span class="kw">let </span>listener = <span class="self">self</span>.recompute(AutoSet::new(), description, note);
                 <span class="prelude-val">Err</span>(RecomputingCell {
                     listener,
                     schedule: <span class="bool-val">true</span>,
                 })
             }
-            Cell::Recomputing { event, .. }
-            | Cell::Full(<span class="kw">box </span>FullCell::Recomputing { event, .. }) =&gt; {
+            Cell::Recomputing { event, .. } =&gt; {
                 <span class="kw">let </span>listener = event.listen_with_note(note);
                 <span class="prelude-val">Err</span>(RecomputingCell {
                     listener,
                     schedule: <span class="bool-val">false</span>,
                 })
             }
-            Cell::InitialValue { content, .. }
-            | Cell::Full(<span class="kw">box </span>FullCell::UpdatedValue { content, .. }) =&gt; <span class="prelude-val">Ok</span>(content.clone()),
+            <span class="kw-2">&amp;mut </span>Cell::TrackedValueless {
+                <span class="kw-2">ref mut </span>dependent_tasks,
+            } =&gt; {
+                <span class="kw">let </span>dependent_tasks = take(dependent_tasks);
+                <span class="kw">let </span>listener = <span class="self">self</span>.recompute(dependent_tasks, description, note);
+                <span class="prelude-val">Err</span>(RecomputingCell {
+                    listener,
+                    schedule: <span class="bool-val">true</span>,
+                })
+            }
+            Cell::Value { content, .. } =&gt; <span class="prelude-val">Ok</span>(content.clone()),
         }
     }
 
-    <span class="doccomment">/// INVALIDATION: Be careful with this, it will not track dependencies, so
-    /// using it could break cache invalidation.
+    <span class="doccomment">/// Read the content of the cell when avaiable. Does not register the reader
+    /// as dependent task. Will not start recomputing when content is not
+    /// available.
+    ///
+    /// INVALIDATION: Be careful with this, it will not track
+    /// dependencies, so using it could break cache invalidation.
     </span><span class="kw">pub fn </span>read_own_content_untracked(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CellContent {
         <span class="kw">match </span><span class="self">self </span>{
-            Cell::Empty
-            | Cell::Recomputing { .. }
-            | Cell::Full(<span class="kw">box </span>FullCell::Recomputing { .. }) =&gt; CellContent(<span class="prelude-val">None</span>),
-            Cell::InitialValue { content, .. }
-            | Cell::Full(<span class="kw">box </span>FullCell::UpdatedValue { content, .. }) =&gt; content.clone(),
+            Cell::Empty | Cell::Recomputing { .. } | Cell::TrackedValueless { .. } =&gt; {
+                CellContent(<span class="prelude-val">None</span>)
+            }
+            Cell::Value { content, .. } =&gt; content.clone(),
         }
     }
 
     <span class="kw">pub fn </span>assign(<span class="kw-2">&amp;mut </span><span class="self">self</span>, content: CellContent, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
         <span class="kw">match </span><span class="self">self </span>{
             Cell::Empty =&gt; {
-                <span class="kw-2">*</span><span class="self">self </span>= Cell::InitialValue {
+                <span class="kw-2">*</span><span class="self">self </span>= Cell::Value {
                     content,
                     dependent_tasks: AutoSet::new(),
                 };
             }
             <span class="kw-2">&amp;mut </span>Cell::Recomputing {
                 <span class="kw-2">ref mut </span>event,
-                updates,
+                <span class="kw-2">ref mut </span>dependent_tasks,
             } =&gt; {
                 event.notify(usize::MAX);
-                <span class="kw">if </span>updates == <span class="number">1 </span>{
-                    <span class="kw-2">*</span><span class="self">self </span>= Cell::InitialValue {
-                        content,
-                        dependent_tasks: AutoSet::new(),
-                    };
-                } <span class="kw">else </span>{
-                    <span class="kw-2">*</span><span class="self">self </span>= Cell::Full(<span class="kw">box </span>FullCell::UpdatedValue {
-                        content,
-                        dependent_tasks: AutoSet::new(),
-                        updates,
-                    });
-                }
-            }
-            <span class="kw-2">&amp;mut </span>Cell::Full(<span class="kw">box </span><span class="kw-2">ref mut </span>cell @ FullCell::Recomputing { .. }) =&gt; {
-                <span class="kw">let </span>FullCell::Recomputing {
-                    <span class="kw-2">ref mut </span>event,
-                    updates,
-                    <span class="kw-2">ref mut </span>dependent_tasks,
-                } = <span class="kw-2">*</span>cell <span class="kw">else </span>{
-                    <span class="macro">unreachable!</span>()
+                <span class="kw-2">*</span><span class="self">self </span>= Cell::Value {
+                    content,
+                    dependent_tasks: take(dependent_tasks),
                 };
-                event.notify(usize::MAX);
-                <span class="kw">if </span>updates == <span class="number">1 </span>{
-                    <span class="kw-2">*</span><span class="self">self </span>= Cell::InitialValue {
-                        content,
-                        dependent_tasks: take(dependent_tasks),
-                    };
-                } <span class="kw">else </span>{
-                    <span class="kw-2">*</span>cell = FullCell::UpdatedValue {
-                        content,
-                        dependent_tasks: take(dependent_tasks),
-                        updates,
-                    };
-                }
             }
-            Cell::InitialValue {
-                content: old_content,
+            <span class="kw-2">&amp;mut </span>Cell::TrackedValueless {
+                <span class="kw-2">ref mut </span>dependent_tasks,
+            } =&gt; {
+                <span class="comment">// Assigning to a cell will invalidate all dependent tasks as the content might
+                // have changed.
+                </span><span class="kw">if </span>!dependent_tasks.is_empty() {
+                    turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
+                }
+                <span class="kw-2">*</span><span class="self">self </span>= Cell::Value {
+                    content,
+                    dependent_tasks: AutoSet::new(),
+                };
+            }
+            Cell::Value {
+                content: <span class="kw-2">ref mut </span>cell_content,
                 dependent_tasks,
             } =&gt; {
-                <span class="kw">if </span>content != <span class="kw-2">*</span>old_content {
-                    <span class="kw">if </span>!dependent_tasks.is_empty() {
-                        turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
-                        dependent_tasks.clear();
-                    }
-                    <span class="kw-2">*</span><span class="self">self </span>= Cell::Full(<span class="kw">box </span>FullCell::UpdatedValue {
-                        content,
-                        updates: <span class="number">2</span>,
-                        dependent_tasks: take(dependent_tasks),
-                    });
-                }
-            }
-            Cell::Full(<span class="kw">box </span>FullCell::UpdatedValue {
-                content: cell_content,
-                updates,
-                dependent_tasks,
-            }) =&gt; {
                 <span class="kw">if </span>content != <span class="kw-2">*</span>cell_content {
                     <span class="kw">if </span>!dependent_tasks.is_empty() {
                         turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
                         dependent_tasks.clear();
                     }
-                    <span class="kw-2">*</span>updates += <span class="number">1</span>;
                     <span class="kw-2">*</span>cell_content = content;
+                }
+            }
+        }
+    }
+
+    <span class="doccomment">/// Reduces memory needs to the minimum.
+    </span><span class="kw">pub fn </span>shrink_to_fit(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">match </span><span class="self">self </span>{
+            Cell::Empty =&gt; {}
+            Cell::TrackedValueless {
+                dependent_tasks, ..
+            }
+            | Cell::Recomputing {
+                dependent_tasks, ..
+            }
+            | Cell::Value {
+                dependent_tasks, ..
+            } =&gt; {
+                dependent_tasks.shrink_to_fit();
+            }
+        }
+    }
+
+    <span class="doccomment">/// Takes the content out of the cell. Make sure to drop the content outside
+    /// of the task state lock.
+    </span><span class="attr">#[must_use]
+    </span><span class="kw">pub fn </span>gc_content(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;CellContent&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            Cell::Empty | Cell::Recomputing { .. } | Cell::TrackedValueless { .. } =&gt; <span class="prelude-val">None</span>,
+            Cell::Value {
+                dependent_tasks, ..
+            } =&gt; {
+                <span class="kw">let </span>dependent_tasks = take(dependent_tasks);
+                <span class="kw">let </span>Cell::Value { content, .. } = replace(<span class="self">self</span>, Cell::TrackedValueless {
+                    dependent_tasks,
+                }) <span class="kw">else </span>{ <span class="macro">unreachable!</span>() };
+                <span class="prelude-val">Some</span>(content)
+            }
+        }
+    }
+
+    <span class="doccomment">/// Drops the cell after GC. Will notify all dependent tasks and events.
+    </span><span class="kw">pub fn </span>gc_drop(<span class="self">self</span>, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
+        <span class="kw">match </span><span class="self">self </span>{
+            Cell::Empty =&gt; {}
+            Cell::Recomputing {
+                event,
+                dependent_tasks,
+                ..
+            } =&gt; {
+                event.notify(usize::MAX);
+                <span class="kw">if </span>!dependent_tasks.is_empty() {
+                    turbo_tasks.schedule_notify_tasks_set(<span class="kw-2">&amp;</span>dependent_tasks);
+                }
+            }
+            Cell::TrackedValueless {
+                dependent_tasks, ..
+            }
+            | Cell::Value {
+                dependent_tasks, ..
+            } =&gt; {
+                <span class="kw">if </span>!dependent_tasks.is_empty() {
+                    turbo_tasks.schedule_notify_tasks_set(<span class="kw-2">&amp;</span>dependent_tasks);
                 }
             }
         }

@@ -110,6 +110,12 @@
 <span id="110">110</span>
 <span id="111">111</span>
 <span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{net::IpAddr, path::PathBuf};
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;cli&quot;</span>)]
@@ -189,6 +195,12 @@
     </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
     #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
     </span><span class="kw">pub </span>full_stats: bool,
+
+    <span class="doccomment">/// Enable experimental garbage collection with the provided memory limit in
+    /// MB.
+    </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
+    #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
+    </span><span class="kw">pub </span>memory_limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
 
     <span class="comment">// ==
     // = Inherited options from next-dev, need revisit later.

@@ -646,6 +646,69 @@
 <span id="646">646</span>
 <span id="647">647</span>
 <span id="648">648</span>
+<span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
+<span id="668">668</span>
+<span id="669">669</span>
+<span id="670">670</span>
+<span id="671">671</span>
+<span id="672">672</span>
+<span id="673">673</span>
+<span id="674">674</span>
+<span id="675">675</span>
+<span id="676">676</span>
+<span id="677">677</span>
+<span id="678">678</span>
+<span id="679">679</span>
+<span id="680">680</span>
+<span id="681">681</span>
+<span id="682">682</span>
+<span id="683">683</span>
+<span id="684">684</span>
+<span id="685">685</span>
+<span id="686">686</span>
+<span id="687">687</span>
+<span id="688">688</span>
+<span id="689">689</span>
+<span id="690">690</span>
+<span id="691">691</span>
+<span id="692">692</span>
+<span id="693">693</span>
+<span id="694">694</span>
+<span id="695">695</span>
+<span id="696">696</span>
+<span id="697">697</span>
+<span id="698">698</span>
+<span id="699">699</span>
+<span id="700">700</span>
+<span id="701">701</span>
+<span id="702">702</span>
+<span id="703">703</span>
+<span id="704">704</span>
+<span id="705">705</span>
+<span id="706">706</span>
+<span id="707">707</span>
+<span id="708">708</span>
+<span id="709">709</span>
+<span id="710">710</span>
+<span id="711">711</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     fmt::{Debug, Display},
@@ -1049,6 +1112,65 @@
             }
         }
     }
+
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>assert_unused(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="comment">// This method checks if everything was cleaned up correctly
+        // no more tasks should be attached to this scope in any way
+
+        // println!(&quot;assert_unused {:?}&quot;, self);
+        </span><span class="macro">assert_eq!</span>(
+            <span class="self">self</span>.tasks.load(Ordering::Acquire),
+            <span class="number">0</span>,
+            <span class="string">&quot;Scope tasks not correctly cleaned up&quot;
+        </span>);
+        <span class="macro">assert_eq!</span>(
+            <span class="self">self</span>.unfinished_tasks.load(Ordering::Acquire),
+            <span class="number">0</span>,
+            <span class="string">&quot;Scope unfinished tasks not correctly cleaned up&quot;
+        </span>);
+        <span class="kw">let </span>state = <span class="self">self</span>.state.lock();
+        <span class="macro">assert!</span>(
+            state.dependent_tasks.is_empty(),
+            <span class="string">&quot;Scope dependent tasks not correctly cleaned up: {:?}&quot;</span>,
+            state.dependent_tasks
+        );
+        <span class="macro">assert!</span>(
+            state.collectibles.is_empty(),
+            <span class="string">&quot;Scope collectibles not correctly cleaned up: {:?}&quot;</span>,
+            state.collectibles
+        );
+        <span class="comment">// assert!(
+        // state.dirty_tasks.is_empty(),
+        // &quot;Scope dirty tasks not correctly cleaned up: {:?}&quot;,
+        // state.dirty_tasks
+        // );
+        // TODO find the bug that causes dirty tasks to remain in the scope
+        </span><span class="kw">if </span>!state.dirty_tasks.is_empty() {
+            <span class="macro">println!</span>(
+                <span class="string">&quot;Scope dirty tasks not correctly cleaned up: {:?}&quot;</span>,
+                state.dirty_tasks
+            );
+        }
+        <span class="macro">assert!</span>(
+            state.children.is_empty(),
+            <span class="string">&quot;Scope children not correctly cleaned up: {:?}&quot;</span>,
+            state.children
+        );
+        <span class="macro">assert!</span>(
+            state.parents.is_empty(),
+            <span class="string">&quot;Scope parents not correctly cleaned up: {:?}&quot;</span>,
+            state.parents
+        );
+        <span class="macro">assert!</span>(
+            !state.has_unfinished_tasks,
+            <span class="string">&quot;Scope has unfinished tasks not correctly cleaned up&quot;
+        </span>);
+        <span class="macro">assert_eq!</span>(
+            state.active, <span class="number">0</span>,
+            <span class="string">&quot;Scope active not correctly cleaned up: {}&quot;</span>,
+            state.active
+        );
+    }
 }
 
 <span class="kw">pub struct </span>ScopeChildChangeEffect {
@@ -1100,13 +1222,17 @@
         <span class="self">self</span>.decrement_active_by(<span class="number">1</span>, more_jobs);
     }
     <span class="doccomment">/// decrement the active counter, returns list of child scopes that need to
-    /// be decremented after releasing the scope lock
-    </span><span class="kw">pub fn </span>decrement_active_by(<span class="kw-2">&amp;mut </span><span class="self">self</span>, count: usize, more_jobs: <span class="kw-2">&amp;mut </span>Vec&lt;TaskScopeId&gt;) {
+    /// be decremented after releasing the scope lock. Returns `true` when the
+    /// scope has become inactive.
+    </span><span class="kw">pub fn </span>decrement_active_by(<span class="kw-2">&amp;mut </span><span class="self">self</span>, count: usize, more_jobs: <span class="kw-2">&amp;mut </span>Vec&lt;TaskScopeId&gt;) -&gt; bool {
         <span class="kw">let </span>was_positive = <span class="self">self</span>.active &gt; <span class="number">0</span>;
         <span class="self">self</span>.active -= count <span class="kw">as </span>isize;
         <span class="kw">if </span><span class="self">self</span>.active &lt;= <span class="number">0 </span>&amp;&amp; was_positive {
             more_jobs.extend(<span class="self">self</span>.children.iter().copied());
-        }
+            <span class="bool-val">true
+        </span>} <span class="kw">else </span>{
+            <span class="bool-val">false
+        </span>}
     }
 
     <span class="doccomment">/// Add a child scope. Returns a [ScopeChildChangeEffect] when the child
