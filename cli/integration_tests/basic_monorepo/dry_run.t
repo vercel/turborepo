@@ -11,23 +11,23 @@ Check my-app#build output
   
   $ ${TURBO} run build --dry | grep "my-app#build" -A 12
   my-app#build
-    Task                   = build                                                                                             
-    Package                = my-app                                                                                            
-    Hash                   = 8ee3ee4bb0bb88be                                                                                  
-    Cached (Local)         = false                                                                                             
-    Cached (Remote)        = false                                                                                             
-    Directory              = apps/my-app                                                                                       
-    Command                = echo 'building'                                                                                   
-    Outputs                =                                                                                                   
-    Log File               = apps/my-app/.turbo/turbo-build.log                                                                
-    Dependencies           =                                                                                                   
-    Dependendents          =                                                                                                   
-    ResolvedTaskDefinition = {"outputs":[],"cache":true,"dependsOn":[],"inputs":[],"outputMode":0,"env":[],"persistent":false} 
+    Task                   = build                                                                                                                      
+    Package                = my-app                                                                                                                     
+    Hash                   = 7438505b97329a3d                                                                                                           
+    Cached (Local)         = false                                                                                                                      
+    Cached (Remote)        = false                                                                                                                      
+    Directory              = apps/my-app                                                                                                                
+    Command                = echo 'building'                                                                                                            
+    Outputs                = apple.json, banana.txt                                                                                                     
+    Log File               = apps/my-app/.turbo/turbo-build.log                                                                                         
+    Dependencies           =                                                                                                                            
+    Dependendents          =                                                                                                                            
+    ResolvedTaskDefinition = {"outputs":["apple.json","banana.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":0,"env":[],"persistent":false} 
   $ ${TURBO} run build --dry | grep "util#build" -A 12
   util#build
     Task                   = build                                                                                             
     Package                = util                                                                                              
-    Hash                   = 238262ce1218fd3a                                                                                  
+    Hash                   = 6dec18f9f767112f                                                                                  
     Cached (Local)         = false                                                                                             
     Cached (Remote)        = false                                                                                             
     Directory              = packages/util                                                                                     
@@ -44,20 +44,26 @@ Check my-app#build output
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "8ee3ee4bb0bb88be",
+    "hash": "7438505b97329a3d",
     "cacheState": {
       "local": false,
       "remote": false
     },
     "command": "echo 'building'",
-    "outputs": null,
+    "outputs": [
+      "apple.json",
+      "banana.txt"
+    ],
     "excludedOutputs": null,
     "logFile": "apps/my-app/.turbo/turbo-build.log",
     "directory": "apps/my-app",
     "dependencies": [],
     "dependents": [],
     "resolvedTaskDefinition": {
-      "outputs": [],
+      "outputs": [
+        "apple.json",
+        "banana.txt"
+      ],
       "cache": true,
       "dependsOn": [],
       "inputs": [],
@@ -73,7 +79,7 @@ Check my-app#build output
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "238262ce1218fd3a",
+    "hash": "6dec18f9f767112f",
     "cacheState": {
       "local": false,
       "remote": false
