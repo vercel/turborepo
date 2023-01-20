@@ -28,12 +28,13 @@ Options:
   -h, --help        display help for command
 ```
 
-### `transform`
+### `transform` (default)
 
-Runs a single codemod on your codebase.
+Runs a single codemod on your codebase. This is the default command, and can be omitted.
 
 ```
 Usage: @turbo/codemod transform [options] [transform] [path]
+       @turbo/codemod [options] [transform] [path]
 
 Apply a single code transformation to a project
 

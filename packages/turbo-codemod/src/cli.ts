@@ -1,15 +1,12 @@
 #!/usr/bin/env node
 
 import chalk from "chalk";
-import os from "os";
 import { Command } from "commander";
 
 import { transform, migrate } from "./commands";
 import notifyUpdate from "./utils/notifyUpdate";
 import cliPkg from "../package.json";
-import loadTransformers from "./utils/loadTransformers";
 
-const transforms = loadTransformers();
 const codemodCli = new Command();
 
 codemodCli
@@ -45,7 +42,7 @@ codemodCli
 
 // transform
 codemodCli
-  .command("transform")
+  .command("transform", { isDefault: true })
   .description("Apply a single code transformation to a project")
   .argument("[transform]", "The transformer to run")
   .argument("[path]", "Directory where the transforms should be applied")
@@ -58,26 +55,6 @@ codemodCli
   .option("--dry", "Dry run (no changes are made to files)", false)
   .option("--print", "Print transformed files to your terminal", false)
   .action(transform);
-
-// show custom suggestion if user attempts an old command
-codemodCli.showHelpAfterError(true);
-codemodCli.addHelpText("beforeAll", (context) => {
-  try {
-    const transformKeys = transforms.map((transform) => transform.value);
-    if (
-      context.command.args.length >= 1 &&
-      transformKeys.includes(context.command.args[0])
-    ) {
-      return `Transforms must be run with the "transform" command.${
-        os.EOL
-      }Try: ${chalk.bold(`transform ${context.command.args[0]}`)}${os.EOL}`;
-    }
-  } catch (e) {
-    return "";
-  }
-
-  return "";
-});
 
 codemodCli
   .parseAsync()
