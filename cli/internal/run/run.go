@@ -414,10 +414,11 @@ func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, er
 
 		topoDeps := util.SetFromStrings(taskDefinition.TopologicalDependencies)
 		engine.AddTask(&core.Task{
-			Name:       taskName,
-			TopoDeps:   topoDeps,
-			Deps:       deps,
-			Persistent: taskDefinition.Persistent,
+			Name:           taskName,
+			TopoDeps:       topoDeps,
+			Deps:           deps,
+			Persistent:     taskDefinition.Persistent,
+			TaskDefinition: taskDefinition,
 		})
 	}
 

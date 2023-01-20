@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/util"
 
@@ -12,6 +13,8 @@ import (
 
 const ROOT_NODE_NAME = "___ROOT___"
 
+// Task is a higher level struct that contains the underlying TaskDefinition
+// but also some adjustments to it, based on business logic.
 type Task struct {
 	Name string
 	// Deps are dependencies between tasks within the same package (e.g. `build` -> `test`)
@@ -20,6 +23,8 @@ type Task struct {
 	TopoDeps util.Set
 	// Persistent is whether this task is persistent or not. We need this information to validate TopoDeps graph
 	Persistent bool
+	// TaskDefinition contains the config for the task from turbo.json
+	TaskDefinition fs.TaskDefinition
 }
 
 type Visitor = func(taskID string) error

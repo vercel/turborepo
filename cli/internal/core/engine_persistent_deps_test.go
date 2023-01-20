@@ -38,10 +38,11 @@ func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
 
 	// "dev": dependsOn: ["^dev"] (where dev is persistent)
 	engine.AddTask(&Task{
-		Name:       "dev",
-		TopoDeps:   util.SetFromStrings([]string{"dev"}),
-		Deps:       make(util.Set), // empty, no non-caret task deps.
-		Persistent: true,
+		Name:           "dev",
+		TopoDeps:       util.SetFromStrings([]string{"dev"}),
+		Deps:           make(util.Set), // empty, no non-caret task deps.,
+		Persistent:     true,
+		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
 	opts := &EngineBuildingOptions{
@@ -80,17 +81,19 @@ func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
 
 	// "build": dependsOn: ["dev"] (where build is not, but "dev" is persistent)
 	engine.AddTask(&Task{
-		Name:       "build",
-		TopoDeps:   make(util.Set), // empty
-		Deps:       util.SetFromStrings([]string{"dev"}),
-		Persistent: false,
+		Name:           "build",
+		TopoDeps:       make(util.Set), // empty
+		Deps:           util.SetFromStrings([]string{"dev"}),
+		Persistent:     false,
+		TaskDefinition: fs.TaskDefinition{Persistent: false},
 	})
 
 	engine.AddTask(&Task{
-		Name:       "dev",
-		TopoDeps:   make(util.Set),
-		Deps:       make(util.Set),
-		Persistent: true,
+		Name:           "dev",
+		TopoDeps:       make(util.Set),
+		Deps:           make(util.Set),
+		Persistent:     true,
+		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
 	opts := &EngineBuildingOptions{
@@ -130,18 +133,20 @@ func TestPrepare_PersistentDependencies_WorkspaceSpecific(t *testing.T) {
 
 	// "build": dependsOn: ["workspace-b#dev"]
 	engine.AddTask(&Task{
-		Name:       "build",
-		TopoDeps:   make(util.Set), // empty
-		Deps:       util.SetFromStrings([]string{"workspace-b#dev"}),
-		Persistent: false,
+		Name:           "build",
+		TopoDeps:       make(util.Set), // empty
+		Deps:           util.SetFromStrings([]string{"workspace-b#dev"}),
+		Persistent:     false,
+		TaskDefinition: fs.TaskDefinition{Persistent: false},
 	})
 
 	// workspace-b#dev is persistent, and has no dependencies
 	engine.AddTask(&Task{
-		Name:       "workspace-b#dev",
-		TopoDeps:   make(util.Set), // empty
-		Deps:       make(util.Set), // empty
-		Persistent: true,
+		Name:           "workspace-b#dev",
+		TopoDeps:       make(util.Set), // empty
+		Deps:           make(util.Set), // empty
+		Persistent:     true,
+		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
 	opts := &EngineBuildingOptions{
@@ -175,18 +180,20 @@ func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
 	assert.NilError(t, err, "Failed to prepare engine")
 
 	engine.AddTask(&Task{
-		Name:       "workspace-a#dev",
-		TopoDeps:   make(util.Set), // empty
-		Deps:       util.SetFromStrings([]string{"workspace-b#dev"}),
-		Persistent: true,
+		Name:           "workspace-a#dev",
+		TopoDeps:       make(util.Set), // empty
+		Deps:           util.SetFromStrings([]string{"workspace-b#dev"}),
+		Persistent:     true,
+		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
 	// workspace-b#dev dependsOn nothing else
 	engine.AddTask(&Task{
-		Name:       "workspace-b#dev",
-		TopoDeps:   make(util.Set), // empty
-		Deps:       make(util.Set), // empty
-		Persistent: true,
+		Name:           "workspace-b#dev",
+		TopoDeps:       make(util.Set), // empty
+		Deps:           make(util.Set), // empty
+		Persistent:     true,
+		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
 	opts := &EngineBuildingOptions{
@@ -230,10 +237,11 @@ func TestPrepare_PersistentDependencies_RootWorkspace(t *testing.T) {
 
 	// Add the persistent task in the root workspace
 	engine.AddTask(&Task{
-		Name:       "//#dev",
-		TopoDeps:   make(util.Set), // empty
-		Deps:       make(util.Set), // empty
-		Persistent: true,
+		Name:           "//#dev",
+		TopoDeps:       make(util.Set), // empty
+		Deps:           make(util.Set), // empty
+		Persistent:     true,
+		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
 	// prepare the engine
@@ -274,10 +282,11 @@ func TestPrepare_PersistentDependencies_Unimplemented(t *testing.T) {
 
 	// "dev": dependsOn: ["^dev"] (dev is persistent, but workspace-c does not implement dev)
 	engine.AddTask(&Task{
-		Name:       "dev",
-		TopoDeps:   util.SetFromStrings([]string{"dev"}),
-		Deps:       make(util.Set), // empty, no non-caret task deps.
-		Persistent: true,
+		Name:           "dev",
+		TopoDeps:       util.SetFromStrings([]string{"dev"}),
+		Deps:           make(util.Set), // empty, no non-caret task deps.
+		Persistent:     true,
+		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
 	opts := &EngineBuildingOptions{
@@ -319,10 +328,11 @@ func TestPrepare_PersistentDependencies_Topological_SkipDepImplementedTask(t *te
 
 	// "dev": dependsOn: ["^dev"] (where dev is persistent)
 	engine.AddTask(&Task{
-		Name:       "dev",
-		TopoDeps:   util.SetFromStrings([]string{"dev"}),
-		Deps:       make(util.Set), // empty, no non-caret task deps.
-		Persistent: true,
+		Name:           "dev",
+		TopoDeps:       util.SetFromStrings([]string{"dev"}),
+		Deps:           make(util.Set), // empty, no non-caret task deps.
+		Persistent:     true,
+		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
 	opts := &EngineBuildingOptions{
@@ -385,10 +395,11 @@ func TestPrepare_PersistentDependencies_Topological_WithALittleExtra(t *testing.
 
 	// workspace-z#dev is persistent (blanket "dev" is not added, we don't need it for this test case)
 	engine.AddTask(&Task{
-		Name:       "workspace-z#dev",
-		TopoDeps:   make(util.Set),
-		Deps:       make(util.Set),
-		Persistent: true,
+		Name:           "workspace-z#dev",
+		TopoDeps:       make(util.Set),
+		Deps:           make(util.Set),
+		Persistent:     true,
+		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
 	opts := &EngineBuildingOptions{
@@ -453,10 +464,11 @@ func TestPrepare_PersistentDependencies_CrossWorkspace_DownstreamPersistent(t *t
 		Deps:     util.SetFromStrings([]string{"workspace-z#dev"}),
 	})
 	engine.AddTask(&Task{
-		Name:       "workspace-z#dev",
-		TopoDeps:   make(util.Set),
-		Deps:       make(util.Set),
-		Persistent: true,
+		Name:           "workspace-z#dev",
+		TopoDeps:       make(util.Set),
+		Deps:           make(util.Set),
+		Persistent:     true,
+		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
 	opts := &EngineBuildingOptions{
