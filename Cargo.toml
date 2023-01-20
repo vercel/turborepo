@@ -7,6 +7,7 @@ members = [
   "crates/next-core",
   "crates/next-dev",
   "crates/next-transform-dynamic",
+  "crates/next-dev-tests",
   "crates/next-transform-strip-page-exports",
   "crates/node-file-trace",
   "crates/swc-ast-explorer",
@@ -74,10 +75,6 @@ default-members = [
   "crates/turbopack-tests",
   "xtask",
 ]
-
-[profile.release]
-
-[profile.bench]
 
 [profile.dev.package.turbo-tasks-macros]
 opt-level = 3
