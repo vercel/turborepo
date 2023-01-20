@@ -4,4 +4,7 @@ module.exports = {
   testEnvironment: "node",
   transformIgnorePatterns: ["/node_modules/(?!(ansi-regex)/)"],
   modulePathIgnorePatterns: ["<rootDir>/node_modules", "<rootDir>/dist"],
+  testPathIgnorePatterns: ["/__fixtures__/", "/__tests__/test-utils.ts"],
+  coveragePathIgnorePatterns: ["/__fixtures__/", "/__tests__/test-utils.ts"],
+  collectCoverage: true,
 };
