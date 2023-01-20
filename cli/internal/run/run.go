@@ -417,7 +417,6 @@ func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, er
 			Name:           taskName,
 			TopoDeps:       topoDeps,
 			Deps:           deps,
-			Persistent:     taskDefinition.Persistent,
 			TaskDefinition: taskDefinition,
 		})
 	}

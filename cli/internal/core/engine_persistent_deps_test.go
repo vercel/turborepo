@@ -41,7 +41,6 @@ func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
 		Name:           "dev",
 		TopoDeps:       util.SetFromStrings([]string{"dev"}),
 		Deps:           make(util.Set), // empty, no non-caret task deps.,
-		Persistent:     true,
 		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
@@ -84,7 +83,6 @@ func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
 		Name:           "build",
 		TopoDeps:       make(util.Set), // empty
 		Deps:           util.SetFromStrings([]string{"dev"}),
-		Persistent:     false,
 		TaskDefinition: fs.TaskDefinition{Persistent: false},
 	})
 
@@ -92,7 +90,6 @@ func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
 		Name:           "dev",
 		TopoDeps:       make(util.Set),
 		Deps:           make(util.Set),
-		Persistent:     true,
 		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
@@ -133,10 +130,10 @@ func TestPrepare_PersistentDependencies_WorkspaceSpecific(t *testing.T) {
 
 	// "build": dependsOn: ["workspace-b#dev"]
 	engine.AddTask(&Task{
-		Name:           "build",
-		TopoDeps:       make(util.Set), // empty
-		Deps:           util.SetFromStrings([]string{"workspace-b#dev"}),
-		Persistent:     false,
+		Name:     "build",
+		TopoDeps: make(util.Set), // empty
+		Deps:     util.SetFromStrings([]string{"workspace-b#dev"}),
+
 		TaskDefinition: fs.TaskDefinition{Persistent: false},
 	})
 
@@ -145,7 +142,6 @@ func TestPrepare_PersistentDependencies_WorkspaceSpecific(t *testing.T) {
 		Name:           "workspace-b#dev",
 		TopoDeps:       make(util.Set), // empty
 		Deps:           make(util.Set), // empty
-		Persistent:     true,
 		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
@@ -183,7 +179,6 @@ func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
 		Name:           "workspace-a#dev",
 		TopoDeps:       make(util.Set), // empty
 		Deps:           util.SetFromStrings([]string{"workspace-b#dev"}),
-		Persistent:     true,
 		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
@@ -192,7 +187,6 @@ func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
 		Name:           "workspace-b#dev",
 		TopoDeps:       make(util.Set), // empty
 		Deps:           make(util.Set), // empty
-		Persistent:     true,
 		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
@@ -240,7 +234,6 @@ func TestPrepare_PersistentDependencies_RootWorkspace(t *testing.T) {
 		Name:           "//#dev",
 		TopoDeps:       make(util.Set), // empty
 		Deps:           make(util.Set), // empty
-		Persistent:     true,
 		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
@@ -285,7 +278,6 @@ func TestPrepare_PersistentDependencies_Unimplemented(t *testing.T) {
 		Name:           "dev",
 		TopoDeps:       util.SetFromStrings([]string{"dev"}),
 		Deps:           make(util.Set), // empty, no non-caret task deps.
-		Persistent:     true,
 		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
@@ -331,7 +323,6 @@ func TestPrepare_PersistentDependencies_Topological_SkipDepImplementedTask(t *te
 		Name:           "dev",
 		TopoDeps:       util.SetFromStrings([]string{"dev"}),
 		Deps:           make(util.Set), // empty, no non-caret task deps.
-		Persistent:     true,
 		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
@@ -398,7 +389,6 @@ func TestPrepare_PersistentDependencies_Topological_WithALittleExtra(t *testing.
 		Name:           "workspace-z#dev",
 		TopoDeps:       make(util.Set),
 		Deps:           make(util.Set),
-		Persistent:     true,
 		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 
@@ -467,7 +457,6 @@ func TestPrepare_PersistentDependencies_CrossWorkspace_DownstreamPersistent(t *t
 		Name:           "workspace-z#dev",
 		TopoDeps:       make(util.Set),
 		Deps:           make(util.Set),
-		Persistent:     true,
 		TaskDefinition: fs.TaskDefinition{Persistent: true},
 	})
 

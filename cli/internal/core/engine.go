@@ -21,8 +21,6 @@ type Task struct {
 	Deps util.Set
 	// TopoDeps are dependencies across packages within the same topological graph (e.g. parent `build` -> child `build`) */
 	TopoDeps util.Set
-	// Persistent is whether this task is persistent or not. We need this information to validate TopoDeps graph
-	Persistent bool
 	// TaskDefinition contains the config for the task from turbo.json
 	TaskDefinition fs.TaskDefinition
 }
@@ -326,7 +324,7 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			_, hasScript := pkg.Scripts[taskName]
 
 			// If both conditions are true set a value and break out of checking the dependencies
-			if depTaskDefinition.Persistent && hasScript {
+			if depTaskDefinition.TaskDefinition.Persistent && hasScript {
 				validationError = fmt.Errorf(
 					"\"%s\" is a persistent task, \"%s\" cannot depend on it",
 					util.GetTaskId(packageName, taskName),
