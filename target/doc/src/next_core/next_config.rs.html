@@ -494,6 +494,8 @@
 <span id="494">494</span>
 <span id="495">495</span>
 <span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -938,6 +940,8 @@
 
     import_map.insert_exact_alias(<span class="string">&quot;next&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
     import_map.insert_wildcard_alias(<span class="string">&quot;next/&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
+    import_map.insert_exact_alias(<span class="string">&quot;styled-jsx&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
+    import_map.insert_wildcard_alias(<span class="string">&quot;styled-jsx/&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
 
     <span class="kw">let </span>context = node_evaluate_asset_context(<span class="prelude-val">Some</span>(import_map.cell()));
     <span class="kw">let </span>find_config_result = find_context_file(project_root, next_configs());

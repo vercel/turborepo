@@ -339,6 +339,10 @@
 <span id="339">339</span>
 <span id="340">340</span>
 <span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
@@ -449,6 +453,8 @@
 
     import_map.insert_exact_alias(<span class="string">&quot;next&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
     import_map.insert_wildcard_alias(<span class="string">&quot;next/&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
+    import_map.insert_exact_alias(<span class="string">&quot;styled-jsx&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
+    import_map.insert_wildcard_alias(<span class="string">&quot;styled-jsx/&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
 
     import_map.cell()
 }
@@ -519,6 +525,8 @@
             import_map.insert_wildcard_alias(<span class="string">&quot;react/&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
             import_map.insert_exact_alias(<span class="string">&quot;react-dom&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
             import_map.insert_wildcard_alias(<span class="string">&quot;react-dom/&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
+            import_map.insert_exact_alias(<span class="string">&quot;styled-jsx&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
+            import_map.insert_wildcard_alias(<span class="string">&quot;styled-jsx/&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
         }
         ServerContextType::AppSSR { app_dir } | ServerContextType::AppRSC { app_dir } =&gt; {
             import_map.insert_exact_alias(
