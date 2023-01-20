@@ -39,7 +39,7 @@ Check my-app#build output
     ResolvedTaskDefinition = {"outputs":[],"cache":true,"dependsOn":[],"inputs":[],"outputMode":0,"env":[],"persistent":false} 
 
 # Validate output of my-app#build task
-  $ ${TURBO} run build --dry=json | jq '.tasks' | jq 'map(select(.taskId == "my-app#build"))' | jq '.[0]'
+  $ ${TURBO} run build --dry=json | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0]'
   {
     "taskId": "my-app#build",
     "task": "build",
@@ -68,7 +68,7 @@ Check my-app#build output
   }
 
 # Validate output of util#build task
-  $ ${TURBO} run build --dry=json | jq '.tasks' | jq 'map(select(.taskId == "util#build"))' | jq '.[0]'
+  $ ${TURBO} run build --dry=json | jq '.tasks | map(select(.taskId == "util#build")) | .[0]'
   {
     "taskId": "util#build",
     "task": "build",
