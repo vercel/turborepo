@@ -32,9 +32,11 @@ pub async fn get_next_client_import_map(
 
     insert_alias_option(
         &mut import_map,
+        project_path,
         next_config.resolve_alias_options(),
         ["browser"],
-    );
+    )
+    .await?;
 
     match ty.into_value() {
         ClientContextType::Pages { pages_dir } => {
@@ -155,7 +157,13 @@ pub async fn get_next_server_import_map(
 
     insert_next_shared_aliases(&mut import_map, project_path).await?;
 
-    insert_alias_option(&mut import_map, next_config.resolve_alias_options(), []);
+    insert_alias_option(
+        &mut import_map,
+        project_path,
+        next_config.resolve_alias_options(),
+        [],
+    )
+    .await?;
 
     match ty.into_value() {
         ServerContextType::Pages { pages_dir } | ServerContextType::PagesData { pages_dir } => {
@@ -302,17 +310,19 @@ pub async fn insert_next_shared_aliases(
     Ok(())
 }
 
-fn insert_alias_option<N: usize>(
+pub async fn insert_alias_option<const N: usize>(
     import_map: &mut ImportMap,
+    project_path: FileSystemPathVc,
     alias_options: ResolveAliasMapVc,
     conditions: [&'static str; N],
-) {
+) -> Result<()> {
     let conditions = BTreeMap::from(conditions.map(|c| (c.to_string(), ConditionValue::Set)));
     for (alias, value) in &alias_options.await? {
         if let Some(mapping) = export_value_to_import_mapping(value, &conditions, project_path) {
             import_map.insert_alias(alias, mapping);
         }
     }
+    Ok(())
 }
 
 fn export_value_to_import_mapping(
