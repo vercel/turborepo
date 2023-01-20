@@ -1,4 +1,5 @@
 mod cli;
+mod client;
 mod commands;
 mod config;
 mod package_manager;

@@ -16,8 +16,6 @@ use dirs_next::config_dir;
 use dirs_next::data_local_dir as config_dir;
 use serde::{Deserialize, Serialize};
 
-use crate::Args;
-
 pub fn default_user_config_path() -> Result<PathBuf> {
     config_dir()
         .map(|p| p.join("turborepo").join("config.json"))
@@ -43,8 +41,13 @@ pub struct RepoConfig {
 }
 
 impl RepoConfig {
-    pub fn new(clap_args: &Args) -> Result<Self> {
-        let repo_root = match &clap_args.cwd {
+    pub fn new(
+        cwd: Option<PathBuf>,
+        api: Option<&str>,
+        login: Option<&str>,
+        team: Option<&str>,
+    ) -> Result<Self> {
+        let repo_root = match cwd.as_ref() {
             Some(cwd) => cwd.clone(),
             None => current_dir()?,
         };
@@ -53,9 +56,9 @@ impl RepoConfig {
             .set_override_option("teamslug", env::var("TURBO_TEAM").ok())?
             .set_override_option("apiurl", env::var("TURBO_API").ok())?
             .set_override_option("loginurl", env::var("TURBO_LOGIN").ok())?
-            .set_override_option("apiurl", clap_args.api.as_deref())?
-            .set_override_option("loginurl", clap_args.login.as_deref())?
-            .set_override_option("teamslug", clap_args.team.as_deref())?
+            .set_override_option("apiurl", api)?
+            .set_override_option("loginurl", login)?
+            .set_override_option("teamslug", team)?
             .set_default("apiurl", DEFAULT_API_URL)?
             .set_default("loginurl", DEFAULT_LOGIN_URL)?
             .add_source(
@@ -184,7 +187,8 @@ mod test {
         let repo_root = TempDir::new().unwrap();
 
         // Confirm that defaults are used when no values are provided.
-        let config = RepoConfig::new(repo_root.path(), None, None, None).unwrap();
+        let config =
+            RepoConfig::new(Some(repo_root.path().to_path_buf()), None, None, None).unwrap();
         assert_eq!(config.api_url, DEFAULT_API_URL);
         assert_eq!(config.login_url, DEFAULT_LOGIN_URL);
         assert_eq!(config.team_slug, None);
@@ -193,10 +197,10 @@ mod test {
         let repo_root = TempDir::new().unwrap();
         // Confirm that when values are provided, they should be used.
         let config = RepoConfig::new(
-            repo_root.path(),
-            Some("https://api.example.com".to_string()),
-            Some("https://login.example.com".to_string()),
-            Some("team".to_string()),
+            Some(repo_root.path().to_path_buf()),
+            Some("https://api.example.com"),
+            Some("https://login.example.com"),
+            Some("team"),
         )
         .unwrap();
         assert_eq!(config.api_url, "https://api.example.com");
@@ -220,29 +224,32 @@ mod test {
         )
         .unwrap();
 
-        let config = RepoConfig::new(repo_root.path(), None, None, None).unwrap();
+        let config =
+            RepoConfig::new(Some(repo_root.path().to_path_buf()), None, None, None).unwrap();
         assert_eq!(config.api_url, "https://api.example4.com");
         assert_eq!(config.login_url, "https://login.example4.com");
         assert_eq!(config.team_slug, Some("turbo-team".to_string()));
     }
 
     fn test_create_repo_config_with_env_var() {
+        let repo_root = TempDir::new().unwrap();
         // Confirm that environment variables are used when no values are provided.
         env::set_var("TURBO_API", "https://api.example2.com");
         env::set_var("TURBO_LOGIN", "https://login.example2.com");
         env::set_var("TURBO_TEAM", "turborepo");
 
-        let config = RepoConfig::new(repo_root.path(), None, None, None).unwrap();
+        let config =
+            RepoConfig::new(Some(repo_root.path().to_path_buf()), None, None, None).unwrap();
         assert_eq!(config.api_url, "https://api.example2.com");
         assert_eq!(config.login_url, "https://login.example2.com");
         assert_eq!(config.team_slug, Some("turborepo".to_string()));
 
         // Confirm that manual overrides take precedence over env variables.
         let config = RepoConfig::new(
-            repo_root.path(),
-            Some("https://api.example3.com".to_string()),
-            Some("https://login.example3.com".to_string()),
-            Some("turbo-tooling".to_string()),
+            Some(repo_root.path().to_path_buf()),
+            Some("https://api.example3.com"),
+            Some("https://login.example3.com"),
+            Some("turbo-tooling"),
         )
         .unwrap();
         assert_eq!(config.api_url, "https://api.example3.com");
@@ -254,8 +261,8 @@ mod test {
         env::remove_var("TURBO_TEAM");
     }
 
-    // NOTE: This is one large test because tests are run in parallel and we do not
-    // want interleaved state with environment variables.
+    // NOTE: This is one large test because tests are run in parallel and we
+    // do not want interleaved state with environment variables.
     #[test]
     fn test_config() {
         // Remove variables to avoid accidental test failures;

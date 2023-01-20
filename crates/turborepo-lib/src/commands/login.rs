@@ -1,7 +1,8 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use axum::{routing::get, Router};
+use axum::{extract::Query, response::Redirect, routing::get, Router};
 use log::{debug, info, warn};
+use serde::Deserialize;
 use tokio::sync::OnceCell;
 
 use crate::{config::RepoConfig, get_version};
@@ -22,8 +23,7 @@ pub async fn login(repo_config: RepoConfig) {
     direct_user_to_url(&login_url);
 
     let query = Arc::new(OnceCell::new());
-    new_one_shot_server(DEFAULT_PORT, query.clone()).await;
-    println!("{}", query.get().unwrap());
+    new_one_shot_server(DEFAULT_PORT, repo_config.login_url, query.clone()).await;
 }
 
 fn direct_user_to_url(url: &str) {
@@ -32,20 +32,29 @@ fn direct_user_to_url(url: &str) {
     }
 }
 
-async fn new_one_shot_server(port: u16, query: Arc<OnceCell<String>>) {
+#[derive(Debug, Clone, Deserialize)]
+struct LoginPayload {
+    token: String,
+}
+
+async fn new_one_shot_server(
+    port: u16,
+    login_url_base: String,
+    login_token: Arc<OnceCell<String>>,
+) {
     let handle = axum_server::Handle::new();
     let route_handle = handle.clone();
     let app = Router::new()
         // `GET /` goes to `root`
         .route(
             "/",
-            get(|| async move {
-                let _ = query.set("hello friends".to_string());
+            get(|login_payload: Query<LoginPayload>| async move {
+                let _ = login_token.set(login_payload.0.token);
                 route_handle.shutdown();
+                Redirect::to(&format!("{login_url_base}/turborepo/success"))
             }),
         );
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    println!("listening on {}", addr);
     axum_server::bind(addr)
         .handle(handle)
         .serve(app.into_make_service())
