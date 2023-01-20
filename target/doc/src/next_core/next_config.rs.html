@@ -493,6 +493,7 @@
 <span id="493">493</span>
 <span id="494">494</span>
 <span id="495">495</span>
+<span id="496">496</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -973,6 +974,7 @@
         intermediate_output_path,
         runtime_entries,
         <span class="macro">vec!</span>[],
+        <span class="comment">/* debug */ </span><span class="bool-val">false</span>,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">match </span><span class="kw-2">&amp;*</span>config_value {
