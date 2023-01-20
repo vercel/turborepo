@@ -19,8 +19,6 @@ type Task struct {
 	Name string
 	// Deps are dependencies between tasks within the same package (e.g. `build` -> `test`)
 	Deps util.Set
-	// TopoDeps are dependencies across packages within the same topological graph (e.g. parent `build` -> child `build`) */
-	TopoDeps util.Set
 	// TaskDefinition contains the config for the task from turbo.json
 	TaskDefinition fs.TaskDefinition
 }
@@ -161,6 +159,8 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		visited.Add(taskID)
 
+		topoDeps := util.SetFromStrings(task.TaskDefinition.TopologicalDependencies)
+
 		// Filter down the tasks if there's a filter in place
 		// https: //turbo.build/repo/docs/reference/command-line-reference#--only
 		if tasksOnly {
@@ -170,7 +170,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 				}
 				return false
 			})
-			task.TopoDeps = task.TopoDeps.Filter(func(d interface{}) bool {
+			topoDeps = topoDeps.Filter(func(d interface{}) bool {
 				for _, target := range taskNames {
 					return fmt.Sprintf("%v", d) == target
 				}
@@ -182,7 +182,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		// hasTopoDeps will be true if the task depends on any tasks from dependency packages
 		// E.g. `dev: { dependsOn: [^dev] }`
-		hasTopoDeps := task.TopoDeps.Len() > 0 && e.TopologicGraph.DownEdges(pkg).Len() > 0
+		hasTopoDeps := topoDeps.Len() > 0 && e.TopologicGraph.DownEdges(pkg).Len() > 0
 
 		// hasDeps will be true if the task depends on any tasks from its own package
 		// E.g. `build: { dependsOn: [dev] }`
@@ -198,7 +198,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		if hasTopoDeps {
 			depPkgs := e.TopologicGraph.DownEdges(pkg)
-			for _, from := range task.TopoDeps.UnsafeListOfStrings() {
+			for _, from := range topoDeps.UnsafeListOfStrings() {
 				// add task dep from all the package deps within repo
 				for depPkg := range depPkgs {
 					fromTaskID := util.GetTaskId(depPkg, from)
