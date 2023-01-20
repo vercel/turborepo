@@ -229,7 +229,7 @@ fn generate_minimal_source_map(filename: String, source: String) -> ParseResultS
     let mut mappings = vec![];
     // Start from 1 because 0 is reserved for dummy spans in SWC.
     let mut pos = 1;
-    for (index, line) in source.lines().enumerate() {
+    for (index, line) in source.split_inclusive('\n').enumerate() {
         mappings.push((
             BytePos(pos),
             LineCol {
