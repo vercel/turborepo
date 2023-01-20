@@ -68,7 +68,7 @@ impl ResolvePlugin for ExternalCjsModulesResolvePlugin {
 
         // check if we can resolve the package from the root dir (might be hidden by
         // pnpm)
-        let FileJsonContent::Content(_) = *self
+        let FileJsonContent::Content(resolved_package) = &*self
             .root
             .join(&format!("node_modules/{}/package.json", package_name))
             .read_json()
@@ -76,6 +76,11 @@ impl ResolvePlugin for ExternalCjsModulesResolvePlugin {
         else {
             return Ok(ResolveResultOptionVc::none());
         };
+
+        // only mark external if the package.json files are the same
+        if resolved_package != package {
+            return Ok(ResolveResultOptionVc::none());
+        }
 
         // mark as external
         Ok(ResolveResultOptionVc::some(
