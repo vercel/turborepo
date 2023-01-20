@@ -1,38 +1,33 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
-use indexmap::IndexMap;
-use reqwest::{Client, Url};
-use serde::Deserialize;
 use turbo_tasks::{primitives::StringVc, Value};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 use turbopack_dev_server::source::{
-    headers::HeaderValue, ContentSource, ContentSourceContent, ContentSourceData,
-    ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
-    NeededData, ProxyResult,
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataFilter,
+    ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc, NeededData, ProxyResult,
 };
+use turbopack_node::execution_context::ExecutionContextVc;
 
-#[derive(Deserialize)]
-struct RoutingResult {
-    url: String,
-    #[allow(dead_code)]
-    res_headers: IndexMap<String, String>,
-}
+use crate::router::{route, RouterRequest, RouterResult};
 
 #[turbo_tasks::value(shared)]
 pub struct NextRouterContentSource {
     /// A wrapped content source from which we will fetch assets.
     inner: ContentSourceVc,
-    address: String,
+    execution_context: ExecutionContextVc,
 }
 
 #[turbo_tasks::value_impl]
 impl NextRouterContentSourceVc {
     #[turbo_tasks::function]
-    pub fn new(inner: ContentSourceVc, address: &str) -> NextRouterContentSourceVc {
+    pub fn new(
+        inner: ContentSourceVc,
+        execution_context: ExecutionContextVc,
+    ) -> NextRouterContentSourceVc {
         NextRouterContentSource {
             inner,
-            address: address.to_string(),
+            execution_context,
         }
         .cell()
     }
@@ -45,9 +40,9 @@ fn need_data(source: ContentSourceVc, path: &str) -> ContentSourceResultVc {
             source,
             path: path.to_string(),
             vary: ContentSourceDataVary {
-                url: true,
                 method: true,
                 headers: Some(ContentSourceDataFilter::All),
+                query: Some(ContentSourceDataFilter::All),
                 ..Default::default()
             },
         }
@@ -64,85 +59,70 @@ impl ContentSource for NextRouterContentSource {
         data: Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
         let this = self_vc.await?;
+
+        // We know how to handle our chunk files.
+        if path.starts_with("_chunks/") {
+            return Ok(this.inner.get(path, data));
+        }
+
         let Some(method) = &data.method else {
-            return Ok(need_data(self_vc.into(), path))
-        };
-        let Some(url) = &data.url else {
             return Ok(need_data(self_vc.into(), path))
         };
         let Some(headers) = &data.headers else {
             return Ok(need_data(self_vc.into(), path))
         };
+        let Some(query) = &data.query else {
+            return Ok(need_data(self_vc.into(), path))
+        };
 
-        let mut query_params = vec![("pathname", path), ("method", method)];
-        if let Some((_, query)) = url.split_once('?') {
-            query_params.push(("query", query));
+        let request = RouterRequest {
+            pathname: format!("/{path}"),
+            method: method.clone(),
+            headers: headers.clone(),
+            query: query.clone(),
         }
-        let url = Url::parse_with_params(&this.address, &query_params)?;
+        .cell();
 
-        let mut req = Client::new().get(url);
-        for (key, value) in headers.iter() {
-            match value {
-                HeaderValue::SingleString(v) => {
-                    req = req.header(key, v);
-                }
-                HeaderValue::SingleBytes(v) => {
-                    req = req.header(key, v.clone());
-                }
-                HeaderValue::MultiStrings(v) => {
-                    for v in v {
-                        req = req.header(key, v);
-                    }
-                }
-                HeaderValue::MultiBytes(v) => {
-                    for v in v {
-                        req = req.header(key, v.clone());
-                    }
-                }
-            }
-        }
-
-        let Ok(res) = req.send().await else {
+        let res = route(this.execution_context, request);
+        let Ok(res) = res.await else {
             return Ok(this
                 .inner
                 .get(path, Value::new(ContentSourceData::default())));
         };
 
-        if res.headers().get("x-nextjs-route-result") == Some(&("1".try_into()?)) {
-            // TODO: We don't have a way to query a source and set additional
-            // headers
-            let bytes = res.bytes().await?;
-            let result: RoutingResult = serde_json::from_slice(&bytes)?;
+        let rewrite = match &*res {
+            RouterResult::Handled => {
+                todo!("need to implement router forwarding body and headers?")
+            }
+            RouterResult::Error => {
+                // TODO: emit error
+                return Ok(this
+                    .inner
+                    .get(path, Value::new(ContentSourceData::default())));
+            }
+            RouterResult::Redirect(data) => {
+                return Ok(ContentSourceResultVc::exact(
+                    ContentSourceContent::HttpProxy(
+                        ProxyResult {
+                            status: data.status_code,
+                            // TODO: Does Next router inject Location header, or do we?
+                            headers: data.headers.clone(),
+                            body: Default::default(),
+                        }
+                        .cell(),
+                    )
+                    .cell()
+                    .into(),
+                ));
+            }
+            RouterResult::Rewrite(data) => data,
+        };
 
-            return Ok(this
-                .inner
-                .get(&result.url, Value::new(ContentSourceData::default())));
-        }
-
-        let headers = res
-            .headers()
-            .iter()
-            .filter_map(|(key, value)| {
-                value
-                    .to_str()
-                    .ok()
-                    .map(|v| [key.as_str().to_string(), v.to_string()])
-            })
-            .flatten()
-            .collect();
-        Ok(ContentSourceResultVc::exact(
-            ContentSourceContent::HttpProxy(
-                ProxyResult {
-                    status: res.status().as_u16(),
-                    headers,
-                    // TODO: We need proper streaming support.
-                    body: res.bytes().await?.into(),
-                }
-                .cell(),
-            )
-            .cell()
-            .into(),
-        ))
+        // TODO: We can't set response headers and query for a source.
+        // TODO: Does a rewrite's status code matter?
+        Ok(this
+            .inner
+            .get(&rewrite.url, Value::new(ContentSourceData::default())))
     }
 }
 

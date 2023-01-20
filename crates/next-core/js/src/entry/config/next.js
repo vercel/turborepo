@@ -5,9 +5,11 @@ const loadNextConfig = async () => {
   const nextConfig = await loadConfig(PHASE_DEVELOPMENT_SERVER, process.cwd());
 
   nextConfig.generateBuildId = await nextConfig.generateBuildId?.();
-  nextConfig.headers = await nextConfig.headers?.();
-  nextConfig.redirects = await nextConfig.redirects?.();
-  nextConfig.rewrites = await nextConfig.rewrites?.();
+
+  const { headers, redirects, rewrites } = await loadCustomRoutes(nextConfig);
+  nextConfig.headers = headers;
+  nextConfig.redirects = redirects;
+  nextConfig.rewrites = rewrites;
 
   // TODO: these functions takes arguments, have to be supported in a different way
   nextConfig.exportPathMap = nextConfig.exportPathMap && {};
