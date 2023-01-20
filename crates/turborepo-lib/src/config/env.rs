@@ -9,6 +9,7 @@ struct MappedEnvironment {
 }
 
 impl MappedEnvironment {
+    #[allow(dead_code)]
     pub fn with_prefix(s: &str) -> Self {
         Self {
             inner: Environment::with_prefix(s),
@@ -16,6 +17,7 @@ impl MappedEnvironment {
         }
     }
 
+    #[allow(dead_code)]
     pub fn source(mut self, source: Option<HashMap<String, String>>) -> Self {
         self.inner = self.inner.source(source);
         self
@@ -26,6 +28,7 @@ impl MappedEnvironment {
     ///
     /// Useful when environment variable names don't match up with config file
     /// names Replacement happens after config::Environment normalization
+    #[allow(dead_code)]
     pub fn replace(mut self, key: String, replacement: String) -> Self {
         self.replacements.insert(key, replacement);
         self

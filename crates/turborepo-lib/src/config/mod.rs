@@ -1,6 +1,6 @@
 mod env;
 
-use std::path::{Path, PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Result};
 use config::{Config, Environment};
@@ -41,36 +41,15 @@ pub struct UserConfig {
     path: PathBuf,
 }
 
+/// Configuration options for loading a UserConfig object
+#[derive(Debug, Clone)]
+pub struct UserConfigLoader {
+    path: PathBuf,
+    token: Option<String>,
+    environment: Option<HashMap<String, String>>,
+}
+
 impl UserConfig {
-    /// Loads the user config from the given path, with token as an optional
-    /// override that the user might provide via the command line.
-    pub fn load(path: &Path, token: Option<&str>) -> Result<Self> {
-        // We load just the disk config to make sure we don't write a config
-        // value that comes from a flag or environment variable.
-        let raw_disk_config = Config::builder()
-            .add_source(
-                config::File::with_name(path.to_string_lossy().as_ref())
-                    .format(config::FileFormat::Json)
-                    .required(false),
-            )
-            .build()?;
-
-        let config = Config::builder()
-            .add_source(raw_disk_config.clone())
-            .add_source(Environment::with_prefix("turbo"))
-            .set_override_option("token", token)?
-            .build()?
-            .try_deserialize()?;
-
-        let disk_config: UserConfigInner = raw_disk_config.try_deserialize()?;
-
-        Ok(Self {
-            disk_config,
-            config,
-            path: path.to_path_buf(),
-        })
-    }
-
     #[allow(dead_code)]
     pub fn token(&self) -> Option<&str> {
         self.config.token.as_deref()
@@ -94,6 +73,65 @@ impl UserConfig {
     }
 }
 
+impl UserConfigLoader {
+    /// Creates a loader that will load the config file at the given path
+    pub fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            token: None,
+            environment: None,
+        }
+    }
+
+    /// Set an override for token that the user provided via the command line
+    #[allow(dead_code)]
+    pub fn with_token(mut self, token: Option<String>) -> Self {
+        self.token = token;
+        self
+    }
+
+    /// Use the given environment map instead of querying the processes
+    /// environment
+    #[allow(dead_code)]
+    pub fn with_environment(mut self, environment: Option<HashMap<String, String>>) -> Self {
+        self.environment = environment;
+        self
+    }
+
+    /// Loads the user config using settings of the loader
+    pub fn load(self) -> Result<UserConfig> {
+        let Self {
+            path,
+            token,
+            environment,
+        } = self;
+        // We load just the disk config to make sure we don't write a config
+        // value that comes from a flag or environment variable.
+        let raw_disk_config = Config::builder()
+            .add_source(
+                config::File::with_name(path.to_string_lossy().as_ref())
+                    .format(config::FileFormat::Json)
+                    .required(false),
+            )
+            .build()?;
+
+        let config = Config::builder()
+            .add_source(raw_disk_config.clone())
+            .add_source(Environment::with_prefix("turbo").source(environment))
+            .set_override_option("token", token)?
+            .build()?
+            .try_deserialize()?;
+
+        let disk_config: UserConfigInner = raw_disk_config.try_deserialize()?;
+
+        Ok(UserConfig {
+            disk_config,
+            config,
+            path,
+        })
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::io::Write;
@@ -108,10 +146,11 @@ mod test {
         let mut config_path = config_dir.path().to_path_buf();
         config_path.push("turbo");
         config_path.push("config.json");
-        let mut config = UserConfig::load(&config_path, None)?;
+        let loader = UserConfigLoader::new(config_path.clone());
+        let mut config = loader.clone().load()?;
         assert_eq!(config.token(), None);
         config.set_token(Some("foo".to_string()))?;
-        let new_config = UserConfig::load(&config_path, None)?;
+        let new_config = loader.load()?;
         assert_eq!(new_config.token(), Some("foo"));
         Ok(())
     }
@@ -120,10 +159,12 @@ mod test {
     fn test_disk_value_preserved() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
         writeln!(&mut config_file, "{{\"token\": \"foo\"}}")?;
-        let config = UserConfig::load(config_file.path(), Some("bar"))?;
+        let loader =
+            UserConfigLoader::new(config_file.path().to_path_buf()).with_token(Some("bar".into()));
+        let config = loader.load()?;
         assert_eq!(config.token(), Some("bar"));
         config.write_to_disk()?;
-        let new_config = UserConfig::load(config_file.path(), None)?;
+        let new_config = UserConfigLoader::new(config_file.path().to_path_buf()).load()?;
         assert_eq!(new_config.token(), Some("foo"));
         Ok(())
     }
@@ -132,8 +173,14 @@ mod test {
     fn test_env_var_trumps_disk() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
         writeln!(&mut config_file, "{{\"token\": \"foo\"}}")?;
-        std::env::set_var("TURBO_TOKEN", "bar");
-        let config = UserConfig::load(config_file.path(), None)?;
+        let env = {
+            let mut map = HashMap::new();
+            map.insert("TURBO_TOKEN".into(), "bar".into());
+            map
+        };
+        let config = UserConfigLoader::new(config_file.path().to_path_buf())
+            .with_environment(Some(env))
+            .load()?;
         assert_eq!(config.token(), Some("bar"));
         Ok(())
     }
