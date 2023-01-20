@@ -2,7 +2,9 @@ import cn from "classnames";
 import { useRouter } from "next/router";
 import Link from "next/link";
 
-export function useTurboSite(): "pack" | "repo" | undefined {
+export type TurboSite = "pack" | "repo";
+
+export function useTurboSite(): TurboSite | undefined {
   const { pathname } = useRouter();
 
   if (pathname.startsWith("/repo")) {

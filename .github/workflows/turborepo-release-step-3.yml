@@ -1,4 +1,4 @@
-name: Build Rust Wrapper
+name: 3. Turborepo Release (rust binary & publish)
 
 on:
   workflow_dispatch:
@@ -121,7 +121,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           github_token: ${{secrets.TURBOBOT}}
-          workflow: build_go_binary.yml
+          workflow: turborepo-release-step-2.yml
           workflow_conclusion: success
           branch: ${{ inputs.release_branch }}
           path: go-artifacts
