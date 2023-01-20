@@ -1,6 +1,6 @@
 {
   "name": "@turbo/codemod",
-  "version": "1.7.1-canary.2",
+  "version": "1.7.1-canary.3",
   "description": "Provides Codemod transformations to help upgrade your Turborepo codebase when a feature is deprecated.",
   "homepage": "https://turbo.build/repo",
   "license": "MPL-2.0",
@@ -12,7 +12,7 @@
   "bugs": {
     "url": "https://github.com/vercel/turbo/issues"
   },
-  "bin": "dist/index.js",
+  "bin": "dist/cli.js",
   "scripts": {
     "build": "tsup",
     "test": "jest",
@@ -33,7 +33,6 @@
     "is-git-clean": "^1.1.0",
     "ora": "4.1.1",
     "semver": "^7.3.7",
-    "turbo-utils": "workspace:*",
     "update-check": "^1.5.4"
   },
   "devDependencies": {
