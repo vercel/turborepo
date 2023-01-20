@@ -3,13 +3,15 @@ use std::{env, io, mem, path::PathBuf, process};
 use anyhow::{anyhow, Result};
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
+use dunce::canonicalize as fs_canonicalize;
 use log::error;
 use serde::Serialize;
 
 use crate::{
-    commands::bin,
+    commands::{bin, logout},
     get_version,
     shim::{RepoMode, RepoState},
+    ui::UI,
     Payload,
 };
 
@@ -376,15 +378,23 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
         clap_args.cwd = Some(repo_state.root);
     }
 
+    if let Some(cwd) = &clap_args.cwd {
+        clap_args.cwd = Some(fs_canonicalize(cwd)?);
+    }
+
     match clap_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
             bin::run()?;
 
             Ok(Payload::Rust(Ok(0)))
         }
+        Command::Logout { .. } => {
+            logout::logout(clap_args.ui())?;
+
+            Ok(Payload::Rust(Ok(0)))
+        }
         Command::Login { .. }
         | Command::Link { .. }
-        | Command::Logout { .. }
         | Command::Unlink { .. }
         | Command::Daemon { .. }
         | Command::Prune { .. }
@@ -393,6 +403,18 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
 
             Ok(Payload::Rust(Ok(0)))
+        }
+    }
+}
+
+impl Args {
+    fn ui(&self) -> UI {
+        if self.no_color {
+            UI::new(true)
+        } else if self.color {
+            UI::new(false)
+        } else {
+            UI::infer()
         }
     }
 }
