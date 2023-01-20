@@ -86,6 +86,8 @@
 <span id="86">86</span>
 <span id="87">87</span>
 <span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -109,7 +111,7 @@
         get_client_resolve_options_context, get_client_runtime_entries, ClientContextType,
     },
     next_config::NextConfigVc,
-    next_import_map::insert_next_shared_aliases,
+    next_import_map::{insert_alias_option, insert_next_shared_aliases},
     runtime::resolve_runtime_request,
 };
 
@@ -137,10 +139,12 @@
     <span class="kw">let </span>entries = get_client_runtime_entries(project_path, env, ty, next_config);
 
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();
-    insert_next_shared_aliases(
+    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path).<span class="kw">await</span><span class="question-mark">?</span>;
+    insert_alias_option(
         <span class="kw-2">&amp;mut </span>import_map,
         project_path,
         next_config.resolve_alias_options(),
+        [<span class="string">&quot;browser&quot;</span>],
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 

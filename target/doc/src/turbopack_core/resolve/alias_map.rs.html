@@ -726,6 +726,82 @@
 <span id="726">726</span>
 <span id="727">727</span>
 <span id="728">728</span>
+<span id="729">729</span>
+<span id="730">730</span>
+<span id="731">731</span>
+<span id="732">732</span>
+<span id="733">733</span>
+<span id="734">734</span>
+<span id="735">735</span>
+<span id="736">736</span>
+<span id="737">737</span>
+<span id="738">738</span>
+<span id="739">739</span>
+<span id="740">740</span>
+<span id="741">741</span>
+<span id="742">742</span>
+<span id="743">743</span>
+<span id="744">744</span>
+<span id="745">745</span>
+<span id="746">746</span>
+<span id="747">747</span>
+<span id="748">748</span>
+<span id="749">749</span>
+<span id="750">750</span>
+<span id="751">751</span>
+<span id="752">752</span>
+<span id="753">753</span>
+<span id="754">754</span>
+<span id="755">755</span>
+<span id="756">756</span>
+<span id="757">757</span>
+<span id="758">758</span>
+<span id="759">759</span>
+<span id="760">760</span>
+<span id="761">761</span>
+<span id="762">762</span>
+<span id="763">763</span>
+<span id="764">764</span>
+<span id="765">765</span>
+<span id="766">766</span>
+<span id="767">767</span>
+<span id="768">768</span>
+<span id="769">769</span>
+<span id="770">770</span>
+<span id="771">771</span>
+<span id="772">772</span>
+<span id="773">773</span>
+<span id="774">774</span>
+<span id="775">775</span>
+<span id="776">776</span>
+<span id="777">777</span>
+<span id="778">778</span>
+<span id="779">779</span>
+<span id="780">780</span>
+<span id="781">781</span>
+<span id="782">782</span>
+<span id="783">783</span>
+<span id="784">784</span>
+<span id="785">785</span>
+<span id="786">786</span>
+<span id="787">787</span>
+<span id="788">788</span>
+<span id="789">789</span>
+<span id="790">790</span>
+<span id="791">791</span>
+<span id="792">792</span>
+<span id="793">793</span>
+<span id="794">794</span>
+<span id="795">795</span>
+<span id="796">796</span>
+<span id="797">797</span>
+<span id="798">798</span>
+<span id="799">799</span>
+<span id="800">800</span>
+<span id="801">801</span>
+<span id="802">802</span>
+<span id="803">803</span>
+<span id="804">804</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::BTreeMap,
@@ -935,6 +1011,19 @@
     }
 }
 
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T&gt; IntoIterator <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>AliasMap&lt;T&gt; {
+    <span class="kw">type </span>Item = (AliasPattern, <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>T);
+
+    <span class="kw">type </span>IntoIter = AliasMapIter&lt;<span class="lifetime">&#39;a</span>, T&gt;;
+
+    <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
+        AliasMapIter {
+            iter: <span class="self">self</span>.map.iter(),
+            current_prefix_iterator: <span class="prelude-val">None</span>,
+        }
+    }
+}
+
 <span class="doccomment">/// An owning iterator over the entries of an `AliasMap`.
 ///
 /// Beware: The items are *NOT* returned in the order defined by
@@ -995,6 +1084,69 @@
                 }
             }
         }
+    }
+}
+
+<span class="doccomment">/// A borrowing iterator over the entries of an `AliasMap`.
+///
+/// Beware: The items are *NOT* returned in the order defined by
+/// [PATTERN_KEY_COMPARE].
+///
+/// [PATTERN_KEY_COMPARE]: https://nodejs.org/api/esm.html#resolver-algorithm-specification
+</span><span class="kw">pub struct </span>AliasMapIter&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+    iter: patricia_tree::map::Iter&lt;<span class="lifetime">&#39;a</span>, BTreeMap&lt;AliasKey, T&gt;&gt;,
+    current_prefix_iterator: <span class="prelude-ty">Option</span>&lt;AliasMapIterItem&lt;<span class="lifetime">&#39;a</span>, T&gt;&gt;,
+}
+
+<span class="kw">struct </span>AliasMapIterItem&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+    prefix: String,
+    iterator: std::collections::btree_map::Iter&lt;<span class="lifetime">&#39;a</span>, AliasKey, T&gt;,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T&gt; AliasMapIter&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+    <span class="kw">fn </span>advance_iter(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; bool {
+        <span class="kw">let </span><span class="prelude-val">Some</span>((prefix, map)) = <span class="self">self</span>.iter.next() <span class="kw">else </span>{
+            <span class="kw">return </span><span class="bool-val">false</span>;
+        };
+        <span class="kw">let </span>prefix = String::from_utf8(prefix).expect(<span class="string">&quot;invalid UTF-8 key in AliasMap&quot;</span>);
+        <span class="self">self</span>.current_prefix_iterator = <span class="prelude-val">Some</span>(AliasMapIterItem {
+            prefix,
+            iterator: map.iter(),
+        });
+        <span class="bool-val">true
+    </span>}
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T&gt; Iterator <span class="kw">for </span>AliasMapIter&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+    <span class="kw">type </span>Item = (AliasPattern, <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>T);
+
+    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
+        <span class="kw">let </span>(current_prefix_iterator, current_value) = <span class="kw">loop </span>{
+            <span class="kw">let </span><span class="prelude-val">Some</span>(current_prefix_iterator) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.current_prefix_iterator <span class="kw">else </span>{
+                <span class="kw">if </span>!<span class="self">self</span>.advance_iter() {
+                    <span class="kw">return </span><span class="prelude-val">None</span>;
+                }
+                <span class="kw">continue</span>;
+            };
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(current_value) = current_prefix_iterator.iterator.next() {
+                <span class="kw">break </span>(<span class="kw-2">&amp;*</span>current_prefix_iterator, current_value);
+            }
+            <span class="self">self</span>.current_prefix_iterator = <span class="prelude-val">None</span>;
+            <span class="kw">continue</span>;
+        };
+        <span class="prelude-val">Some</span>(<span class="kw">match </span>current_value {
+            (AliasKey::Exact, value) =&gt; (
+                AliasPattern::Exact(current_prefix_iterator.prefix.clone()),
+                value,
+            ),
+            (AliasKey::Wildcard { suffix }, value) =&gt; (
+                AliasPattern::Wildcard {
+                    prefix: current_prefix_iterator.prefix.clone(),
+                    suffix: suffix.clone(),
+                },
+                value,
+            ),
+        })
     }
 }
 

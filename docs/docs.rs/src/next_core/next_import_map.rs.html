@@ -343,13 +343,58 @@
 <span id="343">343</span>
 <span id="344">344</span>
 <span id="345">345</span>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+
+<span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
-<span class="kw">use </span>turbopack::module_options::ResolveAliasOptionsVc;
 <span class="kw">use </span>turbopack_core::resolve::{
-    options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap, ResolvedMapVc},
-    AliasPattern,
+    options::{
+        ConditionValue, ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap,
+        ResolvedMapVc,
+    },
+    AliasPattern, ExportsValue, ResolveAliasMapVc,
 };
 
 <span class="kw">use crate</span>::{
@@ -369,10 +414,13 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();
 
-    insert_next_shared_aliases(
+    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    insert_alias_option(
         <span class="kw-2">&amp;mut </span>import_map,
         project_path,
         next_config.resolve_alias_options(),
+        [<span class="string">&quot;browser&quot;</span>],
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -493,10 +541,13 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();
 
-    insert_next_shared_aliases(
+    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    insert_alias_option(
         <span class="kw-2">&amp;mut </span>import_map,
         project_path,
         next_config.resolve_alias_options(),
+        [],
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -615,7 +666,6 @@
 <span class="kw">pub async fn </span>insert_next_shared_aliases(
     import_map: <span class="kw-2">&amp;mut </span>ImportMap,
     project_path: FileSystemPathVc,
-    alias_options: ResolveAliasOptionsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="kw">let </span>package_root = attached_next_js_package_path(project_path);
 
@@ -643,21 +693,53 @@
         ImportMapping::Dynamic(NextFontGoogleCssModuleReplacerVc::new(project_path).into()).into(),
     );
 
-    <span class="kw">for </span>(alias, mappings_vc) <span class="kw">in </span><span class="kw-2">&amp;</span>alias_options.<span class="kw">await</span><span class="question-mark">?</span>.alias_map {
-        <span class="kw">let </span>mappings = mappings_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-        import_map.insert_alias(
-            AliasPattern::exact(alias),
-            ImportMapping::Alternatives(
-                mappings
-                    .iter()
-                    .map(|m| ImportMapping::PrimaryAlternative(m.clone(), <span class="prelude-val">None</span>).cell())
-                    .collect::&lt;Vec&lt;ImportMappingVc&gt;&gt;(),
-            )
-            .cell(),
-        );
-    }
-
     <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">pub async fn </span>insert_alias_option&lt;<span class="kw">const </span>N: usize&gt;(
+    import_map: <span class="kw-2">&amp;mut </span>ImportMap,
+    project_path: FileSystemPathVc,
+    alias_options: ResolveAliasMapVc,
+    conditions: [<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str; N],
+) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">let </span>conditions = BTreeMap::from(conditions.map(|c| (c.to_string(), ConditionValue::Set)));
+    <span class="kw">for </span>(alias, value) <span class="kw">in </span><span class="kw-2">&amp;</span>alias_options.<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(mapping) = export_value_to_import_mapping(value, <span class="kw-2">&amp;</span>conditions, project_path) {
+            import_map.insert_alias(alias, mapping);
+        }
+    }
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">fn </span>export_value_to_import_mapping(
+    value: <span class="kw-2">&amp;</span>ExportsValue,
+    conditions: <span class="kw-2">&amp;</span>BTreeMap&lt;String, ConditionValue&gt;,
+    project_path: FileSystemPathVc,
+) -&gt; <span class="prelude-ty">Option</span>&lt;ImportMappingVc&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>result = Vec::new();
+    value.add_results(
+        conditions,
+        <span class="kw-2">&amp;</span>ConditionValue::Unset,
+        <span class="kw-2">&amp;mut </span>HashMap::new(),
+        <span class="kw-2">&amp;mut </span>result,
+    );
+    <span class="kw">if </span>result.is_empty() {
+        <span class="prelude-val">None
+    </span>} <span class="kw">else </span>{
+        <span class="prelude-val">Some</span>(<span class="kw">if </span>result.len() == <span class="number">1 </span>{
+            ImportMapping::PrimaryAlternative(result[<span class="number">0</span>].to_string(), <span class="prelude-val">Some</span>(project_path)).cell()
+        } <span class="kw">else </span>{
+            ImportMapping::Alternatives(
+                result
+                    .iter()
+                    .map(|m| {
+                        ImportMapping::PrimaryAlternative(m.to_string(), <span class="prelude-val">Some</span>(project_path)).cell()
+                    })
+                    .collect(),
+            )
+            .cell()
+        })
+    }
 }
 
 <span class="doccomment">/// Inserts an alias to an alternative of import mappings into an import map.

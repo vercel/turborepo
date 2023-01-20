@@ -318,14 +318,51 @@
 <span id="318">318</span>
 <span id="319">319</span>
 <span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value;
 
 <span class="kw">use super</span>::{
-    alias_map::{AliasMap, AliasMapLookupIterator, AliasPattern, AliasTemplate},
+    alias_map::{AliasMap, AliasMapIter, AliasMapLookupIterator, AliasPattern, AliasTemplate},
     options::ConditionValue,
 };
 
@@ -636,6 +673,41 @@
     /// when conditions don&#39;t match or only partially match.
     </span><span class="kw">pub fn </span>lookup&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, request: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str) -&gt; AliasMapLookupIterator&lt;<span class="lifetime">&#39;a</span>, ExportsValue&gt; {
         <span class="self">self</span>.<span class="number">0</span>.lookup(request)
+    }
+}
+
+<span class="doccomment">/// Content of an &quot;alias&quot; configuration
+</span><span class="attr">#[turbo_tasks::value(shared)]
+#[derive(Default)]
+</span><span class="kw">pub struct </span>ResolveAliasMap(<span class="attr">#[turbo_tasks(trace_ignore)] </span>AliasMap&lt;ExportsValue&gt;);
+
+<span class="kw">impl </span>TryFrom&lt;<span class="kw-2">&amp;</span>IndexMap&lt;String, Value&gt;&gt; <span class="kw">for </span>ResolveAliasMap {
+    <span class="kw">type </span>Error = anyhow::Error;
+
+    <span class="kw">fn </span>try_from(object: <span class="kw-2">&amp;</span>IndexMap&lt;String, Value&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>map = AliasMap::new();
+
+        <span class="kw">for </span>(key, value) <span class="kw">in </span>object.iter() {
+            <span class="kw">let </span><span class="kw-2">mut </span>value: ExportsValue = value.try_into()<span class="question-mark">?</span>;
+
+            <span class="kw">let </span>pattern = <span class="kw">if </span>is_folder_shorthand(key) {
+                expand_folder_shorthand(key, <span class="kw-2">&amp;mut </span>value)<span class="question-mark">?
+            </span>} <span class="kw">else </span>{
+                AliasPattern::parse(key)
+            };
+
+            map.insert(pattern, value);
+        }
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(map))
+    }
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IntoIterator <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ResolveAliasMap {
+    <span class="kw">type </span>Item = (AliasPattern, <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ExportsValue);
+    <span class="kw">type </span>IntoIter = AliasMapIter&lt;<span class="lifetime">&#39;a</span>, ExportsValue&gt;;
+
+    <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
+        (<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).into_iter()
     }
 }
 </code></pre></div>

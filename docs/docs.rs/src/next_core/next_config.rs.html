@@ -489,16 +489,10 @@
 <span id="489">489</span>
 <span id="490">490</span>
 <span id="491">491</span>
-<span id="492">492</span>
-<span id="493">493</span>
-<span id="494">494</span>
-<span id="495">495</span>
-<span id="496">496</span>
-<span id="497">497</span>
-<span id="498">498</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>serde_json::Value <span class="kw">as </span>JsonValue;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{BoolVc, StringsVc},
     trace::TraceRawVcs,
@@ -507,9 +501,7 @@
 <span class="kw">use </span>turbo_tasks_env::EnvMapVc;
 <span class="kw">use </span>turbopack::{
     evaluate_context::node_evaluate_asset_context,
-    module_options::{
-        ResolveAliasOptions, ResolveAliasOptionsVc, WebpackLoadersOptions, WebpackLoadersOptionsVc,
-    },
+    module_options::{WebpackLoadersOptions, WebpackLoadersOptionsVc},
 };
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
@@ -517,7 +509,7 @@
     resolve::{
         find_context_file,
         options::{ImportMap, ImportMapping},
-        FindContextFileResult,
+        FindContextFileResult, ResolveAliasMap, ResolveAliasMapVc,
     },
     source_asset::SourceAssetVc,
 };
@@ -742,7 +734,7 @@
 #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">pub struct </span>ExperimentalConfig {
     <span class="kw">pub </span>app_dir: <span class="prelude-ty">Option</span>&lt;bool&gt;,
-    <span class="kw">pub </span>resolve_alias: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, Vec&lt;String&gt;&gt;&gt;,
+    <span class="kw">pub </span>resolve_alias: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, JsonValue&gt;&gt;,
     <span class="kw">pub </span>server_components_external_packages: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
     <span class="kw">pub </span>turbopack_loaders: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, Vec&lt;String&gt;&gt;&gt;,
 
@@ -905,19 +897,13 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>resolve_alias_options(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveAliasOptionsVc&gt; {
-        <span class="kw">let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>resolve_alias) = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.experimental.resolve_alias <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveAliasOptionsVc::cell(ResolveAliasOptions::default()));
+    </span><span class="kw">pub async fn </span>resolve_alias_options(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveAliasMapVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="prelude-val">Some</span>(resolve_alias) = this.experimental.resolve_alias.as_ref() <span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveAliasMapVc::cell(ResolveAliasMap::default()));
         };
-        <span class="kw">let </span><span class="kw-2">mut </span>alias_map = IndexMap::new();
-        <span class="kw">for </span>(ext, mappings) <span class="kw">in </span>resolve_alias {
-            alias_map.insert(ext.clone(), StringsVc::cell(mappings.clone()));
-        }
-        <span class="prelude-val">Ok</span>(ResolveAliasOptions {
-            alias_map,
-            ..Default::default()
-        }
-        .cell())
+        <span class="kw">let </span>alias_map: ResolveAliasMap = resolve_alias.try_into()<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(alias_map.cell())
     }
 }
 
