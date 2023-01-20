@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      # create-pull-request does not have a way of skipping hooks when committing.
+      # Remove the pre-commit hook to prevent it from running.
+      - run: rm .husky/pre-commit
       - uses: ./.github/actions/setup-node
       - run: node --experimental-fetch ./scripts/fetch-google-font-data.js > crates/next-core/src/next_font_google/__generated__/font-data.json
       - run: echo "PR_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
