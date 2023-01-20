@@ -1,7 +1,14 @@
 use anyhow::{anyhow, bail, Result};
-use turbo_tasks::{primitives::StringVc, ValueToString};
+use serde::{Deserialize, Serialize};
+use swc_core::ecma::ast::{Lit, Program};
+use turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, ValueToString};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::condition::ContextCondition;
+use turbopack_core::{
+    asset::AssetVc,
+    issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
+};
+use turbopack_ecmascript::{parse::ParseResult, EcmascriptModuleAssetVc};
 
 use crate::next_config::NextConfigVc;
 
@@ -65,4 +72,156 @@ pub async fn foreign_code_context_condition(next_config: NextConfigVc) -> Result
         ])
     };
     Ok(result)
+}
+
+#[derive(Default, PartialEq, Eq, Clone, Copy, Debug, TraceRawVcs, Serialize, Deserialize)]
+pub enum NextRuntime {
+    #[default]
+    NodeJs,
+    Edge,
+}
+
+#[turbo_tasks::value]
+#[derive(Default)]
+pub struct NextSourceConfig {
+    pub runtime: NextRuntime,
+}
+
+/// An issue that occurred while resolving the React Refresh runtime module.
+#[turbo_tasks::value(shared)]
+pub struct NextSourceConfigParsingIssue {
+    path: FileSystemPathVc,
+    detail: StringVc,
+}
+
+#[turbo_tasks::value_impl]
+impl Issue for NextSourceConfigParsingIssue {
+    #[turbo_tasks::function]
+    fn severity(&self) -> IssueSeverityVc {
+        IssueSeverity::Warning.into()
+    }
+
+    #[turbo_tasks::function]
+    fn title(&self) -> StringVc {
+        StringVc::cell("Unable to parse config export in source file".to_string())
+    }
+
+    #[turbo_tasks::function]
+    fn category(&self) -> StringVc {
+        StringVc::cell("parsing".to_string())
+    }
+
+    #[turbo_tasks::function]
+    fn context(&self) -> FileSystemPathVc {
+        self.path
+    }
+
+    #[turbo_tasks::function]
+    fn description(&self) -> StringVc {
+        StringVc::cell(
+            "The exported configuration object in a source file need to have a very specific \
+             format from which some properties can be statically parsed at compiled-time."
+                .to_string(),
+        )
+    }
+
+    #[turbo_tasks::function]
+    fn detail(&self) -> StringVc {
+        self.detail
+    }
+}
+
+#[turbo_tasks::function]
+pub async fn parse_config_from_source(module_asset: AssetVc) -> Result<NextSourceConfigVc> {
+    if let Some(ecmascript_asset) = EcmascriptModuleAssetVc::resolve_from(module_asset).await? {
+        if let ParseResult::Ok { program, .. } = &*ecmascript_asset.parse().await? {
+            if let Program::Module(module) = &program {
+                for item in &module.body {
+                    if let Some(decl) = item
+                        .as_module_decl()
+                        .and_then(|mod_decl| mod_decl.as_export_decl())
+                        .and_then(|export_decl| export_decl.decl.as_var())
+                    {
+                        for decl in &decl.decls {
+                            if decl
+                                .name
+                                .as_ident()
+                                .map(|ident| &*ident.sym == "config")
+                                .unwrap_or_default()
+                            {
+                                let invalid_config = |detail: &str| {
+                                    NextSourceConfigParsingIssue {
+                                        path: module_asset.path(),
+                                        detail: StringVc::cell(detail.to_string()),
+                                    }
+                                    .cell()
+                                    .as_issue()
+                                    .emit()
+                                };
+                                if let Some(obj) =
+                                    decl.init.as_ref().and_then(|init| init.as_object())
+                                {
+                                    let mut config = NextSourceConfig::default();
+                                    for prop in &obj.props {
+                                        if let Some(key_value) =
+                                            prop.as_prop().and_then(|prop| prop.as_key_value())
+                                        {
+                                            if key_value
+                                                .key
+                                                .as_ident()
+                                                .map(|ident| &*ident.sym == "runtime")
+                                                .unwrap_or_default()
+                                            {
+                                                if let Some(value) =
+                                                    key_value.value.as_lit().and_then(|lit| {
+                                                        if let Lit::Str(str) = lit {
+                                                            Some(&*str.value)
+                                                        } else {
+                                                            None
+                                                        }
+                                                    })
+                                                {
+                                                    match value {
+                                                        "edge" | "experimental-edge" => {
+                                                            config.runtime = NextRuntime::Edge
+                                                        }
+                                                        "nodejs" => {
+                                                            config.runtime = NextRuntime::Edge
+                                                        }
+                                                        _ => {
+                                                            invalid_config(
+                                                                "The value of the runtime \
+                                                                 property is not a valid runtime \
+                                                                 name.",
+                                                            );
+                                                        }
+                                                    }
+                                                } else {
+                                                    invalid_config(
+                                                        "The value of the runtime property is not \
+                                                         a simple string literal.",
+                                                    );
+                                                }
+                                            }
+                                        } else {
+                                            invalid_config(
+                                                "The exported config object must only contain \
+                                                 simple key-value pairs.",
+                                            );
+                                        }
+                                    }
+                                    return Ok(config.cell());
+                                } else {
+                                    invalid_config(
+                                        "The exported config object is not a valid object literal.",
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(NextSourceConfig::default().cell())
 }
