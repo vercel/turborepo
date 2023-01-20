@@ -451,6 +451,7 @@
 <span id="451">451</span>
 <span id="452">452</span>
 <span id="453">453</span>
+<span id="454">454</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 #![feature(trait_alias)]
 #![feature(array_chunks)]
@@ -746,9 +747,10 @@
                             )
                             .<span class="kw">await</span><span class="question-mark">?</span>;
                             <span class="kw">let </span>status = response.status().as_u16();
-                            <span class="kw">let </span>success = response.status().is_success();
+                            <span class="kw">let </span>is_error = response.status().is_client_error()
+                                || response.status().is_server_error();
                             <span class="kw">let </span>elapsed = start.elapsed();
-                            <span class="kw">if </span>!success
+                            <span class="kw">if </span>is_error
                                 || (<span class="macro">cfg!</span>(feature = <span class="string">&quot;log_request_stats&quot;</span>)
                                     &amp;&amp; elapsed &gt; Duration::from_secs(<span class="number">1</span>))
                             {
