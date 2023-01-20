@@ -226,8 +226,21 @@ impl EcmascriptChunkItem for ModuleChunkItem {
 }
 
 fn generate_minimal_source_map(filename: String, source: String) -> ParseResultSourceMapVc {
+    let mut mappings = vec![];
+    // Start from 1 because 0 is reserved for dummy spans in SWC.
+    let mut pos = 1;
+    for (index, line) in source.lines().enumerate() {
+        mappings.push((
+            BytePos(pos),
+            LineCol {
+                line: index as u32,
+                col: 0,
+            },
+        ));
+        pos += line.len() as u32;
+    }
     let sm: Arc<SourceMap> = Default::default();
     sm.new_source_file(FileName::Custom(filename), source);
-    let map = ParseResultSourceMap::new(sm, vec![(BytePos(1), LineCol { line: 0, col: 0 })]);
+    let map = ParseResultSourceMap::new(sm, mappings);
     map.cell()
 }
