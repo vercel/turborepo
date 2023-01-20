@@ -1,3 +1,5 @@
+mod env;
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -94,7 +96,7 @@ impl UserConfig {
 
 #[cfg(test)]
 mod test {
-    use std::{env, io::Write};
+    use std::io::Write;
 
     use tempfile::{NamedTempFile, TempDir};
 
@@ -130,7 +132,7 @@ mod test {
     fn test_env_var_trumps_disk() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
         writeln!(&mut config_file, "{{\"token\": \"foo\"}}")?;
-        env::set_var("TURBO_TOKEN", "bar");
+        std::env::set_var("TURBO_TOKEN", "bar");
         let config = UserConfig::load(config_file.path(), None)?;
         assert_eq!(config.token(), Some("bar"));
         Ok(())
