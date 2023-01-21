@@ -1,13 +1,16 @@
 import transform from "../src/commands/transform";
 import { MigrateCommandArgument } from "../src/commands";
-import { setupTestFixtures, spyExit } from "./test-utils";
+import { setupTestFixtures, spyExit } from "turbo-test-utils";
 import * as checkGitStatus from "../src/utils/checkGitStatus";
 import * as getPackageManager from "../src/utils/getPackageManager";
 import * as getPackageManagerVersion from "../src/utils/getPackageManagerVersion";
 
 describe("transform", () => {
   const mockExit = spyExit();
-  const { useFixture } = setupTestFixtures({ test: "transform" });
+  const { useFixture } = setupTestFixtures({
+    directory: __dirname,
+    test: "transform",
+  });
 
   it("runs the selected transform", async () => {
     const { root, readJson } = useFixture({
