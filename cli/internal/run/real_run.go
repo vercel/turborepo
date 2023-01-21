@@ -28,6 +28,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // RealRun executes a set of tasks
@@ -157,6 +158,9 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	progressLogger := ec.logger.Named("")
 	progressLogger.Debug("start")
 
+	// TODO(rafaeltab) this doesn't work
+	isStdout := *ec.rs.Opts.runcacheOpts.TaskOutputModeOverride == util.StdoutFullTaskOutput || *ec.rs.Opts.runcacheOpts.TaskOutputModeOverride == util.StdoutNewTaskOutput
+
 	// Setup tracer
 	tracer := ec.runState.Run(packageTask.TaskID)
 
@@ -211,7 +215,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
-	writer, err := taskCache.OutputWriter(prettyPrefix)
+	writer, err := taskCache.OutputWriter(prettyPrefix, isStdout)
 	if err != nil {
 		tracer(TargetBuildFailed, err)
 		ec.logError(progressLogger, prettyPrefix, err)
@@ -223,9 +227,9 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Create a logger
 	logger := log.New(writer, "", 0)
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
+	logStreamerOut := logstreamer.NewLogstreamer(logger, prettyPrefix, false, isStdout)
 	// Setup a streamer that we'll pipe cmd.Stderr to.
-	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false)
+	logStreamerErr := logstreamer.NewLogstreamer(logger, prettyPrefix, false, isStdout)
 	cmd.Stderr = logStreamerErr
 	cmd.Stdout = logStreamerOut
 	// Flush/Reset any error we recorded
@@ -274,7 +278,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		}
 
 		// If there was an error, flush the buffered output
-		taskCache.OnError(prefixedUI, progressLogger)
+		taskCache.OnError(prefixedUI, progressLogger, isStdout)
 
 		return err
 	}

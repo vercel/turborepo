@@ -24,7 +24,7 @@ import (
 )
 
 // LogReplayer is a function that is responsible for replaying the contents of a given log file
-type LogReplayer = func(logger hclog.Logger, output *cli.PrefixedUi, logFile turbopath.AbsoluteSystemPath)
+type LogReplayer = func(logger hclog.Logger, output *cli.PrefixedUi, logFile turbopath.AbsoluteSystemPath, stdout bool)
 
 // Opts holds the configurable options for a RunCache instance
 type Opts struct {
@@ -149,12 +149,18 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixed
 	// When only showing new task output, cached output should only show the computed hash
 	case util.NewTaskOutput:
 		fallthrough
+	case util.StdoutNewTaskOutput:
+		fallthrough
 	case util.HashTaskOutput:
 		prefixedUI.Info(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(tc.hash)))
 	case util.FullTaskOutput:
 		progressLogger.Debug("log file", "path", tc.LogFileName)
 		prefixedUI.Info(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(tc.hash)))
-		tc.ReplayLogFile(prefixedUI, progressLogger)
+		tc.ReplayLogFile(prefixedUI, progressLogger, false)
+	case util.StdoutFullTaskOutput:
+		progressLogger.Debug("log file", "path", tc.LogFileName)
+		prefixedUI.Info(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(tc.hash)))
+		tc.ReplayLogFile(prefixedUI, progressLogger, true)
 	case util.ErrorTaskOutput:
 		// The task succeeded, so we don't output anything in this case
 	default:
@@ -165,17 +171,17 @@ func (tc TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixed
 }
 
 // ReplayLogFile writes out the stored logfile to the terminal
-func (tc TaskCache) ReplayLogFile(prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) {
+func (tc TaskCache) ReplayLogFile(prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger, stdout bool) {
 	if tc.LogFileName.FileExists() {
-		tc.rc.logReplayer(progressLogger, prefixedUI, tc.LogFileName)
+		tc.rc.logReplayer(progressLogger, prefixedUI, tc.LogFileName, stdout)
 	}
 }
 
 // OnError replays the logfile if --output-mode=errors-only.
 // This is called if the task exited with an non-zero error code.
-func (tc TaskCache) OnError(terminal *cli.PrefixedUi, logger hclog.Logger) {
+func (tc TaskCache) OnError(terminal *cli.PrefixedUi, logger hclog.Logger, stdout bool) {
 	if tc.taskOutputMode == util.ErrorTaskOutput {
-		tc.ReplayLogFile(terminal, logger)
+		tc.ReplayLogFile(terminal, logger, stdout)
 	}
 }
 
@@ -201,9 +207,14 @@ func (fwc *fileWriterCloser) Close() error {
 
 // OutputWriter creates a sink suitable for handling the output of the command associated
 // with this task.
-func (tc TaskCache) OutputWriter(prefix string) (io.WriteCloser, error) {
+func (tc TaskCache) OutputWriter(prefix string, stdout bool) (io.WriteCloser, error) {
 	// an os.Stdout wrapper that will add prefixes before printing to stdout
-	stdoutWriter := logstreamer.NewPrettyStdoutWriter(prefix)
+	var stdoutWriter *logstreamer.StdoutWriter
+	if stdout {
+		stdoutWriter = logstreamer.NewStdoutWriter()
+	} else {
+		stdoutWriter = logstreamer.NewPrettyStdoutWriter(prefix)
+	}
 
 	if tc.cachingDisabled || tc.rc.writesDisabled {
 		return nopWriteCloser{stdoutWriter}, nil
@@ -307,7 +318,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 }
 
 // defaultLogReplayer will try to replay logs back to the given Ui instance
-func defaultLogReplayer(logger hclog.Logger, output *cli.PrefixedUi, logFileName turbopath.AbsoluteSystemPath) {
+func defaultLogReplayer(logger hclog.Logger, output *cli.PrefixedUi, logFileName turbopath.AbsoluteSystemPath, stdout bool) {
 	logger.Debug("start replaying logs")
 	f, err := logFileName.Open()
 	if err != nil {
@@ -321,7 +332,10 @@ func defaultLogReplayer(logger hclog.Logger, output *cli.PrefixedUi, logFileName
 		// cli.PrefixedUi won't prefix empty strings (it'll just print them as empty strings).
 		// So if we have a blank string, we'll just output the string here, instead of passing
 		// it onto the PrefixedUi.
-		if str == "" {
+		if stdout {
+			// Don't prefix the output if stdout mode is on
+			output.Ui.Output(str)
+		} else if str == "" {
 			// Just output the prefix if the current line is a blank string
 			// Note: output.OutputPrefix is also a colored prefix already
 			output.Ui.Output(output.OutputPrefix)

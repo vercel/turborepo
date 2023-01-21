@@ -27,9 +27,12 @@ type Logstreamer struct {
 	colorOkay  string
 	colorFail  string
 	colorReset string
+
+	// If true, output is not altered, and written straight to stdout
+	stdout bool
 }
 
-func NewLogstreamer(logger *log.Logger, prefix string, record bool) *Logstreamer {
+func NewLogstreamer(logger *log.Logger, prefix string, record bool, stdout bool) *Logstreamer {
 	streamer := &Logstreamer{
 		Logger:     logger,
 		buf:        bytes.NewBuffer([]byte("")),
@@ -39,6 +42,7 @@ func NewLogstreamer(logger *log.Logger, prefix string, record bool) *Logstreamer
 		colorOkay:  "",
 		colorFail:  "",
 		colorReset: "",
+		stdout:     stdout,
 	}
 
 	if strings.HasPrefix(os.Getenv("TERM"), "xterm") {
@@ -121,39 +125,60 @@ func (l *Logstreamer) out(str string) {
 		l.persist = l.persist + str
 	}
 
-	if l.prefix == "stdout" {
-		str = l.colorOkay + l.prefix + l.colorReset + " " + str
-	} else if l.prefix == "stderr" {
-		str = l.colorFail + l.prefix + l.colorReset + " " + str
+	if !l.stdout {
+		if l.prefix == "stdout" {
+			str = l.colorOkay + l.prefix + l.colorReset + " " + str
+		} else if l.prefix == "stderr" {
+			str = l.colorFail + l.prefix + l.colorReset + " " + str
+		}
 	}
 
 	l.Logger.Print(str)
 }
 
-// PrettyStdoutWriter wraps an ioWriter so it can add string
+// StdoutWriter wraps an ioWriter so it can add string
 // prefixes to every message it writes to stdout.
-type PrettyStdoutWriter struct {
+type StdoutWriter struct {
 	w      io.Writer
 	Prefix string
+	// If true, output is not altered, and written straight to stdout
+	Stdout bool
 }
 
-var _ io.Writer = (*PrettyStdoutWriter)(nil)
+var _ io.Writer = (*StdoutWriter)(nil)
 
 // NewPrettyStdoutWriter returns an instance of PrettyStdoutWriter
-func NewPrettyStdoutWriter(prefix string) *PrettyStdoutWriter {
-	return &PrettyStdoutWriter{
+func NewPrettyStdoutWriter(prefix string) *StdoutWriter {
+	return &StdoutWriter{
 		w:      os.Stdout,
 		Prefix: prefix,
+		Stdout: false,
 	}
 }
 
-func (psw *PrettyStdoutWriter) Write(p []byte) (int, error) {
-	str := psw.Prefix + string(p)
-	n, err := psw.w.Write([]byte(str))
+func (psw *StdoutWriter) Write(p []byte) (int, error) {
+	var data []byte
+
+	if psw.Stdout {
+		str := psw.Prefix + string(p)
+		data = []byte(str)
+	} else {
+		data = p
+	}
+
+	n, err := psw.w.Write(data)
 
 	if err != nil {
 		return n, err
 	}
 
 	return len(p), nil
+}
+
+func NewStdoutWriter() *StdoutWriter {
+	return &StdoutWriter{
+		w:      os.Stdout,
+		Prefix: "",
+		Stdout: true,
+	}
 }
