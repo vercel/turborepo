@@ -1968,13 +1968,6 @@
 <span id="1968">1968</span>
 <span id="1969">1969</span>
 <span id="1970">1970</span>
-<span id="1971">1971</span>
-<span id="1972">1972</span>
-<span id="1973">1973</span>
-<span id="1974">1974</span>
-<span id="1975">1975</span>
-<span id="1976">1976</span>
-<span id="1977">1977</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>esm;
@@ -2400,7 +2393,6 @@
                 this: JsValue,
                 args: Vec&lt;JsValue&gt;,
                 link_value: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>F,
-                analyze_types: bool,
                 analysis: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>AnalyzeEcmascriptModuleResultBuilder,
                 environment: EnvironmentVc,
             ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;a</span>&gt;&gt; {
@@ -2414,7 +2406,6 @@
                     this,
                     args,
                     link_value,
-                    analyze_types,
                     analysis,
                     environment,
                 ))
@@ -2433,7 +2424,6 @@
                 this: JsValue,
                 args: Vec&lt;JsValue&gt;,
                 link_value: <span class="kw-2">&amp;</span>F,
-                analyze_types: bool,
                 analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
                 environment: EnvironmentVc,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -2454,7 +2444,6 @@
                                 this.clone(),
                                 args.clone(),
                                 link_value,
-                                analyze_types,
                                 analysis,
                                 environment,
                             )
@@ -2480,7 +2469,6 @@
                                             JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;no this provided&quot;</span>),
                                             args,
                                             link_value,
-                                            analyze_types,
                                             analysis,
                                             environment,
                                         )
@@ -3081,7 +3069,6 @@
                             JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;no this provided&quot;</span>),
                             args,
                             <span class="kw-2">&amp;</span>link_value,
-                            analyze_types,
                             <span class="kw-2">&amp;mut </span>analysis,
                             environment,
                         )
@@ -3112,7 +3099,6 @@
                             obj,
                             args,
                             <span class="kw-2">&amp;</span>link_value,
-                            analyze_types,
                             <span class="kw-2">&amp;mut </span>analysis,
                             environment,
                         )

@@ -381,6 +381,9 @@
 <span id="381">381</span>
 <span id="382">382</span>
 <span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -599,7 +602,10 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub fn </span>tsconfig() -&gt; StringsVc {
-    StringsVc::cell(<span class="macro">vec!</span>[<span class="string">&quot;tsconfig.json&quot;</span>.to_string()])
+    StringsVc::cell(<span class="macro">vec!</span>[
+        <span class="string">&quot;tsconfig.json&quot;</span>.to_string(),
+        <span class="string">&quot;jsconfig.json&quot;</span>.to_string(),
+    ])
 }
 
 <span class="attr">#[turbo_tasks::function]
