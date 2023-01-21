@@ -136,7 +136,6 @@ build-go-turbo-cross:
 build-lib-turbo-cross:
 	goreleaser release --rm-dist -f cross-lib.yml
 
-
 .PHONY: stage-release
 stage-release: cmd/turbo/version.go
 	echo "Version: $(TURBO_VERSION)"
@@ -162,52 +161,6 @@ stage-release: cmd/turbo/version.go
 	git tag "v$(TURBO_VERSION)"
 	git push origin staging-$(TURBO_VERSION) --tags --force
 
-.PHONY: publish
-publish: clean build
-	echo "Version: $(TURBO_VERSION)"
-	echo "Tag: $(TURBO_TAG)"
-
-	# Include the patch in the log.
-	git format-patch HEAD~1 --stdout | cat
-
-	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
-
-	# Publishes the native npm modules.
-	goreleaser release --rm-dist -f combined-release.yml
-
-	# Split packing from the publish step so that pnpm locates the correct .npmrc file.
-	cd $(CLI_DIR)/../packages/turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
-	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm pack --pack-destination=$(CLI_DIR)/../
-	cd $(CLI_DIR)/../packages/create-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
-	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm pack --pack-destination=$(CLI_DIR)/../
-
-	# Publish the remaining JS packages in order to avoid race conditions.
-	cd $(CLI_DIR)/../
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
-	# npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
-
-.PHONY: snapshot-turbo
-snapshot-turbo:
-	echo "Version: $(TURBO_VERSION)"
-	echo "Tag: $(TURBO_TAG)"
-
-	# Include the patch in the log.
-	git format-patch HEAD~1 --stdout | cat
-
-	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
-
-	# Publishes the native npm modules.
-	goreleaser release --rm-dist -f combined-shim.yml --snapshot
-
-	# Split packing from the publish step so that npm locates the correct .npmrc file.
-	cd $(CLI_DIR)/../packages/turbo && pnpm pack --pack-destination=$(CLI_DIR)/dist/
-	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm pack --pack-destination=$(CLI_DIR)/dist/
-	cd $(CLI_DIR)/../packages/create-turbo && pnpm pack --pack-destination=$(CLI_DIR)/dist/
-	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm pack --pack-destination=$(CLI_DIR)/dist/
-
-
 .PHONY: publish-turbo
 publish-turbo: clean build
 	echo "Version: $(TURBO_VERSION)"
@@ -225,12 +178,14 @@ publish-turbo: clean build
 	cd $(CLI_DIR)/../packages/turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
 	cd $(CLI_DIR)/../packages/create-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
 	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm pack --pack-destination=$(CLI_DIR)/../
 
 	# Publish the remaining JS packages in order to avoid race conditions.
 	cd $(CLI_DIR)/../
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
 
 demo/lage: install
 	node $(CLI_DIR)/scripts/generate.mjs lage
