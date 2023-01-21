@@ -19,14 +19,20 @@ const (
 	NewTaskOutput
 	// ErrorTaskOutput will show task output for failures only; no cache miss/hit messages are emitted
 	ErrorTaskOutput
+	// StdoutFullTaskOutput will show all task output to stdout without prefix
+	StdoutFullTaskOutput
+	// StdoutNewTaskOutput will show all new task output to stdout without prefix
+	StdoutNewTaskOutput
 )
 
 const (
-	fullTaskOutputString  = "full"
-	noTaskOutputString    = "none"
-	hashTaskOutputString  = "hash-only"
-	newTaskOutputString   = "new-only"
-	errorTaskOutputString = "errors-only"
+	fullTaskOutputString       = "full"
+	noTaskOutputString         = "none"
+	hashTaskOutputString       = "hash-only"
+	newTaskOutputString        = "new-only"
+	errorTaskOutputString      = "errors-only"
+	stdoutFullTaskOutputString = "stdout-full"
+	stdoutNewTaskOutputString  = "stdout-new-only"
 )
 
 // TaskOutputModeStrings is an array containing the string representations for task output modes
@@ -36,6 +42,8 @@ var TaskOutputModeStrings = []string{
 	hashTaskOutputString,
 	newTaskOutputString,
 	errorTaskOutputString,
+	stdoutFullTaskOutputString,
+	stdoutNewTaskOutputString,
 }
 
 // FromTaskOutputModeString converts a task output mode's string representation into the enum value
@@ -51,6 +59,10 @@ func FromTaskOutputModeString(value string) (TaskOutputMode, error) {
 		return NewTaskOutput, nil
 	case errorTaskOutputString:
 		return ErrorTaskOutput, nil
+	case stdoutFullTaskOutputString:
+		return StdoutFullTaskOutput, nil
+	case stdoutNewTaskOutputString:
+		return StdoutNewTaskOutput, nil
 	}
 
 	return FullTaskOutput, fmt.Errorf("invalid task output mode: %v", value)
@@ -69,6 +81,10 @@ func ToTaskOutputModeString(value TaskOutputMode) (string, error) {
 		return newTaskOutputString, nil
 	case ErrorTaskOutput:
 		return errorTaskOutputString, nil
+	case StdoutFullTaskOutput:
+		return stdoutFullTaskOutputString, nil
+	case StdoutNewTaskOutput:
+		return stdoutNewTaskOutputString, nil
 	}
 
 	return "", fmt.Errorf("invalid task output mode: %v", value)

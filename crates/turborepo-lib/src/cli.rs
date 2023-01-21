@@ -27,6 +27,10 @@ pub enum OutputLogsMode {
     NewOnly,
     #[serde(rename = "errors-only")]
     ErrorsOnly,
+    #[serde(rename = "stdout-full")]
+    StdoutFull,
+    #[serde(rename = "stdout-new-only")]
+    StdoutNewOnly,
 }
 
 impl Default for OutputLogsMode {
