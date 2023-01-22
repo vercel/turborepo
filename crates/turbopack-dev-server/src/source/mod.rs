@@ -338,7 +338,7 @@ impl ContentSourceDataFilter {
                 (ContentSourceDataFilter::All, _) => true,
                 (_, ContentSourceDataFilter::All) => false,
                 (ContentSourceDataFilter::Subset(this), ContentSourceDataFilter::Subset(other)) => {
-                    other.iter().all(|key| this.contains(key))
+                    this.is_superset(&other)
                 }
             },
         }
@@ -382,16 +382,16 @@ impl ContentSourceDataVary {
         if other.url && !self.url {
             return false;
         }
-        if !ContentSourceDataFilter::fulfills(&self.query, &other.query) {
-            return false;
-        }
-        if !ContentSourceDataFilter::fulfills(&self.headers, &other.headers) {
-            return false;
-        }
         if other.body && !self.body {
             return false;
         }
         if other.cache_buster && !self.cache_buster {
+            return false;
+        }
+        if !ContentSourceDataFilter::fulfills(&self.query, &other.query) {
+            return false;
+        }
+        if !ContentSourceDataFilter::fulfills(&self.headers, &other.headers) {
             return false;
         }
         true
