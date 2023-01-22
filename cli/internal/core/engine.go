@@ -155,14 +155,16 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 			continue
 		}
 
+		taskDefinition := task.TaskDefinition
+
 		visited.Add(taskID)
 
-		topoDeps := util.SetFromStrings(task.TaskDefinition.TopologicalDependencies)
+		topoDeps := util.SetFromStrings(taskDefinition.TopologicalDependencies)
 
 		deps := make(util.Set)
 		isPackageTask := util.IsPackageTask(taskName)
 
-		for _, dependency := range task.TaskDefinition.TaskDependencies {
+		for _, dependency := range taskDefinition.TaskDependencies {
 			// If the current task is a workspace-specific task (including root Task)
 			// and its dependency is _also_ a workspace-specific task, we need to add
 			// a reference to this dependency directly into the engine.
