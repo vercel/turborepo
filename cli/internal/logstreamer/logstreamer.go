@@ -147,7 +147,7 @@ type StdoutWriter struct {
 
 var _ io.Writer = (*StdoutWriter)(nil)
 
-// NewPrettyStdoutWriter returns an instance of PrettyStdoutWriter
+// NewPrettyStdoutWriter returns an instance of StdoutWriter in pretty mode
 func NewPrettyStdoutWriter(prefix string) *StdoutWriter {
 	return &StdoutWriter{
 		w:      os.Stdout,
@@ -159,7 +159,7 @@ func NewPrettyStdoutWriter(prefix string) *StdoutWriter {
 func (psw *StdoutWriter) Write(p []byte) (int, error) {
 	var data []byte
 
-	if psw.Stdout {
+	if !psw.Stdout {
 		str := psw.Prefix + string(p)
 		data = []byte(str)
 	} else {
@@ -175,6 +175,7 @@ func (psw *StdoutWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// NewStdoutWriter returns an instance of StdoutWriter in stdout mode
 func NewStdoutWriter() *StdoutWriter {
 	return &StdoutWriter{
 		w:      os.Stdout,
