@@ -159,7 +159,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	progressLogger.Debug("start")
 
 	// TODO(rafaeltab) this doesn't work
-	isStdout := *ec.rs.Opts.runcacheOpts.TaskOutputModeOverride == util.StdoutFullTaskOutput || *ec.rs.Opts.runcacheOpts.TaskOutputModeOverride == util.StdoutNewTaskOutput
+	isStdout := ec.rs.Opts.runcacheOpts.TaskOutputModeOverride != nil && (*ec.rs.Opts.runcacheOpts.TaskOutputModeOverride == util.StdoutFullTaskOutput || *ec.rs.Opts.runcacheOpts.TaskOutputModeOverride == util.StdoutNewTaskOutput)
 
 	// Setup tracer
 	tracer := ec.runState.Run(packageTask.TaskID)

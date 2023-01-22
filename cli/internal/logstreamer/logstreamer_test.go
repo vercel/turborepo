@@ -19,11 +19,11 @@ func TestLogstreamerOk(t *testing.T) {
 	logger := log.New(os.Stdout, "--> ", log.Ldate|log.Ltime)
 
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := NewLogstreamer(logger, "stdout", false)
+	logStreamerOut := NewLogstreamer(logger, "stdout", false, false)
 	defer logStreamerOut.Close()
 	// Setup a streamer that we'll pipe cmd.Stderr to.
 	// We want to record/buffer anything that's written to this (3rd argument true)
-	logStreamerErr := NewLogstreamer(logger, "stderr", true)
+	logStreamerErr := NewLogstreamer(logger, "stderr", true, false)
 	defer logStreamerErr.Close()
 
 	// Execute something that succeeds
@@ -57,11 +57,11 @@ func TestLogstreamerErr(t *testing.T) {
 	logger := log.New(os.Stdout, "--> ", log.Ldate|log.Ltime)
 
 	// Setup a streamer that we'll pipe cmd.Stdout to
-	logStreamerOut := NewLogstreamer(logger, "stdout", false)
+	logStreamerOut := NewLogstreamer(logger, "stdout", false, false)
 	defer logStreamerOut.Close()
 	// Setup a streamer that we'll pipe cmd.Stderr to.
 	// We want to record/buffer anything that's written to this (3rd argument true)
-	logStreamerErr := NewLogstreamer(logger, "stderr", true)
+	logStreamerErr := NewLogstreamer(logger, "stderr", true, false)
 	defer logStreamerErr.Close()
 
 	// Execute something that succeeds
@@ -99,7 +99,7 @@ func TestLogstreamerFlush(t *testing.T) {
 	byteWriter := bufio.NewWriter(&buffer)
 
 	logger := log.New(byteWriter, "", 0)
-	logStreamerOut := NewLogstreamer(logger, "", false)
+	logStreamerOut := NewLogstreamer(logger, "", false, false)
 	defer logStreamerOut.Close()
 
 	logStreamerOut.Write([]byte(text))
