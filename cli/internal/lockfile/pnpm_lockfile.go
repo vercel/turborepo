@@ -362,7 +362,7 @@ func (p *PnpmLockfileV6) Subgraph(workspacePackages []turbopath.AnchoredSystemPa
 		OnlyBuiltDependencies:     p.OnlyBuiltDependencies,
 		Overrides:                 p.Overrides,
 		PackageExtensionsChecksum: p.PackageExtensionsChecksum,
-		PatchedDependencies:       prunePatches(p.PatchedDependencies, lockfilePackages),
+		PatchedDependencies:       prunePatchesV6(p.PatchedDependencies, lockfilePackages),
 	}
 	lockfile := PnpmLockfileV6{
 		Importers:        importers,
@@ -435,6 +435,22 @@ func prunePatches(patches map[string]PatchFile, packages map[string]PackageSnaps
 
 		dependencyString := fmt.Sprintf("%s_%s", formatPnpmKey(name, version), entry.Hash)
 		_, inPackages := packages[dependencyString]
+		if inPackages {
+			patchPackages[dependency] = entry
+		}
+	}
+
+	return patchPackages
+}
+
+func prunePatchesV6(patches map[string]PatchFile, packages map[string]PackageSnapshot) map[string]PatchFile {
+	if len(patches) == 0 {
+		return nil
+	}
+
+	patchPackages := make(map[string]PatchFile, len(patches))
+	for dependency, entry := range patches {
+		_, inPackages := packages["/"+dependency]
 		if inPackages {
 			patchPackages[dependency] = entry
 		}

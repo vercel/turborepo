@@ -190,3 +190,27 @@ func Test_PnpmPrunePatches(t *testing.T) {
 
 	assert.Equal(t, len(prunedLockfile.Patches()), 2)
 }
+
+func Test_PnpmPrunePatchesV6(t *testing.T) {
+	contents, err := getFixture(t, "pnpm-patch-v6.yaml")
+	assert.NilError(t, err)
+
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err)
+
+	prunedLockfile, err := lockfile.Subgraph(
+		[]turbopath.AnchoredSystemPath{turbopath.AnchoredSystemPath("packages/a")},
+		[]string{"/lodash@4.17.21"},
+	)
+	assert.NilError(t, err)
+
+	assert.Equal(t, len(prunedLockfile.Patches()), 1)
+
+	prunedLockfile, err = lockfile.Subgraph(
+		[]turbopath.AnchoredSystemPath{turbopath.AnchoredSystemPath("packages/b")},
+		[]string{"/@babel/helper-string-parser@7.19.4"},
+	)
+	assert.NilError(t, err)
+
+	assert.Equal(t, len(prunedLockfile.Patches()), 1)
+}
