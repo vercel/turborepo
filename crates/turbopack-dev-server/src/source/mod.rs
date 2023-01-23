@@ -338,7 +338,7 @@ impl ContentSourceDataFilter {
                 (ContentSourceDataFilter::All, _) => true,
                 (_, ContentSourceDataFilter::All) => false,
                 (ContentSourceDataFilter::Subset(this), ContentSourceDataFilter::Subset(other)) => {
-                    this.is_superset(&other)
+                    this.is_superset(other)
                 }
             },
         }
