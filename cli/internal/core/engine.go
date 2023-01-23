@@ -153,7 +153,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		// into the traversalQueue. But in order to look up the information about
 		// the root workpsace, we need to use the package name "//". Re-assign
 		// the pkgName here to account for that.
-		// TODO(mehulkar): Is it safet o move this logic into GetPackageTaskFromId()?
+		// TODO(mehulkar): Is it safe to move this logic into GetPackageTaskFromId()?
 		if pkg == ROOT_NODE_NAME {
 			pkg = util.RootPkgName
 		}
