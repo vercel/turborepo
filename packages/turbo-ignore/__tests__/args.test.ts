@@ -1,6 +1,6 @@
 import parseArgs, { help } from "../src/args";
 import pkg from "../package.json";
-import { spyConsole, spyExit } from "./test-utils";
+import { spyConsole, spyExit } from "turbo-test-utils";
 
 describe("parseArgs()", () => {
   const mockConsole = spyConsole();

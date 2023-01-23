@@ -1,5 +1,5 @@
 import { getWorkspace } from "../src/getWorkspace";
-import { spyConsole, validateLogs } from "./test-utils";
+import { spyConsole, validateLogs } from "turbo-test-utils";
 
 describe("getWorkspace()", () => {
   const mockConsole = spyConsole();
@@ -11,7 +11,8 @@ describe("getWorkspace()", () => {
     ).toEqual("test-workspace");
     validateLogs(
       ['using "test-workspace" as workspace from arguments'],
-      mockConsole.log
+      mockConsole.log,
+      { prefix: "≫  " }
     );
   });
 
