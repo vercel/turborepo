@@ -112,6 +112,8 @@ func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions
 		result[filePath] = hash
 	}
 
+	fmt.Printf("[debug] result %#v\n", result)
+
 	return result, nil
 }
 
