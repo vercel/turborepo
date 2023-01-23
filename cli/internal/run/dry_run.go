@@ -28,15 +28,15 @@ import (
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed
 type dryRunSummary struct {
-	Packages []string      `json:"packages"`
-	Tasks    []taskSummary `json:"tasks"`
+	Packages []string                `json:"packages"`
+	Tasks    map[string]*taskSummary `json:"tasks"`
 }
 
 // DryRunSummarySinglePackage is the same as DryRunSummary with some adjustments
 // to the internal struct for a single package. It's likely that we can use the
 // same struct for Single Package repos in the future.
 type singlePackageDryRunSummary struct {
-	Tasks []singlePackageTaskSummary `json:"tasks"`
+	Tasks map[string]singlePackageTaskSummary `json:"tasks"`
 }
 
 // DryRun gets all the info needed from tasks and prints out a summary, but doesn't actually
@@ -91,8 +91,17 @@ func DryRun(
 	return nil
 }
 
-func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashes *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase, turboCache cache.Cache) ([]taskSummary, error) {
-	taskIDs := []taskSummary{}
+func executeDryRun(
+	ctx gocontext.Context,
+	engine *core.Engine,
+	g *graph.CompleteGraph,
+	taskHashes *taskhash.Tracker,
+	rs *runSpec,
+	base *cmdutil.CmdBase,
+	turboCache cache.Cache,
+) (map[string]*taskSummary, error) {
+
+	taskSummaryMap := map[string]*taskSummary{}
 
 	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
@@ -126,7 +135,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			return err
 		}
 
-		taskIDs = append(taskIDs, taskSummary{
+		taskSummaryMap[packageTask.TaskID] = &taskSummary{
 			TaskID:                 packageTask.TaskID,
 			Task:                   packageTask.Task,
 			Package:                packageTask.PackageName,
@@ -140,7 +149,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			Dependencies:           ancestors,
 			Dependents:             descendents,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
-		})
+		}
 		return nil
 	}
 
@@ -162,14 +171,14 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 		return nil, errors.New("errors occurred during dry-run graph traversal")
 	}
 
-	return taskIDs, nil
+	return taskSummaryMap, nil
 }
 
 func renderDryRunSinglePackageJSON(summary *dryRunSummary) (string, error) {
-	singlePackageTasks := make([]singlePackageTaskSummary, len(summary.Tasks))
+	singlePackageTasks := map[string]singlePackageTaskSummary{}
 
-	for i, ht := range summary.Tasks {
-		singlePackageTasks[i] = ht.toSinglePackageTask()
+	for taskID, taskSummary := range summary.Tasks {
+		singlePackageTasks[taskID] = taskSummary.toSinglePackageTask()
 	}
 
 	dryRun := &singlePackageDryRunSummary{singlePackageTasks}
@@ -289,6 +298,7 @@ type taskSummary struct {
 	Dependencies           []string           `json:"dependencies"`
 	Dependents             []string           `json:"dependents"`
 	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
+	TaskSummary            *BuildTargetState  `json:"taskSummary"`
 }
 
 type singlePackageTaskSummary struct {

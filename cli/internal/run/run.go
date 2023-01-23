@@ -323,7 +323,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	// Currently, we only emit this on dry runs, but it may be useful for real runs later also.
 	summary := &dryRunSummary{
 		Packages: packagesInScope,
-		Tasks:    []taskSummary{},
+		Tasks:    map[string]*taskSummary{},
 	}
 
 	// Dry Run

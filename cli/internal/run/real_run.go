@@ -89,8 +89,51 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.concurrency,
 	}
 
+	taskSummaryMap := map[string]*taskSummary{}
+
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask) error {
+		// COPY PASTE FROM DRY RUN!
 		deps := engine.TaskGraph.DownEdges(packageTask.TaskID)
+
+		passThroughArgs := rs.ArgsForTask(packageTask.Task)
+		hash, err := hashes.CalculateTaskHash(packageTask, deps, base.Logger, passThroughArgs)
+		if err != nil {
+			fmt.Printf("Warning: error with collecting task summary: %s", err)
+		}
+		itemStatus, err := turboCache.Exists(hash)
+		if err != nil {
+			fmt.Printf("Warning: error with collecting task summary: %s", err)
+		}
+		command := "<NONEXISTENT>"
+		if packageTask.Command != "" {
+			command = packageTask.Command
+		}
+		ancestors, err := engine.GetTaskGraphAncestors(packageTask.TaskID)
+		if err != nil {
+			fmt.Printf("Warning: error with collecting task summary: %s", err)
+		}
+		descendents, err := engine.GetTaskGraphDescendants(packageTask.TaskID)
+		if err != nil {
+			fmt.Printf("Warning: error with collecting task summary: %s", err)
+		}
+
+		taskSummaryMap[packageTask.TaskID] = &taskSummary{
+			TaskID:                 packageTask.TaskID,
+			Task:                   packageTask.Task,
+			Package:                packageTask.PackageName,
+			Hash:                   hash,
+			CacheState:             itemStatus,
+			Command:                command,
+			Dir:                    packageTask.Dir,
+			Outputs:                packageTask.TaskDefinition.Outputs.Inclusions,
+			ExcludedOutputs:        packageTask.TaskDefinition.Outputs.Exclusions,
+			LogFile:                packageTask.LogFile,
+			Dependencies:           ancestors,
+			Dependents:             descendents,
+			ResolvedTaskDefinition: packageTask.TaskDefinition,
+		}
+		// End DRY RUN STOLEN
+
 		// deps here are passed in to calculate the task hash
 		return ec.exec(ctx, packageTask, deps)
 	}
@@ -114,14 +157,34 @@ func RealRun(
 		base.UI.Error(err.Error())
 	}
 
+	summary.Tasks = taskSummaryMap
+	runState.mu.Lock()
+	for taskID, state := range runState.state {
+		t, ok := summary.Tasks[taskID]
+		fmt.Printf("[debug] state for task: %s %#v\n", taskID, state)
+		if ok {
+			t.TaskSummary = state
+		}
+
+		fmt.Printf("[debug] assigned, to task: %s: %#v\n", t.TaskID, t.TaskSummary)
+	}
+
 	if err := runState.Close(base.UI); err != nil {
 		return errors.Wrap(err, "error with profiler")
 	}
+
 	if exitCode != 0 {
 		return &process.ChildExit{
 			ExitCode: exitCode,
 		}
 	}
+
+	rendered, err := renderDryRunFullJSON(summary, singlePackage)
+	if err != nil {
+		return err
+	}
+	base.UI.Output(rendered)
+
 	return nil
 }
 

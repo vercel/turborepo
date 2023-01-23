@@ -42,15 +42,11 @@ const (
 )
 
 type BuildTargetState struct {
-	StartAt time.Time
-
-	Duration time.Duration
-	// Target which has just changed
-	Label string
-	// Its current status
-	Status RunResultStatus
-	// Error, only populated for failure statuses
-	Err error
+	StartAt  time.Time       `json:"startAt"`
+	Duration time.Duration   `json:"duration"`
+	Label    string          `json:"-"`      // Target which has just changed. Omit from JSOn
+	Status   RunResultStatus `json:"status"` // Its current status
+	Err      error           `json:"error"`  // Error, only populated for failure statuses
 }
 
 type RunState struct {
@@ -81,8 +77,7 @@ func NewRunState(startedAt time.Time, tracingProfile string) *RunState {
 		Attempted:       0,
 		state:           make(map[string]*BuildTargetState),
 		profileFilename: tracingProfile,
-
-		startedAt: startedAt,
+		startedAt:       startedAt,
 	}
 }
 
