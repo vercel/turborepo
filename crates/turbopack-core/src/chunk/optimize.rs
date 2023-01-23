@@ -2,10 +2,14 @@ use std::{cell::RefCell, mem::take, rc::Rc};
 
 use anyhow::Result;
 use indexmap::{IndexMap, IndexSet};
-use turbo_tasks::TryJoinIterExt;
+use turbo_tasks::{TryJoinIterExt, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::{FileSystemPathOptionVc, FileSystemPathVc};
 
 use super::{ChunkGroupVc, ChunkVc, ChunksVc};
+use crate::{
+    asset::{Asset, AssetVc},
+    chunk::Chunk,
+};
 
 #[turbo_tasks::value_trait]
 pub trait ChunkOptimizer {
@@ -13,7 +17,7 @@ pub trait ChunkOptimizer {
 }
 
 #[turbo_tasks::value_trait]
-pub trait OptimizableChunk {
+pub trait OptimizableChunk: Chunk + Asset + ValueToString {
     fn get_optimizer(&self) -> ChunkOptimizerVc;
 }
 
