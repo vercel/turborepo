@@ -94,12 +94,6 @@ When deploying on [Vercel](https://vercel.com), `turbo-ignore` can make a more a
 
 **NOTE:** By default on Vercel, `turbo-ignore` will always deploy the first commit of a new branch. This behavior can be changed by providing the `ref` to compare against to the `--fallback` flag. See the [Examples](#Examples) section for more details.
 
-## Releasing
-
-```sh
-pnpm release
-```
-
 ---
 
 For more information about Turborepo, visit [turbo.build](https://turbo.build) and follow us on Twitter ([@turborepo](https://twitter.com/turborepo))!
