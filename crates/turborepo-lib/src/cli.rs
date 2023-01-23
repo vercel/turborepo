@@ -402,11 +402,11 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
                 let this_dir = current_dir()?;
                 let repo_root = repo_state.as_ref().map(|r| &r.root).unwrap_or(&this_dir);
                 if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
-                    debug!(
-                        "pkg_inference_root set to \"{}\"",
-                        relative_path.display()
-                    );
-                    run_args.pkg_inference_root = Some(relative_path.to_string_lossy().to_string());
+                    debug!("pkg_inference_root set to \"{}\"", relative_path.display());
+                    let utf8_path = relative_path
+                        .to_str()
+                        .ok_or(anyhow!("invalid utf8 path: {:?}", relative_path))?;
+                    run_args.pkg_inference_root = Some(utf8_path.to_owned());
                 }
             } else {
                 debug!("{} not set", INVOCATION_DIR_ENV_VAR);

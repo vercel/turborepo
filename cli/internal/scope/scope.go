@@ -74,7 +74,7 @@ func OptsFromArgs(opts *Opts, args *turbostate.ParsedArgsFromRust) {
 	opts.FilterPatterns = args.Command.Run.Filter
 	opts.IgnorePatterns = args.Command.Run.Ignore
 	opts.GlobalDepPatterns = args.Command.Run.GlobalDeps
-	opts.PackageInferenceRoot = args.Command.Run.InferFilterRoot
+	opts.PackageInferenceRoot = args.Command.Run.PkgInferenceRoot
 	addLegacyFlagsFromArgs(&opts.LegacyFilter, args)
 }
 
