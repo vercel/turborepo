@@ -404,7 +404,7 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
                 if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
                     debug!(
                         "pkg_inference_root set to \"{}\"",
-                        relative_path.to_string_lossy()
+                        relative_path.display()
                     );
                     run_args.pkg_inference_root = Some(relative_path.to_string_lossy().to_string());
                 }
