@@ -37,7 +37,7 @@ const basicPipeline = {
       outputs: [],
     },
   },
-  globalDependencies: ["$GLOBAL_ENV_DEPENDENCY"],
+  globalEnv: ["GLOBAL_ENV_DEPENDENCY"],
 };
 
 // This is injected by github actions
