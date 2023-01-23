@@ -3,6 +3,8 @@ package lockfile
 import (
 	"fmt"
 	"io"
+	"sort"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -259,7 +261,16 @@ func prunePatches(patches map[string]PatchFile, packages map[string]PackageSnaps
 
 	patchPackages := make(map[string]PatchFile, len(patches))
 	for dependency, entry := range patches {
-		dependencyString := fmt.Sprintf("%s_%s", dependency, entry.Hash)
+		// The name for patches is of the form name@version
+		// https://github.com/pnpm/pnpm/blob/2895389ae1f2bf7346e140c017f495aa47186eba/packages/plugin-commands-patching/src/patchCommit.ts#L38
+		lastAt := strings.LastIndex(dependency, "@")
+		if lastAt == -1 {
+			panic(fmt.Sprintf("No '@' found in patch key: %s", dependency))
+		}
+		name := strings.Replace(dependency[:lastAt], "/", "-", 1)
+		version := dependency[lastAt+1:]
+
+		dependencyString := fmt.Sprintf("%s_%s", formatPnpmKey(name, version), entry.Hash)
 		_, inPackages := packages[dependencyString]
 		if inPackages {
 			patchPackages[dependency] = entry
@@ -289,13 +300,19 @@ func (p *PnpmLockfile) Patches() []turbopath.AnchoredUnixPath {
 	if len(p.PatchedDependencies) == 0 {
 		return nil
 	}
-	patches := make([]turbopath.AnchoredUnixPath, len(p.PatchedDependencies))
+	patches := make([]string, len(p.PatchedDependencies))
 	i := 0
 	for _, patch := range p.PatchedDependencies {
-		patches[i] = turbopath.AnchoredUnixPath(patch.Path)
+		patches[i] = patch.Path
 		i++
 	}
-	return patches
+	sort.Strings(patches)
+
+	patchPaths := make([]turbopath.AnchoredUnixPath, len(p.PatchedDependencies))
+	for i, patch := range patches {
+		patchPaths[i] = turbopath.AnchoredUnixPath(patch)
+	}
+	return patchPaths
 }
 
 func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath, name string, specifier string) (string, bool, error) {
