@@ -381,6 +381,7 @@
 <span id="381">381</span>
 <span id="382">382</span>
 <span id="383">383</span>
+<span id="384">384</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -412,7 +413,8 @@
     EcmascriptChunkItem, EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
 };
 <span class="kw">use </span>code_gen::CodeGenerateableVc;
-<span class="kw">use </span>parse::{parse, ParseResult, ParseResultSourceMap};
+<span class="kw">use </span>parse::{parse, ParseResult};
+<span class="kw">pub use </span>parse::{ParseResultSourceMap, ParseResultSourceMapVc};
 <span class="kw">use </span>path_visitor::ApplyVisitors;
 <span class="kw">use </span>references::AnalyzeEcmascriptModuleResult;
 <span class="kw">use </span>swc_core::{

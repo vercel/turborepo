@@ -211,10 +211,46 @@
 <span id="211">211</span>
 <span id="212">212</span>
 <span id="213">213</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Write, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>swc_core::css::modules::CssClassName;
+<span class="kw">use </span>swc_core::{
+    common::{BytePos, FileName, LineCol, SourceMap},
+    css::modules::CssClassName,
+};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
@@ -238,6 +274,7 @@
         EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
     },
     utils::stringify_str,
+    ParseResultSourceMap, ParseResultSourceMapVc,
 };
 
 <span class="kw">use crate</span>::{parse::ParseResult, transform::CssInputTransformsVc, CssModuleAssetVc};
@@ -406,23 +443,52 @@
                 }
                 code += <span class="string">&quot;});\n&quot;</span>;
                 EcmascriptChunkItemContent {
-                    inner_code: code.into(),
-                    <span class="comment">// TODO: We generate a minimal map for runtime code so that the filename is
+                    inner_code: code.clone().into(),
+                    <span class="comment">// We generate a minimal map for runtime code so that the filename is
                     // displayed in dev tools.
-                    </span>..Default::default()
+                    </span>source_map: <span class="prelude-val">Some</span>(generate_minimal_source_map(
+                        <span class="macro">format!</span>(<span class="string">&quot;{}.js&quot;</span>, <span class="self">self</span>.module.path().<span class="kw">await</span><span class="question-mark">?</span>.path),
+                        code,
+                    )),
+                    ..Default::default()
                 }
             }
             ParseResult::NotFound | ParseResult::Unparseable =&gt; {
+                <span class="kw">let </span>code = <span class="string">&quot;__turbopack_export_value__({});\n&quot;</span>;
                 EcmascriptChunkItemContent {
-                    inner_code: <span class="string">&quot;__turbopack_export_value__({});\n&quot;</span>.into(),
-                    <span class="comment">// TODO: We generate a minimal map for runtime code so that the filename is
+                    inner_code: code.into(),
+                    <span class="comment">// We generate a minimal map for runtime code so that the filename is
                     // displayed in dev tools.
-                    </span>..Default::default()
+                    </span>source_map: <span class="prelude-val">Some</span>(generate_minimal_source_map(
+                        <span class="macro">format!</span>(<span class="string">&quot;{}.js&quot;</span>, <span class="self">self</span>.module.path().<span class="kw">await</span><span class="question-mark">?</span>.path),
+                        code.into(),
+                    )),
+                    ..Default::default()
                 }
             }
         }
         .cell())
     }
+}
+
+<span class="kw">fn </span>generate_minimal_source_map(filename: String, source: String) -&gt; ParseResultSourceMapVc {
+    <span class="kw">let </span><span class="kw-2">mut </span>mappings = <span class="macro">vec!</span>[];
+    <span class="comment">// Start from 1 because 0 is reserved for dummy spans in SWC.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>pos = <span class="number">1</span>;
+    <span class="kw">for </span>(index, line) <span class="kw">in </span>source.split_inclusive(<span class="string">&#39;\n&#39;</span>).enumerate() {
+        mappings.push((
+            BytePos(pos),
+            LineCol {
+                line: index <span class="kw">as </span>u32,
+                col: <span class="number">0</span>,
+            },
+        ));
+        pos += line.len() <span class="kw">as </span>u32;
+    }
+    <span class="kw">let </span>sm: Arc&lt;SourceMap&gt; = Default::default();
+    sm.new_source_file(FileName::Custom(filename), source);
+    <span class="kw">let </span>map = ParseResultSourceMap::new(sm, mappings);
+    map.cell()
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="turbopack_css" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>
