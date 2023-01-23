@@ -405,7 +405,7 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
                     debug!("pkg_inference_root set to \"{}\"", relative_path.display());
                     let utf8_path = relative_path
                         .to_str()
-                        .ok_or(anyhow!("invalid utf8 path: {:?}", relative_path))?;
+                        .ok_or_else(|| anyhow!("invalid utf8 path: {:?}", relative_path))?;
                     run_args.pkg_inference_root = Some(utf8_path.to_owned());
                 }
             } else {
