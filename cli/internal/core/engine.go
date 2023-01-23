@@ -155,8 +155,6 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 			continue
 		}
 
-		visited.Add(taskID)
-
 		pkg, ok := e.completeGraph.WorkspaceInfos[packageName]
 
 		if !ok {
@@ -165,8 +163,6 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 			// something has gone wrong earlier when building WorkspaceInfos
 			return fmt.Errorf("Failed to look up workspace %s", packageName)
 		}
-
-		fmt.Printf("[debug] e.completeGraph.Pipeline %#v\n", e.completeGraph.Pipeline)
 
 		taskDefinition, err := e.GetResolvedTaskDefinition(
 			&e.completeGraph.Pipeline,
@@ -178,6 +174,8 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		if err != nil {
 			return err
 		}
+
+		visited.Add(taskID)
 
 		// Put this taskDefinition into the Graph so we can look it up later during execution.
 		e.completeGraph.TaskDefinitions[taskID] = taskDefinition
