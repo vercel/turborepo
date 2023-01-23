@@ -3,9 +3,9 @@
 - `dependsOn`
   exercise by: run task, expect dependent task to only run when appropriate
 
-  - [ ] Add `dependsOn` in root turbo.json, override to `[]` in workspace
+  - [x] Add `dependsOn` in root turbo.json, override to `[]` in workspace
   - [ ] Add `dependsOn` in root turbo.json, omit key in workspace
-  - [ ] Add `dependsOn` in root turbo.json, have no workspace turbo.json
+  - [x] Add `dependsOn` in root turbo.json, have no workspace turbo.json
   - [ ] No `dependsOn` in root turbo.json, add in workspace
 
 - `env`
@@ -19,9 +19,9 @@
 - `outputs`
   exercise by: run task by writing files to multiple places, expect correct folder is cached
 
-  - [ ] Add `outputs` in root turbo.json, override to `[]` in workspace
+  - [x] Add `outputs` in root turbo.json, override to something else in workspace
   - [ ] Add `outputs` in root turbo.json, omit key in workspace
-  - [ ] Add `outputs` in root turbo.json, have no workspace turbo.json
+  - [x] Add `outputs` in root turbo.json, have no workspace turbo.json
   - [ ] No `outputs` in root turbo.json, add in workspace
 
 - `inputs`
