@@ -476,6 +476,7 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 			// TODO(mehulkar): Enable extending from more than one workspace.
 			// TODO(mehulkar): Enable extending from non-root workspace.
 			if len(turboJSON.Extends) > 1 || turboJSON.Extends[0] != util.RootPkgName {
+				// TODO(mehulkar): Using pkg.Name here is wrong, since pkg changes on each iteration
 				return nil, fmt.Errorf(
 					"You can only extend from the root workspace. \"%s\" extends from %v",
 					pkg.Name,
