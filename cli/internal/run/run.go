@@ -389,7 +389,7 @@ func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient anal
 }
 
 func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, error) {
-	engine := core.NewEngine(g, &g.WorkspaceGraph)
+	engine := core.NewEngine(g)
 
 	for taskName, taskDefinition := range g.Pipeline {
 		engine.AddTask(&core.Task{
