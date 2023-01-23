@@ -977,6 +977,8 @@ impl Asset for EcmascriptChunk {
                 hasher.write_value(id.await?);
                 need_hash = true;
             }
+            // Marker to end evaluate
+            hasher.write_value(true);
         }
         let main_entries = this.main_entries.await?;
         // If there is only a single entry we can used that for the named info.
@@ -1001,6 +1003,16 @@ impl Asset for EcmascriptChunk {
                 main_entry.path()
             }
         };
+        if let Some(omit_entries) = this.omit_entries {
+            // Marker to start omit entries
+            hasher.write_value(false);
+            let omit_entries = omit_entries.await?;
+            for omit_entry in &omit_entries {
+                let path = omit_entry.path().to_string().await?;
+                hasher.write_value(path);
+            }
+            need_hash = true;
+        }
 
         if need_hash {
             let hash = hasher.finish();
