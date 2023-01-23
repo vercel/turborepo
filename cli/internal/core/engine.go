@@ -122,8 +122,10 @@ func (e *Engine) getTaskDefinition(taskName string, taskID string) (*Task, error
 
 func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly bool) error {
 	traversalQueue := []string{}
+
 	for _, pkg := range pkgs {
 		isRootPkg := pkg == util.RootPkgName
+
 		for _, taskName := range taskNames {
 			if !isRootPkg || e.rootEnabledTasks.Includes(taskName) {
 				taskID := util.GetTaskId(pkg, taskName)
@@ -146,8 +148,8 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		taskID := traversalQueue[0]
 		traversalQueue = traversalQueue[1:]
 
-		packageName, taskName := util.GetPackageTaskFromId(taskID)
-		if packageName == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
+		pkg, taskName := util.GetPackageTaskFromId(taskID)
+		if pkg == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
 			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
 
@@ -158,13 +160,13 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		visited.Add(taskID)
 
-		pkg, ok := e.completeGraph.WorkspaceInfos[packageName]
+		pkg, ok := e.completeGraph.WorkspaceInfos[pkg]
 
 		if !ok {
-			// This should be unlikely to happen. If we have a packageName
+			// This should be unlikely to happen. If we have a pkg
 			// it should be in WorkspaceInfos. If we're hitting this error
 			// something has gone wrong earlier when building WorkspaceInfos
-			return fmt.Errorf("Failed to look up workspace %s", packageName)
+			return fmt.Errorf("Failed to look up workspace %s", pkg)
 		}
 
 		fmt.Printf("[debug] e.completeGraph.Pipeline %#v\n", e.completeGraph.Pipeline)
@@ -184,7 +186,10 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		e.completeGraph.TaskDefinitions[taskID] = taskDefinition
 
 		topoDeps := util.SetFromStrings(taskDefinition.TopologicalDependencies)
+		// Put this taskDefinition into the Graph so we can look it up later during execution.
+		e.completeGraph.TaskDefinitions[taskID] = taskDefinition
 
+		topoDeps := util.SetFromStrings(taskDefinition.TopologicalDependencies)
 		deps := make(util.Set)
 		isPackageTask := util.IsPackageTask(taskName)
 
@@ -225,7 +230,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		// hasTopoDeps will be true if the task depends on any tasks from dependency packages
 		// E.g. `dev: { dependsOn: [^dev] }`
-		hasTopoDeps := topoDeps.Len() > 0 && e.TopologicGraph.DownEdges(packageName).Len() > 0
+		hasTopoDeps := topoDeps.Len() > 0 && e.TopologicGraph.DownEdges(pkg).Len() > 0
 
 		// hasDeps will be true if the task depends on any tasks from its own package
 		// E.g. `build: { dependsOn: [dev] }`
@@ -240,7 +245,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		}
 
 		if hasTopoDeps {
-			depPkgs := e.TopologicGraph.DownEdges(packageName)
+			depPkgs := e.TopologicGraph.DownEdges(pkg)
 			for _, from := range topoDeps.UnsafeListOfStrings() {
 				// add task dep from all the package deps within repo
 				for depPkg := range depPkgs {
@@ -255,7 +260,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		if hasDeps {
 			for _, from := range deps.UnsafeListOfStrings() {
-				fromTaskID := util.GetTaskId(packageName, from)
+				fromTaskID := util.GetTaskId(pkg, from)
 				e.TaskGraph.Add(fromTaskID)
 				e.TaskGraph.Add(toTaskID)
 				e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
@@ -355,19 +360,19 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			}
 
 			// Parse the taskID of this dependency task
-			packageName, taskName := util.GetPackageTaskFromId(depTaskID)
+			pkg, taskName := util.GetPackageTaskFromId(depTaskID)
 
 			// Get the Task Definition so we can check if it is Persistent
 			// TODO(mehulkar): Do we need to get a resolved taskDefinition here?
 			depTaskDefinition, taskExists := e.getTaskDefinition(taskName, depTaskID)
 			if taskExists != nil {
-				return fmt.Errorf("Cannot find task definition for %v in package %v", depTaskID, packageName)
+				return fmt.Errorf("Cannot find task definition for %v in package %v", depTaskID, pkg)
 			}
 
 			// Get information about the package
-			pkg, pkgExists := graph.WorkspaceInfos[packageName]
+			pkg, pkgExists := graph.WorkspaceInfos[pkg]
 			if !pkgExists {
-				return fmt.Errorf("Cannot find package %v", packageName)
+				return fmt.Errorf("Cannot find package %v", pkg)
 			}
 			_, hasScript := pkg.Scripts[taskName]
 
@@ -375,7 +380,7 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			if depTaskDefinition.TaskDefinition.Persistent && hasScript {
 				validationError = fmt.Errorf(
 					"\"%s\" is a persistent task, \"%s\" cannot depend on it",
-					util.GetTaskId(packageName, taskName),
+					util.GetTaskId(pkg, taskName),
 					util.GetTaskId(currentPackageName, currentTaskName),
 				)
 
