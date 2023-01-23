@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use config::Environment;
 
 #[derive(Debug, Clone, Default)]
-struct MappedEnvironment {
+pub struct MappedEnvironment {
     inner: Environment,
     replacements: HashMap<String, String>,
 }
@@ -29,8 +29,8 @@ impl MappedEnvironment {
     /// Useful when environment variable names don't match up with config file
     /// names Replacement happens after config::Environment normalization
     #[allow(dead_code)]
-    pub fn replace(mut self, key: String, replacement: String) -> Self {
-        self.replacements.insert(key, replacement);
+    pub fn replace<S: Into<String>>(mut self, key: S, replacement: S) -> Self {
+        self.replacements.insert(key.into(), replacement.into());
         self
     }
 }
@@ -74,7 +74,7 @@ mod test {
         }
 
         let mapped_env = MappedEnvironment::with_prefix("TURBO")
-            .replace("foo".into(), "bar".into())
+            .replace("foo", "bar")
             .source({
                 let mut map = HashMap::new();
                 map.insert("TURBO_FOO".into(), "42".into());
