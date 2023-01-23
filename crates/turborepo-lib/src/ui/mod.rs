@@ -1,4 +1,4 @@
-use std::f64::consts::PI;
+use std::{borrow::Cow, f64::consts::PI};
 
 use console::{Style, StyledObject};
 use lazy_static::lazy_static;
@@ -48,22 +48,32 @@ impl UI {
         (r as u8, g as u8, b as u8)
     }
 
-    pub fn print_rainbow(&self, text: &str) {
+    pub fn rainbow<'a>(&self, text: &'a str) -> Cow<'a, str> {
         if self.should_strip_ansi {
-            println!("{}", text);
-            return;
+            return Cow::Borrowed(text);
         }
+
+        let mut out = Vec::new();
         for (i, c) in text.char_indices() {
             let (r, g, b) = Self::rainbow_rgb(i);
-            print!("\x1b[1m\x1b[38;2;{};{};{}m{}\x1b[0m\x1b[0;1m", r, g, b, c);
+            out.push(format!(
+                "\x1b[1m\x1b[38;2;{};{};{}m{}\x1b[0m\x1b[0;1m",
+                r, g, b, c
+            ));
         }
-        println!()
+        out.push(RESET.to_string());
+
+        Cow::Owned(out.join(""))
     }
 }
 
 lazy_static! {
     pub static ref GREY: Style = Style::new().dim();
+    pub static ref CYAN: Style = Style::new().cyan();
+    pub static ref BOLD: Style = Style::new().bold();
 }
+
+pub const RESET: &str = "\x1b[0m";
 
 #[cfg(test)]
 mod test {

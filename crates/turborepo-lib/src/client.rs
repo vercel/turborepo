@@ -11,27 +11,21 @@ use crate::get_version;
 pub trait UserClient {
     fn set_token(&mut self, token: String);
     async fn get_user(&self) -> Result<UserResponse>;
-    // fn verify_sso_token(&self, token: String, token_name: String) ->
-    // Result<VerifiedSSOUser>; fn set_team_id(&self, team_id: String);
-    // fn get_caching_status(&self) -> Result<CachingStatus>;
-    // fn get_team(&self, team_id: String) -> Result<Team>;
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct User {
-    id: String,
-    username: String,
-    email: String,
-    name: String,
+    pub id: String,
+    pub username: String,
+    pub email: String,
+    pub name: String,
     #[serde(rename = "createdAt")]
-    created_at: u64,
+    pub created_at: u64,
 }
-
-struct Team {}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct UserResponse {
-    user: User,
+    pub user: User,
 }
 
 pub struct APIClient {
