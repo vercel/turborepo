@@ -19,39 +19,48 @@ func testVisitor(taskID string) error {
 }
 
 func TestEngineDefault(t *testing.T) {
-	var g dag.AcyclicGraph
-	g.Add("a")
-	g.Add("b")
-	g.Add("c")
-	g.Connect(dag.BasicEdge("c", "b"))
-	g.Connect(dag.BasicEdge("c", "a"))
+	var workspaceGraph dag.AcyclicGraph
+	workspaceGraph.Add("a")
+	workspaceGraph.Add("b")
+	workspaceGraph.Add("c")
+	workspaceGraph.Connect(dag.BasicEdge("c", "b"))
+	workspaceGraph.Connect(dag.BasicEdge("c", "a"))
 
-	graph := graph.CompleteGraph{WorkspaceGraph: g}
-	p := NewEngine(&graph)
+	buildTask := fs.TaskDefinition{
+		TopologicalDependencies: []string{"build"},
+		TaskDependencies:        []string{"prepare"},
+	}
 
-	p.AddTask(&Task{
-		Name: "build",
-		TaskDefinition: fs.TaskDefinition{
-			TopologicalDependencies: []string{"build"},
-			TaskDependencies:        []string{"prepare"},
+	testTask := fs.TaskDefinition{
+		TopologicalDependencies: []string{"build"},
+		TaskDependencies:        []string{"prepare"},
+	}
+
+	prepareTask := fs.TaskDefinition{}
+	sideQuestTask := fs.TaskDefinition{TaskDependencies: []string{"prepare"}}
+
+	pipeline := map[string]fs.TaskDefinition{
+		"build":      buildTask,
+		"test":       testTask,
+		"prepare":    prepareTask,
+		"side-quest": sideQuestTask,
+	}
+
+	p := NewEngine(&graph.CompleteGraph{
+		WorkspaceGraph:  workspaceGraph,
+		Pipeline:        pipeline,
+		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		WorkspaceInfos: graph.WorkspaceInfos{
+			"a": &fs.PackageJSON{},
+			"b": &fs.PackageJSON{},
+			"c": &fs.PackageJSON{},
 		},
 	})
-	p.AddTask(&Task{
-		Name: "test",
-		TaskDefinition: fs.TaskDefinition{
-			TopologicalDependencies: []string{"build"},
-			TaskDependencies:        []string{"prepare"},
-		},
-	})
-	p.AddTask(&Task{
-		Name: "prepare",
-	})
-	p.AddTask(&Task{
-		Name: "side-quest", // not in the build/test tree
-		TaskDefinition: fs.TaskDefinition{
-			TaskDependencies: []string{"prepare"},
-		},
-	})
+
+	p.AddTask(&Task{Name: "build", TaskDefinition: buildTask})
+	p.AddTask(&Task{Name: "test", TaskDefinition: testTask})
+	p.AddTask(&Task{Name: "prepare"})
+	p.AddTask(&Task{Name: "side-quest", TaskDefinition: sideQuestTask}) // not in the build/test tree
 
 	if _, ok := p.Tasks["build"]; !ok {
 		t.Fatal("AddTask is not adding tasks (build)")
@@ -126,16 +135,28 @@ func TestDependenciesOnUnspecifiedPackages(t *testing.T) {
 	workspaceGraph.Connect(dag.BasicEdge("app2", "libB"))
 	workspaceGraph.Connect(dag.BasicEdge("app2", "libC"))
 
-	p := NewEngine(&graph.CompleteGraph{WorkspaceGraph: workspaceGraph})
+	buildTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
+	testTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
 
-	p.AddTask(&Task{
-		Name:           "build",
-		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
+	pipeline := fs.Pipeline{"build": buildTask, "test": testTask}
+
+	p := NewEngine(&graph.CompleteGraph{
+		WorkspaceGraph:  workspaceGraph,
+		Pipeline:        pipeline,
+		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		WorkspaceInfos: graph.WorkspaceInfos{
+			"app1": &fs.PackageJSON{},
+			"app2": &fs.PackageJSON{},
+			"libA": &fs.PackageJSON{},
+			"libB": &fs.PackageJSON{},
+			"libC": &fs.PackageJSON{},
+			"libD": &fs.PackageJSON{},
+		},
 	})
-	p.AddTask(&Task{
-		Name:           "test",
-		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
-	})
+
+	p.AddTask(&Task{Name: "build", TaskDefinition: buildTask})
+	p.AddTask(&Task{Name: "test", TaskDefinition: testTask})
+
 	// We're only requesting one package ("scope"),
 	// but the combination of that package and task causes
 	// dependencies to also get run. This is the equivalent of
@@ -178,15 +199,30 @@ func TestRunPackageTask(t *testing.T) {
 	workspaceGraph.Add("libA")
 	workspaceGraph.Connect(dag.BasicEdge("app1", "libA"))
 
-	p := NewEngine(&graph.CompleteGraph{WorkspaceGraph: workspaceGraph})
+	buildTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
+	specialTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
+	pipeline := fs.Pipeline{
+		"build":        buildTask,
+		"app1#special": specialTask,
+	}
+
+	p := NewEngine(&graph.CompleteGraph{
+		WorkspaceGraph:  workspaceGraph,
+		Pipeline:        pipeline,
+		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		WorkspaceInfos: graph.WorkspaceInfos{
+			"app1": &fs.PackageJSON{},
+			"libA": &fs.PackageJSON{},
+		},
+	})
 
 	p.AddTask(&Task{
 		Name:           "app1#special",
-		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
+		TaskDefinition: specialTask,
 	})
 	p.AddTask(&Task{
 		Name:           "build",
-		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
+		TaskDefinition: buildTask,
 	})
 	// equivalent to "turbo run special", without an entry for
 	// "special" in turbo.json. Only "app1#special" is defined.
@@ -232,19 +268,30 @@ func TestIncludeRootTasks(t *testing.T) {
 	workspaceGraph.Add("app1")
 	workspaceGraph.Add("libA")
 	workspaceGraph.Connect(dag.BasicEdge("app1", "libA"))
-	p := NewEngine(&graph.CompleteGraph{WorkspaceGraph: workspaceGraph})
 
-	p.AddTask(&Task{
-		Name:           "build",
-		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
+	buildTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
+	testTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
+	rootTestTask := fs.TaskDefinition{}
+	pipeline := fs.Pipeline{
+		"build":   buildTask,
+		"test":    testTask,
+		"//#test": rootTestTask,
+	}
+	p := NewEngine(&graph.CompleteGraph{
+		WorkspaceGraph:  workspaceGraph,
+		Pipeline:        pipeline,
+		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		WorkspaceInfos: graph.WorkspaceInfos{
+			util.RootPkgName: &fs.PackageJSON{},
+			"app1":           &fs.PackageJSON{},
+			"libA":           &fs.PackageJSON{},
+		},
 	})
-	p.AddTask(&Task{
-		Name:           "test",
-		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
-	})
-	p.AddTask(&Task{
-		Name: util.RootTaskID("test"),
-	})
+
+	p.AddTask(&Task{Name: "build", TaskDefinition: buildTask})
+	p.AddTask(&Task{Name: "test", TaskDefinition: testTask})
+	p.AddTask(&Task{Name: util.RootTaskID("test")})
+
 	err := p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{util.RootPkgName, "app1", "libA"},
 		TaskNames: []string{"build", "test"},
@@ -284,15 +331,27 @@ func TestDependOnRootTask(t *testing.T) {
 	workspaceGraph.Add("libA")
 	workspaceGraph.Connect(dag.BasicEdge("app1", "libA"))
 
-	p := NewEngine(&graph.CompleteGraph{WorkspaceGraph: workspaceGraph})
+	buildTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
+	rootTask := fs.TaskDefinition{}
 
-	p.AddTask(&Task{
-		Name:           "build",
-		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
+	pipeline := fs.Pipeline{
+		"build":        buildTask,
+		"//#root-task": rootTask,
+	}
+
+	p := NewEngine(&graph.CompleteGraph{
+		WorkspaceGraph:  workspaceGraph,
+		Pipeline:        pipeline,
+		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		WorkspaceInfos: graph.WorkspaceInfos{
+			util.RootPkgName: &fs.PackageJSON{},
+			"app1":           &fs.PackageJSON{},
+			"libA":           &fs.PackageJSON{},
+		},
 	})
-	p.AddTask(&Task{
-		Name: "//#root-task",
-	})
+
+	p.AddTask(&Task{Name: "build", TaskDefinition: buildTask})
+	p.AddTask(&Task{Name: "//#root-task"})
 	err := p.AddDep("//#root-task", "libA#build")
 	assert.NilError(t, err, "AddDep")
 
@@ -348,16 +407,26 @@ func TestDependOnMultiplePackageTasks(t *testing.T) {
 	workspaceGraph.Add("libA")
 	workspaceGraph.Connect(dag.BasicEdge("app1", "libA"))
 
-	p := NewEngine(&graph.CompleteGraph{WorkspaceGraph: workspaceGraph})
+	buildTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
+	compileTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
 
-	p.AddTask(&Task{
-		Name:           "build",
-		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
+	pipeline := fs.Pipeline{
+		"build":   buildTask,
+		"compile": compileTask,
+	}
+	p := NewEngine(&graph.CompleteGraph{
+		WorkspaceGraph:  workspaceGraph,
+		Pipeline:        pipeline,
+		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		WorkspaceInfos: graph.WorkspaceInfos{
+			"app1": &fs.PackageJSON{},
+			"libA": &fs.PackageJSON{},
+		},
 	})
-	p.AddTask(&Task{
-		Name:           "compile",
-		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
-	})
+
+	p.AddTask(&Task{Name: "build", TaskDefinition: buildTask})
+	p.AddTask(&Task{Name: "compile", TaskDefinition: compileTask})
+
 	err := p.AddDep("app1#build", "libA#build")
 	assert.NilError(t, err, "AddDep")
 
@@ -420,23 +489,44 @@ func TestEngineTasksOnly(t *testing.T) {
 	workspaceGraph.Connect(dag.BasicEdge("c", "b"))
 	workspaceGraph.Connect(dag.BasicEdge("c", "a"))
 
-	p := NewEngine(&graph.CompleteGraph{WorkspaceGraph: workspaceGraph})
-	p.AddTask(&Task{
-		Name: "build",
-		TaskDefinition: fs.TaskDefinition{
-			TopologicalDependencies: []string{"build"},
-			TaskDependencies:        []string{"prepare"},
+	buildTask := fs.TaskDefinition{
+		TopologicalDependencies: []string{"build"},
+		TaskDependencies:        []string{"prepare"},
+	}
+	testTask := fs.TaskDefinition{
+		TopologicalDependencies: []string{"build"},
+		TaskDependencies:        []string{"prepare"},
+	}
+	prepareTask := fs.TaskDefinition{}
+
+	pipeline := map[string]fs.TaskDefinition{
+		"build":   buildTask,
+		"test":    testTask,
+		"prepare": prepareTask,
+	}
+
+	p := NewEngine(&graph.CompleteGraph{
+		WorkspaceGraph:  workspaceGraph,
+		Pipeline:        pipeline,
+		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		WorkspaceInfos: graph.WorkspaceInfos{
+			"a": &fs.PackageJSON{},
+			"b": &fs.PackageJSON{},
+			"c": &fs.PackageJSON{},
 		},
 	})
+
 	p.AddTask(&Task{
-		Name: "test",
-		TaskDefinition: fs.TaskDefinition{
-			TopologicalDependencies: []string{"build"},
-			TaskDependencies:        []string{"prepare"},
-		},
+		Name:           "build",
+		TaskDefinition: buildTask,
 	})
 	p.AddTask(&Task{
-		Name: "prepare",
+		Name:           "test",
+		TaskDefinition: testTask,
+	})
+	p.AddTask(&Task{
+		Name:           "prepare",
+		TaskDefinition: prepareTask,
 	})
 
 	if _, ok := p.Tasks["build"]; !ok {

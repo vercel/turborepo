@@ -102,7 +102,7 @@ func (p Pipeline) GetTask(taskID string, taskName string) (*TaskDefinition, erro
 		// if neither, then bail
 		if !notcool {
 			// Return an empty TaskDefinition
-			return nil, fmt.Errorf("No task defined in pipeline")
+			return nil, fmt.Errorf("Could not find task \"%s\" in pipeline", taskID)
 		}
 
 		// override if we need to...
