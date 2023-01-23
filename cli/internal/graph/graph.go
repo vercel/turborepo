@@ -44,28 +44,45 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 			return fmt.Errorf("cannot find package %v for task %v", packageName, taskID)
 		}
 
-		// first check for package-tasks
-		taskDefinition, ok := g.Pipeline[fmt.Sprintf("%v", taskID)]
-
-		if !ok {
-			// then check for regular tasks
-			fallbackTaskDefinition, notcool := g.Pipeline[taskName]
-			// if neither, then bail
-			if !notcool {
-				return nil
-			}
-			// override if we need to...
-			taskDefinition = fallbackTaskDefinition
-		}
-
 		packageTask := &nodes.PackageTask{
-			TaskID:         taskID,
-			Task:           taskName,
-			PackageName:    packageName,
-			Pkg:            pkg,
-			TaskDefinition: &taskDefinition,
+			TaskID:      taskID,
+			Task:        taskName,
+			PackageName: packageName,
+			Pkg:         pkg,
 		}
+
+		taskDefinition, err := g.getResolvedTaskDefinition(taskID, taskName)
+		if err != nil {
+			return err
+		}
+
+		packageTask.TaskDefinition = taskDefinition
 
 		return visitor(ctx, packageTask)
 	}
+}
+
+// getResolvedTaskDefinition currently just looks for the definition in the Pipeline
+// defined in the Graph. Later, this will get Pipelines defined in the task's workspace as well.
+func (g *CompleteGraph) getResolvedTaskDefinition(taskID string, taskName string) (*fs.TaskDefinition, error) {
+	return getTaskFromPipeline(g.Pipeline, taskID, taskName)
+}
+
+func getTaskFromPipeline(pipeline fs.Pipeline, taskID string, taskName string) (*fs.TaskDefinition, error) {
+	// first check for package-tasks
+	taskDefinition, ok := pipeline[taskID]
+	if !ok {
+		// then check for regular tasks
+		fallbackTaskDefinition, notcool := pipeline[taskName]
+		// if neither, then bail
+		if !notcool {
+			// Return an empty fs.TaskDefinition
+			return nil, fmt.Errorf("No task defined in pipeline")
+		}
+
+		// override if we need to...
+		taskDefinition = fallbackTaskDefinition
+	}
+
+	return &taskDefinition, nil
 }
