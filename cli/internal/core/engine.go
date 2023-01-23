@@ -149,6 +149,15 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		traversalQueue = traversalQueue[1:]
 
 		pkg, taskName := util.GetPackageTaskFromId(taskID)
+		// This for lopo adds in the Root Node as a taskID (i.e. __ROOT__#build)
+		// into the traversalQueue. But in order to look up the information about
+		// the root workpsace, we need to use the package name "//". Re-assign
+		// the pkgName here to account for that.
+		// TODO(mehulkar): Is it safe to move this logic into GetPackageTaskFromId()?
+		if pkg == ROOT_NODE_NAME {
+			pkg = util.RootPkgName
+		}
+
 		if pkg == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
 			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
@@ -160,7 +169,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		visited.Add(taskID)
 
-		pkg, ok := e.completeGraph.WorkspaceInfos[pkg]
+		pkgJSON, ok := e.completeGraph.WorkspaceInfos[pkg]
 
 		if !ok {
 			// This should be unlikely to happen. If we have a pkg
@@ -173,7 +182,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		taskDefinition, err := e.GetResolvedTaskDefinition(
 			&e.completeGraph.Pipeline,
-			pkg,
+			pkgJSON,
 			taskID,
 			taskName,
 		)
@@ -182,10 +191,6 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 			return err
 		}
 
-		// Put this taskDefinition into the Graph so we can look it up later during execution.
-		e.completeGraph.TaskDefinitions[taskID] = taskDefinition
-
-		topoDeps := util.SetFromStrings(taskDefinition.TopologicalDependencies)
 		// Put this taskDefinition into the Graph so we can look it up later during execution.
 		e.completeGraph.TaskDefinitions[taskID] = taskDefinition
 
