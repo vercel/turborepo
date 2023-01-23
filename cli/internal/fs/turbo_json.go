@@ -31,6 +31,9 @@ type rawTurboJSON struct {
 	Pipeline Pipeline
 	// Configuration options when interfacing with the remote cache
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
+
+	// Extends can be the name of another workspace
+	Extends []string `json:"extends,omitempty"`
 }
 
 // TurboJSON is the root turborepo configuration
@@ -39,6 +42,9 @@ type TurboJSON struct {
 	GlobalEnv          []string
 	Pipeline           Pipeline
 	RemoteCacheOptions RemoteCacheOptions
+
+	// A list of Workspace names
+	Extends []string
 }
 
 // RemoteCacheOptions is a struct for deserializing .remoteCache of configFile
@@ -90,6 +96,25 @@ type TaskDefinition struct {
 	// Persistent indicates whether the Task is expected to exit or not
 	// Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
 	Persistent bool
+}
+
+func (p Pipeline) GetTask(taskID string, taskName string) (*TaskDefinition, error) {
+	// first check for package-tasks
+	taskDefinition, ok := p[taskID]
+	if !ok {
+		// then check for regular tasks
+		fallbackTaskDefinition, notcool := p[taskName]
+		// if neither, then bail
+		if !notcool {
+			// Return an empty TaskDefinition
+			return nil, fmt.Errorf("No task defined in pipeline")
+		}
+
+		// override if we need to...
+		taskDefinition = fallbackTaskDefinition
+	}
+
+	return &taskDefinition, nil
 }
 
 // LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
@@ -386,6 +411,7 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 	// copy these over, we don't need any changes here.
 	c.Pipeline = raw.Pipeline
 	c.RemoteCacheOptions = raw.RemoteCacheOptions
+	c.Extends = raw.Extends
 
 	return nil
 }

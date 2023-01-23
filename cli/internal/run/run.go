@@ -254,11 +254,12 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	// TODO: consolidate some of these arguments
 	g := &graph.CompleteGraph{
-		WorkspaceGraph: pkgDepGraph.WorkspaceGraph,
-		Pipeline:       pipeline,
-		WorkspaceInfos: pkgDepGraph.WorkspaceInfos,
-		GlobalHash:     globalHash,
-		RootNode:       pkgDepGraph.RootNode,
+		WorkspaceGraph:  pkgDepGraph.WorkspaceGraph,
+		Pipeline:        pipeline,
+		WorkspaceInfos:  pkgDepGraph.WorkspaceInfos,
+		GlobalHash:      globalHash,
+		RootNode:        pkgDepGraph.RootNode,
+		TaskDefinitions: map[string]*fs.TaskDefinition{},
 	}
 	rs := &runSpec{
 		Targets:      targets,
@@ -388,7 +389,7 @@ func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient anal
 }
 
 func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, error) {
-	engine := core.NewEngine(&g.WorkspaceGraph)
+	engine := core.NewEngine(g, &g.WorkspaceGraph)
 
 	for taskName, taskDefinition := range g.Pipeline {
 		engine.AddTask(&core.Task{

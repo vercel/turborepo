@@ -6,6 +6,7 @@ import (
 
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/pyr-sh/dag"
@@ -33,11 +34,15 @@ type Engine struct {
 	Tasks            map[string]*Task
 	PackageTaskDeps  map[string][]string
 	rootEnabledTasks util.Set
+
+	// completeGraph is the CompleteGraph. We need this to look up the Pipeline, etc.
+	completeGraph *graph.CompleteGraph
 }
 
 // NewEngine creates a new engine given a topologic graph of workspace package names
-func NewEngine(topologicalGraph *dag.AcyclicGraph) *Engine {
+func NewEngine(completeGraph *graph.CompleteGraph, topologicalGraph *dag.AcyclicGraph) *Engine {
 	return &Engine{
+		completeGraph:    completeGraph,
 		Tasks:            make(map[string]*Task),
 		TopologicGraph:   topologicalGraph,
 		TaskGraph:        &dag.AcyclicGraph{},
@@ -145,19 +150,36 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		if packageName == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
 			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
-		task, err := e.getTaskDefinition(taskName, taskID)
-		if err != nil {
-			return err
-		}
 
 		// Skip this iteration of the loop if we've already seen this taskID
 		if visited.Includes(taskID) {
 			continue
 		}
 
-		taskDefinition := task.TaskDefinition
-
 		visited.Add(taskID)
+
+		pkg, ok := e.completeGraph.WorkspaceInfos[packageName]
+
+		if !ok {
+			// This should be unlikely to happen. If we have a packageName
+			// it should be in WorkspaceInfos. If we're hitting this error
+			// something has gone wrong earlier when building WorkspaceInfos
+			return fmt.Errorf("Failed to look up workspace %s", packageName)
+		}
+
+		taskDefinition, err := e.GetResolvedTaskDefinition(
+			&e.completeGraph.Pipeline,
+			pkg,
+			taskID,
+			taskName,
+		)
+
+		if err != nil {
+			return err
+		}
+
+		// Put this taskDefinition into the Graph so we can look it up later during execution.
+		e.completeGraph.TaskDefinitions[taskID] = taskDefinition
 
 		topoDeps := util.SetFromStrings(taskDefinition.TopologicalDependencies)
 
@@ -271,6 +293,10 @@ func (e *Engine) AddTask(task *Task) *Engine {
 			e.rootEnabledTasks.Add(taskName)
 		}
 	}
+
+	// TODO(mehulkar): Now that we're composing taskDefinition
+	// do we even need to store these in the engine? Should we instead store the resolved
+	// TaskDefinition here?
 	e.Tasks[task.Name] = task
 	return e
 }
@@ -330,6 +356,7 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			packageName, taskName := util.GetPackageTaskFromId(depTaskID)
 
 			// Get the Task Definition so we can check if it is Persistent
+			// TODO(mehulkar): Do we need to get a resolved taskDefinition here?
 			depTaskDefinition, taskExists := e.getTaskDefinition(taskName, depTaskID)
 			if taskExists != nil {
 				return fmt.Errorf("Cannot find task definition for %v in package %v", depTaskID, packageName)
@@ -363,4 +390,118 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 
 	// May or may not be set (could be nil)
 	return validationError
+}
+
+// GetResolvedTaskDefinition returns a "resolved" TaskDefinition composed of one
+// turbo.json in the workspace and following any `extends` keys up. If there is
+// no turbo.json in the workspace, returns the taskDefinition from the root Pipeline.
+func (e *Engine) GetResolvedTaskDefinition(rootPipeline *fs.Pipeline, pkg *fs.PackageJSON, taskID string, taskName string) (*fs.TaskDefinition, error) {
+	taskDefinitions, err := e.getTaskDefinitionChain(rootPipeline, pkg, taskID, taskName)
+	if err != nil {
+		return nil, err
+	}
+
+	// reverse the array, because we want to start with the end of the chain.
+	for i, j := 0, len(taskDefinitions)-1; i < j; i, j = i+1, j-1 {
+		taskDefinitions[i], taskDefinitions[j] = taskDefinitions[j], taskDefinitions[i]
+	}
+
+	// Start with an empty definition
+	mergedTaskDefinition := &fs.TaskDefinition{}
+
+	// For each of the TaskDefinitions we know of, merge them in
+	for _, taskDef := range taskDefinitions {
+		mergedTaskDefinition.Outputs = taskDef.Outputs
+		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
+		mergedTaskDefinition.EnvVarDependencies = taskDef.EnvVarDependencies
+		mergedTaskDefinition.TopologicalDependencies = taskDef.TopologicalDependencies
+		mergedTaskDefinition.TaskDependencies = taskDef.TaskDependencies
+		mergedTaskDefinition.Inputs = taskDef.Inputs
+		mergedTaskDefinition.OutputMode = taskDef.OutputMode
+		mergedTaskDefinition.Persistent = taskDef.Persistent
+	}
+
+	return mergedTaskDefinition, nil
+}
+
+func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.PackageJSON, taskID string, taskName string) ([]fs.TaskDefinition, error) {
+	// Start a list of TaskDefinitions we've found for this TaskID
+	taskDefinitions := []fs.TaskDefinition{}
+
+	// Start in the workspace directory
+	turboJSONPath := turbopath.AbsoluteSystemPath(pkg.Dir).UntypedJoin("turbo.json")
+	_, err := fs.ReadTurboConfig(turboJSONPath)
+
+	// If there is no turbo.json in the workspace directory, we'll use the one in root turbo.json
+	if err != nil {
+		rootTaskDefinition, err := rootPipeline.GetTask(taskID, taskName)
+		if err != nil {
+			// This should be an unlikely error scenario. If we're working with a task
+			// there should be a definition in the rootPipeline. So an error here suggests
+			// that something else went wrong before we got here.
+			return nil, err
+		}
+		taskDefinitions = append(taskDefinitions, *rootTaskDefinition)
+		return taskDefinitions, nil
+	}
+
+	graph := e.completeGraph
+
+	// For loop until we `break` manually.
+	// We will reassign `turboJSONPath` inside this loop, so that
+	// every time we iterate, we're starting from a new one.
+	for {
+		turboJSON, err := fs.ReadTurboConfig(turboJSONPath)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO(mehulkar):
+		// 		getTaskFromPipeline allows searching with a taskID (e.g. `package#task`).
+		// 		But we do not want to allow this, except if we're in the root workspace.
+		taskDefinition, err := turboJSON.Pipeline.GetTask(taskID, taskName)
+		if err != nil {
+			// If there was nothing in the pipeline for this task
+			// We can exit
+			break
+		} else {
+			// Add it into the taskDefinitions
+			taskDefinitions = append(taskDefinitions, *taskDefinition)
+
+			// If this turboJSON doesn't have an extends property, we can stop our for loop here.
+			if len(turboJSON.Extends) == 0 {
+				break
+			}
+
+			// TODO(mehulkar): Enable extending from more than one workspace.
+			// TODO(mehulkar): Enable extending from non-root workspace.
+			if len(turboJSON.Extends) > 1 || turboJSON.Extends[0] != util.RootPkgName {
+				return nil, fmt.Errorf(
+					"You can only extend from the root workspace. \"%s\" extends from %v",
+					pkg.Name,
+					turboJSON.Extends,
+				)
+			}
+
+			// If there's an extends property, walk up to the next one, find the workspace it refers to,
+			// and and assign `directory` to it for the next iteration in this for loop.
+			// Note(mehulkar):
+			//		We are looping through all items in Extends, but as of now,
+			// 		and based on the checks above, we only want to read the first item
+			// 		(and we already know that it's the root workspace).
+			for _, workspaceName := range turboJSON.Extends {
+				workspace, ok := graph.WorkspaceInfos[workspaceName]
+				if !ok {
+					// TODO: Should this be a hard error?
+					// A workspace was referenced that doesn't exist or we know nothing about
+					break
+				}
+
+				// Reassign these. The loop will run again with this new turbo.json now.
+				turboJSONPath = turbopath.AbsoluteSystemPath(workspace.Dir).UntypedJoin("turbo.json")
+			}
+		}
+	}
+
+	return taskDefinitions, nil
 }

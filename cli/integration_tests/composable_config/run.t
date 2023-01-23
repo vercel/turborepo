@@ -2,13 +2,14 @@ Setup
   $ . ${TESTDIR}/../setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd)  
 # Build app-a, save output to a file so we can fish out the hash from the logs
-# Should not run compile task, since dependsOn is overridden.
+# - Should not run compile task, since dependsOn is overridden.
+# - Should write files to `lib/` directory, since `outputs` is overriden.
   $ ${TURBO} run build --skip-infer --filter=app-a > tmp.log
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  app-a:build: cache miss, executing 918d3cdc677a3e0e
+  app-a:build: cache miss, executing 73632373c15f29fb
   app-a:build: 
   app-a:build: > build
   app-a:build: > echo "building app-a" > lib/foo.txt && echo "building app-a" > out/foo.txt
@@ -27,7 +28,8 @@ Setup
   apps/app-a/lib/foo.txt
 
 # Build app-b, save output to a file so we can fish out the hash from logs
-# - Should run `compile`first`
+# - Should run `compile` first.
+# - Should write files to `out/` directory
   $ ${TURBO} run build --skip-infer --filter=app-b > tmp.log
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: app-b (esc)
