@@ -1,13 +1,14 @@
 use std::env;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use axum::async_trait;
+use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::get_version;
 
 #[async_trait]
-trait UserClient {
+pub trait UserClient {
     fn set_token(&mut self, token: String);
     async fn get_user(&self) -> Result<UserResponse>;
     // fn verify_sso_token(&self, token: String, token_name: String) ->
@@ -17,23 +18,23 @@ trait UserClient {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct User {
+pub struct User {
     id: String,
     username: String,
     email: String,
     name: String,
     #[serde(rename = "createdAt")]
-    created_at: u32,
+    created_at: u64,
 }
 
 struct Team {}
 
 #[derive(Debug, Clone, Deserialize)]
-struct UserResponse {
+pub struct UserResponse {
     user: User,
 }
 
-struct APIClient {
+pub struct APIClient {
     token: String,
     client: reqwest::Client,
     base_url: String,
@@ -48,32 +49,38 @@ impl UserClient for APIClient {
     async fn get_user(&self) -> Result<UserResponse> {
         let request_builder = self.client.get(self.make_url("/v2/user"));
         let response = request_builder
+            .header("User-Agent", user_agent())
             .header("Authorization", format!("Bearer {}", self.token))
+            .header("Content-Type", "application/json")
             .send()
-            .await?;
+            .await;
 
-        let user: UserResponse = response.json().await?;
-        Ok(user)
+        match response {
+            Ok(response) => {
+                let user_response = response.json::<UserResponse>().await?;
+                Ok(user_response)
+            }
+            Err(err) => {
+                if matches!(err.status(), Some(StatusCode::NOT_FOUND)) {
+                    Err(anyhow!("404 - Not found"))
+                } else {
+                    Err(err.into())
+                }
+            }
+        }
     }
-
-    // fn verify_sso_token(&self, token: String, token_name: String) ->
-    // Result<VerifiedSSOUser> {     todo!()
-    // }
-    //
-    // fn set_team_id(&self, team_id: String) {
-    //     todo!()
-    // }
-    //
-    // fn get_caching_status(&self) -> Result<CachingStatus> {
-    //     todo!()
-    // }
-    //
-    // fn get_team(&self, team_id: String) -> Result<Team> {
-    //     todo!()
-    // }
 }
 
 impl APIClient {
+    pub fn new(token: impl AsRef<str>, base_url: impl AsRef<str>) -> Self {
+        let client = reqwest::Client::new();
+        APIClient {
+            token: token.as_ref().to_string(),
+            client,
+            base_url: base_url.as_ref().to_string(),
+        }
+    }
+
     fn make_url(&self, endpoint: &str) -> String {
         format!("{}{}", self.base_url, endpoint)
     }
@@ -87,9 +94,4 @@ fn user_agent() -> String {
         env::consts::OS,
         env::consts::ARCH
     )
-}
-
-#[test]
-fn test_user_agent() {
-    println!("{}", user_agent());
 }

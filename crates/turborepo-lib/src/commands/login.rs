@@ -1,16 +1,21 @@
 use std::{net::SocketAddr, sync::Arc};
 
+use anyhow::{anyhow, Result};
 use axum::{extract::Query, response::Redirect, routing::get, Router};
 use log::{debug, info, warn};
 use serde::Deserialize;
 use tokio::sync::OnceCell;
 
-use crate::{config::RepoConfig, get_version};
+use crate::{
+    client::{APIClient, UserClient, UserResponse},
+    config::{default_user_config_path, RepoConfig, UserConfig},
+    get_version,
+};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 
-pub async fn login(repo_config: RepoConfig) {
+pub async fn login(repo_config: RepoConfig) -> Result<UserResponse> {
     let login_url_base = &repo_config.login_url;
     debug!("turbo v{}", get_version());
     debug!("api url: {}", repo_config.api_url);
@@ -22,8 +27,19 @@ pub async fn login(repo_config: RepoConfig) {
     info!(">>> Opening browser to {login_url}");
     direct_user_to_url(&login_url);
 
-    let query = Arc::new(OnceCell::new());
-    new_one_shot_server(DEFAULT_PORT, repo_config.login_url, query.clone()).await;
+    let token_cell = Arc::new(OnceCell::new());
+    new_one_shot_server(DEFAULT_PORT, repo_config.login_url, token_cell.clone()).await?;
+    let token = token_cell
+        .get()
+        .ok_or_else(|| anyhow!("Failed to get token"))?;
+
+    let mut user_config = UserConfig::load(&default_user_config_path()?, None)?;
+    user_config.set_token(Some(token.to_string()))?;
+
+    let client = APIClient::new(token, repo_config.api_url);
+    let user = client.get_user().await?;
+
+    Ok(user)
 }
 
 fn direct_user_to_url(url: &str) {
@@ -41,7 +57,7 @@ async fn new_one_shot_server(
     port: u16,
     login_url_base: String,
     login_token: Arc<OnceCell<String>>,
-) {
+) -> Result<()> {
     let handle = axum_server::Handle::new();
     let route_handle = handle.clone();
     let app = Router::new()
@@ -55,9 +71,9 @@ async fn new_one_shot_server(
             }),
         );
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    axum_server::bind(addr)
+
+    Ok(axum_server::bind(addr)
         .handle(handle)
         .serve(app.into_make_service())
-        .await
-        .unwrap();
+        .await?)
 }

@@ -407,7 +407,8 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
                 clap_args.login.as_deref(),
                 clap_args.team.as_deref(),
             )?;
-            login::login(repo_config).await;
+
+            login::login(repo_config).await?;
 
             Ok(Payload::Rust(Ok(0)))
         }
