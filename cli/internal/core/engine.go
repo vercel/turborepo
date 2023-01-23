@@ -160,10 +160,10 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		}
 
 		taskDefinition, err := e.GetResolvedTaskDefinition(
-			&e.completeGraph.Pipeline,
 			pkgJSON,
-			taskID,
+			&e.completeGraph.Pipeline,
 			taskName,
+			taskID,
 		)
 
 		if err != nil {
@@ -390,6 +390,6 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 // GetResolvedTaskDefinition returns a "resolved" TaskDefinition.
 // Today, it just looks up the task from the root Pipeline, but in the future
 // we will compose the TaskDefinition from workspaces using the `extends` key.
-func (e *Engine) GetResolvedTaskDefinition(rootPipeline *fs.Pipeline, pkg *fs.PackageJSON, taskID string, taskName string) (*fs.TaskDefinition, error) {
+func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs.Pipeline, taskName string, taskID string) (*fs.TaskDefinition, error) {
 	return rootPipeline.GetTask(taskID, taskName)
 }
