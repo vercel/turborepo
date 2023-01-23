@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)  
+  $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
 # Build app-a, save output to a file so we can fish out the hash from the logs
 # - Should not run compile task, since dependsOn is overridden.
 # - Should write files to `lib/` directory, since `outputs` is overriden.
