@@ -98,6 +98,7 @@ type TaskDefinition struct {
 	Persistent bool
 }
 
+// GetTask returns a TaskDefinition based on the ID (package#task format) or name (e.g. "build")
 func (p Pipeline) GetTask(taskID string, taskName string) (*TaskDefinition, error) {
 	// first check for package-tasks
 	taskDefinition, ok := p[taskID]
