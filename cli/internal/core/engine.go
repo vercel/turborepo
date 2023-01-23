@@ -168,7 +168,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 			// This should be unlikely to happen. If we have a pkg
 			// it should be in WorkspaceInfos. If we're hitting this error
 			// something has gone wrong earlier when building WorkspaceInfos
-			return fmt.Errorf("Failed to find workspace \"%s\". Task: %s, %s", pkg, taskID, taskName)
+			return fmt.Errorf("Failed to find workspace \"%s\"", pkg)
 		}
 
 		taskDefinition, err := e.GetResolvedTaskDefinition(
