@@ -141,8 +141,8 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		taskID := traversalQueue[0]
 		traversalQueue = traversalQueue[1:]
 
-		pkg, taskName := util.GetPackageTaskFromId(taskID)
-		if pkg == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
+		packageName, taskName := util.GetPackageTaskFromId(taskID)
+		if packageName == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
 			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
 		task, err := e.getTaskDefinition(taskName, taskID)
@@ -201,7 +201,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		// hasTopoDeps will be true if the task depends on any tasks from dependency packages
 		// E.g. `dev: { dependsOn: [^dev] }`
-		hasTopoDeps := topoDeps.Len() > 0 && e.TopologicGraph.DownEdges(pkg).Len() > 0
+		hasTopoDeps := topoDeps.Len() > 0 && e.TopologicGraph.DownEdges(packageName).Len() > 0
 
 		// hasDeps will be true if the task depends on any tasks from its own package
 		// E.g. `build: { dependsOn: [dev] }`
@@ -216,7 +216,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		}
 
 		if hasTopoDeps {
-			depPkgs := e.TopologicGraph.DownEdges(pkg)
+			depPkgs := e.TopologicGraph.DownEdges(packageName)
 			for _, from := range topoDeps.UnsafeListOfStrings() {
 				// add task dep from all the package deps within repo
 				for depPkg := range depPkgs {
@@ -231,7 +231,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		if hasDeps {
 			for _, from := range deps.UnsafeListOfStrings() {
-				fromTaskID := util.GetTaskId(pkg, from)
+				fromTaskID := util.GetTaskId(packageName, from)
 				e.TaskGraph.Add(fromTaskID)
 				e.TaskGraph.Add(toTaskID)
 				e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
