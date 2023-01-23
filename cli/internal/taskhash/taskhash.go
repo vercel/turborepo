@@ -30,13 +30,14 @@ import (
 // package-task hashing is threadsafe, provided topographical order is
 // respected.
 type Tracker struct {
-	rootNode            string
-	globalHash          string
-	pipeline            fs.Pipeline
-	workspaceInfos      graph.WorkspaceInfos
-	mu                  sync.RWMutex
-	packageInputsHashes packageFileHashes
-	packageTaskHashes   map[string]string // taskID -> hash
+	rootNode                    string
+	globalHash                  string
+	pipeline                    fs.Pipeline
+	workspaceInfos              graph.WorkspaceInfos
+	mu                          sync.RWMutex
+	packageInputsHashes         packageFileHashes
+	PackageInputsExpandedHashes map[packageFileHashKey]map[turbopath.AnchoredUnixPath]string
+	packageTaskHashes           map[string]string // taskID -> hash
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
@@ -56,7 +57,7 @@ type packageFileSpec struct {
 	inputs []string
 }
 
-func specFromPackageTask(packageTask *nodes.PackageTask) packageFileSpec {
+func SpecFromPackageTask(packageTask *nodes.PackageTask) packageFileSpec {
 	return packageFileSpec{
 		pkg:    packageTask.PackageName,
 		inputs: packageTask.TaskDefinition.Inputs,
@@ -80,7 +81,7 @@ func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
 	return gitignore.CompileIgnoreLines([]string{}...), nil
 }
 
-func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot turbopath.AbsoluteSystemPath) (string, error) {
+func (pfs *packageFileSpec) getHashObject(pkg *fs.PackageJSON, repoRoot turbopath.AbsoluteSystemPath) map[turbopath.AnchoredUnixPath]string {
 	hashObject, pkgDepsErr := hashing.GetPackageDeps(repoRoot, &hashing.PackageDepsOptions{
 		PackagePath:   pkg.Dir,
 		InputPatterns: pfs.inputs,
@@ -88,10 +89,15 @@ func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot turbopath.Absolut
 	if pkgDepsErr != nil {
 		manualHashObject, err := manuallyHashPackage(pkg, pfs.inputs, repoRoot)
 		if err != nil {
-			return "", err
+			return make(map[turbopath.AnchoredUnixPath]string)
 		}
 		hashObject = manualHashObject
 	}
+
+	return hashObject
+}
+
+func (pfs *packageFileSpec) hash(hashObject map[turbopath.AnchoredUnixPath]string) (string, error) {
 	hashOfFiles, otherErr := fs.HashObject(hashObject)
 	if otherErr != nil {
 		return "", otherErr
@@ -188,6 +194,7 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, r
 	}
 
 	hashes := make(map[packageFileHashKey]string)
+	hashObjects := make(map[packageFileHashKey]map[turbopath.AnchoredUnixPath]string)
 	hashQueue := make(chan *packageFileSpec, workerCount)
 	hashErrs := &errgroup.Group{}
 
@@ -198,13 +205,15 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, r
 				if !ok {
 					return fmt.Errorf("cannot find package %v", packageFileSpec.pkg)
 				}
-				hash, err := packageFileSpec.hash(pkg, repoRoot)
+				hashObject := packageFileSpec.getHashObject(pkg, repoRoot)
+				hash, err := packageFileSpec.hash(hashObject)
 				if err != nil {
 					return err
 				}
 				th.mu.Lock()
 				pfsKey := packageFileSpec.ToKey()
 				hashes[pfsKey] = hash
+				hashObjects[pfsKey] = hashObject
 				th.mu.Unlock()
 			}
 			return nil
@@ -219,6 +228,7 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, r
 		return err
 	}
 	th.packageInputsHashes = hashes
+	th.PackageInputsExpandedHashes = hashObjects
 	return nil
 }
 
@@ -266,7 +276,7 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
 func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, logger hclog.Logger, args []string) (string, error) {
-	pfs := specFromPackageTask(packageTask)
+	pfs := SpecFromPackageTask(packageTask)
 	pkgFileHashKey := pfs.ToKey()
 
 	hashOfFiles, ok := th.packageInputsHashes[pkgFileHashKey]

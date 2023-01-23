@@ -22,6 +22,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/taskhash"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
@@ -285,20 +286,21 @@ func commandLooksLikeTurbo(command string) bool {
 // as the information is also available in ResolvedTaskDefinition. We could remove them
 // and favor a version of Outputs that is the fully expanded list of files.
 type taskSummary struct {
-	TaskID                 string             `json:"taskId"`
-	Task                   string             `json:"task"`
-	Package                string             `json:"package"`
-	Hash                   string             `json:"hash"`
-	CacheState             cache.ItemStatus   `json:"cacheState"`
-	Command                string             `json:"command"`
-	Outputs                []string           `json:"outputs"`
-	ExcludedOutputs        []string           `json:"excludedOutputs"`
-	LogFile                string             `json:"logFile"`
-	Dir                    string             `json:"directory"`
-	Dependencies           []string           `json:"dependencies"`
-	Dependents             []string           `json:"dependents"`
-	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
-	TaskSummary            *BuildTargetState  `json:"taskSummary"`
+	TaskID                 string                                `json:"taskId"`
+	Task                   string                                `json:"task"`
+	Package                string                                `json:"package"`
+	Hash                   string                                `json:"hash"`
+	CacheState             cache.ItemStatus                      `json:"cacheState"`
+	Command                string                                `json:"command"`
+	Outputs                []string                              `json:"outputs"`
+	ExcludedOutputs        []string                              `json:"excludedOutputs"`
+	LogFile                string                                `json:"logFile"`
+	Dir                    string                                `json:"directory"`
+	Dependencies           []string                              `json:"dependencies"`
+	Dependents             []string                              `json:"dependents"`
+	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
+	TaskSummary            *BuildTargetState                     `json:"taskSummary"`
+	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
 }
 
 type singlePackageTaskSummary struct {
