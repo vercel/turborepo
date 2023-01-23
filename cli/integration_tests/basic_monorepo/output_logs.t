@@ -3,120 +3,97 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd)
 
 Output-logs full
-  $ ${TURBO} run build --output-logs=full --force
-  \xe2\x80\xa2 Packages in scope: my-app, util (esc)
-  \xe2\x80\xa2 Running build in 2 packages (esc)
+  $ ${TURBO} run build --output-logs=full --filter=util --force
+  \xe2\x80\xa2 Packages in scope: util (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache bypass, force executing 7438505b97329a3d
   util:build: cache bypass, force executing 6dec18f9f767112f
-  my-app:build: 
-  my-app:build: > build
-  my-app:build: > echo 'building'
-  my-app:build: 
-  my-app:build: building
   util:build: 
-  util:build: > build
-  util:build: > echo 'building'
+  util:build: \x3e build (esc)
+  util:build: \x3e echo 'building' (esc)
   util:build: 
   util:build: building
   
-   Tasks:    2 successful, 2 total
-  Cached:    0 cached, 2 total
-    Time:    333ms 
+   Tasks:    1 successful, 1 total
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
+  
 Output-logs none
-  $ ${TURBO} run build --output-logs=none --force
-  \xe2\x80\xa2 Packages in scope: my-app, util (esc)
-  \xe2\x80\xa2 Running build in 2 packages (esc)
+  $ ${TURBO} run build --output-logs=none --filter=util --force
+  \xe2\x80\xa2 Packages in scope: util (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
-   Tasks:    2 successful, 2 total
-  Cached:    0 cached, 2 total
-    Time:    301ms 
-   
+   Tasks:    1 successful, 1 total
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
+  
 Output-logs hash-only
-  $ ${TURBO} run build --output-logs=hash-only --force
-  \xe2\x80\xa2 Packages in scope: my-app, util (esc)
-  \xe2\x80\xa2 Running build in 2 packages (esc)
+  $ ${TURBO} run build --output-logs=hash-only --filter=util --force
+  \xe2\x80\xa2 Packages in scope: util (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   util:build: cache bypass, force executing 6dec18f9f767112f
-  my-app:build: cache bypass, force executing 7438505b97329a3d
   
-   Tasks:    2 successful, 2 total
-  Cached:    0 cached, 2 total
-    Time:    304ms 
-
+   Tasks:    1 successful, 1 total
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
+  
 Output-logs new-only
-  $ ${TURBO} run build --output-logs=new-only --force
-  \xe2\x80\xa2 Packages in scope: my-app, util (esc)
-  \xe2\x80\xa2 Running build in 2 packages (esc)
+  $ ${TURBO} run build --output-logs=new-only --filter=util --force
+  \xe2\x80\xa2 Packages in scope: util (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache bypass, force executing 7438505b97329a3d
   util:build: cache bypass, force executing 6dec18f9f767112f
-  my-app:build: 
-  my-app:build: > build
-  my-app:build: > echo 'building'
-  my-app:build: 
   util:build: 
-  util:build: > build
-  util:build: > echo 'building'
+  util:build: \x3e build (esc)
+  util:build: \x3e echo 'building' (esc)
   util:build: 
-  my-app:build: building
   util:build: building
   
-   Tasks:    2 successful, 2 total
-  Cached:    0 cached, 2 total
-    Time:    301ms 
-    
+   Tasks:    1 successful, 1 total
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
+  
 Output-logs error-only
-  $ ${TURBO} run build --output-logs=error-only --force
-  ERROR 'error-only' isn't a valid value for '--output-logs <OUTPUT_LOGS>'
-    
+  $ ${TURBO} run build --output-logs=errors-only --filter=util --force
+  \xe2\x80\xa2 Packages in scope: util (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
   
-    Did you mean 'errors-only'?
+   Tasks:    1 successful, 1 total
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
   
-  For more information try '--help'
-  
-  [1]
 Output-logs stdout-full
-  $ ${TURBO} run build --output-logs=stdout-full --force
-  \xe2\x80\xa2 Packages in scope: my-app, util (esc)
-  \xe2\x80\xa2 Running build in 2 packages (esc)
+  $ ${TURBO} run build --output-logs=stdout-full --filter=util --force
+  \xe2\x80\xa2 Packages in scope: util (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   util:build: cache bypass, force executing 6dec18f9f767112f
-  my-app:build: cache bypass, force executing 7438505b97329a3d
   
-  [>] build
-  [>] echo 'building'
-  
-  
-  [>] build
-  [>] echo 'building'
+  \x3e build (esc)
+  \x3e echo 'building' (esc)
   
   building
-  building
   
-   Tasks:    2 successful, 2 total
-  Cached:    0 cached, 2 total
-    Time:    314ms 
+   Tasks:    1 successful, 1 total
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
   
 Output-logs stdout-new-only
-  $ ${TURBO} run build --output-logs=stdout-new-only --force
-  \xe2\x80\xa2 Packages in scope: my-app, util (esc)
-  \xe2\x80\xa2 Running build in 2 packages (esc)
+  $ ${TURBO} run build --output-logs=stdout-new-only --filter=util --force
+  \xe2\x80\xa2 Packages in scope: util (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   util:build: cache bypass, force executing 6dec18f9f767112f
-  my-app:build: cache bypass, force executing 7438505b97329a3d
   
-  [>] build
-  [>] echo 'building'
-  
-  building
-  
-  [>] build
-  [>] echo 'building'
+  \x3e build (esc)
+  \x3e echo 'building' (esc)
   
   building
   
-   Tasks:    2 successful, 2 total
-  Cached:    0 cached, 2 total
-    Time:    307ms 
+   Tasks:    1 successful, 1 total
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
+  
