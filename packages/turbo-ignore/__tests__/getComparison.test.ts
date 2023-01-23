@@ -1,5 +1,5 @@
 import { getComparison } from "../src/getComparison";
-import { spyConsole, validateLogs, mockEnv } from "./test-utils";
+import { spyConsole, mockEnv } from "turbo-test-utils";
 
 describe("getComparison()", () => {
   mockEnv();

@@ -110,7 +110,11 @@ static ALLOC: turbo_malloc::TurboMalloc = turbo_malloc::TurboMalloc;
 #[case::mailgun("integration/mailgun.js")]
 #[case::mariadb("integration/mariadb.js")]
 #[case::memcached("integration/memcached.js")]
-#[case::mdx("integration/mdx/index.js")]
+#[cfg_attr(
+    not(feature = "bench_against_node_nft"),
+    should_panic(expected = "Error [ERR_MODULE_NOT_FOUND]: Cannot find module"),
+    case::mdx("integration/mdx/index.cjs")
+)]
 #[case::mongoose("integration/mongoose.js")]
 #[case::mysql("integration/mysql.js")]
 #[case::npm("integration/npm.js")]
@@ -248,7 +252,7 @@ fn node_file_trace_memory(#[case] input: CaseInput) {
         false,
         1,
         120,
-        |_| TurboTasks::new(MemoryBackend::new()),
+        |_| TurboTasks::new(MemoryBackend::default()),
         |tt| {
             let b = tt.backend();
             b.with_all_cached_tasks(|task| {
@@ -303,7 +307,7 @@ fn bench_against_node_nft_inner(input: CaseInput, multi_threaded: bool) {
         multi_threaded,
         1,
         120,
-        |_| TurboTasks::new(MemoryBackend::new()),
+        |_| TurboTasks::new(MemoryBackend::default()),
         |tt| {
             let b = tt.backend();
             b.with_all_cached_tasks(|task| {
@@ -553,6 +557,11 @@ async fn exec_node(directory: String, path: FileSystemPathVc) -> Result<CommandO
     let dir = f.parent().unwrap();
     println!("[CWD]: {}", dir.display());
     let label = path.to_string().await?;
+
+    if p.path.contains("mdx") {
+        cmd.arg("--experimental-loader=@mdx-js/node-loader")
+            .arg("--no-warnings");
+    }
 
     #[cfg(not(feature = "bench_against_node_nft"))]
     if p.path.ends_with(".ts") {

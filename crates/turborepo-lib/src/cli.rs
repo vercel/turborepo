@@ -8,9 +8,10 @@ use log::error;
 use serde::Serialize;
 
 use crate::{
-    commands::bin,
+    commands::{bin, logout},
     get_version,
     shim::{RepoMode, RepoState},
+    ui::UI,
     Payload,
 };
 
@@ -387,9 +388,13 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
+        Command::Logout { .. } => {
+            logout::logout(clap_args.ui())?;
+
+            Ok(Payload::Rust(Ok(0)))
+        }
         Command::Login { .. }
         | Command::Link { .. }
-        | Command::Logout { .. }
         | Command::Unlink { .. }
         | Command::Daemon { .. }
         | Command::Prune { .. }
@@ -398,6 +403,18 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
 
             Ok(Payload::Rust(Ok(0)))
+        }
+    }
+}
+
+impl Args {
+    fn ui(&self) -> UI {
+        if self.no_color {
+            UI::new(true)
+        } else if self.color {
+            UI::new(false)
+        } else {
+            UI::infer()
         }
     }
 }

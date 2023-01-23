@@ -88,9 +88,9 @@ cmd/turbo/version.go: ../version.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
 build: install
-	# cd $(CLI_DIR)/../packages/turbo-ignore && pnpm install --filter=turbo-ignore && npm run build
-	cd $(CLI_DIR)/../packages/create-turbo && pnpm install --filter=create-turbo && npm run build
-	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm install --filter=@turbo/codemod && npm run build
+	# cd $(CLI_DIR)/../packages/turbo-ignore && pnpm install --filter=turbo-ignore && pnpm run build
+	cd $(CLI_DIR)/../packages/create-turbo && pnpm install --filter=create-turbo && pnpm run build
+	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm install --filter=@turbo/codemod && pnpm run build
 
 .PHONY: prepublish
 prepublish: compile-protos cmd/turbo/version.go
@@ -136,7 +136,6 @@ build-go-turbo-cross:
 build-lib-turbo-cross:
 	goreleaser release --rm-dist -f cross-lib.yml
 
-
 .PHONY: stage-release
 stage-release: cmd/turbo/version.go
 	echo "Version: $(TURBO_VERSION)"
@@ -152,62 +151,15 @@ stage-release: cmd/turbo/version.go
 	@test "" != "`git diff -- $(CLI_DIR)/cmd/turbo/version.go`" || (echo "Refusing to publish with unupdated version.go" && false)
 
 	# Prepare the packages.
-	cd $(CLI_DIR)/../packages/turbo && npm version "$(TURBO_VERSION)" --allow-same-version
-	# cd $(CLI_DIR)/../packages/turbo-ignore && npm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	# cd $(CLI_DIR)/../packages/turbo-ignore && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/create-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm version "$(TURBO_VERSION)" --allow-same-version
 
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
 	git push origin staging-$(TURBO_VERSION) --tags --force
-
-.PHONY: publish
-publish: clean build
-	echo "Version: $(TURBO_VERSION)"
-	echo "Tag: $(TURBO_TAG)"
-
-	# Include the patch in the log.
-	git format-patch HEAD~1 --stdout | cat
-
-	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
-
-
-	# Publishes the native npm modules.
-	goreleaser release --rm-dist -f combined-release.yml
-
-	# Split packing from the publish step so that npm locates the correct .npmrc file.
-	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
-
-	# Publish the remaining JS packages in order to avoid race conditions.
-	cd $(CLI_DIR)/../
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
-	# npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
-
-.PHONY: snapshot-turbo
-snapshot-turbo:
-	echo "Version: $(TURBO_VERSION)"
-	echo "Tag: $(TURBO_TAG)"
-
-	# Include the patch in the log.
-	git format-patch HEAD~1 --stdout | cat
-
-	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
-
-	# Publishes the native npm modules.
-	goreleaser release --rm-dist -f combined-shim.yml --snapshot
-
-	# Split packing from the publish step so that npm locates the correct .npmrc file.
-	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/dist/
-	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/dist/
-	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/dist/
-	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/dist/
-
 
 .PHONY: publish-turbo
 publish-turbo: clean build
@@ -223,15 +175,17 @@ publish-turbo: clean build
 	goreleaser release --rm-dist -f combined-shim.yml
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
-	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/create-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm pack --pack-destination=$(CLI_DIR)/../
 
 	# Publish the remaining JS packages in order to avoid race conditions.
 	cd $(CLI_DIR)/../
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
 
 demo/lage: install
 	node $(CLI_DIR)/scripts/generate.mjs lage
