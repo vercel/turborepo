@@ -1,9 +1,12 @@
 import { transformer } from "../src/transforms/create-turbo-config";
-import { setupTestFixtures } from "./test-utils";
+import { setupTestFixtures } from "turbo-test-utils";
 import fs from "fs-extra";
 
 describe("create-turbo-config", () => {
-  const { useFixture } = setupTestFixtures({ test: "create-turbo-config" });
+  const { useFixture } = setupTestFixtures({
+    directory: __dirname,
+    test: "create-turbo-config",
+  });
 
   test("package.json config exists but no turbo.json config - basic", () => {
     // load the fixture for the test
