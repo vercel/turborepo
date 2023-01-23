@@ -31,9 +31,6 @@ type rawTurboJSON struct {
 	Pipeline Pipeline
 	// Configuration options when interfacing with the remote cache
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
-
-	// Extends can be the name of another workspace
-	Extends []string `json:"extends,omitempty"`
 }
 
 // TurboJSON is the root turborepo configuration
@@ -42,9 +39,6 @@ type TurboJSON struct {
 	GlobalEnv          []string
 	Pipeline           Pipeline
 	RemoteCacheOptions RemoteCacheOptions
-
-	// A list of Workspace names
-	Extends []string
 }
 
 // RemoteCacheOptions is a struct for deserializing .remoteCache of configFile
@@ -412,7 +406,6 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 	// copy these over, we don't need any changes here.
 	c.Pipeline = raw.Pipeline
 	c.RemoteCacheOptions = raw.RemoteCacheOptions
-	c.Extends = raw.Extends
 
 	return nil
 }
