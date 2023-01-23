@@ -162,13 +162,6 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
 
-		// Skip this iteration of the loop if we've already seen this taskID
-		if visited.Includes(taskID) {
-			continue
-		}
-
-		visited.Add(taskID)
-
 		pkgJSON, ok := e.completeGraph.WorkspaceInfos[pkg]
 
 		if !ok {
@@ -178,18 +171,23 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 			return fmt.Errorf("Failed to look up workspace %s", pkg)
 		}
 
-		fmt.Printf("[debug] e.completeGraph.Pipeline %#v\n", e.completeGraph.Pipeline)
-
 		taskDefinition, err := e.GetResolvedTaskDefinition(
-			&e.completeGraph.Pipeline,
 			pkgJSON,
-			taskID,
+			&e.completeGraph.Pipeline,
 			taskName,
+			taskID,
 		)
 
 		if err != nil {
 			return err
 		}
+
+		// Skip this iteration of the loop if we've already seen this taskID
+		if visited.Includes(taskID) {
+			continue
+		}
+
+		visited.Add(taskID)
 
 		// Put this taskDefinition into the Graph so we can look it up later during execution.
 		e.completeGraph.TaskDefinitions[taskID] = taskDefinition
@@ -365,19 +363,19 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			}
 
 			// Parse the taskID of this dependency task
-			pkg, taskName := util.GetPackageTaskFromId(depTaskID)
+			packageName, taskName := util.GetPackageTaskFromId(depTaskID)
 
 			// Get the Task Definition so we can check if it is Persistent
 			// TODO(mehulkar): Do we need to get a resolved taskDefinition here?
 			depTaskDefinition, taskExists := e.getTaskDefinition(taskName, depTaskID)
 			if taskExists != nil {
-				return fmt.Errorf("Cannot find task definition for %v in package %v", depTaskID, pkg)
+				return fmt.Errorf("Cannot find task definition for %v in package %v", depTaskID, packageName)
 			}
 
 			// Get information about the package
-			pkg, pkgExists := graph.WorkspaceInfos[pkg]
+			pkg, pkgExists := graph.WorkspaceInfos[packageName]
 			if !pkgExists {
-				return fmt.Errorf("Cannot find package %v", pkg)
+				return fmt.Errorf("Cannot find package %v", packageName)
 			}
 			_, hasScript := pkg.Scripts[taskName]
 
@@ -385,7 +383,7 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			if depTaskDefinition.TaskDefinition.Persistent && hasScript {
 				validationError = fmt.Errorf(
 					"\"%s\" is a persistent task, \"%s\" cannot depend on it",
-					util.GetTaskId(pkg, taskName),
+					util.GetTaskId(packageName, taskName),
 					util.GetTaskId(currentPackageName, currentTaskName),
 				)
 
@@ -407,7 +405,7 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 // GetResolvedTaskDefinition returns a "resolved" TaskDefinition composed of one
 // turbo.json in the workspace and following any `extends` keys up. If there is
 // no turbo.json in the workspace, returns the taskDefinition from the root Pipeline.
-func (e *Engine) GetResolvedTaskDefinition(rootPipeline *fs.Pipeline, pkg *fs.PackageJSON, taskID string, taskName string) (*fs.TaskDefinition, error) {
+func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs.Pipeline, taskName string, taskID string) (*fs.TaskDefinition, error) {
 	taskDefinitions, err := e.getTaskDefinitionChain(rootPipeline, pkg, taskID, taskName)
 	if err != nil {
 		return nil, err
