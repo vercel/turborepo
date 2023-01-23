@@ -20,12 +20,10 @@ var _workspaceGraphDefinition = map[string][]string{
 }
 
 func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
-
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 
 	devTask := fs.TaskDefinition{Persistent: true, TopologicalDependencies: []string{"dev"}}
-	pipeline := fs.Pipeline{"dev": devTask}
-	completeGraph.Pipeline = pipeline
+	completeGraph.Pipeline = fs.Pipeline{"dev": devTask}
 
 	engine := NewEngine(completeGraph)
 
@@ -41,10 +39,7 @@ func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
 	// └── workspace-c#dev
 
 	// "dev": dependsOn: ["^dev"] (where dev is persistent)
-	engine.AddTask(&Task{
-		Name:           "dev",
-		TaskDefinition: devTask,
-	})
+	engine.AddTask(&Task{Name: "dev", TaskDefinition: devTask})
 
 	opts := &EngineBuildingOptions{
 		Packages:  workspaces,
@@ -65,6 +60,7 @@ func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
 
 func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
+
 	buildTask := fs.TaskDefinition{Persistent: false, TaskDependencies: []string{"dev"}}
 	devTask := fs.TaskDefinition{Persistent: true}
 
@@ -72,6 +68,7 @@ func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
 		"build": buildTask,
 		"dev":   devTask,
 	}
+
 	engine := NewEngine(completeGraph)
 
 	// Make this Task Graph:
