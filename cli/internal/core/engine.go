@@ -121,8 +121,10 @@ func (e *Engine) getTaskDefinition(taskName string, taskID string) (*Task, error
 
 func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly bool) error {
 	traversalQueue := []string{}
+
 	for _, pkg := range pkgs {
 		isRootPkg := pkg == util.RootPkgName
+
 		for _, taskName := range taskNames {
 			if !isRootPkg || e.rootEnabledTasks.Includes(taskName) {
 				taskID := util.GetTaskId(pkg, taskName)
@@ -146,6 +148,16 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		traversalQueue = traversalQueue[1:]
 
 		pkg, taskName := util.GetPackageTaskFromId(taskID)
+
+		// This for lopo adds in the Root Node as a taskID (i.e. __ROOT__#build)
+		// into the traversalQueue. But in order to look up the information about
+		// the root workpsace, we need to use the package name "//". Re-assign
+		// the pkgName here to account for that.
+		// TODO(mehulkar): Is it safet o move this logic into GetPackageTaskFromId()?
+		if pkg == ROOT_NODE_NAME {
+			pkg = util.RootPkgName
+		}
+
 		if pkg == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
 			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
@@ -156,7 +168,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 			// This should be unlikely to happen. If we have a pkg
 			// it should be in WorkspaceInfos. If we're hitting this error
 			// something has gone wrong earlier when building WorkspaceInfos
-			return fmt.Errorf("Failed to look up workspace %s", pkg)
+			return fmt.Errorf("Failed to find workspace \"%s\". Task: %s, %s", pkg, taskID, taskName)
 		}
 
 		taskDefinition, err := e.GetResolvedTaskDefinition(
