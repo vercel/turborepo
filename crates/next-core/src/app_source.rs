@@ -4,7 +4,10 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
+use turbo_tasks::{
+    primitives::{OptionStringVc, StringVc},
+    TryJoinIterExt, Value, ValueToString,
+};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{
     rope::RopeBuilder, DirectoryContent, DirectoryEntry, File, FileContent, FileContentVc,
@@ -64,7 +67,8 @@ use crate::{
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
     },
-    util::{pathname_for_path, regular_expression_for_path},
+    params_matcher::NextParamsMatcherVc,
+    util::pathname_for_path,
 };
 
 #[turbo_tasks::function]
@@ -408,13 +412,17 @@ async fn create_app_source_for_directory(
         layouts = LayoutSegmentsVc::cell(list);
         if let Some(page_path) = page {
             let pathname = pathname_for_path(server_root, target, false);
-            let path_regex = regular_expression_for_path(pathname);
+            let params_matcher = NextParamsMatcherVc::new(
+                pathname,
+                OptionStringVc::cell(None),
+                OptionStringVc::cell(None),
+            );
 
             sources.push(create_node_rendered_source(
                 specificity,
                 server_root,
                 pathname,
-                path_regex,
+                params_matcher.into(),
                 AppRenderer {
                     context_ssr,
                     context,
