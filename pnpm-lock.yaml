@@ -378,10 +378,10 @@ importers:
       ts-jest: ^27.1.1
       tsconfig: workspace:*
       tsup: ^5.10.3
+      turbo-test-utils: workspace:*
       turbo-types: workspace:*
       typescript: ^4.5.5
       update-check: ^1.5.4
-      uuid: ^9.0.0
     dependencies:
       axios: 0.27.2
       chalk: 2.4.2
@@ -413,9 +413,9 @@ importers:
       ts-jest: 27.1.5_33teeovbg7qyb2atewgc6tchgq
       tsconfig: link:../tsconfig
       tsup: 5.12.9_typescript@4.7.4
+      turbo-test-utils: link:../turbo-test-utils
       turbo-types: link:../turbo-types
       typescript: 4.7.4
-      uuid: 9.0.0
 
   packages/turbo-ignore:
     specifiers:
@@ -427,6 +427,7 @@ importers:
       ts-jest: ^27.1.1
       tsconfig: workspace:*
       tsup: ^5.12.1
+      turbo-test-utils: workspace:^0.0.0
       turbo-utils: workspace:*
       typescript: ^4.7.4
     devDependencies:
@@ -438,8 +439,34 @@ importers:
       ts-jest: 27.1.5_33teeovbg7qyb2atewgc6tchgq
       tsconfig: link:../tsconfig
       tsup: 5.12.9_typescript@4.7.4
+      turbo-test-utils: link:../turbo-test-utils
       turbo-utils: link:../turbo-utils
       typescript: 4.7.4
+
+  packages/turbo-test-utils:
+    specifiers:
+      '@types/fs-extra': ^9.0.13
+      '@types/jest': ^27.4.0
+      '@types/node': ^16.11.12
+      '@types/uuid': ^9.0.0
+      fs-extra: ^11.1.0
+      jest: ^27.4.3
+      ts-jest: ^27.1.1
+      tsconfig: workspace:*
+      typescript: ^4.7.4
+      uuid: ^9.0.0
+    dependencies:
+      fs-extra: 11.1.0
+      uuid: 9.0.0
+    devDependencies:
+      '@types/fs-extra': 9.0.13
+      '@types/jest': 27.5.2
+      '@types/node': 16.11.56
+      '@types/uuid': 9.0.0
+      jest: 27.5.1
+      ts-jest: 27.1.5_ndeyfkjscoamnbcpt4q6qsiybu
+      tsconfig: link:../tsconfig
+      typescript: 4.9.4
 
   packages/turbo-tracing-next-plugin:
     specifiers:
@@ -5984,6 +6011,15 @@ packages:
       universalify: 2.0.0
     dev: false
 
+  /fs-extra/11.1.0:
+    resolution: {integrity: sha512-0rcTq621PD5jM/e0a3EJoGC/1TC5ZBCERW82LQuwfGnCa1V8w7dpYH1yNu+SLb6E5dkeCBzKEyLGlFrnr+dUyw==}
+    engines: {node: '>=14.14'}
+    dependencies:
+      graceful-fs: 4.2.10
+      jsonfile: 6.1.0
+      universalify: 2.0.0
+    dev: false
+
   /fs-extra/8.1.0:
     resolution: {integrity: sha512-yhlQgA6mnOJUKOsRUFsgJdQCvkKhcz8tlZG5HBQfReYZy46OwLcY+Zia0mtdHsOo9y/hP+CxMN0TU9QxoOtG4g==}
     engines: {node: '>=6 <7 || >=8'}
@@ -11387,6 +11423,41 @@ packages:
       yargs-parser: 20.2.9
     dev: true
 
+  /ts-jest/27.1.5_ndeyfkjscoamnbcpt4q6qsiybu:
+    resolution: {integrity: sha512-Xv6jBQPoBEvBq/5i2TeSG9tt/nqkbpcurrEG1b+2yfBrcJelOZF9Ml6dmyMh7bcW9JyFbRYpR5rxROSlBLTZHA==}
+    engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
+    hasBin: true
+    peerDependencies:
+      '@babel/core': '>=7.0.0-beta.0 <8'
+      '@types/jest': ^27.0.0
+      babel-jest: '>=27.0.0 <28'
+      esbuild: '*'
+      jest: ^27.0.0
+      typescript: '>=3.8 <5.0'
+    peerDependenciesMeta:
+      '@babel/core':
+        optional: true
+      '@types/jest':
+        optional: true
+      babel-jest:
+        optional: true
+      esbuild:
+        optional: true
+    dependencies:
+      '@babel/core': 7.20.12
+      '@types/jest': 27.5.2
+      bs-logger: 0.2.6
+      fast-json-stable-stringify: 2.1.0
+      jest: 27.5.1
+      jest-util: 27.5.1
+      json5: 2.2.1
+      lodash.memoize: 4.1.2
+      make-error: 1.3.6
+      semver: 7.3.7
+      typescript: 4.9.4
+      yargs-parser: 20.2.9
+    dev: true
+
   /ts-jest/27.1.5_vwbkq6iekkdgzr33wjcnr3wuaq:
     resolution: {integrity: sha512-Xv6jBQPoBEvBq/5i2TeSG9tt/nqkbpcurrEG1b+2yfBrcJelOZF9Ml6dmyMh7bcW9JyFbRYpR5rxROSlBLTZHA==}
     engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
@@ -11418,7 +11489,7 @@ packages:
       json5: 2.2.1
       lodash.memoize: 4.1.2
       make-error: 1.3.6
-      semver: 7.3.8
+      semver: 7.3.7
       typescript: 4.7.4
       yargs-parser: 20.2.9
     dev: true
@@ -11841,7 +11912,7 @@ packages:
   /uuid/9.0.0:
     resolution: {integrity: sha512-MXcSTerfPa4uqyzStbRoTgt5XIe3x5+42+q1sDuy3R5MDk66URdLMOZe5aPX/SQd+kuYAh0FdP/pO28IkQyTeg==}
     hasBin: true
-    dev: true
+    dev: false
 
   /uvu/0.5.6:
     resolution: {integrity: sha512-+g8ENReyr8YsOc6fv/NVJs2vFdHBnBNdfE49rshrTzDWOlUx4Gq7KOS2GD8eqhy2j+Ejq29+SbKH8yjkAqXqoA==}
