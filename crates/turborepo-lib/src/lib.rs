@@ -3,6 +3,7 @@ mod client;
 mod commands;
 mod config;
 mod package_manager;
+mod retry;
 mod shim;
 mod ui;
 

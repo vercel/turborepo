@@ -1,13 +1,11 @@
-use std::env;
+use std::{env, future::Future};
 
 use anyhow::{anyhow, Result};
 use axum::async_trait;
 use reqwest::StatusCode;
-use reqwest_middleware::ClientBuilder;
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::Deserialize;
 
-use crate::get_version;
+use crate::{get_version, retry::retry_future};
 
 #[async_trait]
 pub trait UserClient {
@@ -32,7 +30,7 @@ pub struct UserResponse {
 
 pub struct APIClient {
     token: String,
-    client: reqwest_middleware::ClientWithMiddleware,
+    client: reqwest::Client,
     base_url: String,
 }
 
@@ -43,50 +41,73 @@ impl UserClient for APIClient {
     }
 
     async fn get_user(&self) -> Result<UserResponse> {
-        let request_builder = self
-            .client
-            .get(self.make_url("/v2/user"))
-            .header("User-Agent", user_agent())
-            .header("Authorization", format!("Bearer {}", self.token))
-            .header("Content-Type", "application/json");
+        let response = self
+            .make_retryable_request(|| {
+                let request_builder = self
+                    .client
+                    .get(self.make_url("/v2/user"))
+                    .header("User-Agent", user_agent())
+                    .header("Authorization", format!("Bearer {}", self.token))
+                    .header("Content-Type", "application/json");
 
-        let response = request_builder.send().await;
+                request_builder.send()
+            })
+            .await;
 
         match response {
             Ok(response) => {
                 let user_response = response.json::<UserResponse>().await?;
                 Ok(user_response)
             }
-            Err(reqwest_middleware::Error::Reqwest(err))
-                if err.status() == Some(StatusCode::NOT_FOUND) =>
-            {
-                Err(anyhow!("404 - Not found"))
+            Err(error) => {
+                if let Some(error) = error.downcast_ref::<reqwest::Error>() {
+                    if error.status() == Some(StatusCode::NOT_FOUND) {
+                        return Err(anyhow!("404 - Not found"));
+                    }
+                }
+
+                Err(error)
             }
-            Err(err) => Err(err.into()),
         }
     }
 }
 
+const RETRY_MAX: u32 = 2;
+
 impl APIClient {
-    pub fn new(token: impl AsRef<str>, base_url: impl AsRef<str>) -> Self {
-        let retry_policy = ExponentialBackoff {
-            max_n_retries: 2,
-            min_retry_interval: std::time::Duration::from_secs(2),
-            max_retry_interval: std::time::Duration::from_secs(10),
-            // The Go library we were using before, retryablehttp,
-            // had the exponent set to 2.
-            backoff_exponent: 2,
-        };
+    async fn make_retryable_request<
+        F: Future<Output = Result<reqwest::Response, reqwest::Error>>,
+    >(
+        &self,
+        request_builder: impl Fn() -> F,
+    ) -> Result<reqwest::Response> {
+        retry_future(RETRY_MAX, request_builder, Self::should_retry_request).await
+    }
 
-        let client = ClientBuilder::new(reqwest::Client::new())
-            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-            .build();
+    fn should_retry_request(error: &reqwest::Error) -> bool {
+        if let Some(status) = error.status() {
+            if status == StatusCode::TOO_MANY_REQUESTS {
+                return true;
+            }
 
-        APIClient {
+            if status.as_u16() >= 500 && status.as_u16() != 501 {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn new(token: impl AsRef<str>, base_url: impl AsRef<str>) -> Result<Self> {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(20))
+            .build()?;
+
+        Ok(APIClient {
             token: token.as_ref().to_string(),
             client,
             base_url: base_url.as_ref().to_string(),
-        }
+        })
     }
 
     fn make_url(&self, endpoint: &str) -> String {

@@ -37,7 +37,7 @@ pub async fn login(repo_config: RepoConfig) -> Result<()> {
     let mut user_config = UserConfig::load(&default_user_config_path()?, None)?;
     user_config.set_token(Some(token.to_string()))?;
 
-    let client = APIClient::new(token, repo_config.api_url);
+    let client = APIClient::new(token, repo_config.api_url)?;
     let user_response = client.get_user().await?;
 
     let ui = UI::infer();
