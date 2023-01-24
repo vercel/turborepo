@@ -60,11 +60,6 @@ impl ContentSource for NextRouterContentSource {
     ) -> Result<ContentSourceResultVc> {
         let this = self_vc.await?;
 
-        // We know how to handle our chunk files.
-        if path.starts_with("_chunks/") {
-            return Ok(this.inner.get(path, data));
-        }
-
         let Some(method) = &data.method else {
             return Ok(need_data(self_vc.into(), path))
         };
@@ -91,9 +86,6 @@ impl ContentSource for NextRouterContentSource {
         };
 
         let rewrite = match &*res {
-            RouterResult::Handled => {
-                todo!("need to implement router forwarding body and headers?")
-            }
             RouterResult::Error => {
                 // TODO: emit error
                 return Ok(this

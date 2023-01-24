@@ -1,5 +1,5 @@
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use turbo_tasks::{
     primitives::{JsonValueVc, StringsVc},
     Value,
@@ -41,16 +41,10 @@ fn next_configs() -> StringsVc {
 #[derive(Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct RouterRequest {
-    method: String,
-    pathname: String,
-    query: Query,
-    headers: Headers,
-}
-
-#[derive(Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-enum RouterOutgoingMessage<'a> {
-    Request { data: &'a RouterRequest },
+    pub method: String,
+    pub pathname: String,
+    pub query: Query,
+    pub headers: Headers,
 }
 
 #[turbo_tasks::value(shared)]
@@ -71,20 +65,43 @@ pub struct RewriteResponse {
     pub headers: Vec<String>,
 }
 
+#[turbo_tasks::value(shared)]
+#[derive(Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MiddlewareHeadersResponse {
+    pub url: String,
+    pub status_code: u16,
+    pub headers: Vec<String>,
+}
+
+#[turbo_tasks::value(shared)]
+#[derive(Debug, Clone, Default)]
+pub struct MiddlewareBodyResponse(Vec<u8>);
+
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum RouterIncomingMessage {
-    // Handled directory via `res`
-    Handled,
-    Redirect { data: RedirectResponse },
-    Rewrite { data: RewriteResponse },
+    Redirect {
+        data: RedirectResponse,
+    },
+    Rewrite {
+        data: RewriteResponse,
+    },
+    // TODO: Implement
+    #[allow(dead_code)]
+    MiddlewareHeaders {
+        data: MiddlewareHeadersResponse,
+    },
+    // TODO: Implement
+    #[allow(dead_code)]
+    MiddlewareBody {
+        data: MiddlewareBodyResponse,
+    },
     Error(StructuredError),
 }
 
 #[turbo_tasks::value]
 pub enum RouterResult {
-    // Handled directory via `res`
-    Handled,
     Redirect(RedirectResponse),
     Rewrite(RewriteResponse),
     Error,
@@ -93,10 +110,9 @@ pub enum RouterResult {
 impl From<RouterIncomingMessage> for RouterResult {
     fn from(value: RouterIncomingMessage) -> Self {
         match value {
-            RouterIncomingMessage::Handled => Self::Handled,
             RouterIncomingMessage::Redirect { data } => Self::Redirect(data),
             RouterIncomingMessage::Rewrite { data } => Self::Rewrite(data),
-            RouterIncomingMessage::Error(_) => Self::Error,
+            _ => Self::Error,
         }
     }
 }
@@ -152,9 +168,7 @@ pub async fn route(
     // TODO this is a hack to get these files watched.
     let extra_configs = extra_configs(context, project_path);
 
-    let request = serde_json::value::to_value(RouterOutgoingMessage::Request {
-        data: &*request.await?,
-    })?;
+    let request = serde_json::value::to_value(&*request.await?)?;
     let result = evaluate(
         project_path,
         router_asset,
