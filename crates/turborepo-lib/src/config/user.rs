@@ -109,12 +109,11 @@ impl UserConfigLoader {
 
 #[cfg(test)]
 mod test {
-    use std::{env, fs, io::Write};
+    use std::io::Write;
 
     use tempfile::{NamedTempFile, TempDir};
 
     use super::*;
-    use crate::config::RepoConfigLoader;
 
     #[test]
     fn test_handles_non_existent_path() -> Result<()> {

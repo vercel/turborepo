@@ -80,12 +80,6 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_rainbow() {
-        let ui = UI::infer();
-        ui.print_rainbow("hello world");
-    }
-
-    #[test]
     fn test_ui_strips_ansi() {
         let ui = UI::new(true);
         let grey_str = GREY.apply_to("gray");
