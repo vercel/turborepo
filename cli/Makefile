@@ -88,9 +88,9 @@ cmd/turbo/version.go: ../version.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
 build: install
-	cd $(CLI_DIR)/../packages/create-turbo && pnpm install --filter=create-turbo && pnpm run build
-	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm install --filter=@turbo/codemod && pnpm run build
-	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm install --filter=turbo-ignore && pnpm run build
+	cd $(CLI_DIR)/../ && pnpm install --filter=create-turbo && pnpm turbo build --filter=create-turbo...
+	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/codemod && pnpm turbo build --filter=@turbo/codemod...
+	cd $(CLI_DIR)/../ && pnpm install --filter=turbo-ignore && pnpm turbo build --filter=turbo-ignore...
 
 .PHONY: prepublish
 prepublish: compile-protos cmd/turbo/version.go
