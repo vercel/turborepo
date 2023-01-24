@@ -146,30 +146,11 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		pkg, taskName := util.GetPackageTaskFromId(taskID)
 
-		// This for loop adds in the Root Node as a taskID (i.e. __ROOT__#build)
-		// into the traversalQueue. But in order to look up the information about
-		// the root workpsace, we need to use the package name "//". Re-assign
-		// the pkgName here to account for that.
-		// TODO(mehulkar): Is it safe to move this logic into GetPackageTaskFromId()?
-		if pkg == ROOT_NODE_NAME {
-			pkg = util.RootPkgName
-		}
-
 		if pkg == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
 			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
 
-		pkgJSON, ok := e.completeGraph.WorkspaceInfos[pkg]
-
-		if !ok {
-			// This should be unlikely to happen. If we have a pkg
-			// it should be in WorkspaceInfos. If we're hitting this error
-			// something has gone wrong earlier when building WorkspaceInfos
-			return fmt.Errorf("Failed to find workspace \"%s\"", pkg)
-		}
-
 		taskDefinition, err := e.GetResolvedTaskDefinition(
-			pkgJSON,
 			&e.completeGraph.Pipeline,
 			taskName,
 			taskID,
@@ -399,6 +380,6 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 // GetResolvedTaskDefinition returns a "resolved" TaskDefinition.
 // Today, it just looks up the task from the root Pipeline, but in the future
 // we will compose the TaskDefinition from workspaces using the `extends` key.
-func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs.Pipeline, taskName string, taskID string) (*fs.TaskDefinition, error) {
+func (e *Engine) GetResolvedTaskDefinition(rootPipeline *fs.Pipeline, taskName string, taskID string) (*fs.TaskDefinition, error) {
 	return rootPipeline.GetTask(taskID, taskName)
 }
