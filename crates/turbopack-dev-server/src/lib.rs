@@ -447,8 +447,24 @@ pub(crate) fn resource_to_data(
     if vary.query.is_some() {
         data.query = Some(Query::default())
     }
-    if vary.headers.is_some() {
-        data.headers = Some(Headers::default())
+    if let Some(filter) = vary.headers.as_ref() {
+        let mut headers = Headers::default();
+        if let Some(resource_headers) = resource.headers {
+            for (header_name, header_value) in resource_headers {
+                if !filter.contains(header_name.as_str()) {
+                    continue;
+                }
+                match headers.entry(header_name) {
+                    Entry::Vacant(e) => {
+                        e.insert(HeaderValue::SingleString(header_value));
+                    }
+                    Entry::Occupied(mut e) => {
+                        e.get_mut().extend_with_string(header_value);
+                    }
+                }
+            }
+        }
+        data.headers = Some(headers);
     }
     if vary.cache_buster {
         data.cache_buster = CACHE_BUSTER.fetch_add(1, Ordering::SeqCst);
