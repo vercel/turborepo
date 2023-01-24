@@ -1,5 +1,5 @@
 use indexmap::IndexMap;
-use turbo_tasks::{ValueToString, ValueToStringVc, primitives::BoolVc};
+use turbo_tasks::{primitives::BoolVc, ValueToString, ValueToStringVc};
 
 #[turbo_tasks::value(transparent)]
 pub struct ParamsMatches(Option<IndexMap<String, String>>);
