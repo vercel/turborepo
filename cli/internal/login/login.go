@@ -22,7 +22,7 @@ const defaultHostname = "127.0.0.1"
 const defaultPort = 9789
 const defaultSSOProvider = "SAML/OIDC Single Sign-On"
 
-// ExecuteLogin executes the `login` command.
+// ExecuteLogin executes the `login` command for SSO Teams (regular login is implemented in Rust).
 func ExecuteLogin(ctx context.Context, helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
 	if err != nil {
@@ -34,34 +34,26 @@ func ExecuteLogin(ctx context.Context, helper *cmdutil.Helper, args *turbostate.
 		return nil
 	}
 
+	if args.Command.Login.SsoTeam != "" {
+		return errors.New("internal error: SSO login should be handled by Rust")
+	}
+
 	login := login{
 		base:                base,
 		openURL:             browser.OpenBrowser,
 		client:              base.APIClient,
 		promptEnableCaching: promptEnableCaching,
 	}
-	if args.Command.Login.SsoTeam != "" {
-		err := login.loginSSO(ctx, args.Command.Login.SsoTeam)
-		if err != nil {
-			if errors.Is(err, errUserCanceled) || errors.Is(err, context.Canceled) {
-				base.UI.Info("Canceled. Turborepo not set up.")
-			} else if errors.Is(err, errTryAfterEnable) || errors.Is(err, errNeedCachingEnabled) || errors.Is(err, errOverage) {
-				base.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
-			} else {
-				base.LogError("SSO login failed: %v", err)
-			}
-			return err
+	err = login.loginSSO(ctx, args.Command.Login.SsoTeam)
+	if err != nil {
+		if errors.Is(err, errUserCanceled) || errors.Is(err, context.Canceled) {
+			base.UI.Info("Canceled. Turborepo not set up.")
+		} else if errors.Is(err, errTryAfterEnable) || errors.Is(err, errNeedCachingEnabled) || errors.Is(err, errOverage) {
+			base.UI.Info("Remote Caching not enabled. Please run 'turbo login' again after Remote Caching has been enabled")
+		} else {
+			base.LogError("SSO login failed: %v", err)
 		}
-	} else {
-		err := login.run(ctx)
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				base.UI.Info("Canceled. Turborepo not set up.")
-			} else {
-				base.LogError("login failed: %v", err)
-			}
-			return err
-		}
+		return err
 	}
 	return nil
 }
@@ -90,58 +82,6 @@ func (l *login) directUserToURL(url string) {
 	if err != nil {
 		l.base.UI.Warn(fmt.Sprintf("Failed to open browser. Please visit %v in your browser", url))
 	}
-}
-
-func (l *login) run(ctx context.Context) error {
-	loginURLBase := l.base.RepoConfig.LoginURL()
-	l.base.Logger.Debug(fmt.Sprintf("turbo v%v", l.base.TurboVersion))
-	l.base.Logger.Debug(fmt.Sprintf("api url: %v", l.base.RemoteConfig.APIURL))
-	l.base.Logger.Debug(fmt.Sprintf("login url: %v", loginURLBase))
-	redirectURL := fmt.Sprintf("http://%v:%v", defaultHostname, defaultPort)
-	loginURL := fmt.Sprintf("%v/turborepo/token?redirect_uri=%v", loginURLBase, redirectURL)
-
-	l.base.UI.Info(util.Sprintf(">>> Opening browser to %v", loginURL))
-
-	rootctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
-	defer cancel()
-
-	var query url.Values
-	oss, err := newOneShotServer(rootctx, func(w http.ResponseWriter, r *http.Request) {
-		query = r.URL.Query()
-		http.Redirect(w, r, loginURLBase+"/turborepo/success", http.StatusFound)
-	}, defaultPort)
-	if err != nil {
-		return errors.Wrap(err, "failed to start local server")
-	}
-
-	s := ui.NewSpinner(os.Stdout)
-	l.directUserToURL(loginURL)
-	s.Start("Waiting for your authorization...")
-	err = oss.Wait()
-	if err != nil {
-		return errors.Wrap(err, "failed to shut down local server")
-	}
-	// Stop the spinner before we return to ensure terminal is left in a good state
-	s.Stop("")
-
-	if err := l.base.UserConfig.SetToken(query.Get("token")); err != nil {
-		return err
-	}
-	rawToken := query.Get("token")
-	l.client.SetToken(rawToken)
-	userResponse, err := l.client.GetUser()
-	if err != nil {
-		return errors.Wrap(err, "could not get user information")
-	}
-	l.base.UI.Info("")
-	l.base.UI.Info(util.Sprintf("%s Turborepo CLI authorized for %s${RESET}", ui.Rainbow(">>> Success!"), userResponse.User.Email))
-	l.base.UI.Info("")
-	l.base.UI.Info(util.Sprintf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}"))
-	l.base.UI.Info(util.Sprintf("${CYAN}root of any turborepo:${RESET}"))
-	l.base.UI.Info("")
-	l.base.UI.Info(util.Sprintf("  ${BOLD}npx turbo link${RESET}"))
-	l.base.UI.Info("")
-	return nil
 }
 
 func (l *login) loginSSO(ctx context.Context, ssoTeam string) error {
