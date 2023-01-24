@@ -29,8 +29,9 @@ impl MappedEnvironment {
     /// Useful when environment variable names don't match up with config file
     /// names Replacement happens after config::Environment normalization
     #[allow(dead_code)]
-    pub fn replace<S: Into<String>>(mut self, key: S, replacement: S) -> Self {
-        self.replacements.insert(key.into(), replacement.into());
+    pub fn replace<S: Into<String>>(mut self, variable_name: S, replacement: S) -> Self {
+        self.replacements
+            .insert(variable_name.into(), replacement.into());
         self
     }
 }

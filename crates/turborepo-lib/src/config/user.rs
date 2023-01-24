@@ -8,7 +8,7 @@ use super::write_to_disk;
 
 // Inner struct that matches the config file schema
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
-struct UserConfigInner {
+struct UserConfigValue {
     token: Option<String>,
 }
 
@@ -17,8 +17,8 @@ pub struct UserConfig {
     // The configuration that comes from the disk
     // We keep this as a separate value to avoid saving values that come from
     // environment variables or command line flags.
-    disk_config: UserConfigInner,
-    config: UserConfigInner,
+    disk_config: UserConfigValue,
+    config: UserConfigValue,
     path: PathBuf,
 }
 
@@ -97,7 +97,7 @@ impl UserConfigLoader {
             .build()?
             .try_deserialize()?;
 
-        let disk_config: UserConfigInner = raw_disk_config.try_deserialize()?;
+        let disk_config: UserConfigValue = raw_disk_config.try_deserialize()?;
 
         Ok(UserConfig {
             disk_config,

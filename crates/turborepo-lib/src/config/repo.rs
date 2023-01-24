@@ -11,13 +11,13 @@ const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoConfig {
-    disk_config: RepoConfigInner,
-    config: RepoConfigInner,
+    disk_config: RepoConfigValue,
+    config: RepoConfigValue,
     path: PathBuf,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
-struct RepoConfigInner {
+struct RepoConfigValue {
     apiurl: Option<String>,
     loginurl: Option<String>,
     teamslug: Option<String>,
@@ -125,7 +125,7 @@ impl RepoConfigLoader {
 
         let has_teamslug_override = teamslug.is_some();
 
-        let mut config: RepoConfigInner = Config::builder()
+        let mut config: RepoConfigValue = Config::builder()
             .add_source(raw_disk_config.clone())
             .add_source(
                 MappedEnvironment::with_prefix("turbo")
@@ -141,7 +141,7 @@ impl RepoConfigLoader {
             .build()?
             .try_deserialize()?;
 
-        let disk_config: RepoConfigInner = raw_disk_config.try_deserialize()?;
+        let disk_config: RepoConfigValue = raw_disk_config.try_deserialize()?;
 
         // If teamid was passed via command line flag we ignore team slug as it
         // might not match.
