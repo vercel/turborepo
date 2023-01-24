@@ -408,11 +408,6 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 		return nil, err
 	}
 
-	// reverse the array, because we want to start with the end of the chain.
-	for i, j := 0, len(taskDefinitions)-1; i < j; i, j = i+1, j-1 {
-		taskDefinitions[i], taskDefinitions[j] = taskDefinitions[j], taskDefinitions[i]
-	}
-
 	// Start with an empty definition
 	mergedTaskDefinition := &fs.TaskDefinition{}
 
@@ -510,6 +505,13 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 			}
 		}
 	}
-
-	return taskDefinitions, nil
+	// Reverse the array. We gathered taskDefinitions above starting from the workspace
+	// which means the "root" turbo.json will be _last_ in this list. We want the opposite order.
+	// We want to consume this chain starting from the root turbo.json and then use later configs
+	// to override the root config.
+	reversedTaskDefinitions := make([]fs.TaskDefinition, len(taskDefinitions))
+	for i, j := 0, len(taskDefinitions)-1; i < j; i, j = i+1, j-1 {
+		reversedTaskDefinitions[i], reversedTaskDefinitions[j] = taskDefinitions[j], taskDefinitions[i]
+	}
+	return reversedTaskDefinitions, nil
 }
