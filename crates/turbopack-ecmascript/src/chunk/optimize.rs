@@ -1,10 +1,9 @@
-use std::{
-    cmp::{Ordering, Reverse},
-    collections::HashSet,
-};
+//! Chunk optimization for Ecmascript chunks.
+
+use std::{cmp::Ordering, collections::HashSet};
 
 use anyhow::{bail, Result};
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use turbo_tasks::TryJoinIterExt;
 use turbo_tasks_fs::FileSystemPathOptionVc;
 use turbopack_core::chunk::{
@@ -50,6 +49,7 @@ async fn get_common_parent(chunk: ChunkVc) -> Result<FileSystemPathOptionVc> {
     Ok(ecma(chunk).await?.common_parent())
 }
 
+/// Merge a few chunks into a single chunk.
 async fn merge_chunks(
     first: EcmascriptChunkVc,
     chunks: &[EcmascriptChunkVc],
@@ -90,6 +90,7 @@ const TOTAL_CHUNK_MERGE_THRESHOLD: usize = 20;
 /// Max number of chunk items per chunk to merge.
 const MAX_CHUNK_ITEMS_PER_CHUNK: usize = 3000;
 
+/// Merge chunks with high duplication between them.
 async fn merge_duplicated_and_contained(
     chunks: &mut Vec<(EcmascriptChunkVc, Option<ChunksVc>)>,
     mut unoptimized_count: usize,
@@ -272,23 +273,25 @@ async fn merge_duplicated_and_contained(
     Ok(())
 }
 
+/// Merge chunks to fit into the target limit. Uses chunk source to first merge
+/// all chunks from a single source and if that's not enough it will merge
+/// chunks into equal sized groups.
 async fn merge_to_limit(
     chunks: Vec<(EcmascriptChunkVc, Option<ChunksVc>)>,
     target_count: usize,
 ) -> Result<Vec<EcmascriptChunkVc>> {
     let mut remaining = chunks.len();
-    let mut chunks = chunks.into_iter().enumerate().collect::<Vec<_>>();
-    chunks.sort_by_key(|&(i, (_, k))| (k, i));
-    let mut chunks_by_source = chunks
-        .group_by(|(_, (_, a)), (_, (_, b))| a == b)
-        .map(|slice| {
-            (
-                slice[0].1 .1,
-                slice.iter().map(|&(i, (c, _))| (i, c)).collect::<Vec<_>>(),
-            )
-        })
-        .collect::<Vec<_>>();
-    chunks_by_source.sort_by_key(|(_, chunks)| (Reverse(chunks.len()), chunks[0].0));
+    // Collecting chunks by source into an index map to keep original order
+    let mut chunks_by_source = IndexMap::new();
+    for (chunk, source) in chunks {
+        chunks_by_source
+            .entry(source)
+            .or_insert_with(Vec::new)
+            .push(chunk);
+    }
+    // Stable sorting by source with the most chunks first
+    chunks_by_source.sort_by(|_, a, _, b| b.len().cmp(&a.len()));
+
     // Merged chunks that are already pretty full, we don't try to merge more into
     // them
     let mut fully_merged = Vec::new();
@@ -297,12 +300,12 @@ async fn merge_to_limit(
     let mut merged = Vec::new();
 
     // Merge chunks by source
-    for (_, chunks) in chunks_by_source {
+    for (_, mut chunks) in chunks_by_source {
         if merged.len() + remaining <= target_count {
-            merged.extend(chunks.into_iter().map(|(_, c)| c));
+            merged.append(&mut chunks);
         } else {
             remaining -= chunks.len();
-            let mut part = merge_by_size(chunks.into_iter().map(|(_, c)| c)).await?;
+            let mut part = merge_by_size(chunks).await?;
             merged.extend(part.pop().into_iter());
             fully_merged.append(&mut part);
         }
@@ -328,6 +331,8 @@ async fn merge_to_limit(
     Ok(fully_merged)
 }
 
+/// Merge chunks into a few chunks as possible while staying below the chunk
+/// size limit.
 async fn merge_by_size(
     chunks: impl IntoIterator<Item = EcmascriptChunkVc>,
 ) -> Result<Vec<EcmascriptChunkVc>> {
@@ -367,6 +372,7 @@ async fn merge_by_size(
     Ok(merged)
 }
 
+/// Chunk optimization for ecmascript chunks.
 #[turbo_tasks::function]
 async fn optimize_ecmascript(
     local: Option<ChunksVc>,

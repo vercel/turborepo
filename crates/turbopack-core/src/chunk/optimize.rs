@@ -1,3 +1,8 @@
+//! Traits and functions to optimize a list of chunks.
+//!
+//! Usually chunks are optimized by limiting their total count, restricting
+//! their size and eliminating duplicates between them.
+
 use std::{cell::RefCell, mem::take, rc::Rc};
 
 use anyhow::Result;
@@ -11,16 +16,19 @@ use crate::{
     chunk::Chunk,
 };
 
+/// A functor to optimize a set of chunks.
 #[turbo_tasks::value_trait]
 pub trait ChunkOptimizer {
     fn optimize(&self, chunks: ChunksVc, chunk_group: ChunkGroupVc) -> ChunksVc;
 }
 
+/// Trait to mark a chunk as optimizable.
 #[turbo_tasks::value_trait]
 pub trait OptimizableChunk: Chunk + Asset + ValueToString {
     fn get_optimizer(&self) -> ChunkOptimizerVc;
 }
 
+/// Optimize all chunks that implement [OptimizableChunk].
 #[turbo_tasks::function]
 pub async fn optimize(chunks: ChunksVc, chunk_group: ChunkGroupVc) -> Result<ChunksVc> {
     let chunks = chunks.await?;
@@ -98,6 +106,7 @@ impl ContainmentTree {
         async fn expand_common_parents(
             common_parents: &mut IndexSet<FileSystemPathVc>,
         ) -> Result<()> {
+            // This is mutated while iterating, so we need to loop with index
             let mut i = 0;
             while i < common_parents.len() {
                 let current = common_parents[i];
