@@ -8,11 +8,8 @@
       "outputs": ["coverage/**/*"],
       "dependsOn": ["^build"]
     },
-    "//#lint": {
-      "outputs": []
-    },
+    "//#lint": {},
     "check-types": {
-      "outputs": [],
       "dependsOn": ["//#build:ts", "^build"]
     },
     "dev": {
@@ -46,8 +43,7 @@
       "outputs": ["public/feed.xml"]
     },
     "create-turbo#test": {
-      "dependsOn": ["create-turbo#build"],
-      "outputs": []
+      "dependsOn": ["create-turbo#build"]
     },
     "docs#build": {
       "env": [
@@ -71,7 +67,6 @@
       ]
     },
     "cli#e2e-prebuilt": {
-      "outputs": [],
       "inputs": [
         "cli/**/*.go",
         "cli/go.mod",
@@ -80,11 +75,8 @@
         "shim/**/*.rs"
       ]
     },
-    "cli#integration-tests": {
-      "outputs": []
-    },
+    "cli#integration-tests": {},
     "//#run-example": {
-      "outputs": [],
       "inputs": [
         "examples/**/*.ts",
         "examples/**/*.tsx",
