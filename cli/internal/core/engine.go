@@ -17,8 +17,6 @@ const ROOT_NODE_NAME = "___ROOT___"
 // but also some adjustments to it, based on business logic.
 type Task struct {
 	Name string
-	// Deps are dependencies between tasks within the same package (e.g. `build` -> `test`)
-	Deps util.Set
 	// TaskDefinition contains the config for the task from turbo.json
 	TaskDefinition fs.TaskDefinition
 }
@@ -161,10 +159,29 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		topoDeps := util.SetFromStrings(task.TaskDefinition.TopologicalDependencies)
 
+		deps := make(util.Set)
+		isPackageTask := util.IsPackageTask(taskName)
+
+		for _, dependency := range task.TaskDefinition.TaskDependencies {
+			// If the current task is a workspace-specific task (including root Task)
+			// and its dependency is _also_ a workspace-specific task, we need to add
+			// a reference to this dependency directly into the engine.
+			// TODO @mehulkar: Why do we need this?
+			if isPackageTask && util.IsPackageTask(dependency) {
+				if err := e.AddDep(dependency, taskName); err != nil {
+					return err
+				}
+			} else {
+				// For non-workspace-specific dependencies, we attach a reference to
+				// the task that is added into the engine.
+				deps.Add(dependency)
+			}
+		}
+
 		// Filter down the tasks if there's a filter in place
 		// https: //turbo.build/repo/docs/reference/command-line-reference#--only
 		if tasksOnly {
-			task.Deps = task.Deps.Filter(func(d interface{}) bool {
+			deps = deps.Filter(func(d interface{}) bool {
 				for _, target := range taskNames {
 					return fmt.Sprintf("%v", d) == target
 				}
@@ -186,7 +203,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		// hasDeps will be true if the task depends on any tasks from its own package
 		// E.g. `build: { dependsOn: [dev] }`
-		hasDeps := task.Deps.Len() > 0
+		hasDeps := deps.Len() > 0
 
 		// hasPackageTaskDeps will be true if this is a workspace-specific task, and
 		// it depends on another workspace-specific tasks
@@ -211,7 +228,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		}
 
 		if hasDeps {
-			for _, from := range task.Deps.UnsafeListOfStrings() {
+			for _, from := range deps.UnsafeListOfStrings() {
 				fromTaskID := util.GetTaskId(pkg, from)
 				e.TaskGraph.Add(fromTaskID)
 				e.TaskGraph.Add(toTaskID)

@@ -391,30 +391,8 @@ func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, er
 	engine := core.NewEngine(&g.WorkspaceGraph)
 
 	for taskName, taskDefinition := range g.Pipeline {
-		deps := make(util.Set)
-
-		isPackageTask := util.IsPackageTask(taskName)
-
-		for _, dependency := range taskDefinition.TaskDependencies {
-			// If the current task is a workspace-specific task (including root Task)
-			// and its dependency is _also_ a workspace-specific task, we need to add
-			// a reference to this dependency directly into the engine.
-			// TODO @mehulkar: Why do we need this?
-			if isPackageTask && util.IsPackageTask(dependency) {
-				err := engine.AddDep(dependency, taskName)
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				// For non-workspace-specific dependencies, we attach a reference to
-				// the task that is added into the engine.
-				deps.Add(dependency)
-			}
-		}
-
 		engine.AddTask(&core.Task{
 			Name:           taskName,
-			Deps:           deps,
 			TaskDefinition: taskDefinition,
 		})
 	}
