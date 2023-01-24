@@ -9,13 +9,14 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
 	"github.com/pkg/errors"
-	"github.com/spf13/pflag"
-	"github.com/vercel/turborepo/cli/internal/context"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/scm"
-	scope_filter "github.com/vercel/turborepo/cli/internal/scope/filter"
-	"github.com/vercel/turborepo/cli/internal/util"
-	"github.com/vercel/turborepo/cli/internal/util/filter"
+	"github.com/vercel/turbo/cli/internal/context"
+	"github.com/vercel/turbo/cli/internal/graph"
+	"github.com/vercel/turbo/cli/internal/packagemanager"
+	"github.com/vercel/turbo/cli/internal/scm"
+	scope_filter "github.com/vercel/turbo/cli/internal/scope/filter"
+	"github.com/vercel/turbo/cli/internal/turbostate"
+	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/util/filter"
 )
 
 // LegacyFilter holds the options in use before the filter syntax. They have their own rules
@@ -35,11 +36,11 @@ var _sinceHelp = `Limit/Set scope to changed packages since a
 mergebase. This uses the git diff ${target_branch}...
 mechanism to identify which packages have changed.`
 
-func addLegacyFlags(opts *LegacyFilter, flags *pflag.FlagSet) {
-	flags.BoolVar(&opts.IncludeDependencies, "include-dependencies", false, "Include the dependencies of tasks in execution.")
-	flags.BoolVar(&opts.SkipDependents, "no-deps", false, "Exclude dependent task consumers from execution.")
-	flags.StringArrayVar(&opts.Entrypoints, "scope", nil, "Specify package(s) to act as entry points for task execution. Supports globs.")
-	flags.StringVar(&opts.Since, "since", "", _sinceHelp)
+func addLegacyFlagsFromArgs(opts *LegacyFilter, args *turbostate.ParsedArgsFromRust) {
+	opts.IncludeDependencies = args.Command.Run.IncludeDependencies
+	opts.SkipDependents = args.Command.Run.NoDeps
+	opts.Entrypoints = args.Command.Run.Scope
+	opts.Since = args.Command.Run.Since
 }
 
 // Opts holds the options for how to select the entrypoint packages for a turbo run
@@ -57,19 +58,20 @@ var (
 	_filterHelp = `Use the given selector to specify package(s) to act as
 entry points. The syntax mirrors pnpm's syntax, and
 additional documentation and examples can be found in
-turbo's documentation https://turborepo.org/docs/reference/command-line-reference#--filter
+turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
 --filter can be specified multiple times. Packages that
 match any filter will be included.`
 	_ignoreHelp    = `Files to ignore when calculating changed files (i.e. --since). Supports globs.`
-	_globalDepHelp = `Specify glob of global filesystem dependencies to be hashed. Useful for .env and files in the root directory.`
+	_globalDepHelp = `Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
+in the root directory. Includes turbo.json, root package.json, and the root lockfile by default.`
 )
 
-// AddFlags adds the flags relevant to this package to the given FlagSet
-func AddFlags(opts *Opts, flags *pflag.FlagSet) {
-	flags.StringArrayVar(&opts.FilterPatterns, "filter", nil, _filterHelp)
-	flags.StringArrayVar(&opts.IgnorePatterns, "ignore", nil, _ignoreHelp)
-	flags.StringArrayVar(&opts.GlobalDepPatterns, "global-deps", nil, _globalDepHelp)
-	addLegacyFlags(&opts.LegacyFilter, flags)
+// OptsFromArgs adds the settings relevant to this package to the given Opts
+func OptsFromArgs(opts *Opts, args *turbostate.ParsedArgsFromRust) {
+	opts.FilterPatterns = args.Command.Run.Filter
+	opts.IgnorePatterns = args.Command.Run.Ignore
+	opts.GlobalDepPatterns = args.Command.Run.GlobalDeps
+	addLegacyFlagsFromArgs(&opts.LegacyFilter, args)
 }
 
 // asFilterPatterns normalizes legacy selectors to filter syntax
@@ -113,10 +115,10 @@ func (l *LegacyFilter) asFilterPatterns() []string {
 // packages represents a default "all packages".
 func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, tui cli.Ui, logger hclog.Logger) (util.Set, bool, error) {
 	filterResolver := &scope_filter.Resolver{
-		Graph:                  &ctx.TopologicalGraph,
-		PackageInfos:           ctx.PackageInfos,
+		Graph:                  &ctx.WorkspaceGraph,
+		WorkspaceInfos:         ctx.WorkspaceInfos,
 		Cwd:                    cwd,
-		PackagesChangedInRange: opts.getPackageChangeFunc(scm, cwd, ctx.PackageInfos),
+		PackagesChangedInRange: opts.getPackageChangeFunc(scm, cwd, ctx.WorkspaceInfos, ctx.PackageManager),
 	}
 	filterPatterns := opts.FilterPatterns
 	legacyFilterPatterns := opts.LegacyFilter.asFilterPatterns()
@@ -129,7 +131,7 @@ func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, 
 
 	if isAllPackages {
 		// no filters specified, run every package
-		for _, f := range ctx.PackageNames {
+		for _, f := range ctx.WorkspaceNames {
 			filteredPkgs.Add(f)
 		}
 	}
@@ -137,7 +139,7 @@ func ResolvePackages(opts *Opts, cwd string, scm scm.SCM, ctx *context.Context, 
 	return filteredPkgs, isAllPackages, nil
 }
 
-func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos map[interface{}]*fs.PackageJSON) scope_filter.PackagesChangedInRange {
+func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos graph.WorkspaceInfos, packageManager *packagemanager.PackageManager) scope_filter.PackagesChangedInRange {
 	return func(fromRef string, toRef string) (util.Set, error) {
 		// We could filter changed files at the git level, since it's possible
 		// that the changes we're interested in are scoped, but we need to handle
@@ -151,7 +153,7 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos map[in
 			}
 			changedFiles = scmChangedFiles
 		}
-		if hasRepoGlobalFileChanged, err := repoGlobalFileHasChanged(o, changedFiles); err != nil {
+		if hasRepoGlobalFileChanged, err := repoGlobalFileHasChanged(o, getDefaultGlobalDeps(packageManager), changedFiles); err != nil {
 			return nil, err
 		} else if hasRepoGlobalFileChanged {
 			allPkgs := make(util.Set)
@@ -169,8 +171,22 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd string, packageInfos map[in
 	}
 }
 
-func repoGlobalFileHasChanged(opts *Opts, changedFiles []string) (bool, error) {
-	globalDepsGlob, err := filter.Compile(opts.GlobalDepPatterns)
+func getDefaultGlobalDeps(packageManager *packagemanager.PackageManager) []string {
+	// include turbo.json, root package.json, and root lockfile as implicit global dependencies
+	defaultGlobalDeps := []string{
+		"turbo.json",
+		"package.json",
+	}
+	if packageManager != nil {
+		// TODO: we should be smarter here and determine if the lockfile changes actually impact the given scope
+		defaultGlobalDeps = append(defaultGlobalDeps, packageManager.Lockfile)
+	}
+
+	return defaultGlobalDeps
+}
+
+func repoGlobalFileHasChanged(opts *Opts, defaultGlobalDeps []string, changedFiles []string) (bool, error) {
+	globalDepsGlob, err := filter.Compile(append(opts.GlobalDepPatterns, defaultGlobalDeps...))
 	if err != nil {
 		return false, errors.Wrap(err, "invalid global deps glob")
 	}
@@ -230,7 +246,7 @@ func fileInPackage(changedFile string, packagePath string) bool {
 	return false
 }
 
-func getChangedPackages(changedFiles []string, packageInfos map[interface{}]*fs.PackageJSON) util.Set {
+func getChangedPackages(changedFiles []string, packageInfos graph.WorkspaceInfos) util.Set {
 	changedPackages := make(util.Set)
 	for _, changedFile := range changedFiles {
 		found := false

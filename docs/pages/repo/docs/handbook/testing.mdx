@@ -1,0 +1,109 @@
+import { Tabs, Tab } from "../../../../components/Tabs";
+import Callout from "../../../../components/Callout";
+
+# Testing in a Monorepo
+
+Along with linting and building, testing is a crucial part of a production-ready monorepo. Whether you're using end-to-end tests or a unit test suite, integrating them with Turborepo will lead to enormous speed-ups.
+
+## Working with test runners
+
+Let's say we have a monorepo that looks like this:
+
+```
+├── apps
+│   └── web
+│       └── package.json
+└── packages
+    └── shared
+        └── package.json
+```
+
+Both `apps/web` and `packages/shared` have their own test suite. Their `package.json` files look like this:
+
+<Tabs items={["Jest", "Vitest"]} storageKey="selected-test-runner">
+  <Tab>
+```json filename="apps/web/package.json"
+{
+  "scripts": {
+    "test": "jest"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```json filename="apps/web/package.json"
+{
+  "scripts": {
+    "test": "vitest run"
+  }
+}
+```
+    </Tab>
+</Tabs>
+
+Inside the root `turbo.json`, we recommend setting up a `test` task in your [pipeline](/repo/docs/core-concepts/monorepos/running-tasks):
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "test": {}
+  }
+}
+```
+
+Now, you can run `turbo test` and have Turborepo test the entire repository.
+
+Because of Turborepo's [caching](/repo/docs/core-concepts/caching), this also means that only repositories that have changed files will be tested - resulting in a lot of time saved.
+
+## Running tests in watch mode
+
+When you run your test suite normally, it completes and outputs to `stdout`. This means you can [cache it](/repo/docs/core-concepts/caching) with Turborepo.
+
+But when you run your tests in watched mode, the process never exits. This makes a watch task more like a [development task](/repo/docs/handbook/dev).
+
+Because of this difference, we recommend specifying **two separate Turborepo tasks**: one for running your tests, and one for running them in watch mode.
+
+Here's an example:
+
+<Tabs items={["Jest", "Vitest"]} storageKey="selected-test-runner">
+  <Tab>
+```json filename="apps/web/package.json"
+{
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```json filename="apps/web/package.json"
+{
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  }
+}
+```
+    </Tab>
+</Tabs>
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "test": {},
+    "test:watch": {
+      "cache": false
+    }
+  }
+}
+```
+
+```json filename="package.json"
+{
+  "scripts": {
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch"
+  }
+}
+```

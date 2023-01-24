@@ -13,7 +13,7 @@
     "db:migrate:deploy": "turbo run db:migrate:deploy",
     "db:push": "turbo run db:push",
     "db:seed": "turbo run db:seed",
-    "dev": "turbo run dev --parallel",
+    "dev": "turbo run dev",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "generate": "turbo run generate",
     "lint": "turbo run lint"
@@ -22,5 +22,6 @@
     "prettier": "^2.5.1",
     "tsx": "^3.7.1",
     "turbo": "latest"
-  }
+  },
+  "packageManager": "yarn@1.22.17"
 }

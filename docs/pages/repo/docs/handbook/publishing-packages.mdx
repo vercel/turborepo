@@ -1,0 +1,15 @@
+import Callout from "../../../../components/Callout";
+
+# Publishing Packages
+
+Publishing a package to `npm` from a monorepo can be an extremely satisfying and smooth experience, with the right tools.
+
+You should follow this setup if you want to publish some of your monorepo's workspaces to `npm` as packages. If you don't need to publish to `npm`, you should use an [internal package](/repo/docs/handbook/sharing-code/internal-packages) instead. They're much easier to set up and use.
+
+## Tools
+
+You'll need to set up a few tools to get it working:
+
+First, you'll need a [bundler](/repo/docs/handbook/publishing-packages/bundling) to turn your code into [`CommonJS`](https://en.wikipedia.org/wiki/CommonJS), the most commonly used format on `npm`. You'll also need to set up a dev script so that you can work on the workspace in local development.
+
+Finally, you'll need a tool for [publishing & versioning](/repo/docs/handbook/publishing-packages/versioning-and-publishing). This will handle both bumping your monorepo's package versions _and_ publishing to npm.

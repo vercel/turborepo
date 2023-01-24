@@ -5,17 +5,15 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
-	"gopkg.in/yaml.v3"
+	"github.com/vercel/turbo/cli/internal/yaml"
 )
 
+// YarnRC Represents contents of .yarnrc.yml
 type YarnRC struct {
 	NodeLinker string `yaml:"nodeLinker"`
 }
 
-func IsYarn(backendName string) bool {
-	return backendName == "nodejs-yarn" || backendName == "nodejs-berry"
-}
-
+// IsNMLinker Checks that Yarn is set to use the node-modules linker style
 func IsNMLinker(cwd string) (bool, error) {
 	yarnRC := &YarnRC{}
 

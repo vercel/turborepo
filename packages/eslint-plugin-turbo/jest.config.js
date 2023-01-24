@@ -4,6 +4,7 @@ module.exports = {
   transform: {
     "^.+\\.tsx?$": "ts-jest",
   },
+  testPathIgnorePatterns: [".+/fixtures/.+"],
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
   modulePathIgnorePatterns: ["<rootDir>/node_modules", "<rootDir>/dist"],
   preset: "ts-jest",

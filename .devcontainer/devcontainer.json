@@ -1,7 +1,7 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.233.0/containers/go
 {
-  "name": "turbo (go, node)",
+  "name": "turbo (go, node, rust)",
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
@@ -13,7 +13,7 @@
       "NODE_VERSION": "lts/*"
     }
   },
-  "runArgs": [ "--cap-add=SYS_PTRACE", "--security-opt", "seccomp=unconfined" ],
+  "runArgs": ["--cap-add=SYS_PTRACE", "--security-opt", "seccomp=unconfined"],
 
   // Set *default* container specific settings.json values on container create.
   "settings": {
@@ -34,6 +34,7 @@
     "github.vscode-pull-request-github",
     "golang.go",
     "heybourn.headwind",
+    "rust-lang.rust-analyzer",
     "silvenon.mdx",
     "windmilleng.vscode-go-autotest",
     "yzhang.markdown-all-in-one"
@@ -43,7 +44,7 @@
   // "forwardPorts": [],
 
   // Use 'postCreateCommand' to run commands after the container is created.
-  "postCreateCommand": "go version",
+  "postCreateCommand": "go version && cargo --version", // Invoking `cargo` will eagerly install the toolchain specified in rust-toolchain file
 
   // Comment out to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
   "remoteUser": "vscode",

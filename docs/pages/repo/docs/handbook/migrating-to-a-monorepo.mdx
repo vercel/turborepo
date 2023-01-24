@@ -1,0 +1,77 @@
+import Callout from "../../../../components/Callout";
+
+# Migrating to a Monorepo
+
+Migrating from a multi-repo setup to a monorepo setup can bring enormous benefits for productivity, especially if:
+
+- You're finding it hard to share code between applications
+- You want a unified approach on how your team builds code
+
+It can be daunting to move to a monorepo. But with careful planning, it can go pretty smoothly.
+
+## Folder structure
+
+Let's imagine your multi-repo setup looks like this:
+
+```
+web (repo 1)
+├─ package.json
+
+docs (repo 2)
+├─ package.json
+
+app (repo 3)
+├─ package.json
+```
+
+You've got three repositories, `web`, `docs` and `app`. They don't have any shared dependencies, but you've noticed _lots_ of duplicated code between them.
+
+The best way to organise them in a monorepo would be like so:
+
+```
+my-monorepo
+├─ apps
+│  ├─ app
+│  │  └─ package.json
+│  ├─ docs
+│  │  └─ package.json
+│  └─ web
+│     └─ package.json
+└─ package.json
+```
+
+To start sharing code, you could use the [internal package](/repo/docs/handbook/sharing-code/internal-packages) pattern, resulting in a new `packages` folder:
+
+```
+my-monorepo
+├─ apps
+│  ├─ app
+│  │  └─ package.json
+│  ├─ docs
+│  │  └─ package.json
+│  └─ web
+│     └─ package.json
+├─ packages
+│  └─ shared
+│     └─ package.json
+└─ package.json
+```
+
+<Callout type="idea">
+  If you're planning to move to a monorepo, try sketching out the exact folder
+  structure you're aiming for.
+</Callout>
+
+## Setting up workspaces
+
+Once your apps are in the right folder structure, you'll need to set up workspaces and install your dependencies. Our sections on [setting up workspaces](/repo/docs/handbook/workspaces) should help.
+
+## Handling tasks
+
+Now your workspaces are set up, you'll need to figure out how you're going to run your tasks in your new monorepo. We've got sections on:
+
+1. How to [configure tasks](/repo/docs/core-concepts/monorepos/running-tasks) with Turborepo.
+1. How to set up your [development tasks](/repo/docs/handbook/dev)
+1. How to set up [linting](/repo/docs/handbook/linting)
+1. How to [build your application](/repo/docs/handbook/building-your-app)
+1. How to set up [testing](/repo/docs/handbook/testing)

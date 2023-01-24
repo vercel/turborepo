@@ -5,7 +5,10 @@ import fs from "fs-extra";
 import os from "os";
 import path from "path";
 const isWin = process.platform === "win32";
-const turboPath = path.join(__dirname, "../turbo" + (isWin ? ".exe" : ""));
+const turboPath = path.join(
+  __dirname,
+  "../../target/debug/turbo" + (isWin ? ".exe" : "")
+);
 
 type NPMClient = "npm" | "pnpm6" | "pnpm" | "yarn" | "berry";
 
@@ -198,7 +201,7 @@ importers:
     });
   }
 
-  addPackage(name, internalDeps = []) {
+  addPackage(name, internalDeps: string[] = []) {
     return this.commitFiles({
       [`packages/${name}/build.js`]: `
 const fs = require('fs');
@@ -324,9 +327,7 @@ fs.copyFileSync(
     options?: execa.SyncOptions<string>
   ) {
     const resolvedArgs = [...args];
-    if (process.env.TURBO_USE_DAEMON == "1" && command === "run") {
-      resolvedArgs.push("--experimental-use-daemon");
-    }
+
     return execa.sync(turboPath, [command, ...resolvedArgs], {
       cwd: this.root,
       shell: true,
@@ -348,6 +349,7 @@ fs.copyFileSync(
           shell: true,
           ...options,
         });
+      case "pnpm6":
       case "pnpm":
         return execa.sync("pnpm", [command, ...(args || [])], {
           cwd: this.root,
@@ -355,7 +357,7 @@ fs.copyFileSync(
           ...options,
         });
       case "npm":
-        return execa.sync("npm", ["run", command, ...(args || [])], {
+        return execa.sync("npm", [command, ...(args || [])], {
           cwd: this.root,
           shell: true,
           ...options,

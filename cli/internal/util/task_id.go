@@ -31,7 +31,22 @@ func GetPackageTaskFromId(taskId string) (packageName string, task string) {
 	return arr[0], arr[1]
 }
 
+// RootTaskTaskName returns the task portion of a root task taskID
+func RootTaskTaskName(taskID string) string {
+	return strings.TrimPrefix(taskID, RootPkgName+TaskDelimiter)
+}
+
 // IsPackageTask returns true if a is a package-specific task (e.g. myapp#build)
 func IsPackageTask(task string) bool {
 	return strings.Contains(task, TaskDelimiter)
+}
+
+// StripPackageName removes the package portion of a taskID if it
+// is a package task. Non-package tasks are returned unmodified
+func StripPackageName(taskID string) string {
+	if IsPackageTask(taskID) {
+		_, task := GetPackageTaskFromId(taskID)
+		return task
+	}
+	return taskID
 }

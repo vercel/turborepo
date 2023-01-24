@@ -15,12 +15,18 @@ import (
 
 const ansiEscapeStr = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
 
+// IsTTY is true when stdout appears to be a tty
 var IsTTY = isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
-var IsCI = os.Getenv("CI") == "true" || os.Getenv("BUILD_NUMBER") == "true" || os.Getenv("TEAMCITY_VERSION") != ""
+
+// IsCI is true when we appear to be running in a non-interactive context.
+var IsCI = !IsTTY || os.Getenv("CI") != "" || os.Getenv("BUILD_NUMBER") != "" || os.Getenv("TEAMCITY_VERSION") != ""
 var gray = color.New(color.Faint)
 var bold = color.New(color.Bold)
 var ERROR_PREFIX = color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
 var WARNING_PREFIX = color.New(color.Bold, color.FgYellow, color.ReverseVideo).Sprint(" WARNING ")
+
+// InfoPrefix is a colored string for warning level log messages
+var InfoPrefix = color.New(color.Bold, color.FgWhite, color.ReverseVideo).Sprint(" INFO ")
 
 var ansiRegex = regexp.MustCompile(ansiEscapeStr)
 

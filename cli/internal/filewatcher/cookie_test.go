@@ -6,14 +6,14 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/fs"
 	"gotest.tools/v3/assert"
 )
 
 func TestWaitForCookie(t *testing.T) {
 	logger := hclog.Default()
-	cookieDir := fs.AbsolutePathFromUpstream(t.TempDir())
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	cookieDir := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 
 	jar, err := NewCookieJar(cookieDir, 5*time.Second)
 	assert.NilError(t, err, "NewCookieJar")
@@ -33,8 +33,8 @@ func TestWaitForCookie(t *testing.T) {
 
 func TestWaitForCookieAfterClose(t *testing.T) {
 	logger := hclog.Default()
-	cookieDir := fs.AbsolutePathFromUpstream(t.TempDir())
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	cookieDir := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 
 	jar, err := NewCookieJar(cookieDir, 5*time.Second)
 	assert.NilError(t, err, "NewCookieJar")
@@ -56,8 +56,8 @@ func TestWaitForCookieAfterClose(t *testing.T) {
 
 func TestWaitForCookieTimeout(t *testing.T) {
 	logger := hclog.Default()
-	cookieDir := fs.AbsolutePathFromUpstream(t.TempDir())
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	cookieDir := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 
 	jar, err := NewCookieJar(cookieDir, 10*time.Millisecond)
 	assert.NilError(t, err, "NewCookieJar")
@@ -77,8 +77,8 @@ func TestWaitForCookieTimeout(t *testing.T) {
 
 func TestWaitForCookieWithError(t *testing.T) {
 	logger := hclog.Default()
-	cookieDir := fs.AbsolutePathFromUpstream(t.TempDir())
-	repoRoot := fs.AbsolutePathFromUpstream(t.TempDir())
+	cookieDir := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
 
 	jar, err := NewCookieJar(cookieDir, 10*time.Second)
 	assert.NilError(t, err, "NewCookieJar")

@@ -5,29 +5,19 @@ const path = require("path");
 
 // Map to node os and arch names.
 const nodeOsLookup = {
-  android: "android",
   darwin: "darwin",
-  freebsd: "freebsd",
   linux: "linux",
   windows: "win32",
 };
 
 const nodeArchLookup = {
-  386: "ia32",
   amd64: "x64",
-  arm: "arm",
   arm64: "arm64",
-  mips64le: "mipsel",
-  ppc64le: "ppc64",
 };
 
 const humanizedArchLookup = {
-  386: "32",
   amd64: "64",
-  arm: "arm",
   arm64: "arm64",
-  mips64le: "mips64le",
-  ppc64le: "ppc64le",
 };
 
 const template = require("./template/template.package.json");
@@ -43,10 +33,9 @@ template.version = version;
 
 const outputPath = path.join(__dirname, "build", template.name);
 fs.rmSync(outputPath, { recursive: true, force: true });
-fs.mkdirSync(outputPath, { recursive: true });
+fs.mkdirSync(path.join(outputPath, "bin"), { recursive: true });
 
 if (os === "windows") {
-  fs.mkdirSync(path.join(outputPath, "bin"));
   fs.copyFileSync(
     path.join(__dirname, "template", "bin", "turbo"),
     path.join(outputPath, "bin", "turbo")
@@ -59,4 +48,10 @@ fs.copyFileSync(
 fs.writeFileSync(
   path.join(outputPath, "package.json"),
   JSON.stringify(template, null, 2)
+);
+
+const goBin = os === "windows" ? "go-turbo.exe" : "go-turbo";
+fs.copyFileSync(
+  path.join(__dirname, "..", "..", `dist-${os}-${arch}`, goBin),
+  path.join(outputPath, "bin", goBin)
 );

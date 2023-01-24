@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/vercel/turborepo/cli/internal/turbodprotocol";
+option go_package = "github.com/vercel/turbo/cli/internal/turbodprotocol";
 
 package turbodprotocol;
 
@@ -33,6 +33,7 @@ message StatusResponse {
 message NotifyOutputsWrittenRequest {
   repeated string output_globs = 1;
   string hash = 2;
+  repeated string output_exclusion_globs = 3;
 }
 
 message NotifyOutputsWrittenResponse {}

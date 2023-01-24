@@ -1,23 +1,39 @@
 {
   "$schema": "./docs/public/schema.json",
   "pipeline": {
+    "eslint-plugin-turbo#test": {
+      "dependsOn": ["build"]
+    },
     "test": {
       "outputs": ["coverage/**/*"],
       "dependsOn": ["^build"]
     },
-    "lint": {
+    "//#lint": {
       "outputs": []
     },
     "check-types": {
       "outputs": [],
-      "dependsOn": ["^build"]
+      "dependsOn": ["//#build:ts", "^build"]
     },
     "dev": {
       "cache": false
     },
+    "//#build:ts": {
+      "outputs": ["packages/**/dist"],
+      "dependsOn": []
+    },
     "build": {
       "outputs": ["dist/**/*", ".next/**/*"],
       "dependsOn": ["^build"]
+    },
+    "//#check:prettier": {
+      "dependsOn": []
+    },
+    "//#check:toml": {
+      "dependsOn": []
+    },
+    "//#check:fmt": {
+      "dependsOn": ["//#check:prettier", "//#check:toml", "//#lint"]
     },
     "cli#build": {
       "outputs": ["turbo", "turbo.exe"],
@@ -26,13 +42,23 @@
     "schema": {
       "outputs": ["public/schema.json"]
     },
+    "rss": {
+      "outputs": ["public/feed.xml"]
+    },
     "create-turbo#test": {
       "dependsOn": ["create-turbo#build"],
       "outputs": []
     },
     "docs#build": {
+      "env": [
+        "SENTRY_DSN",
+        "TURBOREPO_SFDC_CAMPAIGN_ID",
+        "TRAY_URL",
+        "CONVERTKIT_API_KEY",
+        "CONVERTKIT_API_SECRET"
+      ],
       "outputs": [".next/**"],
-      "dependsOn": ["^build", "docs#schema"]
+      "dependsOn": ["^build", "docs#rss", "docs#schema"]
     },
     "cli#e2e": {
       "outputs": [],
@@ -40,8 +66,22 @@
         "cli/**/*.go",
         "cli/go.mod",
         "cli/go.sum",
-        "cli/scripts/e2e/e2e.ts"
+        "cli/scripts/e2e/e2e.ts",
+        "shim/**/*.rs"
       ]
+    },
+    "cli#e2e-prebuilt": {
+      "outputs": [],
+      "inputs": [
+        "cli/**/*.go",
+        "cli/go.mod",
+        "cli/go.sum",
+        "cli/scripts/e2e/e2e.ts",
+        "shim/**/*.rs"
+      ]
+    },
+    "cli#integration-tests": {
+      "outputs": []
     },
     "//#run-example": {
       "outputs": [],

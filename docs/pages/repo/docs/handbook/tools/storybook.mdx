@@ -1,0 +1,223 @@
+import { Tabs, Tab } from '../../../../../components/Tabs'
+import Callout from '../../../../../components/Callout'
+
+# Using Storybook with Turborepo
+
+[Storybook](https://storybook.js.org/) is a popular way to build UI components in an isolated environment. By putting Storybook into your Turborepo, you can easily develop your design system right alongside your applications. If you'd rather use a template, this guide is walking through how to build [this Storybook/Turborepo template](https://vercel.com/templates/react/turborepo-design-system) on Vercel.
+
+## Guide
+
+This guide shows you how to:
+
+1. Set up Storybook in a monorepo
+2. Create your first story
+3. Ensure Storybook works with the rest of your tasks
+
+### 1. Create your monorepo
+
+If you don't have an existing project, use our [quickstart](/repo/docs/getting-started/create-new) to create a new monorepo.
+
+```shell
+npx create-turbo@latest
+```
+
+### 2. Add a new `workshop` app
+
+Storybook needs a builder to use so we will create a Vite app.
+
+<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+  <Tab>
+    ```shell
+    cd apps
+    npm create vite
+    ```
+  </Tab>
+  <Tab>
+    ```shell
+    cd apps
+    yarn create vite
+    ```
+  </Tab>
+  <Tab>
+    ```shell
+    cd apps
+    pnpm create vite
+    ```
+  </Tab>
+</Tabs>
+
+Follow the prompts to create an app named "workshop" as a React, TypeScript app.
+
+Next, we need to scaffold Storybook:
+
+<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+  <Tab>
+    ```shell
+    cd workshop
+    npx sb init --skip-install
+    npm install --save-dev @storybook/cli   # Manually install deps and CLI
+    ```
+
+    <Callout type="info">You may be prompted to enable the `--legacy-peer-deps` flag. This flag is required for Storybook to work in a monorepo.</Callout>
+
+  </Tab>
+  <Tab>
+    ```shell
+    cd workshop
+    npx storybook init
+    ```
+  </Tab>
+  <Tab>
+      <p className="nx-mt-6 nx-leading-7">If you're using `pnpm`, you'll need to add an `.npmrc` at the root of your monorepo:</p>
+      ```txt filename=".npmrc"
+      auto-install-peers=true
+      legacy-peer-deps=true
+      node-linker=hoisted
+      ```
+      Then, we scaffold Storybook and install its dependencies manually:
+
+      ```shell
+      cd workshop
+      pnpx sb init --skip-install
+      pnpm install --save-dev @storybook/cli   # Manually install deps and CLI
+      ```
+
+  </Tab>
+</Tabs>
+
+### 3. Set up a story for your Button component
+
+The Storybook scaffold creates some stories and React components in the `/src/stories` directory. To create a story for the button from your `ui` package, we will replace the import in `Button.stories.tsx` with our own.
+
+1. Update the Button in your `ui` package to match the story's specifications.
+
+```jsx filename="packages/ui/Button.tsx"
+interface Props {
+  primary?: boolean;
+  size?: "small" | "large";
+  label?: string;
+}
+
+export const Button = ({
+  primary = false,
+  label = "Boop",
+  size = "small",
+}: Props) => {
+  return (
+    <button
+      style={{
+        backgroundColor: primary ? "red" : "blue",
+        fontSize: size === "large" ? "24px" : "14px",
+      }}
+    >
+      {label}
+    </button>
+  );
+};
+```
+
+2. Add your `ui` package to the `workshop` app:
+
+<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+  <Tab>
+```json filename="apps/workshop/package.json"
+{
+  // ...
+  {
+    "dependencies": {
+      "ui": "*",
+      // ...
+    }
+  }
+}
+```
+
+And `npm install` one more time to make sure that your `ui` package is installed in the `workshop` app.
+
+  </Tab>
+  <Tab>
+```json filename="apps/workshop/package.json"
+{
+  // ...
+  {
+    "dependencies": {
+      "ui": "*",
+      // ...
+    }
+  }
+}
+```
+
+And `yarn install` to make sure that your `ui` package is installed in the `workshop` app.
+
+  </Tab>
+  <Tab>
+```json filename="apps/workshop/package.json"
+{
+  // ...
+  {
+    "dependencies": {
+      "ui": "workspace:*",
+      // ...
+    }
+  }
+}
+```
+And `pnpm install` one more time to make sure that your `ui` package is installed in the `workshop` app.
+  </Tab>
+</Tabs>
+
+3. Replace the `Button` import in the `Button.stories.tsx` so that it comes from your `ui` package:
+
+```jsx filename="apps/workshop/src/stories/Button.stories.tsx"
+import { Button } from 'ui'
+```
+
+### 4. Align tasks
+
+The last thing that we need to do is make sure that Storybook is lined up with the rest of your tasks:
+
+```json filename="apps/workshop/package.json"
+{
+  // ...
+  "scripts": {
+    "dev": "start-storybook -p 6006",
+    "build": "build-storybook"
+  }
+}
+```
+
+To ensure build caching, you'll first need to add `storybook-static` to your `.gitignore`. Then, add `storybook-static` to the outputs of your `turbo.json` build task:
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "build": {
+      "outputs": [
+        "dist/**",
++       "storybook-static/**"
+      ]
+    }
+  }
+}
+```
+
+Your `dev` and `build` tasks will now include Storybook, allowing you to develop your Storybook alongside your applications and enjoy cached builds with the rest of your applications.
+
+## Deploy on Vercel
+
+Let's deploy your Storybook project.
+
+In the "Build and Development Settings" on the General tab of your project settings, change your "Output Directory" to `storybook-static`.
+
+Additionally, at the time of this writing, Storybook cannot be ran on Node 18, the Vercel default. In the `package.json` of your `workshop` app, add an `engines` field to make sure that this project runs on Node 16:
+
+```json filename="apps/workshop/package.json"
+{
+  // ...
+  "engines": {
+    "node": "16"
+  }
+}
+
+```

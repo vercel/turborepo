@@ -1,0 +1,42 @@
+[package]
+name = "turbo-tasks"
+version = "0.1.0"
+description = "TBD"
+license = "MPL-2.0"
+edition = "2021"
+
+[lib]
+bench = false
+
+[features]
+default = []
+assert_task_state = []
+tokio_tracing = ["tokio/tracing"]
+log_function_stats = []
+hanging_detection = []
+
+[dependencies]
+anyhow = "1.0.47"
+auto-hash-map = { path = "../auto-hash-map" }
+concurrent-queue = "1.2.2"
+dashmap = "5.4.0"
+erased-serde = "0.3.20"
+event-listener = "2.5.3"
+futures = "0.3.25"
+indexmap = { workspace = true, features = ["serde"] }
+mopa = "0.2.0"
+nohash-hasher = "0.2.0"
+once_cell = "1.13.0"
+parking_lot = "0.12.1"
+pin-project-lite = "0.2.9"
+regex = "1.6.0"
+serde = { version = "1.0.136", features = ["rc", "derive"] }
+serde_json = "1.0.85"
+serde_regex = "1.1.0"
+thiserror = "1.0.31"
+tokio = { version = "1.21.2", features = ["full"] }
+turbo-tasks-hash = { path = "../turbo-tasks-hash" }
+turbo-tasks-macros = { path = "../turbo-tasks-macros" }
+
+[build-dependencies]
+turbo-tasks-build = { path = "../turbo-tasks-build" }

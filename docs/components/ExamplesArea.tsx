@@ -11,7 +11,7 @@ export const ExamplesArea = () => {
               fundamentals.`,
           name: "Basic",
         }}
-        href="https://github.com/vercel/turborepo/tree/main/examples/basic"
+        href="https://github.com/vercel/turbo/tree/main/examples/basic"
       ></DetailedFeatureLink>
       <DetailedFeatureLink
         feature={{
@@ -20,7 +20,7 @@ export const ExamplesArea = () => {
             "Unify your site's look and feel by sharing a design system across multiple apps.",
           name: "Design System",
         }}
-        href="https://github.com/vercel/turborepo/tree/main/examples/design-system"
+        href="https://github.com/vercel/turbo/tree/main/examples/design-system"
       ></DetailedFeatureLink>
       <DetailedFeatureLink
         feature={{
@@ -29,7 +29,7 @@ export const ExamplesArea = () => {
             "Learn how to integrate with Tailwind, the popular CSS framework.",
           name: "With Tailwind CSS",
         }}
-        href="https://github.com/vercel/turborepo/tree/main/examples/with-tailwind"
+        href="https://github.com/vercel/turbo/tree/main/examples/with-tailwind"
       ></DetailedFeatureLink>
       <DetailedFeatureLink
         feature={{
@@ -38,7 +38,7 @@ export const ExamplesArea = () => {
             "Want to see a super-complex, kitchen-sink example? Includes multiple frameworks, both frontend and backend.",
           name: "Kitchen Sink",
         }}
-        href="https://github.com/vercel/turborepo/blob/main/examples/kitchen-sink"
+        href="https://github.com/vercel/turbo/blob/main/examples/kitchen-sink"
       ></DetailedFeatureLink>
     </div>
   );

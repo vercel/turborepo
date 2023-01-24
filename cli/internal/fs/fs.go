@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // https://github.com/thought-machine/please/blob/master/src/fs/fs.go
@@ -77,6 +77,13 @@ func CopyFile(from *LstatCachedFile, to string) error {
 		}
 		if err := EnsureDir(to); err != nil {
 			return err
+		}
+		if _, err := os.Lstat(to); err == nil {
+			// target link file exist, should remove it first
+			err := os.Remove(to)
+			if err != nil {
+				return err
+			}
 		}
 		return os.Symlink(target, to)
 	}

@@ -6,7 +6,7 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "dev": "nodemon --exec \"node -r esbuild-register ./src/index.ts\" -e .ts",
-    "lint": "tsc --noEmit && TIMING=1 eslint src/**/*.ts* --fix",
+    "lint": "tsc --noEmit && TIMING=1 eslint \"src/**/*.ts*\"",
     "start": "node -r esbuild-register ./src/index.ts",
     "test": "jest --detectOpenHandles"
   },

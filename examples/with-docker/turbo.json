@@ -1,20 +1,22 @@
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*local"],
   "pipeline": {
     "build": {
       "outputs": ["dist/**", ".next/**", "public/dist/**"],
-      "dependsOn": ["^build", "$NEXT_PUBLIC_API_HOST"]
+      "dependsOn": ["^build"],
+      "env": ["NEXT_PUBLIC_API_HOST"]
     },
     "test": {
       "outputs": ["coverage/**"],
       "dependsOn": []
     },
     "lint": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "dependsOn": ["^build"]
     },
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     },
     "clean": {
       "cache": false

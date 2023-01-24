@@ -8,7 +8,7 @@ export function checkGitStatus(force: boolean) {
     clean = isGitClean.sync(process.cwd());
     errorMessage = "Git directory is not clean";
   } catch (err: any) {
-    if (err && err.stderr && err.stderr.indexOf("Not a git repository") >= 0) {
+    if (err && err.stderr && err.stderr.indexOf("not a git repository") >= 0) {
       clean = true;
     }
   }

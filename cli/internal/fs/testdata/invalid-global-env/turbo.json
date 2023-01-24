@@ -1,0 +1,11 @@
+{
+  // Both global declarations with duplicates
+  "globalDependencies": ["$FOO", "$BAR", "somefile.txt", "somefile.txt"],
+  // some invalid values
+  "globalEnv": ["FOO", "BAZ", "$QUX"],
+  "pipeline": {
+    "task1": {
+      "dependsOn": ["$A"]
+    }
+  }
+}

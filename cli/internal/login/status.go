@@ -3,11 +3,12 @@ package login
 import (
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/pkg/errors"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 var (
 	errOverage            = errors.New("usage limit")
+	errPaused             = errors.New("spending paused")
 	errNeedCachingEnabled = errors.New("caching not enabled")
 	errTryAfterEnable     = errors.New("link after enabling caching")
 )

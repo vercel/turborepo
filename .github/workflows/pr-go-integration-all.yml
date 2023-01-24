@@ -1,0 +1,16 @@
+name: Turborepo Integration tests
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - run: 'echo "No test run required"'

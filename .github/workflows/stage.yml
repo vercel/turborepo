@@ -1,0 +1,43 @@
+name: Create Release Branch
+
+# TODO: Once we have confidence with the release process, add an
+# input to allow automatically kicking off the downstream release.
+on:
+  workflow_dispatch:
+    inputs:
+      increment:
+        description: "SemVer Increment (prerelease = bump canary)"
+        required: true
+        default: "prerelease"
+        type: choice
+        options:
+          - prerelease
+          - prepatch
+          - preminor
+          - premajor
+          - patch
+          - minor
+          - major
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.TURBOBOT }}
+      - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+      - name: Configure git
+        run: |
+          git config --global user.name 'Turbobot'
+          git config --global user.email 'turbobot@vercel.com'
+      - name: Version
+        run: |
+          ./scripts/version.js ${{ inputs.increment }}
+          cat version.txt
+      - name: Stage Commit
+        run: cd cli && make stage-release && echo "STAGE_BRANCH=$(git branch --show-current)" >> $GITHUB_ENV
+      - name: Show Stage Commit
+        run: echo "${{ env.STAGE_BRANCH }}"

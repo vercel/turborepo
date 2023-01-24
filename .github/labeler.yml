@@ -1,0 +1,39 @@
+# areas
+"area: examples":
+  - "examples/*"
+  - "examples/**/*"
+
+"area: turborepo":
+  - "cli/*"
+  - "cli/**/*"
+
+"area: turbopack":
+  - "crates/*"
+  - "crates/**/*"
+
+"area: site":
+  - any: ["docs/*"]
+  - all: ["docs/**/*", "!docs/**/*.mdx"]
+
+"area: ci":
+  - .github/*
+  - .github/**/*
+
+"area: docs":
+  - any: ["docs/*"]
+  - all: ["docs/**/*", "docs/**/*.mdx"]
+
+# packages
+"pkg: create-turbo":
+  - "packages/create-turbo/*"
+  - "packages/create-turbo/**/*"
+
+"pkg: turbo-eslint":
+  - "packages/eslint-config-turbo/*"
+  - "packages/eslint-config-turbo/**/*"
+  - "packages/eslint-plugin-turbo/*"
+  - "packages/eslint-plugin-turbo/**/*"
+
+"pkg: turbo-ignore":
+  - "packages/turbo-ignore/*"
+  - "packages/turbo-ignore/**/*"

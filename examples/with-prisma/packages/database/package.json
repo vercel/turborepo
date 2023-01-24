@@ -18,7 +18,7 @@
     "dev": "tsup --watch",
     "format": "prisma format",
     "generate": "prisma generate",
-    "lint": "eslint ./src --fix",
+    "lint": "TIMING=1 eslint \"src/**/*.ts\"",
     "prebuild": "npm run generate",
     "predev": "npm run generate",
     "studio": "prisma studio"

@@ -1,0 +1,31 @@
+# Troubleshooting
+
+## Handling mismatched package versions
+
+As your monorepo grows, you may end up with different versions of packages in different workspaces.
+
+For instance, `app` may use `react@18.0.0`, but `web` may use `react@17.0.0`. This is especially true when you've just [migrated from a multi-repo setup](/repo/docs/handbook/migrating-to-a-monorepo).
+
+Mis-matched dependencies in different repositories can mean that code runs unexpectedly. React, for instance, will error if there is more than one version installed.
+
+#### `@manypkg/cli`
+
+Our recommended method for handling this problem is with [`@manypkg/cli`](https://www.npmjs.com/package/@manypkg/cli) - a CLI which can ensure that your dependencies match across your repositories.
+
+Here's a quick example. At the root of your `package.json`, add a `postinstall` script.
+
+```json filename="package.json"
+{
+  "scripts": {
+    // This will check your dependencies match
+    // after each installation
+    "postinstall": "manypkg check"
+  },
+  "dependencies": {
+    // Make sure you install @manypkg/cli
+    "@manypkg/cli": "latest"
+  }
+}
+```
+
+You can also run `manypkg fix` to automatically update them throughout your repository.

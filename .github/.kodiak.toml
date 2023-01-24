@@ -11,6 +11,16 @@ optimistic_updates = true
 prioritize_ready_to_merge = true
 notify_on_conflict = false
 
+[update]
+# https://kodiakhq.com/docs/config-reference#updatealways
+# always "update" (i.e. merge main branch into PR), if it has the automerge_label.
+# Without this, only branches that are passing CI will get updated.
+# The benefit of this config is that PRs that we want to automerge, but
+# have failed because the test suite is flaky will get stuck, unless someone
+# presses the Update Branch button manually, or re-triggers the Github workflow
+# for tests again. This causes delays in getting easy PRs in.
+always = true
+
 [merge.message]
 title = "pull_request_title"
 body = "pull_request_body"

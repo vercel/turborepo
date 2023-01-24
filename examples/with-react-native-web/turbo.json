@@ -1,16 +1,16 @@
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*local"],
   "pipeline": {
     "build": {
       "outputs": ["dist/**", ".next/**"],
       "dependsOn": ["^build"]
     },
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "clean": {
       "cache": false
     }

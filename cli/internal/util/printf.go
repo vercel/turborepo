@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/vercel/turborepo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/ui"
 )
 
 // initPrintf sets up the replacements used by printf.

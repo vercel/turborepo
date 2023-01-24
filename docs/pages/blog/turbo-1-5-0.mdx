@@ -1,0 +1,142 @@
+---
+title: Turborepo 1.5
+date: 2022/09/19
+description: Turborepo 1.5 brings the Monorepo Handbook, drops the 'run' command, improves pruning, and much more!
+tag: web development
+ogImage: /images/blog/turbo-1-5-0/twitter-card.png
+---
+
+# Turborepo 1.5
+
+import { Authors } from "../../components/Authors";
+import Callout from "../../components/Callout";
+import Date from "../../components/blog/Date";
+
+<Date>
+  Monday, September 19th, 2022
+</Date>
+
+<Authors
+  authors={[
+    "mattpocock",
+    "gregsoltis",
+    "nathanhammond",
+    "tomknickman",
+    "anthonyshew",
+    "jaredpalmer",
+    "mehulkar",
+    "chrisolszewski",
+  ]}
+/>
+
+Turborepo 1.5 is a **huge leap forward for our documentation and DX**, as well as bringing big improvements to `turbo prune`:
+
+- [**The Monorepo Handbook**](#the-monorepo-handbook): We've built the missing manual for your monorepo - a guide on workspaces, code sharing, integrating common tools and much more.
+- [**Drop the `run`**](#drop-the-run): `turbo run <task>` can now be shortened to `turbo <task>`
+- [**`turbo prune` now supports pnpm and yarn 2+**](#prune-now-supported-on-pnpm-and-yarn-2): Pruning your monorepo is now supported in `pnpm` and `yarn@berry`.
+- [**Improved environment variables in `turbo.json`**](#environment-variables-in-turbojson): Environment variables are now first-class citizens in your Turborepo pipeline configuration.
+- [**Changes to `package.json` hashing**](#changes-to-packagejson-hashing): We've improved how we hash `package.json` when running tasks.
+
+Update today by running `npm install turbo@latest`.
+
+## The Monorepo Handbook
+
+Setting up a monorepo for the first time often means navigating a lot of new concepts. You'll need to understand workspaces, package installation, sharing code and dependency management - and a lot more.
+
+This often meant that folks who wanted to set up a monorepo from scratch had to piece information together from different documentation sites. First `pnpm`, then `tsup`, then back to `changesets`, then back to Turborepo for dessert.
+
+We want to fill this gap with [the Monorepo Handbook](/repo/docs/handbook). We've built guides on how to integrate all the tools you'll need to make ship happen with your monorepo, including guides on:
+
+- [Installing Packages](/repo/docs/handbook/package-installation)
+- [Linting](/repo/docs/handbook/linting)
+- [Development Tasks](/repo/docs/handbook/dev)
+- [Building Apps](/repo/docs/handbook/building-your-app)
+- [Publishing Packages](/repo/docs/handbook/publishing-packages)
+
+## Drop the `run`
+
+<iframe
+  className="max-w-xl h-72 sm:h-96 w-full mt-6"
+  src="https://www.youtube.com/embed/PEgk2v6KntY"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+></iframe>
+
+You can now run tasks with the Turborepo CLI using `turbo <task>`.
+
+```diff
+- turbo run build
++ turbo build
+
+
+- turbo run lint build test
++ turbo lint build test
+```
+
+If your task name conflicts with a built-in `turbo` subcommand, we'll run our subcommand instead. That means you shouldn't name your tasks things like `prune`, `run`, or `login` - since those are built-in subcommands.
+
+`turbo run <task>` will continue to work, and there are no plans to deprecate it.
+
+## Prune now supported on pnpm and yarn 2+
+
+We're delighted to announce that [`turbo prune`](/repo/docs/reference/command-line-reference#turbo-prune---scopetarget) now supports in pnpm, yarn, and yarn 2+.
+
+You can use `turbo prune` to create a pruned subset of your monorepo with a dedicated lockfile--with the correct dependencies needed for a given target application and its dependencies. This is especially useful for using efficiently Turborepo within a Docker image.
+
+As part of the new handbook, we've also added a section on using `turbo prune` to [build docker images](/repo/docs/handbook/deploying-with-docker).
+
+Check out our previous [blog on prune](/blog/turbo-0-4-0#experimental-pruned-workspaces) to learn more.
+
+## Environment variables in `turbo.json`
+
+We've introduced two new keys to `turbo.json` - `env` and `globalEnv`. These allow environment variables to be configured _separately_ from tasks:
+
+```diff filename="turbo.json"
+{
+  "globalDependencies": [
+-   "$DATABASE_URL"
+  ],
++ "globalEnv": [
++   "DATABASE_URL"
++ ],
+  "pipeline": {
+    "build": {
+      "dependsOn": [
+-       "$BUILD_ENV"
+      ],
++     "env": [
++       "BUILD_ENV"
++     ]
+    }
+  }
+}
+```
+
+`globalEnv` and `env` allow you to specify a list of environment variables _without_ `$` prefixes. This makes the configuration file significantly easier to read. Read more [in our updated docs](/repo/docs/core-concepts/caching#altering-caching-based-on-environment-variables).
+
+To help migrate from the previous syntax, we've prepared a codemod. You can run `npx @turbo/codemod migrate-env-var-dependencies`.
+
+This work builds on the [automatic env variable detection](/blog/turbo-1-4-0) we added in 1.4.0.
+
+## Changes to `package.json` hashing
+
+The `package.json` file in each workspace is now _always_ considered an input for tasks in that workspace. This means that if you change the _definition_ for a task in `package.json`, we want to invalidate any caches from the previous definition.
+
+This also counts for the `package.json` in the root. Changes to the root `package.json` will invalidate tasks in the root workspace.
+
+This helps make Turborepo's cache a bit smarter, and less likely to trip up when task definitions change.
+
+## Community
+
+Since releasing [Turborepo v1.4 in August](/blog/turbo-1-4-0), we've seen incredible adoption and community growth:
+
+- [9.5k+ GitHub Stars](https://github.com/vercel/turbo)
+- [440k weekly NPM downloads](https://www.npmjs.com/package/turbo)
+- 15 years of compute time saved through [Remote Caching on Vercel](https://vercel.com/docs/concepts/monorepos/remote-caching), saving over a 1 year per week, up 2x since July
+
+Turborepo is the result of the combined work of all of our contributors including our core team.
+
+This release was brought to you by the contributions of: @7flash, @afady, @alexander-young, @atilafassina, @bguedes-moz, @bobaaaaa, @brunojppb, @chris-olszewski, @DoctorJohn, @erj826, @futantan, @gsoltis, @HosseinAgha, @ivov, @jaredpalmer, @joelhooks, @knownasnaffy, @laurentlucian, @leerob, @MarceloAlves, @mattpocock, @mauricekleine, @mehulkar, @Misikir, @nareshbhatia, @nathanhammond, @pakaponk, @PhentomPT, @renovate, @ruisaraiva19, @samuelhorn, @shemayas, @shuding, @t-i-0414, @theurgi, @tknickman, @yanmao-cc, and more!
+
+Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice.

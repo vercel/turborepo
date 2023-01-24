@@ -1,0 +1,124 @@
+import { Tabs, Tab } from "../../../../../components/Tabs";
+
+# ESLint in a monorepo
+
+## Sharing config
+
+Sharing an ESLint config across workspaces can be a boon to productivity by making all your workspaces more consistent.
+
+Let's imagine a monorepo like this:
+
+```
+apps
+├─ docs
+│  ├─ package.json
+│  └─ .eslintrc.js
+└─ web
+   ├─ package.json
+   └─ .eslintrc.js
+packages
+└─ eslint-config-custom
+   ├─ index.js
+   └─ package.json
+```
+
+We've got a package called `eslint-config-custom`, and two applications, each with their own `.eslintrc.js`.
+
+### Our `eslint-config-custom` package
+
+Our `eslint-config-custom` file contains only a single file, `index.js`. It looks like this.
+
+```js filename="packages/eslint-config-custom/index.js"
+module.exports = {
+  extends: ["next", "turbo", "prettier"],
+  rules: {
+    "@next/next/no-html-link-for-pages": "off",
+    "react/jsx-key": "off",
+  },
+};
+```
+
+It's a typical ESLint config, nothing fancy.
+
+The `package.json` looks like this:
+
+```json filename="packages/eslint-config-custom/package.json"
+{
+  "name": "eslint-config-custom",
+  "main": "index.js",
+  "dependencies": {
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "eslint-config-prettier": "latest",
+    "eslint-plugin-react": "latest",
+    "eslint-config-turbo": "latest"
+  }
+}
+```
+
+Two things are notable here. First, the `main` field points to `index.js`. This allows files to easily [import this config](/repo/docs/handbook/sharing-code#anatomy-of-a-package).
+
+Secondly, the ESLint dependencies are all listed here. This is useful - it means we don't need to re-specify the dependencies inside the apps which import `eslint-config-custom`.
+
+### How to use the `eslint-config-custom` package
+
+In our `web` app, we first need to add `eslint-config-custom` as a dependency.
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+```jsonc filename="apps/web/package.json"
+{
+  "dependencies": {
+    "eslint-config-custom": "*"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```jsonc filename="apps/web/package.json"
+{
+  "dependencies": {
+    "eslint-config-custom": "*"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```jsonc filename="apps/web/package.json"
+{
+  "dependencies": {
+    "eslint-config-custom": "workspace:*"
+  }
+}
+```
+  </Tab>
+</Tabs>
+
+We can then import the config like this:
+
+```js filename="apps/web/.eslintrc.js"
+module.exports = {
+  root: true,
+  extends: ["custom"],
+};
+```
+
+By adding `custom` to our `extends` array, we're telling ESLint to look for a package called `eslint-config-custom` - and it finds our workspace.
+
+### Summary
+
+This setup ships by default when you [create a new monorepo](/repo/docs/getting-started/create-new) with `npx create-turbo@latest`. You can also look at [our basic example](https://github.com/vercel/turbo/tree/main/examples/basic) to see a working version.
+
+## Setting up a `lint` task
+
+We recommend following the setup in the [`basics`](/repo/docs/handbook/linting#running-tasks) section, with one alteration.
+
+Each `package.json` script should look like this:
+
+```json filename="packages/*/package.json"
+{
+  "scripts": {
+    "lint": "eslint"
+  }
+}
+```

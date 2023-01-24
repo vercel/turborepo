@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 func getEnvMap() map[string]string {

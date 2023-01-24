@@ -4,12 +4,12 @@ import (
 	"io/fs"
 	"os"
 
-	"github.com/vercel/turborepo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 // LstatCachedFile maintains a cache of file info, mode and type for the given Path
 type LstatCachedFile struct {
-	Path     turbopath.AbsolutePath
+	Path     turbopath.AbsoluteSystemPath
 	fileInfo fs.FileInfo
 	fileMode *fs.FileMode
 	fileType *fs.FileMode

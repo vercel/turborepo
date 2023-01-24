@@ -1,0 +1,30 @@
+[package]
+name = "turbopack-node"
+version = "0.1.0"
+description = "TBD"
+license = "MPL-2.0"
+edition = "2021"
+autobenches = false
+
+[lib]
+bench = false
+
+[dependencies]
+anyhow = "1.0.47"
+futures = "0.3.25"
+indexmap = { workspace = true, features = ["serde"] }
+mime = "0.3.16"
+regex = "1.6.0"
+serde = "1.0.136"
+serde_json = "1.0.85"
+serde_qs = "0.10.1"
+tokio = { version = "1.21.2", features = ["full"] }
+turbo-tasks = { path = "../turbo-tasks" }
+turbo-tasks-fs = { path = "../turbo-tasks-fs" }
+turbopack-core = { path = "../turbopack-core" }
+turbopack-dev-server = { path = "../turbopack-dev-server" }
+turbopack-ecmascript = { path = "../turbopack-ecmascript" }
+url = "2.2.2"
+
+[build-dependencies]
+turbo-tasks-build = { path = "../turbo-tasks-build" }

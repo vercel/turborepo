@@ -5,6 +5,8 @@ run:
   timeout: 5m
   modules-download-mode: readonly
   go: 1.17
+  skip-dirs:
+    - internal/yaml # vendored upstream library
   skip-files:
     - internal/chrometracing/chrometracing.go # vendored upstream library
 

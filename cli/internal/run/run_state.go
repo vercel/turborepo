@@ -2,13 +2,14 @@ package run
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
-	"github.com/vercel/turborepo/cli/internal/chrometracing"
-	"github.com/vercel/turborepo/cli/internal/fs"
-	"github.com/vercel/turborepo/cli/internal/ui"
-	"github.com/vercel/turborepo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/chrometracing"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/mitchellh/cli"
 )
@@ -62,6 +63,8 @@ type RunState struct {
 	Attempted int
 
 	startedAt time.Time
+
+	profileFilename string
 }
 
 // NewRunState creates a RunState instance for tracking events during the
@@ -70,12 +73,14 @@ func NewRunState(startedAt time.Time, tracingProfile string) *RunState {
 	if tracingProfile != "" {
 		chrometracing.EnableTracing()
 	}
+
 	return &RunState{
-		Success:   0,
-		Failure:   0,
-		Cached:    0,
-		Attempted: 0,
-		state:     make(map[string]*BuildTargetState),
+		Success:         0,
+		Failure:         0,
+		Cached:          0,
+		Attempted:       0,
+		state:           make(map[string]*BuildTargetState),
+		profileFilename: tracingProfile,
 
 		startedAt: startedAt,
 	}
@@ -88,7 +93,9 @@ func (r *RunState) Run(label string) func(outcome RunResultStatus, err error) {
 		Label:  label,
 		Status: TargetBuilding,
 	}, label, true)
+
 	tracer := chrometracing.Event(label)
+
 	return func(outcome RunResultStatus, err error) {
 		defer tracer.Done()
 		now := time.Now()
@@ -136,14 +143,19 @@ func (r *RunState) add(result *RunResult, previous string, active bool) {
 
 // Close finishes a trace of a turbo run. The tracing file will be written if applicable,
 // and run stats are written to the terminal
-func (r *RunState) Close(terminal cli.Ui, filename string) error {
-	if err := writeChrometracing(filename, terminal); err != nil {
+func (r *RunState) Close(terminal cli.Ui) error {
+	if err := writeChrometracing(r.profileFilename, terminal); err != nil {
 		terminal.Error(fmt.Sprintf("Error writing tracing data: %v", err))
 	}
 
 	maybeFullTurbo := ""
 	if r.Cached == r.Attempted && r.Attempted > 0 {
 		maybeFullTurbo = ui.Rainbow(">>> FULL TURBO")
+	}
+
+	if r.Attempted == 0 {
+		terminal.Output("") // Clear the line
+		terminal.Warn("No tasks were executed as part of this run.")
 	}
 	terminal.Output("") // Clear the line
 	terminal.Output(util.Sprintf("${BOLD} Tasks:${BOLD_GREEN}    %v successful${RESET}${GRAY}, %v total${RESET}", r.Cached+r.Success, r.Attempted))
@@ -167,12 +179,16 @@ func writeChrometracing(filename string, terminal cli.Ui) error {
 	if err := chrometracing.Close(); err != nil {
 		terminal.Warn(fmt.Sprintf("Failed to flush tracing data: %v", err))
 	}
-	root, err := fs.GetCwd()
+	cwdRaw, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	root, err := fs.GetCwd(cwdRaw)
 	if err != nil {
 		return err
 	}
 	// chrometracing.Path() is absolute by default, but can still be relative if overriden via $CHROMETRACING_DIR
-	// so we have to account for that before converting to turbopath.AbsolutePath
+	// so we have to account for that before converting to turbopath.AbsoluteSystemPath
 	if err := fs.CopyFile(&fs.LstatCachedFile{Path: fs.ResolveUnknownPath(root, outputPath)}, name); err != nil {
 		return err
 	}

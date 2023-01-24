@@ -1,0 +1,231 @@
+.benchmarkTurbo {
+  background: linear-gradient(288.43deg, #ff1e56 28.29%, #9c51a1 78.78%);
+  box-shadow: 0px 0px 16px #f02662;
+  :global(.light) & {
+    background: linear-gradient(
+      268.86deg,
+      #ff1e56 -5.68%,
+      #d67fdc 107.63%,
+      #9c51a1 107.64%
+    );
+    box-shadow: none;
+  }
+}
+
+.benchmarkActiveTab {
+  background: radial-gradient(
+      50% 50% at 50% 100%,
+      rgba(255, 255, 255, 0.2) 0%,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.12)),
+    radial-gradient(
+      128.57% 128.57% at 50% 0%,
+      rgba(255, 255, 255, 0.1) 0%,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    radial-gradient(
+      100% 427.04% at 100% 0%,
+      rgba(255, 255, 255, 0.1) 0%,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    radial-gradient(
+      100% 462.63% at 0% 0%,
+      rgba(255, 255, 255, 0.1) 0%,
+      rgba(255, 255, 255, 0) 100%
+    );
+  :global(.light) & {
+    background: linear-gradient(
+        0deg,
+        rgba(255, 255, 255, 0.8),
+        rgba(255, 255, 255, 0.8)
+      ),
+      radial-gradient(
+        50% 50% at 49.66% 0%,
+        rgba(255, 255, 255, 0.1) 0%,
+        rgba(255, 255, 255, 0) 100%
+      );
+  }
+}
+
+.benchmarkTurboLabel {
+  background: linear-gradient(288.43deg, #ff1e56 28.29%, #9c51a1 78.78%);
+  color: transparent;
+  background-clip: text;
+  :global(.light) & {
+    background: linear-gradient(
+        268.86deg,
+        #ff1e56 -5.68%,
+        #d67fdc 107.63%,
+        #9c51a1 107.64%
+      ),
+      linear-gradient(288.43deg, #ff1e56 28.29%, #9c51a1 78.78%);
+    color: transparent;
+    background-clip: text;
+  }
+}
+
+.benchmark {
+  background: linear-gradient(270deg, #5c5c5c 0%, #1f1f1f 100%);
+  :global(.light) & {
+    background: linear-gradient(89.98deg, #e0e0e0 0.01%, #9c9c9c 99.49%);
+  }
+}
+
+.barBorder {
+  border: rgba(255, 255, 255, 0.4) 1px solid;
+  :global(.light) & {
+    border: rgba(0, 0, 0, 0.6) 1px solid;
+  }
+}
+
+.tooltipArrow {
+  display: block;
+  border-left: 8px solid transparent;
+  border-bottom: 8px solid #333333;
+  border-right: 8px solid transparent;
+  :global(.light) & {
+    border-bottom: 8px solid #f5f5f5;
+  }
+}
+.translatingGlow {
+  background: linear-gradient(32deg, #2a8af6 0%, #a853ba 50%, #e92a67 100%);
+  background-size: 200% 200%;
+  animation: translateGlow 7s linear infinite;
+  will-change: filter;
+}
+
+@keyframes translateGlow {
+  0% {
+    background-position: -20% -20%;
+  }
+  25% {
+    background-position: 30% 80%;
+  }
+  50% {
+    background-position: 110% 110%;
+  }
+  75% {
+    background-position: 80% 30%;
+  }
+  100% {
+    background-position: -20% -20%;
+  }
+}
+
+.turbopackHeaderText {
+  background: linear-gradient(
+      90deg,
+      rgba(200, 221, 255, 0.75) 0%,
+      rgba(255, 202, 222, 0.75) 100%
+    ),
+    linear-gradient(0deg, #ffffff, #ffffff);
+
+  :global(.light) & {
+    background: linear-gradient(
+        90deg,
+        rgba(200, 221, 255, 0.1) 0%,
+        rgba(255, 202, 222, 0.1) 100%
+      ),
+      #000000;
+    background-clip: text;
+  }
+  background-clip: text;
+}
+
+.heroHeading {
+  background: linear-gradient(180deg, #ffffff 0%, #aaaaaa 100%), #ffffff;
+  :global(.light) & {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.8) 0%, #000000 100%);
+    background-clip: text;
+  }
+  background-clip: text;
+}
+
+.letterLine {
+  opacity: 0.2;
+  background: linear-gradient(
+    90deg,
+    #000000 0%,
+    #ffffff 20%,
+    #ffffff 80%,
+    #000000 100%
+  );
+  :global(.light) & {
+    background: linear-gradient(
+      90deg,
+      #ffffff 0%,
+      #000000 20%,
+      #000000 80%,
+      #ffffff 100%
+    );
+  }
+}
+
+.glow {
+  mix-blend-mode: normal;
+  filter: blur(75px);
+  will-change: filter;
+}
+
+.glowSmall {
+  filter: blur(32px);
+}
+
+.glowBlue {
+  background: linear-gradient(180deg, #58a5ff 0%, #a67af4 100%);
+}
+
+.glowPink {
+  background: linear-gradient(180deg, #ff3358 0%, #ff4fd8 100%);
+}
+
+.glowConic {
+  background: conic-gradient(
+    from 180deg at 50% 50%,
+    #2a8af6 0deg,
+    #a853ba 180deg,
+    #e92a67 360deg
+  );
+}
+
+.glowGray {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.gradientSectionBorder {
+  --gradient-y-offset: -200px;
+  --gradient-x-offset: -200px;
+  --height: 255px;
+  position: relative;
+  overflow: hidden;
+  will-change: filter;
+}
+
+.gradientSectionBorderLeft {
+  position: absolute;
+  width: 60vw;
+  height: var(--height);
+  left: var(--gradient-x-offset);
+  top: var(--gradient-y-offset);
+  background: linear-gradient(180deg, #58a5ff 0%, #a67af4 100%);
+  border-radius: 100%;
+  mix-blend-mode: normal;
+  filter: blur(50px);
+}
+
+.gradientSectionBorderRight {
+  width: 60vw;
+  position: absolute;
+  height: var(--height);
+  right: var(--gradient-x-offset);
+  top: var(--gradient-y-offset);
+  background: linear-gradient(180deg, #ff3358 0%, #ff4fd8 100%);
+  border-radius: 100%;
+  mix-blend-mode: normal;
+  filter: blur(50px);
+}
+
+.gradientSectionBorderDivider {
+  background: linear-gradient(90deg, #288cf9 0%, #e32c6b 100%);
+}

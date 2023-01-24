@@ -1,0 +1,40 @@
+# TypeScript
+
+Turbopack supports [TypeScript](https://www.typescriptlang.org/) out of the box. This means you can import `.ts` files with Turbopack. We support all of TypeScript's feature set.
+
+Thanks to our JSX support, you can also import `.tsx` files too.
+
+## Resolving `paths` and `baseUrl`
+
+In TypeScript, you can use the [`paths`](https://www.typescriptlang.org/tsconfig#paths) property of `tsconfig.json` to let you import files from custom paths.
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": "src",
+    "paths": {
+        "app/*": ["app/*"],
+        "config/*": ["app/_config/*"],
+        "shared/*": ["app/_shared/*"],
+    },
+}
+```
+
+This would let you import directly from `app/*` without needing to do a relative import:
+
+```diff filename="src/app/some/deep/file/in/your/app.ts"
+- import { add } from '../../../../../math';
++ import { add } from 'app/math';
+
+add();
+```
+
+Turbopack reads the `paths` and `baseUrl` in `tsconfig.json` in order to resolve these paths, just like `Next.js` does.
+
+This means you only need to configure your absolute paths in one place.
+
+## Type Checking
+
+Turbopack does not perform type checks on your application. We use [SWC](https://swc.rs/) to compile TypeScript code, which also does not perform type checks.
+
+This means that in order to run your type checks, you'll need a sidecar process running `tsc --watch`. Or, you can rely on your IDE's TypeScript integration.

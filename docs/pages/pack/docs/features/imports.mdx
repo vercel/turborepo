@@ -1,0 +1,47 @@
+# Imports
+
+Turbopack supports CJS and ESM imports out of the box, and offers partial support for AMD.
+
+Turbopack bundles your application, so imports won't be resolved to native browser ESM. You can learn why in our [bundling vs Native ESM](/pack/docs/why-turbopack#bundling-vs-native-esm) section.
+
+## CommonJS
+
+Turbopack supports the `require` syntax out-of-the-box:
+
+```ts
+const { add } = require('./math');
+
+add(1, 2);
+```
+
+We also support dynamic `require()` syntax, for if you want to import a dynamically named asset:
+
+```ts
+const imgName = getRandomImgName();
+
+const img = require(`./images/${imgName}.png`);
+```
+
+## ESM
+
+Importing via the `import` syntax is also supported out-of-the-box. This includes static assets, and `import type`:
+
+```ts
+import img from './img.png';
+
+import type { User } from '../server/types';
+
+import { z } from 'zod';
+```
+
+## Dynamic Imports
+
+Turbopack supports dynamic imports via `import()`:
+
+```ts
+const getFeatureFlags = () => {
+  return import('/featureFlags').then(mod => {
+    return mod.featureFlags;
+  })
+}
+```

@@ -1,0 +1,129 @@
+import { Tabs, Tab } from "../../../../../components/Tabs";
+
+# TypeScript in a monorepo
+
+You can use TypeScript in a monorepo in one of two ways - as a linter, or as a build tool.
+
+In this section, we'll discuss TypeScript's role as a linter. This is when you prevent TypeScript emitting files (with [`noEmit`](https://www.typescriptlang.org/tsconfig/noEmit.html)) and instead use it _only_ to check your source code's types.
+
+## Sharing `tsconfig.json`
+
+We can share TypeScript config files across our repository with a clever solution. We can put our _base_ `tsconfig.json` files in a single workspace, and `extend` them from the `tsconfig.json` files in our apps.
+
+Let's imagine a workspace like this:
+
+```
+apps
+├─ docs
+│  ├─ package.json
+│  ├─ tsconfig.json
+├─ web
+│  ├─ package.json
+│  ├─ tsconfig.json
+packages
+├─ tsconfig
+│  ├─ base.json
+│  ├─ nextjs.json
+│  ├─ package.json
+│  ├─ react-library.json
+```
+
+### Our `tsconfig` package
+
+Inside `packages/tsconfig`, we have a few `json` files which represent different ways you might want to configure TypeScript. They each look like this:
+
+```json filename="packages/tsconfig/base.json"
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Default",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": true,
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "inlineSources": false,
+    "isolatedModules": true,
+    "moduleResolution": "node",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "preserveWatchOutput": true,
+    "skipLibCheck": true,
+    "strict": true
+  },
+  "exclude": ["node_modules"]
+}
+```
+
+Inside `package.json`, we simply name our package:
+
+```json filename="packages/tsconfig/package.json"
+{
+  "name": "tsconfig"
+}
+```
+
+The other `json` files in the repository can be accessed via a simple import:
+
+```ts
+import baseJson from "tsconfig/base.json";
+import nextjsJson from "tsconfig/nextjs.json";
+import reactLibraryJson from "tsconfig/react-library.json";
+```
+
+This lets us export different config settings for different types of projects.
+
+### How to use the `tsconfig` package
+
+Each app/package which uses our shared `tsconfig` must first specify it as a dependency:
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+```jsonc filename="apps/web/package.json"
+{
+  "dependencies": {
+    "tsconfig": "*"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```jsonc filename="apps/web/package.json"
+{
+  "dependencies": {
+    "tsconfig": "*"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```jsonc filename="apps/web/package.json"
+{
+  "dependencies": {
+    "tsconfig": "workspace:*"
+  }
+}
+```
+  </Tab>
+</Tabs>
+
+Then, they can **extend it inside their own `tsconfig.json`**:
+
+```json filename="apps/web/tsconfig.json"
+{
+  // We extend it from here!
+  "extends": "tsconfig/nextjs.json",
+
+  // You can specify your own include/exclude
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules"]
+}
+```
+
+### Summary
+
+This setup ships by default when you [create a new monorepo](/repo/docs/getting-started/create-new) with `npx create-turbo@latest`. You can also look at [our basic example](https://github.com/vercel/turbo/tree/main/examples/basic) to see a working version.
+
+## Running tasks
+
+We recommend following the setup in the [`basics`](/repo/docs/handbook/linting#running-tasks) section.

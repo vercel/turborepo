@@ -1,0 +1,14 @@
+disallowed-types = [
+  # Use turbo_tasks_hash::{DeterministicHash, Xxh3Hash64Hasher} instead.
+  "std::collections::hash_map::DefaultHasher",
+]
+disallowed-methods = [
+  # We forbid the use of the Hasher::hash trait item to prevent misuse of
+  # hashing Vcs. Vcs must themselves be hashable (to be useable in maps and
+  # sets), but the hash **is not stable** and must not be observed.
+  # Use Xxh3Hash64Hasher::write with value's bytes directly.
+  "std::hash::Hasher::hash",
+  # We forbid the use of VecDeque::new as it allocates, which is kind of unexpected
+  # Instead use VecDeque::with_capacity to make it explicit or opt-out of that.
+  "std::collections::VecDeque::new",
+]

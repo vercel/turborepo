@@ -1,0 +1,43 @@
+name: "Turborepo Build Debug"
+description: "Builds debug version of turborepo"
+inputs:
+  target:
+    description: "Compilation target"
+    required: true
+  github-token:
+    description: "GitHub token. You can pass secrets.GITHUB_TOKEN"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: "Setup Node"
+      uses: ./.github/actions/setup-node
+
+    - name: "Setup Go"
+      uses: ./.github/actions/setup-go
+      with:
+        github-token: ${{ inputs.github-token }}
+
+    - name: "Setup Rust"
+      uses: ./.github/actions/setup-rust
+      with:
+        target: ${{ inputs.target }}
+        shared-cache-key: turborepo-debug-build
+        cache-key: ${{ inputs.target }}
+        save-cache: true
+
+    - name: Build Turborepo
+      working-directory: ./cli
+      shell: bash
+      run: |
+        make turbo
+
+    - name: Strip Turborepo binary
+      if: ${{ inputs.target == 'windows' }}
+      shell: bash
+      run: strip target/debug/turbo.exe
+
+    - name: Strip Turborepo binary
+      if: ${{ inputs.target != 'windows' }}
+      shell: bash
+      run: strip target/debug/turbo

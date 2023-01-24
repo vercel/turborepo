@@ -5,19 +5,41 @@ export const CounterButton = () => {
   return (
     <div
       style={{
-        background: `rgba(255,255,255,.05)`,
+        background: `rgba(0,0,0,0.05)`,
         borderRadius: `8px`,
-        padding: 16,
+        padding: "1.5rem",
+        fontWeight: 500,
       }}
     >
-      <p>
-        This is component is from <code>ui</code>
+      <p style={{ margin: "0 0 1.5rem 0" }}>
+        This component is from{" "}
+        <code
+          style={{
+            padding: "0.2rem 0.3rem",
+            background: `rgba(0,0,0,0.1)`,
+            borderRadius: "0.25rem",
+          }}
+        >
+          ui
+        </code>
       </p>
-      <p>
-        <button type="button" onClick={() => setCount((c) => c + 1)}>
-          count {count}
+      <div>
+        <button
+          style={{
+            background: "black",
+            color: "white",
+            border: "none",
+            padding: "0.5rem 1rem",
+            borderRadius: "0.25rem",
+            display: "inline-block",
+            cursor: "pointer",
+          }}
+          type="button"
+          onClick={() => setCount((c) => c + 1)}
+        >
+          Count: {count}
         </button>
-      </p>
+      </div>
     </div>
   );
 };

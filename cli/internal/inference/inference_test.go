@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/vercel/turborepo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/fs"
 )
 
 func getFrameworkBySlug(slug string) *Framework {
@@ -75,6 +75,16 @@ func TestInferFramework(t *testing.T) {
 				"react-scripts": "*",
 			}},
 			want: getFrameworkBySlug("create-react-app"),
+		},
+		{
+			name: "Finds next in non monorepo",
+			pkg: &fs.PackageJSON{
+				Dependencies: map[string]string{
+					"next": "*",
+				},
+				Workspaces: []string{},
+			},
+			want: getFrameworkBySlug("nextjs"),
 		},
 	}
 	for _, tt := range tests {

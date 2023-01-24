@@ -21,9 +21,7 @@ Examples of **incorrect** code for this rule:
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**"]
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "dev": {
       "cache": false
     }
@@ -35,15 +33,13 @@ Examples of **correct** code for this rule:
 
 ```json
 {
-  "globalDependencies": ["$MY_API_TOKEN"]
+  "globalEnv": ["MY_API_TOKEN"],
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**"]
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "dev": {
       "cache": false
     }
@@ -55,12 +51,11 @@ Examples of **correct** code for this rule:
 {
   "pipeline": {
     "build": {
-      "dependsOn": ["^build", "$MY_API_TOKEN"],
+      "dependsOn": ["^build"],
+      "env": ["MY_API_TOKEN"],
       "outputs": ["dist/**", ".next/**"]
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "dev": {
       "cache": false
     }
@@ -77,4 +72,4 @@ Examples of **correct** code for this rule:
 
 ## Further Reading
 
-- [Alter Caching Based on Environment Variables and Files](https://turborepo.org/docs/core-concepts/caching#alter-caching-based-on-environment-variables-and-files)
+- [Altering Caching Based on Environment Variables](https://turbo.build/repo/docs/core-concepts/caching#altering-caching-based-on-environment-variables)
