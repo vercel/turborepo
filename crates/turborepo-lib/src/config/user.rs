@@ -114,7 +114,9 @@ mod test {
     use tempfile::{NamedTempFile, TempDir};
 
     use super::*;
+    use crate::config::RepoConfigLoader;
 
+    #[test]
     fn test_handles_non_existent_path() -> Result<()> {
         let config_dir = TempDir::new()?;
         let mut config_path = config_dir.path().to_path_buf();
@@ -129,6 +131,7 @@ mod test {
         Ok(())
     }
 
+    #[test]
     fn test_disk_value_preserved() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
         writeln!(&mut config_file, "{{\"token\": \"foo\"}}")?;
@@ -142,6 +145,7 @@ mod test {
         Ok(())
     }
 
+    #[test]
     fn test_env_var_trumps_disk() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
         writeln!(&mut config_file, "{{\"token\": \"foo\"}}")?;
@@ -155,101 +159,5 @@ mod test {
             .load()?;
         assert_eq!(config.token(), Some("bar"));
         Ok(())
-    }
-
-    fn test_create_repo_config_no_overrides() {
-        let repo_root = TempDir::new().unwrap();
-
-        // Confirm that defaults are used when no values are provided.
-        let config =
-            RepoConfig::new(Some(repo_root.path().to_path_buf()), None, None, None).unwrap();
-        assert_eq!(config.api_url, DEFAULT_API_URL);
-        assert_eq!(config.login_url, DEFAULT_LOGIN_URL);
-        assert_eq!(config.team_slug, None);
-    }
-    fn test_create_repo_config_with_overrides() {
-        let repo_root = TempDir::new().unwrap();
-        // Confirm that when values are provided, they should be used.
-        let config = RepoConfig::new(
-            Some(repo_root.path().to_path_buf()),
-            Some("https://api.example.com"),
-            Some("https://login.example.com"),
-            Some("team"),
-        )
-        .unwrap();
-        assert_eq!(config.api_url, "https://api.example.com");
-        assert_eq!(config.login_url, "https://login.example.com");
-        assert_eq!(config.team_slug, Some("team".to_string()));
-    }
-
-    fn test_create_repo_config_with_config_file() {
-        let repo_root = TempDir::new().unwrap();
-        // Confirm that the repo config file is used when present.
-        let turbo_dir_path = repo_root.path().join(".turbo");
-        fs::create_dir_all(&turbo_dir_path).unwrap();
-        let config_file_path = turbo_dir_path.join("config.json");
-        fs::write(
-            config_file_path,
-            r#"{
-              "apiurl": "https://api.example4.com",
-              "loginurl": "https://login.example4.com",
-              "teamslug": "turbo-team"
-             }"#,
-        )
-        .unwrap();
-
-        let config =
-            RepoConfig::new(Some(repo_root.path().to_path_buf()), None, None, None).unwrap();
-        assert_eq!(config.api_url, "https://api.example4.com");
-        assert_eq!(config.login_url, "https://login.example4.com");
-        assert_eq!(config.team_slug, Some("turbo-team".to_string()));
-    }
-
-    fn test_create_repo_config_with_env_var() {
-        let repo_root = TempDir::new().unwrap();
-        // Confirm that environment variables are used when no values are provided.
-        env::set_var("TURBO_API", "https://api.example2.com");
-        env::set_var("TURBO_LOGIN", "https://login.example2.com");
-        env::set_var("TURBO_TEAM", "turborepo");
-
-        let config =
-            RepoConfig::new(Some(repo_root.path().to_path_buf()), None, None, None).unwrap();
-        assert_eq!(config.api_url, "https://api.example2.com");
-        assert_eq!(config.login_url, "https://login.example2.com");
-        assert_eq!(config.team_slug, Some("turborepo".to_string()));
-
-        // Confirm that manual overrides take precedence over env variables.
-        let config = RepoConfig::new(
-            Some(repo_root.path().to_path_buf()),
-            Some("https://api.example3.com"),
-            Some("https://login.example3.com"),
-            Some("turbo-tooling"),
-        )
-        .unwrap();
-        assert_eq!(config.api_url, "https://api.example3.com");
-        assert_eq!(config.login_url, "https://login.example3.com");
-        assert_eq!(config.team_slug, Some("turbo-tooling".to_string()));
-
-        env::remove_var("TURBO_API");
-        env::remove_var("TURBO_LOGIN");
-        env::remove_var("TURBO_TEAM");
-    }
-
-    // NOTE: This is one large test because tests are run in parallel and we
-    // do not want interleaved state with environment variables.
-    #[test]
-    fn test_config() {
-        // Remove variables to avoid accidental test failures;
-        env::remove_var("TURBO_TEAM");
-        env::remove_var("TURBO_API");
-        env::remove_var("TURBO_LOGIN");
-
-        test_handles_non_existent_path().unwrap();
-        test_disk_value_preserved().unwrap();
-        test_env_var_trumps_disk().unwrap();
-        test_create_repo_config_no_overrides();
-        test_create_repo_config_with_overrides();
-        test_create_repo_config_with_config_file();
-        test_create_repo_config_with_env_var();
     }
 }
