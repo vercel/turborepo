@@ -14,7 +14,7 @@ use serde::Serialize;
 
 use crate::{
     commands::{bin, login, logout},
-    config::RepoConfig,
+    config::RepoConfigLoader,
     get_version,
     shim::{RepoMode, RepoState},
     ui::UI,
@@ -445,12 +445,15 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
                 return Ok(Payload::Go(Box::new(clap_args)));
             }
 
-            let repo_config = RepoConfig::new(
-                clap_args.cwd,
-                clap_args.api.as_deref(),
-                clap_args.login.as_deref(),
-                clap_args.team.as_deref(),
-            )?;
+            let mut repo_config_path = clap_args.cwd.map(Ok).unwrap_or_else(|| current_dir())?;
+            repo_config_path.push(".turbo");
+            repo_config_path.push("config.json");
+
+            let repo_config = RepoConfigLoader::new(repo_config_path)
+                .with_api(clap_args.api)
+                .with_login(clap_args.login)
+                .with_team_slug(clap_args.team)
+                .load()?;
 
             login::login(repo_config).await?;
 

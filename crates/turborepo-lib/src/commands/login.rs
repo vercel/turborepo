@@ -8,7 +8,7 @@ use tokio::sync::OnceCell;
 
 use crate::{
     client::{APIClient, UserClient},
-    config::{default_user_config_path, RepoConfig, UserConfig},
+    config::{default_user_config_path, RepoConfig, UserConfigLoader},
     get_version,
     ui::{BOLD, CYAN, UI},
 };
@@ -17,9 +17,9 @@ const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 
 pub async fn login(repo_config: RepoConfig) -> Result<()> {
-    let login_url_base = &repo_config.login_url;
+    let login_url_base = &repo_config.login_url();
     debug!("turbo v{}", get_version());
-    debug!("api url: {}", repo_config.api_url);
+    debug!("api url: {}", repo_config.api_url());
     debug!("login url: {login_url_base}");
 
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
@@ -29,15 +29,20 @@ pub async fn login(repo_config: RepoConfig) -> Result<()> {
     direct_user_to_url(&login_url);
 
     let token_cell = Arc::new(OnceCell::new());
-    new_one_shot_server(DEFAULT_PORT, repo_config.login_url, token_cell.clone()).await?;
+    new_one_shot_server(
+        DEFAULT_PORT,
+        repo_config.login_url().to_string(),
+        token_cell.clone(),
+    )
+    .await?;
     let token = token_cell
         .get()
         .ok_or_else(|| anyhow!("Failed to get token"))?;
 
-    let mut user_config = UserConfig::load(&default_user_config_path()?, None)?;
+    let mut user_config = UserConfigLoader::new(default_user_config_path()?).load()?;
     user_config.set_token(Some(token.to_string()))?;
 
-    let client = APIClient::new(token, repo_config.api_url)?;
+    let client = APIClient::new(token, repo_config.api_url())?;
     let user_response = client.get_user().await?;
 
     let ui = UI::infer();

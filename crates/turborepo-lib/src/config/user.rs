@@ -1,60 +1,10 @@
-use std::{
-    env,
-    env::current_dir,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::Result;
 use config::{Config, Environment};
 use serde::{Deserialize, Serialize};
 
 use super::write_to_disk;
-
-const DEFAULT_API_URL: &str = "https://vercel.com/api";
-const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-pub struct RepoConfig {
-    #[serde(rename = "apiurl")]
-    pub api_url: String,
-    #[serde(rename = "loginurl")]
-    pub login_url: String,
-    #[serde(rename = "teamslug")]
-    pub team_slug: Option<String>,
-}
-
-impl RepoConfig {
-    pub fn new(
-        cwd: Option<PathBuf>,
-        api: Option<&str>,
-        login: Option<&str>,
-        team: Option<&str>,
-    ) -> Result<Self> {
-        let repo_root = match cwd.as_ref() {
-            Some(cwd) => cwd.clone(),
-            None => current_dir()?,
-        };
-        let config_path = repo_root.join(".turbo").join("config.json");
-        let config: RepoConfig = Config::builder()
-            .set_override_option("teamslug", env::var("TURBO_TEAM").ok())?
-            .set_override_option("apiurl", env::var("TURBO_API").ok())?
-            .set_override_option("loginurl", env::var("TURBO_LOGIN").ok())?
-            .set_override_option("apiurl", api)?
-            .set_override_option("loginurl", login)?
-            .set_override_option("teamslug", team)?
-            .set_default("apiurl", DEFAULT_API_URL)?
-            .set_default("loginurl", DEFAULT_LOGIN_URL)?
-            .add_source(
-                config::File::with_name(config_path.to_string_lossy().as_ref())
-                    .format(config::FileFormat::Json)
-                    .required(false),
-            )
-            .build()?
-            .try_deserialize()?;
-
-        Ok(config)
-    }
-}
 
 // Inner struct that matches the config file schema
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
