@@ -144,6 +144,7 @@ const theme = {
         <link rel="prefetch" href="/repo/docs" as="document" />
         <link rel="prefetch" href="/pack" as="document" />
         <link rel="prefetch" href="/pack/docs" as="document" />
+        <link rel="alternate" type="application/rss+xml" title="Turbo Blog" href="https://turbo.build/feed.xml" />
       </>
     );
   },
