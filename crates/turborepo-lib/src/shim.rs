@@ -40,6 +40,7 @@ static SUPPORTS_SKIP_INFER_SEMVER: &str = ">=1.7.0-canary.0";
 #[derive(Debug)]
 struct ShimArgs {
     cwd: PathBuf,
+    invocation_dir: PathBuf,
     skip_infer: bool,
     verbosity: usize,
     force_update_check: bool,
@@ -109,14 +110,16 @@ impl ShimArgs {
         if found_cwd_flag {
             Err(anyhow!("No value assigned to `--cwd` argument"))
         } else {
+            let invocation_dir = current_dir()?;
             let cwd = if let Some(cwd) = cwd {
                 fs_canonicalize(cwd)?
             } else {
-                current_dir()?
+                invocation_dir.clone()
             };
 
             Ok(ShimArgs {
                 cwd,
+                invocation_dir,
                 skip_infer,
                 verbosity,
                 force_update_check,
@@ -318,6 +321,9 @@ impl RepoState {
             ))
         } else {
             try_check_for_updates(&shim_args, get_version(), true);
+            // cli::run checks for this env var, rather than an arg, so that we can support
+            // calling old versions without passing unknown flags.
+            env::set_var(cli::INVOCATION_DIR_ENV_VAR, &shim_args.invocation_dir);
             debug!("Running command as global turbo");
             cli::run(Some(self))
         }
@@ -370,6 +376,9 @@ impl RepoState {
         // that we've found in node_modules/.bin/turbo.
         let mut command = process::Command::new(local_turbo_path)
             .args(&raw_args)
+            // rather than passing an argument that local turbo might not understand, set
+            // an environment variable that can be optionally used
+            .env(cli::INVOCATION_DIR_ENV_VAR, &shim_args.invocation_dir)
             .current_dir(cwd)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())

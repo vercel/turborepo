@@ -427,7 +427,6 @@ func TestPrepare_PersistentDependencies_CrossWorkspace_DownstreamPersistent(t *t
 
 	// The default build command has no deps, it just exists to have a baseline
 	engine.AddTask(&Task{Name: "build"})
-
 	engine.AddTask(&Task{Name: "workspace-a#build", TaskDefinition: aBuildTask})
 	engine.AddTask(&Task{Name: "workspace-b#build", TaskDefinition: bBuildTask})
 	engine.AddTask(&Task{Name: "workspace-c#build", TaskDefinition: cBuildTask})

@@ -2,22 +2,15 @@ import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import fs from "fs-extra";
 
-function getFixturePath({ test, fixture }: { test: string; fixture: string }) {
-  const fixturesDirectory = path.join(__dirname, "__fixtures__");
-  return path.join(fixturesDirectory, test, fixture);
-}
-
-/*
-  To test with fixtures:
-  1. create a temporary directory, x
-  2. copy the target fixture to x
-  3. run the test
-  4. verify the output
-  5. cleanup
-*/
-function setupTestFixtures({ test }: { test: string }) {
+export default function setupTestFixtures({
+  directory,
+  test,
+}: {
+  directory: string;
+  test: string;
+}) {
   const fixtures: Array<string> = [];
-  const parentDirectory = path.join(__dirname, test);
+  const parentDirectory = path.join(directory, test);
 
   afterEach(() => {
     fixtures.forEach((fixture) => {
@@ -38,7 +31,9 @@ function setupTestFixtures({ test }: { test: string }) {
     fixtures.push(testDirectory);
 
     // copy fixture to test directory
-    fs.copySync(getFixturePath({ test, fixture }), testDirectory, {
+
+    const fixturePath = path.join(directory, "__fixtures__", test, fixture);
+    fs.copySync(fixturePath, testDirectory, {
       recursive: true,
     });
 
@@ -64,27 +59,3 @@ function setupTestFixtures({ test }: { test: string }) {
 
   return { useFixture };
 }
-
-export type SpyExit = { exit?: any };
-
-function spyExit() {
-  let spy: SpyExit = {};
-
-  beforeEach(() => {
-    spy.exit = jest
-      .spyOn(process, "exit")
-      .mockImplementation(() => undefined as never);
-  });
-
-  afterEach(() => {
-    spy.exit.mockClear();
-  });
-
-  afterAll(() => {
-    spy.exit.mockRestore();
-  });
-
-  return spy;
-}
-
-export { setupTestFixtures, spyExit };

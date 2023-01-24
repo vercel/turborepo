@@ -1,7 +1,12 @@
 import child_process, { ChildProcess, ExecException } from "child_process";
 import turboIgnore from "../src/ignore";
-import { spyExit, spyConsole, mockEnv, validateLogs } from "./test-utils";
-import type { SpyExit } from "./test-utils";
+import {
+  spyConsole,
+  spyExit,
+  SpyExit,
+  mockEnv,
+  validateLogs,
+} from "turbo-test-utils";
 
 function expectBuild(mockExit: SpyExit) {
   expect(mockExit.exit).toHaveBeenCalledWith(1);
@@ -40,7 +45,9 @@ describe("turboIgnore()", () => {
       expect.anything()
     );
 
-    validateLogs(["UNKNOWN_ERROR: error"], mockConsole.error);
+    validateLogs(["UNKNOWN_ERROR: error"], mockConsole.error, {
+      prefix: "≫  ",
+    });
 
     expectBuild(mockExit);
     mockExec.mockRestore();
@@ -77,7 +84,8 @@ describe("turboIgnore()", () => {
       [
         `turbo-ignore could not complete - no package manager detected, please commit a lockfile, or set "packageManager" in your root "package.json"`,
       ],
-      mockConsole.warn
+      mockConsole.warn,
+      { prefix: "≫  " }
     );
 
     expectBuild(mockExit);
@@ -118,7 +126,8 @@ describe("turboIgnore()", () => {
       [
         `turbo-ignore could not complete - commit does not exist or is unreachable`,
       ],
-      mockConsole.warn
+      mockConsole.warn,
+      { prefix: "≫  " }
     );
 
     expectBuild(mockExit);
@@ -156,7 +165,8 @@ describe("turboIgnore()", () => {
       [
         `turbo-ignore could not complete - parent commit does not exist or is unreachable`,
       ],
-      mockConsole.warn
+      mockConsole.warn,
+      { prefix: "≫  " }
     );
 
     expectBuild(mockExit);
@@ -178,7 +188,8 @@ describe("turboIgnore()", () => {
           ),
         ],
       ],
-      mockConsole.error
+      mockConsole.error,
+      { prefix: "≫  " }
     );
     expectBuild(mockExit);
   });
@@ -196,7 +207,8 @@ describe("turboIgnore()", () => {
           expect.stringContaining(' is missing the "name" field (required).'),
         ],
       ],
-      mockConsole.error
+      mockConsole.error,
+      { prefix: "≫  " }
     );
     expectBuild(mockExit);
   });
@@ -274,7 +286,8 @@ describe("turboIgnore()", () => {
         "this project and its dependencies are not affected",
         () => expect.stringContaining("⬜️  ignoring the change"),
       ],
-      mockConsole.log
+      mockConsole.log,
+      { prefix: "≫  " }
     );
 
     expectIgnore(mockExit);
@@ -313,7 +326,8 @@ describe("turboIgnore()", () => {
         'this commit affects "test-app"',
         () => expect.stringContaining("✅  proceeding with deployment"),
       ],
-      mockConsole.log
+      mockConsole.log,
+      { prefix: "≫  " }
     );
 
     expectBuild(mockExit);
@@ -351,7 +365,8 @@ describe("turboIgnore()", () => {
         'this commit affects "test-app" and 1 dependency (ui)',
         () => expect.stringContaining("✅  proceeding with deployment"),
       ],
-      mockConsole.log
+      mockConsole.log,
+      { prefix: "≫  " }
     );
 
     expectBuild(mockExit);
@@ -389,7 +404,8 @@ describe("turboIgnore()", () => {
         'this commit affects "test-app" and 2 dependencies (ui, tsconfig)',
         () => expect.stringContaining("✅  proceeding with deployment"),
       ],
-      mockConsole.log
+      mockConsole.log,
+      { prefix: "≫  " }
     );
 
     expectBuild(mockExit);
@@ -421,7 +437,8 @@ describe("turboIgnore()", () => {
       [
         "failed to parse JSON output from `npx turbo run build --filter=test-app...[HEAD^] --dry=json`.",
       ],
-      mockConsole.error
+      mockConsole.error,
+      { prefix: "≫  " }
     );
 
     expectBuild(mockExit);
@@ -457,7 +474,8 @@ describe("turboIgnore()", () => {
       [
         "failed to parse JSON output from `npx turbo run build --filter=test-app...[HEAD^] --dry=json`.",
       ],
-      mockConsole.error
+      mockConsole.error,
+      { prefix: "≫  " }
     );
 
     expectBuild(mockExit);
@@ -482,7 +500,8 @@ describe("turboIgnore()", () => {
         "found commit message: [vercel skip]",
         () => expect.stringContaining("⬜️  ignoring the change"),
       ],
-      mockConsole.log
+      mockConsole.log,
+      { prefix: "≫  " }
     );
 
     expectIgnore(mockExit);
@@ -506,7 +525,8 @@ describe("turboIgnore()", () => {
         "found commit message: [vercel deploy]",
         () => expect.stringContaining("✅  proceeding with deployment"),
       ],
-      mockConsole.log
+      mockConsole.log,
+      { prefix: "≫  " }
     );
 
     expectBuild(mockExit);
@@ -548,7 +568,8 @@ describe("turboIgnore()", () => {
         "this project and its dependencies are not affected",
         () => expect.stringContaining("⬜️  ignoring the change"),
       ],
-      mockConsole.log
+      mockConsole.log,
+      { prefix: "≫  " }
     );
 
     expectIgnore(mockExit);

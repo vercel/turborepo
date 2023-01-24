@@ -25,8 +25,8 @@ type Visitor = func(taskID string) error
 
 // Engine contains both the DAG for the packages and the tasks and implements the methods to execute tasks in them
 type Engine struct {
-	// TopologicGraph is a graph of workspaces
-	TopologicGraph *dag.AcyclicGraph
+	// WorkspaceGraph is a graph of workspaces
+	WorkspaceGraph *dag.AcyclicGraph
 	// TaskGraph is a graph of package-tasks
 	TaskGraph *dag.AcyclicGraph
 	// Tasks are a map of tasks in the engine
@@ -43,7 +43,7 @@ func NewEngine(completeGraph *graph.CompleteGraph) *Engine {
 	return &Engine{
 		completeGraph:    completeGraph,
 		Tasks:            make(map[string]*Task),
-		TopologicGraph:   &completeGraph.WorkspaceGraph,
+		WorkspaceGraph:   &completeGraph.WorkspaceGraph,
 		TaskGraph:        &dag.AcyclicGraph{},
 		PackageTaskDeps:  map[string][]string{},
 		rootEnabledTasks: make(util.Set),
@@ -212,6 +212,25 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 			}
 		}
 
+		deps := make(util.Set)
+		isPackageTask := util.IsPackageTask(taskName)
+
+		for _, dependency := range task.TaskDefinition.TaskDependencies {
+			// If the current task is a workspace-specific task (including root Task)
+			// and its dependency is _also_ a workspace-specific task, we need to add
+			// a reference to this dependency directly into the engine.
+			// TODO @mehulkar: Why do we need this?
+			if isPackageTask && util.IsPackageTask(dependency) {
+				if err := e.AddDep(dependency, taskName); err != nil {
+					return err
+				}
+			} else {
+				// For non-workspace-specific dependencies, we attach a reference to
+				// the task that is added into the engine.
+				deps.Add(dependency)
+			}
+		}
+
 		// Filter down the tasks if there's a filter in place
 		// https: //turbo.build/repo/docs/reference/command-line-reference#--only
 		if tasksOnly {
@@ -233,7 +252,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		// hasTopoDeps will be true if the task depends on any tasks from dependency packages
 		// E.g. `dev: { dependsOn: [^dev] }`
-		hasTopoDeps := topoDeps.Len() > 0 && e.TopologicGraph.DownEdges(pkg).Len() > 0
+		hasTopoDeps := topoDeps.Len() > 0 && e.WorkspaceGraph.DownEdges(pkg).Len() > 0
 
 		// hasDeps will be true if the task depends on any tasks from its own package
 		// E.g. `build: { dependsOn: [dev] }`
@@ -248,7 +267,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		}
 
 		if hasTopoDeps {
-			depPkgs := e.TopologicGraph.DownEdges(pkg)
+			depPkgs := e.WorkspaceGraph.DownEdges(pkg)
 			for _, from := range topoDeps.UnsafeListOfStrings() {
 				// add task dep from all the package deps within repo
 				for depPkg := range depPkgs {
@@ -311,7 +330,7 @@ func (e *Engine) AddTask(task *Task) *Engine {
 // AddDep adds tuples from+to task ID combos in tuple format so they can be looked up later.
 func (e *Engine) AddDep(fromTaskID string, toTaskID string) error {
 	fromPkg, _ := util.GetPackageTaskFromId(fromTaskID)
-	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !e.TopologicGraph.HasVertex(fromPkg) {
+	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !e.WorkspaceGraph.HasVertex(fromPkg) {
 		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskID)
 	}
 

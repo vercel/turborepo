@@ -1,11 +1,14 @@
 import { transformer } from "../src/transforms/add-package-manager";
-import { setupTestFixtures } from "./test-utils";
+import { setupTestFixtures } from "turbo-test-utils";
 import fs from "fs-extra";
 import * as getPackageManager from "../src/utils/getPackageManager";
 import * as getPackageManagerVersion from "../src/utils/getPackageManagerVersion";
 
 describe("add-package-manager", () => {
-  const { useFixture } = setupTestFixtures({ test: "add-package-manager" });
+  const { useFixture } = setupTestFixtures({
+    directory: __dirname,
+    test: "add-package-manager",
+  });
   test("no package manager - basic", () => {
     // load the fixture for the test
     const { root, read } = useFixture({ fixture: "no-package-manager" });
