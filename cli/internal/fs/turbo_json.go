@@ -48,14 +48,13 @@ type RemoteCacheOptions struct {
 }
 
 type rawTask struct {
-	Outputs *[]string `json:"outputs,omitempty"`
-
-	Cache      *bool               `json:"cache,omitempty"`
-	DependsOn  []string            `json:"dependsOn,omitempty"`
-	Inputs     []string            `json:"inputs,omitempty"`
-	OutputMode util.TaskOutputMode `json:"outputMode,omitempty"`
-	Env        []string            `json:"env,omitempty"`
-	Persistent bool                `json:"persistent,omitempty"`
+	Outputs    []string            `json:"outputs"`
+	Cache      *bool               `json:"cache"`
+	DependsOn  []string            `json:"dependsOn"`
+	Inputs     []string            `json:"inputs"`
+	OutputMode util.TaskOutputMode `json:"outputMode"`
+	Env        []string            `json:"env"`
+	Persistent bool                `json:"persistent"`
 }
 
 // Pipeline is a struct for deserializing .pipeline in configFile
@@ -93,11 +92,43 @@ type TaskDefinition struct {
 	Persistent bool
 }
 
+// GetTask returns a TaskDefinition based on the ID (package#task format) or name (e.g. "build")
+func (p Pipeline) GetTask(taskID string, taskName string) (*TaskDefinition, error) {
+	// first check for package-tasks
+	taskDefinition, ok := p[taskID]
+	if !ok {
+		// then check for regular tasks
+		fallbackTaskDefinition, notcool := p[taskName]
+		// if neither, then bail
+		if !notcool {
+			// Return an empty TaskDefinition
+			return nil, fmt.Errorf("Could not find task \"%s\" in pipeline", taskID)
+		}
+
+		// override if we need to...
+		taskDefinition = fallbackTaskDefinition
+	}
+
+	return &taskDefinition, nil
+}
+
 // LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
 func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON, includeSynthesizedFromRootPackageJSON bool) (*TurboJSON, error) {
+	// If the root package.json stil has a `turbo` key, log a warning and remove it.
+	if rootPackageJSON.LegacyTurboConfig != nil {
+		log.Printf("[WARNING] \"turbo\" in package.json is no longer supported. Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile)
+		rootPackageJSON.LegacyTurboConfig = nil
+	}
+
 	var turboJSON *TurboJSON
-	turboFromFiles, err := ReadTurboConfig(rootPath, rootPackageJSON)
+	turboFromFiles, err := ReadTurboConfig(rootPath.UntypedJoin(configFile))
+
 	if !includeSynthesizedFromRootPackageJSON && err != nil {
+		// If the file didn't exist, throw a custom error here instead of propagating
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("Could not find %s. Follow directions at https://turbo.build/repo/docs to create one: file does not exist", configFile)
+		}
+
 		// There was an error, and we don't have any chance of recovering
 		// because we aren't synthesizing anything
 		return nil, err
@@ -153,14 +184,8 @@ func (to TaskOutputs) Sort() TaskOutputs {
 	return TaskOutputs{Inclusions: inclusions, Exclusions: exclusions}
 }
 
-// ReadTurboConfig toggles between reading from package.json or the configFile to support early adopters.
-func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON) (*TurboJSON, error) {
-
-	turboJSONPath := rootPath.UntypedJoin(configFile)
-
-	// Check if turbo key in package.json exists
-	hasLegacyConfig := rootPackageJSON.LegacyTurboConfig != nil
-
+// ReadTurboConfig reads turbo.json from a provided path
+func ReadTurboConfig(turboJSONPath turbopath.AbsoluteSystemPath) (*TurboJSON, error) {
 	// If the configFile exists, use that
 	if turboJSONPath.FileExists() {
 		turboJSON, err := readTurboJSON(turboJSONPath)
@@ -168,22 +193,11 @@ func ReadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 			return nil, fmt.Errorf("%s: %w", configFile, err)
 		}
 
-		// If pkg.Turbo exists, log a warning and delete it from the representation
-		if hasLegacyConfig {
-			log.Printf("[WARNING] Ignoring \"turbo\" key in package.json, using %s instead.", configFile)
-			rootPackageJSON.LegacyTurboConfig = nil
-		}
-
 		return turboJSON, nil
 	}
 
-	// If the configFile doesn't exist, but a legacy config does, log that it's deprecated and return an error
-	if hasLegacyConfig {
-		log.Printf("[DEPRECATED] \"turbo\" in package.json is deprecated. Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile)
-	}
-
-	// If there's no turbo.json and no turbo key in package.json, return an error.
-	return nil, errors.Wrapf(os.ErrNotExist, "Could not find %s. Follow directions at https://turbo.build/repo/docs to create one", configFile)
+	// If there's no turbo.json, return an error.
+	return nil, errors.Wrapf(os.ErrNotExist, "Could not find %s", configFile)
 }
 
 // readTurboJSON reads the configFile in to a struct
@@ -245,7 +259,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	var exclusions []string
 
 	if task.Outputs != nil {
-		for _, glob := range *task.Outputs {
+		for _, glob := range task.Outputs {
 			if strings.HasPrefix(glob, "!") {
 				exclusions = append(exclusions, glob[1:])
 			} else {
@@ -304,6 +318,54 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	c.OutputMode = task.OutputMode
 	c.Persistent = task.Persistent
 	return nil
+}
+
+// MarshalJSON deserializes JSON into a TaskDefinition
+func (c *TaskDefinition) MarshalJSON() ([]byte, error) {
+	// Initialize with empty arrays, so we get empty arrays serialized into JSON
+	task := rawTask{
+		Outputs:   []string{},
+		Inputs:    []string{},
+		Env:       []string{},
+		DependsOn: []string{},
+	}
+
+	task.Persistent = c.Persistent
+	task.Cache = &c.ShouldCache
+	task.OutputMode = c.OutputMode
+
+	if len(c.Inputs) > 0 {
+		task.Inputs = c.Inputs
+	}
+
+	if len(c.EnvVarDependencies) > 0 {
+		task.Env = append(task.Env, c.EnvVarDependencies...)
+	}
+
+	if len(c.Outputs.Inclusions) > 0 {
+		task.Outputs = append(task.Outputs, c.Outputs.Inclusions...)
+	}
+
+	for _, i := range c.Outputs.Exclusions {
+		task.Outputs = append(task.Outputs, "!"+i)
+	}
+
+	if len(c.TaskDependencies) > 0 {
+		task.DependsOn = append(task.DependsOn, c.TaskDependencies...)
+	}
+	for _, i := range c.TopologicalDependencies {
+		task.DependsOn = append(task.DependsOn, "^"+i)
+	}
+
+	// These _should_ already be sorted when the TaskDefinition struct was unmarshaled,
+	// but we want to ensure they're sorted on the way out also, just in case something
+	// in the middle mutates the items.
+	sort.Strings(task.DependsOn)
+	sort.Strings(task.Outputs)
+	sort.Strings(task.Env)
+	sort.Strings(task.Inputs)
+
+	return json.Marshal(task)
 }
 
 // UnmarshalJSON deserializes TurboJSON objects into struct

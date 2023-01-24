@@ -8,7 +8,6 @@ import (
 	testifyAssert "github.com/stretchr/testify/assert"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
-	"github.com/vercel/turbo/cli/internal/util"
 	"gotest.tools/v3/assert"
 
 	"github.com/pyr-sh/dag"
@@ -23,7 +22,10 @@ var _workspaceGraphDefinition = map[string][]string{
 func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 
-	engine := NewEngine(&completeGraph.WorkspaceGraph)
+	devTask := fs.TaskDefinition{Persistent: true, TopologicalDependencies: []string{"dev"}}
+	completeGraph.Pipeline = fs.Pipeline{"dev": devTask}
+
+	engine := NewEngine(completeGraph)
 
 	// Make this Task Graph:
 	// dev
@@ -37,12 +39,7 @@ func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
 	// └── workspace-c#dev
 
 	// "dev": dependsOn: ["^dev"] (where dev is persistent)
-	engine.AddTask(&Task{
-		Name:       "dev",
-		TopoDeps:   util.SetFromStrings([]string{"dev"}),
-		Deps:       make(util.Set), // empty, no non-caret task deps.
-		Persistent: true,
-	})
+	engine.AddTask(&Task{Name: "dev", TaskDefinition: devTask})
 
 	opts := &EngineBuildingOptions{
 		Packages:  workspaces,
@@ -63,7 +60,16 @@ func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
 
 func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
-	engine := NewEngine(&completeGraph.WorkspaceGraph)
+
+	buildTask := fs.TaskDefinition{Persistent: false, TaskDependencies: []string{"dev"}}
+	devTask := fs.TaskDefinition{Persistent: true}
+
+	completeGraph.Pipeline = fs.Pipeline{
+		"build": buildTask,
+		"dev":   devTask,
+	}
+
+	engine := NewEngine(completeGraph)
 
 	// Make this Task Graph:
 	// build
@@ -79,19 +85,8 @@ func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
 	// └── workspace-c#dev
 
 	// "build": dependsOn: ["dev"] (where build is not, but "dev" is persistent)
-	engine.AddTask(&Task{
-		Name:       "build",
-		TopoDeps:   make(util.Set), // empty
-		Deps:       util.SetFromStrings([]string{"dev"}),
-		Persistent: false,
-	})
-
-	engine.AddTask(&Task{
-		Name:       "dev",
-		TopoDeps:   make(util.Set),
-		Deps:       make(util.Set),
-		Persistent: true,
-	})
+	engine.AddTask(&Task{Name: "build", TaskDefinition: buildTask})
+	engine.AddTask(&Task{Name: "dev", TaskDefinition: devTask})
 
 	opts := &EngineBuildingOptions{
 		Packages:  workspaces,
@@ -113,7 +108,14 @@ func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
 
 func TestPrepare_PersistentDependencies_WorkspaceSpecific(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
-	engine := NewEngine(&completeGraph.WorkspaceGraph)
+	buildTask := fs.TaskDefinition{Persistent: false, TaskDependencies: []string{"workspace-b#dev"}}
+	bDevTask := fs.TaskDefinition{Persistent: true}
+	completeGraph.Pipeline = fs.Pipeline{
+		"build":           buildTask,
+		"workspace-b#dev": bDevTask,
+	}
+
+	engine := NewEngine(completeGraph)
 
 	// Make this Task Graph:
 	// build
@@ -129,20 +131,10 @@ func TestPrepare_PersistentDependencies_WorkspaceSpecific(t *testing.T) {
 	// └── workspace-b#dev
 
 	// "build": dependsOn: ["workspace-b#dev"]
-	engine.AddTask(&Task{
-		Name:       "build",
-		TopoDeps:   make(util.Set), // empty
-		Deps:       util.SetFromStrings([]string{"workspace-b#dev"}),
-		Persistent: false,
-	})
+	engine.AddTask(&Task{Name: "build", TaskDefinition: buildTask})
 
 	// workspace-b#dev is persistent, and has no dependencies
-	engine.AddTask(&Task{
-		Name:       "workspace-b#dev",
-		TopoDeps:   make(util.Set), // empty
-		Deps:       make(util.Set), // empty
-		Persistent: true,
-	})
+	engine.AddTask(&Task{Name: "workspace-b#dev", TaskDefinition: bDevTask})
 
 	opts := &EngineBuildingOptions{
 		Packages:  workspaces,
@@ -163,7 +155,13 @@ func TestPrepare_PersistentDependencies_WorkspaceSpecific(t *testing.T) {
 
 func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
-	engine := NewEngine(&completeGraph.WorkspaceGraph)
+	aDevTask := fs.TaskDefinition{Persistent: true, TaskDependencies: []string{"workspace-b#dev"}}
+	bDevTask := fs.TaskDefinition{Persistent: true}
+	completeGraph.Pipeline = fs.Pipeline{
+		"workspace-a#dev": aDevTask,
+		"workspace-b#dev": bDevTask,
+	}
+	engine := NewEngine(completeGraph)
 
 	// Make this Task Graph:
 	// workspace-a#dev
@@ -174,20 +172,10 @@ func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
 	err := engine.AddDep("workspace-b#dev", "workspace-a#dev")
 	assert.NilError(t, err, "Failed to prepare engine")
 
-	engine.AddTask(&Task{
-		Name:       "workspace-a#dev",
-		TopoDeps:   make(util.Set), // empty
-		Deps:       util.SetFromStrings([]string{"workspace-b#dev"}),
-		Persistent: true,
-	})
+	engine.AddTask(&Task{Name: "workspace-a#dev", TaskDefinition: aDevTask})
 
 	// workspace-b#dev dependsOn nothing else
-	engine.AddTask(&Task{
-		Name:       "workspace-b#dev",
-		TopoDeps:   make(util.Set), // empty
-		Deps:       make(util.Set), // empty
-		Persistent: true,
-	})
+	engine.AddTask(&Task{Name: "workspace-b#dev", TaskDefinition: bDevTask})
 
 	opts := &EngineBuildingOptions{
 		Packages:  workspaces,
@@ -206,7 +194,14 @@ func TestPrepare_PersistentDependencies_RootWorkspace(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 	// Add in a "dev" task into the root workspace, so it exists
 	completeGraph.WorkspaceInfos["//"].Scripts["dev"] = "echo \"root dev task\""
-	engine := NewEngine(&completeGraph.WorkspaceGraph)
+
+	buildTask := fs.TaskDefinition{TaskDependencies: []string{"//#dev"}}
+	rootDevTask := fs.TaskDefinition{Persistent: true}
+	completeGraph.Pipeline = fs.Pipeline{
+		"build":  buildTask,
+		"//#dev": rootDevTask,
+	}
+	engine := NewEngine(completeGraph)
 
 	// Make this Task Graph:
 	// build
@@ -222,19 +217,10 @@ func TestPrepare_PersistentDependencies_RootWorkspace(t *testing.T) {
 	// └── //#dev
 
 	// build task depends on the root dev task
-	engine.AddTask(&Task{
-		Name:     "build",
-		TopoDeps: make(util.Set), // empty
-		Deps:     util.SetFromStrings([]string{"//#dev"}),
-	})
+	engine.AddTask(&Task{Name: "build", TaskDefinition: buildTask})
 
 	// Add the persistent task in the root workspace
-	engine.AddTask(&Task{
-		Name:       "//#dev",
-		TopoDeps:   make(util.Set), // empty
-		Deps:       make(util.Set), // empty
-		Persistent: true,
-	})
+	engine.AddTask(&Task{Name: "//#dev", TaskDefinition: rootDevTask})
 
 	// prepare the engine
 	opts := &EngineBuildingOptions{
@@ -255,7 +241,11 @@ func TestPrepare_PersistentDependencies_RootWorkspace(t *testing.T) {
 
 func TestPrepare_PersistentDependencies_Unimplemented(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
-	engine := NewEngine(&completeGraph.WorkspaceGraph)
+	devTask := fs.TaskDefinition{Persistent: true, TopologicalDependencies: []string{"dev"}}
+	completeGraph.Pipeline = fs.Pipeline{
+		"dev": devTask,
+	}
+	engine := NewEngine(completeGraph)
 
 	// Make this Task Graph:
 	// dev
@@ -273,12 +263,7 @@ func TestPrepare_PersistentDependencies_Unimplemented(t *testing.T) {
 	delete(completeGraph.WorkspaceInfos["workspace-c"].Scripts, "dev")
 
 	// "dev": dependsOn: ["^dev"] (dev is persistent, but workspace-c does not implement dev)
-	engine.AddTask(&Task{
-		Name:       "dev",
-		TopoDeps:   util.SetFromStrings([]string{"dev"}),
-		Deps:       make(util.Set), // empty, no non-caret task deps.
-		Persistent: true,
-	})
+	engine.AddTask(&Task{Name: "dev", TaskDefinition: devTask})
 
 	opts := &EngineBuildingOptions{
 		Packages:  workspaces,
@@ -300,7 +285,9 @@ func TestPrepare_PersistentDependencies_Topological_SkipDepImplementedTask(t *te
 		"workspace-b": {"workspace-c"}, // b depends on c
 		"workspace-c": {},
 	}
+	devTask := fs.TaskDefinition{Persistent: true, TopologicalDependencies: []string{"dev"}}
 	completeGraph, workspaces := _buildCompleteGraph(workspaceGraphDefinition)
+	completeGraph.Pipeline = fs.Pipeline{"dev": devTask}
 
 	// Make this Task Graph:
 	// dev
@@ -315,14 +302,12 @@ func TestPrepare_PersistentDependencies_Topological_SkipDepImplementedTask(t *te
 	// remove b's dev script, so there's a skip in the middle
 	delete(completeGraph.WorkspaceInfos["workspace-b"].Scripts, "dev")
 
-	engine := NewEngine(&completeGraph.WorkspaceGraph)
+	engine := NewEngine(completeGraph)
 
 	// "dev": dependsOn: ["^dev"] (where dev is persistent)
 	engine.AddTask(&Task{
-		Name:       "dev",
-		TopoDeps:   util.SetFromStrings([]string{"dev"}),
-		Deps:       make(util.Set), // empty, no non-caret task deps.
-		Persistent: true,
+		Name:           "dev",
+		TaskDefinition: devTask,
 	})
 
 	opts := &EngineBuildingOptions{
@@ -351,7 +336,17 @@ func TestPrepare_PersistentDependencies_Topological_WithALittleExtra(t *testing.
 	}
 
 	completeGraph, workspaces := _buildCompleteGraph(workspaceGraphDefinition)
-	engine := NewEngine(&completeGraph.WorkspaceGraph)
+
+	buildTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
+	cBuildTask := fs.TaskDefinition{TaskDependencies: []string{"workspace-z#dev"}}
+	zDevTask := fs.TaskDefinition{Persistent: true}
+	completeGraph.Pipeline = fs.Pipeline{
+		"build":             buildTask,
+		"workspace-c#build": cBuildTask,
+		"workspace-z#dev":   zDevTask,
+	}
+
+	engine := NewEngine(completeGraph)
 
 	// Make this Task Graph:
 	// build
@@ -367,29 +362,16 @@ func TestPrepare_PersistentDependencies_Topological_WithALittleExtra(t *testing.
 	// 		 		 └── workspace-z#dev	// this one is persistent
 
 	// "build": dependsOn: ["^build"]
-	engine.AddTask(&Task{
-		Name:     "build",
-		TopoDeps: util.SetFromStrings([]string{"build"}),
-		Deps:     make(util.Set),
-	})
+	engine.AddTask(&Task{Name: "build", TaskDefinition: buildTask})
 
 	// workspace-c#build also depends on workspace-z#dev
 	// Note: AddDep() is necessary in addition to AddTask() to set up this dependency
 	err := engine.AddDep("workspace-z#dev", "workspace-c#build")
 	assert.NilError(t, err, "Failed to prepare engine")
-	engine.AddTask(&Task{
-		Name:     "workspace-c#build",
-		TopoDeps: make(util.Set),
-		Deps:     util.SetFromStrings([]string{"workspace-z#dev"}),
-	})
+	engine.AddTask(&Task{Name: "workspace-c#build", TaskDefinition: cBuildTask})
 
 	// workspace-z#dev is persistent (blanket "dev" is not added, we don't need it for this test case)
-	engine.AddTask(&Task{
-		Name:       "workspace-z#dev",
-		TopoDeps:   make(util.Set),
-		Deps:       make(util.Set),
-		Persistent: true,
-	})
+	engine.AddTask(&Task{Name: "workspace-z#dev", TaskDefinition: zDevTask})
 
 	opts := &EngineBuildingOptions{
 		Packages:  workspaces,
@@ -412,7 +394,20 @@ func TestPrepare_PersistentDependencies_CrossWorkspace_DownstreamPersistent(t *t
 		"workspace-z": {}, // no dependencies
 	}
 	completeGraph, workspaces := _buildCompleteGraph(workspaceGraphDefinition)
-	engine := NewEngine(&completeGraph.WorkspaceGraph)
+	buildTask := fs.TaskDefinition{}
+	aBuildTask := fs.TaskDefinition{TaskDependencies: []string{"workspace-b#build"}}
+	bBuildTask := fs.TaskDefinition{TaskDependencies: []string{"workspace-c#build"}}
+	cBuildTask := fs.TaskDefinition{TaskDependencies: []string{"workspace-z#dev"}}
+	zDevTask := fs.TaskDefinition{Persistent: true}
+	completeGraph.Pipeline = fs.Pipeline{
+		"build":             buildTask,
+		"workspace-a#build": aBuildTask,
+		"workspace-b#build": bBuildTask,
+		"workspace-c#build": cBuildTask,
+		"workspace-z#dev":   zDevTask,
+	}
+
+	engine := NewEngine(completeGraph)
 
 	// Make this Task Graph:
 	//
@@ -431,33 +426,11 @@ func TestPrepare_PersistentDependencies_CrossWorkspace_DownstreamPersistent(t *t
 	assert.NilError(t, err3, "Failed to prepare engine")
 
 	// The default build command has no deps, it just exists to have a baseline
-	engine.AddTask(&Task{
-		Name:     "build",
-		TopoDeps: make(util.Set),
-		Deps:     make(util.Set),
-	})
-
-	engine.AddTask(&Task{
-		Name:     "workspace-a#build",
-		TopoDeps: make(util.Set),
-		Deps:     util.SetFromStrings([]string{"workspace-b#build"}),
-	})
-	engine.AddTask(&Task{
-		Name:     "workspace-b#build",
-		TopoDeps: make(util.Set),
-		Deps:     util.SetFromStrings([]string{"workspace-c#build"}),
-	})
-	engine.AddTask(&Task{
-		Name:     "workspace-c#build",
-		TopoDeps: make(util.Set),
-		Deps:     util.SetFromStrings([]string{"workspace-z#dev"}),
-	})
-	engine.AddTask(&Task{
-		Name:       "workspace-z#dev",
-		TopoDeps:   make(util.Set),
-		Deps:       make(util.Set),
-		Persistent: true,
-	})
+	engine.AddTask(&Task{Name: "build"})
+	engine.AddTask(&Task{Name: "workspace-a#build", TaskDefinition: aBuildTask})
+	engine.AddTask(&Task{Name: "workspace-b#build", TaskDefinition: bBuildTask})
+	engine.AddTask(&Task{Name: "workspace-c#build", TaskDefinition: cBuildTask})
+	engine.AddTask(&Task{Name: "workspace-z#dev", TaskDefinition: zDevTask})
 
 	opts := &EngineBuildingOptions{
 		Packages:  workspaces,
@@ -511,8 +484,9 @@ func _buildCompleteGraph(workspaceEasyDefinition map[string][]string) (*graph.Co
 
 	// build completeGraph struct
 	completeGraph := &graph.CompleteGraph{
-		WorkspaceGraph: workspaceGraph,
-		WorkspaceInfos: workspaceInfos,
+		WorkspaceGraph:  workspaceGraph,
+		WorkspaceInfos:  workspaceInfos,
+		TaskDefinitions: map[string]*fs.TaskDefinition{},
 	}
 
 	return completeGraph, workspaces

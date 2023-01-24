@@ -1,5 +1,5 @@
 import { getTask } from "../src/getTask";
-import { spyConsole, validateLogs } from "./test-utils";
+import { spyConsole, validateLogs } from "turbo-test-utils";
 
 describe("getWorkspace()", () => {
   const mockConsole = spyConsole();
@@ -7,7 +7,8 @@ describe("getWorkspace()", () => {
     expect(getTask({})).toEqual("build");
     validateLogs(
       ['using "build" as the task as it was unspecified'],
-      mockConsole.log
+      mockConsole.log,
+      { prefix: "≫  " }
     );
   });
 
@@ -19,7 +20,8 @@ describe("getWorkspace()", () => {
     ).toEqual(`"workspace#task"`);
     validateLogs(
       ['using "workspace#task" as the task from the arguments'],
-      mockConsole.log
+      mockConsole.log,
+      { prefix: "≫  " }
     );
   });
 });

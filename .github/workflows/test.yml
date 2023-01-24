@@ -185,6 +185,34 @@ jobs:
 
       - run: pnpm -- turbo run test --filter=cli --color
 
+  go_integration:
+    name: Go Integration Tests
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.go == 'true'
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/build-debug-turborepo
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          target: ${{ matrix.os.name }}
+
+      - name: Cache Prysk
+        id: cache-prysk
+        uses: actions/cache@v3
+        with:
+          path: cli/.cram_env
+          key: prysk-venv-${{ matrix.os.name }}
+
+      - name: Integration Tests
+        run: pnpm -- turbo run integration-tests --filter=cli
   go_examples:
     name: Go Cli Examples
     needs: determine_jobs
@@ -307,7 +335,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --workspace --all-targets
+          args: --workspace --all-targets --locked
 
   rust_lint:
     needs: [determine_jobs, rust_prepare]
@@ -620,7 +648,7 @@ jobs:
             target/${{ matrix.os.target }}/release/next-dev.exe
 
   rust_build_dev:
-    needs: [determine_jobs, rust_prepare]
+    needs: [determine_jobs]
     if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
     strategy:
       fail-fast: false
@@ -828,8 +856,10 @@ jobs:
           commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})
 
   next_js_integration:
-    needs: [determine_jobs, rust_prepare, rust_build_dev]
+    needs: [rust_build_dev]
     if: needs.determine_jobs.outputs.rust == 'true'
+    # This job name is being used in github action to collect test results. Do not change it, or should update
+    # ./.github/actions/next-integration-test to match the new name.
     name: Next.js integration test
     runs-on: ubuntu-latest-8-core-oss
     strategy:
@@ -841,11 +871,10 @@ jobs:
       # Enabling backtrace will makes snapshot tests fail
       RUST_BACKTRACE: 0
       NEXT_TELEMETRY_DISABLED: 1
-      NEXT_TEST_JOB: 1
       # Path to the next-dev binary located in **docker container** image.
-      # NEXT_DEV_BIN: /work/next-dev
+      NEXT_DEV_BIN: /work/next-dev
       # Glob pattern to run specific tests with --turbo.
-      NEXT_DEV_TEST_GLOB: ""
+      NEXT_DEV_TEST_GLOB: "*"
       # pnpm version should match to what upstream next.js uses
       PNPM_VERSION: 7.24.3
 
@@ -894,24 +923,46 @@ jobs:
           pnpm run build
 
       - run: |
-          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && /work/next-dev --display-version && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} xvfb-run node run-tests.js --type development --timings -g ${{ matrix.group }}/4 >> /proc/1/fd/1"
+          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && /work/next-dev --display-version && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type development --timings -g ${{ matrix.group }}/4 >> /proc/1/fd/1"
         name: Run test/development
+        # It is currently expected to fail some of next.js integration test, do not fail CI check.
+        continue-on-error: true
         env:
           RECORD_REPLAY_METADATA_TEST_RUN_TITLE: testDev / Group ${{ matrix.group }}
+          # marker to parse log output, do not delete / change.
+          NEXT_INTEGRATION_TEST: true
 
       - run: |
-          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} xvfb-run node run-tests.js --type e2e --timings -g ${{ matrix.group }}/7 >> /proc/1/fd/1"
+          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type e2e --timings -g ${{ matrix.group }}/7 >> /proc/1/fd/1"
         name: Run test/e2e (dev)
+        continue-on-error: true
         env:
           RECORD_REPLAY_METADATA_TEST_RUN_TITLE: testDevE2E / Group ${{ matrix.group }} / Node ${{ matrix.node }}
           NEXT_TEST_MODE: dev
           RECORD_REPLAY_TEST_METRICS: 1
+          NEXT_INTEGRATION_TEST: true
 
       - run: |
-          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v16 | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} xvfb-run node run-tests.js --timings -g ${{ matrix.group }}/25 >> /proc/1/fd/1"
+          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v16 | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_JOB=1 xvfb-run node run-tests.js --timings -g ${{ matrix.group }}/25 >> /proc/1/fd/1"
         name: Test Integration
+        continue-on-error: true
         env:
           RECORD_REPLAY_METADATA_TEST_RUN_TITLE: testIntegration / Group ${{ matrix.group }}
+          NEXT_INTEGRATION_TEST: true
+
+  collect_nextjs_integration_stat:
+    needs: [next_js_integration]
+    if: needs.determine_jobs.outputs.rust == 'true'
+    name: Next.js integration test status report
+    permissions:
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Collect integration test stat
+        uses: ./.github/actions/next-integration-stat
 
   node_lint:
     name: Node.js linting
