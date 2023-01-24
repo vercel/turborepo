@@ -149,7 +149,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		pkg, taskName := util.GetPackageTaskFromId(taskID)
 
-		// This for lopo adds in the Root Node as a taskID (i.e. __ROOT__#build)
+		// This for loop adds in the Root Node as a taskID (i.e. __ROOT__#build)
 		// into the traversalQueue. But in order to look up the information about
 		// the root workpsace, we need to use the package name "//". Re-assign
 		// the pkgName here to account for that.
