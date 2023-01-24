@@ -202,6 +202,11 @@ func DecodePnpmLockfile(contents []byte) (Lockfile, error) {
 
 // ResolvePackage Given a package and version returns the key, resolved version, and if it was found
 func (p *PnpmLockfile) ResolvePackage(workspacePath turbopath.AnchoredUnixPath, name string, version string) (Package, error) {
+	// Check if version is a key
+	if _, ok := p.Packages[version]; ok {
+		return Package{Key: version, Version: getVersionFromKey(version), Found: true}, nil
+	}
+
 	resolvedVersion, ok, err := p.resolveSpecifier(workspacePath, name, version)
 	if !ok || err != nil {
 		return Package{}, err
@@ -222,6 +227,11 @@ func (p *PnpmLockfile) ResolvePackage(workspacePath turbopath.AnchoredUnixPath, 
 
 // ResolvePackage Given a package and version returns the key, resolved version, and if it was found
 func (p *PnpmLockfileV6) ResolvePackage(workspacePath turbopath.AnchoredUnixPath, name string, version string) (Package, error) {
+	// Check if version is a key
+	if _, ok := p.Packages[version]; ok {
+		return Package{Key: version, Version: getVersionFromKeyV6(version), Found: true}, nil
+	}
+
 	resolvedVersion, ok, err := p.resolveSpecifier(workspacePath, name, version)
 	if !ok || err != nil {
 		return Package{}, err
@@ -585,4 +595,20 @@ func formatPnpmKey(name string, version string) string {
 
 func formatPnpmKeyV6(name string, version string) string {
 	return fmt.Sprintf("/%s@%s", name, version)
+}
+
+func getVersionFromKey(key string) string {
+	atIndex := strings.LastIndex(key, "/")
+	if atIndex == -1 || len(key) == atIndex+1 {
+		return ""
+	}
+	return key[atIndex+1:]
+}
+
+func getVersionFromKeyV6(key string) string {
+	atIndex := strings.LastIndex(key, "@")
+	if atIndex == -1 || len(key) == atIndex+1 {
+		return ""
+	}
+	return key[atIndex+1:]
 }
