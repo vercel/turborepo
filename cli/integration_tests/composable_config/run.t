@@ -58,3 +58,27 @@ Setup
   apps/app-b/out/
   apps/app-b/out/.keep
   apps/app-b/out/foo.txt
+
+# Build app-c, save output to a file so we can fish out the hash from logs
+# - Should run `compile` first, even though there is a turbo.json override
+# - Should write files to `out/` directory
+  $ ${TURBO} run build --skip-infer --filter=app-c > tmp.log
+  $ cat tmp.log
+  \xe2\x80\xa2 Packages in scope: app-c (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  app-c:compile: cache miss, executing 55ca1e245673a734
+  app-c:compile: 
+  app-c:compile: > compile
+  app-c:compile: > echo "compiling in app-c"
+  app-c:compile: 
+  app-c:compile: compiling in app-c
+  app-c:build: cache miss, executing 13415565770ebfbe
+  app-c:build: 
+  app-c:build: > build
+  app-c:build: > echo "building app-c" > lib/foo.txt && echo "building app-c" > out/foo.txt
+  app-c:build: 
+  
+   Tasks:    2 successful, 2 total
+  Cached:    0 cached, 2 total
+    Time:\s*[\.0-9]+m?s  (re)
