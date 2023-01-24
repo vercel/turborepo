@@ -26,24 +26,28 @@ func TestEngineDefault(t *testing.T) {
 	g.Connect(dag.BasicEdge("c", "a"))
 
 	p := NewEngine(&g)
-	deps := make(util.Set)
-	deps.Add("prepare")
 	p.AddTask(&Task{
-		Name:           "build",
-		Deps:           deps,
-		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
+		Name: "build",
+		TaskDefinition: fs.TaskDefinition{
+			TopologicalDependencies: []string{"build"},
+			TaskDependencies:        []string{"prepare"},
+		},
 	})
 	p.AddTask(&Task{
-		Name:           "test",
-		Deps:           deps,
-		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
+		Name: "test",
+		TaskDefinition: fs.TaskDefinition{
+			TopologicalDependencies: []string{"build"},
+			TaskDependencies:        []string{"prepare"},
+		},
 	})
 	p.AddTask(&Task{
 		Name: "prepare",
 	})
 	p.AddTask(&Task{
 		Name: "side-quest", // not in the build/test tree
-		Deps: deps,
+		TaskDefinition: fs.TaskDefinition{
+			TaskDependencies: []string{"prepare"},
+		},
 	})
 
 	if _, ok := p.Tasks["build"]; !ok {
@@ -120,12 +124,10 @@ func TestDependenciesOnUnspecifiedPackages(t *testing.T) {
 	p := NewEngine(graph)
 	p.AddTask(&Task{
 		Name:           "build",
-		Deps:           make(util.Set),
 		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
 	})
 	p.AddTask(&Task{
 		Name:           "test",
-		Deps:           make(util.Set),
 		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
 	})
 	// We're only requesting one package ("scope"),
@@ -173,12 +175,10 @@ func TestRunPackageTask(t *testing.T) {
 	p := NewEngine(graph)
 	p.AddTask(&Task{
 		Name:           "app1#special",
-		Deps:           make(util.Set),
 		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
 	})
 	p.AddTask(&Task{
 		Name:           "build",
-		Deps:           make(util.Set),
 		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
 	})
 	// equivalent to "turbo run special", without an entry for
@@ -229,17 +229,14 @@ func TestIncludeRootTasks(t *testing.T) {
 	p := NewEngine(graph)
 	p.AddTask(&Task{
 		Name:           "build",
-		Deps:           make(util.Set),
 		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
 	})
 	p.AddTask(&Task{
 		Name:           "test",
-		Deps:           make(util.Set),
 		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
 	})
 	p.AddTask(&Task{
 		Name: util.RootTaskID("test"),
-		Deps: make(util.Set),
 	})
 	err := p.Prepare(&EngineBuildingOptions{
 		Packages:  []string{util.RootPkgName, "app1", "libA"},
@@ -284,12 +281,10 @@ func TestDependOnRootTask(t *testing.T) {
 
 	p.AddTask(&Task{
 		Name:           "build",
-		Deps:           make(util.Set),
 		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
 	})
 	p.AddTask(&Task{
 		Name: "//#root-task",
-		Deps: make(util.Set),
 	})
 	err := p.AddDep("//#root-task", "libA#build")
 	assert.NilError(t, err, "AddDep")
@@ -326,7 +321,6 @@ func TestDependOnMissingRootTask(t *testing.T) {
 
 	p.AddTask(&Task{
 		Name:           "build",
-		Deps:           make(util.Set),
 		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
 	})
 	err := p.AddDep("//#root-task", "libA#build")
@@ -351,12 +345,10 @@ func TestDependOnMultiplePackageTasks(t *testing.T) {
 
 	p.AddTask(&Task{
 		Name:           "build",
-		Deps:           make(util.Set),
 		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
 	})
 	p.AddTask(&Task{
 		Name:           "compile",
-		Deps:           make(util.Set),
 		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
 	})
 	err := p.AddDep("app1#build", "libA#build")
@@ -396,12 +388,10 @@ func TestDependOnUnenabledRootTask(t *testing.T) {
 
 	p.AddTask(&Task{
 		Name:           "build",
-		Deps:           make(util.Set),
 		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
 	})
 	p.AddTask(&Task{
 		Name: "foo",
-		Deps: make(util.Set),
 	})
 	err := p.AddDep("//#foo", "libA#build")
 	assert.NilError(t, err, "AddDep")
@@ -424,17 +414,19 @@ func TestEngineTasksOnly(t *testing.T) {
 	g.Connect(dag.BasicEdge("c", "a"))
 
 	p := NewEngine(&g)
-	deps := make(util.Set)
-	deps.Add("prepare")
 	p.AddTask(&Task{
-		Name:           "build",
-		Deps:           deps,
-		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
+		Name: "build",
+		TaskDefinition: fs.TaskDefinition{
+			TopologicalDependencies: []string{"build"},
+			TaskDependencies:        []string{"prepare"},
+		},
 	})
 	p.AddTask(&Task{
-		Name:           "test",
-		Deps:           deps,
-		TaskDefinition: fs.TaskDefinition{TopologicalDependencies: []string{"build"}},
+		Name: "test",
+		TaskDefinition: fs.TaskDefinition{
+			TopologicalDependencies: []string{"build"},
+			TaskDependencies:        []string{"prepare"},
+		},
 	})
 	p.AddTask(&Task{
 		Name: "prepare",
