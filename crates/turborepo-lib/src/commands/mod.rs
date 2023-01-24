@@ -25,7 +25,7 @@ impl CommandBase {
         let repo_config_path = repo_root.join(".turbo").join("config.json");
 
         Ok(Self {
-            repo_root: repo_root.to_path_buf(),
+            repo_root,
             ui: args.ui(),
             repo_config: RepoConfigLoader::new(repo_config_path)
                 .with_api(args.api)
