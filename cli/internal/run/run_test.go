@@ -84,8 +84,9 @@ func Test_taskSelfRef(t *testing.T) {
 	}
 
 	completeGraph := &graph.CompleteGraph{
-		WorkspaceGraph: *topoGraph,
-		Pipeline:       pipeline,
+		WorkspaceGraph:  *topoGraph,
+		Pipeline:        pipeline,
+		TaskDefinitions: map[string]*fs.TaskDefinition{},
 	}
 
 	_, err := buildTaskGraphEngine(completeGraph, rs)
