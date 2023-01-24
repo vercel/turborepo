@@ -441,8 +441,6 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 
 	// If there is no turbo.json in the workspace directory, we'll use the one in root turbo.json
 	if err != nil {
-		fmt.Printf("[debug] root: rootPipeline %#v\n", rootPipeline)
-		// fmt.Printf("[debug] root: Looking up def for %#v, %#v\n", taskID, taskName)
 		rootTaskDefinition, err := rootPipeline.GetTask(taskID, taskName)
 		if err != nil {
 			// This should be an unlikely error scenario. If we're working with a task
@@ -468,7 +466,6 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 		// TODO(mehulkar):
 		// 		getTaskFromPipeline allows searching with a taskID (e.g. `package#task`).
 		// 		But we do not want to allow this, except if we're in the root workspace.
-		fmt.Printf("[debug] Looking up def for %#v, %#v\n", taskID, taskName)
 		taskDefinition, err := turboJSON.Pipeline.GetTask(taskID, taskName)
 		if err != nil {
 			// If there was nothing in the pipeline for this task
