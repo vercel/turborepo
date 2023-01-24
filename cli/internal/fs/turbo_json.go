@@ -92,6 +92,26 @@ type TaskDefinition struct {
 	Persistent bool
 }
 
+// GetTask returns a TaskDefinition based on the ID (package#task format) or name (e.g. "build")
+func (p Pipeline) GetTask(taskID string, taskName string) (*TaskDefinition, error) {
+	// first check for package-tasks
+	taskDefinition, ok := p[taskID]
+	if !ok {
+		// then check for regular tasks
+		fallbackTaskDefinition, notcool := p[taskName]
+		// if neither, then bail
+		if !notcool {
+			// Return an empty TaskDefinition
+			return nil, fmt.Errorf("Could not find task \"%s\" in pipeline", taskID)
+		}
+
+		// override if we need to...
+		taskDefinition = fallbackTaskDefinition
+	}
+
+	return &taskDefinition, nil
+}
+
 // LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
 func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON, includeSynthesizedFromRootPackageJSON bool) (*TurboJSON, error) {
 	// If the root package.json stil has a `turbo` key, log a warning and remove it.
