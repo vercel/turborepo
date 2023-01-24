@@ -85,15 +85,15 @@ impl ContentSource for NextRouterContentSource {
                 .get(path, Value::new(ContentSourceData::default())));
         };
 
-        let rewrite = match &*res {
+        match &*res {
             RouterResult::Error => {
                 // TODO: emit error
-                return Ok(this
+                Ok(this
                     .inner
-                    .get(path, Value::new(ContentSourceData::default())));
+                    .get(path, Value::new(ContentSourceData::default())))
             }
             RouterResult::Redirect(data) => {
-                return Ok(ContentSourceResultVc::exact(
+                Ok(ContentSourceResultVc::exact(
                     ContentSourceContent::HttpProxy(
                         ProxyResult {
                             status: data.status_code,
@@ -105,16 +105,16 @@ impl ContentSource for NextRouterContentSource {
                     )
                     .cell()
                     .into(),
-                ));
+                ))
             }
-            RouterResult::Rewrite(data) => data,
-        };
-
-        // TODO: We can't set response headers and query for a source.
-        // TODO: Does a rewrite's status code matter?
-        Ok(this
-            .inner
-            .get(&rewrite.url, Value::new(ContentSourceData::default())))
+            RouterResult::Rewrite(data) => {
+                // TODO: We can't set response headers and query for a source.
+                // TODO: Does a rewrite's status code matter?
+                Ok(this
+                    .inner
+                    .get(&data.url, Value::new(ContentSourceData::default())))
+            }
+        }
     }
 }
 
