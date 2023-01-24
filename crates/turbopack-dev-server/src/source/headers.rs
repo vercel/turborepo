@@ -1,13 +1,12 @@
-use std::{hash::Hash, mem::replace, ops::DerefMut};
+use std::{collections::BTreeMap, hash::Hash, mem::replace, ops::DerefMut};
 
-use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::trace::TraceRawVcs;
 
 /// A parsed query string from a http request
-#[derive(Clone, Debug, PartialEq, Eq, Default, TraceRawVcs, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, Hash, TraceRawVcs, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct Headers(#[turbo_tasks(trace_ignore)] IndexMap<String, HeaderValue>);
+pub struct Headers(BTreeMap<String, HeaderValue>);
 
 /// The value of an http header. HTTP headers might contain non-utf-8 bytes. An
 /// header might also occur multiple times.
@@ -37,19 +36,8 @@ impl Ord for Headers {
     }
 }
 
-// clippy: IndexMap forgot to implement Hash, but PartialEq matches Hash
-#[allow(clippy::derive_hash_xor_eq)]
-impl Hash for Headers {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        for (k, v) in &self.0 {
-            k.hash(state);
-            v.hash(state);
-        }
-    }
-}
-
 impl std::ops::Deref for Headers {
-    type Target = IndexMap<String, HeaderValue>;
+    type Target = BTreeMap<String, HeaderValue>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }

@@ -9,6 +9,7 @@ pub mod update;
 
 use std::{
     borrow::Cow,
+    collections::btree_map::Entry,
     future::Future,
     net::{SocketAddr, TcpListener},
     pin::Pin,
@@ -27,7 +28,6 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Request, Response, Server,
 };
-use indexmap::map::Entry;
 use mime_guess::mime;
 use source::{
     headers::{HeaderValue, Headers},
