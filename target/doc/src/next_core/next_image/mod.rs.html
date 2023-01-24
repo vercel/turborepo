@@ -100,18 +100,15 @@
 <span id="100">100</span>
 <span id="101">101</span>
 <span id="102">102</span>
-<span id="103">103</span>
-<span id="104">104</span>
-<span id="105">105</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbopack_core::introspect::{Introspectable, IntrospectableVc};
 <span class="kw">use </span>turbopack_dev_server::source::{
     query::QueryValue, ContentSource, ContentSourceContent, ContentSourceData,
-    ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
-    NeededData, ProxyResult,
+    ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResult, ContentSourceResultVc,
+    ContentSourceVc, NeededData, ProxyResult,
 };
 
 <span class="doccomment">/// Serves, resizes, optimizes, and re-encodes images to be used with
@@ -147,20 +144,17 @@
                 </span>]
                 .iter()
                 .cloned()
-                .collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;();
+                .collect::&lt;BTreeSet&lt;<span class="kw">_</span>&gt;&gt;();
 
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-                    ContentSourceContent::NeedData(NeededData {
-                        source: self_vc.into(),
-                        path: path.to_string(),
-                        vary: ContentSourceDataVary {
-                            url: <span class="bool-val">true</span>,
-                            query: <span class="prelude-val">Some</span>(ContentSourceDataFilter::Subset(queries)),
-                            ..Default::default()
-                        },
-                    })
-                    .cell(),
-                ));
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::need_data(Value::new(NeededData {
+                    source: self_vc.into(),
+                    path: path.to_string(),
+                    vary: ContentSourceDataVary {
+                        url: <span class="bool-val">true</span>,
+                        query: <span class="prelude-val">Some</span>(ContentSourceDataFilter::Subset(queries)),
+                        ..Default::default()
+                    },
+                })));
             }
             <span class="prelude-val">Some</span>(query) =&gt; query,
         };
@@ -174,9 +168,8 @@
         // formats.
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(path) = url.strip_prefix(<span class="string">&#39;/&#39;</span>) {
             <span class="kw">let </span>asset = this.asset_source.get(path, Default::default());
-            <span class="comment">// THERE&#39;S A HUGE PERFORMANCE ISSUE IF THIS MISSES
-            </span><span class="kw">let </span>inner = asset.<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">if </span><span class="macro">matches!</span>(<span class="kw-2">&amp;*</span>inner.content.<span class="kw">await</span><span class="question-mark">?</span>, ContentSourceContent::Static(..)) {
+            <span class="kw">let </span>inner = asset.<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if let </span>ContentSourceResult::Result { .. } = <span class="kw-2">&amp;*</span>inner {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(asset);
             }
         }
@@ -191,7 +184,8 @@
                 }
                 .cell(),
             )
-            .cell(),
+            .cell()
+            .into(),
         ))
     }
 }

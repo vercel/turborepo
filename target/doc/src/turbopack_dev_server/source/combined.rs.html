@@ -227,6 +227,9 @@
 <span id="227">227</span>
 <span id="228">228</span>
 <span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem;
 
 <span class="kw">use </span>anyhow::Result;
@@ -234,7 +237,7 @@
 <span class="kw">use </span>turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 
 <span class="kw">use super</span>::{
-    specificity::SpecificityReadRef, ContentSource, ContentSourceContent, ContentSourceData,
+    specificity::SpecificityReadRef, ContentSource, ContentSourceData, ContentSourceResult,
     ContentSourceResultVc, ContentSourceVc, NeededData,
 };
 <span class="kw">use </span><span class="kw">crate</span>::source::ContentSourcesVc;
@@ -336,40 +339,43 @@
             };
 
             <span class="kw">let </span>res = result.<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">if let </span>ContentSourceContent::NeedData(data) = <span class="kw-2">&amp;*</span>res.content.<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="comment">// We create a partially computed content source which will be able to resume
-                // iteration at this exact content source after getting data.
-                </span><span class="kw">let </span>paused = PausableCombinedContentSource {
-                    inner,
-                    index,
-                    pending: <span class="prelude-val">Some</span>(PendingState::from(data)),
-                    max,
-                };
+            <span class="kw">match </span><span class="kw-2">&amp;*</span>res {
+                ContentSourceResult::NeedData(data) =&gt; {
+                    <span class="comment">// We create a partially computed content source which will be able to resume
+                    // iteration at this exact content source after getting data.
+                    </span><span class="kw">let </span>paused = PausableCombinedContentSource {
+                        inner,
+                        index,
+                        pending: <span class="prelude-val">Some</span>(PendingState::from(data)),
+                        max,
+                    };
 
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-                    ContentSourceContent::NeedData(NeededData {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::need_data(Value::new(NeededData {
                         <span class="comment">// We do not return data.path because that would affect later content source
                         // requests. However, when we resume, we&#39;ll use the path stored in pending
                         // to correctly requery this source.
                         </span>path: path.to_string(),
                         source: paused.cell().into(),
                         vary: data.vary.clone(),
-                    })
-                    .cell(),
-                ));
-            }
-
-            <span class="kw">let </span>specificity = res.specificity.<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">if </span>specificity.is_exact() {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(result);
-            }
-            <span class="kw">if let </span><span class="prelude-val">Some</span>((max, <span class="kw">_</span>)) = max.as_ref() {
-                <span class="kw">if </span><span class="kw-2">*</span>max &gt;= specificity {
+                    })));
+                }
+                ContentSourceResult::NotFound =&gt; {
                     <span class="comment">// we can keep the current max
-                    </span><span class="kw">continue</span>;
+                </span>}
+                ContentSourceResult::Result { specificity, .. } =&gt; {
+                    <span class="kw">let </span>specificity = specificity.<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">if </span>specificity.is_exact() {
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(result);
+                    }
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>((max, <span class="kw">_</span>)) = max.as_ref() {
+                        <span class="kw">if </span><span class="kw-2">*</span>max &gt;= specificity {
+                            <span class="comment">// we can keep the current max
+                            </span><span class="kw">continue</span>;
+                        }
+                    }
+                    max = <span class="prelude-val">Some</span>((specificity, result));
                 }
             }
-            max = <span class="prelude-val">Some</span>((specificity, result));
         }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, result)) = max {

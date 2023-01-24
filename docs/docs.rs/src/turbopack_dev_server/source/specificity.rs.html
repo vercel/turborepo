@@ -173,6 +173,10 @@
 <span id="173">173</span>
 <span id="174">174</span>
 <span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{cmp::Ordering, fmt::Display};
 
 <span class="kw">use </span>anyhow::Result;
@@ -271,6 +275,16 @@
     </span><span class="kw">pub fn </span>is_exact(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="self">self</span>.elements.is_empty()
     }
+
+    <span class="doccomment">/// The lowest possible specificity. Used when no match is found.
+    </span><span class="kw">pub fn </span>not_found() -&gt; <span class="self">Self </span>{
+        Specificity {
+            elements: <span class="macro">vec!</span>[SpecificityElement {
+                position: <span class="number">0</span>,
+                ty: SpecificityElementType::NotFound,
+            }],
+        }
+    }
 }
 
 <span class="kw">impl </span>Display <span class="kw">for </span>Specificity {
@@ -301,13 +315,7 @@
     <span class="doccomment">/// The lowest possible specificity. Used when no match is found.
     </span><span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>not_found() -&gt; <span class="self">Self </span>{
-        Specificity {
-            elements: <span class="macro">vec!</span>[SpecificityElement {
-                position: <span class="number">0</span>,
-                ty: SpecificityElementType::NotFound,
-            }],
-        }
-        .cell()
+        Specificity::not_found().cell()
     }
 
     <span class="doccomment">/// The highest possible specificity. Used for exact matches.

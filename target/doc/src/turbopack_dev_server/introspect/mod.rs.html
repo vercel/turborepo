@@ -152,6 +152,7 @@
 <span id="152">152</span>
 <span id="153">153</span>
 <span id="154">154</span>
+<span id="155">155</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashSet, fmt::Display};
 
 <span class="kw">use </span>anyhow::Result;
@@ -302,7 +303,8 @@
                 .cell()
                 .into(),
             )
-            .cell(),
+            .cell()
+            .into(),
         ))
     }
 }

@@ -185,6 +185,8 @@
 <span id="185">185</span>
 <span id="186">186</span>
 <span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet, VecDeque};
 
 <span class="kw">use </span>anyhow::Result;
@@ -336,7 +338,9 @@
                 }
             }
             <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-                ContentSourceContent::Static(asset.versioned_content()).cell(),
+                ContentSourceContent::Static(asset.versioned_content())
+                    .cell()
+                    .into(),
             ));
         }
         <span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found())

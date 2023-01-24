@@ -452,6 +452,31 @@
 <span id="452">452</span>
 <span id="453">453</span>
 <span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 #![feature(trait_alias)]
 #![feature(array_chunks)]
@@ -493,8 +518,8 @@
 
 <span class="kw">use </span><span class="self">self</span>::{
     source::{
-        query::Query, ContentSourceContent, ContentSourceDataVary, ContentSourceResultVc,
-        ContentSourceVc, ProxyResultReadRef,
+        query::Query, ContentSourceContent, ContentSourceDataVary, ContentSourceResult,
+        ContentSourceResultVc, ContentSourceVc, ProxyResultReadRef,
     },
     update::{protocol::ResourceIdentifier, UpdateServer},
 };
@@ -568,23 +593,41 @@
     source: ContentSourceVc,
     path: <span class="kw-2">&amp;</span>str,
     data: Value&lt;ContentSourceData&gt;,
+    vary: Value&lt;ContentSourceDataVary&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;GetFromSourceResultVc&gt; {
-    <span class="kw">let </span>content = source.get(path, data).<span class="kw">await</span><span class="question-mark">?</span>.content.<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>content {
-        ContentSourceContent::Static(content_vc) =&gt; {
-            <span class="kw">if let </span>AssetContent::File(file) = <span class="kw-2">&amp;*</span>content_vc.content().<span class="kw">await</span><span class="question-mark">? </span>{
-                GetFromSourceResult::Static(file.<span class="kw">await</span><span class="question-mark">?</span>)
-            } <span class="kw">else </span>{
-                GetFromSourceResult::NotFound
-            }
-        }
-        ContentSourceContent::HttpProxy(proxy) =&gt; GetFromSourceResult::HttpProxy(proxy.<span class="kw">await</span><span class="question-mark">?</span>),
-        ContentSourceContent::NeedData(data) =&gt; GetFromSourceResult::NeedData {
+    <span class="kw">let </span>result = source.get(path, data.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>result {
+        ContentSourceResult::NotFound =&gt; GetFromSourceResult::NotFound,
+        ContentSourceResult::NeedData(data) =&gt; GetFromSourceResult::NeedData {
             source: data.source.resolve().<span class="kw">await</span><span class="question-mark">?</span>,
             path: data.path.clone(),
             vary: data.vary.clone(),
         },
-        ContentSourceContent::NotFound =&gt; GetFromSourceResult::NotFound,
+        ContentSourceResult::Result { get_content, .. } =&gt; {
+            <span class="kw">let </span>content_vary = get_content.vary().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span><span class="kw-2">*</span>vary != <span class="kw-2">*</span>content_vary {
+                GetFromSourceResult::NeedData {
+                    source: ContentSourceResultVc::exact(<span class="kw-2">*</span>get_content).into(),
+                    path: String::new(),
+                    vary: content_vary.clone_value(),
+                }
+            } <span class="kw">else </span>{
+                <span class="kw">let </span>content = get_content.get(data).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">match </span><span class="kw-2">&amp;*</span>content {
+                    ContentSourceContent::NotFound =&gt; GetFromSourceResult::NotFound,
+                    ContentSourceContent::Static(content_vc) =&gt; {
+                        <span class="kw">if let </span>AssetContent::File(file) = <span class="kw-2">&amp;*</span>content_vc.content().<span class="kw">await</span><span class="question-mark">? </span>{
+                            GetFromSourceResult::Static(file.<span class="kw">await</span><span class="question-mark">?</span>)
+                        } <span class="kw">else </span>{
+                            GetFromSourceResult::NotFound
+                        }
+                    }
+                    ContentSourceContent::HttpProxy(proxy) =&gt; {
+                        GetFromSourceResult::HttpProxy(proxy.<span class="kw">await</span><span class="question-mark">?</span>)
+                    }
+                }
+            }
+        }
     }
     .cell())
 }
@@ -597,8 +640,14 @@
     console_ui: ConsoleUiVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Response&lt;hyper::Body&gt;&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>data = ContentSourceData::default();
+    <span class="kw">let </span><span class="kw-2">mut </span>data_vary = ContentSourceDataVary::default();
     <span class="kw">loop </span>{
-        <span class="kw">let </span>content_source_result = get_from_source(resolved_source, <span class="kw-2">&amp;</span>asset_path, Value::new(data));
+        <span class="kw">let </span>content_source_result = get_from_source(
+            resolved_source,
+            <span class="kw-2">&amp;</span>asset_path,
+            Value::new(data),
+            Value::new(data_vary),
+        );
         handle_issues(
             content_source_result,
             path,
@@ -655,6 +704,7 @@
                 resolved_source = <span class="kw-2">*</span>source;
                 asset_path = Cow::Owned(path.to_string());
                 data = request_to_data(<span class="kw-2">&amp;mut </span>request, vary).<span class="kw">await</span><span class="question-mark">?</span>;
+                data_vary = vary.clone();
                 <span class="kw">continue</span>;
             }
             GetFromSourceResult::NotFound =&gt; {}

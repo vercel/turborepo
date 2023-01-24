@@ -114,8 +114,6 @@
 <span id="114">114</span>
 <span id="115">115</span>
 <span id="116">116</span>
-<span id="117">117</span>
-<span id="118">118</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{sync::Arc, time::Duration};
 
 <span class="kw">use </span>anyhow::Result;
@@ -204,17 +202,14 @@
                     <span class="kw">let </span>table = viz::table::create_table(tree, tt.stats_type());
                     viz::table::wrap_html(<span class="kw-2">&amp;</span>table)
                 } <span class="kw">else </span>{
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-                        ContentSourceContent::NeedData(NeededData {
-                            source: self_vc.into(),
-                            path: path.to_string(),
-                            vary: ContentSourceDataVary {
-                                query: <span class="prelude-val">Some</span>(ContentSourceDataFilter::All),
-                                ..Default::default()
-                            },
-                        })
-                        .cell(),
-                    ));
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::need_data(Value::new(NeededData {
+                        source: self_vc.into(),
+                        path: path.to_string(),
+                        vary: ContentSourceDataVary {
+                            query: <span class="prelude-val">Some</span>(ContentSourceDataFilter::All),
+                            ..Default::default()
+                        },
+                    })));
                 }
             }
             <span class="string">&quot;reset&quot; </span>=&gt; {
@@ -230,7 +225,8 @@
             ContentSourceContent::Static(
                 AssetContentVc::from(File::from(html).with_content_type(TEXT_HTML_UTF_8)).into(),
             )
-            .cell(),
+            .cell()
+            .into(),
         ))
     }
 }

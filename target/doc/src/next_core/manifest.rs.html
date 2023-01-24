@@ -81,6 +81,8 @@
 <span id="81">81</span>
 <span id="82">82</span>
 <span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>mime::APPLICATION_JSON;
@@ -160,7 +162,9 @@
         <span class="kw">let </span>file = File::from(manifest_content).with_content_type(APPLICATION_JSON);
 
         <span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-            ContentSourceContent::Static(AssetContentVc::from(file).into()).cell(),
+            ContentSourceContent::Static(AssetContentVc::from(file).into())
+                .cell()
+                .into(),
         ))
     }
 }

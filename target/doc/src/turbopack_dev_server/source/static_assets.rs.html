@@ -145,7 +145,7 @@
                 ) {
                     <span class="kw">let </span>content = SourceAssetVc::new(path).as_asset().content();
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-                        ContentSourceContent::Static(content.into()).cell(),
+                        ContentSourceContent::Static(content.into()).cell().into(),
                     ));
                 }
             }
