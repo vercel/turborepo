@@ -26,8 +26,6 @@ type Visitor = func(taskID string) error
 
 // Engine contains both the DAG for the packages and the tasks and implements the methods to execute tasks in them
 type Engine struct {
-	// TopologicGraph is a graph of workspaces
-	TopologicGraph *dag.AcyclicGraph
 	// TaskGraph is a graph of package-tasks
 	TaskGraph *dag.AcyclicGraph
 	// Tasks are a map of tasks in the engine
@@ -44,7 +42,6 @@ func NewEngine(completeGraph *graph.CompleteGraph) *Engine {
 	return &Engine{
 		completeGraph:    completeGraph,
 		Tasks:            make(map[string]*Task),
-		TopologicGraph:   &completeGraph.WorkspaceGraph,
 		TaskGraph:        &dag.AcyclicGraph{},
 		PackageTaskDeps:  map[string][]string{},
 		rootEnabledTasks: make(util.Set),
@@ -233,7 +230,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		// hasTopoDeps will be true if the task depends on any tasks from dependency packages
 		// E.g. `dev: { dependsOn: [^dev] }`
-		hasTopoDeps := topoDeps.Len() > 0 && e.TopologicGraph.DownEdges(pkg).Len() > 0
+		hasTopoDeps := topoDeps.Len() > 0 && e.completeGraph.WorkspaceGraph.DownEdges(pkg).Len() > 0
 
 		// hasDeps will be true if the task depends on any tasks from its own package
 		// E.g. `build: { dependsOn: [dev] }`
@@ -248,7 +245,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		}
 
 		if hasTopoDeps {
-			depPkgs := e.TopologicGraph.DownEdges(pkg)
+			depPkgs := e.completeGraph.WorkspaceGraph.DownEdges(pkg)
 			for _, from := range topoDeps.UnsafeListOfStrings() {
 				// add task dep from all the package deps within repo
 				for depPkg := range depPkgs {
@@ -314,7 +311,7 @@ func (e *Engine) AddTask(task *Task) *Engine {
 // AddDep adds tuples from+to task ID combos in tuple format so they can be looked up later.
 func (e *Engine) AddDep(fromTaskID string, toTaskID string) error {
 	fromPkg, _ := util.GetPackageTaskFromId(fromTaskID)
-	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !e.TopologicGraph.HasVertex(fromPkg) {
+	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !e.completeGraph.WorkspaceGraph.HasVertex(fromPkg) {
 		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskID)
 	}
 

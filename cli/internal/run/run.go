@@ -220,7 +220,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			return errors.Wrap(err, "failed to create SCM")
 		}
 	}
-	filteredPkgs, isAllPackages, err := scope.ResolvePackages(&r.opts.scopeOpts, r.base.RepoRoot.ToStringDuringMigration(), scmInstance, pkgDepGraph, r.base.UI, r.base.Logger)
+	filteredPkgs, isAllPackages, err := scope.ResolvePackages(&r.opts.scopeOpts, r.base.RepoRoot, scmInstance, pkgDepGraph, r.base.UI, r.base.Logger)
 	if err != nil {
 		return errors.Wrap(err, "failed to resolve packages to run")
 	}
@@ -278,7 +278,13 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	if err != nil {
 		return errors.Wrap(err, "error preparing engine")
 	}
-	tracker := taskhash.NewTracker(g.RootNode, g.GlobalHash, g.Pipeline, g.WorkspaceInfos)
+	tracker := taskhash.NewTracker(
+		g.RootNode,
+		g.GlobalHash,
+		g.Pipeline,
+		g.WorkspaceInfos,
+	)
+
 	err = tracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.runOpts.concurrency, r.base.RepoRoot)
 	if err != nil {
 		return errors.Wrap(err, "error hashing package files")

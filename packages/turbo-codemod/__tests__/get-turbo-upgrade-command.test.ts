@@ -1,4 +1,4 @@
-import { setupTestFixtures } from "./test-utils";
+import { setupTestFixtures } from "turbo-test-utils";
 import getTurboUpgradeCommand from "../src/commands/migrate/steps/getTurboUpgradeCommand";
 import * as utils from "../src/commands/migrate/utils";
 import * as getPackageManager from "../src/utils/getPackageManager";
@@ -352,6 +352,7 @@ const GLOBAL_INSTALL_COMMANDS = [
 
 describe("get-turbo-upgrade-command", () => {
   const { useFixture } = setupTestFixtures({
+    directory: __dirname,
     test: "get-turbo-upgrade-command",
   });
 
