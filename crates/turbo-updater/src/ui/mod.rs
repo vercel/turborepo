@@ -1,4 +1,4 @@
-use console::{measure_text_width, strip_ansi_codes, Term};
+use console::{measure_text_width, Term};
 
 use crate::UpdateNotifierError;
 pub mod utils;
