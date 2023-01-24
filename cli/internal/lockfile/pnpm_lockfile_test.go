@@ -122,3 +122,32 @@ func Test_DecodePnpmUnquotedURL(t *testing.T) {
 	assert.NilError(t, err, "valid package entry should be able to be decoded")
 	assert.Equal(t, resolution["tarball"], "path/to/tarball?foo=bar")
 }
+
+func Test_PnpmLockfilePatches(t *testing.T) {
+	contents, err := getFixture(t, "pnpm-patch.yaml")
+	assert.NilError(t, err)
+
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err)
+
+	patches := lockfile.Patches()
+	assert.Equal(t, len(patches), 2)
+	assert.Equal(t, patches[0], turbopath.AnchoredUnixPath("patches/@babel__core@7.20.12.patch"))
+	assert.Equal(t, patches[1], turbopath.AnchoredUnixPath("patches/is-odd@3.0.1.patch"))
+}
+
+func Test_PnpmPrunePatches(t *testing.T) {
+	contents, err := getFixture(t, "pnpm-patch.yaml")
+	assert.NilError(t, err)
+
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err)
+
+	prunedLockfile, err := lockfile.Subgraph(
+		[]turbopath.AnchoredSystemPath{turbopath.AnchoredSystemPath("packages/dependency")},
+		[]string{"/is-odd/3.0.1_nrrwwz7lemethtlvvm75r5bmhq", "/is-number/6.0.0", "/@babel-core/7.20.12_3hyn7hbvzkemudbydlwjmrb65y"},
+	)
+	assert.NilError(t, err)
+
+	assert.Equal(t, len(prunedLockfile.Patches()), 2)
+}
