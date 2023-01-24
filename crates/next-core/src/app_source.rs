@@ -4,10 +4,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use turbo_tasks::{
-    primitives::{OptionStringVc, StringVc},
-    TryJoinIterExt, Value, ValueToString,
-};
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{
     rope::RopeBuilder, DirectoryContent, DirectoryEntry, File, FileContent, FileContentVc,
@@ -412,11 +409,7 @@ async fn create_app_source_for_directory(
         layouts = LayoutSegmentsVc::cell(list);
         if let Some(page_path) = page {
             let pathname = pathname_for_path(server_root, target, false);
-            let params_matcher = NextParamsMatcherVc::new(
-                pathname,
-                OptionStringVc::cell(None),
-                OptionStringVc::cell(None),
-            );
+            let params_matcher = NextParamsMatcherVc::new(pathname, None, None);
 
             sources.push(create_node_rendered_source(
                 specificity,

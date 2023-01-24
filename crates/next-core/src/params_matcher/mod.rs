@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use turbo_tasks::{
-    primitives::{BoolVc, OptionStringVc, StringVc},
+    primitives::{BoolVc, StringVc},
     ValueToString, ValueToStringVc,
 };
 use turbopack_node::match_params::{MatchParams, MatchParamsVc, ParamsMatchesVc};
@@ -13,8 +13,8 @@ mod path_regex;
 pub(crate) struct NextParamsMatcher {
     #[turbo_tasks(trace_ignore)]
     path_regex: PathRegex,
-    prefix: OptionStringVc,
-    suffix: OptionStringVc,
+    prefix: Option<StringVc>,
+    suffix: Option<StringVc>,
 }
 
 #[turbo_tasks::value_impl]
@@ -24,8 +24,8 @@ impl NextParamsMatcherVc {
     #[turbo_tasks::function]
     pub async fn new(
         pathname: StringVc,
-        prefix: OptionStringVc,
-        suffix: OptionStringVc,
+        prefix: Option<StringVc>,
+        suffix: Option<StringVc>,
     ) -> Result<Self> {
         let path = pathname.await?;
 
@@ -84,16 +84,16 @@ impl ValueToString for NextParamsMatcher {
 
 impl NextParamsMatcher {
     async fn strip_prefix_and_suffix<'a, 'b>(&'a self, path: &'b str) -> Result<Option<&'b str>> {
-        let path = match &*self.prefix.await? {
-            Some(prefix) => match path.strip_prefix(prefix) {
+        let path = match self.prefix {
+            Some(prefix) => match path.strip_prefix(prefix.await?.as_str()) {
                 Some(path) => path,
                 None => return Ok(None),
             },
             None => path,
         };
 
-        let path = match &*self.suffix.await? {
-            Some(suffix) => match path.strip_suffix(suffix) {
+        let path = match self.suffix {
+            Some(suffix) => match path.strip_suffix(suffix.await?.as_str()) {
                 Some(path) => path,
                 None => return Ok(None),
             },

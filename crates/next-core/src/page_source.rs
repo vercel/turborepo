@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
-    primitives::{BoolVc, OptionStringVc},
+    primitives::{BoolVc, StringVc},
     trace::TraceRawVcs,
     Value,
 };
@@ -282,11 +282,7 @@ async fn create_page_source_for_file(
     );
 
     let pathname = pathname_for_path(server_root, server_path, true);
-    let params_matcher = NextParamsMatcherVc::new(
-        pathname,
-        OptionStringVc::cell(None),
-        OptionStringVc::cell(None),
-    );
+    let params_matcher = NextParamsMatcherVc::new(pathname, None, None);
 
     Ok(if *is_api_path.await? {
         create_node_api_source(
@@ -308,8 +304,8 @@ async fn create_page_source_for_file(
     } else {
         let data_params_matcher = NextParamsMatcherVc::new(
             pathname,
-            OptionStringVc::cell(Some("_next/data/development/".to_string())),
-            OptionStringVc::cell(Some(".json".to_string())),
+            Some(StringVc::cell("_next/data/development/".to_string())),
+            Some(StringVc::cell(".json".to_string())),
         );
 
         let ssr_entry = SsrEntry {
