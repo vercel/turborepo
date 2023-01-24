@@ -236,28 +236,10 @@ impl ContainmentTree {
     }
 }
 
-#[turbo_tasks::value(transparent)]
-struct ListsOfChunks(Vec<ChunksVc>);
-
-#[turbo_tasks::function]
-async fn flatten_chunks(chunks: ListsOfChunksVc) -> Result<ChunksVc> {
-    Ok(ChunksVc::cell(
-        chunks
-            .await?
-            .iter()
-            .copied()
-            .try_join()
-            .await?
-            .iter()
-            .flat_map(|c| c.iter().copied())
-            .collect(),
-    ))
-}
-
 pub async fn optimize_by_common_parent(
     chunks: ChunksVc,
     get_common_parent: impl Fn(ChunkVc) -> FileSystemPathOptionVc,
-    optimize: impl Fn(Option<ChunksVc>, Option<ChunksVc>) -> ChunksVc,
+    optimize: impl Fn(Option<ChunksVc>, Vec<ChunksVc>) -> ChunksVc,
 ) -> Result<ChunksVc> {
     let tree = ContainmentTree::build(
         chunks
@@ -269,20 +251,13 @@ pub async fn optimize_by_common_parent(
 
     fn optimize_tree(
         tree: ContainmentTree,
-        optimize: &impl Fn(Option<ChunksVc>, Option<ChunksVc>) -> ChunksVc,
+        optimize: &impl Fn(Option<ChunksVc>, Vec<ChunksVc>) -> ChunksVc,
     ) -> ChunksVc {
         let children = tree
             .children
             .into_iter()
             .map(|tree| optimize_tree(tree, optimize))
             .collect::<Vec<_>>();
-        let children = if !children.is_empty() {
-            // TODO keyed cell: this would benefit from keying the cell by tree.path
-            let lists = ListsOfChunksVc::cell(children);
-            Some(flatten_chunks(lists))
-        } else {
-            None
-        };
         optimize(tree.chunks, children)
     }
 
