@@ -423,7 +423,10 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
     }
 
     let repo_root = if let Some(cwd) = &clap_args.cwd {
-        fs_canonicalize(cwd)?
+        let canonical_cwd = fs_canonicalize(cwd)?;
+        // Update on clap_args so that Go gets a canonical path.
+        clap_args.cwd = Some(canonical_cwd.clone());
+        canonical_cwd
     } else {
         current_dir()?
     };

@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Result;
 use config::Config;
@@ -68,6 +71,10 @@ impl RepoConfig {
     fn write_to_disk(&self) -> Result<()> {
         write_to_disk(&self.path, &self.disk_config)
     }
+}
+
+pub fn get_repo_config_path(repo_root: &Path) -> PathBuf {
+    repo_root.join(".turbo").join("config.json")
 }
 
 impl RepoConfigLoader {

@@ -4,7 +4,8 @@ use anyhow::Result;
 
 use crate::{
     config::{
-        default_user_config_path, RepoConfig, RepoConfigLoader, UserConfig, UserConfigLoader,
+        default_user_config_path, get_repo_config_path, RepoConfig, RepoConfigLoader, UserConfig,
+        UserConfigLoader,
     },
     ui::UI,
     Args,
@@ -22,7 +23,7 @@ pub struct CommandBase {
 
 impl CommandBase {
     pub fn new(args: Args, repo_root: PathBuf) -> Result<Self> {
-        let repo_config_path = repo_root.join(".turbo").join("config.json");
+        let repo_config_path = get_repo_config_path(&repo_root);
 
         Ok(Self {
             repo_root,
