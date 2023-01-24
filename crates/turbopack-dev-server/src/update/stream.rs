@@ -42,26 +42,27 @@ async fn get_content_wrapper(
     get_content: TransientInstance<GetContentFn>,
 ) -> Result<ContentSourceContentVc> {
     let mut content = get_content().await?;
-    while let ContentSourceResult::NeedData(data) = &*content {
-        content = data
-            .source
-            .get(
-                &data.path,
-                Value::new(resource_to_data(resource.clone().into_value(), &data.vary)),
-            )
-            .await?;
-    }
-    Ok(match &*content {
-        ContentSourceResult::NeedData(..) => unreachable!(),
-        ContentSourceResult::NotFound => ContentSourceContentVc::not_found(),
-        ContentSourceResult::Result { get_content, .. } => {
-            let vary = get_content.vary().await?;
-            get_content.get(Value::new(resource_to_data(
-                resource.clone().into_value(),
-                &vary,
-            )))
+    loop {
+        match &*content {
+            ContentSourceResult::NeedData(data) => {
+                content = data
+                    .source
+                    .get(
+                        &data.path,
+                        Value::new(resource_to_data(resource.clone().into_value(), &data.vary)),
+                    )
+                    .await?;
+            }
+            ContentSourceResult::NotFound => return Ok(ContentSourceContentVc::not_found()),
+            ContentSourceResult::Result { get_content, .. } => {
+                let vary = get_content.vary().await?;
+                return Ok(get_content.get(Value::new(resource_to_data(
+                    resource.clone().into_value(),
+                    &vary,
+                ))));
+            }
         }
-    })
+    }
 }
 
 #[turbo_tasks::function]

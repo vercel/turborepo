@@ -83,11 +83,16 @@ impl ContentSourceResultVc {
     }
 }
 
+/// A functor to receive the actual content of a content source result.
 #[turbo_tasks::value_trait]
 pub trait GetContentSourceContent {
+    /// Specifies data requirements for the get function. Restricting data
+    /// passed allows to cache the get method.
     fn vary(&self) -> ContentSourceDataVaryVc {
         ContentSourceDataVary::default().cell()
     }
+
+    /// Get the content
     fn get(&self, data: Value<ContentSourceData>) -> ContentSourceContentVc;
 }
 
@@ -327,6 +332,8 @@ impl ContentSourceDataFilter {
         }
     }
 
+    /// Returns true if the first argument at least contains all values that the
+    /// second argument would contain.
     pub fn fulfills(
         this: &Option<ContentSourceDataFilter>,
         other: &Option<ContentSourceDataFilter>,
@@ -375,23 +382,35 @@ impl ContentSourceDataVary {
         ContentSourceDataFilter::extend_options(&mut self.headers, &other.headers);
     }
 
+    /// Returns true if `self` at least contains all values that the
+    /// argument would contain.
     pub fn fulfills(&self, other: &ContentSourceDataVary) -> bool {
-        if other.method && !self.method {
+        // All fields must be used!
+        let ContentSourceDataVary {
+            method,
+            url,
+            query,
+            headers,
+            body,
+            cache_buster,
+            placeholder_for_future_extensions: _,
+        } = self;
+        if other.method && !method {
             return false;
         }
-        if other.url && !self.url {
+        if other.url && !url {
             return false;
         }
-        if other.body && !self.body {
+        if other.body && !body {
             return false;
         }
-        if other.cache_buster && !self.cache_buster {
+        if other.cache_buster && !cache_buster {
             return false;
         }
-        if !ContentSourceDataFilter::fulfills(&self.query, &other.query) {
+        if !ContentSourceDataFilter::fulfills(&query, &other.query) {
             return false;
         }
-        if !ContentSourceDataFilter::fulfills(&self.headers, &other.headers) {
+        if !ContentSourceDataFilter::fulfills(&headers, &other.headers) {
             return false;
         }
         true

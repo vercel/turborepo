@@ -56,7 +56,12 @@ impl ContentSource for ConditionalContentSource {
                     get_content,
                     specificity,
                 } => ContentSourceResult::Result {
-                    get_content: ActivateOnGetContentSource(this, get_content).cell().into(),
+                    get_content: ActivateOnGetContentSource {
+                        source: this,
+                        get_content,
+                    }
+                    .cell()
+                    .into(),
                     specificity,
                 }
                 .cell(),
@@ -126,18 +131,21 @@ impl Introspectable for ConditionalContentSource {
 }
 
 #[turbo_tasks::value(serialization = "none", eq = "manual", cell = "new")]
-struct ActivateOnGetContentSource(ConditionalContentSourceReadRef, GetContentSourceContentVc);
+struct ActivateOnGetContentSource {
+    source: ConditionalContentSourceReadRef,
+    get_content: GetContentSourceContentVc,
+}
 
 #[turbo_tasks::value_impl]
 impl GetContentSourceContent for ActivateOnGetContentSource {
     #[turbo_tasks::function]
     fn vary(&self) -> ContentSourceDataVaryVc {
-        self.1.vary()
+        self.get_content.vary()
     }
 
     #[turbo_tasks::function]
     fn get(&self, data: Value<ContentSourceData>) -> ContentSourceContentVc {
-        self.0.activated.set(true);
-        self.1.get(data)
+        self.source.activated.set(true);
+        self.get_content.get(data)
     }
 }
