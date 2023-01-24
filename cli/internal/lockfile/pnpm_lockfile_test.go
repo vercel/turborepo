@@ -214,3 +214,17 @@ func Test_PnpmPrunePatchesV6(t *testing.T) {
 
 	assert.Equal(t, len(prunedLockfile.Patches()), 1)
 }
+
+func Test_PnpmAbsoluteDependency(t *testing.T) {
+	contents, err := getFixture(t, "pnpm-absolute.yaml")
+	assert.NilError(t, err)
+
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err)
+
+	pkg, err := lockfile.ResolvePackage(turbopath.AnchoredUnixPath("packages/a"), "child", "/@scope/child/1.0.0")
+	assert.NilError(t, err, "resolve")
+	assert.Assert(t, pkg.Found)
+	assert.DeepEqual(t, pkg.Key, "/@scope/child/1.0.0")
+	assert.DeepEqual(t, pkg.Version, "1.0.0")
+}
