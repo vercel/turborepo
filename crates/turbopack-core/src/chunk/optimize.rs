@@ -95,6 +95,19 @@ impl ContainmentTree {
                 .await
         }
 
+        async fn expand_common_parents(
+            common_parents: &mut IndexSet<FileSystemPathVc>,
+        ) -> Result<()> {
+            let mut i = 0;
+            while i < common_parents.len() {
+                let current = common_parents[i];
+                let parent = current.parent().resolve().await?;
+                common_parents.insert(parent);
+                i += 1;
+            }
+            Ok(())
+        }
+
         async fn compute_relationships(
             common_parents: &IndexSet<FileSystemPathVc>,
         ) -> Result<Vec<(Option<FileSystemPathVc>, FileSystemPathVc)>> {
@@ -129,22 +142,33 @@ impl ContainmentTree {
             children: Vec<Rc<RefCell<Node>>>,
         }
 
-        async fn build_node_tree(
-            chunks: Vec<(Option<FileSystemPathVc>, ChunkVc)>,
-        ) -> Result<(IndexMap<FileSystemPathVc, Rc<RefCell<Node>>>, Vec<ChunkVc>)> {
-            let mut orphan_chunks = Vec::new();
+        fn create_node_tree(
+            common_parents: IndexSet<FileSystemPathVc>,
+        ) -> IndexMap<FileSystemPathVc, Rc<RefCell<Node>>> {
             let mut trees = IndexMap::<FileSystemPathVc, Rc<RefCell<Node>>>::new();
+            for common_parent in common_parents {
+                trees.insert(
+                    common_parent,
+                    Rc::new(RefCell::new(Node {
+                        path: common_parent,
+                        chunks: Vec::new(),
+                        children: Vec::new(),
+                    })),
+                );
+            }
+            trees
+        }
+
+        fn add_chunks_to_tree(
+            trees: &mut IndexMap<FileSystemPathVc, Rc<RefCell<Node>>>,
+            chunks: Vec<(Option<FileSystemPathVc>, ChunkVc)>,
+        ) -> Vec<ChunkVc> {
+            let mut orphan_chunks = Vec::new();
             for (common_parent, chunk) in chunks {
                 if let Some(common_parent) = common_parent {
                     trees
-                        .entry(common_parent)
-                        .or_insert_with(|| {
-                            Rc::new(RefCell::new(Node {
-                                path: common_parent,
-                                chunks: Vec::new(),
-                                children: Vec::new(),
-                            }))
-                        })
+                        .get_mut(&common_parent)
+                        .unwrap()
                         .borrow_mut()
                         .chunks
                         .push(chunk);
@@ -152,7 +176,7 @@ impl ContainmentTree {
                     orphan_chunks.push(chunk);
                 }
             }
-            Ok((trees, orphan_chunks))
+            orphan_chunks
         }
 
         fn treeify(
@@ -171,6 +195,19 @@ impl ContainmentTree {
                     }
                 })
                 .collect::<Vec<_>>()
+        }
+
+        fn skip_unnessary_nodes(trees: &mut IndexMap<FileSystemPathVc, Rc<RefCell<Node>>>) {
+            for tree in trees.values_mut() {
+                let mut tree = tree.borrow_mut();
+                if tree.chunks.len() == 0 && tree.children.len() == 1 {
+                    let child = tree.children.pop().unwrap();
+                    let mut child = child.borrow_mut();
+                    tree.path = child.path;
+                    tree.chunks.append(&mut child.chunks);
+                    tree.children.append(&mut child.children);
+                }
+            }
         }
 
         // Convert function to the real data structure
@@ -207,18 +244,26 @@ impl ContainmentTree {
         // resolve all paths
         let chunks = resolve(chunks).await?;
         // compute all unique common_parents
-        let common_parents = chunks
+        let mut common_parents = chunks
             .iter()
             .filter_map(|&(path, _)| path)
             .collect::<IndexSet<_>>();
+        // expand all common parents to include all their parents
+        expand_common_parents(&mut common_parents).await?;
         // compute parent -> child relationships between common_parents
         let relationships = compute_relationships(&common_parents).await?;
 
-        // all the tree by common_parent
-        let (mut trees, orphan_chunks) = build_node_tree(chunks).await?;
+        // create the tree nodes
+        let mut trees = create_node_tree(common_parents);
+
+        // add chunks to nodes
+        let orphan_chunks = add_chunks_to_tree(&mut trees, chunks);
 
         // nest each tree by relationship, compute the roots
         let roots = treeify(relationships, &mut trees);
+
+        // optimize tree by removing unnecessary nodes
+        skip_unnessary_nodes(&mut trees);
 
         // do conversion
         let roots = convert_into_common_parent_tree(roots, orphan_chunks);
