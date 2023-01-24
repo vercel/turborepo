@@ -685,6 +685,7 @@
 <span id="685">685</span>
 <span id="686">686</span>
 <span id="687">687</span>
+<span id="688">688</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
@@ -751,7 +752,8 @@
         get_server_environment, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
     },
-    util::{pathname_for_path, regular_expression_for_path},
+    params_matcher::NextParamsMatcherVc,
+    util::pathname_for_path,
 };
 
 <span class="attr">#[turbo_tasks::function]
@@ -1095,13 +1097,13 @@
         layouts = LayoutSegmentsVc::cell(list);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(page_path) = page {
             <span class="kw">let </span>pathname = pathname_for_path(server_root, target, <span class="bool-val">false</span>);
-            <span class="kw">let </span>path_regex = regular_expression_for_path(pathname);
+            <span class="kw">let </span>params_matcher = NextParamsMatcherVc::new(pathname, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>);
 
             sources.push(create_node_rendered_source(
                 specificity,
                 server_root,
                 pathname,
-                path_regex,
+                params_matcher.into(),
                 AppRenderer {
                     context_ssr,
                     context,
