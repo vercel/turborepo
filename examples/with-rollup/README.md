@@ -1,6 +1,6 @@
 # Turborepo starter with Rollup
 
-This is an official starter Turborepo, showing how Turborepo can be integrated with Rollup for bundling a `ui` package.
+This is an official starter Turborepo, showing how Turborepo can be used with Rollup for bundling a `ui` package.
 
 ## What's inside?
 
@@ -29,7 +29,7 @@ To build all apps and packages, run the following command:
 
 ```
 cd my-turborepo
-yarn run build
+pnpm run build
 ```
 
 ### Develop
@@ -38,7 +38,7 @@ To develop all apps and packages, run the following command:
 
 ```
 cd my-turborepo
-yarn run dev
+pnpm run dev
 ```
 
 ### Remote Caching
