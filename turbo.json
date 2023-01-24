@@ -8,9 +8,7 @@
       "outputs": ["coverage/**/*"],
       "dependsOn": ["^build"]
     },
-    "//#lint": {
-      "outputs": []
-    },
+    "lint": {},
     "check-types": {
       "outputs": [],
       "dependsOn": ["//#build:ts", "^build"]
@@ -33,7 +31,7 @@
       "dependsOn": []
     },
     "//#check:fmt": {
-      "dependsOn": ["//#check:prettier", "//#check:toml", "//#lint"]
+      "dependsOn": ["//#check:prettier", "//#check:toml"]
     },
     "cli#build": {
       "outputs": ["turbo", "turbo.exe"],

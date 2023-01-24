@@ -26,7 +26,8 @@
     "release": "pnpm build && pnpm publish",
     "test": "jest",
     "build": "tsup",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "lint": "eslint lib/**/*.ts"
   },
   "devDependencies": {
     "@types/eslint": "^8.4.5",
