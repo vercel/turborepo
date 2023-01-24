@@ -21,6 +21,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/nodes"
+	"github.com/vercel/turbo/cli/internal/runcache"
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
@@ -299,21 +300,25 @@ type taskSummary struct {
 	Dependencies           []string                              `json:"dependencies"`
 	Dependents             []string                              `json:"dependents"`
 	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
-	TaskSummary            *BuildTargetState                     `json:"taskSummary"`
+	RunSummary             *BuildTargetState                     `json:"taskSummary"`
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
+	ExpandedOutputs        *runcache.ExpandedOutputs             `json:"expandedOutputs"`
 }
 
 type singlePackageTaskSummary struct {
-	Task                   string             `json:"task"`
-	Hash                   string             `json:"hash"`
-	CacheState             cache.ItemStatus   `json:"cacheState"`
-	Command                string             `json:"command"`
-	Outputs                []string           `json:"outputs"`
-	ExcludedOutputs        []string           `json:"excludedOutputs"`
-	LogFile                string             `json:"logFile"`
-	Dependencies           []string           `json:"dependencies"`
-	Dependents             []string           `json:"dependents"`
-	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
+	Task                   string                                `json:"task"`
+	Hash                   string                                `json:"hash"`
+	CacheState             cache.ItemStatus                      `json:"cacheState"`
+	Command                string                                `json:"command"`
+	Outputs                []string                              `json:"outputs"`
+	ExcludedOutputs        []string                              `json:"excludedOutputs"`
+	LogFile                string                                `json:"logFile"`
+	Dependencies           []string                              `json:"dependencies"`
+	Dependents             []string                              `json:"dependents"`
+	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
+	RunSummary             *BuildTargetState                     `json:"taskSummary"`
+	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"expandedInputs"`
+	ExpandedOutputs        *runcache.ExpandedOutputs             `json:"expandedOutputs"`
 }
 
 func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
@@ -336,5 +341,8 @@ func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
 		Dependencies:           dependencies,
 		Dependents:             dependents,
 		ResolvedTaskDefinition: ht.ResolvedTaskDefinition,
+		RunSummary:             ht.RunSummary,
+		ExpandedInputs:         ht.ExpandedInputs,
+		ExpandedOutputs:        ht.ExpandedOutputs,
 	}
 }

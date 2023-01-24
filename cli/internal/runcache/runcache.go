@@ -235,17 +235,19 @@ func (tc TaskCache) OutputWriter(prefix string) (io.WriteCloser, error) {
 
 var _emptyIgnore []string
 
+type ExpandedOutputs []turbopath.AnchoredSystemPath
+
 // SaveOutputs is responsible for saving the outputs of task to the cache, after the task has completed
-func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, terminal cli.Ui, duration int) error {
+func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, terminal cli.Ui, duration int) (ExpandedOutputs, error) {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
-		return nil
+		return []turbopath.AnchoredSystemPath{}, nil
 	}
 
 	logger.Debug("caching output", "outputs", tc.repoRelativeGlobs)
 
 	filesToBeCached, err := globby.GlobAll(tc.rc.repoRoot.ToStringDuringMigration(), tc.repoRelativeGlobs.Inclusions, tc.repoRelativeGlobs.Exclusions)
 	if err != nil {
-		return err
+		return []turbopath.AnchoredSystemPath{}, err
 	}
 
 	relativePaths := make([]turbopath.AnchoredSystemPath, len(filesToBeCached))
@@ -261,8 +263,9 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 	}
 
 	if err = tc.rc.cache.Put(tc.rc.repoRoot, tc.hash, duration, relativePaths); err != nil {
-		return err
+		return []turbopath.AnchoredSystemPath{}, err
 	}
+
 	err = tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs)
 	if err != nil {
 		// Don't fail the cache write because we also failed to record it, we will just do
@@ -270,7 +273,8 @@ func (tc TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termin
 		logger.Warn(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err))
 		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
 	}
-	return nil
+
+	return relativePaths, nil
 }
 
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific

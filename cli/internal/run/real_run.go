@@ -119,7 +119,7 @@ func RealRun(
 			fmt.Printf("Warning: error with collecting task summary: %s", err)
 		}
 
-		taskSummaryMap[packageTask.TaskID] = &taskSummary{
+		ts := &taskSummary{
 			TaskID:                 packageTask.TaskID,
 			Task:                   packageTask.Task,
 			Package:                packageTask.PackageName,
@@ -138,7 +138,14 @@ func RealRun(
 		// End DRY RUN STOLEN
 
 		// deps here are passed in to calculate the task hash
-		return ec.exec(ctx, packageTask, deps)
+		expandedOutputs, err := ec.exec(ctx, packageTask, deps)
+		if err != nil {
+			return err
+		}
+
+		ts.ExpandedOutputs = expandedOutputs
+		taskSummaryMap[packageTask.TaskID] = ts
+		return nil
 	}
 
 	visitorFn := g.GetPackageTaskVisitor(ctx, execFunc)
@@ -164,12 +171,9 @@ func RealRun(
 	runState.mu.Lock()
 	for taskID, state := range runState.state {
 		t, ok := summary.Tasks[taskID]
-		fmt.Printf("[debug] state for task: %s %#v\n", taskID, state)
 		if ok {
-			t.TaskSummary = state
+			t.RunSummary = state
 		}
-
-		fmt.Printf("[debug] assigned, to task: %s: %#v\n", t.TaskID, t.TaskSummary)
 	}
 
 	if err := runState.Close(base.UI); err != nil {
@@ -215,7 +219,7 @@ func (ec *execContext) logError(log hclog.Logger, prefix string, err error) {
 	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) error {
+func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, deps dag.Set) (*runcache.ExpandedOutputs, error) {
 	cmdTime := time.Now()
 
 	prefix := packageTask.OutputPrefix(ec.isSinglePackage)
@@ -242,7 +246,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	if packageTask.Command == "" {
 		progressLogger.Debug("no task in package, skipping")
 		progressLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
-		return nil
+		return nil, nil
 	}
 
 	// Cache ---------------------------------------------
@@ -260,7 +264,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if hit {
 		tracer(TargetCached, nil)
-		return nil
+		return nil, nil
 	}
 
 	// Setup command execution
@@ -330,7 +334,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		// if we already know we're in the process of exiting,
 		// we don't need to record an error to that effect.
 		if errors.Is(err, process.ErrClosing) {
-			return nil
+			return nil, nil
 		}
 		tracer(TargetBuildFailed, err)
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
@@ -344,15 +348,17 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		// If there was an error, flush the buffered output
 		taskCache.OnError(prefixedUI, progressLogger)
 
-		return err
+		return nil, err
 	}
+
+	var expandedOutputs runcache.ExpandedOutputs
 
 	duration := time.Since(cmdTime)
 	// Close off our outputs and cache them
 	if err := closeOutputs(); err != nil {
 		ec.logError(progressLogger, "", err)
 	} else {
-		if err = taskCache.SaveOutputs(ctx, progressLogger, prefixedUI, int(duration.Milliseconds())); err != nil {
+		if expandedOutputs, err = taskCache.SaveOutputs(ctx, progressLogger, prefixedUI, int(duration.Milliseconds())); err != nil {
 			ec.logError(progressLogger, "", fmt.Errorf("error caching output: %w", err))
 		}
 	}
@@ -360,5 +366,5 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Clean up tracing
 	tracer(TargetBuilt, nil)
 	progressLogger.Debug("done", "status", "complete", "duration", duration)
-	return nil
+	return &expandedOutputs, nil
 }
