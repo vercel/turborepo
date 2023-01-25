@@ -1,9 +1,7 @@
 package ffi
 
-// #include "bindings.h"
-//
 // #cgo LDFLAGS: -L${SRCDIR} -lturborepo_ffi
-// #cgo windows LDFLAGS: -lole32 -lbcrypt -lws2_32 -luserenv
+// #include "bindings.h"
 import "C"
 
 import (
@@ -26,7 +24,7 @@ func Unmarshal[M proto.Message](b C.Buffer, c M) error {
 	return nil
 }
 
-// Marshal consumes a proto.Message and returns a bufferfire
+// Marshal consumes a proto.Message and returns a buffer
 //
 // NOTE: the buffer must be freed by calling `Free` on it
 func Marshal[M proto.Message](c M) C.Buffer {
