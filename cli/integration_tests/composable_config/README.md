@@ -4,6 +4,14 @@
 
 - [ ] Missing task definition in root, can add task from override.
 
+- `outputs`
+  exercise by: run task by writing files to multiple places, expect correct folder is cached
+
+  - [x] add-key: No `outputs` in root turbo.json, add in workspace
+  - [x] omit: Add `outputs` in root turbo.json, omit key in workspace
+  - [x] override: Add `outputs` in root turbo.json, override to something else in workspace
+  - [x] no-config: Add `outputs` in root turbo.json, have no workspace turbo.json
+
 - `dependsOn`
   exercise by: run task, expect dependent task to only run when appropriate
 
@@ -19,14 +27,6 @@
   - [ ] Add `env` in root turbo.json, omit key in workspace
   - [ ] Add `env` in root turbo.json, have no workspace turbo.json
   - [ ] No `env` in root turbo.json, add in workspace
-
-- `outputs`
-  exercise by: run task by writing files to multiple places, expect correct folder is cached
-
-  - [x] Add `outputs` in root turbo.json, override to something else in workspace
-  - [ ] Add `outputs` in root turbo.json, omit key in workspace
-  - [x] Add `outputs` in root turbo.json, have no workspace turbo.json
-  - [ ] No `outputs` in root turbo.json, add in workspace
 
 - `inputs`
   exercise by: run task, change input, run again and expect cache miss in the right places
