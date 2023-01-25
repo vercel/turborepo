@@ -1,0 +1,46 @@
+name: Turborepo Test Release
+
+on:
+  workflow_run:
+    workflows: ["1. Turborepo Release (release branch)"]
+    types: [completed]
+
+env:
+  RELEASE_TURBO_CLI: true
+
+jobs:
+  test:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    name: "Build Native"
+    steps:
+      - name: 'Download turborepo-release artifact'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            let allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               run_id: context.payload.workflow_run.id,
+            });
+            let matchArtifact = allArtifacts.data.artifacts.filter((artifact) => {
+              return artifact.name == "release_branch"
+            })[0];
+            let download = await github.rest.actions.downloadArtifact({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               artifact_id: matchArtifact.id,
+               archive_format: 'zip',
+            });
+            let fs = require('fs');
+            fs.writeFileSync(`${process.env.GITHUB_WORKSPACE}/release_branch.zip`, Buffer.from(download.data));
+
+      - name: 'Unzip turborepo-release'
+        run: unzip release_branch.zip
+        
+      - name: Get release branch
+        id: getReleaseBranch
+        run: echo ::set-output name=releaseBranch::$(head -n 1 release_branch)
+        
+      - name: Test output
+        run: echo ${{ steps.getReleaseBranch.outputs.releaseBranch }}
+    
