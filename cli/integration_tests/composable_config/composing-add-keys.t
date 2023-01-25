@@ -61,7 +61,7 @@ Setup
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total
-    Time:    24ms >>> FULL TURBO
+    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 # 3. Change input file and assert cache miss
 # 4. Set env var and assert cache miss
