@@ -40,7 +40,6 @@ go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
 turborepo-ffi-install: turborepo-ffi turborepo-ffi-copy-bindings
 	cp ../crates/turborepo-ffi/target/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_$(GOOS)_$(GOARCH).a
 
-.PHONY: turborepo-ffi
 turborepo-ffi:
 	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target
 
@@ -100,7 +99,6 @@ turborepo-ffi-linux-amd64:
 # end
 #
 
-.PHONY: turborepo-ffi-proto
 turborepo-ffi-proto:
 	protoc -I../crates/ ../crates/turborepo-ffi/messages.proto --go_out=./internal/
 
