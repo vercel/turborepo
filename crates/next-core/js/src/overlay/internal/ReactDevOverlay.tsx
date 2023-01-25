@@ -48,7 +48,6 @@ function pushErrorFilterDuplicates(
 }
 
 function reducer(state: OverlayState, ev: Bus.BusEvent): OverlayState {
-  console.log("error");
   switch (ev.type) {
     case Bus.TYPE_BUILD_OK: {
       return { ...state };

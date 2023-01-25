@@ -1,11 +1,13 @@
 import type {
   ClientMessage,
-  EcmascriptChunkUpdate,
+  HmrUpdateEntry,
+  Issue,
   ResourceIdentifier,
   ServerMessage,
 } from "@vercel/turbopack-runtime/types/protocol";
 import type {
   ChunkPath,
+  ModuleId,
   UpdateCallback,
   TurbopackGlobals,
 } from "@vercel/turbopack-runtime/types";
@@ -19,11 +21,6 @@ import {
   onTurbopackIssues,
 } from "../overlay/client";
 import { addEventListener, sendMessage } from "./websocket";
-import { ModuleId } from "@vercel/turbopack-runtime/types";
-import {
-  HmrUpdateEntry,
-  Issue,
-} from "@vercel/turbopack-runtime/types/protocol";
 
 declare var globalThis: TurbopackGlobals;
 

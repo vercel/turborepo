@@ -304,7 +304,6 @@ function ErrorsDialog({ children, ...props }: DialogProps) {
   );
 }
 
-/// noinspection CssUnresolvedCustomProperty,CssUnusedSymbol,CssNoGenericFontName
 export const styles = css`
   /** == Header == */
 
