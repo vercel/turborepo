@@ -1,0 +1,15 @@
+[package]
+name = "turborepo-ffi"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+directories = "4.0.1"
+prost = "0.11.6"
+
+[build-dependencies]
+cbindgen = "0.24.3"
+prost-build = "0.11.6"
