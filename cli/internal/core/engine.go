@@ -152,7 +152,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		// the pkgName here to account for that.
 		// TODO(mehulkar): Is it safe to move this logic into GetPackageTaskFromId()?
 		if pkg == ROOT_NODE_NAME {
-			pkg = util.RootPkgName
+			continue
 		}
 
 		if pkg == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {

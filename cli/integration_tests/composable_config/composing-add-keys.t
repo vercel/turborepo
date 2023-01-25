@@ -19,7 +19,6 @@ Setup
 
 # 1. First run, assert for `dependsOn` and `outputs` keys
   $ ${TURBO} run add-keys-task --skip-infer --filter=add-keys > tmp.log
-  Hashing error: cannot find package-file hash for add-keys#src/foo.txt
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
@@ -30,7 +29,7 @@ Setup
   add-keys:add-keys-underlying-task: > echo "running add-keys-underlying-task"
   add-keys:add-keys-underlying-task: 
   add-keys:add-keys-underlying-task: running add-keys-underlying-task
-  add-keys:add-keys-task: cache miss, executing 
+  add-keys:add-keys-task: cache miss, executing 4704e217f779d371
   add-keys:add-keys-task: 
   add-keys:add-keys-task: > add-keys-task
   add-keys:add-keys-task: > echo "running add-keys-task" > out/foo.min.txt
@@ -57,12 +56,52 @@ Setup
   add-keys:add-keys-underlying-task: > echo "running add-keys-underlying-task"
   add-keys:add-keys-underlying-task: 
   add-keys:add-keys-underlying-task: running add-keys-underlying-task
-  Hashing error: cannot find package-file hash for add-keys#src/foo.txt
-  add-keys:add-keys-task: cache hit, suppressing output 
+  add-keys:add-keys-task: cache hit, suppressing output 4704e217f779d371
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 # 3. Change input file and assert cache miss
+  $ echo "more text" >> $TARGET_DIR/apps/add-keys/src/foo.txt
+  $ ${TURBO} run add-keys-task --skip-infer --filter=add-keys
+  \xe2\x80\xa2 Packages in scope: add-keys (esc)
+  \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  add-keys:add-keys-underlying-task: cache miss, executing 47f17f2be6e4f7d5
+  add-keys:add-keys-underlying-task: 
+  add-keys:add-keys-underlying-task: > add-keys-underlying-task
+  add-keys:add-keys-underlying-task: > echo "running add-keys-underlying-task"
+  add-keys:add-keys-underlying-task: 
+  add-keys:add-keys-underlying-task: running add-keys-underlying-task
+  add-keys:add-keys-task: cache miss, executing a462cfd345a81245
+  add-keys:add-keys-task: 
+  add-keys:add-keys-task: > add-keys-task
+  add-keys:add-keys-task: > echo "running add-keys-task" > out/foo.min.txt
+  add-keys:add-keys-task: 
+  
+   Tasks:    2 successful, 2 total
+  Cached:    0 cached, 2 total
+    Time:\s*[\.0-9]+m?s  (re)
+  
 # 4. Set env var and assert cache miss
+  $ SOME_VAR=somevalue ${TURBO} run add-keys-task --skip-infer --filter=add-keys
+  \xe2\x80\xa2 Packages in scope: add-keys (esc)
+  \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  add-keys:add-keys-underlying-task: cache hit, replaying output 47f17f2be6e4f7d5
+  add-keys:add-keys-underlying-task: 
+  add-keys:add-keys-underlying-task: > add-keys-underlying-task
+  add-keys:add-keys-underlying-task: > echo "running add-keys-underlying-task"
+  add-keys:add-keys-underlying-task: 
+  add-keys:add-keys-underlying-task: running add-keys-underlying-task
+  add-keys:add-keys-task: cache miss, executing 4842232c8296af30
+  add-keys:add-keys-task: 
+  add-keys:add-keys-task: > add-keys-task
+  add-keys:add-keys-task: > echo "running add-keys-task" > out/foo.min.txt
+  add-keys:add-keys-task: 
+  
+   Tasks:    2 successful, 2 total
+  Cached:    1 cached, 2 total
+    Time:\s*[\.0-9]+m?s  (re)
+  

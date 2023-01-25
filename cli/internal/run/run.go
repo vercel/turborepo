@@ -285,7 +285,13 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		g.WorkspaceInfos,
 	)
 
-	err = tracker.CalculateFileHashes(engine.TaskGraph.Vertices(), rs.Opts.runOpts.concurrency, r.base.RepoRoot)
+	err = tracker.CalculateFileHashes(
+		engine.TaskGraph.Vertices(),
+		rs.Opts.runOpts.concurrency,
+		r.base.RepoRoot,
+		g,
+	)
+
 	if err != nil {
 		return errors.Wrap(err, "error hashing package files")
 	}
