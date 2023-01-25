@@ -17,6 +17,9 @@ GO_FLAGS += -trimpath
 
 CLI_DIR = $(shell pwd)
 
+# allow opting in to the rust codepaths
+GO_TAG ?= go
+
 GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
@@ -24,8 +27,21 @@ GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/t
 turbo: go-turbo$(EXT)
 	cargo build --manifest-path ../crates/turborepo/Cargo.toml
 
-go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod
-	CGO_ENABLED=1 go build $(GO_FLAGS) -o go-turbo$(EXT) ./cmd/turbo
+go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
+	CGO_ENABLED=1 go build $(GO_FLAGS) -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
+
+.PHONY: turborepo-ffi-install
+turborepo-ffi-install: turborepo-ffi turborepo-ffi-proto
+	cd ../crates/turborepo-ffi\
+	 && cp bindings.h ../../cli/internal/ffi\
+	 && cp ../../target/release/libturborepo_ffi.a ../../cli/internal/ffi\
+	 && cp -r ffi/proto ../../cli/internal/ffi
+
+turborepo-ffi:
+	cd ../crates/turborepo-ffi && cargo build --release
+
+turborepo-ffi-proto:
+	cd ../crates/turborepo-ffi && protoc --go_out=. messages.proto
 
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
