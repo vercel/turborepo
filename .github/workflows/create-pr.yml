@@ -11,15 +11,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@1.0.0
+        with:
+          ref: ${{ inputs.release_branch }}
       - name: Get version
-        id: vars
-        run: echo ::set-output name=version::$(cat version.txt)
+        id: getVersion
+        run: echo ::set-output name=version::$(head -n 1 version.txt)
       - name: Test output
-        run: echo ${{ steps.vars.outputs.version }}
+        run: echo ${{ steps.getVersion.outputs.version }}
       - name: Create pull request
         uses: thomaseizinger/create-pull-request@master
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           head: ${{ inputs.release_branch }}
           base: main
-          title: "release(turborepo): version"
+          title: "release(turborepo): ${{ steps.getVersion.outputs.version }}"
