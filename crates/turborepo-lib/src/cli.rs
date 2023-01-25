@@ -13,8 +13,7 @@ use log::{debug, error};
 use serde::Serialize;
 
 use crate::{
-    commands::{bin, login, logout},
-    config::RepoConfigLoader,
+    commands::{bin, login, logout, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     ui::UI,
@@ -424,9 +423,14 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
         clap_args.cwd = Some(repo_state.root);
     }
 
-    if let Some(cwd) = &clap_args.cwd {
-        clap_args.cwd = Some(fs_canonicalize(cwd)?);
-    }
+    let repo_root = if let Some(cwd) = &clap_args.cwd {
+        let canonical_cwd = fs_canonicalize(cwd)?;
+        // Update on clap_args so that Go gets a canonical path.
+        clap_args.cwd = Some(canonical_cwd.clone());
+        canonical_cwd
+    } else {
+        current_dir()?
+    };
 
     match clap_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
@@ -435,7 +439,8 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Logout { .. } => {
-            logout::logout(clap_args.ui())?;
+            let mut base = CommandBase::new(clap_args, repo_root)?;
+            logout::logout(&mut base)?;
 
             Ok(Payload::Rust(Ok(0)))
         }
@@ -445,17 +450,9 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
                 return Ok(Payload::Go(Box::new(clap_args)));
             }
 
-            let mut repo_config_path = clap_args.cwd.map(Ok).unwrap_or_else(|| current_dir())?;
-            repo_config_path.push(".turbo");
-            repo_config_path.push("config.json");
+            let base = CommandBase::new(clap_args, repo_root)?;
 
-            let repo_config = RepoConfigLoader::new(repo_config_path)
-                .with_api(clap_args.api)
-                .with_login(clap_args.login)
-                .with_team_slug(clap_args.team)
-                .load()?;
-
-            login::login(repo_config).await?;
+            login::login(base).await?;
 
             Ok(Payload::Rust(Ok(0)))
         }
@@ -473,7 +470,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 }
 
 impl Args {
-    fn ui(&self) -> UI {
+    pub fn ui(&self) -> UI {
         if self.no_color {
             UI::new(true)
         } else if self.color {

@@ -8,16 +8,18 @@ use tokio::sync::OnceCell;
 
 use crate::{
     client::{APIClient, UserClient},
-    config::{default_user_config_path, RepoConfig, UserConfigLoader},
+    commands::CommandBase,
+    config::{default_user_config_path, UserConfigLoader},
     get_version,
-    ui::{BOLD, CYAN, UI},
+    ui::{BOLD, CYAN},
 };
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 
-pub async fn login(repo_config: RepoConfig) -> Result<()> {
-    let login_url_base = &repo_config.login_url();
+pub async fn login(base: CommandBase) -> Result<()> {
+    let repo_config = base.repo_config()?;
+    let login_url_base = repo_config.login_url();
     debug!("turbo v{}", get_version());
     debug!("api url: {}", repo_config.api_url());
     debug!("login url: {login_url_base}");
@@ -45,7 +47,7 @@ pub async fn login(repo_config: RepoConfig) -> Result<()> {
     let client = APIClient::new(token, repo_config.api_url())?;
     let user_response = client.get_user().await?;
 
-    let ui = UI::infer();
+    let ui = base.ui;
 
     println!();
     println!(
