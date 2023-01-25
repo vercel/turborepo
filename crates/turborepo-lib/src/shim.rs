@@ -42,7 +42,8 @@ fn turbo_version_has_shim(version: &str) -> bool {
     if version.major == 1 {
         return version.minor >= 7;
     }
-    return version.major > 1;
+
+    version.major > 1
 }
 
 #[derive(Debug)]
