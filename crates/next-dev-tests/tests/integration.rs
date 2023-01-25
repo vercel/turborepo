@@ -263,9 +263,9 @@ async fn run_test_browser(addr: SocketAddr, is_debugging: bool) -> Result<JestRu
     )?;
 
     if is_debugging {
-        let _ = page.evaluate(format!(
+        let _ = page.evaluate(
             r#"console.info("%cTurbopack tests:", "font-weight: bold;", "Waiting for READY to be signaled by page...");"#,
-        ))
+        )
         .await;
     }
 
@@ -323,7 +323,7 @@ async fn run_test_browser(addr: SocketAddr, is_debugging: bool) -> Result<JestRu
                 errors_next = errors.next();
             }
             event = &mut bindings_next => {
-                if let Some(_) = event {
+                if event.is_some() {
                     if is_debugging {
                         let run_tests_msg =
                             "Entering debug mode. Run `await __jest__.run()` in the browser console to run tests.";
