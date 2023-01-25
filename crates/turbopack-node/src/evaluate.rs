@@ -1,8 +1,18 @@
-use std::{borrow::Cow, thread::available_parallelism, time::Duration};
+use std::{
+    borrow::Cow,
+    pin::Pin,
+    sync::{Arc, Mutex},
+    task::{Context as TaskContext, Poll},
+    thread::available_parallelism,
+    time::Duration,
+};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
+use futures::Stream;
 use futures_retry::{FutureRetry, RetryPolicy};
 use indexmap::indexmap;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::Value as JsonValue;
 use turbo_tasks::{
     primitives::{JsonValueVc, StringVc},
     CompletionVc, TryJoinIterExt, Value, ValueToString,
@@ -29,17 +39,153 @@ use crate::{
     bootstrap::NodeJsBootstrapAsset,
     embed_js::embed_file_path,
     emit, emit_package_json,
-    pool::{NodeJsPool, NodeJsPoolVc},
-    EvalJavaScriptIncomingMessage, EvalJavaScriptOutgoingMessage, StructuredError,
+    pool::{NodeJsOperation, NodeJsPool, NodeJsPoolVc},
+    StructuredError,
 };
+
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum EvalJavaScriptOutgoingMessage<'a> {
+    #[serde(rename_all = "camelCase")]
+    Evaluate { args: Vec<&'a JsonValue> },
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum EvalJavaScriptIncomingMessage {
+    FileDependency {
+        path: String,
+    },
+    BuildDependency {
+        path: String,
+    },
+    DirDependency {
+        path: String,
+        glob: String,
+    },
+    EmittedError {
+        severity: IssueSeverity,
+        error: StructuredError,
+    },
+    Value {
+        data: String,
+    },
+    End {
+        data: Option<String>,
+    },
+    Error(StructuredError),
+}
 
 #[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
 pub enum JavaScriptValue {
     Error,
+    Empty,
     Value(Rope),
-    // TODO, support stream in the future
-    Stream(#[turbo_tasks(trace_ignore)] Vec<u8>),
+}
+
+impl From<String> for JavaScriptValue {
+    fn from(value: String) -> Self {
+        JavaScriptValue::Value(value.into())
+    }
+}
+
+impl From<Option<String>> for JavaScriptValue {
+    fn from(value: Option<String>) -> Self {
+        match value {
+            Some(v) => v.into(),
+            None => JavaScriptValue::Empty,
+        }
+    }
+}
+
+#[turbo_tasks::value(shared)]
+#[derive(Clone)]
+pub enum JavaScriptEvaluation {
+    Single(JavaScriptValue),
+    Stream(JavaScriptStream),
+}
+
+#[turbo_tasks::value(shared, eq = "manual", serialization = "custom")]
+#[derive(Clone)]
+pub struct JavaScriptStream(#[turbo_tasks(trace_ignore, debug_ignore)] Arc<Mutex<JsStreamInner>>);
+
+impl JavaScriptStream {
+    fn new(data: Vec<JavaScriptValue>) -> Self {
+        JavaScriptStream(Arc::new(Mutex::new(JsStreamInner { done: false, data })))
+    }
+
+    fn into_stream(self) -> JsStreamable {
+        JsStreamable {
+            inner: self,
+            index: 0,
+        }
+    }
+}
+
+pub struct JsStreamable {
+    inner: JavaScriptStream,
+    index: usize,
+}
+
+impl Stream for JsStreamable {
+    type Item = Result<Rope>;
+
+    fn poll_next(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        let inner = this.inner.0.lock().unwrap();
+        inner.data.get(this.index).map_or_else(
+            || {
+                if inner.done {
+                    Poll::Ready(None)
+                } else {
+                    Poll::Pending
+                }
+            },
+            |data| match data {
+                JavaScriptValue::Empty => unreachable!(),
+                JavaScriptValue::Value(v) => Poll::Ready(Some(Ok(v.clone()))),
+                JavaScriptValue::Error => {
+                    Poll::Ready(Some(Err(anyhow!("error during evaluation"))))
+                }
+            },
+        )
+    }
+}
+
+impl PartialEq for JavaScriptStream {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0) || {
+            let inner = self.0.lock().unwrap();
+            let other = other.0.lock().unwrap();
+            *inner == *other
+        }
+    }
+}
+impl Eq for JavaScriptStream {}
+
+impl Serialize for JavaScriptStream {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::Error;
+        let lock = self.0.lock().map_err(Error::custom)?;
+        if !lock.done {
+            return Err(Error::custom("cannot serialize unfinished stream"));
+        }
+        lock.data.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for JavaScriptStream {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let data = <Vec<JavaScriptValue>>::deserialize(deserializer)?;
+        Ok(JavaScriptStream::new(data))
+    }
+}
+
+#[derive(Eq, PartialEq)]
+pub struct JsStreamInner {
+    done: bool,
+    data: Vec<JavaScriptValue>,
 }
 
 #[turbo_tasks::function]
@@ -182,7 +328,7 @@ pub async fn evaluate(
     args: Vec<JsonValueVc>,
     additional_invalidation: CompletionVc,
     debug: bool,
-) -> Result<JavaScriptValueVc> {
+) -> Result<JavaScriptEvaluationVc> {
     let pool = get_evaluate_pool(
         module_asset,
         cwd,
@@ -196,6 +342,9 @@ pub async fn evaluate(
     .await?;
 
     let args = args.into_iter().try_join().await?;
+    // Assume this is a one-off operation, so we can kill the process
+    // TODO use a better way to decide that.
+    let kill = args.is_empty();
 
     // Workers in the pool could be in a bad state that we didn't detect yet.
     // The bad state might even be unnoticable until we actually send the job to the
@@ -217,13 +366,72 @@ pub async fn evaluate(
     .await
     .map_err(|(e, _)| e)?;
 
+    let output = loop_operation(&mut operation, cwd, context_ident_for_issue).await?;
+
+    let data = match output {
+        EvalJavaScriptIncomingMessage::End { data } => {
+            if kill {
+                operation.wait_or_kill().await?;
+            }
+            return Ok(JavaScriptEvaluation::Single(data.into()).cell());
+        }
+        EvalJavaScriptIncomingMessage::Error(_) => {
+            return Ok(JavaScriptEvaluation::Single(JavaScriptValue::Error).cell());
+        }
+        EvalJavaScriptIncomingMessage::Value { data } => data,
+        _ => unreachable!("file dep messages cannot leak out of loop"),
+    };
+
+    let stream = JavaScriptStream::new(vec![data.into()]);
+    let inner = stream.0.clone();
+    tokio::spawn(async move {
+        let inner = inner.clone();
+        loop {
+            let output = loop_operation(&mut operation, cwd, context_ident_for_issue).await?;
+            let mut lock = inner.lock().unwrap();
+
+            match output {
+                EvalJavaScriptIncomingMessage::End { data } => {
+                    lock.done = true;
+                    if let Some(data) = data {
+                        lock.data.push(data.into());
+                    };
+                    break;
+                }
+                EvalJavaScriptIncomingMessage::Error(_) => {
+                    lock.done = true;
+                    lock.data.push(JavaScriptValue::Error);
+                    break;
+                }
+                EvalJavaScriptIncomingMessage::Value { data } => {
+                    lock.data.push(data.into());
+                }
+                _ => unreachable!("file dep messages cannot leak out of loop"),
+            }
+        }
+
+        if kill {
+            operation.wait_or_kill().await?;
+        }
+        Result::<()>::Ok(())
+    });
+
+    Ok(JavaScriptEvaluation::Stream(stream).cell())
+}
+
+async fn loop_operation(
+    operation: &mut NodeJsOperation,
+    cwd: FileSystemPathVc,
+    context_ident_for_issue: AssetIdentVc,
+) -> Result<EvalJavaScriptIncomingMessage> {
     let mut file_dependencies = Vec::new();
     let mut dir_dependencies = Vec::new();
+
     let output = loop {
         match operation.recv().await? {
             EvalJavaScriptIncomingMessage::Error(error) => {
                 EvaluationIssue {
-                    error,
+                    error: error.clone(),
                     context_ident: context_ident_for_issue,
                     cwd,
                 }
@@ -232,15 +440,13 @@ pub async fn evaluate(
                 .emit();
                 // Do not reuse the process in case of error
                 operation.disallow_reuse();
-                break JavaScriptValue::Error;
+                break EvalJavaScriptIncomingMessage::Error(error);
             }
-            EvalJavaScriptIncomingMessage::JsonValue { data } => {
-                if args.is_empty() {
-                    // Assume this is a one-off operation, so we can kill the process
-                    // TODO use a better way to decide that.
-                    operation.wait_or_kill().await?;
-                }
-                break JavaScriptValue::Value(data.into());
+            value @ EvalJavaScriptIncomingMessage::Value { .. } => {
+                break value;
+            }
+            value @ EvalJavaScriptIncomingMessage::End { .. } => {
+                break value;
             }
             EvalJavaScriptIncomingMessage::FileDependency { path } => {
                 // TODO We might miss some changes that happened during execution
@@ -275,6 +481,7 @@ pub async fn evaluate(
             }
         }
     };
+
     // Read dependencies to make them a dependencies of this task. This task will
     // execute again when they change.
     for dep in file_dependencies {
@@ -283,7 +490,8 @@ pub async fn evaluate(
     for dep in dir_dependencies {
         dep.await?;
     }
-    Ok(output.cell())
+
+    Ok(output)
 }
 
 /// An issue that occurred while evaluating node code.
