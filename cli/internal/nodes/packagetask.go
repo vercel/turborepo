@@ -44,10 +44,15 @@ func (pt *PackageTask) RepoRelativeLogFile() string {
 // of this task
 func (pt *PackageTask) HashableOutputs() fs.TaskOutputs {
 	inclusionOutputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.Task)}
-	inclusionOutputs = append(inclusionOutputs, pt.TaskDefinition.Outputs.Inclusions...)
+
+	var tdOutputs []string
+	if pt.TaskDefinition.Outputs != nil {
+		inclusionOutputs = append(inclusionOutputs, pt.TaskDefinition.Outputs.Inclusions...)
+		tdOutputs = pt.TaskDefinition.Outputs.Exclusions
+	}
 
 	return fs.TaskOutputs{
 		Inclusions: inclusionOutputs,
-		Exclusions: pt.TaskDefinition.Outputs.Exclusions,
+		Exclusions: tdOutputs,
 	}
 }

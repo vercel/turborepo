@@ -5,8 +5,22 @@
       "outputs": ["out/**"],
       "dependsOn": ["compile"]
     },
+
+
     "add-keys-task": {},
     "add-keys-underlying-task": {},
+
+
+    "omit-keys-task": {
+      "dependsOn": ["omit-keys-underlying-task"],
+      "inputs": ["src/foo.txt"],
+      "outputs": ["out/**"],
+      "env": ["SOME_ENV"],
+      "outputMode": "new-only"
+    },
+    "omit-keys-underlying-task": {},
+
+
     "compile": {},
     "beforecompile": {},
     "somethingelse": {}

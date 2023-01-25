@@ -59,7 +59,7 @@ type RemoteCacheOptions struct {
 // Notably this is important for arrays. The 0-value for an array in Go is an empty array,
 // and we need to distinguish that from when an empty array is explicitly set in config.
 type rawTask struct {
-	Outputs    []string            `json:"outputs,omitempty"`
+	Outputs    []string            `json:"outputs"`
 	Cache      *bool               `json:"cache,omitempty"`
 	DependsOn  []string            `json:"dependsOn,omitempty"`
 	Inputs     []string            `json:"inputs,omitempty"`
@@ -73,7 +73,7 @@ type Pipeline map[string]TaskDefinition
 
 // TaskDefinition is a representation of the configFile pipeline for further computation.
 type TaskDefinition struct {
-	Outputs     TaskOutputs
+	Outputs     *TaskOutputs
 	ShouldCache bool
 
 	// This field is custom-marshalled from rawTask.Env and rawTask.DependsOn
@@ -185,14 +185,14 @@ type TaskOutputs struct {
 }
 
 // Sort contents of task outputs
-func (to TaskOutputs) Sort() TaskOutputs {
+func (to *TaskOutputs) Sort() *TaskOutputs {
 	var inclusions []string
 	var exclusions []string
 	copy(inclusions, to.Inclusions)
 	copy(exclusions, to.Exclusions)
 	sort.Strings(inclusions)
 	sort.Strings(exclusions)
-	return TaskOutputs{Inclusions: inclusions, Exclusions: exclusions}
+	return &TaskOutputs{Inclusions: inclusions, Exclusions: exclusions}
 }
 
 // ReadTurboConfig reads turbo.json from a provided path
@@ -266,10 +266,9 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	var inclusions []string
-	var exclusions []string
-
 	if task.Outputs != nil {
+		var inclusions []string
+		var exclusions []string
 		for _, glob := range task.Outputs {
 			if strings.HasPrefix(glob, "!") {
 				exclusions = append(exclusions, glob[1:])
@@ -277,15 +276,13 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 				inclusions = append(inclusions, glob)
 			}
 		}
+		c.Outputs = &TaskOutputs{
+			Inclusions: inclusions,
+			Exclusions: exclusions,
+		}
+		sort.Strings(c.Outputs.Inclusions)
+		sort.Strings(c.Outputs.Exclusions)
 	}
-
-	c.Outputs = TaskOutputs{
-		Inclusions: inclusions,
-		Exclusions: exclusions,
-	}
-
-	sort.Strings(c.Outputs.Inclusions)
-	sort.Strings(c.Outputs.Exclusions)
 
 	if task.Cache == nil {
 		c.ShouldCache = true

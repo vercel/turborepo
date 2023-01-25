@@ -413,7 +413,10 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 
 	// For each of the TaskDefinitions we know of, merge them in
 	for _, taskDef := range taskDefinitions {
-		mergedTaskDefinition.Outputs = taskDef.Outputs
+		if taskDef.Outputs != nil {
+			mergedTaskDefinition.Outputs = taskDef.Outputs
+		}
+
 		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
 		mergedTaskDefinition.EnvVarDependencies = taskDef.EnvVarDependencies
 		if taskDef.TopologicalDependencies != nil {
@@ -427,6 +430,15 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 		mergedTaskDefinition.Persistent = taskDef.Persistent
 	}
 
+	// Set defaults if we had no config for this.
+	if mergedTaskDefinition.Outputs == nil {
+		mergedTaskDefinition.Outputs = &fs.TaskOutputs{
+			Inclusions: []string{},
+			Exclusions: []string{},
+		}
+	}
+
+	fmt.Printf("[debug] %s merged task def %#v\n", taskID, mergedTaskDefinition.Outputs)
 	return mergedTaskDefinition, nil
 }
 
