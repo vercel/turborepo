@@ -2,20 +2,12 @@ Setup
   $ . ${TESTDIR}/../setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
 
-# TMP DEBUG:
-# "dependsOn": ["add-key-underlying-task"],
-# "inputs": ["foo.txt"]
-# "outputs": ["out/**"]
-# "env": ["SOME_VAR"]
-# "outputMode": "new-only"
-
-# The add-keys-task in the root turbo.json has no config
-# [x] Test dependOn works by testing that output runs another task
-# [x] Test outputs works by testing that the right directory is cached
-# [x] Test outputMode by checking output
-# [ ] Test inputs works by changing a file and testing there was a cache miss
-# [ ] Test env works by setting an env var and asserting there was a cache miss
-# [ ] Figure out Hashing error: cannot find package-file hash for add-keys#src/foo.txt
+# The add-keys-task in the root turbo.json has no config. This test:
+# [x] Tests dependsOn works by asserting that another task first
+# [x] Tests outputs works by asserting that the right directory is cached
+# [x] Tests outputMode by asserting output logs on a second run
+# [x] Tests inputs works by changing a file and testing there was a cache miss
+# [x] Tests env works by setting an env var and asserting there was a cache miss
 
 # 1. First run, assert for `dependsOn` and `outputs` keys
   $ ${TURBO} run add-keys-task --skip-infer --filter=add-keys > tmp.log
@@ -45,7 +37,8 @@ Setup
   apps/add-keys/out/
   apps/add-keys/out/.keep
   apps/add-keys/out/foo.min.txt
-# 2. Second run, test there was a cache hit and output was suppressed, because of outputMode
+
+# 2. Second run, test there was a cache hit (`cache` config`) and `output` was suppressed (`outputMode`)
   $ ${TURBO} run add-keys-task --skip-infer --filter=add-keys
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
