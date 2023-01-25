@@ -34,7 +34,7 @@ pub async fn retry_future<T, E: Into<anyhow::Error>, F: Future<Output = Result<T
             }
         }
 
-        let sleep_period = (2 as u64)
+        let sleep_period = (2_u64)
             .pow(retry_count)
             .clamp(MIN_SLEEP_TIME, MAX_SLEEP_TIME);
         sleep(std::time::Duration::from_secs(sleep_period)).await;
