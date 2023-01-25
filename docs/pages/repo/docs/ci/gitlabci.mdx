@@ -19,7 +19,7 @@ For a given root `package.json`:
     "test": "turbo run test"
   },
   "devDependencies": {
-    "turbo": "1.2.5"
+    "turbo": "latest"
   }
 }
 ```
@@ -34,7 +34,7 @@ And a `turbo.json`:
       "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["build"]
     },
   }
 }
