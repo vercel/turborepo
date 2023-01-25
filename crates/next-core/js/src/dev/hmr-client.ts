@@ -20,7 +20,10 @@ import {
 } from "../overlay/client";
 import { addEventListener, sendMessage } from "./websocket";
 import { ModuleId } from "@vercel/turbopack-runtime/types";
-import { HmrUpdateEntry } from "@vercel/turbopack-runtime/types/protocol";
+import {
+  HmrUpdateEntry,
+  Issue,
+} from "@vercel/turbopack-runtime/types/protocol";
 
 declare var globalThis: TurbopackGlobals;
 
@@ -111,12 +114,12 @@ const chunksWithUpdates: Map<ResourceKey, AggregatedUpdates> = new Map();
 
 function aggregateUpdates(
   msg: ServerMessage,
-  hasIssues: boolean
+  hasCriticalIssues: boolean
 ): ServerMessage {
   const key = resourceKey(msg.resource);
   const aggregated = chunksWithUpdates.get(key);
 
-  if (msg.type === "issues" && aggregated == null && hasIssues) {
+  if (msg.type === "issues" && aggregated == null && hasCriticalIssues) {
     // add an empty record to make sure we don't call `onBuildOk`
     chunksWithUpdates.set(key, {
       added: {},
@@ -126,7 +129,7 @@ function aggregateUpdates(
   }
 
   if (msg.type === "issues" && aggregated != null) {
-    if (!hasIssues) {
+    if (!hasCriticalIssues) {
       chunksWithUpdates.delete(key);
     }
 
@@ -145,7 +148,7 @@ function aggregateUpdates(
   if (msg.type !== "partial") return msg;
 
   if (aggregated == null) {
-    if (hasIssues) {
+    if (hasCriticalIssues) {
       chunksWithUpdates.set(key, {
         added: msg.instruction.added,
         modified: msg.instruction.modified,
@@ -193,7 +196,7 @@ function aggregateUpdates(
     aggregated.deleted.add(moduleId);
   }
 
-  if (!hasIssues) {
+  if (!hasCriticalIssues) {
     chunksWithUpdates.delete(key);
   } else {
     chunksWithUpdates.set(key, aggregated);
@@ -218,7 +221,28 @@ function compareByList(list: any[], a: any, b: any) {
   return aI - bI;
 }
 
+const chunksWithIssues: Map<ResourceKey, Issue[]> = new Map();
+
+function emitIssues() {
+  const issues = [];
+  const deduplicationSet = new Set();
+
+  for (const [_, chunkIssues] of chunksWithIssues) {
+    for (const chunkIssue of chunkIssues) {
+      if (deduplicationSet.has(chunkIssue.formatted)) continue;
+
+      issues.push(chunkIssue);
+      deduplicationSet.add(chunkIssue.formatted);
+    }
+  }
+
+  sortIssues(issues);
+
+  onTurbopackIssues(issues);
+}
+
 function handleIssues(msg: ServerMessage): boolean {
+  const key = resourceKey(msg.resource);
   let hasCriticalIssues = false;
 
   for (const issue of msg.issues) {
@@ -229,8 +253,12 @@ function handleIssues(msg: ServerMessage): boolean {
   }
 
   if (msg.issues.length > 0) {
-    onTurbopackIssues(msg.issues);
+    chunksWithIssues.set(key, msg.issues);
+  } else if (chunksWithIssues.has(key)) {
+    chunksWithIssues.delete(key);
   }
+
+  emitIssues();
 
   return hasCriticalIssues;
 }
@@ -245,17 +273,21 @@ const CATEGORY_ORDER = [
   "other",
 ];
 
-function handleSocketMessage(msg: ServerMessage) {
-  msg.issues.sort((a, b) => {
+function sortIssues(issues: Issue[]): Issue[] {
+  return issues.sort((a, b) => {
     const first = compareByList(SEVERITY_ORDER, a.severity, b.severity);
     if (first !== 0) return first;
     return compareByList(CATEGORY_ORDER, a.category, b.category);
   });
+}
 
-  const hasIssues = handleIssues(msg);
-  const aggregatedMsg = aggregateUpdates(msg, hasIssues);
+function handleSocketMessage(msg: ServerMessage) {
+  sortIssues(msg.issues);
 
-  if (hasIssues) return;
+  const hasCriticalIssues = handleIssues(msg);
+  const aggregatedMsg = aggregateUpdates(msg, hasCriticalIssues);
+
+  if (hasCriticalIssues) return;
 
   const runHooks = chunksWithUpdates.size === 0;
 
