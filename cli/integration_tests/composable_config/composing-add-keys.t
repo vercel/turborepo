@@ -12,7 +12,7 @@ Setup
 # The add-keys-task in the root turbo.json has no config
 # [x] Test dependOn works by testing that output runs another task
 # [x] Test outputs works by testing that the right directory is cached
-# Test outputMode by checking output
+# [x] Test outputMode by checking output
 # Test inputs works by changing a file and testing there was a cache miss
 # Test env works by setting an env var and asserting there was a cache miss
 
