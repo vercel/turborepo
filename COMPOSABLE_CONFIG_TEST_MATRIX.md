@@ -22,51 +22,30 @@
   - [ ] cache
   - [ ] outputMode
 
-- `dependsOn`
-  exercise by: run task, expect dependent task to only run when appropriate
+- [ ] override-values
 
-  - [x] add-key: No `dependsOn` in root, add in workspace
-  - [x] omit-key: Add `dependsOn` in root, omit key in workspace
-  - [x] override-value: Add `dependsOn` in root, override in workspace
-  - [ ] no-config: Add `dependsOn` in root, have no workspace turbo.json
+  - [ ] dependsOn
+  - [ ] inputs
+  - [ ] outputs
+  - [ ] env
+  - [ ] cache
+  - [ ] outputMode
 
-- `outputs`
-  exercise by: run task by writing files to multiple places, expect correct folder is cached
+- [ ] missing-workspace-config
 
-  - [x] add-key: No `outputs` in root, add in workspace
-  - [x] omit-key: Add `outputs` in root, omit key in workspace
-  - [x] override-value: Add `outputs` in root, override to something else in workspace
-  - [ ] no-config: Add `outputs` in root, have no workspace turbo.json
-
-- `env`
-  exercise by: run task, set env var, run again, expect has is different
-
-  - [ ] add-keyNo `env` in root, add in workspace
-  - [ ] omit-key: Add `env` in root, omit key in workspace
-  - [ ] override-value: Add `env` in root, override to `[]` in workspace
-  - [ ] no-config: Add `env` in root, have no workspace turbo.json
-
-- `inputs`
-  exercise by: run task, change input, run again and expect cache miss in the right places
-
-  - [ ] add-key: No `inputs` in root, add in workspace
-  - [ ] omit-key: Add `inputs` in root, omit key in workspace
-  - [ ] override-value: Add `inputs` in root, override to `[]` in workspace
-  - [ ] no-config: Add `inputs` in root, have no workspace turbo.json
+  - [ ] dependsOn
+  - [ ] inputs
+  - [ ] outputs
+  - [ ] env
+  - [ ] cache
+  - [ ] outputMode
 
 - `cache`
-  exercise by: run task, expect overriden workspace not to have a cache
 
-  - [ ] add-key: No `cache` in root, add `false` in workspace
-  - [ ] override-value: Add `cache:false` in root, override to `true` in workspace
-
-- `outputMode`
-  exercise by: run task, expect correct log output
-
-  - [ ] add-key: No `outputMode` in root, add in workspace
-  - [ ] override-value: Add `outputMode` to root, override in workspace
-  - [ ] omit-key: Add `outputMode` to root, omit in workspace with turbo.json
-  - [ ] no-config: Add `outputMode` to root, no turbo.json in workspace
+  - [ ] Task that has cache:false in root can be overriden to cache:true in workspace
+  - [ ] Task that has cache:true in root can be overriden to cache:false in workspace
+  - [ ] Task that no cache config root can set cache:false in workspace
+  - [ ] Task that has cache:false in root still works if workspace has no turbo.json
 
 - `persistent`
 
