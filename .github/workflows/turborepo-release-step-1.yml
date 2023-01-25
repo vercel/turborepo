@@ -44,8 +44,8 @@ jobs:
           RELEASE_BRANCH: ${{ env.STAGE_BRANCH }}
         run: |
           mkdir -p ./turborepo-release
-          echo $RELEASE_BRANCH > ./turborepo-release/branch
+          echo $RELEASE_BRANCH > ./turborepo-release/release_branch
       - uses: actions/upload-artifact@v3
         with:
-          name: turborepo-release
+          name: release_branch
           path: turborepo-release/
