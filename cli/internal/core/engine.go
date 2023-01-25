@@ -427,96 +427,59 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 		mergedTaskDefinition.Persistent = taskDef.Persistent
 	}
 
-	fmt.Printf("[debug] %s: merged from %v definitions: %#v\n", taskID, len(taskDefinitions), mergedTaskDefinition)
 	return mergedTaskDefinition, nil
 }
 
 func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.PackageJSON, taskID string, taskName string) ([]fs.TaskDefinition, error) {
-	// Start a list of TaskDefinitions we've found for this TaskID
-	taskDefinitions := []fs.TaskDefinition{}
 
-	// Start in the workspace directory
-	turboJSONPath := turbopath.AbsoluteSystemPath(pkg.Dir).UntypedJoin("turbo.json")
-	_, err := fs.ReadTurboConfig(turboJSONPath)
+	// Look for the taskDefinition in the root pipeline. We'll wait to throw errors until the end
+	rootTaskDefinition, _ := rootPipeline.GetTask(taskID, taskName)
 
-	// If there is no turbo.json in the workspace directory, we'll use the one in root turbo.json
-	if err != nil {
-		rootTaskDefinition, err := rootPipeline.GetTask(taskID, taskName)
-		if err != nil {
-			// This should be an unlikely error scenario. If we're working with a task
-			// there should be a definition in the rootPipeline. So an error here suggests
-			// that something else went wrong before we got here.
-			return nil, err
+	// Look up task definition in turbo.json in the workspace directory
+	workspaceConfigPath := turbopath.AbsoluteSystemPath(pkg.Dir).UntypedJoin("turbo.json")
+	workspaceTurboJSON, _ := fs.ReadTurboConfig(workspaceConfigPath)
+
+	var workspaceDefinition *fs.TaskDefinition
+
+	if workspaceTurboJSON != nil {
+		// TODO(mehulkar): Enable extending from more than one workspace.
+		if len(workspaceTurboJSON.Extends) > 1 {
+			return nil, fmt.Errorf(
+				"You can only extend from the root workspace. \"%s\" extends from %v",
+				pkg.Name,
+				workspaceTurboJSON.Extends,
+			)
 		}
-		taskDefinitions = append(taskDefinitions, *rootTaskDefinition)
-		return taskDefinitions, nil
-	}
 
-	graph := e.completeGraph
-
-	// For loop until we `break` manually.
-	// We will reassign `turboJSONPath` inside this loop, so that
-	// every time we iterate, we're starting from a new one.
-	for {
-		turboJSON, err := fs.ReadTurboConfig(turboJSONPath)
-		if err != nil {
-			return nil, err
+		// TODO(mehulkar): Enable extending from non-root workspace.
+		if workspaceTurboJSON.Extends[0] != util.RootPkgName {
+			return nil, fmt.Errorf(
+				"You can only extend from the root workspace. \"%s\" extends from %v",
+				pkg.Name,
+				workspaceTurboJSON.Extends,
+			)
 		}
 
 		// TODO(mehulkar):
-		// 		getTaskFromPipeline allows searching with a taskID (e.g. `package#task`).
+		// 		Pipeline.GetTask allows searching with a taskID (e.g. `package#task`).
 		// 		But we do not want to allow this, except if we're in the root workspace.
-		taskDefinition, err := turboJSON.Pipeline.GetTask(taskID, taskName)
-		if err != nil {
-			// If there was nothing in the pipeline for this task, we can exit
-			fmt.Printf("[debug] No definition for %s in %s\n", taskID, turboJSONPath)
-			break
-		} else {
-			// Add it into the taskDefinitions
-			taskDefinitions = append(taskDefinitions, *taskDefinition)
-
-			// If this turboJSON doesn't have an extends property, we can stop our for loop here.
-			if len(turboJSON.Extends) == 0 {
-				break
-			}
-
-			// TODO(mehulkar): Enable extending from more than one workspace.
-			// TODO(mehulkar): Enable extending from non-root workspace.
-			if len(turboJSON.Extends) > 1 || turboJSON.Extends[0] != util.RootPkgName {
-				// TODO(mehulkar): Using pkg.Name here is wrong, since pkg changes on each iteration
-				return nil, fmt.Errorf(
-					"You can only extend from the root workspace. \"%s\" extends from %v",
-					pkg.Name,
-					turboJSON.Extends,
-				)
-			}
-
-			// If there's an extends property, walk up to the next one, find the workspace it refers to,
-			// and and assign `directory` to it for the next iteration in this for loop.
-			// Note(mehulkar):
-			//		We are looping through all items in Extends, but as of now,
-			// 		and based on the checks above, we only want to read the first item
-			// 		(and we already know that it's the root workspace).
-			for _, workspaceName := range turboJSON.Extends {
-				workspace, ok := graph.WorkspaceInfos[workspaceName]
-				if !ok {
-					// TODO: Should this be a hard error?
-					// A workspace was referenced that doesn't exist or we know nothing about
-					break
-				}
-
-				// Reassign these. The loop will run again with this new turbo.json now.
-				turboJSONPath = turbopath.AbsoluteSystemPath(workspace.Dir).UntypedJoin("turbo.json")
-			}
-		}
+		workspaceDefinition, _ = workspaceTurboJSON.Pipeline.GetTask(taskID, taskName)
 	}
-	// Reverse the array. We gathered taskDefinitions above starting from the workspace
-	// which means the "root" turbo.json will be _last_ in this list. We want the opposite order.
-	// We want to consume this chain starting from the root turbo.json and then use later configs
-	// to override the root config.
-	reversedTaskDefinitions := make([]fs.TaskDefinition, len(taskDefinitions))
-	for i, j := 0, len(taskDefinitions)-1; i < j; i, j = i+1, j-1 {
-		reversedTaskDefinitions[i], reversedTaskDefinitions[j] = taskDefinitions[j], taskDefinitions[i]
+
+	if workspaceDefinition == nil && rootTaskDefinition == nil {
+		return nil, fmt.Errorf("Could not find %s in root turbo.json or %s", taskID, pkg.Dir)
 	}
-	return reversedTaskDefinitions, nil
+
+	// Start a list of TaskDefinitions we've found for this TaskID
+	taskDefinitions := []fs.TaskDefinition{}
+
+	if rootTaskDefinition != nil {
+		taskDefinitions = append(taskDefinitions, *rootTaskDefinition)
+	}
+
+	if workspaceDefinition != nil {
+		taskDefinitions = append(taskDefinitions, *workspaceDefinition)
+	}
+
+	return taskDefinitions, nil
 }
