@@ -13,8 +13,9 @@ Setup
 # [x] Test dependOn works by testing that output runs another task
 # [x] Test outputs works by testing that the right directory is cached
 # [x] Test outputMode by checking output
-# Test inputs works by changing a file and testing there was a cache miss
-# Test env works by setting an env var and asserting there was a cache miss
+# [ ] Test inputs works by changing a file and testing there was a cache miss
+# [ ] Test env works by setting an env var and asserting there was a cache miss
+# [ ] Figure out Hashing error: cannot find package-file hash for add-keys#src/foo.txt
 
 # 1. First run, assert for `dependsOn` and `outputs` keys
   $ ${TURBO} run add-keys-task --skip-infer --filter=add-keys > tmp.log
