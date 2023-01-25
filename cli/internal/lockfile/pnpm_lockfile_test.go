@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -28,6 +29,9 @@ func getFixture(t *testing.T, name string) ([]byte, error) {
 	return os.ReadFile(lockfilePath.ToString())
 }
 
+func Test_SpecifierMapZero(t *testing.T) {
+}
+
 func Test_Roundtrip(t *testing.T) {
 	lockfiles := []string{"pnpm6-workspace.yaml", "pnpm7-workspace.yaml", "pnpm8.yaml"}
 
@@ -49,7 +53,14 @@ func Test_Roundtrip(t *testing.T) {
 			t.Errorf("decoding failed %s", err)
 		}
 
-		assert.DeepEqual(t, lockfile, newLockfile)
+		assert.DeepEqual(
+			t,
+			lockfile,
+			newLockfile,
+			// Skip over fields that don't get serialized
+			cmpopts.IgnoreUnexported(PnpmLockfile{}),
+			cmpopts.IgnoreTypes(yaml.Node{}),
+		)
 	}
 }
 
@@ -58,8 +69,7 @@ func Test_SpecifierResolution(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	untypedLockfile, err := DecodePnpmLockfile(contents)
-	lockfile := untypedLockfile.(*PnpmLockfile)
+	lockfile, err := DecodePnpmLockfile(contents)
 	if err != nil {
 		t.Errorf("failure decoding lockfile: %v", err)
 	}
@@ -99,8 +109,7 @@ func Test_SpecifierResolutionV6(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	untypedLockfile, err := DecodePnpmLockfile(contents)
-	lockfile := untypedLockfile.(*PnpmLockfileV6)
+	lockfile, err := DecodePnpmLockfile(contents)
 	if err != nil {
 		t.Errorf("failure decoding lockfile: %v", err)
 	}
