@@ -9,10 +9,10 @@ env:
   RELEASE_TURBO_CLI: true
 
 jobs:
-  test:
+  smoke-test:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    name: "Build Native"
+    name: "Smoke Test"
     steps:
       - name: 'Download turborepo-release artifact'
         uses: actions/github-script@v6
@@ -35,13 +35,119 @@ jobs:
             let fs = require('fs');
             fs.writeFileSync(`${process.env.GITHUB_WORKSPACE}/release_branch.zip`, Buffer.from(download.data));
 
-      - name: 'Unzip turborepo-release'
+      - name: 'Unzip turborepo-release artifact'
         run: unzip release_branch.zip
         
-      - name: Get release branch
+      - name: 'Get release branch'
+        id: getReleaseBranch
+        run: echo ::set-output name=releaseBranch::$(head -n 1 release_branch)
+
+      - uses: actions/checkout@v3
+        name: 'Checkout code'
+        with:
+          ref: ${{ steps.getReleaseBranch.outputs.releaseBranch }}
+
+      - uses: ./.github/actions/setup-node
+        name: 'Setup node'
+        with:
+          enable-corepack: false
+          
+      - uses: ./.github/actions/setup-go
+        name: 'Setup go'
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Test
+        run: pnpm -- turbo run test --filter=cli --color
+        
+  build-rust:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    name: 'Build Rust'
+    needs: [smoke-test]
+    runs-on: ${{ matrix.settings.host }}
+    container:
+      image: ${{ matrix.settings.container }}
+      options: ${{ matrix.settings.container-options }}
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: macos-latest
+            target: "x86_64-apple-darwin"
+            container-options: "--rm"
+          - host: macos-latest
+            target: "aarch64-apple-darwin"
+            container-options: "--rm"
+          - host: ubuntu-latest
+            container: ubuntu:xenial
+            container-options: "--platform=linux/amd64 --rm"
+            container-setup: "apt-get update && apt-get install -y curl musl-tools"
+            target: "x86_64-unknown-linux-musl"
+            setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev"
+          - host: ubuntu-latest
+            container-options: "--rm"
+            target: "aarch64-unknown-linux-musl"
+            rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
+            setup: "sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
+          - host: windows-latest
+            target: x86_64-pc-windows-gnu
+            setup: "rustup set default-host x86_64-pc-windows-gnu"
+            container-options: "--rm"
+    steps:
+      - name: 'Download turborepo-release artifact'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            let allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               run_id: context.payload.workflow_run.id,
+            });
+            let matchArtifact = allArtifacts.data.artifacts.filter((artifact) => {
+              return artifact.name == "turborepo-release"
+            })[0];
+            let download = await github.rest.actions.downloadArtifact({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               artifact_id: matchArtifact.id,
+               archive_format: 'zip',
+            });
+            let fs = require('fs');
+            fs.writeFileSync(`${process.env.GITHUB_WORKSPACE}/turborepo-release.zip`, Buffer.from(download.data));
+
+      - name: 'Unzip turborepo-release'
+        run: unzip turborepo-release.zip
+      
+      - name: 'Get release branch'
         id: getReleaseBranch
         run: echo ::set-output name=releaseBranch::$(head -n 1 release_branch)
         
-      - name: Test output
-        run: echo ${{ steps.getReleaseBranch.outputs.releaseBranch }}
-    
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ steps.getReleaseBranch.outputs.releaseBranch }}
+
+      - name: Setup Container
+        if: ${{ matrix.settings.container-setup }}
+        run: ${{ matrix.settings.container-setup }}
+
+      - name: Rust Setup
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          override: true
+          target: ${{ matrix.settings.target }}
+
+      - name: Build Setup
+        shell: bash
+        if: ${{ matrix.settings.setup }}
+        run: ${{ matrix.settings.setup }}
+
+      - name: Build
+        run: ${{ matrix.settings.rust-build-env }} cargo build --release -p turbo --target ${{ matrix.settings.target }}
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: turbo-${{ matrix.settings.target }}
+          path: target/${{ matrix.settings.target }}/release/turbo*
