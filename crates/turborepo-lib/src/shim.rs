@@ -14,7 +14,7 @@ use chrono::offset::Local;
 use dunce::canonicalize as fs_canonicalize;
 use env_logger::{fmt::Color, Builder, Env, WriteStyle};
 use log::{debug, Level, LevelFilter};
-use semver::{Version, VersionReq};
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
 use turbo_updater::check_for_updates;
@@ -35,7 +35,15 @@ static TURBO_PURE_OUTPUT_ARGS: [&str; 6] = [
 ];
 
 static TURBO_SKIP_NOTIFIER_ARGS: [&str; 4] = ["--help", "--h", "--version", "--v"];
-static SUPPORTS_SKIP_INFER_SEMVER: &str = ">=1.7.0-canary.0";
+
+fn turbo_version_has_shim(version: &str) -> bool {
+    let version = Version::parse(version).unwrap();
+    // only need to check major and minor (this will include canaries)
+    if version.major == 1 {
+        return version.minor >= 7;
+    }
+    return version.major > 1;
+}
 
 #[derive(Debug)]
 struct ShimArgs {
@@ -330,10 +338,8 @@ impl RepoState {
     }
 
     fn local_turbo_supports_skip_infer_and_single_package(&self) -> Result<bool> {
-        let skip_infer_versions = VersionReq::parse(SUPPORTS_SKIP_INFER_SEMVER).unwrap();
         if let Some(LocalTurboState { version, .. }) = &self.local_turbo_state {
-            let version = Version::parse(version)?;
-            Ok(skip_infer_versions.matches(&version))
+            Ok(turbo_version_has_shim(version))
         } else {
             Ok(false)
         }
@@ -354,6 +360,10 @@ impl RepoState {
             && !already_has_single_package_flag
             && supports_skip_infer_and_single_package;
 
+        debug!(
+            "supports_skip_infer_and_single_package {:?}",
+            supports_skip_infer_and_single_package
+        );
         let cwd = fs_canonicalize(&self.root)?;
         let mut raw_args: Vec<_> = if supports_skip_infer_and_single_package {
             vec!["--skip-infer".to_string()]
@@ -533,15 +543,23 @@ mod test {
 
     #[test]
     fn test_skip_infer_version_constraint() {
-        let req = VersionReq::parse(SUPPORTS_SKIP_INFER_SEMVER).unwrap();
-        let canary = Version::parse("1.7.0-canary.0").unwrap();
-        let release = Version::parse("1.7.0").unwrap();
-        let old = Version::parse("1.6.3").unwrap();
-        let new = Version::parse("1.8.0").unwrap();
-        assert!(req.matches(&release));
-        assert!(req.matches(&canary));
-        assert!(req.matches(&new));
-        assert!(!req.matches(&old));
+        let canary = "1.7.0-canary.0";
+        let newer_canary = "1.7.0-canary.1";
+        let newer_minor_canary = "1.7.1-canary.6";
+        let release = "1.7.0";
+        let old = "1.6.3";
+        let old_canary = "1.6.2-canary.1";
+        let new = "1.8.0";
+        let new_major = "2.1.0";
+
+        assert!(turbo_version_has_shim(release));
+        assert!(turbo_version_has_shim(canary));
+        assert!(turbo_version_has_shim(newer_canary));
+        assert!(turbo_version_has_shim(newer_minor_canary));
+        assert!(turbo_version_has_shim(new));
+        assert!(turbo_version_has_shim(new_major));
+        assert!(!turbo_version_has_shim(old));
+        assert!(!turbo_version_has_shim(old_canary));
     }
 
     #[cfg(windows)]
