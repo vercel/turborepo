@@ -1,0 +1,10 @@
+{
+  "extends": ["//"],
+
+  "pipeline": {
+    "build": {
+      "dependsOn": ["somethingelse"]
+    },
+    "somethingelse": {}
+  }
+}
