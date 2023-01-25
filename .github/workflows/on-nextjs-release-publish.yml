@@ -1,0 +1,21 @@
+# A workflow supposed to run when there is a new release of Next.js.
+# This relies on next.js upstream's `repository_dispatch` workflow.
+name: Next.js Release Publish
+
+on:
+  repository_dispatch:
+    # This is the event type defined by next.js upstream's `repository_dispatch` workflow dispatches.
+    types: [nextjs-release-published]
+
+jobs:
+  check-release-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Display release tag
+        run: echo "Found a new release ${{ github.event.client_payload.version }}"
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          repository: vercel/next.js
+          ref: ${{ github.event.client_payload.version }}
