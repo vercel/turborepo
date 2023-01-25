@@ -2441,7 +2441,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>((path, ext)) = this.path.rsplit_once(<span class="string">&#39;.&#39;</span>) {
             <span class="comment">// check if `ext` is a real extension, and not a &quot;.&quot; in a directory name or a
             // .dotfile
-            </span><span class="kw">if </span>!ext.contains(<span class="string">&#39;/&#39;</span>) &amp;&amp; !(path.ends_with(<span class="string">&#39;/&#39;</span>) &amp;&amp; !path.is_empty()) {
+            </span><span class="kw">if </span>!(ext.contains(<span class="string">&#39;/&#39;</span>) || (path.ends_with(<span class="string">&#39;/&#39;</span>) &amp;&amp; !path.is_empty())) {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="self">Self</span>::new_normalized(
                     this.fs,
                     <span class="macro">format!</span>(<span class="string">&quot;{}{}.{}&quot;</span>, path, appending, ext),

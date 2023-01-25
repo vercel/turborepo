@@ -766,11 +766,11 @@
     </span><span class="kw">while </span>merged.len() &gt; <span class="number">1 </span>&amp;&amp; merged.len() + fully_merged.len() &gt; target_count {
         <span class="kw">let </span>target = target_count - fully_merged.len();
         <span class="kw">let </span>size = merged.len().div_ceil(target);
-        <span class="kw">let </span>old_merged = std::mem::replace(<span class="kw-2">&amp;mut </span>merged, Vec::new());
+        <span class="kw">let </span>old_merged = std::mem::take(<span class="kw-2">&amp;mut </span>merged);
         <span class="kw">for </span>some <span class="kw">in </span>old_merged.chunks(size) {
             <span class="comment">// TODO this collect looks unnecessary, but rust will complain about a
             // higher-level lifetime error otherwise
-            </span><span class="kw">let </span>some = some.iter().map(|c| <span class="kw-2">*</span>c).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            </span><span class="kw">let </span>some = some.iter().copied().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
             <span class="kw">let </span><span class="kw-2">mut </span>part = merge_by_size(some).<span class="kw">await</span><span class="question-mark">?</span>;
             merged.extend(part.pop().into_iter());
             fully_merged.append(<span class="kw-2">&amp;mut </span>part);

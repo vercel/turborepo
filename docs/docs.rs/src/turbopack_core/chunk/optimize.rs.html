@@ -528,7 +528,7 @@
         <span class="kw">fn </span>skip_unnessary_nodes(trees: <span class="kw-2">&amp;mut </span>IndexMap&lt;FileSystemPathVc, Rc&lt;RefCell&lt;Node&gt;&gt;&gt;) {
             <span class="kw">for </span>tree <span class="kw">in </span>trees.values_mut() {
                 <span class="kw">let </span><span class="kw-2">mut </span>tree = tree.borrow_mut();
-                <span class="kw">if </span>tree.chunks.len() == <span class="number">0 </span>&amp;&amp; tree.children.len() == <span class="number">1 </span>{
+                <span class="kw">if </span>tree.chunks.is_empty() &amp;&amp; tree.children.len() == <span class="number">1 </span>{
                     <span class="kw">let </span>child = tree.children.pop().unwrap();
                     <span class="kw">let </span><span class="kw-2">mut </span>child = child.borrow_mut();
                     tree.path = child.path;
