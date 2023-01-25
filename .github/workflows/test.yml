@@ -80,15 +80,11 @@ jobs:
           PATTERNS: |
             pnpm-lock.yaml
             package.json
-            crates/**
-            shim/**
+            crates/turbopack/**
             xtask/**
             Cargo.*
             .cargo/**
             rust-toolchain
-            !crates/turborepo/**
-            !crates/turborepo-lib/**
-            !crates/turbo-updater/**
             !**.md
             !**.mdx
 
