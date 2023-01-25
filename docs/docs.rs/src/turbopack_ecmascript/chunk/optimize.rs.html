@@ -373,10 +373,86 @@
 <span id="373">373</span>
 <span id="374">374</span>
 <span id="375">375</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{cmp::Ordering, collections::HashSet};
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+<span id="398">398</span>
+<span id="399">399</span>
+<span id="400">400</span>
+<span id="401">401</span>
+<span id="402">402</span>
+<span id="403">403</span>
+<span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+</pre><pre class="rust"><code><span class="doccomment">//! Chunk optimization for Ecmascript chunks.
+
+</span><span class="kw">use </span>std::{cmp::Ordering, collections::HashSet};
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>indexmap::IndexSet;
+<span class="kw">use </span>indexmap::{IndexMap, IndexSet};
 <span class="kw">use </span>turbo_tasks::TryJoinIterExt;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathOptionVc;
 <span class="kw">use </span>turbopack_core::chunk::{
@@ -422,7 +498,8 @@
     <span class="prelude-val">Ok</span>(ecma(chunk).<span class="kw">await</span><span class="question-mark">?</span>.common_parent())
 }
 
-<span class="kw">async fn </span>merge_chunks(
+<span class="doccomment">/// Merge a few chunks into a single chunk.
+</span><span class="kw">async fn </span>merge_chunks(
     first: EcmascriptChunkVc,
     chunks: <span class="kw-2">&amp;</span>[EcmascriptChunkVc],
 ) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkVc&gt; {
@@ -462,8 +539,9 @@
 <span class="doccomment">/// Max number of chunk items per chunk to merge.
 </span><span class="kw">const </span>MAX_CHUNK_ITEMS_PER_CHUNK: usize = <span class="number">3000</span>;
 
-<span class="kw">async fn </span>merge_duplicated_and_contained(
-    chunks: <span class="kw-2">&amp;mut </span>Vec&lt;EcmascriptChunkVc&gt;,
+<span class="doccomment">/// Merge chunks with high duplication between them.
+</span><span class="kw">async fn </span>merge_duplicated_and_contained(
+    chunks: <span class="kw-2">&amp;mut </span>Vec&lt;(EcmascriptChunkVc, <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;)&gt;,
     <span class="kw-2">mut </span>unoptimized_count: usize,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="kw">struct </span>Comparison {
@@ -512,13 +590,13 @@
     // find duplication greater than DUPLICATION_THRESHOLD.
     </span><span class="kw">let </span><span class="kw-2">mut </span>i = <span class="number">0</span>;
     <span class="kw">while </span>i &lt; unoptimized_count {
-        <span class="kw">let </span>chunk = chunks[i];
+        <span class="kw">let </span>chunk = chunks[i].<span class="number">0</span>;
         <span class="comment">// Compare chunk with following chunks
         </span><span class="kw">let </span><span class="kw-2">mut </span>comparisons = chunks[i + <span class="number">1</span>..]
             .iter()
             .enumerate()
             .take(COMPARE_WITH_COUNT)
-            .map(|(j, <span class="kw-2">&amp;</span>other)| <span class="kw">async move </span>{
+            .map(|(j, <span class="kw-2">&amp;</span>(other, <span class="kw">_</span>))| <span class="kw">async move </span>{
                 <span class="kw">let </span>compare = EcmascriptChunkVc::compare(chunk, other).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(Comparison {
                     <span class="comment">// since enumerate is offset by `i + 1` we need to account for that
@@ -622,7 +700,7 @@
         }
         <span class="kw">if </span>merged.len() &gt; <span class="number">1 </span>{
             <span class="comment">// Merge selected chunks
-            </span>chunks[i] = merge_chunks(chunk, <span class="kw-2">&amp;</span>merged).<span class="kw">await</span><span class="question-mark">?</span>;
+            </span>chunks[i] = (merge_chunks(chunk, <span class="kw-2">&amp;</span>merged).<span class="kw">await</span><span class="question-mark">?</span>, <span class="prelude-val">None</span>);
 
             <span class="comment">// We need to fix the unoptimized_count when we merge unoptimized chunks
             </span>unoptimized_count -= merged_indices
@@ -632,7 +710,7 @@
 
             <span class="comment">// Remove merged chunks from chunks list
             </span><span class="kw">let </span><span class="kw-2">mut </span>remove = merged[<span class="number">1</span>..].iter().collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;();
-            chunks.retain(|c| !remove.remove(c));
+            chunks.retain(|(c, <span class="kw">_</span>)| !remove.remove(c));
             <span class="comment">// All merged chunks must be removed
             </span><span class="macro">debug_assert!</span>(remove.is_empty());
             <span class="comment">// Don&#39;t increase i, since we want to re-visit the chunk for more
@@ -644,11 +722,73 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">async fn </span>merge_by_size(chunks: <span class="kw-2">&amp;</span>[EcmascriptChunkVc]) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;EcmascriptChunkVc&gt;&gt; {
+<span class="doccomment">/// Merge chunks to fit into the target limit. Uses chunk source to first merge
+/// all chunks from a single source and if that&#39;s not enough it will merge
+/// chunks into equal sized groups.
+</span><span class="kw">async fn </span>merge_to_limit(
+    chunks: Vec&lt;(EcmascriptChunkVc, <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;)&gt;,
+    target_count: usize,
+) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;EcmascriptChunkVc&gt;&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>remaining = chunks.len();
+    <span class="comment">// Collecting chunks by source into an index map to keep original order
+    </span><span class="kw">let </span><span class="kw-2">mut </span>chunks_by_source = IndexMap::new();
+    <span class="kw">for </span>(chunk, source) <span class="kw">in </span>chunks {
+        chunks_by_source
+            .entry(source)
+            .or_insert_with(Vec::new)
+            .push(chunk);
+    }
+    <span class="comment">// Stable sorting by source with the most chunks first
+    </span>chunks_by_source.sort_by(|<span class="kw">_</span>, a, <span class="kw">_</span>, b| b.len().cmp(<span class="kw-2">&amp;</span>a.len()));
+
+    <span class="comment">// Merged chunks that are already pretty full, we don&#39;t try to merge more into
+    // them
+    </span><span class="kw">let </span><span class="kw-2">mut </span>fully_merged = Vec::new();
+    <span class="comment">// Merged chunks that are probably not full enough, we will try to merge them
+    // with others when we are still above the target count
+    </span><span class="kw">let </span><span class="kw-2">mut </span>merged = Vec::new();
+
+    <span class="comment">// Merge chunks by source
+    </span><span class="kw">for </span>(<span class="kw">_</span>, <span class="kw-2">mut </span>chunks) <span class="kw">in </span>chunks_by_source {
+        <span class="kw">if </span>merged.len() + remaining &lt;= target_count {
+            merged.append(<span class="kw-2">&amp;mut </span>chunks);
+        } <span class="kw">else </span>{
+            remaining -= chunks.len();
+            <span class="kw">let </span><span class="kw-2">mut </span>part = merge_by_size(chunks).<span class="kw">await</span><span class="question-mark">?</span>;
+            merged.extend(part.pop().into_iter());
+            fully_merged.append(<span class="kw-2">&amp;mut </span>part);
+        }
+    }
+
+    <span class="comment">// When still above the limit, merge chunks into evenly sized subsequences.
+    // In some rare cases we might need multiple tries when the count can&#39;t be
+    // reduced as intended due to max chunk size limits
+    </span><span class="kw">while </span>merged.len() &gt; <span class="number">1 </span>&amp;&amp; merged.len() + fully_merged.len() &gt; target_count {
+        <span class="kw">let </span>target = target_count - fully_merged.len();
+        <span class="kw">let </span>size = merged.len().div_ceil(target);
+        <span class="kw">let </span>old_merged = std::mem::replace(<span class="kw-2">&amp;mut </span>merged, Vec::new());
+        <span class="kw">for </span>some <span class="kw">in </span>old_merged.chunks(size) {
+            <span class="comment">// TODO this collect looks unnecessary, but rust will complain about a
+            // higher-level lifetime error otherwise
+            </span><span class="kw">let </span>some = some.iter().map(|c| <span class="kw-2">*</span>c).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            <span class="kw">let </span><span class="kw-2">mut </span>part = merge_by_size(some).<span class="kw">await</span><span class="question-mark">?</span>;
+            merged.extend(part.pop().into_iter());
+            fully_merged.append(<span class="kw-2">&amp;mut </span>part);
+        }
+    }
+    fully_merged.append(<span class="kw-2">&amp;mut </span>merged);
+    <span class="prelude-val">Ok</span>(fully_merged)
+}
+
+<span class="doccomment">/// Merge chunks into a few chunks as possible while staying below the chunk
+/// size limit.
+</span><span class="kw">async fn </span>merge_by_size(
+    chunks: <span class="kw">impl </span>IntoIterator&lt;Item = EcmascriptChunkVc&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;EcmascriptChunkVc&gt;&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>merged = Vec::new();
     <span class="kw">let </span><span class="kw-2">mut </span>current = Vec::new();
     <span class="kw">let </span><span class="kw-2">mut </span>current_items = <span class="number">0</span>;
-    <span class="kw">for </span><span class="kw-2">&amp;</span>chunk <span class="kw">in </span>chunks {
+    <span class="kw">for </span>chunk <span class="kw">in </span>chunks {
         <span class="kw">let </span>chunk_items = <span class="kw-2">*</span>chunk.chunk_items_count().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>chunk_items &gt;= MAX_CHUNK_ITEMS_PER_CHUNK {
             <span class="comment">// chunk is too big, keep it separate
@@ -681,22 +821,21 @@
     <span class="prelude-val">Ok</span>(merged)
 }
 
-<span class="attr">#[turbo_tasks::function]
+<span class="doccomment">/// Chunk optimization for ecmascript chunks.
+</span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>optimize_ecmascript(
     local: <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;,
-    children: <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;,
+    children: Vec&lt;ChunksVc&gt;,
     chunk_group: ChunkGroupVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>chunks = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>chunks = Vec::&lt;(EcmascriptChunkVc, <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;)&gt;::new();
     <span class="comment">// TODO optimize
     </span><span class="kw">let </span><span class="kw-2">mut </span>unoptimized_count = <span class="number">0</span>;
     <span class="kw">if let </span><span class="prelude-val">Some</span>(local) = local {
-        <span class="comment">// Local chunks have the same common_parent and could be merged into fewer
-        // chunks. (We use a pretty large threshold for that.)
-        </span><span class="kw">let </span><span class="kw-2">mut </span>local = local.<span class="kw">await</span><span class="question-mark">?</span>.iter().copied().map(ecma).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>local = local.<span class="kw">await</span><span class="question-mark">?</span>.iter().copied().map(ecma).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// Merge all local chunks when they are too many
         </span><span class="kw">if </span>local.len() &gt; LOCAL_CHUNK_MERGE_THRESHOLD {
-            local = merge_by_size(<span class="kw-2">&amp;</span>local).<span class="kw">await</span><span class="question-mark">?</span>;
+            local = merge_by_size(local).<span class="kw">await</span><span class="question-mark">?</span>;
         }
         <span class="kw">for </span>chunk <span class="kw">in </span>local.iter_mut() {
             <span class="kw">let </span>content = (<span class="kw-2">*</span>chunk).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -717,10 +856,15 @@
             }
         }
         unoptimized_count = local.len();
-        chunks.append(<span class="kw-2">&amp;mut </span>local);
+        chunks.extend(local.into_iter().map(|c| (c, <span class="prelude-val">None</span>)));
     }
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(children) = children {
-        <span class="kw">let </span><span class="kw-2">mut </span>children = children.<span class="kw">await</span><span class="question-mark">?</span>.iter().copied().map(ecma).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">for </span>children_chunks <span class="kw">in </span>children.into_iter() {
+        <span class="kw">let </span><span class="kw-2">mut </span>children = children_chunks
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.iter()
+            .map(|child| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>((ecma(<span class="kw-2">*</span>child).<span class="kw">await</span><span class="question-mark">?</span>, <span class="prelude-val">Some</span>(children_chunks))) })
+            .try_join()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         chunks.append(<span class="kw-2">&amp;mut </span>children);
     }
 
@@ -742,11 +886,15 @@
     // When there are too many chunks, try hard to reduce the number of chunks to
     // limit the request count.
     </span><span class="kw">if </span>chunks.len() &gt; TOTAL_CHUNK_MERGE_THRESHOLD {
-        chunks = merge_by_size(<span class="kw-2">&amp;</span>chunks).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunks = merge_to_limit(chunks, TOTAL_CHUNK_MERGE_THRESHOLD).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(ChunksVc::cell(
+            chunks.into_iter().map(|c| c.as_chunk()).collect(),
+        ))
+    } <span class="kw">else </span>{
+        <span class="prelude-val">Ok</span>(ChunksVc::cell(
+            chunks.into_iter().map(|(c, <span class="kw">_</span>)| c.as_chunk()).collect(),
+        ))
     }
-    <span class="prelude-val">Ok</span>(ChunksVc::cell(
-        chunks.into_iter().map(|c| c.as_chunk()).collect(),
-    ))
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="turbopack_ecmascript" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>

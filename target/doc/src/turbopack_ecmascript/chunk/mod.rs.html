@@ -1267,6 +1267,7 @@
 <span id="1267">1267</span>
 <span id="1268">1268</span>
 <span id="1269">1269</span>
+<span id="1270">1270</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>loader;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub mod </span>source_map;
@@ -1395,6 +1396,7 @@
             </span>.resolve()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">for </span>path <span class="kw">in </span>paths {
+            <span class="kw">let </span>path = path.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">while </span>!<span class="kw-2">*</span>path.is_inside_or_equal(current).<span class="kw">await</span><span class="question-mark">? </span>{
                 <span class="kw">let </span>parent = current.parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">if </span>parent == current {

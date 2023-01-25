@@ -104,6 +104,7 @@
 <span id="104">104</span>
 <span id="105">105</span>
 <span id="106">106</span>
+<span id="107">107</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem::take;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -173,7 +174,7 @@
 </span><span class="kw">const </span>TOTAL_CHUNK_MERGE_THRESHOLD: usize = <span class="number">10</span>;
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>optimize_css(local: <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;, children: <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
+</span><span class="kw">async fn </span>optimize_css(local: <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;, children: Vec&lt;ChunksVc&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>chunks = Vec::new();
     <span class="comment">// TODO optimize
     </span><span class="kw">if let </span><span class="prelude-val">Some</span>(local) = local {
@@ -189,7 +190,7 @@
         }
         chunks.append(<span class="kw-2">&amp;mut </span>local);
     }
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(children) = children {
+    <span class="kw">for </span>children <span class="kw">in </span>children {
         <span class="kw">let </span><span class="kw-2">mut </span>children = children.<span class="kw">await</span><span class="question-mark">?</span>.iter().copied().map(css).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
         chunks.append(<span class="kw-2">&amp;mut </span>children);
     }
@@ -202,6 +203,7 @@
     </span><span class="kw">if </span>chunks.len() &gt; TOTAL_CHUNK_MERGE_THRESHOLD {
         <span class="kw">let </span>size = chunks.len().div_ceil(TOTAL_CHUNK_MERGE_THRESHOLD);
         <span class="comment">// TODO be smarter in selecting the chunks to merge
+        // see ecmascript implementation
         </span><span class="kw">for </span>merged <span class="kw">in </span>take(<span class="kw-2">&amp;mut </span>chunks).chunks(size) {
             chunks.push(merge_chunks(<span class="kw-2">*</span>merged.first().unwrap(), merged).<span class="kw">await</span><span class="question-mark">?</span>);
         }

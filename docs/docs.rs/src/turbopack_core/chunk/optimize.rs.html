@@ -284,26 +284,71 @@
 <span id="284">284</span>
 <span id="285">285</span>
 <span id="286">286</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{cell::RefCell, mem::take, rc::Rc};
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+</pre><pre class="rust"><code><span class="doccomment">//! Traits and functions to optimize a list of chunks.
+//!
+//! Usually chunks are optimized by limiting their total count, restricting
+//! their size and eliminating duplicates between them.
+
+</span><span class="kw">use </span>std::{cell::RefCell, mem::take, rc::Rc};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::{IndexMap, IndexSet};
-<span class="kw">use </span>turbo_tasks::TryJoinIterExt;
+<span class="kw">use </span>turbo_tasks::{TryJoinIterExt, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::{FileSystemPathOptionVc, FileSystemPathVc};
 
 <span class="kw">use super</span>::{ChunkGroupVc, ChunkVc, ChunksVc};
+<span class="kw">use crate</span>::{
+    asset::{Asset, AssetVc},
+    chunk::Chunk,
+};
 
-<span class="attr">#[turbo_tasks::value_trait]
+<span class="doccomment">/// A functor to optimize a set of chunks.
+</span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>ChunkOptimizer {
     <span class="kw">fn </span>optimize(<span class="kw-2">&amp;</span><span class="self">self</span>, chunks: ChunksVc, chunk_group: ChunkGroupVc) -&gt; ChunksVc;
 }
 
-<span class="attr">#[turbo_tasks::value_trait]
-</span><span class="kw">pub trait </span>OptimizableChunk {
+<span class="doccomment">/// Trait to mark a chunk as optimizable.
+</span><span class="attr">#[turbo_tasks::value_trait]
+</span><span class="kw">pub trait </span>OptimizableChunk: Chunk + Asset + ValueToString {
     <span class="kw">fn </span>get_optimizer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkOptimizerVc;
 }
 
-<span class="attr">#[turbo_tasks::function]
+<span class="doccomment">/// Optimize all chunks that implement [OptimizableChunk].
+</span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>optimize(chunks: ChunksVc, chunk_group: ChunkGroupVc) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
     <span class="kw">let </span>chunks = chunks.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>by_optimizer = IndexMap::&lt;<span class="kw">_</span>, Vec&lt;<span class="kw">_</span>&gt;&gt;::new();
@@ -377,6 +422,20 @@
                 .<span class="kw">await
         </span>}
 
+        <span class="kw">async fn </span>expand_common_parents(
+            common_parents: <span class="kw-2">&amp;mut </span>IndexSet&lt;FileSystemPathVc&gt;,
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+            <span class="comment">// This is mutated while iterating, so we need to loop with index
+            </span><span class="kw">let </span><span class="kw-2">mut </span>i = <span class="number">0</span>;
+            <span class="kw">while </span>i &lt; common_parents.len() {
+                <span class="kw">let </span>current = common_parents[i];
+                <span class="kw">let </span>parent = current.parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+                common_parents.insert(parent);
+                i += <span class="number">1</span>;
+            }
+            <span class="prelude-val">Ok</span>(())
+        }
+
         <span class="kw">async fn </span>compute_relationships(
             common_parents: <span class="kw-2">&amp;</span>IndexSet&lt;FileSystemPathVc&gt;,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(<span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;, FileSystemPathVc)&gt;&gt; {
@@ -411,22 +470,33 @@
             children: Vec&lt;Rc&lt;RefCell&lt;Node&gt;&gt;&gt;,
         }
 
-        <span class="kw">async fn </span>build_node_tree(
-            chunks: Vec&lt;(<span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;, ChunkVc)&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;(IndexMap&lt;FileSystemPathVc, Rc&lt;RefCell&lt;Node&gt;&gt;&gt;, Vec&lt;ChunkVc&gt;)&gt; {
-            <span class="kw">let </span><span class="kw-2">mut </span>orphan_chunks = Vec::new();
+        <span class="kw">fn </span>create_node_tree(
+            common_parents: IndexSet&lt;FileSystemPathVc&gt;,
+        ) -&gt; IndexMap&lt;FileSystemPathVc, Rc&lt;RefCell&lt;Node&gt;&gt;&gt; {
             <span class="kw">let </span><span class="kw-2">mut </span>trees = IndexMap::&lt;FileSystemPathVc, Rc&lt;RefCell&lt;Node&gt;&gt;&gt;::new();
+            <span class="kw">for </span>common_parent <span class="kw">in </span>common_parents {
+                trees.insert(
+                    common_parent,
+                    Rc::new(RefCell::new(Node {
+                        path: common_parent,
+                        chunks: Vec::new(),
+                        children: Vec::new(),
+                    })),
+                );
+            }
+            trees
+        }
+
+        <span class="kw">fn </span>add_chunks_to_tree(
+            trees: <span class="kw-2">&amp;mut </span>IndexMap&lt;FileSystemPathVc, Rc&lt;RefCell&lt;Node&gt;&gt;&gt;,
+            chunks: Vec&lt;(<span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;, ChunkVc)&gt;,
+        ) -&gt; Vec&lt;ChunkVc&gt; {
+            <span class="kw">let </span><span class="kw-2">mut </span>orphan_chunks = Vec::new();
             <span class="kw">for </span>(common_parent, chunk) <span class="kw">in </span>chunks {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(common_parent) = common_parent {
                     trees
-                        .entry(common_parent)
-                        .or_insert_with(|| {
-                            Rc::new(RefCell::new(Node {
-                                path: common_parent,
-                                chunks: Vec::new(),
-                                children: Vec::new(),
-                            }))
-                        })
+                        .get_mut(<span class="kw-2">&amp;</span>common_parent)
+                        .unwrap()
                         .borrow_mut()
                         .chunks
                         .push(chunk);
@@ -434,7 +504,7 @@
                     orphan_chunks.push(chunk);
                 }
             }
-            <span class="prelude-val">Ok</span>((trees, orphan_chunks))
+            orphan_chunks
         }
 
         <span class="kw">fn </span>treeify(
@@ -453,6 +523,19 @@
                     }
                 })
                 .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+        }
+
+        <span class="kw">fn </span>skip_unnessary_nodes(trees: <span class="kw-2">&amp;mut </span>IndexMap&lt;FileSystemPathVc, Rc&lt;RefCell&lt;Node&gt;&gt;&gt;) {
+            <span class="kw">for </span>tree <span class="kw">in </span>trees.values_mut() {
+                <span class="kw">let </span><span class="kw-2">mut </span>tree = tree.borrow_mut();
+                <span class="kw">if </span>tree.chunks.len() == <span class="number">0 </span>&amp;&amp; tree.children.len() == <span class="number">1 </span>{
+                    <span class="kw">let </span>child = tree.children.pop().unwrap();
+                    <span class="kw">let </span><span class="kw-2">mut </span>child = child.borrow_mut();
+                    tree.path = child.path;
+                    tree.chunks.append(<span class="kw-2">&amp;mut </span>child.chunks);
+                    tree.children.append(<span class="kw-2">&amp;mut </span>child.children);
+                }
+            }
         }
 
         <span class="comment">// Convert function to the real data structure
@@ -489,18 +572,26 @@
         <span class="comment">// resolve all paths
         </span><span class="kw">let </span>chunks = resolve(chunks).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// compute all unique common_parents
-        </span><span class="kw">let </span>common_parents = chunks
+        </span><span class="kw">let </span><span class="kw-2">mut </span>common_parents = chunks
             .iter()
             .filter_map(|<span class="kw-2">&amp;</span>(path, <span class="kw">_</span>)| path)
             .collect::&lt;IndexSet&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="comment">// expand all common parents to include all their parents
+        </span>expand_common_parents(<span class="kw-2">&amp;mut </span>common_parents).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// compute parent -&gt; child relationships between common_parents
         </span><span class="kw">let </span>relationships = compute_relationships(<span class="kw-2">&amp;</span>common_parents).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// all the tree by common_parent
-        </span><span class="kw">let </span>(<span class="kw-2">mut </span>trees, orphan_chunks) = build_node_tree(chunks).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="comment">// create the tree nodes
+        </span><span class="kw">let </span><span class="kw-2">mut </span>trees = create_node_tree(common_parents);
+
+        <span class="comment">// add chunks to nodes
+        </span><span class="kw">let </span>orphan_chunks = add_chunks_to_tree(<span class="kw-2">&amp;mut </span>trees, chunks);
 
         <span class="comment">// nest each tree by relationship, compute the roots
         </span><span class="kw">let </span>roots = treeify(relationships, <span class="kw-2">&amp;mut </span>trees);
+
+        <span class="comment">// optimize tree by removing unnecessary nodes
+        </span>skip_unnessary_nodes(<span class="kw-2">&amp;mut </span>trees);
 
         <span class="comment">// do conversion
         </span><span class="kw">let </span>roots = convert_into_common_parent_tree(roots, orphan_chunks);
@@ -518,28 +609,10 @@
     }
 }
 
-<span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">struct </span>ListsOfChunks(Vec&lt;ChunksVc&gt;);
-
-<span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>flatten_chunks(chunks: ListsOfChunksVc) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
-    <span class="prelude-val">Ok</span>(ChunksVc::cell(
-        chunks
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.iter()
-            .copied()
-            .try_join()
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.iter()
-            .flat_map(|c| c.iter().copied())
-            .collect(),
-    ))
-}
-
 <span class="kw">pub async fn </span>optimize_by_common_parent(
     chunks: ChunksVc,
     get_common_parent: <span class="kw">impl </span>Fn(ChunkVc) -&gt; FileSystemPathOptionVc,
-    optimize: <span class="kw">impl </span>Fn(<span class="prelude-ty">Option</span>&lt;ChunksVc&gt;, <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;) -&gt; ChunksVc,
+    optimize: <span class="kw">impl </span>Fn(<span class="prelude-ty">Option</span>&lt;ChunksVc&gt;, Vec&lt;ChunksVc&gt;) -&gt; ChunksVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
     <span class="kw">let </span>tree = ContainmentTree::build(
         chunks
@@ -551,20 +624,13 @@
 
     <span class="kw">fn </span>optimize_tree(
         tree: ContainmentTree,
-        optimize: <span class="kw-2">&amp;</span><span class="kw">impl </span>Fn(<span class="prelude-ty">Option</span>&lt;ChunksVc&gt;, <span class="prelude-ty">Option</span>&lt;ChunksVc&gt;) -&gt; ChunksVc,
+        optimize: <span class="kw-2">&amp;</span><span class="kw">impl </span>Fn(<span class="prelude-ty">Option</span>&lt;ChunksVc&gt;, Vec&lt;ChunksVc&gt;) -&gt; ChunksVc,
     ) -&gt; ChunksVc {
         <span class="kw">let </span>children = tree
             .children
             .into_iter()
             .map(|tree| optimize_tree(tree, optimize))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="kw">let </span>children = <span class="kw">if </span>!children.is_empty() {
-            <span class="comment">// TODO keyed cell: this would benefit from keying the cell by tree.path
-            </span><span class="kw">let </span>lists = ListsOfChunksVc::cell(children);
-            <span class="prelude-val">Some</span>(flatten_chunks(lists))
-        } <span class="kw">else </span>{
-            <span class="prelude-val">None
-        </span>};
         optimize(tree.chunks, children)
     }
 

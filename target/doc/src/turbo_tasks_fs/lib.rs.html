@@ -1626,6 +1626,7 @@
 <span id="1626">1626</span>
 <span id="1627">1627</span>
 <span id="1628">1628</span>
+<span id="1629">1629</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -2438,8 +2439,9 @@
             )
         }
         <span class="kw">if let </span><span class="prelude-val">Some</span>((path, ext)) = this.path.rsplit_once(<span class="string">&#39;.&#39;</span>) {
-            <span class="comment">// check if `ext` is a real extension, and not a &quot;.&quot; in a directory name
-            </span><span class="kw">if </span>!ext.contains(<span class="string">&#39;/&#39;</span>) {
+            <span class="comment">// check if `ext` is a real extension, and not a &quot;.&quot; in a directory name or a
+            // .dotfile
+            </span><span class="kw">if </span>!ext.contains(<span class="string">&#39;/&#39;</span>) &amp;&amp; !(path.ends_with(<span class="string">&#39;/&#39;</span>) &amp;&amp; !path.is_empty()) {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="self">Self</span>::new_normalized(
                     this.fs,
                     <span class="macro">format!</span>(<span class="string">&quot;{}{}.{}&quot;</span>, path, appending, ext),
