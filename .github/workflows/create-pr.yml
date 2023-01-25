@@ -1,4 +1,5 @@
-name: "Create PR"
+name: Create PR
+
 on:
   workflow_dispatch:
     inputs:
@@ -6,19 +7,19 @@ on:
         description: "Staging branch to run release from"
 
 jobs:
-  create-pr-on-push:
+  create-pr:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@1.0.0
-    - name: Get version
+      - uses: actions/checkout@1.0.0
+      - name: Get version
         id: vars
         run: echo ::set-output name=version::$(cat VERSION.txt)
-    - name: Test output
+      - name: Test output
         run: echo ${{ steps.vars.outputs.version }}
-    - name: Create pull request
-      uses: thomaseizinger/create-pull-request@master
-      with:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        head: ${{ inputs.release_branch }}
-        base: main
-        title: "release(turborepo): version"
+      - name: Create pull request
+        uses: thomaseizinger/create-pull-request@master
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          head: ${{ inputs.release_branch }}
+          base: main
+          title: "release(turborepo): version"
