@@ -13,7 +13,7 @@ use log::{debug, error};
 use serde::Serialize;
 
 use crate::{
-    commands::{bin, logout},
+    commands::{bin, logout, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     ui::UI,
@@ -422,9 +422,14 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
         clap_args.cwd = Some(repo_state.root);
     }
 
-    if let Some(cwd) = &clap_args.cwd {
-        clap_args.cwd = Some(fs_canonicalize(cwd)?);
-    }
+    let repo_root = if let Some(cwd) = &clap_args.cwd {
+        let canonical_cwd = fs_canonicalize(cwd)?;
+        // Update on clap_args so that Go gets a canonical path.
+        clap_args.cwd = Some(canonical_cwd.clone());
+        canonical_cwd
+    } else {
+        current_dir()?
+    };
 
     match clap_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
@@ -433,7 +438,8 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Logout { .. } => {
-            logout::logout(clap_args.ui())?;
+            let mut base = CommandBase::new(clap_args, repo_root)?;
+            logout::logout(&mut base)?;
 
             Ok(Payload::Rust(Ok(0)))
         }
@@ -452,7 +458,7 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 }
 
 impl Args {
-    fn ui(&self) -> UI {
+    pub fn ui(&self) -> UI {
         if self.no_color {
             UI::new(true)
         } else if self.color {
