@@ -416,8 +416,13 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 		mergedTaskDefinition.Outputs = taskDef.Outputs
 		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
 		mergedTaskDefinition.EnvVarDependencies = taskDef.EnvVarDependencies
-		mergedTaskDefinition.TopologicalDependencies = taskDef.TopologicalDependencies
-		mergedTaskDefinition.TaskDependencies = taskDef.TaskDependencies
+
+		if taskDef.TopologicalDependencies != nil {
+			mergedTaskDefinition.TopologicalDependencies = taskDef.TopologicalDependencies
+		}
+		if taskDef.TaskDependencies != nil {
+			mergedTaskDefinition.TaskDependencies = taskDef.TaskDependencies
+		}
 		mergedTaskDefinition.Inputs = taskDef.Inputs
 		mergedTaskDefinition.OutputMode = taskDef.OutputMode
 		mergedTaskDefinition.Persistent = taskDef.Persistent

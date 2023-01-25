@@ -53,14 +53,19 @@ type RemoteCacheOptions struct {
 	Signature bool   `json:"signature,omitempty"`
 }
 
+// rawTask is the struct we unmarshal turbo.json config files into
+// we use omitempty fields because when we merge config files, missing
+// keys in the config file work differently from keys that have the 0-value for the type.
+// Notably this is important for arrays. The 0-value for an array in Go is an empty array,
+// and we need to distinguish that from when an empty array is explicitly set in config.
 type rawTask struct {
-	Outputs    []string            `json:"outputs"`
-	Cache      *bool               `json:"cache"`
-	DependsOn  []string            `json:"dependsOn"`
-	Inputs     []string            `json:"inputs"`
-	OutputMode util.TaskOutputMode `json:"outputMode"`
-	Env        []string            `json:"env"`
-	Persistent bool                `json:"persistent"`
+	Outputs    []string            `json:"outputs,omitempty"`
+	Cache      *bool               `json:"cache,omitempty"`
+	DependsOn  []string            `json:"dependsOn,omitempty"`
+	Inputs     []string            `json:"inputs,omitempty"`
+	OutputMode util.TaskOutputMode `json:"outputMode,omitempty"`
+	Env        []string            `json:"env,omitempty"`
+	Persistent bool                `json:"persistent,omitempty"`
 }
 
 // Pipeline is a struct for deserializing .pipeline in configFile
@@ -281,6 +286,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 
 	sort.Strings(c.Outputs.Inclusions)
 	sort.Strings(c.Outputs.Exclusions)
+
 	if task.Cache == nil {
 		c.ShouldCache = true
 	} else {
@@ -289,21 +295,23 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 
 	envVarDependencies := make(util.Set)
 
-	c.TopologicalDependencies = []string{} // TODO @mehulkar: this should be a set
-	c.TaskDependencies = []string{}        // TODO @mehulkar: this should be a set
+	if task.DependsOn != nil {
+		c.TopologicalDependencies = []string{} // TODO @mehulkar: this should be a set
+		c.TaskDependencies = []string{}        // TODO @mehulkar: this should be a set
 
-	for _, dependency := range task.DependsOn {
-		if strings.HasPrefix(dependency, envPipelineDelimiter) {
-			log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
-			envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
-		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
-			c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
-		} else {
-			c.TaskDependencies = append(c.TaskDependencies, dependency)
+		for _, dependency := range task.DependsOn {
+			if strings.HasPrefix(dependency, envPipelineDelimiter) {
+				log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
+				envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
+			} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
+				c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
+			} else {
+				c.TaskDependencies = append(c.TaskDependencies, dependency)
+			}
 		}
+		sort.Strings(c.TaskDependencies)
+		sort.Strings(c.TopologicalDependencies)
 	}
-	sort.Strings(c.TaskDependencies)
-	sort.Strings(c.TopologicalDependencies)
 
 	// Append env key into EnvVarDependencies
 	for _, value := range task.Env {
