@@ -20,7 +20,7 @@ pub enum Payload {
 }
 
 pub fn get_version() -> &'static str {
-    include_str!("../../../version.txt")
+    include_str!("../../../../version.txt")
         .split_once('\n')
         .expect("Failed to read version from version.txt")
         .0
