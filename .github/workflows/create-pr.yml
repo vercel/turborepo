@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@1.0.0
       - name: Get version
         id: vars
-        run: echo ::set-output name=version::$(cat VERSION.txt)
+        run: echo ::set-output name=version::$(cat version.txt)
       - name: Test output
         run: echo ${{ steps.vars.outputs.version }}
       - name: Create pull request
