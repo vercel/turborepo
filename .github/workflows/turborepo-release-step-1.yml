@@ -24,15 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.TURBOBOT }}
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
-      - name: Configure git
-        run: |
-          git config --global user.name 'Turbobot'
-          git config --global user.email 'turbobot@vercel.com'
       - name: Version
         run: |
           ./scripts/version.js ${{ inputs.increment }}
@@ -41,3 +35,13 @@ jobs:
         run: cd cli && make stage-release && echo "STAGE_BRANCH=$(git branch --show-current)" >> $GITHUB_ENV
       - name: Show Stage Commit
         run: echo "${{ env.STAGE_BRANCH }}"
+      - name: Save release branch
+        env:
+          RELEASE_BRANCH: ${{ env.STAGE_BRANCH }}
+        run: |
+          mkdir -p ./turborepo-release
+          echo $RELEASE_BRANCH > ./turborepo-release/branch
+      - uses: actions/upload-artifact@v3
+        with:
+          name: turborepo-release
+          path: turborepo-release/
