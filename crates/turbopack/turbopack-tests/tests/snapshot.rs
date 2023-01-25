@@ -87,7 +87,7 @@ fn default_entry() -> String {
     "input/index.js".to_owned()
 }
 
-#[test_resources("crates/turbopack-tests/tests/snapshot/*/*/")]
+#[test_resources("crates/turbopack/turbopack-tests/tests/snapshot/*/*/")]
 fn test(resource: &'static str) {
     // Separating this into a different function fixes my IDE's types for some
     // reason...
