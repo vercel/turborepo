@@ -51,7 +51,6 @@ lazy_static! {
     // Allows for interactive manual debugging of a test case in a browser with:
     // `TURBOPACK_DEBUG_BROWSER=1 cargo test -p next-dev-tests -- test_my_pattern --nocapture`
     static ref DEBUG_BROWSER: bool = env::var("TURBOPACK_DEBUG_BROWSER").is_ok();
-    static ref BROWSER_HEAD: bool = env::var("TURBOPACK_BROWSER_HEAD").is_ok();
 }
 
 #[test_resources("crates/next-dev-tests/tests/integration/*/*/*")]
