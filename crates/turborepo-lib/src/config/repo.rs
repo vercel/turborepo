@@ -73,6 +73,7 @@ impl RepoConfig {
     }
 }
 
+#[allow(dead_code)]
 pub fn get_repo_config_path(repo_root: &Path) -> PathBuf {
     repo_root.join(".turbo").join("config.json")
 }
