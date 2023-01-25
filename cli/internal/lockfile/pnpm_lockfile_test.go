@@ -29,9 +29,6 @@ func getFixture(t *testing.T, name string) ([]byte, error) {
 	return os.ReadFile(lockfilePath.ToString())
 }
 
-func Test_SpecifierMapZero(t *testing.T) {
-}
-
 func Test_Roundtrip(t *testing.T) {
 	lockfiles := []string{"pnpm6-workspace.yaml", "pnpm7-workspace.yaml", "pnpm8.yaml"}
 

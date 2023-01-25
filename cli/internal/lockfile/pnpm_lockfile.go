@@ -282,7 +282,6 @@ func (p *PnpmLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath
 	for _, importer := range importers {
 		for dependency, meta := range importer.DependenciesMeta {
 			if meta.Injected {
-				// DONOTCOMMIT look into this behavior, it's weird
 				resolution, ok, err := importer.findResolution(dependency)
 				if err != nil {
 					return nil, errors.Wrapf(err, "Unable to decode reference to %s", dependency)
