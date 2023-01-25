@@ -73,6 +73,25 @@ jobs:
             !**.md
             !**.mdx
 
+      - name: Turbopack related changes
+        id: turbopack
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            pnpm-lock.yaml
+            package.json
+            crates/**
+            shim/**
+            xtask/**
+            Cargo.*
+            .cargo/**
+            rust-toolchain
+            !crates/turborepo/**
+            !crates/turborepo-lib/**
+            !crates/turbo-updater/**
+            !**.md
+            !**.mdx
+
       - name: Rust Benchmark related changes
         id: rust_bench
         uses: technote-space/get-diff-action@v6
@@ -123,6 +142,7 @@ jobs:
 
     outputs:
       rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
+      turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
       rust_bench: ${{ steps.ci.outputs.diff != '' || steps.rust_bench.outputs.diff != '' }}
       go: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
@@ -455,7 +475,7 @@ jobs:
 
   rust_test:
     needs: [determine_jobs, rust_prepare]
-    if: needs.determine_jobs.outputs.rust == 'true'
+    if: needs.determine_jobs.outputs.turbopack == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -470,7 +490,7 @@ jobs:
             runner: windows-latest
             nextest: windows-tar
     runs-on: ${{ matrix.os.runner }}
-    name: Rust testing on ${{ matrix.os.name }}
+    name: Turbopack Rust testing on ${{ matrix.os.name }}
     steps:
       - name: Set git to use LF line endings
         run: |
@@ -520,7 +540,7 @@ jobs:
 
   rust_test_bench:
     needs: [determine_jobs, rust_prepare]
-    if: needs.determine_jobs.outputs.rust == 'true'
+    if: needs.determine_jobs.outputs.turbopack == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -536,7 +556,7 @@ jobs:
           #   runner: windows-2019
           #   nextest: windows-tar
     runs-on: ${{ matrix.os.runner }}
-    name: Rust testing benchmarks on ${{ matrix.os.name }}
+    name: Turbopack Rust testing benchmarks on ${{ matrix.os.name }}
 
     steps:
       - name: Set git to use LF
@@ -698,7 +718,7 @@ jobs:
 
   rust_bench_pr:
     needs: [determine_jobs, rust_prepare]
-    if: needs.determine_jobs.outputs.rust == 'true' && github.event_name == 'pull_request'
+    if: needs.determine_jobs.outputs.turbopack == 'true' && github.event_name == 'pull_request'
     name: Benchmark and compare Turbopack performance
     runs-on: ubuntu-latest-16-core-oss
     permissions:
