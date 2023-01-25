@@ -740,6 +740,25 @@ dependencies = [
 
 [[package]]
 name = "cc"
+version = "1.0.78"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6358dedf60f4d9b8db43ad187391afe959746101346fe51bb978126bec61dfb"
+dependencies = [
+ "clap 3.2.23",
+ "heck",
+ "indexmap",
+ "log",
+ "proc-macro2 1.0.50",
+ "quote 1.0.23",
+ "serde",
+ "serde_json",
+ "syn 1.0.107",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "cc"
 version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50d30906286121d95be3d479533b458f87493b30a4b5f79a607db8f5d11aa91f"
