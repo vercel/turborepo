@@ -344,7 +344,7 @@ async fn run_test_browser(addr: SocketAddr, is_debugging: bool) -> Result<JestRu
             }
             event = &mut network_next => {
                 if let Some(event) = event {
-                    println!("{} [{}]", event.response.url, event.response.status);
+                    println!("network {} [{}]", event.response.url, event.response.status);
                 } else {
                     return Err(anyhow!("Network events channel ended unexpectedly"));
                 }
