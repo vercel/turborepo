@@ -416,7 +416,6 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 		mergedTaskDefinition.Outputs = taskDef.Outputs
 		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
 		mergedTaskDefinition.EnvVarDependencies = taskDef.EnvVarDependencies
-
 		if taskDef.TopologicalDependencies != nil {
 			mergedTaskDefinition.TopologicalDependencies = taskDef.TopologicalDependencies
 		}
@@ -428,6 +427,7 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 		mergedTaskDefinition.Persistent = taskDef.Persistent
 	}
 
+	fmt.Printf("[debug] %s: merged from %v definitions: %#v\n", taskID, len(taskDefinitions), mergedTaskDefinition)
 	return mergedTaskDefinition, nil
 }
 
@@ -468,8 +468,8 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 		// 		But we do not want to allow this, except if we're in the root workspace.
 		taskDefinition, err := turboJSON.Pipeline.GetTask(taskID, taskName)
 		if err != nil {
-			// If there was nothing in the pipeline for this task
-			// We can exit
+			// If there was nothing in the pipeline for this task, we can exit
+			fmt.Printf("[debug] No definition for %s in %s\n", taskID, turboJSONPath)
 			break
 		} else {
 			// Add it into the taskDefinitions

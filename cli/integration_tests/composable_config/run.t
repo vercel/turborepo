@@ -61,7 +61,6 @@ Setup
 
 # Build app-c, save output to a file so we can fish out the hash from logs
 # - Should run `compile` first, even though there is a turbo.json override
-# - Should write files to `out/` directory
 # TODO(mehulkar) app-c:compile is get a cache bypass instead of miss right now, figure out why.
   $ ${TURBO} run build --skip-infer --filter=app-c > tmp.log
   $ cat tmp.log
@@ -79,6 +78,35 @@ Setup
   app-c:build: > build
   app-c:build: > echo "building app-c" > lib/foo.txt && echo "building app-c" > out/foo.txt
   app-c:build: 
+  
+   Tasks:    2 successful, 2 total
+  Cached:    0 cached, 2 total
+    Time:\s*[\.0-9]+m?s  (re)
+
+# Build app-d, save output to a file so we can fish out the hash from logs
+# - Should run `compile` first, even though there is a turbo.json override
+  $ ${TURBO} run build --skip-infer --filter=app-d > tmp.log
+  $ cat tmp.log
+  \xe2\x80\xa2 Packages in scope: app-d (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  app-d:beforecompile: cache bypass, force executing cdbdc97e374cb306
+  app-d:beforecompile: 
+  app-d:beforecompile: > beforecompile
+  app-d:beforecompile: > echo "beforecompiling in app-d"
+  app-d:beforecompile: 
+  app-d:beforecompile: beforecompiling in app-d
+  app-d:compile: cache bypass, force executing cdbdc97e374cb306
+  app-d:compile: 
+  app-d:compile: > compile
+  app-d:compile: > echo "compiling in app-d"
+  app-d:compile: 
+  app-d:compile: compiling in app-d
+  app-d:build: cache miss, executing df21a337628e3fae
+  app-d:build: 
+  app-d:build: > build
+  app-d:build: > echo "building app-d" > lib/foo.txt && echo "building app-d" > out/foo.txt
+  app-d:build: 
   
    Tasks:    2 successful, 2 total
   Cached:    0 cached, 2 total

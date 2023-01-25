@@ -1,10 +1,14 @@
 # Test cases for composable config
 
+## General
+
+- [ ] Missing task definition in root, can add task from override.
+
 - `dependsOn`
   exercise by: run task, expect dependent task to only run when appropriate
 
   - [x] Add `dependsOn` in root turbo.json, override to `[]` in workspace
-  - [ ] Add `dependsOn` in root turbo.json, omit key in workspace
+  - [x] Add `dependsOn` in root turbo.json, omit key in workspace
   - [x] Add `dependsOn` in root turbo.json, have no workspace turbo.json
   - [ ] No `dependsOn` in root turbo.json, add in workspace
 
