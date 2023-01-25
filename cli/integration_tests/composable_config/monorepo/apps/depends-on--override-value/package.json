@@ -1,0 +1,8 @@
+{
+  "name": "depends-on--override-value",
+  "scripts": {
+    "build": "echo \"building depends-on--override-value\" > lib/foo.txt && echo \"building depends-on--override-value\" > out/foo.txt",
+    "somethingelse": "echo \"somethingelse depends-on--override-value\""
+  },
+  "packageManager": "npm@8.9.12"
+}

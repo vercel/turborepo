@@ -1,24 +1,24 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
-# depends-on--omit#build. dependsOn compile, but this dependence is inherited from root turbo.json
-# because depends-on--omit turbo.json omits dependsOn key.
+# depends-on--omit-key#build. dependsOn compile, but this dependence is inherited from root turbo.json
+# because depends-on--omit-key turbo.json omits dependsOn key.
 # Test that both compile and build are run in the right order.
-  $ ${TURBO} run build --skip-infer --filter=depends-on--omit
-  \xe2\x80\xa2 Packages in scope: depends-on--omit (esc)
+  $ ${TURBO} run build --skip-infer --filter=depends-on--omit-key
+  \xe2\x80\xa2 Packages in scope: depends-on--omit-key (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  depends-on--omit:compile: cache miss, executing a03840dc6b8a343b
-  depends-on--omit:compile: 
-  depends-on--omit:compile: > compile
-  depends-on--omit:compile: > echo "compiling in depends-on--omit"
-  depends-on--omit:compile: 
-  depends-on--omit:compile: compiling in depends-on--omit
-  depends-on--omit:build: cache miss, executing 755e4c2418d7a217
-  depends-on--omit:build: 
-  depends-on--omit:build: > build
-  depends-on--omit:build: > echo "building depends-on--omit" > lib/foo.txt && echo "building depends-on--omit" > out/foo.txt
-  depends-on--omit:build: 
+  depends-on--omit-key:compile: cache miss, executing 97fe079b4bc13291
+  depends-on--omit-key:compile: 
+  depends-on--omit-key:compile: > compile
+  depends-on--omit-key:compile: > echo "compiling in depends-on--omit-key"
+  depends-on--omit-key:compile: 
+  depends-on--omit-key:compile: compiling in depends-on--omit-key
+  depends-on--omit-key:build: cache miss, executing b204975bd2ef2c43
+  depends-on--omit-key:build: 
+  depends-on--omit-key:build: > build
+  depends-on--omit-key:build: > echo "building depends-on--omit-key" > lib/foo.txt && echo "building depends-on--omit-key" > out/foo.txt
+  depends-on--omit-key:build: 
   
    Tasks:    2 successful, 2 total
   Cached:    0 cached, 2 total
@@ -55,25 +55,24 @@ Setup
     Time:\s*[\.0-9]+m?s  (re)
   
 
-
-# depends-on--override#build. dependsOn compile, which depends on precompile.
+# depends-on--override-value#build. dependsOn compile, which depends on precompile.
 # Root turbo.json depends on compile, but compile does not depend on anything.
 # Test that all three tasks are executed in order.
-  $ ${TURBO} run build --skip-infer --filter=depends-on--override
-  \xe2\x80\xa2 Packages in scope: depends-on--override (esc)
+  $ ${TURBO} run build --skip-infer --filter=depends-on--override-value
+  \xe2\x80\xa2 Packages in scope: depends-on--override-value (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  depends-on--override:somethingelse: cache miss, executing 75bbade08c42dd53
-  depends-on--override:somethingelse: 
-  depends-on--override:somethingelse: > somethingelse
-  depends-on--override:somethingelse: > echo "somethingelse depends-on--override"
-  depends-on--override:somethingelse: 
-  depends-on--override:somethingelse: somethingelse depends-on--override
-  depends-on--override:build: cache miss, executing a90407b3f729eeb7
-  depends-on--override:build: 
-  depends-on--override:build: > build
-  depends-on--override:build: > echo "building depends-on--override" > lib/foo.txt && echo "building depends-on--override" > out/foo.txt
-  depends-on--override:build: 
+  depends-on--override-value:somethingelse: cache miss, executing e119e2fc2adf5146
+  depends-on--override-value:somethingelse: 
+  depends-on--override-value:somethingelse: > somethingelse
+  depends-on--override-value:somethingelse: > echo "somethingelse depends-on--override-value"
+  depends-on--override-value:somethingelse: 
+  depends-on--override-value:somethingelse: somethingelse depends-on--override-value
+  depends-on--override-value:build: cache miss, executing 60eb153849befc65
+  depends-on--override-value:build: 
+  depends-on--override-value:build: > build
+  depends-on--override-value:build: > echo "building depends-on--override-value" > lib/foo.txt && echo "building depends-on--override-value" > out/foo.txt
+  depends-on--override-value:build: 
   
    Tasks:    2 successful, 2 total
   Cached:    0 cached, 2 total
