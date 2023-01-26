@@ -11,6 +11,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -120,7 +121,7 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 		}
 	}
 	workspaces := []turbopath.AnchoredSystemPath{}
-	targets, err := ctx.InternalDependencies(opts.Scope)
+	targets, err := ctx.InternalDependencies(append(opts.Scope, util.RootPkgName))
 	if err != nil {
 		return errors.Wrap(err, "could not traverse the dependency graph to find topological dependencies")
 	}
@@ -130,7 +131,8 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 	lockfileKeys = append(lockfileKeys, rootPackageJSON.TransitiveDeps...)
 
 	for _, internalDep := range targets {
-		if internalDep == ctx.RootNode {
+		// We skip over the pseudo root node and the root package
+		if internalDep == ctx.RootNode || internalDep == util.RootPkgName {
 			continue
 		}
 

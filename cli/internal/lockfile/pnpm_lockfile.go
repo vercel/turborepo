@@ -326,11 +326,12 @@ func pruneImporters(importers map[string]ProjectSnapshot, workspacePackages []tu
 		workspace := workspacePath.ToUnixPath().ToString()
 		importer, ok := importers[workspace]
 
-		if !ok {
-			return nil, fmt.Errorf("Unable to find import entry for workspace package %s", workspace)
+		// If a workspace has no dependencies *and* it is only depended on by the
+		// workspace root it will not show up as an importer.
+		if ok {
+			prunedImporters[workspace] = importer
 		}
 
-		prunedImporters[workspace] = importer
 	}
 
 	return prunedImporters, nil
