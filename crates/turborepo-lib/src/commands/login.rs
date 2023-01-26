@@ -16,7 +16,7 @@ use crate::{
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 
-pub async fn login(base: CommandBase) -> Result<()> {
+pub async fn login(mut base: CommandBase) -> Result<()> {
     let repo_config = base.repo_config()?;
     let login_url_base = repo_config.login_url();
     debug!("turbo v{}", get_version());

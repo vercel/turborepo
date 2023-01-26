@@ -464,7 +464,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
         Command::Link { no_gitignore } => {
             let base = CommandBase::new(clap_args, repo_root)?;
 
-            link::link(base)?;
+            link::link(base).await?;
 
             Ok(Payload::Rust(Ok(0)))
         }

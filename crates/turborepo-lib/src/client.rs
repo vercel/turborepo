@@ -16,7 +16,7 @@ pub trait UserClient {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct Pagination {
+pub struct Pagination {
     count: usize,
     next: usize,
     previous: usize,
@@ -25,25 +25,25 @@ struct Pagination {
 /// Membership is the relationship between the logged-in user and a particular
 /// team
 #[derive(Debug, Clone, Deserialize)]
-struct Membership {
+pub struct Membership {
     role: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct Team {
-    id: String,
-    slug: String,
-    name: String,
+pub struct Team {
+    pub id: String,
+    pub slug: String,
+    pub name: String,
     #[serde(rename = "createdAt")]
-    created_at: String,
-    created: String,
-    membership: Membership,
+    pub created_at: String,
+    pub created: String,
+    pub membership: Membership,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct TeamsResponse {
-    teams: Vec<Team>,
-    pagination: Pagination,
+pub struct TeamsResponse {
+    pub teams: Vec<Team>,
+    pub pagination: Pagination,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -111,8 +111,8 @@ impl UserClient for APIClient {
                     .client
                     .get(self.make_url("/v2/teams?limit=100"))
                     .header("User-Agent", USER_AGENT.clone())
-                    .header("Authorization", format!("Bearer {}", self.token))
-                    .header("Content-Type", "application/json");
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", format!("Bearer {}", self.token));
 
                 request_builder.send()
             })

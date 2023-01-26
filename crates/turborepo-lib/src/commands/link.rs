@@ -1,13 +1,14 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use dialoguer::Confirm;
 use dirs_next::home_dir;
 
 use crate::{
+    client::UserClient,
     commands::CommandBase,
     ui::{BOLD, CYAN, GREY, UNDERLINE},
 };
 
-pub fn link(base: CommandBase) -> Result<()> {
+pub async fn link(mut base: CommandBase) -> Result<()> {
     let homedir_path = home_dir().ok_or_else(|| anyhow!("could not find home directory."))?;
     let homedir = homedir_path.to_string_lossy();
     println!(">>> Remote Caching");
@@ -28,13 +29,31 @@ pub fn link(base: CommandBase) -> Result<()> {
         return Err(anyhow!("canceled"));
     }
 
-    if base.user_config()?.token.is_none() {
-        return Err(anyhow!(
+    let api_client = base.api_client()?.ok_or_else(|| {
+        anyhow!(
             "User not found. Please login to Turborepo first by running {}.",
             BOLD.apply_to("`npx turbo login`")
-        ));
-    }
-    let teams_response = base.api_client.get_teams().await?;
+        )
+    })?;
+
+    let teams_response = api_client
+        .get_teams()
+        .await
+        .context("could not get team information")?;
+
+    let user_response = api_client
+        .get_user()
+        .await
+        .context("could not get user information")?;
+
+    let mut teams = if &user_response.user.name == "" {
+        vec![user_response.user.username.as_str()]
+    } else {
+        vec![user_response.user.name.as_str()]
+    };
+
+    teams.extend(teams_response.teams.iter().map(|team| team.name.as_str()));
+    println!("{}", teams.join("\n"));
     Ok(())
 }
 
