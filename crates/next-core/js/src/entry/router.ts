@@ -1,5 +1,5 @@
 import type { Ipc } from "@vercel/turbopack-next/ipc/index";
-import type { IncomingMessage } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { Buffer } from "node:buffer";
 import { createServer, makeRequest } from "@vercel/turbopack-next/ipc/server";
 import loadNextConfig from "@vercel/turbopack-next/entry/config/next";
@@ -46,11 +46,10 @@ type MiddlewareHeadersResponse = {
   headers: string[];
 };
 
-export default async function route(
-  ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
-  routerRequest: RouterRequest,
-  dir: string
-) {
+let resolveRouteMemo: Promise<
+  (req: IncomingMessage, res: ServerResponse) => Promise<unknown>
+>;
+async function getResolveRoute(dir: string) {
   // Deferring the import allows us to not error while we wait for Next.js to implement.
   const { makeResolver } = (await import("next/dist/server/router.js")) as any;
   const nextConfig = await loadNextConfig();
@@ -70,8 +69,18 @@ export default async function route(
   //   statusCode: 200, //
   //   isRedirect: false, //
   // }
-  const resolveRoute = await makeResolver(dir, nextConfig);
-  const server = await createServer();
+  return await makeResolver(dir, nextConfig);
+}
+
+export default async function route(
+  ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
+  routerRequest: RouterRequest,
+  dir: string
+) {
+  const [resolveRoute, server] = await Promise.all([
+    (resolveRouteMemo ??= getResolveRoute(dir)),
+    createServer(),
+  ]);
 
   try {
     const {
