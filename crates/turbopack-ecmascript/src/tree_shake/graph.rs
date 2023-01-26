@@ -89,7 +89,7 @@ pub struct Graph {
 }
 
 impl Graph {
-    fn node(&mut self, id: &ItemId) -> u32 {
+    pub(super) fn node(&mut self, id: &ItemId) -> u32 {
         self.graph_ix.get_index_of(id).unwrap_or_else(|| {
             let ix = self.graph_ix.len();
             self.graph_ix.insert_full(id.clone());

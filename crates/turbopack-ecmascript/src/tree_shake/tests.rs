@@ -111,22 +111,22 @@ fn run(input: PathBuf) {
         let eventual_ids = analyzer.hoist_vars_and_bindings(&module);
 
         writeln!(s, "# Phase 1").unwrap();
-        writeln!(s, "```mermaid\n{}```", render_graph(&analyzer)).unwrap();
+        writeln!(s, "```mermaid\n{}```", render_graph(&mut analyzer)).unwrap();
 
         analyzer.evaluate_immediate(&module, &eventual_ids);
 
         writeln!(s, "# Phase 2").unwrap();
-        writeln!(s, "```mermaid\n{}```", render_graph(&analyzer)).unwrap();
+        writeln!(s, "```mermaid\n{}```", render_graph(&mut analyzer)).unwrap();
 
         analyzer.evaluate_eventual(&module);
 
         writeln!(s, "# Phase 3").unwrap();
-        writeln!(s, "```mermaid\n{}```", render_graph(&analyzer)).unwrap();
+        writeln!(s, "```mermaid\n{}```", render_graph(&mut analyzer)).unwrap();
 
         analyzer.handle_exports(&module);
 
         writeln!(s, "# Phase 4").unwrap();
-        writeln!(s, "```mermaid\n{}```", render_graph(&analyzer)).unwrap();
+        writeln!(s, "```mermaid\n{}```", render_graph(&mut analyzer)).unwrap();
 
         NormalizedOutput::from(s)
             .compare_to_file(input.with_file_name("output.md"))
@@ -156,10 +156,12 @@ fn print<N: swc_core::ecma::codegen::Node>(cm: &Arc<SourceMap>, nodes: &[&N]) ->
     String::from_utf8(buf).unwrap()
 }
 
-fn render_graph(analyzer: &Analyzer) -> String {
+fn render_graph(analyzer: &mut Analyzer) -> String {
     let mut mermaid = String::from("graph TD\n");
 
     for (i, id) in analyzer.item_ids.iter().enumerate() {
+        let i = analyzer.g.node(id);
+
         writeln!(mermaid, "    Item{};", i + 1).unwrap();
 
         if let Some(item_id) = render_item_id(&id.kind) {
