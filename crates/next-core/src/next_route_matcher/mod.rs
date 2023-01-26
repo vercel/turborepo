@@ -30,12 +30,12 @@ impl NextExactMatcherVc {
 impl RouteMatcher for NextExactMatcher {
     #[turbo_tasks::function]
     async fn matches(&self, path: &str) -> Result<BoolVc> {
-        Ok(BoolVc::cell(path == &*self.path.await?))
+        Ok(BoolVc::cell(path == *self.path.await?))
     }
 
     #[turbo_tasks::function]
     async fn params(&self, path: &str) -> Result<ParamsVc> {
-        Ok(ParamsVc::cell(if path == &*self.path.await? {
+        Ok(ParamsVc::cell(if path == *self.path.await? {
             Some(Default::default())
         } else {
             None

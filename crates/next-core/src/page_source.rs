@@ -282,10 +282,10 @@ pub async fn create_page_source(
     Ok(CombinedContentSource {
         sources: vec![
             // Match _next/404 first to ensure rewrites work properly.
-            force_not_found_source.into(),
+            force_not_found_source,
             page_source.into(),
             fallback_source.into(),
-            fallback_not_found_source.into(),
+            fallback_not_found_source,
         ],
     }
     .cell()
@@ -530,7 +530,7 @@ async fn create_not_found_page_source(
         create_node_rendered_source(
             specificity,
             server_root,
-            route_matcher.into(),
+            route_matcher,
             pathname,
             ssr_entry,
             runtime_entries,
