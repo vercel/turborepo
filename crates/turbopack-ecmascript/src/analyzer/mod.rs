@@ -10,6 +10,7 @@ use std::{
 
 use indexmap::IndexSet;
 use num_bigint::BigInt;
+use num_traits::identities::Zero;
 use swc_core::{
     common::Mark,
     ecma::{
@@ -95,6 +96,38 @@ impl ConstantValue {
             Self::StrWord(s) => Some(s),
             Self::StrAtom(s) => Some(s),
             _ => None,
+        }
+    }
+
+    pub fn is_truthy(&self) -> bool {
+        match self {
+            Self::Undefined | Self::False | Self::Null => false,
+            Self::True | Self::Regex(..) => true,
+            Self::StrWord(s) => !s.is_empty(),
+            Self::StrAtom(s) => !s.is_empty(),
+            Self::Num(ConstantNumber(n)) => *n != 0.0,
+            Self::BigInt(n) => !n.is_zero(),
+        }
+    }
+
+    pub fn is_nullish(&self) -> bool {
+        match self {
+            Self::Undefined | Self::Null => true,
+            Self::StrWord(..)
+            | Self::StrAtom(..)
+            | Self::Num(..)
+            | Self::True
+            | Self::False
+            | Self::BigInt(..)
+            | Self::Regex(..) => false,
+        }
+    }
+
+    pub fn is_empty_string(&self) -> bool {
+        match self {
+            Self::StrWord(s) => s.is_empty(),
+            Self::StrAtom(s) => s.is_empty(),
+            _ => false,
         }
     }
 }
@@ -1050,6 +1083,93 @@ impl JsValue {
             | JsValue::Module(..)
             | JsValue::FreeVar(_) => true,
         }
+    }
+
+    pub fn is_truthy(&self) -> Option<bool> {
+        match self {
+            JsValue::Constant(c) => Some(c.is_truthy()),
+            JsValue::Concat(..) => self.is_empty_string().map(|x| !x),
+            JsValue::Url(..)
+            | JsValue::Array(..)
+            | JsValue::Object(..)
+            | JsValue::WellKnownObject(..)
+            | JsValue::WellKnownFunction(..)
+            | JsValue::Function(..) => Some(true),
+            JsValue::Alternatives(_, list) => merge_if_known(list.iter().map(|x| x.is_truthy())),
+            _ => None,
+        }
+    }
+
+    pub fn is_nullish(&self) -> Option<bool> {
+        match self {
+            JsValue::Constant(c) => Some(c.is_nullish()),
+            JsValue::Concat(..)
+            | JsValue::Url(..)
+            | JsValue::Array(..)
+            | JsValue::Object(..)
+            | JsValue::WellKnownObject(..)
+            | JsValue::WellKnownFunction(..)
+            | JsValue::Function(..) => Some(false),
+            JsValue::Alternatives(_, list) => merge_if_known(list.iter().map(|x| x.is_nullish())),
+            _ => None,
+        }
+    }
+
+    pub fn is_empty_string(&self) -> Option<bool> {
+        match self {
+            JsValue::Constant(c) => Some(c.is_empty_string()),
+            JsValue::Concat(_, list) => all_if_known(list.iter().map(|x| x.is_empty_string())),
+            JsValue::Alternatives(_, list) => {
+                merge_if_known(list.iter().map(|x| x.is_empty_string()))
+            }
+            JsValue::Url(..)
+            | JsValue::Array(..)
+            | JsValue::Object(..)
+            | JsValue::WellKnownObject(..)
+            | JsValue::WellKnownFunction(..)
+            | JsValue::Function(..) => Some(false),
+            _ => None,
+        }
+    }
+
+    pub fn is_unknown(&self) -> bool {
+        match self {
+            JsValue::Unknown(..) => true,
+            JsValue::Alternatives(_, list) => list.iter().any(|x| x.is_unknown()),
+            _ => false,
+        }
+    }
+}
+
+fn merge_if_known(list: impl IntoIterator<Item = Option<bool>>) -> Option<bool> {
+    let mut current = None;
+    for item in list {
+        if item.is_some() {
+            if current.is_none() {
+                current = item;
+            } else if current != item {
+                return None;
+            }
+        } else {
+            return None;
+        }
+    }
+    current
+}
+
+fn all_if_known(list: impl IntoIterator<Item = Option<bool>>) -> Option<bool> {
+    let mut unknown = false;
+    for item in list {
+        match item {
+            Some(false) => return Some(false),
+            None => unknown = true,
+            _ => {}
+        }
+    }
+    if unknown {
+        None
+    } else {
+        Some(true)
     }
 }
 

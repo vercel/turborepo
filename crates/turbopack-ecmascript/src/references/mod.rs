@@ -1,10 +1,12 @@
 pub mod amd;
 pub mod cjs;
+pub mod constant_condition;
 pub mod esm;
 pub mod node;
 pub mod pattern_mapping;
 pub mod raw;
 pub mod typescript;
+pub mod unreachable;
 pub mod util;
 
 use std::{
@@ -16,6 +18,7 @@ use std::{
 };
 
 use anyhow::Result;
+use constant_condition::{ConstantConditionValue, ConstantConditionVc};
 use lazy_static::lazy_static;
 use regex::Regex;
 use swc_core::{
@@ -43,6 +46,7 @@ use turbopack_core::{
     },
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
+use unreachable::UnreachableVc;
 
 use self::{
     amd::{
@@ -81,7 +85,11 @@ use super::{
     EcmascriptModuleAssetType,
 };
 use crate::{
-    analyzer::{graph::EvalContext, imports::Reexport, ModuleValue},
+    analyzer::{
+        graph::{ConditionalKind, EvalContext},
+        imports::Reexport,
+        ModuleValue,
+    },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
     code_gen::{CodeGenerateableVc, CodeGenerateablesVc},
     magic_identifier,
@@ -1074,8 +1082,109 @@ pub(crate) async fn analyze_ecmascript_module(
             // the object allocation.
             let mut first_import_meta = true;
 
-            for effect in effects.into_iter() {
+            let mut queue = Vec::new();
+            queue.extend(effects.into_iter().rev());
+
+            while let Some(effect) = queue.pop() {
                 match effect {
+                    Effect::Conditional {
+                        condition,
+                        kind,
+                        ast_path: condition_ast_path,
+                        span: _,
+                    } => {
+                        let condition = link_value(condition).await?;
+                        macro_rules! inactive {
+                            ($block:ident) => {
+                                analysis.add_code_gen(UnreachableVc::new(AstPathVc::cell(
+                                    $block.ast_path.to_vec(),
+                                )));
+                            };
+                        }
+                        macro_rules! condition {
+                            ($expr:expr) => {
+                                analysis.add_code_gen(ConstantConditionVc::new(
+                                    Value::new($expr),
+                                    AstPathVc::cell(condition_ast_path.to_vec()),
+                                ));
+                            };
+                        }
+                        macro_rules! active {
+                            ($block:ident) => {
+                                queue.extend($block.effects.into_iter().rev());
+                            };
+                        }
+                        match *kind {
+                            ConditionalKind::If { then } => {
+                                if let Some(value) = condition.is_truthy() {
+                                    if value {
+                                        condition!(ConstantConditionValue::Truthy);
+                                        active!(then);
+                                    } else {
+                                        condition!(ConstantConditionValue::Falsy);
+                                        inactive!(then);
+                                    }
+                                } else {
+                                    active!(then);
+                                }
+                            }
+                            ConditionalKind::IfElse { then, r#else }
+                            | ConditionalKind::Ternary { then, r#else } => {
+                                if let Some(value) = condition.is_truthy() {
+                                    if value {
+                                        condition!(ConstantConditionValue::Truthy);
+                                        active!(then);
+                                        inactive!(r#else);
+                                    } else {
+                                        condition!(ConstantConditionValue::Falsy);
+                                        active!(r#else);
+                                        inactive!(then);
+                                    }
+                                } else {
+                                    active!(then);
+                                    active!(r#else);
+                                }
+                            }
+                            ConditionalKind::And { expr } => {
+                                if let Some(value) = condition.is_truthy() {
+                                    if value {
+                                        condition!(ConstantConditionValue::Truthy);
+                                        active!(expr);
+                                    } else {
+                                        // The condition value need to stay since it's used
+                                        inactive!(expr);
+                                    }
+                                } else {
+                                    active!(expr);
+                                }
+                            }
+                            ConditionalKind::Or { expr } => {
+                                if let Some(value) = condition.is_truthy() {
+                                    if value {
+                                        // The condition value need to stay since it's used
+                                        inactive!(expr);
+                                    } else {
+                                        condition!(ConstantConditionValue::Falsy);
+                                        active!(expr);
+                                    }
+                                } else {
+                                    active!(expr);
+                                }
+                            }
+                            ConditionalKind::NullishCoalescing { expr } => {
+                                if let Some(value) = condition.is_nullish() {
+                                    if value {
+                                        condition!(ConstantConditionValue::Nullish);
+                                        active!(expr);
+                                    } else {
+                                        inactive!(expr);
+                                    }
+                                } else {
+                                    active!(expr);
+                                }
+                            }
+                        }
+                    }
                     Effect::Call {
                         func,
                         args,
@@ -1501,6 +1610,11 @@ async fn value_visitor_inner(
                 Some(Arc::new(v)),
                 "cross function analyzing is not yet supported",
             ),
+            JsValue::Member(
+                _,
+                box JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
+                box JsValue::Constant(value),
+            ) if value.as_str() == Some("turbopack") => JsValue::Constant(ConstantValue::True),
             _ => {
                 let (mut v, mut modified) = replace_well_known(v, environment).await?;
                 modified = replace_builtin(&mut v) || modified;

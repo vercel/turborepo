@@ -1,4 +1,9 @@
-use std::{collections::HashMap, iter, mem::replace, sync::Arc};
+use std::{
+    collections::HashMap,
+    iter,
+    mem::{replace, take},
+    sync::Arc,
+};
 
 use swc_core::{
     common::{pass::AstNodePath, Mark, Span, Spanned, SyntaxContext},
@@ -15,14 +20,90 @@ use crate::{
     utils::unparen,
 };
 
+#[derive(Debug, Clone, Default)]
+pub struct EffectsBlock {
+    pub effects: Vec<Effect>,
+    /// The ast path to the block or expression.
+    pub ast_path: Vec<AstParentKind>,
+}
+
+impl EffectsBlock {
+    pub fn is_empty(&self) -> bool {
+        self.effects.is_empty()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ConditionalKind {
+    /// The blocks of an `if` statement without an `else` block.
+    If { then: EffectsBlock },
+    /// The blocks of an `if ... else` statement.
+    IfElse {
+        then: EffectsBlock,
+        r#else: EffectsBlock,
+    },
+    /// The expressions on the right side of the `?:` operator.
+    Ternary {
+        then: EffectsBlock,
+        r#else: EffectsBlock,
+    },
+    /// The expression on the right side of the `&&` operator.
+    And { expr: EffectsBlock },
+    /// The expression on the right side of the `||` operator.
+    Or { expr: EffectsBlock },
+    /// The expression on the right side of the `??` operator.
+    NullishCoalescing { expr: EffectsBlock },
+}
+
+impl ConditionalKind {
+    /// Normalizes all contained values.
+    pub fn normalize(&mut self) {
+        match self {
+            ConditionalKind::If { then, .. } => {
+                for effect in &mut then.effects {
+                    effect.normalize();
+                }
+            }
+            ConditionalKind::IfElse { then, r#else, .. }
+            | ConditionalKind::Ternary { then, r#else, .. } => {
+                for effect in &mut then.effects {
+                    effect.normalize();
+                }
+                for effect in &mut r#else.effects {
+                    effect.normalize();
+                }
+            }
+            ConditionalKind::And { expr, .. }
+            | ConditionalKind::Or { expr, .. }
+            | ConditionalKind::NullishCoalescing { expr, .. } => {
+                for effect in &mut expr.effects {
+                    effect.normalize();
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Effect {
+    /// Some condition which effects which effects might be executed. When the
+    /// condition evaluates to something compile-time constant we can use that
+    /// to determine which effects are executed and remove the others.
+    Conditional {
+        condition: JsValue,
+        kind: Box<ConditionalKind>,
+        /// The ast path to the condition.
+        ast_path: Vec<AstParentKind>,
+        span: Span,
+    },
+    /// A function call.
     Call {
         func: JsValue,
         args: Vec<JsValue>,
         ast_path: Vec<AstParentKind>,
         span: Span,
     },
+    /// A function call of a property of an object.
     MemberCall {
         obj: JsValue,
         prop: JsValue,
@@ -30,22 +111,26 @@ pub enum Effect {
         ast_path: Vec<AstParentKind>,
         span: Span,
     },
+    /// A property access.
     Member {
         obj: JsValue,
         prop: JsValue,
         ast_path: Vec<AstParentKind>,
         span: Span,
     },
+    /// A reference to an imported binding.
     ImportedBinding {
         esm_reference_index: usize,
         export: Option<String>,
         ast_path: Vec<AstParentKind>,
         span: Span,
     },
+    /// A reference to `import.meta`.
     ImportMeta {
         ast_path: Vec<AstParentKind>,
         span: Span,
     },
+    /// A reference to `new URL(..., import.meta.url)`.
     Url {
         input: JsValue,
         ast_path: Vec<AstParentKind>,
@@ -54,8 +139,18 @@ pub enum Effect {
 }
 
 impl Effect {
+    /// Normalizes all contained values.
     pub fn normalize(&mut self) {
         match self {
+            Effect::Conditional {
+                condition,
+                kind,
+                ast_path: _,
+                span: _,
+            } => {
+                condition.normalize();
+                kind.normalize();
+            }
             Effect::Call {
                 func,
                 args,
@@ -140,6 +235,7 @@ pub fn create_graph(m: &Program, eval_context: &EvalContext) -> VarGraph {
         &mut Analyzer {
             data: &mut graph,
             eval_context,
+            effects: Default::default(),
             var_decl_kind: Default::default(),
             current_value: Default::default(),
             cur_fn_return_values: Default::default(),
@@ -432,6 +528,8 @@ impl EvalContext {
 struct Analyzer<'a> {
     data: &'a mut VarGraph,
 
+    effects: Vec<Effect>,
+
     eval_context: &'a EvalContext,
 
     var_decl_kind: Option<VarDeclKind>,
@@ -448,6 +546,16 @@ struct Analyzer<'a> {
 
 pub fn as_parent_path(ast_path: &AstNodePath<AstParentNodeRef<'_>>) -> Vec<AstParentKind> {
     ast_path.iter().map(|n| n.kind()).collect()
+}
+pub fn as_parent_path_with(
+    ast_path: &AstNodePath<AstParentNodeRef<'_>>,
+    additional: AstParentKind,
+) -> Vec<AstParentKind> {
+    ast_path
+        .iter()
+        .map(|n| n.kind())
+        .chain([additional].into_iter())
+        .collect()
 }
 
 impl Analyzer<'_> {
@@ -466,6 +574,10 @@ impl Analyzer<'_> {
         let value = self.eval_context.eval(value);
 
         self.add_value(id, value);
+    }
+
+    fn add_effect(&mut self, effect: Effect) {
+        self.effects.push(effect);
     }
 
     fn check_iife<'ast: 'r, 'r>(
@@ -685,7 +797,7 @@ impl Analyzer<'_> {
         };
         match &n.callee {
             Callee::Import(_) => {
-                self.data.effects.push(Effect::Call {
+                self.add_effect(Effect::Call {
                     func: JsValue::FreeVar(FreeVarKind::Import),
                     args,
                     ast_path: as_parent_path(ast_path),
@@ -705,7 +817,7 @@ impl Analyzer<'_> {
                             self.eval_context.eval(expr)
                         }
                     };
-                    self.data.effects.push(Effect::MemberCall {
+                    self.add_effect(Effect::MemberCall {
                         obj: obj_value,
                         prop: prop_value,
                         args,
@@ -714,7 +826,7 @@ impl Analyzer<'_> {
                     });
                 } else {
                     let fn_value = self.eval_context.eval(expr);
-                    self.data.effects.push(Effect::Call {
+                    self.add_effect(Effect::Call {
                         func: fn_value,
                         args,
                         ast_path: as_parent_path(ast_path),
@@ -740,7 +852,7 @@ impl Analyzer<'_> {
             }
             MemberProp::Computed(ComputedPropName { expr, .. }) => self.eval_context.eval(expr),
         };
-        self.data.effects.push(Effect::Member {
+        self.add_effect(Effect::Member {
             obj: obj_value,
             prop: prop_value,
             ast_path: as_parent_path(ast_path),
@@ -841,7 +953,7 @@ impl VisitAstPath for Analyzer<'_> {
                         }) = &*args[1].expr
                         {
                             if &*prop.sym == "url" {
-                                self.data.effects.push(Effect::Url {
+                                self.add_effect(Effect::Url {
                                     input: self.eval_context.eval(&args[0].expr),
                                     ast_path: as_parent_path(ast_path),
                                     span: new_expr.span(),
@@ -1142,7 +1254,7 @@ impl VisitAstPath for Analyzer<'_> {
         if let Some((esm_reference_index, export)) =
             self.eval_context.imports.get_binding(&ident.to_id())
         {
-            self.data.effects.push(Effect::ImportedBinding {
+            self.add_effect(Effect::ImportedBinding {
                 esm_reference_index,
                 export,
                 ast_path: as_parent_path(ast_path),
@@ -1159,15 +1271,124 @@ impl VisitAstPath for Analyzer<'_> {
         if expr.kind == MetaPropKind::ImportMeta {
             // MetaPropExpr also covers `new.target`. Only consider `import.meta`
             // an effect.
-            self.data.effects.push(Effect::ImportMeta {
+            self.add_effect(Effect::ImportMeta {
                 span: expr.span,
                 ast_path: as_parent_path(ast_path),
             })
         }
     }
+
+    fn visit_program<'ast: 'r, 'r>(
+        &mut self,
+        program: &'ast Program,
+        ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
+    ) {
+        self.effects = take(&mut self.data.effects);
+        program.visit_children_with_path(self, ast_path);
+        self.data.effects = take(&mut self.effects);
+    }
+
+    fn visit_if_stmt<'ast: 'r, 'r>(
+        &mut self,
+        stmt: &'ast IfStmt,
+        ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
+    ) {
+        ast_path.with(
+            AstParentNodeRef::IfStmt(stmt, IfStmtField::Test),
+            |ast_path| {
+                stmt.test.visit_with_path(self, ast_path);
+            },
+        );
+        let prev_effects = take(&mut self.effects);
+        let then = ast_path.with(
+            AstParentNodeRef::IfStmt(stmt, IfStmtField::Cons),
+            |ast_path| {
+                stmt.cons.visit_with_path(self, ast_path);
+                EffectsBlock {
+                    effects: take(&mut self.effects),
+                    ast_path: as_parent_path(ast_path),
+                }
+            },
+        );
+        let r#else = stmt
+            .alt
+            .as_ref()
+            .map(|alt| {
+                ast_path.with(
+                    AstParentNodeRef::IfStmt(stmt, IfStmtField::Alt),
+                    |ast_path| {
+                        alt.visit_with_path(self, ast_path);
+                        EffectsBlock {
+                            effects: take(&mut self.effects),
+                            ast_path: as_parent_path(ast_path),
+                        }
+                    },
+                )
+            })
+            .unwrap_or_default();
+        self.effects = prev_effects;
+        match (!then.is_empty(), !r#else.is_empty()) {
+            (true, false) => {
+                self.add_conditional_effect(
+                    &stmt.test,
+                    ast_path,
+                    AstParentKind::IfStmt(IfStmtField::Test),
+                    stmt.span(),
+                    ConditionalKind::If { then },
+                );
+            }
+            (_, true) => {
+                self.add_conditional_effect(
+                    &stmt.test,
+                    ast_path,
+                    AstParentKind::IfStmt(IfStmtField::Test),
+                    stmt.span(),
+                    ConditionalKind::IfElse { then, r#else },
+                );
+            }
+            (false, false) => {
+                // no effects, can be ignored
+            }
+        }
+    }
 }
 
 impl<'a> Analyzer<'a> {
+    fn add_conditional_effect<'r>(
+        &mut self,
+        test: &Expr,
+        ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
+        ast_kind: AstParentKind,
+        span: Span,
+        mut cond_kind: ConditionalKind,
+    ) {
+        let condition = self.eval_context.eval(test);
+        if condition.is_unknown() {
+            match &mut cond_kind {
+                ConditionalKind::If { then } => {
+                    self.effects.append(&mut then.effects);
+                }
+                ConditionalKind::IfElse { then, r#else }
+                | ConditionalKind::Ternary { then, r#else } => {
+                    self.effects.append(&mut then.effects);
+                    self.effects.append(&mut r#else.effects);
+                }
+                ConditionalKind::And { expr }
+                | ConditionalKind::Or { expr }
+                | ConditionalKind::NullishCoalescing { expr } => {
+                    self.effects.append(&mut expr.effects);
+                }
+            }
+        } else {
+            self.add_effect(Effect::Conditional {
+                condition,
+                kind: box cond_kind,
+                ast_path: as_parent_path_with(ast_path, ast_kind),
+                span,
+            });
+        }
+    }
+
     fn visit_pat_with_value<'ast: 'r, 'r>(
         &mut self,
         pat: &'ast Pat,
