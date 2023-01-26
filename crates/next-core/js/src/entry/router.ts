@@ -1,5 +1,5 @@
 import type { Ipc } from "@vercel/turbopack-next/ipc/index";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { IncomingMessage } from "node:http";
 import { Buffer } from "node:buffer";
 import { createServer, makeRequest } from "@vercel/turbopack-next/ipc/server";
 import loadNextConfig from "@vercel/turbopack-next/entry/config/next";
@@ -17,8 +17,6 @@ type RouterRequest = {
 type RouteResult = {
   url: string;
   headers: Record<string, string>;
-  statusCode: number;
-  isRedirect: boolean;
 };
 
 type IpcOutgoingMessage = {
@@ -31,26 +29,15 @@ type MessageData =
   | { type: "middleware-body"; data: Uint8Array }
   | {
       type: "full-middleware";
-      data: { headers: MiddlewareHeadersResponse; body: Uint8Array };
-    }
-  | {
-      type: "redirect";
-      data: RedirectResponse;
+      data: { headers: MiddlewareHeadersResponse; body: number[] };
     }
   | {
       type: "rewrite";
       data: RewriteResponse;
     };
 
-type RedirectResponse = {
-  url: string;
-  statusCode: number;
-  headers: string[];
-};
-
 type RewriteResponse = {
   url: string;
-  statusCode: number;
   headers: string[];
 };
 
@@ -65,7 +52,7 @@ export default async function route(
   dir: string
 ) {
   // Deferring the import allows us to not error while we wait for Next.js to implement.
-  const { makeResolver } = await import("next/dist/server/router.js");
+  const { makeResolver } = (await import("next/dist/server/router.js")) as any;
   const nextConfig = await loadNextConfig();
 
   // TODO: Need next impl. This function receives the parsed nextConfig, which it should
@@ -119,7 +106,7 @@ export default async function route(
 async function handleClientResponse(
   _ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
   clientResponsePromise: Promise<IncomingMessage>
-) {
+): Promise<MessageData | void> {
   const clientResponse = await clientResponsePromise;
 
   if (clientResponse.headers["x-nextjs-route-result"] === "1") {
@@ -132,10 +119,9 @@ async function handleClientResponse(
 
     const data = JSON.parse(buffer) as RouteResult;
     return {
-      type: data.isRedirect ? "redirect" : "rewrite",
+      type: "rewrite",
       data: {
         url: data.url,
-        statusCode: data.statusCode,
         headers: Object.entries(data.headers).flat(),
       },
     };

@@ -60,13 +60,12 @@ impl ContentSource for NextRouterContentSource {
     ) -> Result<ContentSourceResultVc> {
         let this = self_vc.await?;
 
-        let Some(method) = &data.method else {
-            return Ok(need_data(self_vc.into(), path))
-        };
-        let Some(headers) = &data.headers else {
-            return Ok(need_data(self_vc.into(), path))
-        };
-        let Some(query) = &data.query else {
+        let ContentSourceData {
+            method: Some(method),
+            headers: Some(headers),
+            query: Some(query),
+            ..
+        } = &*data else {
             return Ok(need_data(self_vc.into(), path))
         };
 
@@ -85,38 +84,19 @@ impl ContentSource for NextRouterContentSource {
                 .get(path, Value::new(ContentSourceData::default())));
         };
 
-        match &*res {
+        Ok(match &*res {
             RouterResult::Error => {
                 // TODO: emit error
-                Ok(this
-                    .inner
-                    .get(path, Value::new(ContentSourceData::default())))
-            }
-            RouterResult::Redirect(data) => {
-                let mut headers = data.headers.clone();
-                headers.extend(["Location".to_string(), data.url.clone()]);
-                Ok(ContentSourceResultVc::exact(
-                    ContentSourceContent::HttpProxy(
-                        ProxyResult {
-                            status: data.status_code,
-                            headers,
-                            body: Default::default(),
-                        }
-                        .cell(),
-                    )
-                    .cell()
-                    .into(),
-                ))
+                this.inner
+                    .get(path, Value::new(ContentSourceData::default()))
             }
             RouterResult::Rewrite(data) => {
                 let path = data.url.strip_prefix('/').unwrap_or(&data.url);
                 // TODO: We can't set response headers and query for a source.
-                // TODO: Does a rewrite's status code matter?
-                Ok(this
-                    .inner
-                    .get(path, Value::new(ContentSourceData::default())))
+                this.inner
+                    .get(path, Value::new(ContentSourceData::default()))
             }
-            RouterResult::FullMiddleware(data) => Ok(ContentSourceResultVc::exact(
+            RouterResult::FullMiddleware(data) => ContentSourceResultVc::exact(
                 ContentSourceContent::HttpProxy(
                     ProxyResult {
                         status: data.headers.status_code,
@@ -127,8 +107,8 @@ impl ContentSource for NextRouterContentSource {
                 )
                 .cell()
                 .into(),
-            )),
-        }
+            ),
+        })
     }
 }
 
