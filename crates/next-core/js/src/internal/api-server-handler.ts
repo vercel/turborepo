@@ -53,6 +53,13 @@ type Handler = (data: {
   path: string;
 }) => Promise<void>;
 
+type Operation = {
+  clientRequest: ClientRequest;
+  clientResponsePromise: Promise<IncomingMessage>;
+  apiOperation: Promise<void>;
+  server: Server;
+};
+
 export default function startHandler(handler: Handler): void {
   (async () => {
     while (true) {
@@ -102,13 +109,6 @@ export default function startHandler(handler: Handler): void {
   })().catch((err) => {
     ipc.sendError(err);
   });
-
-  type Operation = {
-    clientRequest: ClientRequest;
-    clientResponsePromise: Promise<IncomingMessage>;
-    apiOperation: Promise<void>;
-    server: Server;
-  };
 
   async function createOperation(renderData: RenderData): Promise<Operation> {
     const server = await createServer();
