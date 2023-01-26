@@ -1,3 +1,23 @@
+# Turborepo Release Pipeline
+#
+# This release consists of 3 steps. The first, is this one.
+#
+# 1. Kick off the release flow with a manual workflow_dispatch
+#    which increments the version and creates a new branch,
+#    with a commit incrementing version.go as well as version.txt.
+#    For more detail, see stage-release in cli/Makefile
+# 2. Stage two takes the newly-created staging branch and compiles
+#    a production go build, the artifacts for which are stored
+#    in the build cache
+# 3. Stage three, if it has not successfully run before, builds
+#    the rust binaries, and then finally loads both of them
+#    into a new container where the final npm package assembly
+#    is performed. If opting-in to a dry run, the tarballs will
+#    be uploaded and the build will terminate. If it is _not_ a
+#    dry run, it will first check for previously-built artifacts
+#    to avoid re-building. That way you can test the exact tar-
+#    balls that will be used in the final release.
+
 name: 1. Turborepo Release (release branch)
 
 # TODO: Once we have confidence with the release process, add an

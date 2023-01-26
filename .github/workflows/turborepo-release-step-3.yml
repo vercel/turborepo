@@ -5,6 +5,9 @@ on:
     inputs:
       release_branch:
         description: "Staging branch to run release from"
+      dry_run:
+        description: "Do a dry run, skipping the final publish step. The outputs of a previous dry-run will be reused when uploading properly, but you can delete the old ones to force a re-build."
+        type: boolean
 
 env:
   RELEASE_TURBO_CLI: true
@@ -47,11 +50,22 @@ jobs:
         with:
           ref: "${{ inputs.release_branch }}"
 
+      - name: Attempt to download release artifacts
+        uses: dawidd6/action-download-artifact@v2
+        id: cached-release
+        with:
+          name: turbo-${{ matrix.settings.target }}
+          path: target/${{ matrix.settings.target }}/release/turbo*
+          github_token: ${{secrets.TURBOBOT}}
+          branch: ${{ inputs.release_branch }}
+          if_no_artifact_found: ignore
+
       - name: Setup Container
-        if: ${{ matrix.settings.container-setup }}
+        if: ${{ !steps.cached-release.outputs.found_artifact && matrix.settings.container-setup }}
         run: ${{ matrix.settings.container-setup }}
 
       - name: Rust Setup
+        if: ${{ !steps.cached-release.outputs.found_artifact }}
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -60,10 +74,11 @@ jobs:
 
       - name: Build Setup
         shell: bash
-        if: ${{ matrix.settings.setup }}
+        if: ${{ !steps.cached-release.outputs.found_artifact && matrix.settings.setup }}
         run: ${{ matrix.settings.setup }}
 
       - name: Build
+        if: ${{ !steps.cached-release.outputs.found_artifact }}
         run: ${{ matrix.settings.rust-build-env }} cargo build --release -p turbo --features rustls-tls --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
@@ -93,6 +108,16 @@ jobs:
           git config --global user.name 'Turbobot'
           git config --global user.email 'turbobot@vercel.com'
 
+      - name: Attempt to download release artifacts
+        uses: dawidd6/action-download-artifact@v2
+        id: cached-release
+        with:
+          name: turbo-combined
+          path: cli/dist
+          github_token: ${{secrets.TURBOBOT}}
+          branch: ${{ inputs.release_branch }}
+          if_no_artifact_found: ignore
+
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v3
         with:
@@ -103,11 +128,13 @@ jobs:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
       - name: Download Rust artifacts
+        if: ${{ steps.cached-release.outputs.found_artifact }}
         uses: actions/download-artifact@v3
         with:
           path: rust-artifacts
 
       - name: Move Rust artifacts into place
+        if: ${{ steps.cached-release.outputs.found_artifact }}
         run: |
           mv rust-artifacts/turbo-aarch64-apple-darwin cli/dist-darwin-arm64
           mv rust-artifacts/turbo-aarch64-unknown-linux-musl cli/dist-linux-arm64
@@ -117,7 +144,7 @@ jobs:
           mv rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-amd64
 
       - name: Download Go artifacts
-        id: download-artifact
+        if: ${{ steps.cached-release.outputs.found_artifact }}
         uses: dawidd6/action-download-artifact@v2
         with:
           github_token: ${{secrets.TURBOBOT}}
@@ -125,10 +152,9 @@ jobs:
           workflow_conclusion: success
           branch: ${{ inputs.release_branch }}
           path: go-artifacts
-          skip_unpack: false
-          if_no_artifact_found: fail
 
       - name: Move Go artifacts into place
+        if: ${{ steps.cached-release.outputs.found_artifact }}
         run: |
           mv go-artifacts/turbo-go-cross-${{ inputs.release_branch }}/turbo_linux_amd64_v1/bin/* cli/dist-linux-amd64
           chmod a+x cli/dist-linux-amd64/turbo
@@ -150,7 +176,7 @@ jobs:
           chmod a+x cli/dist-darwin-arm64/go-turbo
 
       - name: Perform Release
-        run: cd cli && make publish-turbo
+        run: cd cli && make publish-turbo SKIP_PUBLISH=${{ inputs.dry_run && '--skip-publish' || '' }}
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -174,6 +200,7 @@ jobs:
         run: echo ::set-output name=version::$(head -n 1 version.txt)
       - name: Create pull request
         uses: thomaseizinger/create-pull-request@master
+        if: ${{ !inputs.dry_run }}
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           head: ${{ inputs.release_branch }}
