@@ -2,6 +2,7 @@ use std::{env, future::Future};
 
 use anyhow::{anyhow, Result};
 use axum::async_trait;
+use lazy_static::lazy_static;
 use reqwest::StatusCode;
 use serde::Deserialize;
 
@@ -46,7 +47,7 @@ impl UserClient for APIClient {
                 let request_builder = self
                     .client
                     .get(self.make_url("/v2/user"))
-                    .header("User-Agent", user_agent())
+                    .header("User-Agent", USER_AGENT.clone())
                     .header("Authorization", format!("Bearer {}", self.token))
                     .header("Content-Type", "application/json");
 
@@ -115,12 +116,12 @@ impl APIClient {
     }
 }
 
-fn user_agent() -> String {
-    format!(
+lazy_static! {
+    static ref USER_AGENT: String = format!(
         "turbo {} {} {} {}",
         get_version(),
         rustc_version_runtime::version(),
         env::consts::OS,
         env::consts::ARCH
-    )
+    );
 }
