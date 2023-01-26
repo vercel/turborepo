@@ -1,20 +1,8 @@
 # Items
 
-Count: 19
+Count: 18
 
-## Item 1: Stmt 0, `Normal`
-
-```js
-export function external1() {
-  return internal() + foobar;
-}
-```
-
-- Hoisted
-- Declares: "`external1`"
-- Reads (eventual): "`internal`, `foobar`"
-
-## Item 2: Stmt 1, `ImportOfModule`
+## Item 1: Stmt 0, `ImportOfModule`
 
 ```js
 import { upper } from "module";
@@ -23,7 +11,7 @@ import { upper } from "module";
 - Hoisted
 - Side effects
 
-## Item 3: Stmt 1, `ImportBinding(0)`
+## Item 2: Stmt 0, `ImportBinding(0)`
 
 ```js
 import { upper } from "module";
@@ -32,7 +20,7 @@ import { upper } from "module";
 - Hoisted
 - Declares: "`upper`"
 
-## Item 4: Stmt 2, `VarDeclarator(0)`
+## Item 3: Stmt 1, `VarDeclarator(0)`
 
 ```js
 export let foobar = "foo";
@@ -42,7 +30,7 @@ export let foobar = "foo";
 - Declares: "`foobar`"
 - Write: "`foobar`"
 
-## Item 5: Stmt 3, `VarDeclarator(0)`
+## Item 4: Stmt 2, `VarDeclarator(0)`
 
 ```js
 export const foo = foobar;
@@ -53,7 +41,7 @@ export const foo = foobar;
 - Reads: "`foobar`"
 - Write: "`foo`"
 
-## Item 6: Stmt 4, `VarDeclarator(0)`
+## Item 5: Stmt 3, `VarDeclarator(0)`
 
 ```js
 const bar = "bar";
@@ -63,7 +51,7 @@ const bar = "bar";
 - Declares: "`bar`"
 - Write: "`bar`"
 
-## Item 7: Stmt 5, `Normal`
+## Item 6: Stmt 4, `Normal`
 
 ```js
 foobar += bar;
@@ -73,7 +61,7 @@ foobar += bar;
 - Reads: "`bar`"
 - Write: "`foobar`"
 
-## Item 8: Stmt 6, `VarDeclarator(0)`
+## Item 7: Stmt 5, `VarDeclarator(0)`
 
 ```js
 let foobarCopy = foobar;
@@ -84,7 +72,7 @@ let foobarCopy = foobar;
 - Reads: "`foobar`"
 - Write: "`foobarCopy`"
 
-## Item 9: Stmt 7, `Normal`
+## Item 8: Stmt 6, `Normal`
 
 ```js
 foobar += "foo";
@@ -93,7 +81,7 @@ foobar += "foo";
 - Side effects
 - Write: "`foobar`"
 
-## Item 10: Stmt 8, `Normal`
+## Item 9: Stmt 7, `Normal`
 
 ```js
 console.log(foobarCopy);
@@ -102,7 +90,7 @@ console.log(foobarCopy);
 - Side effects
 - Reads: "`console`, `foobarCopy`"
 
-## Item 11: Stmt 9, `Normal`
+## Item 10: Stmt 8, `Normal`
 
 ```js
 foobarCopy += "Unused";
@@ -111,7 +99,7 @@ foobarCopy += "Unused";
 - Side effects
 - Write: "`foobarCopy`"
 
-## Item 12: Stmt 10, `Normal`
+## Item 11: Stmt 9, `Normal`
 
 ```js
 function internal() {
@@ -122,6 +110,18 @@ function internal() {
 - Hoisted
 - Declares: "`internal`"
 - Reads (eventual): "`upper`, `foobar`"
+
+## Item 12: Stmt 10, `Normal`
+
+```js
+export function external1() {
+  return internal() + foobar;
+}
+```
+
+- Hoisted
+- Declares: "`external1`"
+- Reads (eventual): "`internal`, `foobar`"
 
 ## Item 13: Stmt 11, `Normal`
 
@@ -134,15 +134,6 @@ export function external2() {
 - Hoisted
 - Declares: "`external2`"
 - Write (eventual): "`foobar`"
-
-## Item 14: Stmt 12, `ImportOfModule`
-
-```js
-import "other";
-```
-
-- Hoisted
-- Side effects
 
 # Phase 1
 
@@ -162,17 +153,15 @@ graph TD
     Item12;
     Item13;
     Item14;
+    Item14["ModuleEvaluation"];
     Item15;
-    Item15["ModuleEvaluation"];
+    Item15["export foobar"];
     Item16;
-    Item16["export external1"];
+    Item16["export foo"];
     Item17;
-    Item17["export foobar"];
+    Item17["export external1"];
     Item18;
-    Item18["export foo"];
-    Item19;
-    Item19["export external2"];
-    Item1 --> Item2;
+    Item18["export external2"];
 ```
 
 # Phase 2
@@ -193,58 +182,56 @@ graph TD
     Item12;
     Item13;
     Item14;
+    Item14["ModuleEvaluation"];
     Item15;
-    Item15["ModuleEvaluation"];
+    Item15["export foobar"];
     Item16;
-    Item16["export external1"];
+    Item16["export foo"];
     Item17;
-    Item17["export foobar"];
+    Item17["export external1"];
     Item18;
-    Item18["export foo"];
-    Item19;
-    Item19["export external2"];
+    Item18["export external2"];
     Item1 --> Item2;
-    Item3 --> Item1;
-    Item3 -.-> Item4;
-    Item3 -.-> Item5;
-    Item6 --> Item3;
+    Item1 -.-> Item3;
+    Item1 -.-> Item4;
+    Item5 --> Item1;
+    Item5 -.-> Item3;
+    Item5 -.-> Item4;
+    Item6 --> Item5;
+    Item6 -.-> Item3;
+    Item6 -.-> Item1;
     Item6 -.-> Item4;
-    Item6 -.-> Item5;
     Item7 --> Item6;
-    Item7 -.-> Item4;
-    Item7 -.-> Item3;
     Item7 -.-> Item5;
+    Item7 -.-> Item3;
+    Item7 -.-> Item1;
+    Item7 -.-> Item4;
+    Item8 --> Item1;
     Item8 --> Item7;
-    Item8 -.-> Item6;
-    Item8 -.-> Item4;
     Item8 -.-> Item3;
     Item8 -.-> Item5;
-    Item9 --> Item3;
-    Item9 --> Item8;
-    Item9 -.-> Item4;
-    Item9 -.-> Item6;
+    Item8 -.-> Item4;
     Item9 -.-> Item5;
-    Item10 -.-> Item6;
+    Item9 --> Item8;
+    Item9 -.-> Item3;
+    Item9 -.-> Item1;
+    Item9 -.-> Item7;
+    Item9 -.-> Item4;
+    Item10 --> Item8;
     Item10 --> Item9;
-    Item10 -.-> Item4;
     Item10 -.-> Item3;
-    Item10 -.-> Item8;
+    Item10 -.-> Item1;
+    Item10 -.-> Item7;
     Item10 -.-> Item5;
-    Item11 --> Item9;
+    Item10 -.-> Item4;
     Item11 --> Item10;
-    Item11 -.-> Item4;
     Item11 -.-> Item3;
-    Item11 -.-> Item8;
-    Item11 -.-> Item6;
+    Item11 -.-> Item1;
+    Item11 -.-> Item7;
+    Item11 -.-> Item9;
     Item11 -.-> Item5;
-    Item12 --> Item11;
-    Item12 -.-> Item4;
-    Item12 -.-> Item3;
-    Item12 -.-> Item8;
-    Item12 -.-> Item10;
-    Item12 -.-> Item6;
-    Item12 -.-> Item9;
-    Item12 -.-> Item5;
+    Item11 -.-> Item8;
+    Item11 -.-> Item4;
 ```
 
 # Phase 3
@@ -265,68 +252,66 @@ graph TD
     Item12;
     Item13;
     Item14;
+    Item14["ModuleEvaluation"];
     Item15;
-    Item15["ModuleEvaluation"];
+    Item15["export foobar"];
     Item16;
-    Item16["export external1"];
+    Item16["export foo"];
     Item17;
-    Item17["export foobar"];
+    Item17["export external1"];
     Item18;
-    Item18["export foo"];
-    Item19;
-    Item19["export external2"];
+    Item18["export external2"];
     Item1 --> Item2;
-    Item3 --> Item1;
-    Item3 -.-> Item4;
-    Item3 -.-> Item5;
-    Item6 --> Item3;
+    Item1 -.-> Item3;
+    Item1 -.-> Item4;
+    Item5 --> Item1;
+    Item5 -.-> Item3;
+    Item5 -.-> Item4;
+    Item6 --> Item5;
+    Item6 -.-> Item3;
+    Item6 -.-> Item1;
     Item6 -.-> Item4;
-    Item6 -.-> Item5;
     Item7 --> Item6;
-    Item7 -.-> Item4;
-    Item7 -.-> Item3;
     Item7 -.-> Item5;
+    Item7 -.-> Item3;
+    Item7 -.-> Item1;
+    Item7 -.-> Item4;
+    Item8 --> Item1;
     Item8 --> Item7;
-    Item8 -.-> Item6;
-    Item8 -.-> Item4;
     Item8 -.-> Item3;
     Item8 -.-> Item5;
-    Item9 --> Item3;
-    Item9 --> Item8;
-    Item9 -.-> Item4;
-    Item9 -.-> Item6;
+    Item8 -.-> Item4;
     Item9 -.-> Item5;
-    Item10 -.-> Item6;
+    Item9 --> Item8;
+    Item9 -.-> Item3;
+    Item9 -.-> Item1;
+    Item9 -.-> Item7;
+    Item9 -.-> Item4;
+    Item10 --> Item8;
     Item10 --> Item9;
-    Item10 -.-> Item4;
     Item10 -.-> Item3;
-    Item10 -.-> Item8;
+    Item10 -.-> Item1;
+    Item10 -.-> Item7;
     Item10 -.-> Item5;
-    Item11 --> Item9;
+    Item10 -.-> Item4;
     Item11 --> Item10;
-    Item11 -.-> Item4;
     Item11 -.-> Item3;
-    Item11 -.-> Item8;
-    Item11 -.-> Item6;
+    Item11 -.-> Item1;
+    Item11 -.-> Item7;
+    Item11 -.-> Item9;
     Item11 -.-> Item5;
-    Item12 --> Item11;
-    Item12 -.-> Item4;
-    Item12 -.-> Item3;
-    Item12 -.-> Item8;
-    Item12 -.-> Item10;
-    Item12 -.-> Item6;
-    Item12 -.-> Item9;
-    Item12 -.-> Item5;
-    Item13 --> Item4;
-    Item13 --> Item3;
-    Item13 --> Item8;
-    Item13 --> Item10;
-    Item4 --> Item5;
+    Item11 -.-> Item8;
+    Item11 -.-> Item4;
     Item4 --> Item3;
-    Item4 --> Item8;
-    Item4 --> Item10;
-    Item14 -.-> Item6;
-    Item14 -.-> Item9;
+    Item4 --> Item1;
+    Item4 --> Item7;
+    Item4 --> Item9;
+    Item12 --> Item4;
+    Item12 --> Item1;
+    Item12 --> Item7;
+    Item12 --> Item9;
+    Item13 -.-> Item5;
+    Item13 -.-> Item8;
 ```
 
 # Phase 4
@@ -347,84 +332,82 @@ graph TD
     Item12;
     Item13;
     Item14;
+    Item14["ModuleEvaluation"];
     Item15;
-    Item15["ModuleEvaluation"];
+    Item15["export foobar"];
     Item16;
-    Item16["export external1"];
+    Item16["export foo"];
     Item17;
-    Item17["export foobar"];
+    Item17["export external1"];
     Item18;
-    Item18["export foo"];
-    Item19;
-    Item19["export external2"];
+    Item18["export external2"];
     Item1 --> Item2;
-    Item3 --> Item1;
-    Item3 -.-> Item4;
-    Item3 -.-> Item5;
-    Item6 --> Item3;
+    Item1 -.-> Item3;
+    Item1 -.-> Item4;
+    Item5 --> Item1;
+    Item5 -.-> Item3;
+    Item5 -.-> Item4;
+    Item6 --> Item5;
+    Item6 -.-> Item3;
+    Item6 -.-> Item1;
     Item6 -.-> Item4;
-    Item6 -.-> Item5;
     Item7 --> Item6;
-    Item7 -.-> Item4;
-    Item7 -.-> Item3;
     Item7 -.-> Item5;
+    Item7 -.-> Item3;
+    Item7 -.-> Item1;
+    Item7 -.-> Item4;
+    Item8 --> Item1;
     Item8 --> Item7;
-    Item8 -.-> Item6;
-    Item8 -.-> Item4;
     Item8 -.-> Item3;
     Item8 -.-> Item5;
-    Item9 --> Item3;
-    Item9 --> Item8;
-    Item9 -.-> Item4;
-    Item9 -.-> Item6;
+    Item8 -.-> Item4;
     Item9 -.-> Item5;
-    Item10 -.-> Item6;
+    Item9 --> Item8;
+    Item9 -.-> Item3;
+    Item9 -.-> Item1;
+    Item9 -.-> Item7;
+    Item9 -.-> Item4;
+    Item10 --> Item8;
     Item10 --> Item9;
-    Item10 -.-> Item4;
     Item10 -.-> Item3;
-    Item10 -.-> Item8;
+    Item10 -.-> Item1;
+    Item10 -.-> Item7;
     Item10 -.-> Item5;
-    Item11 --> Item9;
+    Item10 -.-> Item4;
     Item11 --> Item10;
-    Item11 -.-> Item4;
     Item11 -.-> Item3;
-    Item11 -.-> Item8;
-    Item11 -.-> Item6;
+    Item11 -.-> Item1;
+    Item11 -.-> Item7;
+    Item11 -.-> Item9;
     Item11 -.-> Item5;
-    Item12 --> Item11;
-    Item12 -.-> Item4;
-    Item12 -.-> Item3;
-    Item12 -.-> Item8;
-    Item12 -.-> Item10;
-    Item12 -.-> Item6;
-    Item12 -.-> Item9;
-    Item12 -.-> Item5;
-    Item13 --> Item4;
-    Item13 --> Item3;
-    Item13 --> Item8;
-    Item13 --> Item10;
-    Item4 --> Item5;
+    Item11 -.-> Item8;
+    Item11 -.-> Item4;
     Item4 --> Item3;
-    Item4 --> Item8;
-    Item4 --> Item10;
-    Item14 -.-> Item6;
+    Item4 --> Item1;
+    Item4 --> Item7;
+    Item4 --> Item9;
+    Item12 --> Item4;
+    Item12 --> Item1;
+    Item12 --> Item7;
+    Item12 --> Item9;
+    Item13 -.-> Item5;
+    Item13 -.-> Item8;
+    Item14 --> Item11;
+    Item14 -.-> Item12;
+    Item14 -.-> Item10;
+    Item14 -.-> Item3;
+    Item14 -.-> Item1;
+    Item14 -.-> Item7;
     Item14 -.-> Item9;
-    Item15 --> Item12;
-    Item15 -.-> Item13;
-    Item15 -.-> Item11;
-    Item15 -.-> Item5;
-    Item15 -.-> Item3;
-    Item15 -.-> Item8;
-    Item15 -.-> Item10;
-    Item15 -.-> Item6;
-    Item15 -.-> Item9;
-    Item15 -.-> Item7;
-    Item15 -.-> Item4;
-    Item15 -.-> Item14;
-    Item16 --> Item13;
-    Item17 --> Item3;
-    Item17 --> Item8;
-    Item17 --> Item10;
-    Item18 --> Item6;
-    Item19 --> Item14;
+    Item14 -.-> Item5;
+    Item14 -.-> Item8;
+    Item14 -.-> Item6;
+    Item14 -.-> Item4;
+    Item14 -.-> Item13;
+    Item15 --> Item1;
+    Item15 --> Item7;
+    Item15 --> Item9;
+    Item16 --> Item5;
+    Item17 --> Item12;
+    Item18 --> Item13;
 ```
