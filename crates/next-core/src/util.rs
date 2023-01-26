@@ -139,42 +139,39 @@ impl Issue for NextSourceConfigParsingIssue {
 pub async fn parse_config_from_source(module_asset: AssetVc) -> Result<NextSourceConfigVc> {
     if let Some(ecmascript_asset) = EcmascriptModuleAssetVc::resolve_from(module_asset).await? {
         if let ParseResult::Ok {
-            program,
+            program: Program::Module(module),
             eval_context,
             ..
         } = &*ecmascript_asset.parse().await?
         {
-            if let Program::Module(module) = &program {
-                for item in &module.body {
-                    if let Some(decl) = item
-                        .as_module_decl()
-                        .and_then(|mod_decl| mod_decl.as_export_decl())
-                        .and_then(|export_decl| export_decl.decl.as_var())
-                    {
-                        for decl in &decl.decls {
-                            if decl
-                                .name
-                                .as_ident()
-                                .map(|ident| &*ident.sym == "config")
-                                .unwrap_or_default()
-                            {
-                                if let Some(init) = decl.init.as_ref() {
-                                    let value = eval_context.eval(init);
-                                    return Ok(
-                                        parse_config_from_js_value(module_asset, &value).cell()
-                                    );
-                                } else {
-                                    NextSourceConfigParsingIssue {
-                                        path: module_asset.path(),
-                                        detail: StringVc::cell(format!(
-                                            "The exported config object must contain an variable \
-                                             initializer."
-                                        )),
-                                    }
-                                    .cell()
-                                    .as_issue()
-                                    .emit()
+            for item in &module.body {
+                if let Some(decl) = item
+                    .as_module_decl()
+                    .and_then(|mod_decl| mod_decl.as_export_decl())
+                    .and_then(|export_decl| export_decl.decl.as_var())
+                {
+                    for decl in &decl.decls {
+                        if decl
+                            .name
+                            .as_ident()
+                            .map(|ident| &*ident.sym == "config")
+                            .unwrap_or_default()
+                        {
+                            if let Some(init) = decl.init.as_ref() {
+                                let value = eval_context.eval(init);
+                                return Ok(parse_config_from_js_value(module_asset, &value).cell());
+                            } else {
+                                NextSourceConfigParsingIssue {
+                                    path: module_asset.path(),
+                                    detail: StringVc::cell(
+                                        "The exported config object must contain an variable \
+                                         initializer."
+                                            .to_string(),
+                                    ),
                                 }
+                                .cell()
+                                .as_issue()
+                                .emit()
                             }
                         }
                     }
@@ -218,8 +215,8 @@ fn parse_config_from_js_value(module_asset: AssetVc, value: &JsValue) -> NextSou
                                         }
                                         _ => {
                                             invalid_config(
-                                                &"The runtime property must be either \"nodejs\" \
-                                                  or \"edge\".",
+                                                "The runtime property must be either \"nodejs\" \
+                                                 or \"edge\".",
                                                 value,
                                             );
                                         }
