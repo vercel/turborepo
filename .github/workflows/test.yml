@@ -1017,3 +1017,10 @@ jobs:
       - name: It's fine
         if: success() && steps.cancelled.outputs.cancelled != 'true'
         run: echo Ok
+
+  cleanup:
+    name: Cleanup
+    needs: [final]
+    if: always()
+    uses: ./.github/workflows/pr-clean-caches.yml
+    secrets: inherit

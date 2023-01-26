@@ -161,10 +161,21 @@ jobs:
         with:
           name: turbo-combined
           path: cli/dist
-
-      - name: Open Pull Request for release branch
-        uses: peter-evans/create-pull-request@v4
+  create-release-pr:
+    name: "Open Release Branch PR"
+    needs: [final-publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@1.0.0
         with:
-          title: "feat(turborepo): release"
-          branch: "${{ inputs.release_branch }}"
+          ref: ${{ inputs.release_branch }}
+      - name: Get version
+        id: getVersion
+        run: echo ::set-output name=version::$(head -n 1 version.txt)
+      - name: Create pull request
+        uses: thomaseizinger/create-pull-request@master
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          head: ${{ inputs.release_branch }}
           base: main
+          title: "release(turborepo): ${{ steps.getVersion.outputs.version }}"
