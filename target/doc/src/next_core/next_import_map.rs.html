@@ -384,6 +384,48 @@
 <span id="384">384</span>
 <span id="385">385</span>
 <span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+<span id="398">398</span>
+<span id="399">399</span>
+<span id="400">400</span>
+<span id="401">401</span>
+<span id="402">402</span>
+<span id="403">403</span>
+<span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::Result;
@@ -551,25 +593,12 @@
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">match </span>ty.into_value() {
-        ServerContextType::Pages { pages_dir } | ServerContextType::PagesData { pages_dir } =&gt; {
-            insert_alias_to_alternatives(
-                <span class="kw-2">&amp;mut </span>import_map,
-                <span class="macro">format!</span>(<span class="string">&quot;{VIRTUAL_PACKAGE_NAME}/pages/_app&quot;</span>),
-                <span class="macro">vec!</span>[
-                    request_to_import_mapping(pages_dir, <span class="string">&quot;./_app&quot;</span>),
-                    external_request_to_import_mapping(<span class="string">&quot;next/app&quot;</span>),
-                ],
-            );
-            insert_alias_to_alternatives(
-                <span class="kw-2">&amp;mut </span>import_map,
-                <span class="macro">format!</span>(<span class="string">&quot;{VIRTUAL_PACKAGE_NAME}/pages/_document&quot;</span>),
-                <span class="macro">vec!</span>[
-                    request_to_import_mapping(pages_dir, <span class="string">&quot;./_document&quot;</span>),
-                    external_request_to_import_mapping(<span class="string">&quot;next/document&quot;</span>),
-                ],
-            );
+    <span class="kw">let </span>ty = ty.into_value();
 
+    insert_next_server_special_aliases(<span class="kw-2">&amp;mut </span>import_map, ty).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">match </span>ty {
+        ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } =&gt; {
             import_map.insert_exact_alias(<span class="string">&quot;next&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
             import_map.insert_wildcard_alias(<span class="string">&quot;next/&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
             import_map.insert_exact_alias(<span class="string">&quot;react&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
@@ -579,27 +608,7 @@
             import_map.insert_exact_alias(<span class="string">&quot;styled-jsx&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
             import_map.insert_wildcard_alias(<span class="string">&quot;styled-jsx/&quot;</span>, ImportMapping::External(<span class="prelude-val">None</span>).into());
         }
-        ServerContextType::AppSSR { app_dir } | ServerContextType::AppRSC { app_dir } =&gt; {
-            import_map.insert_exact_alias(
-                <span class="string">&quot;react&quot;</span>,
-                request_to_import_mapping(app_dir, <span class="string">&quot;next/dist/compiled/react&quot;</span>),
-            );
-            import_map.insert_wildcard_alias(
-                <span class="string">&quot;react/&quot;</span>,
-                request_to_import_mapping(app_dir, <span class="string">&quot;next/dist/compiled/react/*&quot;</span>),
-            );
-            import_map.insert_exact_alias(
-                <span class="string">&quot;react-dom&quot;</span>,
-                request_to_import_mapping(
-                    app_dir,
-                    <span class="string">&quot;next/dist/compiled/react-dom/server-rendering-stub.js&quot;</span>,
-                ),
-            );
-            import_map.insert_wildcard_alias(
-                <span class="string">&quot;react-dom/&quot;</span>,
-                request_to_import_mapping(app_dir, <span class="string">&quot;next/dist/compiled/react-dom/*&quot;</span>),
-            );
-
+        ServerContextType::AppSSR { .. } | ServerContextType::AppRSC { .. } =&gt; {
             <span class="kw">for </span>external <span class="kw">in </span>next_config.server_component_externals().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
                 import_map.insert_exact_alias(external, ImportMapping::External(<span class="prelude-val">None</span>).into());
                 import_map.insert_wildcard_alias(
@@ -609,6 +618,32 @@
             }
         }
     }
+
+    <span class="prelude-val">Ok</span>(import_map.cell())
+}
+
+<span class="doccomment">/// Computes the Next-specific edge-side import map.
+</span><span class="attr">#[turbo_tasks::function]
+</span><span class="kw">pub async fn </span>get_next_edge_import_map(
+    project_path: FileSystemPathVc,
+    ty: Value&lt;ServerContextType&gt;,
+    next_config: NextConfigVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ImportMapVc&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>import_map = ImportMap::empty();
+
+    insert_next_shared_aliases(<span class="kw-2">&amp;mut </span>import_map, project_path).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    insert_alias_option(
+        <span class="kw-2">&amp;mut </span>import_map,
+        project_path,
+        next_config.resolve_alias_options(),
+        [],
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>ty = ty.into_value();
+
+    insert_next_server_special_aliases(<span class="kw-2">&amp;mut </span>import_map, ty).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(import_map.cell())
 }
@@ -662,6 +697,55 @@
     (<span class="string">&quot;events&quot;</span>, <span class="string">&quot;next/dist/compiled/events&quot;</span>),
     (<span class="string">&quot;setImmediate&quot;</span>, <span class="string">&quot;next/dist/compiled/setimmediate&quot;</span>),
 ];
+
+<span class="kw">pub async fn </span>insert_next_server_special_aliases(
+    import_map: <span class="kw-2">&amp;mut </span>ImportMap,
+    ty: ServerContextType,
+) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">match </span>ty {
+        ServerContextType::Pages { pages_dir } =&gt; {
+            insert_alias_to_alternatives(
+                import_map,
+                <span class="macro">format!</span>(<span class="string">&quot;{VIRTUAL_PACKAGE_NAME}/pages/_app&quot;</span>),
+                <span class="macro">vec!</span>[
+                    request_to_import_mapping(pages_dir, <span class="string">&quot;./_app&quot;</span>),
+                    external_request_to_import_mapping(<span class="string">&quot;next/app&quot;</span>),
+                ],
+            );
+            insert_alias_to_alternatives(
+                import_map,
+                <span class="macro">format!</span>(<span class="string">&quot;{VIRTUAL_PACKAGE_NAME}/pages/_document&quot;</span>),
+                <span class="macro">vec!</span>[
+                    request_to_import_mapping(pages_dir, <span class="string">&quot;./_document&quot;</span>),
+                    external_request_to_import_mapping(<span class="string">&quot;next/document&quot;</span>),
+                ],
+            );
+        }
+        ServerContextType::PagesData { .. } =&gt; {}
+        ServerContextType::AppSSR { app_dir } | ServerContextType::AppRSC { app_dir } =&gt; {
+            import_map.insert_exact_alias(
+                <span class="string">&quot;react&quot;</span>,
+                request_to_import_mapping(app_dir, <span class="string">&quot;next/dist/compiled/react&quot;</span>),
+            );
+            import_map.insert_wildcard_alias(
+                <span class="string">&quot;react/&quot;</span>,
+                request_to_import_mapping(app_dir, <span class="string">&quot;next/dist/compiled/react/*&quot;</span>),
+            );
+            import_map.insert_exact_alias(
+                <span class="string">&quot;react-dom&quot;</span>,
+                request_to_import_mapping(
+                    app_dir,
+                    <span class="string">&quot;next/dist/compiled/react-dom/server-rendering-stub.js&quot;</span>,
+                ),
+            );
+            import_map.insert_wildcard_alias(
+                <span class="string">&quot;react-dom/&quot;</span>,
+                request_to_import_mapping(app_dir, <span class="string">&quot;next/dist/compiled/react-dom/*&quot;</span>),
+            );
+        }
+    }
+    <span class="prelude-val">Ok</span>(())
+}
 
 <span class="kw">pub async fn </span>insert_next_shared_aliases(
     import_map: <span class="kw-2">&amp;mut </span>ImportMap,

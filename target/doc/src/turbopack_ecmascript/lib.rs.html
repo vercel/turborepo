@@ -383,6 +383,15 @@
 <span id="383">383</span>
 <span id="384">384</span>
 <span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -398,7 +407,7 @@
 <span class="kw">pub mod </span>code_gen;
 <span class="kw">mod </span>errors;
 <span class="kw">pub mod </span>magic_identifier;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>parse;
+<span class="kw">pub mod </span>parse;
 <span class="kw">mod </span>path_visitor;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>references;
 <span class="kw">pub mod </span>resolve;
@@ -443,11 +452,14 @@
     },
 };
 
-<span class="kw">use </span><span class="self">self</span>::chunk::{
-    EcmascriptChunkItemContent, EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions,
-    EcmascriptExportsVc,
-};
 <span class="kw">pub use </span><span class="self">self</span>::references::AnalyzeEcmascriptModuleResultVc;
+<span class="kw">use </span><span class="self">self</span>::{
+    chunk::{
+        EcmascriptChunkItemContent, EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions,
+        EcmascriptExportsVc,
+    },
+    parse::ParseResultVc,
+};
 <span class="kw">use crate</span>::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
     references::analyze_ecmascript_module,
@@ -538,6 +550,12 @@
             this.transforms,
             this.environment,
         ))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>parse(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ParseResultVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(parse(this.source, Value::new(this.ty), this.transforms))
     }
 }
 

@@ -352,6 +352,13 @@
 <span id="352">352</span>
 <span id="353">353</span>
 <span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     net::SocketAddr,
     process::{Command, Stdio},
@@ -477,7 +484,7 @@
 </span><span class="kw">pub enum </span>ExecutionEnvironment {
     NodeJsBuildTime(NodeJsEnvironmentVc),
     NodeJsLambda(NodeJsEnvironmentVc),
-    EdgeFunction(NodeJsEnvironmentVc),
+    EdgeWorker(EdgeWorkerEnvironmentVc),
     Browser(BrowserEnvironmentVc),
     <span class="comment">// TODO allow custom trait here
     </span>Custom(u8),
@@ -492,7 +499,7 @@
             ExecutionEnvironment::NodeJsBuildTime(node_env, ..)
             | ExecutionEnvironment::NodeJsLambda(node_env) =&gt; node_env.<span class="kw">await</span><span class="question-mark">?</span>.compile_target,
             ExecutionEnvironment::Browser(<span class="kw">_</span>) =&gt; CompileTargetVc::unknown(),
-            ExecutionEnvironment::EdgeFunction(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
+            ExecutionEnvironment::EdgeWorker(<span class="kw">_</span>) =&gt; CompileTargetVc::unknown(),
             ExecutionEnvironment::Custom(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
         })
     }
@@ -509,7 +516,7 @@
                     <span class="kw-2">&amp;</span>browserslist::Opts::new(),
                 )<span class="question-mark">?</span>)<span class="question-mark">?</span>)
             }
-            ExecutionEnvironment::EdgeFunction(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
+            ExecutionEnvironment::EdgeWorker(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
             ExecutionEnvironment::Custom(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
         })
     }
@@ -522,7 +529,7 @@
                 BoolVc::cell(<span class="bool-val">true</span>)
             }
             ExecutionEnvironment::Browser(<span class="kw">_</span>) =&gt; BoolVc::cell(<span class="bool-val">false</span>),
-            ExecutionEnvironment::EdgeFunction(<span class="kw">_</span>) =&gt; BoolVc::cell(<span class="bool-val">false</span>),
+            ExecutionEnvironment::EdgeWorker(<span class="kw">_</span>) =&gt; BoolVc::cell(<span class="bool-val">false</span>),
             ExecutionEnvironment::Custom(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
         })
     }
@@ -538,7 +545,7 @@
                     <span class="string">&quot;.json&quot;</span>.to_string(),
                 ])
             }
-            ExecutionEnvironment::EdgeFunction(<span class="kw">_</span>) | ExecutionEnvironment::Browser(<span class="kw">_</span>) =&gt; {
+            ExecutionEnvironment::EdgeWorker(<span class="kw">_</span>) | ExecutionEnvironment::Browser(<span class="kw">_</span>) =&gt; {
                 StringsVc::empty()
             }
             ExecutionEnvironment::Custom(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
@@ -552,7 +559,7 @@
             ExecutionEnvironment::NodeJsBuildTime(..) | ExecutionEnvironment::NodeJsLambda(<span class="kw">_</span>) =&gt; {
                 BoolVc::cell(<span class="bool-val">true</span>)
             }
-            ExecutionEnvironment::EdgeFunction(<span class="kw">_</span>) | ExecutionEnvironment::Browser(<span class="kw">_</span>) =&gt; {
+            ExecutionEnvironment::EdgeWorker(<span class="kw">_</span>) | ExecutionEnvironment::Browser(<span class="kw">_</span>) =&gt; {
                 BoolVc::cell(<span class="bool-val">false</span>)
             }
             ExecutionEnvironment::Custom(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
@@ -566,9 +573,8 @@
             ExecutionEnvironment::NodeJsBuildTime(..) | ExecutionEnvironment::NodeJsLambda(<span class="kw">_</span>) =&gt; {
                 StringsVc::cell(<span class="macro">vec!</span>[<span class="string">&quot;node&quot;</span>.to_string()])
             }
-            ExecutionEnvironment::EdgeFunction(<span class="kw">_</span>) | ExecutionEnvironment::Browser(<span class="kw">_</span>) =&gt; {
-                StringsVc::empty()
-            }
+            ExecutionEnvironment::Browser(<span class="kw">_</span>) =&gt; StringsVc::empty(),
+            ExecutionEnvironment::EdgeWorker(<span class="kw">_</span>) =&gt; StringsVc::cell(<span class="macro">vec!</span>[<span class="string">&quot;edge-worker&quot;</span>.to_string()]),
             ExecutionEnvironment::Custom(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
         })
     }
@@ -588,8 +594,10 @@
         <span class="kw">let </span>env = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">match </span>env.execution {
             ExecutionEnvironment::NodeJsBuildTime(env)
-            | ExecutionEnvironment::NodeJsLambda(env)
-            | ExecutionEnvironment::EdgeFunction(env) =&gt; {
+            | ExecutionEnvironment::NodeJsLambda(env) =&gt; {
+                Rendering::Server(env.<span class="kw">await</span><span class="question-mark">?</span>.server_addr).cell()
+            }
+            ExecutionEnvironment::EdgeWorker(env) =&gt; {
                 Rendering::Server(env.<span class="kw">await</span><span class="question-mark">?</span>.server_addr).cell()
             }
             ExecutionEnvironment::Browser(<span class="kw">_</span>) =&gt; Rendering::Client.cell(),
@@ -601,9 +609,10 @@
     </span><span class="kw">pub async fn </span>chunk_loading(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkLoadingVc&gt; {
         <span class="kw">let </span>env = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">match </span>env.execution {
-            ExecutionEnvironment::NodeJsBuildTime(<span class="kw">_</span>)
-            | ExecutionEnvironment::NodeJsLambda(<span class="kw">_</span>)
-            | ExecutionEnvironment::EdgeFunction(<span class="kw">_</span>) =&gt; ChunkLoading::NodeJs.cell(),
+            ExecutionEnvironment::NodeJsBuildTime(<span class="kw">_</span>) | ExecutionEnvironment::NodeJsLambda(<span class="kw">_</span>) =&gt; {
+                ChunkLoading::NodeJs.cell()
+            }
+            ExecutionEnvironment::EdgeWorker(<span class="kw">_</span>) =&gt; ChunkLoading::None.cell(),
             ExecutionEnvironment::Browser(<span class="kw">_</span>) =&gt; ChunkLoading::Dom.cell(),
             <span class="kw">_ </span>=&gt; ChunkLoading::None.cell(),
         })
@@ -681,6 +690,11 @@
     <span class="kw">pub </span>web_worker: bool,
     <span class="kw">pub </span>service_worker: bool,
     <span class="kw">pub </span>browserslist_query: String,
+}
+
+<span class="attr">#[turbo_tasks::value(shared)]
+</span><span class="kw">pub struct </span>EdgeWorkerEnvironment {
+    <span class="kw">pub </span>server_addr: ServerAddrVc,
 }
 
 <span class="attr">#[turbo_tasks::value(transparent)]
