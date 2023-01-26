@@ -93,12 +93,13 @@ impl ContentSource for NextRouterContentSource {
                     .get(path, Value::new(ContentSourceData::default())))
             }
             RouterResult::Redirect(data) => {
+                let mut headers = data.headers.clone();
+                headers.extend(["Location".to_string(), data.url.clone()]);
                 Ok(ContentSourceResultVc::exact(
                     ContentSourceContent::HttpProxy(
                         ProxyResult {
                             status: data.status_code,
-                            // TODO: Does Next router inject Location header, or do we?
-                            headers: data.headers.clone(),
+                            headers,
                             body: Default::default(),
                         }
                         .cell(),
