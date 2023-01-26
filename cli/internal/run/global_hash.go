@@ -89,7 +89,7 @@ func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 		RootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
 		HashedSortedEnvPairs: globalHashableEnvPairs,
 		GlobalCacheKey:       _globalCacheKey,
-		// Pipeline:             pipeline,
+		Pipeline:             pipeline,
 	}
 
 	globalHash, err := fs.HashObject(globalHashable)
