@@ -137,6 +137,16 @@ async function run() {
             ?.shift()
             ?.trim();
 
+          octokit.rest.issues.createComment({
+            ...context.repo,
+            issue_number: prNumber,
+            body: `\`\`\`${JSON.stringify(
+              JSON.parse(testData),
+              null,
+              2
+            )}\`\`\``,
+          });
+
           testData = JSON.parse(testData);
         } catch (_) {
           console.log(`Failed to parse test data`);
@@ -161,14 +171,14 @@ async function run() {
         if (existingComment?.body?.includes(prSha)) {
           if (failedTest && existingComment.body?.includes(failedTest)) {
             console.log(
-              `Suite is already included in current comment on ${prNumber}`
+              `Suite is already included in current comment on ${prNumber} `
             );
             // the check_suite comment already says this test failed
             return;
           }
           commentToPost = existingComment.body;
         } else if (!commentToPost || commentToPost.length === 0) {
-          commentToPost = `${commentTitle}\n`;
+          commentToPost = `${commentTitle} \n`;
         }
 
         commentToPost += `\n\`${failedTest}\` `;
