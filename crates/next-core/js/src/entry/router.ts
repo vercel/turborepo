@@ -52,7 +52,8 @@ type MiddlewareHeadersResponse = {
 
 export default async function route(
   ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
-  routerRequest: RouterRequest
+  routerRequest: RouterRequest,
+  dir: string
 ) {
   // Deferring the import allows us to not error while we wait for Next.js to implement.
   const { makeResolver } = await import("next/dist/server/router.js");

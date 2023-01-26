@@ -1,10 +1,10 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use serde::Deserialize;
 use turbo_tasks::{
     primitives::{JsonValueVc, StringsVc},
     Value,
 };
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks_fs::{to_sys_path, FileSystemPathVc};
 use turbopack::evaluate_context::node_evaluate_asset_context;
 use turbopack_core::{
     asset::AssetVc,
@@ -169,6 +169,9 @@ pub async fn route(
     let extra_configs = extra_configs(context, project_path);
 
     let request = serde_json::value::to_value(&*request.await?)?;
+    let Some(dir) = to_sys_path(project_root).await? else {
+        bail!("Next.js requires a disk path to check for valid routes");
+    };
     let result = evaluate(
         project_path,
         router_asset,
@@ -177,7 +180,10 @@ pub async fn route(
         context,
         intermediate_output_path,
         Some(extra_configs),
-        vec![JsonValueVc::cell(request)],
+        vec![
+            JsonValueVc::cell(request),
+            JsonValueVc::cell(dir.to_string_lossy().into()),
+        ],
         false,
     )
     .await?;
