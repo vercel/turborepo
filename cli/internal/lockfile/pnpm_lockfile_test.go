@@ -244,3 +244,19 @@ func Test_PnpmAbsoluteDependency(t *testing.T) {
 		assert.DeepEqual(t, pkg.Version, "1.0.0")
 	}
 }
+
+func Test_LockfilePeer(t *testing.T) {
+	contents, err := getFixture(t, "pnpm-peer-v6.yaml")
+	if err != nil {
+		t.Error(err)
+	}
+	assert.NilError(t, err, "read fixture")
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err, "parse lockfile")
+
+	pkg, err := lockfile.ResolvePackage(turbopath.AnchoredUnixPath("apps/web"), "next", "13.0.4")
+	assert.NilError(t, err, "read lockfile")
+	assert.Assert(t, pkg.Found)
+	assert.DeepEqual(t, pkg.Version, "13.0.4(react-dom@18.2.0)(react@18.2.0)")
+	assert.DeepEqual(t, pkg.Key, "/next@13.0.4(react-dom@18.2.0)(react@18.2.0)")
+}

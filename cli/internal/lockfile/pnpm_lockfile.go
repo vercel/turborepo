@@ -402,11 +402,6 @@ func (p *PnpmLockfile) Patches() []turbopath.AnchoredUnixPath {
 }
 
 func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath, name string, specifier string) (string, bool, error) {
-	// Check if the specifier is already a resolved version
-	_, ok := p.Packages[p.formatKey(name, specifier)]
-	if ok {
-		return specifier, true, nil
-	}
 	pnpmWorkspacePath := workspacePath.ToString()
 	if pnpmWorkspacePath == "" {
 		// For pnpm, the root is named "."
@@ -421,6 +416,10 @@ func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath
 		return "", false, err
 	}
 	if !ok {
+		// Check if the specifier is already a resolved version
+		if _, ok := p.Packages[p.formatKey(name, specifier)]; ok {
+			return specifier, true, nil
+		}
 		return "", false, fmt.Errorf("Unable to find resolved version for %s@%s in %s", name, specifier, workspacePath)
 	}
 	if resolution.Specifier != specifier {
