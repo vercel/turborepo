@@ -69,9 +69,7 @@ impl Analyzer<'_> {
                     if let Some(last) = self.last_side_effect.take() {
                         self.g.add_strong_dep(item_id, &last)
                     }
-                }
 
-                if item.is_hoisted && item.side_effects {
                     self.last_side_effect = Some(item_id.clone());
                 }
 
