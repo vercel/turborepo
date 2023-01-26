@@ -292,10 +292,9 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	// Start a bookkeeping map
 	c.FieldsMeta = map[string]bool{}
 
-	var inclusions []string
-	var exclusions []string
-
 	if task.Outputs != nil {
+		var inclusions []string
+		var exclusions []string
 		// Assign a bookkeeping field so we know that there really were
 		// outputs configured in the underlying config file.
 		c.FieldsMeta["HasOutputs"] = true
@@ -307,15 +306,16 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 				inclusions = append(inclusions, glob)
 			}
 		}
+
+		c.Outputs = TaskOutputs{
+			Inclusions: inclusions,
+			Exclusions: exclusions,
+		}
+
+		sort.Strings(c.Outputs.Inclusions)
+		sort.Strings(c.Outputs.Exclusions)
 	}
 
-	c.Outputs = TaskOutputs{
-		Inclusions: inclusions,
-		Exclusions: exclusions,
-	}
-
-	sort.Strings(c.Outputs.Inclusions)
-	sort.Strings(c.Outputs.Exclusions)
 	if task.Cache == nil {
 		c.ShouldCache = true
 	} else {

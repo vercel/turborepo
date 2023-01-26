@@ -12,7 +12,7 @@
 
 
     "omit-keys-task": {
-      "dependsOn": [],
+      "dependsOn": ["omit-keys-underlying-task"],
       "inputs": ["src/foo.txt"],
       "outputs": ["out/**"],
       "env": ["SOME_ENV"],

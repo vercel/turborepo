@@ -11,7 +11,7 @@ Setup
 # [ ] Tests env works by setting an env var and asserting there was a cache miss
 
 # 1. First run, assert for `dependsOn` and `outputs` keys
-  $ ${TURBO} run omit-keys-task --skip-infer --filter=omit-keys -vvv > tmp.log
+  $ ${TURBO} run omit-keys-task --skip-infer --filter=omit-keys > tmp.log
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)

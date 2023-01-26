@@ -414,7 +414,11 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 	// For each of the TaskDefinitions we know of, merge them in
 	for _, taskDef := range taskDefinitions {
 		if _, ok := taskDef.FieldsMeta["HasOutputs"]; ok {
-			mergedTaskDefinition.Outputs = &taskDef.Outputs
+			// TODO(mehulkar): Couldn't figure out how to just assign taskDef.Outputs here
+			mergedTaskDefinition.Outputs = &fs.TaskOutputs{
+				Inclusions: taskDef.Outputs.Inclusions,
+				Exclusions: taskDef.Outputs.Exclusions,
+			}
 		}
 
 		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
@@ -437,7 +441,6 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 			Exclusions: []string{},
 		}
 	}
-
 	return mergedTaskDefinition, nil
 }
 
