@@ -147,16 +147,20 @@ async function handleClientResponse(
   };
 
   // TODO: support streaming middleware
-  //await sendValue(ipc, {
-  //  type: "middleware-headers",
-  //  data: responseHeaders,
-  //});
-  //for await (const chunk of clientResponse) {
-  //  await sendValue(ipc, {
-  //    type: "middleware-body",
-  //    data: chunk as Buffer,
-  //  });
-  //}
+  // ipc.send({
+  //   type: "jsonValue",
+  //   data: JSON.stringify({
+  //     type: "middleware-headers",
+  //     data: responseHeaders,
+  //   }),
+  // });
+  // ipc.send({
+  //   type: "jsonValue",
+  //   data: JSON.stringify({
+  //     type: "middleware-body",
+  //     data: chunk as Buffer,
+  //   }),
+  // });
 
   const buffers = [];
   for await (const chunk of clientResponse) {
