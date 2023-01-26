@@ -9,7 +9,6 @@ use tokio::sync::OnceCell;
 use crate::{
     client::{APIClient, UserClient},
     commands::CommandBase,
-    config::{default_user_config_path, UserConfigLoader},
     get_version,
     ui::{BOLD, CYAN},
 };
