@@ -180,8 +180,6 @@ publish-turbo: clean build
 	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm pack --pack-destination=$(CLI_DIR)/../
 	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm pack --pack-destination=$(CLI_DIR)/../
 
-	@test "" != $(DRY_RUN) || (echo "Dry run complete!" && exit 0)
-
 	# Publish the remaining JS packages in order to avoid race conditions.
 	cd $(CLI_DIR)/../
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
