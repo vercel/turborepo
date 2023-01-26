@@ -1190,117 +1190,289 @@
             ctxt: #0,
         },
     },
-    MemberCall {
-        obj: FreeVar(
-            Require,
+    Conditional {
+        condition: Not(
+            5,
+            MemberCall(
+                4,
+                FreeVar(
+                    Other(
+                        Atom('fs' type=inline),
+                    ),
+                ),
+                Constant(
+                    StrWord(
+                        Atom('existsSync' type=dynamic),
+                    ),
+                ),
+                [
+                    Variable(
+                        (
+                            Atom('binPath' type=inline),
+                            #4,
+                        ),
+                    ),
+                ],
+            ),
         ),
-        prop: Constant(
-            StrWord(
-                Atom('resolve' type=inline),
-            ),
-        ),
-        args: [
-            Variable(
-                (
-                    Atom('pkg' type=inline),
-                    #4,
-                ),
-            ),
-        ],
-        ast_path: [
-            Program(
-                Script,
-            ),
-            Script(
-                Body(
-                    6,
-                ),
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Fn,
-            ),
-            FnDecl(
-                Function,
-            ),
-            Function(
-                Body,
-            ),
-            BlockStmt(
-                Stmts(
-                    3,
-                ),
-            ),
-            Stmt(
-                Try,
-            ),
-            TryStmt(
-                Handler,
-            ),
-            CatchClause(
-                Body,
-            ),
-            BlockStmt(
-                Stmts(
-                    1,
-                ),
-            ),
-            Stmt(
-                If,
-            ),
-            IfStmt(
-                Cons,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    0,
-                ),
-            ),
-            Stmt(
-                Try,
-            ),
-            TryStmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    0,
-                ),
-            ),
-            Stmt(
-                Expr,
-            ),
-            ExprStmt(
-                Expr,
-            ),
-            Expr(
-                Call,
-            ),
-        ],
-        span: Span {
-            lo: BytePos(
-                1758,
-            ),
-            hi: BytePos(
-                1778,
-            ),
-            ctxt: #0,
+        kind: If {
+            then: EffectsBlock {
+                effects: [
+                    MemberCall {
+                        obj: FreeVar(
+                            Require,
+                        ),
+                        prop: Constant(
+                            StrWord(
+                                Atom('resolve' type=inline),
+                            ),
+                        ),
+                        args: [
+                            Variable(
+                                (
+                                    Atom('pkg' type=inline),
+                                    #4,
+                                ),
+                            ),
+                        ],
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    6,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    3,
+                                ),
+                            ),
+                            Stmt(
+                                Try,
+                            ),
+                            TryStmt(
+                                Handler,
+                            ),
+                            CatchClause(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    1,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Cons,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                Try,
+                            ),
+                            TryStmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                Expr,
+                            ),
+                            ExprStmt(
+                                Expr,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                        ],
+                        span: Span {
+                            lo: BytePos(
+                                1758,
+                            ),
+                            hi: BytePos(
+                                1778,
+                            ),
+                            ctxt: #0,
+                        },
+                    },
+                    Member {
+                        obj: FreeVar(
+                            Require,
+                        ),
+                        prop: Constant(
+                            StrWord(
+                                Atom('resolve' type=inline),
+                            ),
+                        ),
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    6,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    3,
+                                ),
+                            ),
+                            Stmt(
+                                Try,
+                            ),
+                            TryStmt(
+                                Handler,
+                            ),
+                            CatchClause(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    1,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Cons,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                Try,
+                            ),
+                            TryStmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                Expr,
+                            ),
+                            ExprStmt(
+                                Expr,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                            CallExpr(
+                                Callee,
+                            ),
+                            Callee(
+                                Expr,
+                            ),
+                            Expr(
+                                Member,
+                            ),
+                        ],
+                        span: Span {
+                            lo: BytePos(
+                                1758,
+                            ),
+                            hi: BytePos(
+                                1773,
+                            ),
+                            ctxt: #0,
+                        },
+                    },
+                ],
+                ast_path: [
+                    Program(
+                        Script,
+                    ),
+                    Script(
+                        Body(
+                            6,
+                        ),
+                    ),
+                    Stmt(
+                        Decl,
+                    ),
+                    Decl(
+                        Fn,
+                    ),
+                    FnDecl(
+                        Function,
+                    ),
+                    Function(
+                        Body,
+                    ),
+                    BlockStmt(
+                        Stmts(
+                            3,
+                        ),
+                    ),
+                    Stmt(
+                        Try,
+                    ),
+                    TryStmt(
+                        Handler,
+                    ),
+                    CatchClause(
+                        Body,
+                    ),
+                    BlockStmt(
+                        Stmts(
+                            1,
+                        ),
+                    ),
+                    Stmt(
+                        If,
+                    ),
+                    IfStmt(
+                        Cons,
+                    ),
+                ],
+            },
         },
-    },
-    Member {
-        obj: FreeVar(
-            Require,
-        ),
-        prop: Constant(
-            StrWord(
-                Atom('resolve' type=inline),
-            ),
-        ),
         ast_path: [
             Program(
                 Script,
@@ -1345,52 +1517,15 @@
                 If,
             ),
             IfStmt(
-                Cons,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    0,
-                ),
-            ),
-            Stmt(
-                Try,
-            ),
-            TryStmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    0,
-                ),
-            ),
-            Stmt(
-                Expr,
-            ),
-            ExprStmt(
-                Expr,
-            ),
-            Expr(
-                Call,
-            ),
-            CallExpr(
-                Callee,
-            ),
-            Callee(
-                Expr,
-            ),
-            Expr(
-                Member,
+                Test,
             ),
         ],
         span: Span {
             lo: BytePos(
-                1758,
+                1707,
             ),
             hi: BytePos(
-                1773,
+                2154,
             ),
             ctxt: #0,
         },
@@ -2460,310 +2595,471 @@
                             ctxt: #0,
                         },
                     },
-                    MemberCall {
-                        obj: FreeVar(
-                            Other(
-                                Atom('fs' type=inline),
-                            ),
-                        ),
-                        prop: Constant(
-                            StrWord(
-                                Atom('copyFileSync' type=dynamic),
-                            ),
-                        ),
-                        args: [
-                            Variable(
-                                (
-                                    Atom('binPath' type=inline),
-                                    #4,
-                                ),
-                            ),
-                            Variable(
-                                (
-                                    Atom('binTargetPath' type=dynamic),
-                                    #7,
-                                ),
-                            ),
-                        ],
-                        ast_path: [
-                            Program(
-                                Script,
-                            ),
-                            Script(
-                                Body(
-                                    6,
-                                ),
-                            ),
-                            Stmt(
-                                Decl,
-                            ),
-                            Decl(
-                                Fn,
-                            ),
-                            FnDecl(
-                                Function,
-                            ),
-                            Function(
-                                Body,
-                            ),
-                            BlockStmt(
-                                Stmts(
-                                    6,
-                                ),
-                            ),
-                            Stmt(
-                                If,
-                            ),
-                            IfStmt(
-                                Cons,
-                            ),
-                            Stmt(
-                                Block,
-                            ),
-                            BlockStmt(
-                                Stmts(
-                                    2,
-                                ),
-                            ),
-                            Stmt(
-                                If,
-                            ),
-                            IfStmt(
-                                Cons,
-                            ),
-                            Stmt(
-                                Block,
-                            ),
-                            BlockStmt(
-                                Stmts(
-                                    0,
-                                ),
-                            ),
-                            Stmt(
-                                Expr,
-                            ),
-                            ExprStmt(
-                                Expr,
-                            ),
-                            Expr(
-                                Call,
-                            ),
-                        ],
-                        span: Span {
-                            lo: BytePos(
-                                2501,
-                            ),
-                            hi: BytePos(
-                                2540,
-                            ),
-                            ctxt: #0,
-                        },
-                    },
-                    Member {
-                        obj: FreeVar(
-                            Other(
-                                Atom('fs' type=inline),
-                            ),
-                        ),
-                        prop: Constant(
-                            StrWord(
-                                Atom('copyFileSync' type=dynamic),
-                            ),
-                        ),
-                        ast_path: [
-                            Program(
-                                Script,
-                            ),
-                            Script(
-                                Body(
-                                    6,
-                                ),
-                            ),
-                            Stmt(
-                                Decl,
-                            ),
-                            Decl(
-                                Fn,
-                            ),
-                            FnDecl(
-                                Function,
-                            ),
-                            Function(
-                                Body,
-                            ),
-                            BlockStmt(
-                                Stmts(
-                                    6,
-                                ),
-                            ),
-                            Stmt(
-                                If,
-                            ),
-                            IfStmt(
-                                Cons,
-                            ),
-                            Stmt(
-                                Block,
-                            ),
-                            BlockStmt(
-                                Stmts(
-                                    2,
-                                ),
-                            ),
-                            Stmt(
-                                If,
-                            ),
-                            IfStmt(
-                                Cons,
-                            ),
-                            Stmt(
-                                Block,
-                            ),
-                            BlockStmt(
-                                Stmts(
-                                    0,
-                                ),
-                            ),
-                            Stmt(
-                                Expr,
-                            ),
-                            ExprStmt(
-                                Expr,
-                            ),
-                            Expr(
-                                Call,
-                            ),
-                            CallExpr(
-                                Callee,
-                            ),
-                            Callee(
-                                Expr,
-                            ),
-                            Expr(
-                                Member,
-                            ),
-                        ],
-                        span: Span {
-                            lo: BytePos(
-                                2501,
-                            ),
-                            hi: BytePos(
-                                2516,
-                            ),
-                            ctxt: #0,
-                        },
-                    },
-                    MemberCall {
-                        obj: FreeVar(
-                            Other(
-                                Atom('fs' type=inline),
-                            ),
-                        ),
-                        prop: Constant(
-                            StrWord(
-                                Atom('chmodSync' type=dynamic),
-                            ),
-                        ),
-                        args: [
-                            Variable(
-                                (
-                                    Atom('binTargetPath' type=dynamic),
-                                    #7,
-                                ),
-                            ),
-                            Constant(
-                                Num(
-                                    ConstantNumber(
-                                        493.0,
+                    Conditional {
+                        condition: Not(
+                            5,
+                            MemberCall(
+                                4,
+                                FreeVar(
+                                    Other(
+                                        Atom('fs' type=inline),
                                     ),
                                 ),
-                            ),
-                        ],
-                        ast_path: [
-                            Program(
-                                Script,
-                            ),
-                            Script(
-                                Body(
-                                    6,
+                                Constant(
+                                    StrWord(
+                                        Atom('existsSync' type=dynamic),
+                                    ),
                                 ),
+                                [
+                                    Variable(
+                                        (
+                                            Atom('binTargetPath' type=dynamic),
+                                            #7,
+                                        ),
+                                    ),
+                                ],
                             ),
-                            Stmt(
-                                Decl,
-                            ),
-                            Decl(
-                                Fn,
-                            ),
-                            FnDecl(
-                                Function,
-                            ),
-                            Function(
-                                Body,
-                            ),
-                            BlockStmt(
-                                Stmts(
-                                    6,
-                                ),
-                            ),
-                            Stmt(
-                                If,
-                            ),
-                            IfStmt(
-                                Cons,
-                            ),
-                            Stmt(
-                                Block,
-                            ),
-                            BlockStmt(
-                                Stmts(
-                                    2,
-                                ),
-                            ),
-                            Stmt(
-                                If,
-                            ),
-                            IfStmt(
-                                Cons,
-                            ),
-                            Stmt(
-                                Block,
-                            ),
-                            BlockStmt(
-                                Stmts(
-                                    1,
-                                ),
-                            ),
-                            Stmt(
-                                Expr,
-                            ),
-                            ExprStmt(
-                                Expr,
-                            ),
-                            Expr(
-                                Call,
-                            ),
-                        ],
-                        span: Span {
-                            lo: BytePos(
-                                2548,
-                            ),
-                            hi: BytePos(
-                                2580,
-                            ),
-                            ctxt: #0,
+                        ),
+                        kind: If {
+                            then: EffectsBlock {
+                                effects: [
+                                    MemberCall {
+                                        obj: FreeVar(
+                                            Other(
+                                                Atom('fs' type=inline),
+                                            ),
+                                        ),
+                                        prop: Constant(
+                                            StrWord(
+                                                Atom('copyFileSync' type=dynamic),
+                                            ),
+                                        ),
+                                        args: [
+                                            Variable(
+                                                (
+                                                    Atom('binPath' type=inline),
+                                                    #4,
+                                                ),
+                                            ),
+                                            Variable(
+                                                (
+                                                    Atom('binTargetPath' type=dynamic),
+                                                    #7,
+                                                ),
+                                            ),
+                                        ],
+                                        ast_path: [
+                                            Program(
+                                                Script,
+                                            ),
+                                            Script(
+                                                Body(
+                                                    6,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                Decl,
+                                            ),
+                                            Decl(
+                                                Fn,
+                                            ),
+                                            FnDecl(
+                                                Function,
+                                            ),
+                                            Function(
+                                                Body,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    6,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                If,
+                                            ),
+                                            IfStmt(
+                                                Cons,
+                                            ),
+                                            Stmt(
+                                                Block,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    2,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                If,
+                                            ),
+                                            IfStmt(
+                                                Cons,
+                                            ),
+                                            Stmt(
+                                                Block,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    0,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                Expr,
+                                            ),
+                                            ExprStmt(
+                                                Expr,
+                                            ),
+                                            Expr(
+                                                Call,
+                                            ),
+                                        ],
+                                        span: Span {
+                                            lo: BytePos(
+                                                2501,
+                                            ),
+                                            hi: BytePos(
+                                                2540,
+                                            ),
+                                            ctxt: #0,
+                                        },
+                                    },
+                                    Member {
+                                        obj: FreeVar(
+                                            Other(
+                                                Atom('fs' type=inline),
+                                            ),
+                                        ),
+                                        prop: Constant(
+                                            StrWord(
+                                                Atom('copyFileSync' type=dynamic),
+                                            ),
+                                        ),
+                                        ast_path: [
+                                            Program(
+                                                Script,
+                                            ),
+                                            Script(
+                                                Body(
+                                                    6,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                Decl,
+                                            ),
+                                            Decl(
+                                                Fn,
+                                            ),
+                                            FnDecl(
+                                                Function,
+                                            ),
+                                            Function(
+                                                Body,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    6,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                If,
+                                            ),
+                                            IfStmt(
+                                                Cons,
+                                            ),
+                                            Stmt(
+                                                Block,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    2,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                If,
+                                            ),
+                                            IfStmt(
+                                                Cons,
+                                            ),
+                                            Stmt(
+                                                Block,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    0,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                Expr,
+                                            ),
+                                            ExprStmt(
+                                                Expr,
+                                            ),
+                                            Expr(
+                                                Call,
+                                            ),
+                                            CallExpr(
+                                                Callee,
+                                            ),
+                                            Callee(
+                                                Expr,
+                                            ),
+                                            Expr(
+                                                Member,
+                                            ),
+                                        ],
+                                        span: Span {
+                                            lo: BytePos(
+                                                2501,
+                                            ),
+                                            hi: BytePos(
+                                                2516,
+                                            ),
+                                            ctxt: #0,
+                                        },
+                                    },
+                                    MemberCall {
+                                        obj: FreeVar(
+                                            Other(
+                                                Atom('fs' type=inline),
+                                            ),
+                                        ),
+                                        prop: Constant(
+                                            StrWord(
+                                                Atom('chmodSync' type=dynamic),
+                                            ),
+                                        ),
+                                        args: [
+                                            Variable(
+                                                (
+                                                    Atom('binTargetPath' type=dynamic),
+                                                    #7,
+                                                ),
+                                            ),
+                                            Constant(
+                                                Num(
+                                                    ConstantNumber(
+                                                        493.0,
+                                                    ),
+                                                ),
+                                            ),
+                                        ],
+                                        ast_path: [
+                                            Program(
+                                                Script,
+                                            ),
+                                            Script(
+                                                Body(
+                                                    6,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                Decl,
+                                            ),
+                                            Decl(
+                                                Fn,
+                                            ),
+                                            FnDecl(
+                                                Function,
+                                            ),
+                                            Function(
+                                                Body,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    6,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                If,
+                                            ),
+                                            IfStmt(
+                                                Cons,
+                                            ),
+                                            Stmt(
+                                                Block,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    2,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                If,
+                                            ),
+                                            IfStmt(
+                                                Cons,
+                                            ),
+                                            Stmt(
+                                                Block,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    1,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                Expr,
+                                            ),
+                                            ExprStmt(
+                                                Expr,
+                                            ),
+                                            Expr(
+                                                Call,
+                                            ),
+                                        ],
+                                        span: Span {
+                                            lo: BytePos(
+                                                2548,
+                                            ),
+                                            hi: BytePos(
+                                                2580,
+                                            ),
+                                            ctxt: #0,
+                                        },
+                                    },
+                                    Member {
+                                        obj: FreeVar(
+                                            Other(
+                                                Atom('fs' type=inline),
+                                            ),
+                                        ),
+                                        prop: Constant(
+                                            StrWord(
+                                                Atom('chmodSync' type=dynamic),
+                                            ),
+                                        ),
+                                        ast_path: [
+                                            Program(
+                                                Script,
+                                            ),
+                                            Script(
+                                                Body(
+                                                    6,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                Decl,
+                                            ),
+                                            Decl(
+                                                Fn,
+                                            ),
+                                            FnDecl(
+                                                Function,
+                                            ),
+                                            Function(
+                                                Body,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    6,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                If,
+                                            ),
+                                            IfStmt(
+                                                Cons,
+                                            ),
+                                            Stmt(
+                                                Block,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    2,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                If,
+                                            ),
+                                            IfStmt(
+                                                Cons,
+                                            ),
+                                            Stmt(
+                                                Block,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    1,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                Expr,
+                                            ),
+                                            ExprStmt(
+                                                Expr,
+                                            ),
+                                            Expr(
+                                                Call,
+                                            ),
+                                            CallExpr(
+                                                Callee,
+                                            ),
+                                            Callee(
+                                                Expr,
+                                            ),
+                                            Expr(
+                                                Member,
+                                            ),
+                                        ],
+                                        span: Span {
+                                            lo: BytePos(
+                                                2548,
+                                            ),
+                                            hi: BytePos(
+                                                2560,
+                                            ),
+                                            ctxt: #0,
+                                        },
+                                    },
+                                ],
+                                ast_path: [
+                                    Program(
+                                        Script,
+                                    ),
+                                    Script(
+                                        Body(
+                                            6,
+                                        ),
+                                    ),
+                                    Stmt(
+                                        Decl,
+                                    ),
+                                    Decl(
+                                        Fn,
+                                    ),
+                                    FnDecl(
+                                        Function,
+                                    ),
+                                    Function(
+                                        Body,
+                                    ),
+                                    BlockStmt(
+                                        Stmts(
+                                            6,
+                                        ),
+                                    ),
+                                    Stmt(
+                                        If,
+                                    ),
+                                    IfStmt(
+                                        Cons,
+                                    ),
+                                    Stmt(
+                                        Block,
+                                    ),
+                                    BlockStmt(
+                                        Stmts(
+                                            2,
+                                        ),
+                                    ),
+                                    Stmt(
+                                        If,
+                                    ),
+                                    IfStmt(
+                                        Cons,
+                                    ),
+                                ],
+                            },
                         },
-                    },
-                    Member {
-                        obj: FreeVar(
-                            Other(
-                                Atom('fs' type=inline),
-                            ),
-                        ),
-                        prop: Constant(
-                            StrWord(
-                                Atom('chmodSync' type=dynamic),
-                            ),
-                        ),
                         ast_path: [
                             Program(
                                 Script,
@@ -2808,41 +3104,15 @@
                                 If,
                             ),
                             IfStmt(
-                                Cons,
-                            ),
-                            Stmt(
-                                Block,
-                            ),
-                            BlockStmt(
-                                Stmts(
-                                    1,
-                                ),
-                            ),
-                            Stmt(
-                                Expr,
-                            ),
-                            ExprStmt(
-                                Expr,
-                            ),
-                            Expr(
-                                Call,
-                            ),
-                            CallExpr(
-                                Callee,
-                            ),
-                            Callee(
-                                Expr,
-                            ),
-                            Expr(
-                                Member,
+                                Test,
                             ),
                         ],
                         span: Span {
                             lo: BytePos(
-                                2548,
+                                2458,
                             ),
                             hi: BytePos(
-                                2560,
+                                2587,
                             ),
                             ctxt: #0,
                         },

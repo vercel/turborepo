@@ -60,8 +60,16 @@
 
 *anonymous function 13543* = (...) => {"property": arguments[1], "computed": true}
 
-*anonymous function 13636* = (...) => arguments[1]["reduce"]((...) => ???*0*, arguments[0])
-- *0* unsupported expression
+*anonymous function 13636* = (...) => arguments[1]["reduce"](
+    (...) => {"type": "scalar_member_expression", "object": ???*0*, "property": ???*1*, "computed": ???*2*},
+    arguments[0]
+)
+- *0* object
+  ⚠️  pattern without value
+- *1* property
+  ⚠️  no value of this variable analysed
+- *2* computed
+  ⚠️  no value of this variable analysed
 
 *anonymous function 13891* = (...) => {"type": "scalar_unary_expression", "operator": arguments[0], "argument": arguments[1]}
 
@@ -74,8 +82,16 @@
     "alternate": arguments[2]
 }
 
-*anonymous function 14448* = (...) => arguments[1]["reduce"]((...) => ???*0*, arguments[0])
-- *0* unsupported expression
+*anonymous function 14448* = (...) => arguments[1]["reduce"](
+    (...) => {"type": "scalar_binary_expression", "left": ???*0*, "operator": ???*1*, "right": ???*2*},
+    arguments[0]
+)
+- *0* left
+  ⚠️  pattern without value
+- *1* operator
+  ⚠️  pattern without value
+- *2* right
+  ⚠️  pattern without value
 
 *anonymous function 15047* = (...) => {"type": "scalar_in_expression", "value": arguments[0], "list": arguments[1]}
 
@@ -90,8 +106,16 @@
 
 *anonymous function 16072* = (...) => {"type": "collection_expression", "expression": arguments[0]}
 
-*anonymous function 16201* = (...) => arguments[1]["reduce"]((...) => ???*0*, arguments[0])
-- *0* unsupported expression
+*anonymous function 16201* = (...) => arguments[1]["reduce"](
+    (...) => {"type": "collection_member_expression", "object": ???*0*, "property": ???*1*, "computed": ???*2*},
+    arguments[0]
+)
+- *0* object
+  ⚠️  pattern without value
+- *1* property
+  ⚠️  no value of this variable analysed
+- *2* computed
+  ⚠️  no value of this variable analysed
 
 *anonymous function 16460* = (...) => {"type": "collection_subquery_expression", "expression": arguments[0]}
 
@@ -160,8 +184,33 @@
 
 *anonymous function 5936* = (...) => {"type": "sort_expression", "expression": arguments[0], "order": arguments[1]}
 
-*anonymous function 625* = (...) => ???*0*
-- *0* unsupported expression
+*anonymous function 625* = (...) => `Expected ${(???*0* | `${???*2*} or ${???*4*}` | `${???*6*}, or ${???*12*}`)} but ${(
+      | `"${...(..., ...)["replace"](/\r/g, "\r")["replace"](/[\x00-\x0F]/g, (...) => `\x0${...[...]()}`)["replace"](/[\x10-\x1F\x7F-\x9F]/g, (...) => `\x${...[...](16)["toUpperCase"]()}`)}"`
+      | "end of input"
+    )} found.`
+- *0* ???*1*[0]
+  ⚠️  property on unknown
+- *1* unknown new expression
+- *2* ???*3*[0]
+  ⚠️  property on unknown
+- *3* unknown new expression
+- *4* ???*5*[1]
+  ⚠️  property on unknown
+- *5* unknown new expression
+- *6* ???*7*(", ")
+  ⚠️  call of unknown function
+- *7* ???*8*["join"]
+  ⚠️  property on unknown
+- *8* ???*9*(0, ???*11*)
+  ⚠️  call of unknown function
+- *9* ???*10*["slice"]
+  ⚠️  property on unknown
+- *10* unknown new expression
+- *11* unsupported expression
+- *12* ???*13*[???*14*]
+  ⚠️  property on unknown
+- *13* unknown new expression
+- *14* unsupported expression
 
 *anonymous function 6287* = (...) => {"type": "scalar_function_expression", "name": arguments[0], "arguments": arguments[1], "udf": true}
 
@@ -188,8 +237,7 @@
 *anonymous function 7869* = ???*0*
 - *0* in progress nodes limit reached
 
-*anonymous function 804* = (...) => `[${???*0*}]`
-- *0* unsupported expression
+*anonymous function 804* = (...) => `[${("^" | "")}]`
 
 *anonymous function 8139* = (...) => {"type": "string_constant", "value": arguments[0]["join"]("")}
 
@@ -205,26 +253,40 @@
 
 *anonymous function 9939* = (...) => "AND"
 
-*arrow function 13694* = (...) => ???*0*
-- *0* unsupported expression
+*arrow function 13694* = (...) => {"type": "scalar_member_expression", "object": ???*0*, "property": ???*1*, "computed": ???*2*}
+- *0* object
+  ⚠️  pattern without value
+- *1* property
+  ⚠️  no value of this variable analysed
+- *2* computed
+  ⚠️  no value of this variable analysed
 
-*arrow function 16259* = (...) => ???*0*
-- *0* unsupported expression
+*arrow function 16259* = (...) => {"type": "collection_member_expression", "object": ???*0*, "property": ???*1*, "computed": ???*2*}
+- *0* object
+  ⚠️  pattern without value
+- *1* property
+  ⚠️  no value of this variable analysed
+- *2* computed
+  ⚠️  no value of this variable analysed
 
-*arrow function 169161* = (...) => ???*0*
-- *0* unsupported expression
+*arrow function 169161* = (...) => {"type": "scalar_binary_expression", "left": ???*0*, "operator": ???*1*, "right": ???*2*}
+- *0* left
+  ⚠️  pattern without value
+- *1* operator
+  ⚠️  pattern without value
+- *2* right
+  ⚠️  pattern without value
 
 DESCRIBE_EXPECTATION_FNS = {
     "literal": (...) => `"${...[...](/\n/g, "\n")["replace"](/\r/g, "\r")["replace"](/[\x00-\x0F]/g, (...) => `\x0${...(...)["toUpperCase"]()}`)["replace"](
             /[\x10-\x1F\x7F-\x9F]/g,
             (...) => `\x${...(...)["toString"](16)["toUpperCase"]()}`
         )}"`,
-    "class": (...) => `[${???*0*}]`,
+    "class": (...) => `[${("^" | "")}]`,
     "any": (...) => "any character",
     "end": (...) => "end of input",
     "other": (...) => arguments[0]["description"]
 }
-- *0* unsupported expression
 
 alias#34 = arguments[0]
 
@@ -244,8 +306,16 @@ begin = arguments[1]
 
 body = arguments[0]
 
-buildBinaryExpression = (...) => arguments[1]["reduce"]((...) => ???*0*, arguments[0])
-- *0* unsupported expression
+buildBinaryExpression = (...) => arguments[1]["reduce"](
+    (...) => {"type": "scalar_binary_expression", "left": ???*0*, "operator": ???*1*, "right": ???*2*},
+    arguments[0]
+)
+- *0* left
+  ⚠️  pattern without value
+- *1* operator
+  ⚠️  pattern without value
+- *2* right
+  ⚠️  pattern without value
 
 ch#11 = arguments[0]
 
@@ -279,14 +349,13 @@ ctor = (...) => ???*0*
 
 describeExpectation = (...) => {
     "literal": (...) => `"${...(..., ...)["replace"](/[\x00-\x0F]/g, (...) => `\x0${...}`)["replace"](/[\x10-\x1F\x7F-\x9F]/g, (...) => `\x${...[...]()}`)}"`,
-    "class": (...) => `[${???*0*}]`,
+    "class": (...) => `[${("^" | "")}]`,
     "any": (...) => "any character",
     "end": (...) => "end of input",
     "other": (...) => arguments[0]["description"]
 }[arguments[0]["type"]](arguments[0])
-- *0* unsupported expression
 
-describeExpected = (...) => (???*0* | `${???*2*} or ${???*4*}` | ???*6*)
+describeExpected = (...) => (???*0* | `${???*2*} or ${???*4*}` | `${???*6*}, or ${???*12*}`)
 - *0* ???*1*[0]
   ⚠️  property on unknown
 - *1* unknown new expression
@@ -296,7 +365,20 @@ describeExpected = (...) => (???*0* | `${???*2*} or ${???*4*}` | ???*6*)
 - *4* ???*5*[1]
   ⚠️  property on unknown
 - *5* unknown new expression
-- *6* unsupported expression
+- *6* ???*7*(", ")
+  ⚠️  call of unknown function
+- *7* ???*8*["join"]
+  ⚠️  property on unknown
+- *8* ???*9*(0, ???*11*)
+  ⚠️  call of unknown function
+- *9* ???*10*["slice"]
+  ⚠️  property on unknown
+- *10* unknown new expression
+- *11* unsupported expression
+- *12* ???*13*[???*14*]
+  ⚠️  property on unknown
+- *13* unknown new expression
+- *14* unsupported expression
 
 describeFound = (...) => (
   | `"${...[...](/\n/g, "\n")["replace"](/\r/g, "\r")["replace"](/[\x00-\x0F]/g, (...) => `\x0${...(...)["toUpperCase"]()}`)["replace"](
@@ -738,8 +820,16 @@ peg$c161 = (...) => {"property": arguments[1], "computed": false}
 
 peg$c162 = (...) => {"property": arguments[1], "computed": true}
 
-peg$c163 = (...) => arguments[1]["reduce"]((...) => ???*0*, arguments[0])
-- *0* unsupported expression
+peg$c163 = (...) => arguments[1]["reduce"](
+    (...) => {"type": "scalar_member_expression", "object": ???*0*, "property": ???*1*, "computed": ???*2*},
+    arguments[0]
+)
+- *0* object
+  ⚠️  pattern without value
+- *1* property
+  ⚠️  no value of this variable analysed
+- *2* computed
+  ⚠️  no value of this variable analysed
 
 peg$c164 = (...) => {"type": "scalar_unary_expression", "operator": arguments[0], "argument": arguments[1]}
 
@@ -764,8 +854,16 @@ peg$c170 = "??"
 
 peg$c171 = {"type": "literal", "text": "??", "ignoreCase": false}
 
-peg$c172 = (...) => arguments[1]["reduce"]((...) => ???*0*, arguments[0])
-- *0* unsupported expression
+peg$c172 = (...) => arguments[1]["reduce"](
+    (...) => {"type": "scalar_binary_expression", "left": ???*0*, "operator": ???*1*, "right": ???*2*},
+    arguments[0]
+)
+- *0* left
+  ⚠️  pattern without value
+- *1* operator
+  ⚠️  pattern without value
+- *2* right
+  ⚠️  pattern without value
 
 peg$c173 = "="
 
@@ -852,8 +950,16 @@ peg$c207 = (...) => {"key": arguments[0], "value": arguments[1]}
 
 peg$c208 = (...) => {"type": "collection_expression", "expression": arguments[0]}
 
-peg$c209 = (...) => arguments[1]["reduce"]((...) => ???*0*, arguments[0])
-- *0* unsupported expression
+peg$c209 = (...) => arguments[1]["reduce"](
+    (...) => {"type": "collection_member_expression", "object": ???*0*, "property": ???*1*, "computed": ???*2*},
+    arguments[0]
+)
+- *0* object
+  ⚠️  pattern without value
+- *1* property
+  ⚠️  no value of this variable analysed
+- *2* computed
+  ⚠️  no value of this variable analysed
 
 peg$c21 = (...) => {"type": "sort_specification", "expressions": ???*0*}
 - *0* spread is not supported

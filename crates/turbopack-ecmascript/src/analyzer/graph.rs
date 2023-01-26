@@ -313,6 +313,7 @@ impl EvalContext {
 
     pub fn eval(&self, e: &Expr) -> JsValue {
         match e {
+            Expr::Paren(e) => self.eval(&e.expr),
             Expr::Lit(e) => JsValue::Constant(e.clone().into()),
             Expr::Ident(i) => {
                 let id = i.to_id();
@@ -334,6 +335,14 @@ impl EvalContext {
                 }
             }
 
+            Expr::Unary(UnaryExpr {
+                op: op!("!"), arg, ..
+            }) => {
+                let arg = self.eval(arg);
+
+                JsValue::logical_not(box arg)
+            }
+
             Expr::Bin(BinExpr {
                 op: op!(bin, "+"),
                 left,
@@ -353,11 +362,25 @@ impl EvalContext {
             }
 
             Expr::Bin(BinExpr {
-                op: op!("||") | op!("??"),
+                op: op!("&&"),
                 left,
                 right,
                 ..
-            }) => JsValue::alternatives(vec![self.eval(left), self.eval(right)]),
+            }) => JsValue::logical_and(vec![self.eval(left), self.eval(right)]),
+
+            Expr::Bin(BinExpr {
+                op: op!("||"),
+                left,
+                right,
+                ..
+            }) => JsValue::logical_or(vec![self.eval(left), self.eval(right)]),
+
+            Expr::Bin(BinExpr {
+                op: op!("??"),
+                left,
+                right,
+                ..
+            }) => JsValue::nullish_coalescing(vec![self.eval(left), self.eval(right)]),
 
             &Expr::Cond(CondExpr {
                 box ref cons,

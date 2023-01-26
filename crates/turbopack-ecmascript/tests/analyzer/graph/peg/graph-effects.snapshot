@@ -24797,18 +24797,174 @@
             ctxt: #0,
         },
     },
-    Member {
-        obj: Variable(
-            (
-                Atom('options' type=inline),
-                #21,
+    Conditional {
+        condition: Not(
+            2,
+            Unknown(
+                None,
+                "unsupported expression",
             ),
         ),
-        prop: Constant(
-            StrWord(
-                Atom('startRule' type=dynamic),
-            ),
-        ),
+        kind: If {
+            then: EffectsBlock {
+                effects: [
+                    Member {
+                        obj: Variable(
+                            (
+                                Atom('options' type=inline),
+                                #21,
+                            ),
+                        ),
+                        prop: Constant(
+                            StrWord(
+                                Atom('startRule' type=dynamic),
+                            ),
+                        ),
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    5,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    2,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Cons,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Cons,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                Throw,
+                            ),
+                            ThrowStmt(
+                                Arg,
+                            ),
+                            Expr(
+                                New,
+                            ),
+                            NewExpr(
+                                Args,
+                            ),
+                            ExprOrSpread(
+                                Expr,
+                            ),
+                            Expr(
+                                Bin,
+                            ),
+                            BinExpr(
+                                Left,
+                            ),
+                            Expr(
+                                Bin,
+                            ),
+                            BinExpr(
+                                Right,
+                            ),
+                            Expr(
+                                Member,
+                            ),
+                        ],
+                        span: Span {
+                            lo: BytePos(
+                                17326,
+                            ),
+                            hi: BytePos(
+                                17343,
+                            ),
+                            ctxt: #0,
+                        },
+                    },
+                ],
+                ast_path: [
+                    Program(
+                        Script,
+                    ),
+                    Script(
+                        Body(
+                            5,
+                        ),
+                    ),
+                    Stmt(
+                        Decl,
+                    ),
+                    Decl(
+                        Fn,
+                    ),
+                    FnDecl(
+                        Function,
+                    ),
+                    Function(
+                        Body,
+                    ),
+                    BlockStmt(
+                        Stmts(
+                            2,
+                        ),
+                    ),
+                    Stmt(
+                        If,
+                    ),
+                    IfStmt(
+                        Cons,
+                    ),
+                    Stmt(
+                        Block,
+                    ),
+                    BlockStmt(
+                        Stmts(
+                            0,
+                        ),
+                    ),
+                    Stmt(
+                        If,
+                    ),
+                    IfStmt(
+                        Cons,
+                    ),
+                ],
+            },
+        },
         ast_path: [
             Program(
                 Script,
@@ -24853,53 +25009,15 @@
                 If,
             ),
             IfStmt(
-                Cons,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    0,
-                ),
-            ),
-            Stmt(
-                Throw,
-            ),
-            ThrowStmt(
-                Arg,
-            ),
-            Expr(
-                New,
-            ),
-            NewExpr(
-                Args,
-            ),
-            ExprOrSpread(
-                Expr,
-            ),
-            Expr(
-                Bin,
-            ),
-            BinExpr(
-                Left,
-            ),
-            Expr(
-                Bin,
-            ),
-            BinExpr(
-                Right,
-            ),
-            Expr(
-                Member,
+                Test,
             ),
         ],
         span: Span {
             lo: BytePos(
-                17326,
+                17204,
             ),
             hi: BytePos(
-                17343,
+                17365,
             ),
             ctxt: #0,
         },
@@ -178859,307 +178977,731 @@
             ctxt: #0,
         },
     },
-    Member {
-        obj: Variable(
-            (
-                Atom('input' type=static),
-                #21,
-            ),
-        ),
-        prop: Constant(
-            StrWord(
-                Atom('length' type=static),
-            ),
-        ),
-        ast_path: [
-            Program(
-                Script,
-            ),
-            Script(
-                Body(
-                    5,
+    Conditional {
+        condition: Logical(
+            3,
+            And,
+            [
+                Unknown(
+                    None,
+                    "unsupported expression",
                 ),
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Fn,
-            ),
-            FnDecl(
-                Function,
-            ),
-            Function(
-                Body,
-            ),
-            BlockStmt(
-                Stmts(
-                    111,
+                Unknown(
+                    None,
+                    "unsupported expression",
                 ),
-            ),
-            Stmt(
-                If,
-            ),
-            IfStmt(
-                Alt,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    0,
-                ),
-            ),
-            Stmt(
-                If,
-            ),
-            IfStmt(
-                Test,
-            ),
-            Expr(
-                Bin,
-            ),
-            BinExpr(
-                Right,
-            ),
-            Expr(
-                Bin,
-            ),
-            BinExpr(
-                Right,
-            ),
-            Expr(
-                Member,
-            ),
-        ],
-        span: Span {
-            lo: BytePos(
-                169512,
-            ),
-            hi: BytePos(
-                169524,
-            ),
-            ctxt: #0,
-        },
-    },
-    Call {
-        func: Variable(
-            (
-                Atom('peg$fail' type=dynamic),
-                #21,
-            ),
+            ],
         ),
-        args: [
-            Call(
-                2,
-                Variable(
-                    (
-                        Atom('peg$endExpectation' type=dynamic),
-                        #21,
+        kind: IfElse {
+            then: EffectsBlock {
+                effects: [],
+                ast_path: [
+                    Program(
+                        Script,
                     ),
-                ),
-                [],
-            ),
-        ],
-        ast_path: [
-            Program(
-                Script,
-            ),
-            Script(
-                Body(
-                    5,
-                ),
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Fn,
-            ),
-            FnDecl(
-                Function,
-            ),
-            Function(
-                Body,
-            ),
-            BlockStmt(
-                Stmts(
-                    111,
-                ),
-            ),
-            Stmt(
-                If,
-            ),
-            IfStmt(
-                Alt,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    0,
-                ),
-            ),
-            Stmt(
-                If,
-            ),
-            IfStmt(
-                Cons,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    0,
-                ),
-            ),
-            Stmt(
-                Expr,
-            ),
-            ExprStmt(
-                Expr,
-            ),
-            Expr(
-                Call,
-            ),
-        ],
-        span: Span {
-            lo: BytePos(
-                169534,
-            ),
-            hi: BytePos(
-                169564,
-            ),
-            ctxt: #0,
-        },
-    },
-    Call {
-        func: Variable(
-            (
-                Atom('peg$endExpectation' type=dynamic),
-                #21,
-            ),
-        ),
-        args: [],
-        ast_path: [
-            Program(
-                Script,
-            ),
-            Script(
-                Body(
-                    5,
-                ),
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Fn,
-            ),
-            FnDecl(
-                Function,
-            ),
-            Function(
-                Body,
-            ),
-            BlockStmt(
-                Stmts(
-                    111,
-                ),
-            ),
-            Stmt(
-                If,
-            ),
-            IfStmt(
-                Alt,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    0,
-                ),
-            ),
-            Stmt(
-                If,
-            ),
-            IfStmt(
-                Cons,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    0,
-                ),
-            ),
-            Stmt(
-                Expr,
-            ),
-            ExprStmt(
-                Expr,
-            ),
-            Expr(
-                Call,
-            ),
-            CallExpr(
-                Args(
-                    0,
-                ),
-            ),
-            ExprOrSpread(
-                Expr,
-            ),
-            Expr(
-                Call,
-            ),
-        ],
-        span: Span {
-            lo: BytePos(
-                169543,
-            ),
-            hi: BytePos(
-                169563,
-            ),
-            ctxt: #0,
-        },
-    },
-    Call {
-        func: Variable(
-            (
-                Atom('peg$buildStructuredError' type=dynamic),
-                #21,
-            ),
-        ),
-        args: [
-            Variable(
-                (
-                    Atom('peg$maxFailExpected' type=dynamic),
-                    #21,
-                ),
-            ),
-            Alternatives(
-                6,
-                [
-                    MemberCall(
-                        4,
-                        Variable(
+                    Script(
+                        Body(
+                            5,
+                        ),
+                    ),
+                    Stmt(
+                        Decl,
+                    ),
+                    Decl(
+                        Fn,
+                    ),
+                    FnDecl(
+                        Function,
+                    ),
+                    Function(
+                        Body,
+                    ),
+                    BlockStmt(
+                        Stmts(
+                            111,
+                        ),
+                    ),
+                    Stmt(
+                        If,
+                    ),
+                    IfStmt(
+                        Cons,
+                    ),
+                ],
+            },
+            else: EffectsBlock {
+                effects: [
+                    Member {
+                        obj: Variable(
                             (
                                 Atom('input' type=static),
                                 #21,
                             ),
                         ),
-                        Constant(
+                        prop: Constant(
+                            StrWord(
+                                Atom('length' type=static),
+                            ),
+                        ),
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    5,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    111,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Alt,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Test,
+                            ),
+                            Expr(
+                                Bin,
+                            ),
+                            BinExpr(
+                                Right,
+                            ),
+                            Expr(
+                                Bin,
+                            ),
+                            BinExpr(
+                                Right,
+                            ),
+                            Expr(
+                                Member,
+                            ),
+                        ],
+                        span: Span {
+                            lo: BytePos(
+                                169512,
+                            ),
+                            hi: BytePos(
+                                169524,
+                            ),
+                            ctxt: #0,
+                        },
+                    },
+                    Conditional {
+                        condition: Logical(
+                            3,
+                            And,
+                            [
+                                Unknown(
+                                    None,
+                                    "unsupported expression",
+                                ),
+                                Unknown(
+                                    None,
+                                    "unsupported expression",
+                                ),
+                            ],
+                        ),
+                        kind: If {
+                            then: EffectsBlock {
+                                effects: [
+                                    Call {
+                                        func: Variable(
+                                            (
+                                                Atom('peg$fail' type=dynamic),
+                                                #21,
+                                            ),
+                                        ),
+                                        args: [
+                                            Call(
+                                                2,
+                                                Variable(
+                                                    (
+                                                        Atom('peg$endExpectation' type=dynamic),
+                                                        #21,
+                                                    ),
+                                                ),
+                                                [],
+                                            ),
+                                        ],
+                                        ast_path: [
+                                            Program(
+                                                Script,
+                                            ),
+                                            Script(
+                                                Body(
+                                                    5,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                Decl,
+                                            ),
+                                            Decl(
+                                                Fn,
+                                            ),
+                                            FnDecl(
+                                                Function,
+                                            ),
+                                            Function(
+                                                Body,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    111,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                If,
+                                            ),
+                                            IfStmt(
+                                                Alt,
+                                            ),
+                                            Stmt(
+                                                Block,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    0,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                If,
+                                            ),
+                                            IfStmt(
+                                                Cons,
+                                            ),
+                                            Stmt(
+                                                Block,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    0,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                Expr,
+                                            ),
+                                            ExprStmt(
+                                                Expr,
+                                            ),
+                                            Expr(
+                                                Call,
+                                            ),
+                                        ],
+                                        span: Span {
+                                            lo: BytePos(
+                                                169534,
+                                            ),
+                                            hi: BytePos(
+                                                169564,
+                                            ),
+                                            ctxt: #0,
+                                        },
+                                    },
+                                    Call {
+                                        func: Variable(
+                                            (
+                                                Atom('peg$endExpectation' type=dynamic),
+                                                #21,
+                                            ),
+                                        ),
+                                        args: [],
+                                        ast_path: [
+                                            Program(
+                                                Script,
+                                            ),
+                                            Script(
+                                                Body(
+                                                    5,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                Decl,
+                                            ),
+                                            Decl(
+                                                Fn,
+                                            ),
+                                            FnDecl(
+                                                Function,
+                                            ),
+                                            Function(
+                                                Body,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    111,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                If,
+                                            ),
+                                            IfStmt(
+                                                Alt,
+                                            ),
+                                            Stmt(
+                                                Block,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    0,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                If,
+                                            ),
+                                            IfStmt(
+                                                Cons,
+                                            ),
+                                            Stmt(
+                                                Block,
+                                            ),
+                                            BlockStmt(
+                                                Stmts(
+                                                    0,
+                                                ),
+                                            ),
+                                            Stmt(
+                                                Expr,
+                                            ),
+                                            ExprStmt(
+                                                Expr,
+                                            ),
+                                            Expr(
+                                                Call,
+                                            ),
+                                            CallExpr(
+                                                Args(
+                                                    0,
+                                                ),
+                                            ),
+                                            ExprOrSpread(
+                                                Expr,
+                                            ),
+                                            Expr(
+                                                Call,
+                                            ),
+                                        ],
+                                        span: Span {
+                                            lo: BytePos(
+                                                169543,
+                                            ),
+                                            hi: BytePos(
+                                                169563,
+                                            ),
+                                            ctxt: #0,
+                                        },
+                                    },
+                                ],
+                                ast_path: [
+                                    Program(
+                                        Script,
+                                    ),
+                                    Script(
+                                        Body(
+                                            5,
+                                        ),
+                                    ),
+                                    Stmt(
+                                        Decl,
+                                    ),
+                                    Decl(
+                                        Fn,
+                                    ),
+                                    FnDecl(
+                                        Function,
+                                    ),
+                                    Function(
+                                        Body,
+                                    ),
+                                    BlockStmt(
+                                        Stmts(
+                                            111,
+                                        ),
+                                    ),
+                                    Stmt(
+                                        If,
+                                    ),
+                                    IfStmt(
+                                        Alt,
+                                    ),
+                                    Stmt(
+                                        Block,
+                                    ),
+                                    BlockStmt(
+                                        Stmts(
+                                            0,
+                                        ),
+                                    ),
+                                    Stmt(
+                                        If,
+                                    ),
+                                    IfStmt(
+                                        Cons,
+                                    ),
+                                ],
+                            },
+                        },
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    5,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    111,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Alt,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Test,
+                            ),
+                        ],
+                        span: Span {
+                            lo: BytePos(
+                                169465,
+                            ),
+                            hi: BytePos(
+                                169571,
+                            ),
+                            ctxt: #0,
+                        },
+                    },
+                    Call {
+                        func: Variable(
+                            (
+                                Atom('peg$buildStructuredError' type=dynamic),
+                                #21,
+                            ),
+                        ),
+                        args: [
+                            Variable(
+                                (
+                                    Atom('peg$maxFailExpected' type=dynamic),
+                                    #21,
+                                ),
+                            ),
+                            Alternatives(
+                                6,
+                                [
+                                    MemberCall(
+                                        4,
+                                        Variable(
+                                            (
+                                                Atom('input' type=static),
+                                                #21,
+                                            ),
+                                        ),
+                                        Constant(
+                                            StrWord(
+                                                Atom('charAt' type=inline),
+                                            ),
+                                        ),
+                                        [
+                                            Variable(
+                                                (
+                                                    Atom('peg$maxFailPos' type=dynamic),
+                                                    #21,
+                                                ),
+                                            ),
+                                        ],
+                                    ),
+                                    Constant(
+                                        Null,
+                                    ),
+                                ],
+                            ),
+                            Alternatives(
+                                11,
+                                [
+                                    Call(
+                                        6,
+                                        Variable(
+                                            (
+                                                Atom('peg$computeLocation' type=dynamic),
+                                                #21,
+                                            ),
+                                        ),
+                                        [
+                                            Variable(
+                                                (
+                                                    Atom('peg$maxFailPos' type=dynamic),
+                                                    #21,
+                                                ),
+                                            ),
+                                            Add(
+                                                3,
+                                                [
+                                                    Variable(
+                                                        (
+                                                            Atom('peg$maxFailPos' type=dynamic),
+                                                            #21,
+                                                        ),
+                                                    ),
+                                                    Constant(
+                                                        Num(
+                                                            ConstantNumber(
+                                                                1.0,
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ],
+                                            ),
+                                        ],
+                                    ),
+                                    Call(
+                                        4,
+                                        Variable(
+                                            (
+                                                Atom('peg$computeLocation' type=dynamic),
+                                                #21,
+                                            ),
+                                        ),
+                                        [
+                                            Variable(
+                                                (
+                                                    Atom('peg$maxFailPos' type=dynamic),
+                                                    #21,
+                                                ),
+                                            ),
+                                            Variable(
+                                                (
+                                                    Atom('peg$maxFailPos' type=dynamic),
+                                                    #21,
+                                                ),
+                                            ),
+                                        ],
+                                    ),
+                                ],
+                            ),
+                        ],
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    5,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    111,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Alt,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    1,
+                                ),
+                            ),
+                            Stmt(
+                                Throw,
+                            ),
+                            ThrowStmt(
+                                Arg,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                        ],
+                        span: Span {
+                            lo: BytePos(
+                                169583,
+                            ),
+                            hi: BytePos(
+                                169880,
+                            ),
+                            ctxt: #0,
+                        },
+                    },
+                    Member {
+                        obj: Variable(
+                            (
+                                Atom('input' type=static),
+                                #21,
+                            ),
+                        ),
+                        prop: Constant(
+                            StrWord(
+                                Atom('length' type=static),
+                            ),
+                        ),
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    5,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    111,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Alt,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    1,
+                                ),
+                            ),
+                            Stmt(
+                                Throw,
+                            ),
+                            ThrowStmt(
+                                Arg,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                            CallExpr(
+                                Args(
+                                    1,
+                                ),
+                            ),
+                            ExprOrSpread(
+                                Expr,
+                            ),
+                            Expr(
+                                Cond,
+                            ),
+                            CondExpr(
+                                Test,
+                            ),
+                            Expr(
+                                Bin,
+                            ),
+                            BinExpr(
+                                Right,
+                            ),
+                            Expr(
+                                Member,
+                            ),
+                        ],
+                        span: Span {
+                            lo: BytePos(
+                                169659,
+                            ),
+                            hi: BytePos(
+                                169671,
+                            ),
+                            ctxt: #0,
+                        },
+                    },
+                    MemberCall {
+                        obj: Variable(
+                            (
+                                Atom('input' type=static),
+                                #21,
+                            ),
+                        ),
+                        prop: Constant(
                             StrWord(
                                 Atom('charAt' type=inline),
                             ),
                         ),
-                        [
+                        args: [
                             Variable(
                                 (
                                     Atom('peg$maxFailPos' type=dynamic),
@@ -179167,24 +179709,284 @@
                                 ),
                             ),
                         ],
-                    ),
-                    Constant(
-                        Null,
-                    ),
-                ],
-            ),
-            Alternatives(
-                11,
-                [
-                    Call(
-                        6,
-                        Variable(
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    5,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    111,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Alt,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    1,
+                                ),
+                            ),
+                            Stmt(
+                                Throw,
+                            ),
+                            ThrowStmt(
+                                Arg,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                            CallExpr(
+                                Args(
+                                    1,
+                                ),
+                            ),
+                            ExprOrSpread(
+                                Expr,
+                            ),
+                            Expr(
+                                Cond,
+                            ),
+                            CondExpr(
+                                Cons,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                        ],
+                        span: Span {
+                            lo: BytePos(
+                                169674,
+                            ),
+                            hi: BytePos(
+                                169702,
+                            ),
+                            ctxt: #0,
+                        },
+                    },
+                    Member {
+                        obj: Variable(
+                            (
+                                Atom('input' type=static),
+                                #21,
+                            ),
+                        ),
+                        prop: Constant(
+                            StrWord(
+                                Atom('charAt' type=inline),
+                            ),
+                        ),
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    5,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    111,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Alt,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    1,
+                                ),
+                            ),
+                            Stmt(
+                                Throw,
+                            ),
+                            ThrowStmt(
+                                Arg,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                            CallExpr(
+                                Args(
+                                    1,
+                                ),
+                            ),
+                            ExprOrSpread(
+                                Expr,
+                            ),
+                            Expr(
+                                Cond,
+                            ),
+                            CondExpr(
+                                Cons,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                            CallExpr(
+                                Callee,
+                            ),
+                            Callee(
+                                Expr,
+                            ),
+                            Expr(
+                                Member,
+                            ),
+                        ],
+                        span: Span {
+                            lo: BytePos(
+                                169674,
+                            ),
+                            hi: BytePos(
+                                169686,
+                            ),
+                            ctxt: #0,
+                        },
+                    },
+                    Member {
+                        obj: Variable(
+                            (
+                                Atom('input' type=static),
+                                #21,
+                            ),
+                        ),
+                        prop: Constant(
+                            StrWord(
+                                Atom('length' type=static),
+                            ),
+                        ),
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    5,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    111,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Alt,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    1,
+                                ),
+                            ),
+                            Stmt(
+                                Throw,
+                            ),
+                            ThrowStmt(
+                                Arg,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                            CallExpr(
+                                Args(
+                                    2,
+                                ),
+                            ),
+                            ExprOrSpread(
+                                Expr,
+                            ),
+                            Expr(
+                                Cond,
+                            ),
+                            CondExpr(
+                                Test,
+                            ),
+                            Expr(
+                                Bin,
+                            ),
+                            BinExpr(
+                                Right,
+                            ),
+                            Expr(
+                                Member,
+                            ),
+                        ],
+                        span: Span {
+                            lo: BytePos(
+                                169734,
+                            ),
+                            hi: BytePos(
+                                169746,
+                            ),
+                            ctxt: #0,
+                        },
+                    },
+                    Call {
+                        func: Variable(
                             (
                                 Atom('peg$computeLocation' type=dynamic),
                                 #21,
                             ),
                         ),
-                        [
+                        args: [
                             Variable(
                                 (
                                     Atom('peg$maxFailPos' type=dynamic),
@@ -179210,16 +180012,91 @@
                                 ],
                             ),
                         ],
-                    ),
-                    Call(
-                        4,
-                        Variable(
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    5,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    111,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Alt,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    1,
+                                ),
+                            ),
+                            Stmt(
+                                Throw,
+                            ),
+                            ThrowStmt(
+                                Arg,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                            CallExpr(
+                                Args(
+                                    2,
+                                ),
+                            ),
+                            ExprOrSpread(
+                                Expr,
+                            ),
+                            Expr(
+                                Cond,
+                            ),
+                            CondExpr(
+                                Cons,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                        ],
+                        span: Span {
+                            lo: BytePos(
+                                169757,
+                            ),
+                            hi: BytePos(
+                                169812,
+                            ),
+                            ctxt: #0,
+                        },
+                    },
+                    Call {
+                        func: Variable(
                             (
                                 Atom('peg$computeLocation' type=dynamic),
                                 #21,
                             ),
                         ),
-                        [
+                        args: [
                             Variable(
                                 (
                                     Atom('peg$maxFailPos' type=dynamic),
@@ -179233,586 +180110,119 @@
                                 ),
                             ),
                         ],
-                    ),
-                ],
-            ),
-        ],
-        ast_path: [
-            Program(
-                Script,
-            ),
-            Script(
-                Body(
-                    5,
-                ),
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Fn,
-            ),
-            FnDecl(
-                Function,
-            ),
-            Function(
-                Body,
-            ),
-            BlockStmt(
-                Stmts(
-                    111,
-                ),
-            ),
-            Stmt(
-                If,
-            ),
-            IfStmt(
-                Alt,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    1,
-                ),
-            ),
-            Stmt(
-                Throw,
-            ),
-            ThrowStmt(
-                Arg,
-            ),
-            Expr(
-                Call,
-            ),
-        ],
-        span: Span {
-            lo: BytePos(
-                169583,
-            ),
-            hi: BytePos(
-                169880,
-            ),
-            ctxt: #0,
-        },
-    },
-    Member {
-        obj: Variable(
-            (
-                Atom('input' type=static),
-                #21,
-            ),
-        ),
-        prop: Constant(
-            StrWord(
-                Atom('length' type=static),
-            ),
-        ),
-        ast_path: [
-            Program(
-                Script,
-            ),
-            Script(
-                Body(
-                    5,
-                ),
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Fn,
-            ),
-            FnDecl(
-                Function,
-            ),
-            Function(
-                Body,
-            ),
-            BlockStmt(
-                Stmts(
-                    111,
-                ),
-            ),
-            Stmt(
-                If,
-            ),
-            IfStmt(
-                Alt,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    1,
-                ),
-            ),
-            Stmt(
-                Throw,
-            ),
-            ThrowStmt(
-                Arg,
-            ),
-            Expr(
-                Call,
-            ),
-            CallExpr(
-                Args(
-                    1,
-                ),
-            ),
-            ExprOrSpread(
-                Expr,
-            ),
-            Expr(
-                Cond,
-            ),
-            CondExpr(
-                Test,
-            ),
-            Expr(
-                Bin,
-            ),
-            BinExpr(
-                Right,
-            ),
-            Expr(
-                Member,
-            ),
-        ],
-        span: Span {
-            lo: BytePos(
-                169659,
-            ),
-            hi: BytePos(
-                169671,
-            ),
-            ctxt: #0,
-        },
-    },
-    MemberCall {
-        obj: Variable(
-            (
-                Atom('input' type=static),
-                #21,
-            ),
-        ),
-        prop: Constant(
-            StrWord(
-                Atom('charAt' type=inline),
-            ),
-        ),
-        args: [
-            Variable(
-                (
-                    Atom('peg$maxFailPos' type=dynamic),
-                    #21,
-                ),
-            ),
-        ],
-        ast_path: [
-            Program(
-                Script,
-            ),
-            Script(
-                Body(
-                    5,
-                ),
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Fn,
-            ),
-            FnDecl(
-                Function,
-            ),
-            Function(
-                Body,
-            ),
-            BlockStmt(
-                Stmts(
-                    111,
-                ),
-            ),
-            Stmt(
-                If,
-            ),
-            IfStmt(
-                Alt,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    1,
-                ),
-            ),
-            Stmt(
-                Throw,
-            ),
-            ThrowStmt(
-                Arg,
-            ),
-            Expr(
-                Call,
-            ),
-            CallExpr(
-                Args(
-                    1,
-                ),
-            ),
-            ExprOrSpread(
-                Expr,
-            ),
-            Expr(
-                Cond,
-            ),
-            CondExpr(
-                Cons,
-            ),
-            Expr(
-                Call,
-            ),
-        ],
-        span: Span {
-            lo: BytePos(
-                169674,
-            ),
-            hi: BytePos(
-                169702,
-            ),
-            ctxt: #0,
-        },
-    },
-    Member {
-        obj: Variable(
-            (
-                Atom('input' type=static),
-                #21,
-            ),
-        ),
-        prop: Constant(
-            StrWord(
-                Atom('charAt' type=inline),
-            ),
-        ),
-        ast_path: [
-            Program(
-                Script,
-            ),
-            Script(
-                Body(
-                    5,
-                ),
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Fn,
-            ),
-            FnDecl(
-                Function,
-            ),
-            Function(
-                Body,
-            ),
-            BlockStmt(
-                Stmts(
-                    111,
-                ),
-            ),
-            Stmt(
-                If,
-            ),
-            IfStmt(
-                Alt,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    1,
-                ),
-            ),
-            Stmt(
-                Throw,
-            ),
-            ThrowStmt(
-                Arg,
-            ),
-            Expr(
-                Call,
-            ),
-            CallExpr(
-                Args(
-                    1,
-                ),
-            ),
-            ExprOrSpread(
-                Expr,
-            ),
-            Expr(
-                Cond,
-            ),
-            CondExpr(
-                Cons,
-            ),
-            Expr(
-                Call,
-            ),
-            CallExpr(
-                Callee,
-            ),
-            Callee(
-                Expr,
-            ),
-            Expr(
-                Member,
-            ),
-        ],
-        span: Span {
-            lo: BytePos(
-                169674,
-            ),
-            hi: BytePos(
-                169686,
-            ),
-            ctxt: #0,
-        },
-    },
-    Member {
-        obj: Variable(
-            (
-                Atom('input' type=static),
-                #21,
-            ),
-        ),
-        prop: Constant(
-            StrWord(
-                Atom('length' type=static),
-            ),
-        ),
-        ast_path: [
-            Program(
-                Script,
-            ),
-            Script(
-                Body(
-                    5,
-                ),
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Fn,
-            ),
-            FnDecl(
-                Function,
-            ),
-            Function(
-                Body,
-            ),
-            BlockStmt(
-                Stmts(
-                    111,
-                ),
-            ),
-            Stmt(
-                If,
-            ),
-            IfStmt(
-                Alt,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    1,
-                ),
-            ),
-            Stmt(
-                Throw,
-            ),
-            ThrowStmt(
-                Arg,
-            ),
-            Expr(
-                Call,
-            ),
-            CallExpr(
-                Args(
-                    2,
-                ),
-            ),
-            ExprOrSpread(
-                Expr,
-            ),
-            Expr(
-                Cond,
-            ),
-            CondExpr(
-                Test,
-            ),
-            Expr(
-                Bin,
-            ),
-            BinExpr(
-                Right,
-            ),
-            Expr(
-                Member,
-            ),
-        ],
-        span: Span {
-            lo: BytePos(
-                169734,
-            ),
-            hi: BytePos(
-                169746,
-            ),
-            ctxt: #0,
-        },
-    },
-    Call {
-        func: Variable(
-            (
-                Atom('peg$computeLocation' type=dynamic),
-                #21,
-            ),
-        ),
-        args: [
-            Variable(
-                (
-                    Atom('peg$maxFailPos' type=dynamic),
-                    #21,
-                ),
-            ),
-            Add(
-                3,
-                [
-                    Variable(
-                        (
-                            Atom('peg$maxFailPos' type=dynamic),
-                            #21,
-                        ),
-                    ),
-                    Constant(
-                        Num(
-                            ConstantNumber(
-                                1.0,
+                        ast_path: [
+                            Program(
+                                Script,
                             ),
+                            Script(
+                                Body(
+                                    5,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    111,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Alt,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    1,
+                                ),
+                            ),
+                            Stmt(
+                                Throw,
+                            ),
+                            ThrowStmt(
+                                Arg,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                            CallExpr(
+                                Args(
+                                    2,
+                                ),
+                            ),
+                            ExprOrSpread(
+                                Expr,
+                            ),
+                            Expr(
+                                Cond,
+                            ),
+                            CondExpr(
+                                Alt,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                        ],
+                        span: Span {
+                            lo: BytePos(
+                                169823,
+                            ),
+                            hi: BytePos(
+                                169874,
+                            ),
+                            ctxt: #0,
+                        },
+                    },
+                ],
+                ast_path: [
+                    Program(
+                        Script,
+                    ),
+                    Script(
+                        Body(
+                            5,
                         ),
                     ),
+                    Stmt(
+                        Decl,
+                    ),
+                    Decl(
+                        Fn,
+                    ),
+                    FnDecl(
+                        Function,
+                    ),
+                    Function(
+                        Body,
+                    ),
+                    BlockStmt(
+                        Stmts(
+                            111,
+                        ),
+                    ),
+                    Stmt(
+                        If,
+                    ),
+                    IfStmt(
+                        Alt,
+                    ),
                 ],
-            ),
-        ],
-        ast_path: [
-            Program(
-                Script,
-            ),
-            Script(
-                Body(
-                    5,
-                ),
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Fn,
-            ),
-            FnDecl(
-                Function,
-            ),
-            Function(
-                Body,
-            ),
-            BlockStmt(
-                Stmts(
-                    111,
-                ),
-            ),
-            Stmt(
-                If,
-            ),
-            IfStmt(
-                Alt,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    1,
-                ),
-            ),
-            Stmt(
-                Throw,
-            ),
-            ThrowStmt(
-                Arg,
-            ),
-            Expr(
-                Call,
-            ),
-            CallExpr(
-                Args(
-                    2,
-                ),
-            ),
-            ExprOrSpread(
-                Expr,
-            ),
-            Expr(
-                Cond,
-            ),
-            CondExpr(
-                Cons,
-            ),
-            Expr(
-                Call,
-            ),
-        ],
-        span: Span {
-            lo: BytePos(
-                169757,
-            ),
-            hi: BytePos(
-                169812,
-            ),
-            ctxt: #0,
+            },
         },
-    },
-    Call {
-        func: Variable(
-            (
-                Atom('peg$computeLocation' type=dynamic),
-                #21,
-            ),
-        ),
-        args: [
-            Variable(
-                (
-                    Atom('peg$maxFailPos' type=dynamic),
-                    #21,
-                ),
-            ),
-            Variable(
-                (
-                    Atom('peg$maxFailPos' type=dynamic),
-                    #21,
-                ),
-            ),
-        ],
         ast_path: [
             Program(
                 Script,
@@ -179843,49 +180253,15 @@
                 If,
             ),
             IfStmt(
-                Alt,
-            ),
-            Stmt(
-                Block,
-            ),
-            BlockStmt(
-                Stmts(
-                    1,
-                ),
-            ),
-            Stmt(
-                Throw,
-            ),
-            ThrowStmt(
-                Arg,
-            ),
-            Expr(
-                Call,
-            ),
-            CallExpr(
-                Args(
-                    2,
-                ),
-            ),
-            ExprOrSpread(
-                Expr,
-            ),
-            Expr(
-                Cond,
-            ),
-            CondExpr(
-                Alt,
-            ),
-            Expr(
-                Call,
+                Test,
             ),
         ],
         span: Span {
             lo: BytePos(
-                169823,
+                169362,
             ),
             hi: BytePos(
-                169874,
+                169885,
             ),
             ctxt: #0,
         },

@@ -180,6 +180,30 @@ pub struct ModuleValue {
     pub annotations: ImportAnnotations,
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum LogicalOperator {
+    And,
+    Or,
+    NullishCoalescing,
+}
+
+impl LogicalOperator {
+    fn joiner(&self) -> &'static str {
+        match self {
+            LogicalOperator::And => " && ",
+            LogicalOperator::Or => " || ",
+            LogicalOperator::NullishCoalescing => " ?? ",
+        }
+    }
+    fn multi_line_joiner(&self) -> &'static str {
+        match self {
+            LogicalOperator::And => "&& ",
+            LogicalOperator::Or => "|| ",
+            LogicalOperator::NullishCoalescing => "?? ",
+        }
+    }
+}
+
 /// TODO: Use `Arc`
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum JsValue {
@@ -207,6 +231,12 @@ pub enum JsValue {
     /// This can be converted to [JsValue::Concat] if the type of the variable
     /// is string.
     Add(usize, Vec<JsValue>),
+
+    /// Logical negation `!expr`
+    Not(usize, Box<JsValue>),
+
+    /// Logical operator chain `expr && expr`
+    Logical(usize, LogicalOperator, Vec<JsValue>),
 
     /// `(callee, args)`
     Call(usize, Box<JsValue>, Vec<JsValue>),
@@ -350,6 +380,15 @@ impl Display for JsValue {
                     .collect::<Vec<_>>()
                     .join(" + ")
             ),
+            JsValue::Not(_, value) => write!(f, "!({})", value),
+            JsValue::Logical(_, op, list) => write!(
+                f,
+                "({})",
+                list.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(op.joiner())
+            ),
             JsValue::Call(_, callee, list) => write!(
                 f,
                 "{}({})",
@@ -451,6 +490,26 @@ impl JsValue {
         Self::Add(1 + total_nodes(&list), list)
     }
 
+    pub fn logical_and(list: Vec<JsValue>) -> Self {
+        Self::Logical(1 + total_nodes(&list), LogicalOperator::And, list)
+    }
+
+    pub fn logical_or(list: Vec<JsValue>) -> Self {
+        Self::Logical(1 + total_nodes(&list), LogicalOperator::Or, list)
+    }
+
+    pub fn nullish_coalescing(list: Vec<JsValue>) -> Self {
+        Self::Logical(
+            1 + total_nodes(&list),
+            LogicalOperator::NullishCoalescing,
+            list,
+        )
+    }
+
+    pub fn logical_not(inner: Box<JsValue>) -> Self {
+        Self::Not(1 + inner.total_nodes(), inner)
+    }
+
     pub fn array(list: Vec<JsValue>) -> Self {
         Self::Array(1 + total_nodes(&list), list)
     }
@@ -505,6 +564,8 @@ impl JsValue {
             | JsValue::Alternatives(c, _)
             | JsValue::Concat(c, _)
             | JsValue::Add(c, _)
+            | JsValue::Not(c, _)
+            | JsValue::Logical(c, _, _)
             | JsValue::Call(c, _, _)
             | JsValue::MemberCall(c, _, _, _)
             | JsValue::Member(c, _, _)
@@ -527,8 +588,13 @@ impl JsValue {
             JsValue::Array(c, list)
             | JsValue::Alternatives(c, list)
             | JsValue::Concat(c, list)
-            | JsValue::Add(c, list) => {
+            | JsValue::Add(c, list)
+            | JsValue::Logical(c, _, list) => {
                 *c = 1 + total_nodes(list);
+            }
+
+            JsValue::Not(c, r) => {
+                *c = 1 + r.total_nodes();
             }
 
             JsValue::Object(c, props) => {
@@ -579,9 +645,13 @@ impl JsValue {
                 JsValue::Array(_, list)
                 | JsValue::Alternatives(_, list)
                 | JsValue::Concat(_, list)
+                | JsValue::Logical(_, _, list)
                 | JsValue::Add(_, list) => {
                     make_max_unknown(list.iter_mut());
                     self.update_total_nodes();
+                }
+                JsValue::Not(_, r) => {
+                    r.make_unknown_without_content("node limit reached");
                 }
                 JsValue::Object(_, list) => {
                     make_max_unknown(list.iter_mut().flat_map(|v| match v {
@@ -785,6 +855,28 @@ impl JsValue {
                     "",
                     "+ "
                 )
+            ),
+            JsValue::Logical(_, op, list) => format!(
+                "({})",
+                pretty_join(
+                    &list
+                        .iter()
+                        .map(|v| v.explain_internal_inner(
+                            hints,
+                            indent_depth + 1,
+                            depth,
+                            unknown_depth
+                        ))
+                        .collect::<Vec<_>>(),
+                    indent_depth,
+                    op.joiner(),
+                    "",
+                    op.multi_line_joiner()
+                )
+            ),
+            JsValue::Not(_, value) => format!(
+                "!({})",
+                value.explain_internal_inner(hints, indent_depth, depth, unknown_depth)
             ),
             JsValue::Call(_, callee, list) => {
                 format!(
@@ -1069,7 +1161,9 @@ impl JsValue {
             | JsValue::Object(..)
             | JsValue::Alternatives(..)
             | JsValue::Concat(..)
-            | JsValue::Add(..) => {
+            | JsValue::Add(..)
+            | JsValue::Not(..)
+            | JsValue::Logical(..) => {
                 let mut result = false;
                 self.for_each_children(&mut |child| {
                     result = result || child.has_placeholder();
@@ -1096,8 +1190,24 @@ impl JsValue {
             | JsValue::WellKnownFunction(..)
             | JsValue::Function(..) => Some(true),
             JsValue::Alternatives(_, list) => merge_if_known(list.iter().map(|x| x.is_truthy())),
+            JsValue::Not(_, value) => value.is_truthy().map(|x| !x),
+            JsValue::Logical(_, op, list) => match op {
+                LogicalOperator::And => all_if_known(list.iter().map(|x| x.is_truthy())),
+                LogicalOperator::Or => any_if_known(list.iter().map(|x| x.is_truthy())),
+                LogicalOperator::NullishCoalescing => {
+                    if all_if_known(list[..list.len() - 1].iter().map(|x| x.is_nullish()))? {
+                        list.last().unwrap().is_truthy()
+                    } else {
+                        Some(false)
+                    }
+                }
+            },
             _ => None,
         }
+    }
+
+    pub fn is_falsy(&self) -> Option<bool> {
+        self.is_truthy().map(|x| !x)
     }
 
     pub fn is_nullish(&self) -> Option<bool> {
@@ -1109,8 +1219,20 @@ impl JsValue {
             | JsValue::Object(..)
             | JsValue::WellKnownObject(..)
             | JsValue::WellKnownFunction(..)
+            | JsValue::Not(..)
             | JsValue::Function(..) => Some(false),
             JsValue::Alternatives(_, list) => merge_if_known(list.iter().map(|x| x.is_nullish())),
+            JsValue::Logical(_, op, list) => match op {
+                LogicalOperator::And => {
+                    shortcircut_if_known(list, JsValue::is_truthy, JsValue::is_nullish)
+                }
+                LogicalOperator::Or => {
+                    shortcircut_if_known(list, JsValue::is_falsy, JsValue::is_nullish)
+                }
+                LogicalOperator::NullishCoalescing => {
+                    all_if_known(list.iter().map(|x| x.is_nullish()))
+                }
+            },
             _ => None,
         }
     }
@@ -1122,6 +1244,17 @@ impl JsValue {
             JsValue::Alternatives(_, list) => {
                 merge_if_known(list.iter().map(|x| x.is_empty_string()))
             }
+            JsValue::Logical(_, op, list) => match op {
+                LogicalOperator::And => {
+                    shortcircut_if_known(list, JsValue::is_truthy, JsValue::is_empty_string)
+                }
+                LogicalOperator::Or => {
+                    shortcircut_if_known(list, JsValue::is_falsy, JsValue::is_empty_string)
+                }
+                LogicalOperator::NullishCoalescing => {
+                    shortcircut_if_known(list, JsValue::is_nullish, JsValue::is_empty_string)
+                }
+            },
             JsValue::Url(..)
             | JsValue::Array(..)
             | JsValue::Object(..)
@@ -1173,12 +1306,37 @@ fn all_if_known(list: impl IntoIterator<Item = Option<bool>>) -> Option<bool> {
     }
 }
 
+fn any_if_known(list: impl IntoIterator<Item = Option<bool>>) -> Option<bool> {
+    all_if_known(list.into_iter().map(|x| x.map(|x| !x))).map(|x| !x)
+}
+
+fn shortcircut_if_known<T: Copy>(
+    list: impl IntoIterator<Item = T>,
+    use_item: impl Fn(T) -> Option<bool>,
+    item_value: impl FnOnce(T) -> Option<bool>,
+) -> Option<bool> {
+    let mut it = list.into_iter().peekable();
+    while let Some(item) = it.next() {
+        if it.peek().is_none() {
+            return item_value(item);
+        } else {
+            match use_item(item) {
+                Some(true) => return item_value(item),
+                None => return None,
+                _ => {}
+            }
+        }
+    }
+    None
+}
+
 macro_rules! for_each_children_async {
     ($value:expr, $visit_fn:expr, $($args:expr),+) => {
         Ok(match &mut $value {
             JsValue::Alternatives(_, list)
             | JsValue::Concat(_, list)
             | JsValue::Add(_, list)
+            | JsValue::Logical(_, _, list)
             | JsValue::Array(_, list) => {
                 let mut modified = false;
                 for item in list.iter_mut() {
@@ -1253,6 +1411,13 @@ macro_rules! for_each_children_async {
             JsValue::Function(_, box return_value) => {
                 let (new_return_value, modified) = $visit_fn(take(return_value), $($args),+).await?;
                 *return_value = new_return_value;
+
+                $value.update_total_nodes();
+                ($value, modified)
+            }
+            JsValue::Not(_, box value) => {
+                let (new_value, modified) = $visit_fn(take(value), $($args),+).await?;
+                *value = new_value;
 
                 $value.update_total_nodes();
                 ($value, modified)
@@ -1413,6 +1578,7 @@ impl JsValue {
             JsValue::Alternatives(_, list)
             | JsValue::Concat(_, list)
             | JsValue::Add(_, list)
+            | JsValue::Logical(_, _, list)
             | JsValue::Array(_, list) => {
                 let mut modified = false;
                 for item in list.iter_mut() {
@@ -1420,6 +1586,11 @@ impl JsValue {
                         modified = true
                     }
                 }
+                self.update_total_nodes();
+                modified
+            }
+            JsValue::Not(_, value) => {
+                let modified = visitor(value);
                 self.update_total_nodes();
                 modified
             }
@@ -1501,10 +1672,14 @@ impl JsValue {
             JsValue::Alternatives(_, list)
             | JsValue::Concat(_, list)
             | JsValue::Add(_, list)
+            | JsValue::Logical(_, _, list)
             | JsValue::Array(_, list) => {
                 for item in list.iter() {
                     visitor(item);
                 }
+            }
+            JsValue::Not(_, value) => {
+                visitor(value);
             }
             JsValue::Object(_, list) => {
                 for item in list.iter() {
@@ -1551,42 +1726,54 @@ impl JsValue {
         }
     }
 
-    pub fn is_string(&self) -> bool {
+    pub fn is_string(&self) -> Option<bool> {
         match self {
             JsValue::Constant(ConstantValue::StrWord(..))
             | JsValue::Constant(ConstantValue::StrAtom(..))
-            | JsValue::Concat(..) => true,
+            | JsValue::Concat(..) => Some(true),
 
             JsValue::Constant(..)
             | JsValue::Array(..)
             | JsValue::Object(..)
             | JsValue::Url(..)
             | JsValue::Module(..)
-            | JsValue::Function(..) => false,
+            | JsValue::Function(..) => Some(false),
 
-            JsValue::FreeVar(FreeVarKind::Dirname | FreeVarKind::Filename) => true,
+            JsValue::FreeVar(FreeVarKind::Dirname | FreeVarKind::Filename) => Some(true),
             JsValue::FreeVar(
                 FreeVarKind::Object
                 | FreeVarKind::Require
                 | FreeVarKind::Define
                 | FreeVarKind::Import
                 | FreeVarKind::NodeProcess,
-            ) => false,
-            JsValue::FreeVar(FreeVarKind::Other(_)) => false,
+            ) => Some(false),
+            JsValue::FreeVar(FreeVarKind::Other(_)) => None,
 
-            JsValue::Add(_, v) => v.iter().any(|v| v.is_string()),
+            JsValue::Not(..) => Some(false),
+            JsValue::Add(_, list) => any_if_known(list.iter().map(|v| v.is_string())),
+            JsValue::Logical(_, op, list) => match op {
+                LogicalOperator::And => {
+                    shortcircut_if_known(list, JsValue::is_truthy, JsValue::is_string)
+                }
+                LogicalOperator::Or => {
+                    shortcircut_if_known(list, JsValue::is_falsy, JsValue::is_string)
+                }
+                LogicalOperator::NullishCoalescing => {
+                    shortcircut_if_known(list, JsValue::is_nullish, JsValue::is_string)
+                }
+            },
 
-            JsValue::Alternatives(_, v) => v.iter().all(|v| v.is_string()),
+            JsValue::Alternatives(_, v) => merge_if_known(v.iter().map(|v| v.is_string())),
 
-            JsValue::Variable(_) | JsValue::Unknown(..) | JsValue::Argument(..) => false,
+            JsValue::Variable(_) | JsValue::Unknown(..) | JsValue::Argument(..) => None,
 
             JsValue::Call(
                 _,
                 box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
                 _,
-            ) => true,
-            JsValue::Call(..) | JsValue::MemberCall(..) | JsValue::Member(..) => false,
-            JsValue::WellKnownObject(_) | JsValue::WellKnownFunction(_) => false,
+            ) => Some(true),
+            JsValue::Call(..) | JsValue::MemberCall(..) | JsValue::Member(..) => None,
+            JsValue::WellKnownObject(_) | JsValue::WellKnownFunction(_) => Some(false),
         }
     }
 
@@ -1755,7 +1942,7 @@ impl JsValue {
                 let mut added: Vec<JsValue> = Vec::new();
                 let mut iter = take(v).into_iter();
                 while let Some(item) = iter.next() {
-                    if item.is_string() {
+                    if item.is_string() == Some(true) {
                         let mut concat = match added.len() {
                             0 => Vec::new(),
                             1 => vec![added.into_iter().next().unwrap()],
@@ -1781,6 +1968,28 @@ impl JsValue {
                     *self = added.into_iter().next().unwrap();
                 } else {
                     *v = added;
+                    self.update_total_nodes();
+                }
+            }
+            JsValue::Logical(_, op, list) => {
+                if list.iter().any(|v| {
+                    if let JsValue::Logical(_, inner_op, _) = v {
+                        inner_op == op
+                    } else {
+                        false
+                    }
+                }) {
+                    for mut v in take(list).into_iter() {
+                        if let JsValue::Logical(_, inner_op, inner_list) = &mut v {
+                            if inner_op == op {
+                                list.append(inner_list);
+                            } else {
+                                list.push(v);
+                            }
+                        } else {
+                            list.push(v);
+                        }
+                    }
                     self.update_total_nodes();
                 }
             }
@@ -1836,6 +2045,10 @@ impl JsValue {
                 lc == rc && all_similar(l, r, depth - 1)
             }
             (JsValue::Add(lc, l), JsValue::Add(rc, r)) => lc == rc && all_similar(l, r, depth - 1),
+            (JsValue::Logical(lc, lo, l), JsValue::Logical(rc, ro, r)) => {
+                lc == rc && lo == ro && all_similar(l, r, depth - 1)
+            }
+            (JsValue::Not(lc, l), JsValue::Not(rc, r)) => lc == rc && l.similar(r, depth - 1),
             (JsValue::Call(lc, lf, la), JsValue::Call(rc, rf, ra)) => {
                 lc == rc && lf.similar(rf, depth - 1) && all_similar(la, ra, depth - 1)
             }
@@ -1900,14 +2113,16 @@ impl JsValue {
 
         match self {
             JsValue::Constant(v) => Hash::hash(v, state),
-            JsValue::Array(_, v) => all_similar_hash(v, state, depth - 1),
             JsValue::Object(_, v) => all_parts_similar_hash(v, state, depth - 1),
             JsValue::Url(v) => Hash::hash(v, state),
-            JsValue::Alternatives(_, v) => all_similar_hash(v, state, depth - 1),
             JsValue::FreeVar(v) => Hash::hash(v, state),
             JsValue::Variable(v) => Hash::hash(v, state),
-            JsValue::Concat(_, v) => all_similar_hash(v, state, depth - 1),
-            JsValue::Add(_, v) => all_similar_hash(v, state, depth - 1),
+            JsValue::Array(_, v)
+            | JsValue::Alternatives(_, v)
+            | JsValue::Concat(_, v)
+            | JsValue::Add(_, v)
+            | JsValue::Logical(_, _, v) => all_similar_hash(v, state, depth - 1),
+            JsValue::Not(_, v) => v.similar_hash(state, depth - 1),
             JsValue::Call(_, a, b) => {
                 a.similar_hash(state, depth - 1);
                 all_similar_hash(b, state, depth - 1);

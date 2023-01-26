@@ -42,3 +42,17 @@ it("should evaluate process.turbopack", () => {
     import("fail");
   }
 });
+
+it("should evaluate !process.turbopack", () => {
+  if (!process.turbopack) {
+    require("fail");
+    import("fail");
+  }
+});
+
+// it("should evaluate NODE_ENV", () => {
+//   if (process.env.NODE_ENV !== "development") {
+//     require("fail");
+//     import("fail");
+//   }
+// });

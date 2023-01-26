@@ -138,8 +138,7 @@
 
 *anonymous function 5936* = (...) => {"type": "sort_expression", "expression": expression, "order": order}
 
-*anonymous function 625* = (...) => ???*0*
-- *0* unsupported expression
+*anonymous function 625* = (...) => `Expected ${describeExpected(expected)} but ${describeFound(found)} found.`
 
 *anonymous function 6287* = (...) => {"type": "scalar_function_expression", "name": name, "arguments": args, "udf": true}
 
@@ -165,8 +164,7 @@
     "value": (FreeVar(parseInt)(text(), 16) | FreeVar(parseFloat)(text()))
 }
 
-*anonymous function 804* = (...) => `[${???*0*}${escapedParts}]`
-- *0* unsupported expression
+*anonymous function 804* = (...) => `[${("^" | "")}${escapedParts}]`
 
 *anonymous function 8139* = (...) => {"type": "string_constant", "value": chars["join"]("")}
 
@@ -182,14 +180,16 @@
 
 *anonymous function 9939* = (...) => "AND"
 
-*arrow function 13694* = (...) => ???*0*
-- *0* unsupported expression
+*arrow function 13694* = (...) => {"type": "scalar_member_expression", "object": object, "property": property, "computed": computed}
 
-*arrow function 16259* = (...) => ???*0*
-- *0* unsupported expression
+*arrow function 16259* = (...) => {
+    "type": "collection_member_expression",
+    "object": object,
+    "property": property,
+    "computed": computed
+}
 
-*arrow function 169161* = (...) => ???*0*
-- *0* unsupported expression
+*arrow function 169161* = (...) => {"type": "scalar_binary_expression", "left": left, "operator": operator, "right": right}
 
 DESCRIBE_EXPECTATION_FNS = {
     "literal": *anonymous function 702*,
@@ -243,8 +243,13 @@ ctor = (...) => FreeVar(undefined)
 
 describeExpectation = (...) => DESCRIBE_EXPECTATION_FNS[expectation["type"]](expectation)
 
-describeExpected = (...) => (descriptions[0] | `${descriptions[0]} or ${descriptions[1]}` | ???*0*)
+describeExpected = (...) => (
+  | descriptions[0]
+  | `${descriptions[0]} or ${descriptions[1]}`
+  | `${descriptions["slice"](0, ???*0*)["join"](", ")}, or ${descriptions[???*1*]}`
+)
 - *0* unsupported expression
+- *1* unsupported expression
 
 describeFound = (...) => (`"${literalEscape(found)}"` | "end of input")
 

@@ -1861,10 +1861,60 @@
     (
         "*anonymous function 625*",
         Function(
-            2,
-            Unknown(
-                None,
-                "unsupported expression",
+            11,
+            Concat(
+                10,
+                [
+                    Constant(
+                        StrWord(
+                            Atom('Expected ' type=dynamic),
+                        ),
+                    ),
+                    Call(
+                        3,
+                        Variable(
+                            (
+                                Atom('describeExpected' type=dynamic),
+                                #5,
+                            ),
+                        ),
+                        [
+                            Variable(
+                                (
+                                    Atom('expected' type=dynamic),
+                                    #5,
+                                ),
+                            ),
+                        ],
+                    ),
+                    Constant(
+                        StrWord(
+                            Atom(' but ' type=inline),
+                        ),
+                    ),
+                    Call(
+                        3,
+                        Variable(
+                            (
+                                Atom('describeFound' type=dynamic),
+                                #5,
+                            ),
+                        ),
+                        [
+                            Variable(
+                                (
+                                    Atom('found' type=inline),
+                                    #5,
+                                ),
+                            ),
+                        ],
+                    ),
+                    Constant(
+                        StrWord(
+                            Atom(' found.' type=inline),
+                        ),
+                    ),
+                ],
             ),
         ),
     ),
@@ -2298,18 +2348,29 @@
     (
         "*anonymous function 804*",
         Function(
-            6,
+            8,
             Concat(
-                5,
+                7,
                 [
                     Constant(
                         StrWord(
                             Atom('[' type=inline),
                         ),
                     ),
-                    Unknown(
-                        None,
-                        "unsupported expression",
+                    Alternatives(
+                        3,
+                        [
+                            Constant(
+                                StrWord(
+                                    Atom('^' type=inline),
+                                ),
+                            ),
+                            Constant(
+                                StrWord(
+                                    Atom('' type=static),
+                                ),
+                            ),
+                        ],
                     ),
                     Variable(
                         (
@@ -2481,30 +2542,186 @@
     (
         "*arrow function 13694*",
         Function(
-            2,
-            Unknown(
-                None,
-                "unsupported expression",
+            10,
+            Object(
+                9,
+                [
+                    KeyValue(
+                        Constant(
+                            StrWord(
+                                Atom('type' type=static),
+                            ),
+                        ),
+                        Constant(
+                            StrWord(
+                                Atom('scalar_member_expression' type=dynamic),
+                            ),
+                        ),
+                    ),
+                    KeyValue(
+                        Constant(
+                            StrWord(
+                                Atom('object' type=static),
+                            ),
+                        ),
+                        Variable(
+                            (
+                                Atom('object' type=static),
+                                #61,
+                            ),
+                        ),
+                    ),
+                    KeyValue(
+                        Constant(
+                            StrWord(
+                                Atom('property' type=static),
+                            ),
+                        ),
+                        Variable(
+                            (
+                                Atom('property' type=static),
+                                #61,
+                            ),
+                        ),
+                    ),
+                    KeyValue(
+                        Constant(
+                            StrWord(
+                                Atom('computed' type=dynamic),
+                            ),
+                        ),
+                        Variable(
+                            (
+                                Atom('computed' type=dynamic),
+                                #61,
+                            ),
+                        ),
+                    ),
+                ],
             ),
         ),
     ),
     (
         "*arrow function 16259*",
         Function(
-            2,
-            Unknown(
-                None,
-                "unsupported expression",
+            10,
+            Object(
+                9,
+                [
+                    KeyValue(
+                        Constant(
+                            StrWord(
+                                Atom('type' type=static),
+                            ),
+                        ),
+                        Constant(
+                            StrWord(
+                                Atom('collection_member_expression' type=dynamic),
+                            ),
+                        ),
+                    ),
+                    KeyValue(
+                        Constant(
+                            StrWord(
+                                Atom('object' type=static),
+                            ),
+                        ),
+                        Variable(
+                            (
+                                Atom('object' type=static),
+                                #70,
+                            ),
+                        ),
+                    ),
+                    KeyValue(
+                        Constant(
+                            StrWord(
+                                Atom('property' type=static),
+                            ),
+                        ),
+                        Variable(
+                            (
+                                Atom('property' type=static),
+                                #70,
+                            ),
+                        ),
+                    ),
+                    KeyValue(
+                        Constant(
+                            StrWord(
+                                Atom('computed' type=dynamic),
+                            ),
+                        ),
+                        Variable(
+                            (
+                                Atom('computed' type=dynamic),
+                                #70,
+                            ),
+                        ),
+                    ),
+                ],
             ),
         ),
     ),
     (
         "*arrow function 169161*",
         Function(
-            2,
-            Unknown(
-                None,
-                "unsupported expression",
+            10,
+            Object(
+                9,
+                [
+                    KeyValue(
+                        Constant(
+                            StrWord(
+                                Atom('type' type=static),
+                            ),
+                        ),
+                        Constant(
+                            StrWord(
+                                Atom('scalar_binary_expression' type=dynamic),
+                            ),
+                        ),
+                    ),
+                    KeyValue(
+                        Constant(
+                            StrWord(
+                                Atom('left' type=static),
+                            ),
+                        ),
+                        Variable(
+                            (
+                                Atom('left' type=static),
+                                #178,
+                            ),
+                        ),
+                    ),
+                    KeyValue(
+                        Constant(
+                            StrWord(
+                                Atom('operator' type=dynamic),
+                            ),
+                        ),
+                        Variable(
+                            (
+                                Atom('operator' type=dynamic),
+                                #178,
+                            ),
+                        ),
+                    ),
+                    KeyValue(
+                        Constant(
+                            StrWord(
+                                Atom('right' type=static),
+                            ),
+                        ),
+                        Variable(
+                            (
+                                Atom('right' type=static),
+                                #178,
+                            ),
+                        ),
+                    ),
+                ],
             ),
         ),
     ),
@@ -2998,9 +3215,9 @@
     (
         "describeExpected",
         Function(
-            14,
+            26,
             Alternatives(
-                13,
+                25,
                 [
                     Member(
                         3,
@@ -3060,9 +3277,70 @@
                             ),
                         ],
                     ),
-                    Unknown(
-                        None,
-                        "unsupported expression",
+                    Concat(
+                        13,
+                        [
+                            MemberCall(
+                                8,
+                                MemberCall(
+                                    5,
+                                    Variable(
+                                        (
+                                            Atom('descriptions' type=dynamic),
+                                            #19,
+                                        ),
+                                    ),
+                                    Constant(
+                                        StrWord(
+                                            Atom('slice' type=static),
+                                        ),
+                                    ),
+                                    [
+                                        Constant(
+                                            Num(
+                                                ConstantNumber(
+                                                    0.0,
+                                                ),
+                                            ),
+                                        ),
+                                        Unknown(
+                                            None,
+                                            "unsupported expression",
+                                        ),
+                                    ],
+                                ),
+                                Constant(
+                                    StrWord(
+                                        Atom('join' type=inline),
+                                    ),
+                                ),
+                                [
+                                    Constant(
+                                        StrWord(
+                                            Atom(', ' type=inline),
+                                        ),
+                                    ),
+                                ],
+                            ),
+                            Constant(
+                                StrWord(
+                                    Atom(', or ' type=inline),
+                                ),
+                            ),
+                            Member(
+                                3,
+                                Variable(
+                                    (
+                                        Atom('descriptions' type=dynamic),
+                                        #19,
+                                    ),
+                                ),
+                                Unknown(
+                                    None,
+                                    "unsupported expression",
+                                ),
+                            ),
+                        ],
                     ),
                 ],
             ),

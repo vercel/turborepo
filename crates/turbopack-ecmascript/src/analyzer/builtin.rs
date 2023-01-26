@@ -1,6 +1,6 @@
 use std::{mem::take, sync::Arc};
 
-use super::{ConstantNumber, ConstantValue, JsValue, ObjectPart};
+use super::{ConstantNumber, ConstantValue, JsValue, LogicalOperator, ObjectPart};
 use crate::analyzer::FreeVarKind;
 
 const ARRAY_METHODS: [&str; 2] = ["concat", "map"];
@@ -23,6 +23,14 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 }
                 JsValue::Add(..) => {
                     value.make_unknown("property on number or string");
+                    true
+                }
+                JsValue::Logical(..) => {
+                    value.make_unknown("property on logical operation");
+                    true
+                }
+                JsValue::Not(..) => {
+                    value.make_unknown("property on not operation");
                     true
                 }
                 JsValue::Unknown(..) => {
@@ -108,7 +116,10 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                             );
                             true
                         }
-                        JsValue::Concat(..) | JsValue::Add(..) => {
+                        JsValue::Concat(..)
+                        | JsValue::Add(..)
+                        | JsValue::Logical(..)
+                        | JsValue::Not(..) => {
                             if prop.has_placeholder() {
                                 // keep the member infact since it might be handled later
                                 false
@@ -211,7 +222,10 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                             );
                             true
                         }
-                        JsValue::Concat(..) | JsValue::Add(..) => {
+                        JsValue::Concat(..)
+                        | JsValue::Add(..)
+                        | JsValue::Logical(..)
+                        | JsValue::Not(..) => {
                             if prop.has_placeholder() {
                                 // keep the member intact since it might be handled later
                                 false
@@ -408,6 +422,14 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                     value.make_unknown("call of number or string");
                     true
                 }
+                JsValue::Logical(..) => {
+                    value.make_unknown("call of logical operation");
+                    true
+                }
+                JsValue::Not(..) => {
+                    value.make_unknown("call of not operation");
+                    true
+                }
                 JsValue::WellKnownFunction(..) => {
                     value.make_unknown("unknown call of well known function");
                     true
@@ -474,6 +496,62 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 false
             }
         }
+        JsValue::Logical(_, op, ref mut parts) => {
+            let len = parts.len();
+            for (i, part) in take(parts).into_iter().enumerate() {
+                if i == len - 1 {
+                    parts.push(part);
+                    break;
+                }
+                let skip_part = match op {
+                    LogicalOperator::And => part.is_truthy(),
+                    LogicalOperator::Or => part.is_falsy(),
+                    LogicalOperator::NullishCoalescing => part.is_falsy(),
+                };
+                match skip_part {
+                    Some(true) => {
+                        continue;
+                    }
+                    Some(false) => {
+                        parts.push(part);
+                        break;
+                    }
+                    None => {
+                        parts.push(part);
+                        continue;
+                    }
+                }
+            }
+            if parts.len() == 1 {
+                *value = parts.pop().unwrap();
+                true
+            } else {
+                if parts.iter().all(|part| !part.has_placeholder()) {
+                    *value = JsValue::alternatives(take(parts));
+                    true
+                } else {
+                    parts.len() != len
+                }
+            }
+        }
+        JsValue::Not(_, ref inner) => match inner.is_truthy() {
+            Some(true) => {
+                *value = JsValue::Constant(ConstantValue::False);
+                true
+            }
+            Some(false) => {
+                *value = JsValue::Constant(ConstantValue::True);
+                true
+            }
+            None => {
+                if inner.has_placeholder() {
+                    false
+                } else {
+                    value.make_unknown("negation of unknown value");
+                    true
+                }
+            }
+        },
         _ => false,
     }
 }
