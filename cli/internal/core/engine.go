@@ -402,19 +402,19 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 // GetResolvedTaskDefinition returns a "resolved" TaskDefinition composed of one
 // turbo.json in the workspace and following any `extends` keys up. If there is
 // no turbo.json in the workspace, returns the taskDefinition from the root Pipeline.
-func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs.Pipeline, taskName string, taskID string) (*fs.TaskDefinition, error) {
+func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs.Pipeline, taskName string, taskID string) (*fs.ResolvedTaskDefinition, error) {
 	taskDefinitions, err := e.getTaskDefinitionChain(rootPipeline, pkg, taskID, taskName)
 	if err != nil {
 		return nil, err
 	}
 
 	// Start with an empty definition
-	mergedTaskDefinition := &fs.TaskDefinition{}
+	mergedTaskDefinition := &fs.ResolvedTaskDefinition{}
 
 	// For each of the TaskDefinitions we know of, merge them in
 	for _, taskDef := range taskDefinitions {
-		if taskDef.Outputs != nil {
-			mergedTaskDefinition.Outputs = taskDef.Outputs
+		if _, ok := taskDef.FieldsMeta["HasOutputs"]; ok {
+			mergedTaskDefinition.Outputs = &taskDef.Outputs
 		}
 
 		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache

@@ -259,7 +259,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		WorkspaceInfos:  pkgDepGraph.WorkspaceInfos,
 		GlobalHash:      globalHash,
 		RootNode:        pkgDepGraph.RootNode,
-		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		TaskDefinitions: map[string]*fs.ResolvedTaskDefinition{},
 	}
 	rs := &runSpec{
 		Targets:      targets,

@@ -16,7 +16,7 @@ type PackageTask struct {
 	Task           string
 	PackageName    string
 	Pkg            *fs.PackageJSON
-	TaskDefinition *fs.TaskDefinition
+	TaskDefinition *fs.ResolvedTaskDefinition
 }
 
 // Command returns the script for this task from package.json and a boolean indicating

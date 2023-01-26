@@ -32,7 +32,7 @@ type CompleteGraph struct {
 	RootNode string
 
 	// Map of TaskDefinitions by taskID
-	TaskDefinitions map[string]*fs.TaskDefinition
+	TaskDefinitions map[string]*fs.ResolvedTaskDefinition
 }
 
 // GetPackageTaskVisitor wraps a `visitor` function that is used for walking the TaskGraph

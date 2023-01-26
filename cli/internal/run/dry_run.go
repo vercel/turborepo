@@ -292,32 +292,32 @@ func commandLooksLikeTurbo(command string) bool {
 // as the information is also available in ResolvedTaskDefinition. We could remove them
 // and favor a version of Outputs that is the fully expanded list of files.
 type taskSummary struct {
-	TaskID                 string             `json:"taskId"`
-	Task                   string             `json:"task"`
-	Package                string             `json:"package"`
-	Hash                   string             `json:"hash"`
-	CacheState             cache.ItemStatus   `json:"cacheState"`
-	Command                string             `json:"command"`
-	Outputs                []string           `json:"outputs"`
-	ExcludedOutputs        []string           `json:"excludedOutputs"`
-	LogFile                string             `json:"logFile"`
-	Dir                    string             `json:"directory"`
-	Dependencies           []string           `json:"dependencies"`
-	Dependents             []string           `json:"dependents"`
-	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
+	TaskID                 string                     `json:"taskId"`
+	Task                   string                     `json:"task"`
+	Package                string                     `json:"package"`
+	Hash                   string                     `json:"hash"`
+	CacheState             cache.ItemStatus           `json:"cacheState"`
+	Command                string                     `json:"command"`
+	Outputs                []string                   `json:"outputs"`
+	ExcludedOutputs        []string                   `json:"excludedOutputs"`
+	LogFile                string                     `json:"logFile"`
+	Dir                    string                     `json:"directory"`
+	Dependencies           []string                   `json:"dependencies"`
+	Dependents             []string                   `json:"dependents"`
+	ResolvedTaskDefinition *fs.ResolvedTaskDefinition `json:"resolvedTaskDefinition"`
 }
 
 type singlePackageTaskSummary struct {
-	Task                   string             `json:"task"`
-	Hash                   string             `json:"hash"`
-	CacheState             cache.ItemStatus   `json:"cacheState"`
-	Command                string             `json:"command"`
-	Outputs                []string           `json:"outputs"`
-	ExcludedOutputs        []string           `json:"excludedOutputs"`
-	LogFile                string             `json:"logFile"`
-	Dependencies           []string           `json:"dependencies"`
-	Dependents             []string           `json:"dependents"`
-	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
+	Task                   string                     `json:"task"`
+	Hash                   string                     `json:"hash"`
+	CacheState             cache.ItemStatus           `json:"cacheState"`
+	Command                string                     `json:"command"`
+	Outputs                []string                   `json:"outputs"`
+	ExcludedOutputs        []string                   `json:"excludedOutputs"`
+	LogFile                string                     `json:"logFile"`
+	Dependencies           []string                   `json:"dependencies"`
+	Dependents             []string                   `json:"dependents"`
+	ResolvedTaskDefinition *fs.ResolvedTaskDefinition `json:"resolvedTaskDefinition"`
 }
 
 func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {

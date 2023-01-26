@@ -83,7 +83,8 @@ type Pipeline map[string]TaskDefinition
 
 // TaskDefinition is a representation of the configFile pipeline for further computation.
 type TaskDefinition struct {
-	Outputs     *TaskOutputs
+	FieldsMeta  map[string]bool
+	Outputs     TaskOutputs
 	ShouldCache bool
 
 	// This field is custom-marshalled from rawTask.Env and rawTask.DependsOn
@@ -111,6 +112,17 @@ type TaskDefinition struct {
 	// Persistent indicates whether the Task is expected to exit or not
 	// Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
 	Persistent bool
+}
+
+type ResolvedTaskDefinition struct {
+	Outputs                 *TaskOutputs
+	ShouldCache             bool
+	EnvVarDependencies      []string
+	TopologicalDependencies []string
+	TaskDependencies        []string
+	Inputs                  []string
+	OutputMode              util.TaskOutputMode
+	Persistent              bool
 }
 
 // GetTask returns a TaskDefinition based on the ID (package#task format) or name (e.g. "build")
@@ -277,9 +289,17 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	// Start a bookkeeping map
+	c.FieldsMeta = map[string]bool{}
+
+	var inclusions []string
+	var exclusions []string
+
 	if task.Outputs != nil {
-		var inclusions []string
-		var exclusions []string
+		// Assign a bookkeeping field so we know that there really were
+		// outputs configured in the underlying config file.
+		c.FieldsMeta["HasOutputs"] = true
+
 		for _, glob := range task.Outputs {
 			if strings.HasPrefix(glob, "!") {
 				exclusions = append(exclusions, glob[1:])
@@ -287,14 +307,15 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 				inclusions = append(inclusions, glob)
 			}
 		}
-		c.Outputs = &TaskOutputs{
-			Inclusions: inclusions,
-			Exclusions: exclusions,
-		}
-		sort.Strings(c.Outputs.Inclusions)
-		sort.Strings(c.Outputs.Exclusions)
 	}
 
+	c.Outputs = TaskOutputs{
+		Inclusions: inclusions,
+		Exclusions: exclusions,
+	}
+
+	sort.Strings(c.Outputs.Inclusions)
+	sort.Strings(c.Outputs.Exclusions)
 	if task.Cache == nil {
 		c.ShouldCache = true
 	} else {
@@ -303,23 +324,20 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 
 	envVarDependencies := make(util.Set)
 
-	if task.DependsOn != nil {
-		c.TopologicalDependencies = []string{} // TODO @mehulkar: this should be a set
-		c.TaskDependencies = []string{}        // TODO @mehulkar: this should be a set
-
-		for _, dependency := range task.DependsOn {
-			if strings.HasPrefix(dependency, envPipelineDelimiter) {
-				log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
-				envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
-			} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
-				c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
-			} else {
-				c.TaskDependencies = append(c.TaskDependencies, dependency)
-			}
+	c.TopologicalDependencies = []string{} // TODO @mehulkar: this should be a set
+	c.TaskDependencies = []string{}        // TODO @mehulkar: this should be a set
+	for _, dependency := range task.DependsOn {
+		if strings.HasPrefix(dependency, envPipelineDelimiter) {
+			log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
+			envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
+		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
+			c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
+		} else {
+			c.TaskDependencies = append(c.TaskDependencies, dependency)
 		}
-		sort.Strings(c.TaskDependencies)
-		sort.Strings(c.TopologicalDependencies)
 	}
+	sort.Strings(c.TaskDependencies)
+	sort.Strings(c.TopologicalDependencies)
 
 	// Append env key into EnvVarDependencies
 	for _, value := range task.Env {
@@ -342,8 +360,9 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalJSON serializes TaskDefinition struct into json
-func (c *TaskDefinition) MarshalJSON() ([]byte, error) {
+// MarshalJSON serializes ResolvedTaskDefinition struct into json
+// It sets defaults for empty fields.
+func (c *ResolvedTaskDefinition) MarshalJSON() ([]byte, error) {
 	// Initialize with empty arrays, so we get empty arrays serialized into JSON
 	task := rawTaskWithDefaults{
 		Outputs:   []string{},
