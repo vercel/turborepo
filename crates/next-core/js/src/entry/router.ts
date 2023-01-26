@@ -59,47 +59,13 @@ type MiddlewareHeadersResponse = {
   headers: string[];
 };
 
-export function makeResolver(dir: string, nextConfig: any) {
-  return async function resolveRoute(
-    req: IncomingMessage,
-    res: ServerResponse
-  ) {
-    res.setHeader("x-nextjs-route-result", "1");
-
-    const resolvedUrl: string = req.url as string;
-    console.log(resolvedUrl);
-
-    let routeResult: {
-      url: string;
-      statusCode: number;
-      headers: Record<string, undefined | number | string | string[]>;
-      isRedirect?: boolean;
-    };
-    if (resolvedUrl === "/page?") {
-      routeResult = {
-        url: "/page2",
-        statusCode: 302,
-        headers: res.getHeaders(),
-      };
-    } else {
-      routeResult = {
-        url: resolvedUrl,
-        statusCode: 200,
-        headers: res.getHeaders(),
-      };
-    }
-
-    res.end(JSON.stringify(routeResult));
-  };
-}
-
 export default async function route(
   ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
   routerRequest: RouterRequest,
   dir: string
 ) {
   // Deferring the import allows us to not error while we wait for Next.js to implement.
-  // const { makeResolver } = await import("next/dist/server/router.js");
+  const { makeResolver } = await import("next/dist/server/router.js");
   const nextConfig = await loadNextConfig();
 
   // TODO: Need next impl. This function receives the parsed nextConfig, which it should

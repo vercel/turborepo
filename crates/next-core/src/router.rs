@@ -109,6 +109,7 @@ enum RouterIncomingMessage {
     Error(StructuredError),
 }
 
+#[derive(Debug)]
 #[turbo_tasks::value]
 pub enum RouterResult {
     Redirect(RedirectResponse),
