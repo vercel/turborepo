@@ -1,7 +1,32 @@
-use std::{borrow::Cow, f64::consts::PI};
+use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
 
 use console::{Style, StyledObject};
+use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
+
+pub fn start_spinner(message: &str) -> ProgressBar {
+    let pb = ProgressBar::new_spinner();
+    if env::var("CI").is_ok() {
+        pb.enable_steady_tick(Duration::from_secs(30));
+    } else {
+        pb.enable_steady_tick(Duration::from_millis(125));
+    }
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            // For more spinners check out the cli-spinners project:
+            // https://github.com/sindresorhus/cli-spinners/blob/master/spinners.json
+            .tick_strings(&[
+                "   ",
+                GREY.apply_to(">  ").to_string().as_str(),
+                GREY.apply_to(">> ").to_string().as_str(),
+                GREY.apply_to(">>>").to_string().as_str(),
+                ">>>",
+            ]),
+    );
+    pb.set_message(message.to_string());
+
+    pb
+}
 
 /// Helper struct to apply any necessary formatting to UI output
 pub struct UI {
@@ -53,6 +78,11 @@ impl UI {
             return Cow::Borrowed(text);
         }
 
+        if matches!(env::var("TERM_PROGRAM"), Ok(terminal_program) if terminal_program == "Apple_Terminal")
+        {
+            return BOLD.apply_to(MAGENTA.apply_to(text)).to_string().into();
+        }
+
         let mut out = Vec::new();
         for (i, c) in text.char_indices() {
             let (r, g, b) = Self::rainbow_rgb(i);
@@ -71,6 +101,7 @@ lazy_static! {
     pub static ref GREY: Style = Style::new().dim();
     pub static ref CYAN: Style = Style::new().cyan();
     pub static ref BOLD: Style = Style::new().bold();
+    pub static ref MAGENTA: Style = Style::new().magenta();
 }
 
 pub const RESET: &str = "\x1b[0m";

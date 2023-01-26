@@ -10,7 +10,7 @@ use crate::{
     client::{APIClient, UserClient},
     commands::CommandBase,
     get_version,
-    ui::{BOLD, CYAN},
+    ui::{start_spinner, BOLD, CYAN},
 };
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
@@ -26,7 +26,7 @@ pub async fn login(base: CommandBase) -> Result<()> {
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
     let login_url = format!("{login_url_base}/turborepo/token?redirect_uri={redirect_url}");
     println!(">>> Opening browser to {login_url}");
-
+    let spinner = start_spinner("Waiting for your authorization...");
     direct_user_to_url(&login_url);
 
     let token_cell = Arc::new(OnceCell::new());
@@ -36,6 +36,7 @@ pub async fn login(base: CommandBase) -> Result<()> {
         token_cell.clone(),
     )
     .await?;
+    spinner.finish_and_clear();
     let token = token_cell
         .get()
         .ok_or_else(|| anyhow!("Failed to get token"))?;
