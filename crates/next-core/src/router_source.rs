@@ -109,11 +109,12 @@ impl ContentSource for NextRouterContentSource {
                 ))
             }
             RouterResult::Rewrite(data) => {
+                let path = data.url.strip_prefix('/').unwrap_or(&data.url);
                 // TODO: We can't set response headers and query for a source.
                 // TODO: Does a rewrite's status code matter?
                 Ok(this
                     .inner
-                    .get(&data.url, Value::new(ContentSourceData::default())))
+                    .get(path, Value::new(ContentSourceData::default())))
             }
         }
     }
