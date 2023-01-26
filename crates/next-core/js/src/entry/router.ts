@@ -53,22 +53,6 @@ async function getResolveRoute(dir: string) {
   // Deferring the import allows us to not error while we wait for Next.js to implement.
   const { makeResolver } = (await import("next/dist/server/router.js")) as any;
   const nextConfig = await loadNextConfig();
-
-  // TODO: Need next impl. This function receives the parsed nextConfig, which it should
-  // use to create a router function. The router fn will receive
-  // (IncomingMessage, ServerResponse) params (which exactly match a regular
-  // request/response) and returns:
-  //
-  // headers:
-  //   'x-nextjs-route-result: 1' to signal the body has the JSON payload with result,
-  //       else it streams the response headers/body as raw bytes.
-  // body (if 'x-nextjs-route-result: 1'):
-  // {
-  //   url: '/', // resolved url (includes query info if applicable)
-  //   headers: {}, // response headers to send down
-  //   statusCode: 200, //
-  //   isRedirect: false, //
-  // }
   return await makeResolver(dir, nextConfig);
 }
 

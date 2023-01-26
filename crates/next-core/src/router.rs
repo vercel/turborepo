@@ -190,7 +190,6 @@ pub async fn route(
             let result: RouterIncomingMessage = serde_json::from_reader(val.read())?;
             Ok(RouterResult::from(result).cell())
         }
-        // TODO: provide a real default
         JavaScriptValue::Error => Ok(RouterResult::Error.cell()),
         JavaScriptValue::Stream(_) => {
             unimplemented!("Stream not supported now");
