@@ -40,3 +40,10 @@ jobs:
       - name: E2E Tests
         # Turbo has already been built in previous step, no need to rebuild
         run: pnpm -- turbo-prebuilt run e2e-prebuilt --filter=cli
+
+  cleanup:
+    name: Cleanup
+    needs: [test]
+    if: always()
+    uses: ./.github/workflows/pr-clean-caches.yml
+    secrets: inherit
