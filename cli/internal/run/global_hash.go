@@ -94,24 +94,6 @@ func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 
 	globalHash, err := fs.HashObject(globalHashable)
 
-	fmt.Println("====================================")
-	fmt.Printf("globalHash: %#v\n", globalHash)
-	fmt.Printf("GlobalFileHashMap: %#v\n", globalFileHashMap)
-	fmt.Printf("RootExternalDepsHash: %#v\n", rootPackageJSON.ExternalDepsHash)
-	fmt.Printf("HashedSortedEnvPairs: %#v\n", globalHashableEnvPairs)
-	fmt.Printf("GlobalCacheKey: %#v\n", _globalCacheKey)
-	// jsonRendered, _ := json.MarshalIndent(pipeline, "", " ")
-	// fmt.Printf("Pipeline:\n")
-	// fmt.Printf(string(jsonRendered))
-	fmt.Println("-----------------------")
-
-	bites := []byte(fmt.Sprintf("%v", globalHashable))
-	fmt.Printf("[debug] allTheBites\n")
-	fmt.Println(bites)
-	fmt.Printf("[debug] allTheBites as a string\n")
-	fmt.Println(string(bites))
-	fmt.Println("====================================")
-
 	if err != nil {
 		return "", fmt.Errorf("error hashing global dependencies %w", err)
 	}
