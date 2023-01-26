@@ -1,5 +1,5 @@
 import type { Ipc } from "@vercel/turbopack-next/ipc/index";
-import type { IncomingMessage } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { Buffer } from "node:buffer";
 import { createServer, makeRequest } from "@vercel/turbopack-next/ipc/server";
 import loadNextConfig from "@vercel/turbopack-next/entry/config/next";
@@ -21,7 +21,12 @@ type RouteResult = {
   isRedirect: boolean;
 };
 
-type IpcOutgoingMessage =
+type IpcOutgoingMessage = {
+  type: "jsonValue";
+  data: string;
+};
+
+type MessageData =
   | { type: "middleware-headers"; data: MiddlewareHeadersResponse }
   | { type: "middleware-body"; data: Uint8Array }
   | {
@@ -50,13 +55,47 @@ type MiddlewareHeadersResponse = {
   headers: string[];
 };
 
+export function makeResolver(dir: string, nextConfig: any) {
+  return async function resolveRoute(
+    req: IncomingMessage,
+    res: ServerResponse
+  ) {
+    res.setHeader("x-nextjs-route-result", "1");
+
+    const resolvedUrl: string = req.url as string;
+    console.log(resolvedUrl);
+
+    let routeResult: {
+      url: string;
+      statusCode: number;
+      headers: Record<string, undefined | number | string | string[]>;
+      isRedirect?: boolean;
+    };
+    if (resolvedUrl === "/page?") {
+      routeResult = {
+        url: "/page2",
+        statusCode: 302,
+        headers: res.getHeaders(),
+      };
+    } else {
+      routeResult = {
+        url: resolvedUrl,
+        statusCode: 200,
+        headers: res.getHeaders(),
+      };
+    }
+
+    res.end(JSON.stringify(routeResult));
+  };
+}
+
 export default async function route(
   ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
   routerRequest: RouterRequest,
   dir: string
 ) {
   // Deferring the import allows us to not error while we wait for Next.js to implement.
-  const { makeResolver } = await import("next/dist/server/router.js");
+  // const { makeResolver } = await import("next/dist/server/router.js");
   const nextConfig = await loadNextConfig();
 
   // TODO: Need next impl. This function receives the parsed nextConfig, which it should
@@ -105,6 +144,16 @@ export default async function route(
   }
 }
 
+function sendValue(
+  ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
+  value: MessageData
+) {
+  return ipc.send({
+    type: "jsonValue",
+    data: JSON.stringify(value),
+  });
+}
+
 async function handleClientResponse(
   ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
   clientResponsePromise: Promise<IncomingMessage>
@@ -120,7 +169,7 @@ async function handleClientResponse(
     }
 
     const data = JSON.parse(buffer) as RouteResult;
-    return ipc.send({
+    return sendValue(ipc, {
       type: data.isRedirect ? "redirect" : "rewrite",
       data: {
         url: data.url,
@@ -138,13 +187,13 @@ async function handleClientResponse(
   // https://linear.app/vercel/issue/WEB-277/nextjs-middleware
   ipc.sendError(new Error("middleware routing is not supported yet"));
 
-  ipc.send({
+  await sendValue(ipc, {
     type: "middleware-headers",
     data: responseHeaders,
   });
 
   for await (const chunk of clientResponse) {
-    ipc.send({
+    await sendValue(ipc, {
       type: "middleware-body",
       data: chunk as Buffer,
     });
