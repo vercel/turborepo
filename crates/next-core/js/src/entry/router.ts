@@ -170,7 +170,7 @@ async function handleClientResponse(
     type: "full-middleware",
     data: {
       headers: responseHeaders,
-      body: Buffer.concat(buffers),
+      body: Buffer.concat(buffers).toJSON().data,
     },
   };
 }
