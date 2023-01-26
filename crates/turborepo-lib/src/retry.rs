@@ -3,8 +3,8 @@ use std::future::Future;
 use anyhow::anyhow;
 use tokio::time::sleep;
 
-const MIN_SLEEP_TIME: u64 = 2;
-const MAX_SLEEP_TIME: u64 = 10;
+const MIN_SLEEP_TIME_SECS: u64 = 2;
+const MAX_SLEEP_TIME_SECS: u64 = 10;
 
 /// Retries a future until `max_retries` is reached, the `should_retry` function
 /// returns false, or the future succeeds. Uses an exponential backoff with a
@@ -23,6 +23,7 @@ pub async fn retry_future<T, E: Into<anyhow::Error>, F: Future<Output = Result<T
     future_generator: impl Fn() -> F,
     should_retry: impl Fn(&E) -> bool,
 ) -> Result<T, anyhow::Error> {
+    let mut last_error = None;
     for retry_count in 0..max_retries {
         let future = future_generator();
         match future.await {
@@ -31,16 +32,18 @@ pub async fn retry_future<T, E: Into<anyhow::Error>, F: Future<Output = Result<T
                 if !should_retry(&err) {
                     return Err(err.into());
                 }
+                last_error = Some(err);
             }
         }
 
         let sleep_period = (2_u64)
             .pow(retry_count)
-            .clamp(MIN_SLEEP_TIME, MAX_SLEEP_TIME);
+            .clamp(MIN_SLEEP_TIME_SECS, MAX_SLEEP_TIME_SECS);
         sleep(std::time::Duration::from_secs(sleep_period)).await;
     }
 
     Err(anyhow!(
-        "skipping HTTP Request, too many failures have occurred"
+        "skipping HTTP Request, too many failures have occurred.\nLast error: {}",
+        last_error.unwrap().into()
     ))
 }

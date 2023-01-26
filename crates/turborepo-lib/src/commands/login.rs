@@ -47,23 +47,22 @@ pub async fn login(base: CommandBase) -> Result<()> {
 
     let ui = base.ui;
 
-    println!();
     println!(
-        "{} Turborepo CLI authorized for {}",
+        "
+{} Turborepo CLI authorized for {}
+
+{}
+
+{}
+
+",
         ui.rainbow(">>> Success!"),
         user_response.user.email,
-    );
-    println!();
-    println!(
-        "{}",
         ui.apply(
             CYAN.apply_to("To connect to your Remote Cache, run the following in any turborepo:")
-        )
+        ),
+        ui.apply(BOLD.apply_to("  npx turbo link"))
     );
-    println!();
-    println!("{}", ui.apply(BOLD.apply_to("  npx turbo link")));
-    println!();
-
     Ok(())
 }
 
