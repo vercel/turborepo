@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
-use swc_core::ecma::ast::{Lit, Program};
+use swc_core::ecma::ast::Program;
 use turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, ValueToString};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::condition::ContextCondition;
@@ -8,7 +8,11 @@ use turbopack_core::{
     asset::AssetVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
 };
-use turbopack_ecmascript::{parse::ParseResult, EcmascriptModuleAssetVc};
+use turbopack_ecmascript::{
+    analyzer::{JsValue, ObjectPart},
+    parse::ParseResult,
+    EcmascriptModuleAssetVc,
+};
 
 use crate::next_config::NextConfigVc;
 
@@ -134,7 +138,12 @@ impl Issue for NextSourceConfigParsingIssue {
 #[turbo_tasks::function]
 pub async fn parse_config_from_source(module_asset: AssetVc) -> Result<NextSourceConfigVc> {
     if let Some(ecmascript_asset) = EcmascriptModuleAssetVc::resolve_from(module_asset).await? {
-        if let ParseResult::Ok { program, .. } = &*ecmascript_asset.parse().await? {
+        if let ParseResult::Ok {
+            program,
+            eval_context,
+            ..
+        } = &*ecmascript_asset.parse().await?
+        {
             if let Program::Module(module) = &program {
                 for item in &module.body {
                     if let Some(decl) = item
@@ -149,72 +158,22 @@ pub async fn parse_config_from_source(module_asset: AssetVc) -> Result<NextSourc
                                 .map(|ident| &*ident.sym == "config")
                                 .unwrap_or_default()
                             {
-                                let invalid_config = |detail: &str| {
+                                if let Some(init) = decl.init.as_ref() {
+                                    let value = eval_context.eval(init);
+                                    return Ok(
+                                        parse_config_from_js_value(module_asset, &value).cell()
+                                    );
+                                } else {
                                     NextSourceConfigParsingIssue {
                                         path: module_asset.path(),
-                                        detail: StringVc::cell(detail.to_string()),
+                                        detail: StringVc::cell(format!(
+                                            "The exported config object must contain an variable \
+                                             initializer."
+                                        )),
                                     }
                                     .cell()
                                     .as_issue()
                                     .emit()
-                                };
-                                if let Some(obj) =
-                                    decl.init.as_ref().and_then(|init| init.as_object())
-                                {
-                                    let mut config = NextSourceConfig::default();
-                                    for prop in &obj.props {
-                                        if let Some(key_value) =
-                                            prop.as_prop().and_then(|prop| prop.as_key_value())
-                                        {
-                                            if key_value
-                                                .key
-                                                .as_ident()
-                                                .map(|ident| &*ident.sym == "runtime")
-                                                .unwrap_or_default()
-                                            {
-                                                if let Some(value) =
-                                                    key_value.value.as_lit().and_then(|lit| {
-                                                        if let Lit::Str(str) = lit {
-                                                            Some(&*str.value)
-                                                        } else {
-                                                            None
-                                                        }
-                                                    })
-                                                {
-                                                    match value {
-                                                        "edge" | "experimental-edge" => {
-                                                            config.runtime = NextRuntime::Edge
-                                                        }
-                                                        "nodejs" => {
-                                                            config.runtime = NextRuntime::Edge
-                                                        }
-                                                        _ => {
-                                                            invalid_config(
-                                                                "The value of the runtime \
-                                                                 property is not a valid runtime \
-                                                                 name.",
-                                                            );
-                                                        }
-                                                    }
-                                                } else {
-                                                    invalid_config(
-                                                        "The value of the runtime property is not \
-                                                         a simple string literal.",
-                                                    );
-                                                }
-                                            }
-                                        } else {
-                                            invalid_config(
-                                                "The exported config object must only contain \
-                                                 simple key-value pairs.",
-                                            );
-                                        }
-                                    }
-                                    return Ok(config.cell());
-                                } else {
-                                    invalid_config(
-                                        "The exported config object is not a valid object literal.",
-                                    );
                                 }
                             }
                         }
@@ -224,4 +183,70 @@ pub async fn parse_config_from_source(module_asset: AssetVc) -> Result<NextSourc
         }
     }
     Ok(NextSourceConfig::default().cell())
+}
+
+fn parse_config_from_js_value(module_asset: AssetVc, value: &JsValue) -> NextSourceConfig {
+    let mut config = NextSourceConfig::default();
+    let invalid_config = |detail: &str, value: &JsValue| {
+        let (explainer, hints) = value.explain(2, 0);
+        NextSourceConfigParsingIssue {
+            path: module_asset.path(),
+            detail: StringVc::cell(format!("{detail} Got {explainer}.{hints}")),
+        }
+        .cell()
+        .as_issue()
+        .emit()
+    };
+    if let JsValue::Object(_, parts) = value {
+        for part in parts {
+            match part {
+                ObjectPart::Spread(_) => invalid_config(
+                    "Spread properties are not supported in the config export.",
+                    value,
+                ),
+                ObjectPart::KeyValue(key, value) => {
+                    if let Some(key) = key.as_str() {
+                        if key == "runtime" {
+                            if let JsValue::Constant(runtime) = value {
+                                if let Some(runtime) = runtime.as_str() {
+                                    match runtime {
+                                        "edge" | "experimental-edge" => {
+                                            config.runtime = NextRuntime::Edge;
+                                        }
+                                        "nodejs" => {
+                                            config.runtime = NextRuntime::NodeJs;
+                                        }
+                                        _ => {
+                                            invalid_config(
+                                                &"The runtime property must be either \"nodejs\" \
+                                                  or \"edge\".",
+                                                value,
+                                            );
+                                        }
+                                    }
+                                }
+                            } else {
+                                invalid_config(
+                                    "The runtime property must be a constant string.",
+                                    value,
+                                );
+                            }
+                        }
+                    } else {
+                        invalid_config(
+                            "The exported config object must not contain non-constant strings.",
+                            key,
+                        );
+                    }
+                }
+            }
+        }
+    } else {
+        invalid_config(
+            "The exported config object must be a valid object literal.",
+            value,
+        );
+    }
+
+    config
 }
