@@ -105,7 +105,10 @@ export function makeRequest(
       host: "localhost",
       port: address.port,
       method,
-      path: query ? `${path}?${qs.stringify(query)}` : path,
+      path:
+        query && Object.keys(query).length > 0
+          ? `${path}?${qs.stringify(query)}`
+          : path,
       headers,
     });
     // Otherwise Node.js waits for the first chunk of data to be written before sending the request.
