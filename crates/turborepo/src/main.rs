@@ -19,7 +19,7 @@ fn run_go_binary(args: Args) -> Result<i32> {
     #[cfg(not(windows))]
     go_binary_path.push("go-turbo");
 
-    if !go_binary_path.exists() {
+    if go_binary_path.exists() {
         debug!("Found go binary at {:?}", go_binary_path);
     } else {
         error!("Unable to find Go binary. Please report this issue at https://github.com/vercel/turbo/issues and include your package manager and version along with the following information:
