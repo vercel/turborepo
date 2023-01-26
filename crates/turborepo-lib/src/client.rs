@@ -12,6 +12,38 @@ use crate::{get_version, retry::retry_future};
 pub trait UserClient {
     fn set_token(&mut self, token: String);
     async fn get_user(&self) -> Result<UserResponse>;
+    async fn get_teams(&self) -> Result<TeamsResponse>;
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct Pagination {
+    count: usize,
+    next: usize,
+    previous: usize,
+}
+
+/// Membership is the relationship between the logged-in user and a particular
+/// team
+#[derive(Debug, Clone, Deserialize)]
+struct Membership {
+    role: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct Team {
+    id: String,
+    slug: String,
+    name: String,
+    #[serde(rename = "createdAt")]
+    created_at: String,
+    created: String,
+    membership: Membership,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct TeamsResponse {
+    teams: Vec<Team>,
+    pagination: Pagination,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -59,6 +91,37 @@ impl UserClient for APIClient {
             Ok(response) => {
                 let user_response = response.json::<UserResponse>().await?;
                 Ok(user_response)
+            }
+            Err(error) => {
+                if let Some(error) = error.downcast_ref::<reqwest::Error>() {
+                    if error.status() == Some(StatusCode::NOT_FOUND) {
+                        return Err(anyhow!("404 - Not found"));
+                    }
+                }
+
+                Err(error)
+            }
+        }
+    }
+
+    async fn get_teams(&self) -> Result<TeamsResponse> {
+        let response = self
+            .make_retryable_request(|| {
+                let request_builder = self
+                    .client
+                    .get(self.make_url("/v2/teams?limit=100"))
+                    .header("User-Agent", USER_AGENT.clone())
+                    .header("Authorization", format!("Bearer {}", self.token))
+                    .header("Content-Type", "application/json");
+
+                request_builder.send()
+            })
+            .await;
+
+        match response {
+            Ok(response) => {
+                let teams_response = response.json::<TeamsResponse>().await?;
+                Ok(teams_response)
             }
             Err(error) => {
                 if let Some(error) = error.downcast_ref::<reqwest::Error>() {

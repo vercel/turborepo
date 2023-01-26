@@ -34,7 +34,7 @@ pub fn link(base: CommandBase) -> Result<()> {
             BOLD.apply_to("`npx turbo login`")
         ));
     }
-
+    let teams_response = base.api_client.get_teams().await?;
     Ok(())
 }
 
