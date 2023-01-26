@@ -16,4 +16,9 @@ module.exports = {
   rules: {
     "@typescript-eslint/no-non-null-assertion": "off",
   },
+  parserOptions: {
+    babelOptions: {
+      presets: [require.resolve('next/babel')],
+    },
+  },
 };
