@@ -78,6 +78,8 @@ impl UI {
             return Cow::Borrowed(text);
         }
 
+        // On the macOS Terminal, the rainbow colors don't show up correctly.
+        // Instead, we print in bold magenta
         if matches!(env::var("TERM_PROGRAM"), Ok(terminal_program) if terminal_program == "Apple_Terminal")
         {
             return BOLD.apply_to(MAGENTA.apply_to(text)).to_string().into();
