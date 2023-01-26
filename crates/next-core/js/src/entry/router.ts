@@ -135,6 +135,9 @@ async function handleClientResponse(
     headers: clientResponse.rawHeaders,
   };
 
+  // https://linear.app/vercel/issue/WEB-277/nextjs-middleware
+  ipc.sendError(new Error("middleware routing is not supported yet"));
+
   ipc.send({
     type: "middleware-headers",
     data: responseHeaders,
