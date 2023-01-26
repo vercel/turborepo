@@ -55,8 +55,8 @@ export default async function route(
   routerRequest: RouterRequest
 ) {
   // Deferring the import allows us to not error while we wait for Next.js to implement.
-  const { makeResolver } = await import("next/dist/server/router");
-  const nextConfig = loadNextConfig();
+  const { makeResolver } = await import("next/dist/server/router.js");
+  const nextConfig = await loadNextConfig();
 
   // TODO: Need next impl. This function receives the parsed nextConfig, which it should
   // use to create a router function. The router fn will receive
@@ -73,7 +73,7 @@ export default async function route(
   //   statusCode: 200, //
   //   isRedirect: false, //
   // }
-  const resolveRoute = makeResolver(nextConfig);
+  const resolveRoute = await makeResolver(dir, nextConfig);
   const server = await createServer();
 
   try {
