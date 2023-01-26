@@ -129,7 +129,7 @@ async fn get_from_source(
         },
         ContentSourceResult::Result { get_content, .. } => {
             let content_vary = get_content.vary().await?;
-            if !vary.fulfills(&content_vary) {
+            if *vary != *content_vary {
                 GetFromSourceResult::NeedData {
                     source: ContentSourceResultVc::exact(*get_content).into(),
                     path: path.to_string(),
