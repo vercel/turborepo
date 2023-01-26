@@ -80,6 +80,10 @@ func TestResolvePackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app2", "libC"))
 	graph.Connect(dag.BasicEdge("app2-a", "libC"))
 	workspaceInfos := internalGraph.WorkspaceInfos{
+		"//": {
+			Dir:  turbopath.AnchoredSystemPath("").ToSystemPath(),
+			Name: "monorepo",
+		},
 		"app0": {
 			Dir:  turbopath.AnchoredUnixPath("app/app0").ToSystemPath(),
 			Name: "app0",
@@ -142,21 +146,21 @@ func TestResolvePackages(t *testing.T) {
 		{
 			name:                "Only turbo.json changed",
 			changed:             []string{"turbo.json"},
-			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			expected:            []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			since:               "dummy",
 			includeDependencies: true,
 		},
 		{
 			name:                "Only root package.json changed",
 			changed:             []string{"package.json"},
-			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			expected:            []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			since:               "dummy",
 			includeDependencies: true,
 		},
 		{
 			name:                "Only package-lock.json changed",
 			changed:             []string{"package-lock.json"},
-			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			expected:            []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			since:               "dummy",
 			includeDependencies: true,
 			lockfile:            "package-lock.json",
@@ -164,7 +168,7 @@ func TestResolvePackages(t *testing.T) {
 		{
 			name:                "Only yarn.lock changed",
 			changed:             []string{"yarn.lock"},
-			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			expected:            []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			since:               "dummy",
 			includeDependencies: true,
 			lockfile:            "yarn.lock",
@@ -172,7 +176,7 @@ func TestResolvePackages(t *testing.T) {
 		{
 			name:                "Only pnpm-lock.yaml changed",
 			changed:             []string{"pnpm-lock.yaml"},
-			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			expected:            []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			since:               "dummy",
 			includeDependencies: true,
 			lockfile:            "pnpm-lock.yaml",
@@ -234,7 +238,7 @@ func TestResolvePackages(t *testing.T) {
 		{
 			name:       "global dependency changed, even though it was ignored, forcing a build of everything",
 			changed:    []string{"libs/libB/src/index.ts"},
-			expected:   []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			expected:   []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			since:      "dummy",
 			ignore:     "libs/libB/**/*.ts",
 			globalDeps: []string{"libs/**/*.ts"},
@@ -257,7 +261,7 @@ func TestResolvePackages(t *testing.T) {
 			// no changes, no base to compare against, defaults to everything
 			name:              "no changes or scope specified, build everything",
 			since:             "",
-			expected:          []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			expected:          []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			expectAllPackages: true,
 		},
 		{

@@ -165,7 +165,8 @@ func calculateInference(repoRoot turbopath.AbsoluteSystemPath, rawPkgInferenceDi
 		if err != nil {
 			return nil, err
 		}
-		if inferredPathIsBelow {
+		// We skip over the root package as the inferred path will always be below it
+		if inferredPathIsBelow && pkgPath != repoRoot {
 			// set both. The user might have set a parent directory filter,
 			// in which case we *should* fail to find any packages, but we should
 			// do so in a consistent manner
