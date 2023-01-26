@@ -700,7 +700,17 @@ impl Task {
         match state.state_type {
             InProgress { .. } => match result {
                 Ok(Ok(result)) => state.output.link(result, turbo_tasks),
-                Ok(Err(err)) => state.output.error(err, turbo_tasks),
+                Ok(Err(mut err)) => {
+                    if let TaskType::Persistent(ty) = &self.ty {
+                        if let PersistentTaskType::Native(native_fn, _) = &**ty {
+                            err = err.context(format!(
+                                "Execution of {} failed",
+                                registry::get_function(*native_fn).name
+                            ));
+                        }
+                    }
+                    state.output.error(err, turbo_tasks)
+                }
                 Err(message) => state.output.panic(message, turbo_tasks),
             },
             InProgressDirty { .. } => {
