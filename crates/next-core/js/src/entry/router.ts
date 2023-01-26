@@ -84,24 +84,25 @@ export default async function route(
     // the serverRequest to Next.js to handle.
     clientRequest.end();
 
-    const [_, response] = await Promise.all([
-      resolveRoute(serverRequest, serverResponse),
-      handleClientResponse(ipc, clientResponsePromise),
-    ]);
-    server.close();
+    await resolveRoute(serverRequest, serverResponse);
+    const response = await handleClientResponse(
+      ipc,
+      await clientResponsePromise
+    );
 
+    server.close();
     return response;
   } catch (e) {
+    // Server doesn't need to be closed, because the sendError will terminate
+    // the process.
     ipc.sendError(e as Error);
   }
 }
 
 async function handleClientResponse(
   _ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
-  clientResponsePromise: Promise<IncomingMessage>
+  clientResponse: IncomingMessage
 ): Promise<MessageData | void> {
-  const clientResponse = await clientResponsePromise;
-
   if (clientResponse.headers["x-nextjs-route-result"] === "1") {
     clientResponse.setEncoding("utf8");
     // We're either a redirect or a rewrite
