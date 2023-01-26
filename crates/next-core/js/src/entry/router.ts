@@ -104,28 +104,20 @@ export default async function route(
     // the serverRequest to Next.js to handle.
     clientRequest.end();
 
-    await Promise.all([
+    const [_, response] = await Promise.all([
       resolveRoute(serverRequest, serverResponse),
       handleClientResponse(ipc, clientResponsePromise),
     ]);
     server.close();
+
+    return response;
   } catch (e) {
     ipc.sendError(e as Error);
   }
 }
 
-function sendValue(
-  ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
-  value: MessageData
-) {
-  return ipc.send({
-    type: "jsonValue",
-    data: JSON.stringify(value),
-  });
-}
-
 async function handleClientResponse(
-  ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
+  _ipc: Ipc<RouterRequest, IpcOutgoingMessage>,
   clientResponsePromise: Promise<IncomingMessage>
 ) {
   const clientResponse = await clientResponsePromise;
@@ -139,14 +131,14 @@ async function handleClientResponse(
     }
 
     const data = JSON.parse(buffer) as RouteResult;
-    return sendValue(ipc, {
+    return {
       type: data.isRedirect ? "redirect" : "rewrite",
       data: {
         url: data.url,
         statusCode: data.statusCode,
         headers: Object.entries(data.headers).flat(),
       },
-    });
+    };
   }
 
   const responseHeaders: MiddlewareHeadersResponse = {
@@ -170,11 +162,11 @@ async function handleClientResponse(
   for await (const chunk of clientResponse) {
     buffers.push(chunk as Buffer);
   }
-  await sendValue(ipc, {
+  return {
     type: "full-middleware",
     data: {
       headers: responseHeaders,
       body: Buffer.concat(buffers),
     },
-  });
+  };
 }
