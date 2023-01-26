@@ -770,7 +770,7 @@
         <span class="kw">for </span>some <span class="kw">in </span>old_merged.chunks(size) {
             <span class="comment">// TODO this collect looks unnecessary, but rust will complain about a
             // higher-level lifetime error otherwise
-            </span><span class="kw">let </span>some = some.iter().copied().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            </span><span class="kw">let </span>some = some.to_vec();
             <span class="kw">let </span><span class="kw-2">mut </span>part = merge_by_size(some).<span class="kw">await</span><span class="question-mark">?</span>;
             merged.extend(part.pop().into_iter());
             fully_merged.append(<span class="kw-2">&amp;mut </span>part);

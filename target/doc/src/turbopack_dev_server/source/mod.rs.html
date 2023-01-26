@@ -872,10 +872,10 @@
         <span class="kw">if </span>other.cache_buster &amp;&amp; !cache_buster {
             <span class="kw">return </span><span class="bool-val">false</span>;
         }
-        <span class="kw">if </span>!ContentSourceDataFilter::fulfills(<span class="kw-2">&amp;</span>query, <span class="kw-2">&amp;</span>other.query) {
+        <span class="kw">if </span>!ContentSourceDataFilter::fulfills(query, <span class="kw-2">&amp;</span>other.query) {
             <span class="kw">return </span><span class="bool-val">false</span>;
         }
-        <span class="kw">if </span>!ContentSourceDataFilter::fulfills(<span class="kw-2">&amp;</span>headers, <span class="kw-2">&amp;</span>other.headers) {
+        <span class="kw">if </span>!ContentSourceDataFilter::fulfills(headers, <span class="kw-2">&amp;</span>other.headers) {
             <span class="kw">return </span><span class="bool-val">false</span>;
         }
         <span class="bool-val">true
