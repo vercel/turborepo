@@ -2,8 +2,9 @@ use anyhow::Result;
 use turbo_tasks::primitives::BoolVc;
 use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
 
-use crate::resolve::{parse::RequestVc, ResolveResultVc};
+use crate::resolve::{parse::RequestVc, ResolveResultOptionVc};
 
+/// A condition which determines if the hooks of a resolve plugin gets called.
 #[turbo_tasks::value]
 pub struct ResolvePluginCondition {
     root: FileSystemPathVc,
@@ -18,7 +19,7 @@ impl ResolvePluginConditionVc {
     }
 
     #[turbo_tasks::function]
-    pub async fn matches(self, fs_path: FileSystemPathVc) -> Result<BoolVc> {
+    pub(super) async fn matches(self, fs_path: FileSystemPathVc) -> Result<BoolVc> {
         let this = self.await?;
         let root = this.root.await?;
         let glob = this.glob.await?;
@@ -35,25 +36,14 @@ impl ResolvePluginConditionVc {
     }
 }
 
-#[turbo_tasks::value(transparent)]
-pub struct ResolveResultOption(Option<ResolveResultVc>);
-
-#[turbo_tasks::value_impl]
-impl ResolveResultOptionVc {
-    #[turbo_tasks::function]
-    pub fn some(result: ResolveResultVc) -> Self {
-        ResolveResultOption(Some(result)).cell()
-    }
-
-    #[turbo_tasks::function]
-    pub fn none() -> Self {
-        ResolveResultOption(None).cell()
-    }
-}
-
 #[turbo_tasks::value_trait]
 pub trait ResolvePlugin {
+    /// A condition which determines if the hooks gets called.
     fn condition(&self) -> ResolvePluginConditionVc;
+
+    /// This hook gets called when a full filepath has been resolved and the
+    /// condition matches. If a value is returned it replaces the resolve
+    /// result.
     fn after_resolve(&self, fs_path: FileSystemPathVc, request: RequestVc)
         -> ResolveResultOptionVc;
 }

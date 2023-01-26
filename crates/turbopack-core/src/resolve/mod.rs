@@ -335,6 +335,22 @@ impl ResolveResultVc {
     }
 }
 
+#[turbo_tasks::value(transparent)]
+pub struct ResolveResultOption(Option<ResolveResultVc>);
+
+#[turbo_tasks::value_impl]
+impl ResolveResultOptionVc {
+    #[turbo_tasks::function]
+    pub fn some(result: ResolveResultVc) -> Self {
+        ResolveResultOption(Some(result)).cell()
+    }
+
+    #[turbo_tasks::function]
+    pub fn none() -> Self {
+        ResolveResultOption(None).cell()
+    }
+}
+
 async fn exists(
     fs_path: FileSystemPathVc,
     refs: &mut Vec<AssetReferenceVc>,
