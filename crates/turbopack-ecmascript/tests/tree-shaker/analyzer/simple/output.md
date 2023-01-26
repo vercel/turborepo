@@ -74,11 +74,11 @@ graph TD
     Item6["export DOG"];
     Item7;
     Item7["export CHIMERA"];
-    Item1 --> Item2;
-    Item3 --> Item2;
+    Item2 --> Item1;
     Item3 --> Item1;
-    Item4 --> Item1;
+    Item3 --> Item2;
     Item4 --> Item2;
+    Item4 --> Item1;
     Item4 --> Item3;
 ```
 
@@ -96,11 +96,11 @@ graph TD
     Item6["export DOG"];
     Item7;
     Item7["export CHIMERA"];
-    Item1 --> Item2;
-    Item3 --> Item2;
+    Item2 --> Item1;
     Item3 --> Item1;
-    Item4 --> Item1;
+    Item3 --> Item2;
     Item4 --> Item2;
+    Item4 --> Item1;
     Item4 --> Item3;
 ```
 
@@ -118,16 +118,16 @@ graph TD
     Item6["export DOG"];
     Item7;
     Item7["export CHIMERA"];
-    Item1 --> Item2;
-    Item3 --> Item2;
+    Item2 --> Item1;
     Item3 --> Item1;
-    Item4 --> Item1;
+    Item3 --> Item2;
     Item4 --> Item2;
+    Item4 --> Item1;
     Item4 --> Item3;
     Item5 --> Item4;
-    Item5 -.-> Item2;
-    Item5 -.-> Item3;
     Item5 -.-> Item1;
+    Item5 -.-> Item3;
+    Item5 -.-> Item2;
     Item6 --> Item3;
     Item7 --> Item4;
 ```
