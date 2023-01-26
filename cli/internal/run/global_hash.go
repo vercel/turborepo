@@ -84,24 +84,46 @@ func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 	if err != nil {
 		return "", fmt.Errorf("error hashing files: %w", err)
 	}
-	globalHashable := struct {
-		globalFileHashMap    map[turbopath.AnchoredUnixPath]string
-		rootExternalDepsHash string
-		hashedSortedEnvPairs []string
-		globalCacheKey       string
-		pipeline             fs.Pipeline
-	}{
-		globalFileHashMap:    globalFileHashMap,
-		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
-		hashedSortedEnvPairs: globalHashableEnvPairs,
-		globalCacheKey:       _globalCacheKey,
-		pipeline:             pipeline,
+	globalHashable := &globalHashInputs{
+		GlobalFileHashMap:    globalFileHashMap,
+		RootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
+		HashedSortedEnvPairs: globalHashableEnvPairs,
+		GlobalCacheKey:       _globalCacheKey,
+		// Pipeline:             pipeline,
 	}
+
 	globalHash, err := fs.HashObject(globalHashable)
+
+	fmt.Println("====================================")
+	fmt.Printf("globalHash: %#v\n", globalHash)
+	fmt.Printf("GlobalFileHashMap: %#v\n", globalFileHashMap)
+	fmt.Printf("RootExternalDepsHash: %#v\n", rootPackageJSON.ExternalDepsHash)
+	fmt.Printf("HashedSortedEnvPairs: %#v\n", globalHashableEnvPairs)
+	fmt.Printf("GlobalCacheKey: %#v\n", _globalCacheKey)
+	// jsonRendered, _ := json.MarshalIndent(pipeline, "", " ")
+	// fmt.Printf("Pipeline:\n")
+	// fmt.Printf(string(jsonRendered))
+	fmt.Println("-----------------------")
+
+	bites := []byte(fmt.Sprintf("%v", globalHashable))
+	fmt.Printf("[debug] allTheBites\n")
+	fmt.Println(bites)
+	fmt.Printf("[debug] allTheBites as a string\n")
+	fmt.Println(string(bites))
+	fmt.Println("====================================")
+
 	if err != nil {
 		return "", fmt.Errorf("error hashing global dependencies %w", err)
 	}
 	return globalHash, nil
+}
+
+type globalHashInputs struct {
+	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string `json:"globalFileHashMap"`
+	RootExternalDepsHash string                                `json:"rootExternalDepsHash"`
+	HashedSortedEnvPairs []string                              `json:"hashSortedEnvPairs"`
+	GlobalCacheKey       string                                `json:"globalCacheKey"`
+	Pipeline             fs.Pipeline                           `json:"pipeline"`
 }
 
 // getHashableTurboEnvVarsFromOs returns a list of environment variables names and
