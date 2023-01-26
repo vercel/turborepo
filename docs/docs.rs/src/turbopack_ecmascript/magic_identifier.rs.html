@@ -64,6 +64,7 @@
 <span id="64">64</span>
 <span id="65">65</span>
 <span id="66">66</span>
+<span id="67">67</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">pub fn </span>encode(content: <span class="kw-2">&amp;</span>str) -&gt; String {
@@ -115,6 +116,7 @@
         <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello__World__&quot;</span>);
         <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello_World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello_World__&quot;</span>);
         <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello__World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello_$5f$World__&quot;</span>);
+        <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello___World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello_$5f$_World__&quot;</span>);
         <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello/World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$2f$World__&quot;</span>);
         <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello///World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$2f2f2f$World__&quot;</span>);
         <span class="macro">assert_eq!</span>(encode(<span class="string">&quot;Hello/_World&quot;</span>), <span class="string">&quot;__TURBOPACK__Hello$2f$_World__&quot;</span>);
