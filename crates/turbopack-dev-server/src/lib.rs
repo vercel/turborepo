@@ -132,7 +132,7 @@ async fn get_from_source(
             if *vary != *content_vary {
                 GetFromSourceResult::NeedData {
                     source: ContentSourceResultVc::exact(*get_content).into(),
-                    path: String::new(),
+                    path: path.to_string(),
                     vary: content_vary.clone_value(),
                 }
             } else {
