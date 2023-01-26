@@ -438,7 +438,6 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 		}
 	}
 
-	fmt.Printf("[debug] %s merged task def %#v\n", taskID, mergedTaskDefinition.Outputs)
 	return mergedTaskDefinition, nil
 }
 
