@@ -39,17 +39,19 @@ type Tracker struct {
 	PackageInputsExpandedHashes map[packageFileHashKey]map[turbopath.AnchoredUnixPath]string
 	packageTaskHashes           map[string]string // taskID -> hash
 	HashableEnvPairs            map[string][]string
+	PackageTaskFramework        map[string]*inference.Framework
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
 func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, workspaceInfos graph.WorkspaceInfos) *Tracker {
 	return &Tracker{
-		rootNode:          rootNode,
-		globalHash:        globalHash,
-		pipeline:          pipeline,
-		workspaceInfos:    workspaceInfos,
-		packageTaskHashes: make(map[string]string),
-		HashableEnvPairs:  make(map[string][]string),
+		rootNode:             rootNode,
+		globalHash:           globalHash,
+		pipeline:             pipeline,
+		workspaceInfos:       workspaceInfos,
+		packageTaskHashes:    make(map[string]string),
+		HashableEnvPairs:     make(map[string][]string),
+		PackageTaskFramework: make(map[string]*inference.Framework),
 	}
 }
 
@@ -320,6 +322,7 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 	th.mu.Lock()
 	th.packageTaskHashes[packageTask.TaskID] = hash
 	th.HashableEnvPairs[packageTask.TaskID] = hashableEnvPairs
+	th.PackageTaskFramework[packageTask.TaskID] = framework
 	th.mu.Unlock()
 	return hash, nil
 }

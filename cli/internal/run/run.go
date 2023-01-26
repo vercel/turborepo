@@ -322,8 +322,9 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	// the tasks that we expect to run based on the user command.
 	// Currently, we only emit this on dry runs, but it may be useful for real runs later also.
 	summary := &dryRunSummary{
-		Packages: packagesInScope,
-		Tasks:    map[string]*taskSummary{},
+		TurboVersion: r.base.TurboVersion,
+		Packages:     packagesInScope,
+		Tasks:        map[string]*taskSummary{},
 	}
 
 	// Dry Run

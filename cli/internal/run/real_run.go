@@ -100,6 +100,7 @@ func RealRun(
 		pfs := taskhash.SpecFromPackageTask(packageTask)
 		expandedInputs := hashes.PackageInputsExpandedHashes[pfs.ToKey()]
 		envPairs := hashes.HashableEnvPairs[packageTask.TaskID]
+		framework := hashes.PackageTaskFramework[packageTask.TaskID]
 		if err != nil {
 			fmt.Printf("Warning: error with collecting task summary: %s", err)
 		}
@@ -136,6 +137,7 @@ func RealRun(
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
 			ExpandedInputs:         expandedInputs,
 			Environment:            envPairs,
+			Framework:              framework,
 		}
 		// End DRY RUN STOLEN
 
@@ -188,6 +190,7 @@ func RealRun(
 		}
 	}
 
+	summary.ExitCode = exitCode
 	rendered, err := renderDryRunFullJSON(summary, singlePackage)
 	if err != nil {
 		return err
