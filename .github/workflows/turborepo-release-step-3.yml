@@ -162,6 +162,8 @@ jobs:
           name: turbo-combined
           path: cli/dist
   create-release-pr:
+    name: "Open Release Branch PR"
+    needs: [final-publish]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@1.0.0
