@@ -489,6 +489,11 @@
 <span id="489">489</span>
 <span id="490">490</span>
 <span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -528,19 +533,20 @@
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
 </span><span class="kw">pub struct </span>NextConfig {
-    <span class="kw">pub </span>cross_origin: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>config_file: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>config_file_name: String,
 
-    <span class="kw">pub </span>react_strict_mode: <span class="prelude-ty">Option</span>&lt;bool&gt;,
-    <span class="kw">pub </span>experimental: ExperimentalConfig,
     <span class="kw">pub </span>env: IndexMap&lt;String, String&gt;,
-    <span class="kw">pub </span>compiler: <span class="prelude-ty">Option</span>&lt;CompilerConfig&gt;,
+    <span class="kw">pub </span>experimental: ExperimentalConfig,
     <span class="kw">pub </span>images: ImageConfig,
+    <span class="kw">pub </span>page_extensions: Vec&lt;String&gt;,
+    <span class="kw">pub </span>react_strict_mode: <span class="prelude-ty">Option</span>&lt;bool&gt;,
     <span class="kw">pub </span>transpile_packages: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
 
     <span class="comment">// unsupported
-    </span>amp: AmpConfig,
+    </span>cross_origin: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    compiler: <span class="prelude-ty">Option</span>&lt;CompilerConfig&gt;,
+    amp: AmpConfig,
     analytics_id: String,
     asset_prefix: String,
     base_path: String,
@@ -563,7 +569,6 @@
     optimize_fonts: bool,
     output: <span class="prelude-ty">Option</span>&lt;OutputType&gt;,
     output_file_tracing: bool,
-    page_extensions: Vec&lt;String&gt;,
     powered_by_header: bool,
     production_browser_source_maps: bool,
     public_runtime_config: IndexMap&lt;String, serde_json::Value&gt;,
@@ -871,6 +876,11 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>image_config(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ImageConfigVc&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.images.clone().cell())
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>page_extensions(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringsVc&gt; {
+        <span class="prelude-val">Ok</span>(StringsVc::cell(<span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.page_extensions.clone()))
     }
 
     <span class="attr">#[turbo_tasks::function]

@@ -592,12 +592,15 @@
 <span id="592">592</span>
 <span id="593">593</span>
 <span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{
-    primitives::{BoolVc, StringVc},
+    primitives::{BoolVc, StringVc, StringsVc},
     trace::TraceRawVcs,
     Value,
 };
@@ -824,6 +827,7 @@
         server_data_context,
         client_context,
         pages_dir,
+        next_config.page_extensions(),
         SpecificityVc::exact(),
         <span class="number">0</span>,
         pages_dir,
@@ -1004,6 +1008,7 @@
     server_data_context: AssetContextVc,
     client_context: AssetContextVc,
     pages_dir: FileSystemPathVc,
+    page_extensions: StringsVc,
     specificity: SpecificityVc,
     position: u32,
     input_dir: FileSystemPathVc,
@@ -1015,6 +1020,8 @@
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;CombinedContentSourceVc&gt; {
+    <span class="kw">let </span>page_extensions_raw = <span class="kw-2">&amp;*</span>page_extensions.<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="kw">let </span><span class="kw-2">mut </span>sources = <span class="macro">vec!</span>[];
     <span class="kw">let </span>dir_content = input_dir.read_dir().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">if let </span>DirectoryContent::Entries(entries) = <span class="kw-2">&amp;*</span>dir_content {
@@ -1029,51 +1036,49 @@
             <span class="kw">match </span>entry {
                 DirectoryEntry::File(file) =&gt; {
                     <span class="kw">if let </span><span class="prelude-val">Some</span>((basename, extension)) = name.rsplit_once(<span class="string">&#39;.&#39;</span>) {
-                        <span class="kw">match </span>extension {
-                            <span class="comment">// pageExtensions option from next.js
-                            // defaults: https://github.com/vercel/next.js/blob/611e13f5159457fedf96d850845650616a1f75dd/packages/next/server/config-shared.ts#L499
-                            </span><span class="string">&quot;js&quot; </span>| <span class="string">&quot;ts&quot; </span>| <span class="string">&quot;jsx&quot; </span>| <span class="string">&quot;tsx&quot; </span>| <span class="string">&quot;mdx&quot; </span>=&gt; {
-                                <span class="kw">let </span>(dev_server_path, intermediate_output_path, specificity) =
-                                    <span class="kw">if </span>basename == <span class="string">&quot;index&quot; </span>{
-                                        (
-                                            server_path.join(<span class="string">&quot;index.html&quot;</span>),
-                                            intermediate_output_path,
-                                            specificity,
-                                        )
-                                    } <span class="kw">else if </span>basename == <span class="string">&quot;404&quot; </span>{
-                                        (
-                                            server_path.join(<span class="string">&quot;[...].html&quot;</span>),
-                                            intermediate_output_path.join(basename),
-                                            specificity.with_fallback(position),
-                                        )
-                                    } <span class="kw">else </span>{
-                                        (
-                                            server_path.join(basename).join(<span class="string">&quot;index.html&quot;</span>),
-                                            intermediate_output_path.join(basename),
-                                            specificity,
-                                        )
-                                    };
-                                sources.push((
-                                    name,
-                                    create_page_source_for_file(
-                                        context_path,
-                                        server_context,
-                                        server_data_context,
-                                        client_context,
-                                        pages_dir,
-                                        specificity,
-                                        <span class="kw-2">*</span>file,
-                                        runtime_entries,
-                                        fallback_page,
-                                        server_root,
-                                        dev_server_path,
-                                        dev_server_path.is_inside(server_api_path),
+                        <span class="kw">if </span>page_extensions_raw
+                            .iter()
+                            .any(|allowed| allowed == extension)
+                        {
+                            <span class="kw">let </span>(dev_server_path, intermediate_output_path, specificity) =
+                                <span class="kw">if </span>basename == <span class="string">&quot;index&quot; </span>{
+                                    (
+                                        server_path.join(<span class="string">&quot;index.html&quot;</span>),
                                         intermediate_output_path,
-                                        output_root,
-                                    ),
-                                ));
-                            }
-                            <span class="kw">_ </span>=&gt; {}
+                                        specificity,
+                                    )
+                                } <span class="kw">else if </span>basename == <span class="string">&quot;404&quot; </span>{
+                                    (
+                                        server_path.join(<span class="string">&quot;[...].html&quot;</span>),
+                                        intermediate_output_path.join(basename),
+                                        specificity.with_fallback(position),
+                                    )
+                                } <span class="kw">else </span>{
+                                    (
+                                        server_path.join(basename).join(<span class="string">&quot;index.html&quot;</span>),
+                                        intermediate_output_path.join(basename),
+                                        specificity,
+                                    )
+                                };
+                            sources.push((
+                                name,
+                                create_page_source_for_file(
+                                    context_path,
+                                    server_context,
+                                    server_data_context,
+                                    client_context,
+                                    pages_dir,
+                                    specificity,
+                                    <span class="kw-2">*</span>file,
+                                    runtime_entries,
+                                    fallback_page,
+                                    server_root,
+                                    dev_server_path,
+                                    dev_server_path.is_inside(server_api_path),
+                                    intermediate_output_path,
+                                    output_root,
+                                ),
+                            ));
                         }
                     }
                 }
@@ -1086,6 +1091,7 @@
                             server_data_context,
                             client_context,
                             pages_dir,
+                            page_extensions,
                             specificity,
                             position + <span class="number">1</span>,
                             <span class="kw-2">*</span>dir,
