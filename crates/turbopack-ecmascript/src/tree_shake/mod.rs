@@ -80,6 +80,7 @@ impl Analyzer<'_> {
                         state.last_writes.push(item_id.clone());
                     } else {
                         // TODO: Create a fake module item
+                        state.last_writes.push(item_id.clone());
                     }
                 }
             }
