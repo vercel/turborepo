@@ -30,6 +30,10 @@ type MessageData =
   | { type: "middleware-headers"; data: MiddlewareHeadersResponse }
   | { type: "middleware-body"; data: Uint8Array }
   | {
+      type: "full-middleware";
+      data: { headers: MiddlewareHeadersResponse; body: Uint8Array };
+    }
+  | {
       type: "redirect";
       data: RedirectResponse;
     }
@@ -184,18 +188,27 @@ async function handleClientResponse(
     headers: clientResponse.rawHeaders,
   };
 
-  // https://linear.app/vercel/issue/WEB-277/nextjs-middleware
-  ipc.sendError(new Error("middleware routing is not supported yet"));
+  // TODO: support streaming middleware
+  //await sendValue(ipc, {
+  //  type: "middleware-headers",
+  //  data: responseHeaders,
+  //});
+  //for await (const chunk of clientResponse) {
+  //  await sendValue(ipc, {
+  //    type: "middleware-body",
+  //    data: chunk as Buffer,
+  //  });
+  //}
 
-  await sendValue(ipc, {
-    type: "middleware-headers",
-    data: responseHeaders,
-  });
-
+  const buffers = [];
   for await (const chunk of clientResponse) {
-    await sendValue(ipc, {
-      type: "middleware-body",
-      data: chunk as Buffer,
-    });
+    buffers.push(chunk as Buffer);
   }
+  await sendValue(ipc, {
+    type: "full-middleware",
+    data: {
+      headers: responseHeaders,
+      body: Buffer.concat(buffers),
+    },
+  });
 }

@@ -116,6 +116,18 @@ impl ContentSource for NextRouterContentSource {
                     .inner
                     .get(path, Value::new(ContentSourceData::default())))
             }
+            RouterResult::FullMiddleware(data) => Ok(ContentSourceResultVc::exact(
+                ContentSourceContent::HttpProxy(
+                    ProxyResult {
+                        status: data.headers.status_code,
+                        headers: data.headers.headers.clone(),
+                        body: data.body.clone().into(),
+                    }
+                    .cell(),
+                )
+                .cell()
+                .into(),
+            )),
         }
     }
 }

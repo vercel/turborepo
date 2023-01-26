@@ -69,17 +69,23 @@ pub struct RewriteResponse {
 #[derive(Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct MiddlewareHeadersResponse {
-    pub url: String,
     pub status_code: u16,
     pub headers: Vec<String>,
 }
 
 #[turbo_tasks::value(shared)]
 #[derive(Debug, Clone, Default)]
-pub struct MiddlewareBodyResponse(Vec<u8>);
+pub struct MiddlewareBodyResponse(pub Vec<u8>);
+
+#[turbo_tasks::value(shared)]
+#[derive(Debug, Clone, Default)]
+pub struct FullMiddlewareResponse {
+    pub headers: MiddlewareHeadersResponse,
+    pub body: Vec<u8>,
+}
 
 #[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type", rename_all = "kebab-case")]
 enum RouterIncomingMessage {
     Redirect {
         data: RedirectResponse,
@@ -97,6 +103,9 @@ enum RouterIncomingMessage {
     MiddlewareBody {
         data: MiddlewareBodyResponse,
     },
+    FullMiddleware {
+        data: FullMiddlewareResponse,
+    },
     Error(StructuredError),
 }
 
@@ -104,6 +113,7 @@ enum RouterIncomingMessage {
 pub enum RouterResult {
     Redirect(RedirectResponse),
     Rewrite(RewriteResponse),
+    FullMiddleware(FullMiddlewareResponse),
     Error,
 }
 
@@ -112,6 +122,7 @@ impl From<RouterIncomingMessage> for RouterResult {
         match value {
             RouterIncomingMessage::Redirect { data } => Self::Redirect(data),
             RouterIncomingMessage::Rewrite { data } => Self::Rewrite(data),
+            RouterIncomingMessage::FullMiddleware { data } => Self::FullMiddleware(data),
             _ => Self::Error,
         }
     }
