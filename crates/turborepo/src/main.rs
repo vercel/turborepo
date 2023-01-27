@@ -42,6 +42,10 @@ fn run_go_binary(args: Args) -> Result<i32> {
     }
 
     let serialized_args = serde_json::to_string(&args)?;
+    if matches!(std::env::var("TURBO_DUMP_GO_ARGS").as_deref(), Ok("1")) {
+        println!("{}", serialized_args);
+        return Ok(1);
+    }
     let mut command = process::Command::new(go_binary_path)
         .arg(serialized_args)
         .stdout(Stdio::inherit())
