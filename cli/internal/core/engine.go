@@ -423,10 +423,12 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 
 		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
 		mergedTaskDefinition.EnvVarDependencies = taskDef.EnvVarDependencies
+
 		if taskDef.TopologicalDependencies != nil {
 			mergedTaskDefinition.TopologicalDependencies = taskDef.TopologicalDependencies
 		}
-		if taskDef.TaskDependencies != nil {
+
+		if _, ok := taskDef.FieldsMeta["HasTaskDependencies"]; ok {
 			mergedTaskDefinition.TaskDependencies = taskDef.TaskDependencies
 		}
 		mergedTaskDefinition.Inputs = taskDef.Inputs
@@ -441,6 +443,7 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 			Exclusions: []string{},
 		}
 	}
+	// fmt.Printf("[debug] Merged def %#v\n", mergedTaskDefinition)
 	return mergedTaskDefinition, nil
 }
 

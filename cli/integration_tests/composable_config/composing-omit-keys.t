@@ -16,7 +16,13 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing 5c7fd63a64a3e13f
+  omit-keys:omit-keys-underlying-task: cache miss, executing 97f32c8be558bb46
+  omit-keys:omit-keys-underlying-task: 
+  omit-keys:omit-keys-underlying-task: > omit-keys-underlying-task
+  omit-keys:omit-keys-underlying-task: > echo "running omit-keys-underlying-task"
+  omit-keys:omit-keys-underlying-task: 
+  omit-keys:omit-keys-underlying-task: running omit-keys-underlying-task
+  omit-keys:omit-keys-task: cache miss, executing 1106081f1913bcfd
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
@@ -38,7 +44,17 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache hit, suppressing output 4704e217f779d371
+  omit-keys:omit-keys-underlying-task: cache hit, replaying output 97f32c8be558bb46
+  omit-keys:omit-keys-underlying-task: 
+  omit-keys:omit-keys-underlying-task: > omit-keys-underlying-task
+  omit-keys:omit-keys-underlying-task: > echo "running omit-keys-underlying-task"
+  omit-keys:omit-keys-underlying-task: 
+  omit-keys:omit-keys-underlying-task: running omit-keys-underlying-task
+  omit-keys:omit-keys-task: cache hit, replaying output 1106081f1913bcfd
+  omit-keys:omit-keys-task: 
+  omit-keys:omit-keys-task: > omit-keys-task
+  omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
+  omit-keys:omit-keys-task: 
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total

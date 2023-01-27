@@ -326,16 +326,28 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 
 	c.TopologicalDependencies = []string{} // TODO @mehulkar: this should be a set
 	c.TaskDependencies = []string{}        // TODO @mehulkar: this should be a set
-	for _, dependency := range task.DependsOn {
-		if strings.HasPrefix(dependency, envPipelineDelimiter) {
-			log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
-			envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
-		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
-			c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
-		} else {
-			c.TaskDependencies = append(c.TaskDependencies, dependency)
+	if task.DependsOn != nil {
+
+		for _, dependency := range task.DependsOn {
+			if strings.HasPrefix(dependency, envPipelineDelimiter) {
+				log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
+				envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
+			} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
+				// TODO(mehulkar): Assign bookkeeping, but only once, since we are in a loop
+				// if _, ok := c.FieldsMeta["HasTaskDependencies"]; !ok {
+				// 	c.FieldsMeta["HasTopologicalDependencies"] = true
+				// }
+				c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
+			} else {
+				// Assign bookkeeping, but only once, since we are in a loop
+				if _, ok := c.FieldsMeta["HasTaskDependencies"]; !ok {
+					c.FieldsMeta["HasTaskDependencies"] = true
+				}
+				c.TaskDependencies = append(c.TaskDependencies, dependency)
+			}
 		}
 	}
+
 	sort.Strings(c.TaskDependencies)
 	sort.Strings(c.TopologicalDependencies)
 
