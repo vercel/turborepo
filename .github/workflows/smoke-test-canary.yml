@@ -17,11 +17,7 @@ jobs:
       - name: Check node version
         run: node --version
       - name: Setup Basic Example
-        run: npx create-turbo@canary --help --use-pnpm basic-test
-      - name: ls directory
-        run: ls -lsa
-      - name: Enter project directory
-        run: cd basic-test
+        run: npx create-turbo@canary --help --use-pnpm .
       - name: ls directory
         run: ls -lsa
       - name: Check turbo bin
