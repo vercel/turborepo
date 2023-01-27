@@ -23,6 +23,24 @@ function exec({ command, options }) {
   }
 }
 
+function installGlobalTurbo({ packageManager }) {
+  console.log("Install global turbo");
+  if (packageManager === "pnpm" || packageManager === "npm") {
+    exec({ command: `${packageManager} install turbo --global` });
+  } else {
+    exec({ command: `${packageManager} global add turbo` });
+  }
+}
+
+function uninstallLocalTurbo({ packageManager }) {
+  console.log("Uninstall local turbo");
+  if (packageManager === "pnpm" || packageManager === "npm") {
+    exec({ command: `${packageManager} uninstall turbo` });
+  } else {
+    exec({ command: `${packageManager} remove turbo` });
+  }
+}
+
 function local({ version, packageManager }) {
   const createTurboOutput = exec({
     command: `npx create-turbo@${version} --help --use-${packageManager} .`,
@@ -60,8 +78,7 @@ function global({ version, packageManager }) {
   });
   assert(createTurboOutput.includes("Success! Your new Turborepo is ready."));
 
-  console.log("Install global turbo");
-  exec({ command: `${packageManager} install turbo --global` });
+  installGlobalTurbo({ packageManager });
 
   console.log("Turbo details");
   exec({ command: `turbo --version` });
@@ -71,8 +88,7 @@ function global({ version, packageManager }) {
   const turboFirstBin = exec({ command: `turbo bin` });
   assert(!turboFirstBin.includes("global"));
 
-  console.log("Uninstall local turbo");
-  exec({ command: `${packageManager} uninstall turbo` });
+  uninstallLocalTurbo({ packageManager });
 
   console.log("Turbo details");
   exec({ command: `turbo --version` });
@@ -101,8 +117,7 @@ function both({ version, packageManager }) {
   });
   assert(createTurboOutput.includes("Success! Your new Turborepo is ready."));
 
-  console.log("Install global turbo");
-  exec({ command: `${packageManager} install turbo --global` });
+  installGlobalTurbo({ packageManager });
 
   console.log("Turbo details");
   exec({ command: `turbo --version` });
