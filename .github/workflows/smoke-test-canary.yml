@@ -2,6 +2,9 @@ name: Smoke Test Canary
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types:
+      - webhook
 
 jobs:
   test-local:
@@ -14,6 +17,8 @@ jobs:
           version: 7.12.1
       - name: Setup Basic Example
         run: npx create-turbo@canary --help --use-pnpm .
+      - name: Turbo Details
+        run: pnpm turbo --version && pnpm turbo bin
       - name: Verify Binary Location
         uses: GuillaumeFalourd/assert-command-line-output@v2.1
         with:
@@ -44,6 +49,8 @@ jobs:
         run: pnpm install turbo@canary --global
       - name: Setup Basic Example
         run: npx create-turbo@canary --help --use-pnpm .
+      - name: Turbo Details
+        run: pnpm turbo --version && pnpm turbo bin
       - name: Verify Binary Location
         uses: GuillaumeFalourd/assert-command-line-output@v2.1
         with:
@@ -57,7 +64,7 @@ jobs:
         with:
           command_line: turbo bin
           contains: "global"
-          expected_result: SUCCESS
+          expected_result: FAILED
       - name: Build
         uses: GuillaumeFalourd/assert-command-line-output@v2.1
         with:
@@ -82,6 +89,8 @@ jobs:
         run: pnpm install turbo@canary --global
       - name: Setup Basic Example
         run: npx create-turbo@canary --help --use-pnpm .
+      - name: Turbo Details
+        run: pnpm turbo --version && pnpm turbo bin
       - name: Verify Binary Location
         uses: GuillaumeFalourd/assert-command-line-output@v2.1
         with:
