@@ -1,9 +1,5 @@
 name: Cleanup branch caches
 on:
-  check_suite:
-    types: [completed]
-  check_run:
-    types: [completed]
   pull_request:
     types: [opened, closed, reopened, synchronize]
   push:
@@ -29,13 +25,7 @@ jobs:
           BRANCH=${{ github.ref }}
 
           echo "Fetching list of cache key"
-          cacheKeysList=$(gh actions-cache list -R "$REPO" -B "$BRANCH" --limit 100)
-          if [ "$cacheKeysList" = 'There are no Actions caches currently present in this repo or for the provided filters' ]; then
-            echo "No caches, nothing to do."
-            exit 0
-          fi
-
-          cacheKeysForPR=$(echo -e "$cacheKeysList" | cut -f 1)
+          cacheKeysForPR=$(gh actions-cache list -R "$REPO" -B "$BRANCH" --limit 100 | cut -f 1)
 
           ## Setting this to not fail the workflow while deleting cache keys.
           set +e
