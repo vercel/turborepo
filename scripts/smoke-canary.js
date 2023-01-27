@@ -6,7 +6,6 @@ const { assert } = require("console");
 function exec({ command, options }) {
   console.log(`Running: "${command}"`);
   try {
-
     const result = execSync(command, options).toString();
     if (process.env.GITHUB_ACTIONS === "true") {
       console.log(`::group::"${command}" output`);
@@ -15,14 +14,13 @@ function exec({ command, options }) {
     } else {
       console.log(result);
     }
+
+    return result;
   } catch (err) {
     console.error(err);
     console.error(err.stdout.toString());
     process.exit(1);
   }
-
-
-  return result;
 }
 
 function local({ version, packageManager }) {
@@ -144,13 +142,12 @@ const tests = {
 
 function test() {
   const args = process.argv.slice(2);
-  const [
-    testName = "local",
-    version = "canary",
-    packageManager = "pnpm",
-  ] = args;
+  const [testName = "local", version = "canary", packageManager = "pnpm"] =
+    args;
 
-  console.log(`Running test: "${testName}" with version: "turbo@${version}" using ${packageManager}`);
+  console.log(
+    `Running test: "${testName}" with version: "turbo@${version}" using ${packageManager}`
+  );
   tests[testName]({ version, packageManager });
   console.log("Tests passed!");
 }
