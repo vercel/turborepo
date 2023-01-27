@@ -357,7 +357,7 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 	defer c.mutex.Unlock()
 
 	if pkgJSONPath.FileExists() {
-		pkg, err := fs.ReadPackageJSON(pkgJSONPath)
+		pkg, err := fs.ReadPackageJSON(repoRoot, pkgJSONPath)
 		if err != nil {
 			return fmt.Errorf("parsing %s: %w", pkgJSONPath, err)
 		}

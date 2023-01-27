@@ -460,7 +460,6 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 }
 
 func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.PackageJSON, taskID string, taskName string) ([]fs.TaskDefinition, error) {
-
 	// Look for the taskDefinition in the root pipeline. We'll wait to throw errors until the end
 	rootTaskDefinition, _ := rootPipeline.GetTask(taskID, taskName)
 
@@ -480,11 +479,22 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 			)
 		}
 
+		// TODO(mehulkar):
+		// 		Pipeline.GetTask allows searching with a taskID (e.g. `package#task`).
+		// 		But we do not want to allow this, except if we're in the root workspace.
+		workspaceDefinition, _ = workspaceTurboJSON.Pipeline.GetTask(taskID, taskName)
+
 		// If there is no Extends key, we are either in a workspace that didn't
 		// extend from anything, or in a single package repo, where the workspace is the root.
-		// In either case, we want to error.
-		// TODO(mehulkar): If pkg.Dir is Root allow this to happen
 		if len(workspaceTurboJSON.Extends) == 0 {
+			// For the single package case, we can just return the workspaceDefinition
+			// (It should be the same as the rootTaskDefinition)
+			if pkg.PackageJSONPath == "package.json" {
+				return []fs.TaskDefinition{*workspaceDefinition}, nil
+			}
+
+			// For turbo.jsons in workspaces that don't have an extends key, throw an error
+			// We don't support this right now.
 			return nil, fmt.Errorf("No \"extends\" key found in %s", workspaceConfigPath)
 		}
 
@@ -496,11 +506,6 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 				workspaceTurboJSON.Extends,
 			)
 		}
-
-		// TODO(mehulkar):
-		// 		Pipeline.GetTask allows searching with a taskID (e.g. `package#task`).
-		// 		But we do not want to allow this, except if we're in the root workspace.
-		workspaceDefinition, _ = workspaceTurboJSON.Pipeline.GetTask(taskID, taskName)
 	}
 
 	if workspaceDefinition == nil && rootTaskDefinition == nil {
