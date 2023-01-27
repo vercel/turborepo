@@ -297,7 +297,7 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 		return "", err
 	}
 	// log any auto detected env vars
-	logger.Debug(fmt.Sprintf("task hash env vars for %s#%s", packageTask.PackageName, packageTask.Task), "vars", hashableEnvPairs)
+	logger.Debug(fmt.Sprintf("task hash env vars for %s:%s", packageTask.PackageName, packageTask.Task), "vars", hashableEnvPairs)
 
 	hash, err := fs.HashObject(&taskHashInputs{
 		packageDir:           packageTask.Pkg.Dir.ToUnixPath(),
