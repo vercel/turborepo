@@ -104,7 +104,13 @@ function verifyLocalBinary({ installType, packageManager }) {
   const turboBinary = getTurboBinary({ installType, packageManager });
   exec({
     command: `${turboBinary} bin`,
-    conditions: [{ expected: "global", condition: "notIncludes" }],
+    conditions: [
+      {
+        expected:
+          packageManager === "npm" ? "/usr/local/lib/node_modules" : "global",
+        condition: "notIncludes",
+      },
+    ],
   });
 }
 
@@ -113,7 +119,13 @@ function verifyGlobalBinary({ installType, packageManager }) {
   const turboBinary = getTurboBinary({ installType, packageManager });
   exec({
     command: `${turboBinary} bin`,
-    conditions: [{ expected: "global", condition: "includes" }],
+    conditions: [
+      {
+        expected:
+          packageManager === "npm" ? "/usr/local/lib/node_modules" : "global",
+        condition: "includes",
+      },
+    ],
   });
 }
 
@@ -147,31 +159,31 @@ function verifySecondBuild({ installType, packageManager }) {
 
 function local({ version, packageManager }) {
   installExample({ version, packageManager });
-  logTurboDetails({ installType: "local", packageManager});
-  verifyLocalBinary({ installType: "local", packageManager});
-  verifyFirstBuild({ installType: "local", packageManager});
-  verifySecondBuild({ installType: "local", packageManager});
+  logTurboDetails({ installType: "local", packageManager });
+  verifyLocalBinary({ installType: "local", packageManager });
+  verifyFirstBuild({ installType: "local", packageManager });
+  verifySecondBuild({ installType: "local", packageManager });
 }
 
 function global({ version, packageManager }) {
   installExample({ version, packageManager });
   installGlobalTurbo({ packageManager });
-  logTurboDetails({ installType: "global", packageManager});
-  verifyLocalBinary({ installType: "global", packageManager});
+  logTurboDetails({ installType: "global", packageManager });
+  verifyLocalBinary({ installType: "global", packageManager });
   uninstallLocalTurbo({ packageManager });
-  logTurboDetails({ installType: "global", packageManager});
-  verifyGlobalBinary({ installType: "global", packageManager});
-  verifyFirstBuild({ installType: "global", packageManager});
-  verifySecondBuild({ installType: "global", packageManager});
+  logTurboDetails({ installType: "global", packageManager });
+  verifyGlobalBinary({ installType: "global", packageManager });
+  verifyFirstBuild({ installType: "global", packageManager });
+  verifySecondBuild({ installType: "global", packageManager });
 }
 
 function both({ version, packageManager }) {
   installExample({ version, packageManager });
   installGlobalTurbo({ packageManager });
-  logTurboDetails({ installType: "global", packageManager});
-  verifyLocalBinary({ installType: "global", packageManager});
-  verifyFirstBuild({ installType: "global", packageManager});
-  verifySecondBuild({ installType: "global", packageManager});
+  logTurboDetails({ installType: "global", packageManager });
+  verifyLocalBinary({ installType: "global", packageManager });
+  verifyFirstBuild({ installType: "global", packageManager });
+  verifySecondBuild({ installType: "global", packageManager });
 }
 
 const tests = {
