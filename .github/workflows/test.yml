@@ -82,13 +82,19 @@ jobs:
             !*.md
 
       - name: Go related changes
-        ## Warning: When we add Integration tests to this workflow
-        # we need to add shim/ directory to this as well
         id: go
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
             cli/**
+      - name: Go E2E related changes
+        id: go_e2e
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            shim/**
+            crates/turborepo*
+            Cargo.lock
 
       - name: Examples related changes
         id: examples
@@ -114,6 +120,7 @@ jobs:
       rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
       rust_bench: ${{ steps.ci.outputs.diff != '' || steps.rust_bench.outputs.diff != '' }}
       go: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' }}
+      go_e2e: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' || steps.go_e2e.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
@@ -177,7 +184,7 @@ jobs:
   go_integration:
     name: Go Integration Tests
     needs: determine_jobs
-    if: needs.determine_jobs.outputs.go == 'true'
+    if: needs.determine_jobs.outputs.go_e2e == 'true'
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -202,6 +209,34 @@ jobs:
 
       - name: Integration Tests
         run: pnpm -- turbo run integration-tests --filter=cli
+
+  go_e2e:
+    name: Go E2E Tests
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.go_e2e == 'true'
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/build-debug-turborepo
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          target: ${{ matrix.os.name }}
+
+      - name: E2E Tests
+        # Turbo has already been built in previous step, no need to rebuild
+        run: pnpm -- turbo-prebuilt run e2e-prebuilt --filter=cli
+
   go_examples:
     name: Go Cli Examples
     needs: determine_jobs
