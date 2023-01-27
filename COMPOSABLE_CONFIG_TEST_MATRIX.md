@@ -15,13 +15,12 @@
   - [x] outputs
   - [x] env
   - [x] outputMode
-- [ ] override-values
-  - [ ] dependsOn
-  - [ ] inputs
-  - [ ] outputs
-  - [ ] env
-  - [ ] cache
-  - [ ] outputMode
+- [x] override-values
+  - [x] dependsOn
+  - [x] inputs
+  - [x] outputs
+  - [x] env
+  - [x] outputMode
 - [x] missing-workspace-config
   - [x] dependsOn
   - [x] inputs

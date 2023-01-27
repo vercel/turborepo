@@ -1,15 +1,9 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
-    "build": {
-      "outputs": ["out/**"],
-      "dependsOn": ["compile"]
-    },
-
 
     "add-keys-task": {},
     "add-keys-underlying-task": {},
-
 
     "omit-keys-task-with-deps": {
       "dependsOn": ["omit-keys-underlying-task", "^omit-keys-underlying-topo-task"],
@@ -24,6 +18,7 @@
       "env": ["SOME_VAR"],
       "outputMode": "new-only"
     },
+
 
     "missing-workspace-config-task-with-deps": {
       "dependsOn": ["missing-workspace-config-underlying-task", "^missing-workspace-config-underlying-topo-task"],
@@ -40,6 +35,26 @@
     },
 
 
+    "override-values-task": {
+      "inputs": ["src/foo.txt"],
+      "outputs": ["out/**"],
+      "env": ["SOME_VAR"],
+      "outputMode": "new-only"
+    },
+    "override-values-task-with-deps": {
+      "dependsOn": [
+        "override-values-underlying-task",
+        "^override-values-underlying-topo-task"
+      ]
+    },
+    "override-values-underlying-task": {},
+    "override-values-underlying-topo-task": {},
+
+
+    "build": {
+      "outputs": ["out/**"],
+      "dependsOn": ["compile"]
+    },
     "compile": {},
     "beforecompile": {},
     "somethingelse": {}
