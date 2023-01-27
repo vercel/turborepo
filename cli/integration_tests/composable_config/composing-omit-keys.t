@@ -2,6 +2,13 @@ Setup
   $ . ${TESTDIR}/../setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
 
+$ ${TURBO} run omit-keys-task --skip-infer --filter=omit-keys > tmp.log
+$ cat tmp.log | grep "in scope" -A 1
+$ cat tmp.log | grep "omit-keys:omit-keys-task"
+$ cat tmp.log | grep "omit-keys:omit-keys-underlying-task"
+$ cat tmp.log | grep "blank-pkg:omit-keys-underlying-topo-task"
+$ cat tmp.log | grep "Tasks:" -A 2
+
 # The omit-keys-task in the root turbo.json has ALL the config. The workspace config
 # defines the task, but does not override any of the keys. This test:
 # [x] Tests dependsOn works by asserting that another task runs first
@@ -84,27 +91,36 @@ Setup
   Cached:    3 cached, 3 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
 
-# 3. Change input file and assert cache miss
-$ echo "more text" >> $TARGET_DIR/apps/omit-keys/src/foo.txt
-$ ${TURBO} run omit-keys-task --skip-infer --filter=omit-keys
-\xe2\x80\xa2 Packages in scope: omit-keys (esc)
-\xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
-\xe2\x80\xa2 Remote caching disabled (esc)
-omit-keys:omit-keys-underlying-task: cache miss, executing 47f17f2be6e4f7d5
-omit-keys:omit-keys-underlying-task: 
-omit-keys:omit-keys-underlying-task: > omit-keys-underlying-task
-omit-keys:omit-keys-underlying-task: > echo "running omit-keys-underlying-task"
-omit-keys:omit-keys-underlying-task: 
-omit-keys:omit-keys-underlying-task: running omit-keys-underlying-task
-omit-keys:omit-keys-task: cache miss, executing a462cfd345a81245
-omit-keys:omit-keys-task: 
-omit-keys:omit-keys-task: > omit-keys-task
-omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
-omit-keys:omit-keys-task: 
-
-Tasks:    2 successful, 2 total
-Cached:    0 cached, 2 total
-Time:\s*[\.0-9]+m?s  (re)
+# 3. Change input file and assert cache miss, and not FULL TURBO
+  $ echo "more text" >> $TARGET_DIR/apps/omit-keys/src/foo.txt
+  $ ${TURBO} run omit-keys-task --skip-infer --filter=omit-keys > tmp.log
+  $ cat tmp.log | grep "in scope" -A 1
+  \xe2\x80\xa2 Packages in scope: omit-keys (esc)
+  \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
+  $ cat tmp.log | grep "omit-keys:omit-keys-task"
+  omit-keys:omit-keys-task: cache miss, executing 020d495ef9cd6275
+  omit-keys:omit-keys-task: 
+  omit-keys:omit-keys-task: > omit-keys-task
+  omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
+  omit-keys:omit-keys-task: 
+  $ cat tmp.log | grep "omit-keys:omit-keys-underlying-task"
+  omit-keys:omit-keys-underlying-task: cache miss, executing e908c5bcda37d63a
+  omit-keys:omit-keys-underlying-task: 
+  omit-keys:omit-keys-underlying-task: > omit-keys-underlying-task
+  omit-keys:omit-keys-underlying-task: > echo "running omit-keys-underlying-task"
+  omit-keys:omit-keys-underlying-task: 
+  omit-keys:omit-keys-underlying-task: running omit-keys-underlying-task
+  $ cat tmp.log | grep "blank-pkg:omit-keys-underlying-topo-task"
+  blank-pkg:omit-keys-underlying-topo-task: cache hit, replaying output ead5d19f879b620d
+  blank-pkg:omit-keys-underlying-topo-task: 
+  blank-pkg:omit-keys-underlying-topo-task: > omit-keys-underlying-topo-task
+  blank-pkg:omit-keys-underlying-topo-task: > echo "omit-keys-underlying-topo-task from blank-pkg"
+  blank-pkg:omit-keys-underlying-topo-task: 
+  blank-pkg:omit-keys-underlying-topo-task: omit-keys-underlying-topo-task from blank-pkg
+  $ cat tmp.log | grep "Tasks:" -A 2
+   Tasks:    3 successful, 3 total
+  Cached:    1 cached, 3 total
+    Time:\s*[\.0-9]+m?s  (re)
 
 # 4. Set env var and assert cache miss
 $ SOME_VAR=somevalue ${TURBO} run omit-keys-task --skip-infer --filter=omit-keys
