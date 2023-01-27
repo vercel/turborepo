@@ -14,7 +14,7 @@ use dirs_next::config_dir;
 #[cfg(windows)]
 use dirs_next::data_local_dir as config_dir;
 pub use env::MappedEnvironment;
-pub use repo::{RepoConfig, RepoConfigLoader};
+pub use repo::{get_repo_config_path, RepoConfig, RepoConfigLoader};
 use serde::Serialize;
 pub use user::{UserConfig, UserConfigLoader};
 

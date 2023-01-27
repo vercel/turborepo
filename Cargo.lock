@@ -3181,8 +3181,9 @@ dependencies = [
 
 [[package]]
 name = "mdxjs"
-version = "0.1.4"
-source = "git+https://github.com/jridgewell/mdxjs-rs.git?rev=7bb794ebb6b7c0506aff42089055bcd1837d99df#7bb794ebb6b7c0506aff42089055bcd1837d99df"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68931216cc0e72f009bd674c5178cfd20aae01c68575fda61dead94d9bd4e702"
 dependencies = [
  "markdown",
  "serde",
@@ -3574,6 +3575,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "swc_core",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-env",
@@ -7219,6 +7221,7 @@ dependencies = [
  "clap_complete",
  "dunce",
  "itertools",
+ "log",
  "predicates",
  "pretty_assertions",
  "serde",
