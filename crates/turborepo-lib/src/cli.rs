@@ -462,6 +462,11 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Link { no_gitignore } => {
+            if clap_args.test_run {
+                println!("Link test run successful");
+                return Ok(Payload::Rust(Ok(0)));
+            }
+
             let modify_gitignore = !*no_gitignore;
             let base = CommandBase::new(clap_args, repo_root)?;
 
