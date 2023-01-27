@@ -434,7 +434,9 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 		}
 
 		mergedTaskDefinition.Inputs = taskDef.Inputs
-		mergedTaskDefinition.OutputMode = taskDef.OutputMode
+		if _, ok := taskDef.FieldsMeta["HasOutputMode"]; ok {
+			mergedTaskDefinition.OutputMode = taskDef.OutputMode
+		}
 		mergedTaskDefinition.Persistent = taskDef.Persistent
 	}
 
@@ -445,7 +447,7 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 			Exclusions: []string{},
 		}
 	}
-	// fmt.Printf("[debug] Merged def %#v\n", mergedTaskDefinition)
+
 	return mergedTaskDefinition, nil
 }
 

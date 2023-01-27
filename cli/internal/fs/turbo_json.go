@@ -69,13 +69,13 @@ type rawTaskWithDefaults struct {
 // rawTask exists to Unmarshal from json. When fields are omitted, we _want_
 // them to be missing, so that we can distinguish missing from empty value.
 type rawTask struct {
-	Outputs    []string            `json:"outputs,omitempty"`
-	Cache      *bool               `json:"cache,omitempty"`
-	DependsOn  []string            `json:"dependsOn,omitempty"`
-	Inputs     []string            `json:"inputs,omitempty"`
-	OutputMode util.TaskOutputMode `json:"outputMode,omitempty"`
-	Env        []string            `json:"env,omitempty"`
-	Persistent bool                `json:"persistent,omitempty"`
+	Outputs    []string             `json:"outputs,omitempty"`
+	Cache      *bool                `json:"cache,omitempty"`
+	DependsOn  []string             `json:"dependsOn,omitempty"`
+	Inputs     []string             `json:"inputs,omitempty"`
+	OutputMode *util.TaskOutputMode `json:"outputMode,omitempty"`
+	Env        []string             `json:"env,omitempty"`
+	Persistent bool                 `json:"persistent,omitempty"`
 }
 
 // Pipeline is a struct for deserializing .pipeline in configFile
@@ -367,7 +367,10 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	// Note that we don't require Inputs to be sorted, we're going to
 	// hash the resulting files and sort that instead
 	c.Inputs = task.Inputs
-	c.OutputMode = task.OutputMode
+	if task.OutputMode != nil {
+		c.FieldsMeta["HasOutputMode"] = true
+		c.OutputMode = *task.OutputMode
+	}
 	c.Persistent = task.Persistent
 	return nil
 }

@@ -4,9 +4,9 @@ Setup
 
 # The omit-keys-task in the root turbo.json has ALL the config. The workspace config
 # defines the task, but does not override any of the keys. This test:
-# [ ] Tests dependsOn works by asserting that another task runs first
-# [ ] Tests outputs works by asserting that the right directory is cached
-# [ ] Tests outputMode by asserting output logs on a second run
+# [x] Tests dependsOn works by asserting that another task runs first
+# [x] Tests outputs works by asserting that the right directory is cached
+# [x] Tests outputMode by asserting output logs on a second run
 # [ ] Tests inputs works by changing a file and testing there was a cache miss
 # [ ] Tests env works by setting an env var and asserting there was a cache miss
 
@@ -19,14 +19,14 @@ Setup
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
 
   $ cat tmp.log | grep "omit-keys:omit-keys-task"
-  omit-keys:omit-keys-task: cache miss, executing 3e6073b6e677c520
+  omit-keys:omit-keys-task: cache miss, executing 71560f6762b366d7
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
   omit-keys:omit-keys-task: 
 
   $ cat tmp.log | grep "omit-keys:omit-keys-underlying-task"
-  omit-keys:omit-keys-underlying-task: cache miss, executing 730bbc992f6e397b
+  omit-keys:omit-keys-underlying-task: cache miss, executing ff047baf9c6a73fc
   omit-keys:omit-keys-underlying-task: 
   omit-keys:omit-keys-underlying-task: > omit-keys-underlying-task
   omit-keys:omit-keys-underlying-task: > echo "running omit-keys-underlying-task"
@@ -34,7 +34,7 @@ Setup
   omit-keys:omit-keys-underlying-task: running omit-keys-underlying-task
 
   $ cat tmp.log | grep "blank-pkg:omit-keys-underlying-topo-task"
-  blank-pkg:omit-keys-underlying-topo-task: cache miss, executing 7394d4cb8aee0ca5
+  blank-pkg:omit-keys-underlying-topo-task: cache miss, executing ead5d19f879b620d
   blank-pkg:omit-keys-underlying-topo-task: 
   blank-pkg:omit-keys-underlying-topo-task: > omit-keys-underlying-topo-task
   blank-pkg:omit-keys-underlying-topo-task: > echo "omit-keys-underlying-topo-task from blank-pkg"
@@ -61,7 +61,7 @@ Setup
   \xe2\x80\xa2 Remote caching disabled (esc)
 
   $ cat tmp-2.log | grep "blank-pkg:omit-keys-underlying-topo-task"
-  blank-pkg:omit-keys-underlying-topo-task: cache hit, replaying output 7394d4cb8aee0ca5
+  blank-pkg:omit-keys-underlying-topo-task: cache hit, replaying output ead5d19f879b620d
   blank-pkg:omit-keys-underlying-topo-task: 
   blank-pkg:omit-keys-underlying-topo-task: > omit-keys-underlying-topo-task
   blank-pkg:omit-keys-underlying-topo-task: > echo "omit-keys-underlying-topo-task from blank-pkg"
@@ -69,7 +69,7 @@ Setup
   blank-pkg:omit-keys-underlying-topo-task: omit-keys-underlying-topo-task from blank-pkg
 
   $ cat tmp-2.log | grep "omit-keys:omit-keys-underlying-task"
-  omit-keys:omit-keys-underlying-task: cache hit, replaying output 730bbc992f6e397b
+  omit-keys:omit-keys-underlying-task: cache hit, replaying output ff047baf9c6a73fc
   omit-keys:omit-keys-underlying-task: 
   omit-keys:omit-keys-underlying-task: > omit-keys-underlying-task
   omit-keys:omit-keys-underlying-task: > echo "running omit-keys-underlying-task"
@@ -77,11 +77,7 @@ Setup
   omit-keys:omit-keys-underlying-task: running omit-keys-underlying-task
 
   $ cat tmp-2.log | grep "omit-keys:omit-keys-task"
-  omit-keys:omit-keys-task: cache hit, replaying output 3e6073b6e677c520
-  omit-keys:omit-keys-task: 
-  omit-keys:omit-keys-task: > omit-keys-task
-  omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
-  omit-keys:omit-keys-task: 
+  omit-keys:omit-keys-task: cache hit, suppressing output 71560f6762b366d7
 
   $ cat tmp-2.log | grep "Tasks:" -A 2
    Tasks:    3 successful, 3 total
