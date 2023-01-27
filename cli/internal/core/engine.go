@@ -480,6 +480,14 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 			)
 		}
 
+		// If there is no Extends key, we are either in a workspace that didn't
+		// extend from anything, or in a single package repo, where the workspace is the root.
+		// In either case, we want to error.
+		// TODO(mehulkar): If pkg.Dir is Root allow this to happen
+		if len(workspaceTurboJSON.Extends) == 0 {
+			return nil, fmt.Errorf("No \"extends\" key found in %s", workspaceConfigPath)
+		}
+
 		// TODO(mehulkar): Enable extending from non-root workspace.
 		if workspaceTurboJSON.Extends[0] != util.RootPkgName {
 			return nil, fmt.Errorf(
