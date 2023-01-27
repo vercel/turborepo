@@ -99,8 +99,13 @@ pub trait GetContentSourceContent {
 /// The content of a result that is returned by a content source.
 pub enum ContentSourceContent {
     NotFound,
-    Static(VersionedContentVc),
+    Static {
+        content: VersionedContentVc,
+        status_code: u16,
+        headers: HeaderListVc,
+    },
     HttpProxy(ProxyResultVc),
+    Rewrite(RewriteVc),
 }
 
 #[turbo_tasks::value_impl]
@@ -117,8 +122,44 @@ impl GetContentSourceContent for ContentSourceContent {
 #[turbo_tasks::value_impl]
 impl ContentSourceContentVc {
     #[turbo_tasks::function]
+    pub fn static_content(content: VersionedContentVc) -> ContentSourceContentVc {
+        ContentSourceContent::Static {
+            content,
+            status_code: 200,
+            headers: HeaderListVc::empty(),
+        }
+        .cell()
+    }
+
+    #[turbo_tasks::function]
+    pub fn static_with_headers(
+        content: VersionedContentVc,
+        status_code: u16,
+        headers: HeaderListVc,
+    ) -> ContentSourceContentVc {
+        ContentSourceContent::Static {
+            content,
+            status_code,
+            headers,
+        }
+        .cell()
+    }
+
+    #[turbo_tasks::function]
     pub fn not_found() -> ContentSourceContentVc {
         ContentSourceContent::NotFound.cell()
+    }
+}
+
+/// A list of headers arranged as contiguous (name, value) pairs.
+#[turbo_tasks::value(transparent)]
+pub struct HeaderList(Vec<(String, String)>);
+
+#[turbo_tasks::value_impl]
+impl HeaderListVc {
+    #[turbo_tasks::function]
+    pub fn empty() -> HeaderListVc {
+        HeaderList(vec![]).cell()
     }
 }
 
@@ -143,7 +184,7 @@ pub struct NeededData {
 
 impl From<VersionedContentVc> for ContentSourceContentVc {
     fn from(content: VersionedContentVc) -> Self {
-        ContentSourceContent::Static(content).cell()
+        ContentSourceContentVc::static_content(content)
     }
 }
 
@@ -401,5 +442,27 @@ impl ContentSource for NoContentSource {
     #[turbo_tasks::function]
     fn get(&self, _path: &str, _data: Value<ContentSourceData>) -> ContentSourceResultVc {
         ContentSourceResultVc::not_found()
+    }
+}
+
+/// A rewrite returned from a [ContentSource].
+#[turbo_tasks::value(shared)]
+pub struct Rewrite {
+    path: String,
+}
+
+impl Rewrite {
+    /// The path to rewrite to.
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl RewriteVc {
+    /// Creates a new [RewriteVc].
+    #[turbo_tasks::function]
+    pub fn new(path: String) -> RewriteVc {
+        Rewrite { path }.cell()
     }
 }
