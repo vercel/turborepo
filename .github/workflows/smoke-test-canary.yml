@@ -4,7 +4,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  smoke-test:
+  test-local:
+    name: "test local turbo"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -12,6 +13,22 @@ jobs:
         with:
           enable-corepack: false
       - name: Setup Basic Example
-        run: npx create-turbo@latest --help --use-pnpm basic-test
+        run: npx create-turbo@canary --help --use-pnpm basic-test
       - name: Build
         run: cd basic-test && pnpm build
+  test-global:
+    name: "test global turbo"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+      - name: Setup Global Turbo
+        run: pnpm install turbo@canary --global
+      - name: Setup Basic Example
+        run: npx create-turbo@canary --help --use-pnpm basic-test
+      - name: Remove Local Turbo
+        run: cd basic-test && pnpm uninstall turbo
+      - name: Build
+        run: pnpm build
