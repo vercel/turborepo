@@ -104,5 +104,5 @@ Setup
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
-    Time:    23ms >>> FULL TURBO
+    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
