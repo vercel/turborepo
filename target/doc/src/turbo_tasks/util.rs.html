@@ -100,7 +100,9 @@
 <span id="100">100</span>
 <span id="101">101</span>
 <span id="102">102</span>
+<span id="103">103</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
+    any::Provider,
     fmt::{Debug, Display},
     sync::Arc,
     time::Duration,
@@ -133,7 +135,7 @@
     }
 
     <span class="kw">fn </span>provide&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, req: <span class="kw-2">&amp;mut </span>std::any::Demand&lt;<span class="lifetime">&#39;a</span>&gt;) {
-        <span class="self">self</span>.inner.provide(req);
+        Provider::provide(<span class="kw-2">&amp;*</span><span class="self">self</span>.inner, req);
     }
 }
 
