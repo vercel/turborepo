@@ -29,9 +29,6 @@ function local({ version, packageManager }) {
   });
   assert(createTurboOutput.includes("Success! Your new Turborepo is ready."));
 
-  // setup git
-  exec({ command: `git init . && git add . && git commit -m "Init"` });
-
   console.log("Turbo details");
   exec({ command: `${packageManager} turbo --version` });
   exec({ command: `${packageManager} turbo bin` });
@@ -62,9 +59,6 @@ function global({ version, packageManager }) {
     command: `npx create-turbo@${version} --help --use-${packageManager} .`,
   });
   assert(createTurboOutput.includes("Success! Your new Turborepo is ready."));
-
-  // setup git
-  exec({ command: `git init . && git add . && git commit -m "Init"` });
 
   console.log("Install global turbo");
   exec({ command: `${packageManager} install turbo --global` });
@@ -106,9 +100,6 @@ function both({ version, packageManager }) {
     command: `npx create-turbo@${version} --help --use-${packageManager} .`,
   });
   assert(createTurboOutput.includes("Success! Your new Turborepo is ready."));
-
-  // setup git
-  exec({ command: `git init . && git add . && git commit -m "Init"` });
 
   console.log("Install global turbo");
   exec({ command: `${packageManager} install turbo --global` });
