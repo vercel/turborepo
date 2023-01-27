@@ -944,8 +944,9 @@ jobs:
       - go_examples
       - rust_lint
       - rust_check
-      - rust_test
-      - rust_test_bench
+      - turbopack_rust_test
+      - turborepo_rust_test
+      - turbopack_rust_test_bench
       - rust_build_release
       - rust_bench
       - format_lint
