@@ -17,6 +17,7 @@ pub trait UserClient {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "status")]
 pub enum CachingStatus {
     #[serde(rename = "disabled")]
     Disabled,
@@ -149,18 +150,20 @@ impl UserClient for APIClient {
     async fn get_caching_status(&self, team_id: &str) -> Result<CachingStatus> {
         let response = self
             .make_retryable_request(|| {
-                let request_builder = self
+                let mut request_builder = self
                     .client
                     .get(self.make_url("/v8/artifacts/status"))
-                    .query(&[("teamId", team_id)])
                     .header("User-Agent", USER_AGENT.clone())
                     .header("Content-Type", "application/json")
                     .header("Authorization", format!("Bearer {}", self.token));
 
+                if team_id.starts_with("team_") {
+                    request_builder = request_builder.query(&[("teamId", team_id)]);
+                }
+
                 request_builder.send()
             })
             .await?;
-
         Ok(response.json().await?)
     }
 }
