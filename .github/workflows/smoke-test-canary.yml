@@ -5,7 +5,7 @@ on:
 
 jobs:
   test-local:
-    name: "test local turbo"
+    name: "Test local turbo"
     runs-on: ubuntu-latest
     steps:
       - name: Setup pnpm
@@ -24,27 +24,31 @@ jobs:
         run: pwd && pnpm turbo bin
       - name: Build
         run: pnpm turbo build
-#   test-global:
-#     name: "test global turbo"
-#     runs-on: ubuntu-latest
-#     steps:
-#       - uses: actions/checkout@v3
-#       - uses: ./.github/actions/setup-node
-#         with:
-#           enable-corepack: false
-#       - name: Create test directory
-#         run: mkdir smoke-test && cd smoke-test
-#       - name: Setup Global Turbo
-#         run: pnpm install turbo@canary --global
-#       - name: Setup Basic Example
-#         run: npx create-turbo@canary --help --use-pnpm basic-test
-#       - name: Enter project directory
-#         run: cd ./basic-test
-#       - name: Check turbo bin
-#         run: pwd && turbo bin
-#       - name: Remove Local Turbo
-#         run: pnpm uninstall turbo
-#       - name: Check turbo bin
-#         run: turbo bin
-#       - name: Build
-#         run: turbo build
+      - name: Build Again (Cache Hit)
+        run: pnpm turbo build
+  test-global:
+    name: "Test global turbo"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2.2.4
+        with:
+          version: 7.12.1
+      - name: Setup Global Turbo
+        run: pnpm install turbo@canary --global
+      - name: ls directory
+        run: ls -lsa
+      - name: Check node version
+        run: node --version
+      - name: Setup Basic Example
+        run: npx create-turbo@canary --help --use-pnpm .
+      - name: Check turbo bin
+        run: pwd && turbo bin
+      - name: Remove Local Turbo
+        run: pnpm uninstall turbo
+      - name: Check turbo bin
+        run: turbo bin
+      - name: Build
+        run: turbo build
+      - name: Build Again (Cache Hit)
+        run: pnpm turbo build
