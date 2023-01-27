@@ -424,13 +424,15 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
 		mergedTaskDefinition.EnvVarDependencies = taskDef.EnvVarDependencies
 
-		if taskDef.TopologicalDependencies != nil {
+		if _, ok := taskDef.FieldsMeta["HasTopologicalDependencies"]; ok {
+			// fmt.Printf("[debug] Assigning topoDeps %#v\n", taskDef.TopologicalDependencies)
 			mergedTaskDefinition.TopologicalDependencies = taskDef.TopologicalDependencies
 		}
 
 		if _, ok := taskDef.FieldsMeta["HasTaskDependencies"]; ok {
 			mergedTaskDefinition.TaskDependencies = taskDef.TaskDependencies
 		}
+
 		mergedTaskDefinition.Inputs = taskDef.Inputs
 		mergedTaskDefinition.OutputMode = taskDef.OutputMode
 		mergedTaskDefinition.Persistent = taskDef.Persistent

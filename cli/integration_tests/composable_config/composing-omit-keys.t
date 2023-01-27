@@ -16,20 +16,26 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-underlying-task: cache miss, executing 97f32c8be558bb46
+  blank-pkg:omit-keys-underlying-topo-task: cache miss, executing 7394d4cb8aee0ca5
+  omit-keys:omit-keys-underlying-task: cache miss, executing 60675dc83422aaf4
   omit-keys:omit-keys-underlying-task: 
-  omit-keys:omit-keys-underlying-task: > omit-keys-underlying-task
+  omit-keys:omit-keys-underlying-task: > omit-keys@ omit-keys-underlying-task /private/var/folders/vg/sr4krlws0k12g21phhjwy4z40000gn/T/prysk-tests-l1wc6itd/composing-omit-keys.t/apps/omit-keys
   omit-keys:omit-keys-underlying-task: > echo "running omit-keys-underlying-task"
   omit-keys:omit-keys-underlying-task: 
+  blank-pkg:omit-keys-underlying-topo-task: 
+  blank-pkg:omit-keys-underlying-topo-task: > blank-pkg@ omit-keys-underlying-topo-task /private/var/folders/vg/sr4krlws0k12g21phhjwy4z40000gn/T/prysk-tests-l1wc6itd/composing-omit-keys.t/packages/blank-pkg
+  blank-pkg:omit-keys-underlying-topo-task: > echo "omit-keys-underlying-topo-task from blank-pkg"
+  blank-pkg:omit-keys-underlying-topo-task: 
   omit-keys:omit-keys-underlying-task: running omit-keys-underlying-task
-  omit-keys:omit-keys-task: cache miss, executing 1106081f1913bcfd
+  blank-pkg:omit-keys-underlying-topo-task: omit-keys-underlying-topo-task from blank-pkg
+  omit-keys:omit-keys-task: cache miss, executing c755cadf749a347a
   omit-keys:omit-keys-task: 
-  omit-keys:omit-keys-task: > omit-keys-task
+  omit-keys:omit-keys-task: > omit-keys@ omit-keys-task /private/var/folders/vg/sr4krlws0k12g21phhjwy4z40000gn/T/prysk-tests-l1wc6itd/composing-omit-keys.t/apps/omit-keys
   omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
   omit-keys:omit-keys-task: 
   
-   Tasks:    2 successful, 2 total
-  Cached:    0 cached, 2 total
+   Tasks:    3 successful, 3 total
+  Cached:    0 cached, 3 total
     Time:\s*[\.0-9]+m?s  (re)
   
   $ HASH=$(cat tmp.log | grep -E "omit-keys:omit-keys-task.* executing .*" | awk '{print $5}')
@@ -44,20 +50,26 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-underlying-task: cache hit, replaying output 97f32c8be558bb46
+  omit-keys:omit-keys-underlying-task: cache hit, replaying output 60675dc83422aaf4
+  blank-pkg:omit-keys-underlying-topo-task: cache hit, replaying output 7394d4cb8aee0ca5
   omit-keys:omit-keys-underlying-task: 
-  omit-keys:omit-keys-underlying-task: > omit-keys-underlying-task
+  omit-keys:omit-keys-underlying-task: > omit-keys@ omit-keys-underlying-task /private/var/folders/vg/sr4krlws0k12g21phhjwy4z40000gn/T/prysk-tests-l1wc6itd/composing-omit-keys.t/apps/omit-keys
   omit-keys:omit-keys-underlying-task: > echo "running omit-keys-underlying-task"
   omit-keys:omit-keys-underlying-task: 
   omit-keys:omit-keys-underlying-task: running omit-keys-underlying-task
-  omit-keys:omit-keys-task: cache hit, replaying output 1106081f1913bcfd
+  blank-pkg:omit-keys-underlying-topo-task: 
+  blank-pkg:omit-keys-underlying-topo-task: > blank-pkg@ omit-keys-underlying-topo-task /private/var/folders/vg/sr4krlws0k12g21phhjwy4z40000gn/T/prysk-tests-l1wc6itd/composing-omit-keys.t/packages/blank-pkg
+  blank-pkg:omit-keys-underlying-topo-task: > echo "omit-keys-underlying-topo-task from blank-pkg"
+  blank-pkg:omit-keys-underlying-topo-task: 
+  blank-pkg:omit-keys-underlying-topo-task: omit-keys-underlying-topo-task from blank-pkg
+  omit-keys:omit-keys-task: cache hit, replaying output c755cadf749a347a
   omit-keys:omit-keys-task: 
-  omit-keys:omit-keys-task: > omit-keys-task
+  omit-keys:omit-keys-task: > omit-keys@ omit-keys-task /private/var/folders/vg/sr4krlws0k12g21phhjwy4z40000gn/T/prysk-tests-l1wc6itd/composing-omit-keys.t/apps/omit-keys
   omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
   omit-keys:omit-keys-task: 
   
-   Tasks:    2 successful, 2 total
-  Cached:    2 cached, 2 total
+   Tasks:    3 successful, 3 total
+  Cached:    3 cached, 3 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 # 3. Change input file and assert cache miss

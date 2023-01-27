@@ -12,14 +12,14 @@
 
 
     "omit-keys-task": {
-      "dependsOn": ["omit-keys-underlying-task"],
+      "dependsOn": ["omit-keys-underlying-task", "^omit-keys-underlying-topo-task"],
       "inputs": ["src/foo.txt"],
       "outputs": ["out/**"],
       "env": ["SOME_ENV"],
       "outputMode": "new-only"
     },
     "omit-keys-underlying-task": {},
-
+    "omit-keys-underlying-topo-task": {},
 
     "compile": {},
     "beforecompile": {},

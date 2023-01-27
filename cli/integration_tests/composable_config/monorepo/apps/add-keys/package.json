@@ -4,5 +4,7 @@
     "add-keys-task": "echo \"running add-keys-task\" > out/foo.min.txt",
     "add-keys-underlying-task": "echo \"running add-keys-underlying-task\""
   },
-  "packageManager": "npm@8.9.12"
+  "dependencies": {
+    "blank-pkg": "workspace:*"
+  }
 }
