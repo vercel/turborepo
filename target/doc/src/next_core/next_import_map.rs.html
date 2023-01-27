@@ -426,6 +426,22 @@
 <span id="426">426</span>
 <span id="427">427</span>
 <span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::Result;
@@ -482,6 +498,14 @@
                 <span class="macro">vec!</span>[
                     request_to_import_mapping(pages_dir, <span class="string">&quot;./_document&quot;</span>),
                     request_to_import_mapping(pages_dir, <span class="string">&quot;next/document&quot;</span>),
+                ],
+            );
+            insert_alias_to_alternatives(
+                <span class="kw-2">&amp;mut </span>import_map,
+                <span class="macro">format!</span>(<span class="string">&quot;{VIRTUAL_PACKAGE_NAME}/internal/_error&quot;</span>),
+                <span class="macro">vec!</span>[
+                    request_to_import_mapping(pages_dir, <span class="string">&quot;./_error&quot;</span>),
+                    request_to_import_mapping(pages_dir, <span class="string">&quot;next/error&quot;</span>),
                 ],
             );
         }
@@ -718,6 +742,14 @@
                 <span class="macro">vec!</span>[
                     request_to_import_mapping(pages_dir, <span class="string">&quot;./_document&quot;</span>),
                     external_request_to_import_mapping(<span class="string">&quot;next/document&quot;</span>),
+                ],
+            );
+            insert_alias_to_alternatives(
+                import_map,
+                <span class="macro">format!</span>(<span class="string">&quot;{VIRTUAL_PACKAGE_NAME}/internal/_error&quot;</span>),
+                <span class="macro">vec!</span>[
+                    request_to_import_mapping(pages_dir, <span class="string">&quot;./_error&quot;</span>),
+                    external_request_to_import_mapping(<span class="string">&quot;next/error&quot;</span>),
                 ],
             );
         }

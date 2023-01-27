@@ -1627,6 +1627,7 @@
 <span id="1627">1627</span>
 <span id="1628">1628</span>
 <span id="1629">1629</span>
+<span id="1630">1630</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -2867,15 +2868,16 @@
         }
     }
 
-    <span class="kw">pub fn </span>content_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Mime&gt; {
+    <span class="doccomment">/// Returns the content type associated with this file.
+    </span><span class="kw">pub fn </span>content_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Mime&gt; {
         <span class="self">self</span>.meta.content_type.as_ref()
     }
 
-    <span class="kw">pub fn </span>with_content_type(<span class="kw-2">mut </span><span class="self">self</span>, content_type: Mime) -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Sets the content type associated with this file.
+    </span><span class="kw">pub fn </span>with_content_type(<span class="kw-2">mut </span><span class="self">self</span>, content_type: Mime) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.meta.content_type = <span class="prelude-val">Some</span>(content_type);
         <span class="self">self
     </span>}
-
     <span class="doccomment">/// Returns a Read/AsyncRead/Stream/Iterator to access the File&#39;s contents.
     </span><span class="kw">pub fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RopeReader {
         <span class="self">self</span>.content.read()
