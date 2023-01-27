@@ -1,6 +1,7 @@
 pub mod asset_graph;
 pub mod combined;
 pub mod conditional;
+pub mod headers;
 pub mod lazy_instatiated;
 pub mod query;
 pub mod router;
@@ -8,11 +9,7 @@ pub mod source_maps;
 pub mod specificity;
 pub mod static_assets;
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    hash::Hash,
-    mem::replace,
-};
+use std::collections::BTreeSet;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize, Serializer};
@@ -20,7 +17,7 @@ use turbo_tasks::{trace::TraceRawVcs, Value};
 use turbo_tasks_fs::rope::Rope;
 use turbopack_core::version::VersionedContentVc;
 
-use self::{query::Query, specificity::SpecificityVc};
+use self::{headers::Headers, query::Query, specificity::SpecificityVc};
 
 /// The result of proxying a request to another HTTP server.
 #[turbo_tasks::value(shared)]
@@ -102,8 +99,13 @@ pub trait GetContentSourceContent {
 /// The content of a result that is returned by a content source.
 pub enum ContentSourceContent {
     NotFound,
-    Static(VersionedContentVc),
+    Static {
+        content: VersionedContentVc,
+        status_code: u16,
+        headers: HeaderListVc,
+    },
     HttpProxy(ProxyResultVc),
+    Rewrite(RewriteVc),
 }
 
 #[turbo_tasks::value_impl]
@@ -120,8 +122,44 @@ impl GetContentSourceContent for ContentSourceContent {
 #[turbo_tasks::value_impl]
 impl ContentSourceContentVc {
     #[turbo_tasks::function]
+    pub fn static_content(content: VersionedContentVc) -> ContentSourceContentVc {
+        ContentSourceContent::Static {
+            content,
+            status_code: 200,
+            headers: HeaderListVc::empty(),
+        }
+        .cell()
+    }
+
+    #[turbo_tasks::function]
+    pub fn static_with_headers(
+        content: VersionedContentVc,
+        status_code: u16,
+        headers: HeaderListVc,
+    ) -> ContentSourceContentVc {
+        ContentSourceContent::Static {
+            content,
+            status_code,
+            headers,
+        }
+        .cell()
+    }
+
+    #[turbo_tasks::function]
     pub fn not_found() -> ContentSourceContentVc {
         ContentSourceContent::NotFound.cell()
+    }
+}
+
+/// A list of headers arranged as contiguous (name, value) pairs.
+#[turbo_tasks::value(transparent)]
+pub struct HeaderList(Vec<(String, String)>);
+
+#[turbo_tasks::value_impl]
+impl HeaderListVc {
+    #[turbo_tasks::function]
+    pub fn empty() -> HeaderListVc {
+        HeaderList(vec![]).cell()
     }
 }
 
@@ -146,64 +184,7 @@ pub struct NeededData {
 
 impl From<VersionedContentVc> for ContentSourceContentVc {
     fn from(content: VersionedContentVc) -> Self {
-        ContentSourceContent::Static(content).cell()
-    }
-}
-
-/// The value of an http header. HTTP headers might contain non-utf-8 bytes. An
-/// header might also occur multiple times.
-#[derive(
-    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, TraceRawVcs, Serialize, Deserialize,
-)]
-#[serde(untagged)]
-pub enum HeaderValue {
-    SingleString(String),
-    SingleBytes(Vec<u8>),
-    MultiStrings(Vec<String>),
-    MultiBytes(Vec<Vec<u8>>),
-}
-
-impl HeaderValue {
-    /// Extends the current value with another occurrence of that header which
-    /// is a string
-    pub fn extend_with_string(&mut self, new: String) {
-        *self = match replace(self, HeaderValue::SingleBytes(Vec::new())) {
-            HeaderValue::SingleString(s) => HeaderValue::MultiStrings(vec![s, new]),
-            HeaderValue::SingleBytes(b) => HeaderValue::MultiBytes(vec![b, new.into()]),
-            HeaderValue::MultiStrings(mut v) => {
-                v.push(new);
-                HeaderValue::MultiStrings(v)
-            }
-            HeaderValue::MultiBytes(mut v) => {
-                v.push(new.into());
-                HeaderValue::MultiBytes(v)
-            }
-        }
-    }
-    /// Extends the current value with another occurrence of that header which
-    /// is a non-utf-8 valid byte sequence
-    pub fn extend_with_bytes(&mut self, new: Vec<u8>) {
-        *self = match replace(self, HeaderValue::SingleBytes(Vec::new())) {
-            HeaderValue::SingleString(s) => HeaderValue::MultiBytes(vec![s.into(), new]),
-            HeaderValue::SingleBytes(b) => HeaderValue::MultiBytes(vec![b, new]),
-            HeaderValue::MultiStrings(v) => {
-                let mut v: Vec<Vec<u8>> = v.into_iter().map(|s| s.into()).collect();
-                v.push(new);
-                HeaderValue::MultiBytes(v)
-            }
-            HeaderValue::MultiBytes(mut v) => {
-                v.push(new);
-                HeaderValue::MultiBytes(v)
-            }
-        }
-    }
-
-    pub fn contains(&self, string_value: &str) -> bool {
-        match self {
-            HeaderValue::SingleString(s) => s.contains(string_value),
-            HeaderValue::MultiStrings(s) => s.iter().any(|s| s.contains(string_value)),
-            _ => false,
-        }
+        ContentSourceContentVc::static_content(content)
     }
 }
 
@@ -224,7 +205,7 @@ pub struct ContentSourceData {
     pub query: Option<Query>,
     /// http headers, might contain multiple headers with the same name, if
     /// requested
-    pub headers: Option<BTreeMap<String, HeaderValue>>,
+    pub headers: Option<Headers>,
     /// request body, if requested
     pub body: Option<BodyVc>,
     /// see [ContentSourceDataVary::cache_buster]
@@ -407,10 +388,10 @@ impl ContentSourceDataVary {
         if other.cache_buster && !cache_buster {
             return false;
         }
-        if !ContentSourceDataFilter::fulfills(&query, &other.query) {
+        if !ContentSourceDataFilter::fulfills(query, &other.query) {
             return false;
         }
-        if !ContentSourceDataFilter::fulfills(&headers, &other.headers) {
+        if !ContentSourceDataFilter::fulfills(headers, &other.headers) {
             return false;
         }
         true
@@ -461,5 +442,27 @@ impl ContentSource for NoContentSource {
     #[turbo_tasks::function]
     fn get(&self, _path: &str, _data: Value<ContentSourceData>) -> ContentSourceResultVc {
         ContentSourceResultVc::not_found()
+    }
+}
+
+/// A rewrite returned from a [ContentSource].
+#[turbo_tasks::value(shared)]
+pub struct Rewrite {
+    path: String,
+}
+
+impl Rewrite {
+    /// The path to rewrite to.
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl RewriteVc {
+    /// Creates a new [RewriteVc].
+    #[turbo_tasks::function]
+    pub fn new(path: String) -> RewriteVc {
+        Rewrite { path }.cell()
     }
 }

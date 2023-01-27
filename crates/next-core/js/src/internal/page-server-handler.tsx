@@ -8,6 +8,8 @@ import "@vercel/turbopack-next/internal/shims";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { renderToHTML, RenderOpts } from "next/dist/server/render";
+import { getRedirectStatus } from "next/dist/lib/redirect-status";
+import { PERMANENT_REDIRECT_STATUS } from "next/dist/shared/lib/constants";
 import type { BuildManifest } from "next/dist/server/get-page-files";
 import type { ReactLoadableManifest } from "next/dist/server/load-components";
 
@@ -23,10 +25,17 @@ type IpcIncomingMessage = {
   data: RenderData;
 };
 
-type IpcOutgoingMessage = {
-  type: "result";
-  result: string | { body: string; contentType?: string };
-};
+type IpcOutgoingMessage =
+  | {
+      type: "response";
+      statusCode: number;
+      headers: Array<[string, string]>;
+      body: string;
+    }
+  | { type: "rewrite"; path: string };
+
+const MIME_APPLICATION_JAVASCRIPT = "application/javascript";
+const MIME_TEXT_HTML_UTF8 = "text/html; charset=utf-8";
 
 export default function startHandler({
   isDataReq,
@@ -59,35 +68,9 @@ export default function startHandler({
         }
       }
 
-      let res = await runOperation(renderData);
+      const res = await runOperation(renderData);
 
-      if (isDataReq) {
-        if (res === undefined) {
-          // Page data is only returned if the page had getXxyProps.
-          res = {};
-        }
-        ipc.send({
-          type: "result",
-          result: {
-            contentType: "application/json",
-            body: JSON.stringify(res),
-          },
-        });
-      } else {
-        if (res == null) {
-          throw new Error("no render result returned");
-        }
-        if (typeof res !== "string") {
-          throw new Error("Non-string render result returned");
-        }
-        ipc.send({
-          type: "result",
-          result: {
-            contentType: undefined,
-            body: res,
-          },
-        });
-      }
+      ipc.send(res);
     }
   })().catch((err) => {
     ipc.sendError(err);
@@ -95,7 +78,7 @@ export default function startHandler({
 
   async function runOperation(
     renderData: RenderData
-  ): Promise<Object | string | null> {
+  ): Promise<IpcOutgoingMessage> {
     // TODO(alexkirsz) This is missing *a lot* of data, but it's enough to get a
     // basic render working.
 
@@ -188,6 +171,19 @@ export default function startHandler({
       headers: renderData.headers,
     } as any;
     const res: ServerResponse = new ServerResponseShim(req) as any;
+
+    // Both _error and 404 should receive a 404 status code.
+    const statusCode =
+      renderData.path === "/404"
+        ? 404
+        : renderData.path === "/_error"
+        ? 404
+        : 200;
+
+    // Setting the status code on the response object is necessary for
+    // `Error.getInitialProps` to detect the status code.
+    res.statusCode = statusCode;
+
     const query = { ...renderData.query, ...renderData.params };
 
     const renderResult = await renderToHTML(
@@ -203,23 +199,92 @@ export default function startHandler({
       renderOpts
     );
 
+    // Set when `getStaticProps` returns `notFound: true`.
+    const isNotFound = (renderOpts as any).isNotFound;
+
+    if (isNotFound) {
+      if (isDataReq) {
+        return {
+          type: "response",
+          statusCode,
+          body: '{"notFound":true}',
+          headers: [["Content-Type", MIME_APPLICATION_JAVASCRIPT]],
+        };
+      }
+
+      return {
+        type: "rewrite",
+        // _next/404 is a Turbopack-internal route that will always redirect to
+        // the 404 page.
+        path: "_next/404",
+      };
+    }
+
+    // Set when `getStaticProps` returns `redirect: { destination, permanent, statusCode }`.
+    const isRedirect = (renderOpts as any).isRedirect;
+
+    if (isRedirect && !isDataReq) {
+      const pageProps = (renderOpts as any).pageData.pageProps;
+      const redirect = {
+        destination: pageProps.__N_REDIRECT,
+        statusCode: pageProps.__N_REDIRECT_STATUS,
+        basePath: pageProps.__N_REDIRECT_BASE_PATH,
+      };
+      const statusCode = getRedirectStatus(redirect);
+
+      // TODO(alexkirsz) Handle basePath.
+      // if (
+      //   basePath &&
+      //   redirect.basePath !== false &&
+      //   redirect.destination.startsWith("/")
+      // ) {
+      //   redirect.destination = `${basePath}${redirect.destination}`;
+      // }
+
+      const headers: Array<[string, string]> = [
+        ["Location", redirect.destination],
+      ];
+      if (statusCode === PERMANENT_REDIRECT_STATUS) {
+        headers.push(["Refresh", `0;url=${redirect.destination}`]);
+      }
+
+      return {
+        type: "response",
+        statusCode,
+        headers,
+        body: redirect.destination,
+      };
+    }
+
     if (isDataReq) {
       // TODO(from next.js): change this to a different passing mechanism
       const pageData = (renderOpts as any).pageData;
-      return pageData;
+      return {
+        type: "response",
+        statusCode,
+        headers: [["Content-Type", MIME_APPLICATION_JAVASCRIPT]],
+        // Page data is only returned if the page had getXxyProps.
+        body: JSON.stringify(pageData === undefined ? {} : pageData),
+      };
     }
 
     if (!renderResult) {
-      return null;
+      throw new Error("no render result returned");
     }
 
     const body = renderResult.toUnchunkedString();
-    // TODO: handle these
-    // const sprRevalidate = (renderOpts as any).revalidate;
-    // const isNotFound = (renderOpts as any).isNotFound;
-    // const isRedirect = (renderOpts as any).isRedirect;
 
-    return body;
+    // TODO: handle revalidate
+    // const sprRevalidate = (renderOpts as any).revalidate;
+
+    return {
+      type: "response",
+      statusCode,
+      headers: [
+        ["Content-Type", renderResult.contentType() ?? MIME_TEXT_HTML_UTF8],
+      ],
+      body,
+    };
   }
 }
 

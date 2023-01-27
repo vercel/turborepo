@@ -192,6 +192,17 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 		}
 	}
 
+	if fs.FileExists(".npmrc") {
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin(".npmrc")}, fullDir.UntypedJoin(".npmrc").ToStringDuringMigration()); err != nil {
+			return errors.Wrap(err, "failed to copy root .npmrc")
+		}
+		if opts.Docker {
+			if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin(".npmrc")}, outDir.UntypedJoin("json/.npmrc").ToStringDuringMigration()); err != nil {
+				return errors.Wrap(err, "failed to copy root .npmrc")
+			}
+		}
+	}
+
 	if fs.FileExists("turbo.json") {
 		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin("turbo.json")}, fullDir.UntypedJoin("turbo.json").ToStringDuringMigration()); err != nil {
 			return errors.Wrap(err, "failed to copy root turbo.json")

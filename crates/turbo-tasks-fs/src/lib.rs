@@ -1238,15 +1238,16 @@ impl File {
         }
     }
 
+    /// Returns the content type associated with this file.
     pub fn content_type(&self) -> Option<&Mime> {
         self.meta.content_type.as_ref()
     }
 
+    /// Sets the content type associated with this file.
     pub fn with_content_type(mut self, content_type: Mime) -> Self {
         self.meta.content_type = Some(content_type);
         self
     }
-
     /// Returns a Read/AsyncRead/Stream/Iterator to access the File's contents.
     pub fn read(&self) -> RopeReader {
         self.content.read()

@@ -1,11 +1,10 @@
 name: Cleanup branch caches
 on:
-  check_suite:
-    types: [completed]
   pull_request:
     types: [opened, closed, reopened, synchronize]
   push:
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,9 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.ref != 'refs/heads/main' }}
     steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-
       - name: Cleanup
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -29,13 +25,13 @@ jobs:
           BRANCH=${{ github.ref }}
 
           echo "Fetching list of cache key"
-          cacheKeysForPR=$(gh actions-cache list -R $REPO -B $BRANCH | cut -f 1 )
+          cacheKeysForPR=$(gh actions-cache list -R "$REPO" -B "$BRANCH" --limit 100 | cut -f 1)
 
           ## Setting this to not fail the workflow while deleting cache keys.
           set +e
           echo "Deleting caches..."
           for cacheKey in $cacheKeysForPR
           do
-              gh actions-cache delete $cacheKey -R $REPO -B $BRANCH --confirm
+              gh actions-cache delete "$cacheKey" -R "$REPO" -B "$BRANCH" --confirm
           done
           echo "Done"
