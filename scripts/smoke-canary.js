@@ -3,6 +3,7 @@
 const { execSync } = require("child_process");
 
 function exec({ command, options, conditions }) {
+  console.log();
   console.log(`Running: "${command}"`);
   try {
     const result = execSync(command, options).toString();
@@ -50,7 +51,7 @@ function assertOutput({ output, command, expected, condition }) {
 
 function installExample({ version, packageManager }) {
   exec({
-    command: `npx create-turbo@${version} --help --use-${packageManager} .`,
+    command: `npx create-turbo@${version} --use-${packageManager} .`,
     conditions: [
       {
         expected: "Success! Your new Turborepo is ready.",
