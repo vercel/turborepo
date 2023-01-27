@@ -12,13 +12,13 @@ use dialoguer::{theme::ColorfulTheme, Confirm, Select};
 use dirs_next::home_dir;
 
 use crate::{
-    client::{CachingStatus, Team, User, UserClient},
+    client::{CachingStatus, Team, UserClient},
     commands::CommandBase,
     ui::{BOLD, CYAN, GREY, UNDERLINE},
 };
 
 enum SelectedTeam<'a> {
-    User(&'a User),
+    User,
     Team(&'a Team),
 }
 
@@ -60,10 +60,16 @@ pub async fn link(mut base: CommandBase, modify_gitignore: bool) -> Result<()> {
         .await
         .context("could not get user information")?;
 
-    let selected_team = select_team(&teams_response.teams, &user_response.user)?;
+    let user_display_name = user_response
+        .user
+        .name
+        .as_deref()
+        .unwrap_or(user_response.user.username.as_str());
+
+    let selected_team = select_team(&teams_response.teams, user_display_name)?;
 
     let team_id = match selected_team {
-        SelectedTeam::User(user) => user.id.as_str(),
+        SelectedTeam::User => user_response.user.id.as_str(),
         SelectedTeam::Team(team) => team.id.as_str(),
     };
     let caching_status = api_client.get_caching_status(team_id).await?;
@@ -78,7 +84,7 @@ pub async fn link(mut base: CommandBase, modify_gitignore: bool) -> Result<()> {
 
                         enable_caching(&url)?;
                     }
-                    SelectedTeam::User(_) => {
+                    SelectedTeam::User => {
                         let url = "https://vercel.com/account/billing";
 
                         enable_caching(url)?;
@@ -92,15 +98,12 @@ pub async fn link(mut base: CommandBase, modify_gitignore: bool) -> Result<()> {
         CachingStatus::Enabled => {}
     }
 
-    fs::create_dir_all(&base.repo_root.join(".turbo"))
+    fs::create_dir_all(base.repo_root.join(".turbo"))
         .context("could not create .turbo directory")?;
     base.repo_config()?.set_team_id(Some(team_id.to_string()))?;
 
     let chosen_team_name = match selected_team {
-        SelectedTeam::User(user) => user
-            .name
-            .as_deref()
-            .unwrap_or_else(|| user.username.as_str()),
+        SelectedTeam::User => user_display_name,
         SelectedTeam::Team(team) => team.name.as_str(),
     };
 
@@ -132,24 +135,22 @@ fn should_enable_caching() -> Result<bool> {
         .interact()?)
 }
 
-fn select_team<'a>(teams: &'a [Team], user: &'a User) -> Result<SelectedTeam<'a>> {
-    let user_name = user
-        .name
-        .as_deref()
-        .unwrap_or_else(|| user.username.as_str());
-    let mut team_names = vec![user_name];
+fn select_team<'a>(teams: &'a [Team], user_display_name: &'a str) -> Result<SelectedTeam<'a>> {
+    let mut team_names = vec![user_display_name];
     team_names.extend(teams.iter().map(|team| team.name.as_str()));
 
-    let mut theme = ColorfulTheme::default();
-    theme.active_item_style = Style::new().cyan().bold();
-    theme.active_item_prefix = Style::new().cyan().bold().apply_to(">".to_string());
+    let theme = ColorfulTheme {
+        active_item_style: Style::new().cyan().bold(),
+        active_item_prefix: Style::new().cyan().bold().apply_to(">".to_string()),
+        ..ColorfulTheme::default()
+    };
     let selection = Select::with_theme(&theme)
         .items(&team_names)
         .default(0)
         .interact()?;
 
     if selection == 0 {
-        Ok(SelectedTeam::User(user))
+        Ok(SelectedTeam::User)
     } else {
         Ok(SelectedTeam::Team(&teams[selection - 1]))
     }
@@ -186,8 +187,8 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<()> {
     if !gitignore_path.exists() {
         let mut gitignore = File::create(gitignore_path)?;
         #[cfg(unix)]
-        gitignore.metadata()?.permissions().set_mode(0644);
-        write!(gitignore, ".turbo\n")?;
+        gitignore.metadata()?.permissions().set_mode(0o0644);
+        writeln!(gitignore, ".turbo")?;
     } else {
         let gitignore = File::open(&gitignore_path)?;
         let mut lines = io::BufReader::new(gitignore).lines();

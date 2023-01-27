@@ -38,7 +38,7 @@ impl CommandBase {
 
     pub fn repo_config(&mut self) -> Result<RepoConfig> {
         if let Some(repo_config) = &self.repo_config {
-            return Ok(repo_config.clone());
+            Ok(repo_config.clone())
         } else {
             let repo_config_path = get_repo_config_path(&self.repo_root);
 
@@ -55,7 +55,7 @@ impl CommandBase {
 
     pub fn user_config(&mut self) -> Result<UserConfig> {
         if let Some(user_config) = &self.user_config {
-            return Ok(user_config.clone());
+            Ok(user_config.clone())
         } else {
             let user_config = UserConfigLoader::new(default_user_config_path()?)
                 .with_token(self.args.token.clone())
