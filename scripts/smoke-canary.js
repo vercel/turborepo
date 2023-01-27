@@ -7,7 +7,7 @@ function exec({ command, options }) {
   console.log(`Running: "${command}"`);
   const result = execSync(command, options).toString();
   if (process.env.GITHUB_ACTIONS === "true") {
-    console.log(`::group::{"${command}" output}`);
+    console.log(`::group::"${command}" output`);
     console.log(result);
     console.log(`::endgroup::`);
   } else {
@@ -22,6 +22,9 @@ function local({ version, packageManager }) {
     command: `npx create-turbo@${version} --help --use-${packageManager} .`,
   });
   assert(createTurboOutput.includes("Success! Your new Turborepo is ready."));
+
+  // setup git
+  exec({ command: `git init . && git add . && git commit -m "Init"` });
 
   console.log("Turbo details");
   exec({ command: `${packageManager} turbo --version` });
@@ -54,6 +57,9 @@ function global() {
     command: `npx create-turbo@${version} --help --use-${packageManager} .`,
   });
   assert(createTurboOutput.includes("Success! Your new Turborepo is ready."));
+
+  // setup git
+  exec({ command: `git init . && git add . && git commit -m "Init"` });
 
   console.log("Install global turbo");
   exec({ command: `${packageManager} install turbo --global` });
@@ -97,6 +103,9 @@ function both() {
   });
   assert(createTurboOutput.includes("Success! Your new Turborepo is ready."));
 
+  // setup git
+  exec({ command: `git init . && git add . && git commit -m "Init"` });
+
   console.log("Install global turbo");
   exec({ command: `${packageManager} install turbo --global` });
 
@@ -137,7 +146,7 @@ function test() {
 
   console.log(`Running test: "${testName}" with version: "${version}"`);
   tests[testName]({ version, packageManager });
-  console.log("Test passed!");
+  console.log("Tests passed!");
 }
 
 test();
