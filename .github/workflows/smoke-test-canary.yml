@@ -18,9 +18,11 @@ jobs:
         id: turbo-bin
         run: |
           echo "turbo_bin=$(pnpm turbo bin)" >> $GITHUB_ENV
-      - name: Use the value
-        run: |
-          echo "${{ env.turbo_bin }}"
+      - uses: nick-fields/assert-action@v1
+        with:
+          expected: global
+          actual: ${{ env.turbo_bin }}
+          comparison: notContains
       - name: Build
         run: pnpm turbo build
       - name: Build Again (Cache Hit)
