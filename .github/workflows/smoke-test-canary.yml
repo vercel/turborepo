@@ -15,9 +15,6 @@ jobs:
         test: ["local", "global", "both"]
         packageManager: ["npm", "pnpm"]
         
-  steps:
-    runs-on: ubuntu-latest
-    name: "Test ${{ matrix.test }} install of turbo with ${{ matrix.packageManager }}"
     steps:
       - name: Setup pnpm
         uses: pnpm/action-setup@v2.2.4
