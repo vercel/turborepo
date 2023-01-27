@@ -157,10 +157,12 @@ where
 
     let mut queue: Vec<(bool, JsValue)> = Vec::new();
     let mut done: Vec<(JsValue, bool)> = Vec::new();
+    // Tracks the number of nodes in the queue and done combined
     let mut total_nodes = 0;
     let mut cycle_stack: HashSet<Id> = HashSet::new();
     let mut replaced_references: (HashSet<Id>, HashSet<Id>) = (HashSet::new(), HashSet::new());
     let mut replaced_references_stack: Vec<(HashSet<Id>, HashSet<Id>)> = Vec::new();
+    // Tracks the number linking steps so far
     let mut steps = 0;
 
     total_nodes += val.total_nodes();
@@ -252,12 +254,14 @@ where
                     *child = val;
                     modified
                 });
+                val.update_total_nodes();
                 total_nodes -= val.total_nodes();
 
                 if modified {
                     if val.total_nodes() > LIMIT_NODE_SIZE {
+                        total_nodes += 1;
                         done.push((JsValue::Unknown(None, "node limit reached"), true));
-                        break;
+                        continue;
                     }
                     val.normalize_shallow();
                 }
@@ -265,21 +269,26 @@ where
                 let (val, visit_modified) = val.visit_async_until_settled(&mut visitor).await?;
                 if visit_modified {
                     if val.total_nodes() > LIMIT_NODE_SIZE {
+                        total_nodes += 1;
                         done.push((JsValue::Unknown(None, "node limit reached"), true));
-                        break;
+                        continue;
                     }
                     modified = true;
                 }
 
-                total_nodes += val.total_nodes();
-                done.push((val, modified));
-                if total_nodes > LIMIT_IN_PROGRESS_NODES {
+                let count = val.total_nodes();
+                if total_nodes + count > LIMIT_IN_PROGRESS_NODES {
+                    // There is always space for one more node since we just popped at least one
+                    // count
+                    total_nodes += 1;
                     done.push((
                         JsValue::Unknown(None, "in progress nodes limit reached"),
                         true,
                     ));
-                    break;
+                    continue;
                 }
+                total_nodes += count;
+                done.push((val, modified));
             }
         }
         if steps > LIMIT_LINK_STEPS {

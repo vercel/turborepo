@@ -177,62 +177,26 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                                     return true;
                                 }
                             }
-                            // TODO This breaks the Function <-> Argument relationship
-                            // We need to refactor that once we expand function calls
                             "map" => {
-                                if let Some(JsValue::Function(_, box return_value)) =
-                                    args.get_mut(0)
-                                {
-                                    match return_value {
-                                        // ['a', 'b', 'c'].map((i) => require.resolve(i)))
-                                        JsValue::Unknown(Some(call), _) => {
-                                            if let JsValue::Call(len, callee, call_args) = &**call {
-                                                *value =
-                                                    JsValue::array(
-                                                        items
-                                                            .iter()
-                                                            .map(|item| {
-                                                                let new_args = call_args
-                                                            .iter()
-                                                            .map(|arg| {
-                                                                if let JsValue::Argument(0) = arg {
-                                                                    return item.clone();
-                                                                } else if let JsValue::Unknown(
-                                                                    Some(arg),
-                                                                    _,
-                                                                ) = arg
-                                                                {
-                                                                    if let JsValue::Argument(0) =
-                                                                    &**arg
-                                                                    {
-                                                                        return item.clone();
-                                                                    }
-                                                                }
-                                                                arg.clone()
-                                                            })
-                                                            .collect();
-                                                                JsValue::Call(
-                                                                    *len,
-                                                                    callee.clone(),
-                                                                    new_args,
-                                                                )
-                                                            })
-                                                            .collect(),
-                                                    );
-                                            }
-                                        }
-                                        _ => {
-                                            *value = JsValue::array(
-                                                items
-                                                    .iter()
-                                                    .map(|_| return_value.clone())
-                                                    .collect(),
-                                            );
-                                        }
-                                    }
-                                    // stop the iteration, let the `handle_call` to continue
-                                    // processing the new mapped array
-                                    return false;
+                                if let Some(func) = args.get(0) {
+                                    *value = JsValue::array(
+                                        take(items)
+                                            .into_iter()
+                                            .enumerate()
+                                            .map(|(i, item)| {
+                                                JsValue::call(
+                                                    box func.clone(),
+                                                    vec![
+                                                        item,
+                                                        JsValue::Constant(ConstantValue::Num(
+                                                            ConstantNumber(i as f64),
+                                                        )),
+                                                    ],
+                                                )
+                                            })
+                                            .collect(),
+                                    );
+                                    return true;
                                 }
                             }
                             _ => {}

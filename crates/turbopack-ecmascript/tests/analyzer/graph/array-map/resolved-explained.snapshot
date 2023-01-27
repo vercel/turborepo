@@ -1,0 +1,35 @@
+*anonymous function 170* = (...) => [arguments[0]]
+
+*anonymous function 254* = (...) => ???*0*
+- *0* require.resolve*1*(arguments[0])
+  ⚠️  resolve.resolve non constant
+- *1* require.resolve: The require.resolve method from CommonJS
+
+*anonymous function 88* = (...) => arguments[0]
+
+a = ["../lib/a.js", "../lib/b.js"]
+
+b = ["../lib/a.js", "../lib/b.js"]
+
+c = [["../lib/a.js"], ["../lib/b.js"]]
+
+d = [???*0*, ???*2*]
+- *0* require.resolve*1*(arguments[0])
+  ⚠️  resolve.resolve non constant
+- *1* require.resolve: The require.resolve method from CommonJS
+- *2* require.resolve*3*(arguments[0])
+  ⚠️  resolve.resolve non constant
+- *3* require.resolve: The require.resolve method from CommonJS
+
+file#2 = arguments[0]
+
+file#3 = arguments[0]
+
+file#4 = arguments[0]
+
+file#6 = arguments[0]
+
+func = (...) => ???*0*
+- *0* require.resolve*1*(arguments[0])
+  ⚠️  resolve.resolve non constant
+- *1* require.resolve: The require.resolve method from CommonJS
