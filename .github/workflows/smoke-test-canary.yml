@@ -18,15 +18,32 @@ jobs:
         id: turbo-bin
         run: |
           echo "turbo_bin=$(pnpm turbo bin)" >> $GITHUB_ENV
-      - uses: nick-fields/assert-action@v1
+      - name: Verify binary location
+        uses: nick-fields/assert-action@v1
         with:
           expected: global
           actual: ${{ env.turbo_bin }}
           comparison: notContains
       - name: Build
-        run: pnpm turbo build
+        id: turbo-build-1
+        run: |
+          echo "turbo_build_1=$(pnpm turbo build)" >> $GITHUB_ENV
       - name: Build Again (Cache Hit)
-        run: pnpm turbo build
+        id: turbo-build-2
+        run: |
+          echo "turbo_build_2=$(pnpm turbo build)" >> $GITHUB_ENV
+      - name: Verify first build result
+        uses: nick-fields/assert-action@v1
+        with:
+          expected: "FULL TURBO"
+          actual: ${{ env.turbo_build_1 }}
+          comparison: notContains 
+      - name: Verify full turbo
+        uses: nick-fields/assert-action@v1
+        with:
+          expected: "FULL TURBO"
+          actual: ${{ env.turbo_build_2 }}
+          comparison: contains 
 #   test-global:
 #     name: "Test global turbo"
 #     runs-on: ubuntu-latest
