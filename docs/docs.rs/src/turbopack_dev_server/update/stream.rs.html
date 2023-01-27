@@ -236,9 +236,6 @@
 <span id="236">236</span>
 <span id="237">237</span>
 <span id="238">238</span>
-<span id="239">239</span>
-<span id="240">240</span>
-<span id="241">241</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -315,10 +312,7 @@
     <span class="kw">let </span>content = get_content_wrapper(resource, get_content);
 
     <span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
-        ContentSourceContent::Static {
-            content: resolved_content,
-            ..
-        } =&gt; {
+        ContentSourceContent::Static(resolved_content) =&gt; {
             <span class="kw">let </span>from = from.get();
             <span class="kw">let </span>update = resolved_content.update(from);
 
@@ -418,7 +412,7 @@
         <span class="comment">// We can ignore issues reported in content here since [compute_update_stream]
         // will handle them
         </span><span class="kw">let </span>version = <span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
-            ContentSourceContent::Static { content, .. } =&gt; content.version(),
+            ContentSourceContent::Static(content) =&gt; content.version(),
             <span class="kw">_ </span>=&gt; NotFoundVersionVc::new().into(),
         };
         <span class="kw">let </span>version_state = VersionStateVc::new(version).<span class="kw">await</span><span class="question-mark">?</span>;

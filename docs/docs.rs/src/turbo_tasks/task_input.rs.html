@@ -822,44 +822,6 @@
 <span id="822">822</span>
 <span id="823">823</span>
 <span id="824">824</span>
-<span id="825">825</span>
-<span id="826">826</span>
-<span id="827">827</span>
-<span id="828">828</span>
-<span id="829">829</span>
-<span id="830">830</span>
-<span id="831">831</span>
-<span id="832">832</span>
-<span id="833">833</span>
-<span id="834">834</span>
-<span id="835">835</span>
-<span id="836">836</span>
-<span id="837">837</span>
-<span id="838">838</span>
-<span id="839">839</span>
-<span id="840">840</span>
-<span id="841">841</span>
-<span id="842">842</span>
-<span id="843">843</span>
-<span id="844">844</span>
-<span id="845">845</span>
-<span id="846">846</span>
-<span id="847">847</span>
-<span id="848">848</span>
-<span id="849">849</span>
-<span id="850">850</span>
-<span id="851">851</span>
-<span id="852">852</span>
-<span id="853">853</span>
-<span id="854">854</span>
-<span id="855">855</span>
-<span id="856">856</span>
-<span id="857">857</span>
-<span id="858">858</span>
-<span id="859">859</span>
-<span id="860">860</span>
-<span id="861">861</span>
-<span id="862">862</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::{type_name, Any},
     borrow::Cow,
@@ -1192,8 +1154,6 @@
     String(String),
     Bool(bool),
     Usize(usize),
-    I16(i16),
-    U16(u16),
     I32(i32),
     U32(u32),
     U64(u64),
@@ -1377,8 +1337,6 @@
             TaskInput::String(s) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;string {:?}&quot;</span>, s),
             TaskInput::Bool(b) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;bool {:?}&quot;</span>, b),
             TaskInput::Usize(v) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;usize {}&quot;</span>, v),
-            TaskInput::I16(v) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;i16 {}&quot;</span>, v),
-            TaskInput::U16(v) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;u16 {}&quot;</span>, v),
             TaskInput::I32(v) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;i32 {}&quot;</span>, v),
             TaskInput::U32(v) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;u32 {}&quot;</span>, v),
             TaskInput::U64(v) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;u64 {}&quot;</span>, v),
@@ -1407,18 +1365,6 @@
 <span class="kw">impl </span>From&lt;bool&gt; <span class="kw">for </span>TaskInput {
     <span class="kw">fn </span>from(b: bool) -&gt; <span class="self">Self </span>{
         TaskInput::Bool(b)
-    }
-}
-
-<span class="kw">impl </span>From&lt;i16&gt; <span class="kw">for </span>TaskInput {
-    <span class="kw">fn </span>from(v: i16) -&gt; <span class="self">Self </span>{
-        TaskInput::I16(v)
-    }
-}
-
-<span class="kw">impl </span>From&lt;u16&gt; <span class="kw">for </span>TaskInput {
-    <span class="kw">fn </span>from(v: u16) -&gt; <span class="self">Self </span>{
-        TaskInput::U16(v)
     }
 }
 
@@ -1552,28 +1498,6 @@
                 .map(|i| FromTaskInput::try_from(i))
                 .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;invalid task input type, expected list&quot;</span>)),
-        }
-    }
-}
-
-<span class="kw">impl </span>FromTaskInput&lt;<span class="lifetime">&#39;_</span>&gt; <span class="kw">for </span>u16 {
-    <span class="kw">type </span>Error = anyhow::Error;
-
-    <span class="kw">fn </span>try_from(value: <span class="kw-2">&amp;</span>TaskInput) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
-        <span class="kw">match </span>value {
-            TaskInput::U16(value) =&gt; <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>value),
-            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;invalid task input type, expected u16&quot;</span>)),
-        }
-    }
-}
-
-<span class="kw">impl </span>FromTaskInput&lt;<span class="lifetime">&#39;_</span>&gt; <span class="kw">for </span>i16 {
-    <span class="kw">type </span>Error = anyhow::Error;
-
-    <span class="kw">fn </span>try_from(value: <span class="kw-2">&amp;</span>TaskInput) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
-        <span class="kw">match </span>value {
-            TaskInput::I16(value) =&gt; <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>value),
-            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;invalid task input type, expected i16&quot;</span>)),
         }
     }
 }

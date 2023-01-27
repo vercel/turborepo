@@ -165,8 +165,7 @@
 <span class="kw">use </span>turbopack_ecmascript::utils::FormatIter;
 
 <span class="kw">use </span><span class="kw">crate</span>::source::{
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceResultVc,
-    ContentSourceVc,
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
 };
 
 <span class="attr">#[turbo_tasks::value(shared)]
@@ -296,7 +295,7 @@
             children = FormatIter(|| children.iter())
         );
         <span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-            ContentSourceContentVc::static_content(
+            ContentSourceContent::Static(
                 AssetContent::File(
                     FileContent::Content(File::from(html).with_content_type(mime::TEXT_HTML_UTF_8))
                         .cell(),
@@ -304,6 +303,7 @@
                 .cell()
                 .into(),
             )
+            .cell()
             .into(),
         ))
     }

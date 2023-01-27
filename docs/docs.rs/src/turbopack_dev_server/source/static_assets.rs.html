@@ -93,7 +93,6 @@
 <span id="93">93</span>
 <span id="94">94</span>
 <span id="95">95</span>
-<span id="96">96</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>anyhow::Result;
@@ -107,8 +106,7 @@
 };
 
 <span class="kw">use super</span>::{
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceResultVc,
-    ContentSourceVc,
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
 };
 
 <span class="attr">#[turbo_tasks::value(shared)]
@@ -147,7 +145,7 @@
                 ) {
                     <span class="kw">let </span>content = SourceAssetVc::new(path).as_asset().content();
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-                        ContentSourceContentVc::static_content(content.into()).into(),
+                        ContentSourceContent::Static(content.into()).cell().into(),
                     ));
                 }
             }

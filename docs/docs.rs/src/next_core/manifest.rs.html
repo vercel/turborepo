@@ -82,6 +82,7 @@
 <span id="82">82</span>
 <span id="83">83</span>
 <span id="84">84</span>
+<span id="85">85</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>mime::APPLICATION_JSON;
@@ -89,8 +90,7 @@
 <span class="kw">use </span>turbo_tasks_fs::File;
 <span class="kw">use </span>turbopack_core::asset::AssetContentVc;
 <span class="kw">use </span>turbopack_dev_server::source::{
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceResultVc,
-    ContentSourceVc,
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
 };
 <span class="kw">use </span>turbopack_node::render::{
     node_api_source::NodeApiContentSourceVc, rendered_source::NodeRenderContentSourceVc,
@@ -162,7 +162,9 @@
         <span class="kw">let </span>file = File::from(manifest_content).with_content_type(APPLICATION_JSON);
 
         <span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-            ContentSourceContentVc::static_content(AssetContentVc::from(file).into()).into(),
+            ContentSourceContent::Static(AssetContentVc::from(file).into())
+                .cell()
+                .into(),
         ))
     }
 }

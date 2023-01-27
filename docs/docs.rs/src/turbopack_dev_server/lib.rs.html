@@ -498,39 +498,6 @@
 <span id="498">498</span>
 <span id="499">499</span>
 <span id="500">500</span>
-<span id="501">501</span>
-<span id="502">502</span>
-<span id="503">503</span>
-<span id="504">504</span>
-<span id="505">505</span>
-<span id="506">506</span>
-<span id="507">507</span>
-<span id="508">508</span>
-<span id="509">509</span>
-<span id="510">510</span>
-<span id="511">511</span>
-<span id="512">512</span>
-<span id="513">513</span>
-<span id="514">514</span>
-<span id="515">515</span>
-<span id="516">516</span>
-<span id="517">517</span>
-<span id="518">518</span>
-<span id="519">519</span>
-<span id="520">520</span>
-<span id="521">521</span>
-<span id="522">522</span>
-<span id="523">523</span>
-<span id="524">524</span>
-<span id="525">525</span>
-<span id="526">526</span>
-<span id="527">527</span>
-<span id="528">528</span>
-<span id="529">529</span>
-<span id="530">530</span>
-<span id="531">531</span>
-<span id="532">532</span>
-<span id="533">533</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 #![feature(trait_alias)]
 #![feature(array_chunks)]
@@ -635,11 +602,7 @@
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;none&quot;</span>)]
 </span><span class="kw">enum </span>GetFromSourceResult {
-    Static {
-        content: FileContentReadRef,
-        status_code: u16,
-        headers: Vec&lt;(String, String)&gt;,
-    },
+    Static(FileContentReadRef),
     Rewrite(RewriteReadRef),
     HttpProxy(ProxyResultReadRef),
     NeedData {
@@ -680,17 +643,9 @@
                         GetFromSourceResult::Rewrite(rewrite.<span class="kw">await</span><span class="question-mark">?</span>)
                     }
                     ContentSourceContent::NotFound =&gt; GetFromSourceResult::NotFound,
-                    ContentSourceContent::Static {
-                        content: content_vc,
-                        status_code,
-                        headers,
-                    } =&gt; {
+                    ContentSourceContent::Static(content_vc) =&gt; {
                         <span class="kw">if let </span>AssetContent::File(file) = <span class="kw-2">&amp;*</span>content_vc.content().<span class="kw">await</span><span class="question-mark">? </span>{
-                            GetFromSourceResult::Static {
-                                content: file.<span class="kw">await</span><span class="question-mark">?</span>,
-                                status_code: <span class="kw-2">*</span>status_code,
-                                headers: headers.<span class="kw">await</span><span class="question-mark">?</span>.clone(),
-                            }
+                            GetFromSourceResult::Static(file.<span class="kw">await</span><span class="question-mark">?</span>)
                         } <span class="kw">else </span>{
                             GetFromSourceResult::NotFound
                         }
@@ -731,38 +686,16 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">match </span><span class="kw-2">&amp;*</span>content_source_result.strongly_consistent().<span class="kw">await</span><span class="question-mark">? </span>{
-            GetFromSourceResult::Static {
-                content: file,
-                status_code,
-                headers,
-            } =&gt; {
+            GetFromSourceResult::Static(file) =&gt; {
                 <span class="kw">if let </span>FileContent::Content(content) = <span class="kw-2">&amp;**</span>file {
-                    <span class="kw">let </span><span class="kw-2">mut </span>response = Response::builder().status(<span class="kw-2">*</span>status_code);
-
-                    <span class="kw">let </span>header_map = response.headers_mut().expect(<span class="string">&quot;headers must be defined&quot;</span>);
-
-                    <span class="kw">for </span>(header_name, header_value) <span class="kw">in </span>headers {
-                        header_map.append(
-                            HeaderName::try_from(header_name.clone())<span class="question-mark">?</span>,
-                            hyper::header::HeaderValue::try_from(header_value.as_str())<span class="question-mark">?</span>,
-                        );
-                    }
-
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(content_type) = content.content_type() {
-                        header_map.append(
-                            <span class="string">&quot;content-type&quot;</span>,
-                            hyper::header::HeaderValue::try_from(content_type.to_string())<span class="question-mark">?</span>,
-                        );
-                    } <span class="kw">else if let </span>hyper::header::Entry::Vacant(entry) =
-                        header_map.entry(<span class="string">&quot;content-type&quot;</span>)
-                    {
-                        <span class="kw">let </span>guess =
-                            mime_guess::from_path(asset_path.as_ref()).first_or_octet_stream();
-                        <span class="comment">// If a text type, application/javascript, or application/json was
-                        // guessed, use a utf-8 charset as  we most likely generated it as
-                        // such.
-                        </span>entry.insert(hyper::header::HeaderValue::try_from(
-                            <span class="kw">if </span>(guess.type_() == mime::TEXT
+                    <span class="kw">let </span>content_type = content.content_type().map_or_else(
+                        || {
+                            <span class="kw">let </span>guess =
+                                mime_guess::from_path(asset_path.as_ref()).first_or_octet_stream();
+                            <span class="comment">// If a text type, application/javascript, or application/json was
+                            // guessed, use a utf-8 charset as  we most likely generated it as
+                            // such.
+                            </span><span class="kw">if </span>(guess.type_() == mime::TEXT
                                 || guess.subtype() == mime::JAVASCRIPT
                                 || guess.subtype() == mime::JSON)
                                 &amp;&amp; guess.get_param(<span class="string">&quot;charset&quot;</span>).is_none()
@@ -770,18 +703,19 @@
                                 guess.to_string() + <span class="string">&quot;; charset=utf-8&quot;
                             </span>} <span class="kw">else </span>{
                                 guess.to_string()
-                            },
-                        )<span class="question-mark">?</span>);
-                    }
-
-                    <span class="kw">let </span>content = content.content();
-                    header_map.insert(
-                        <span class="string">&quot;Content-Length&quot;</span>,
-                        hyper::header::HeaderValue::try_from(content.len().to_string())<span class="question-mark">?</span>,
+                            }
+                        },
+                        |m| m.to_string(),
                     );
 
+                    <span class="kw">let </span>status_code = content.status_code().unwrap_or(<span class="number">200</span>);
+                    <span class="kw">let </span>content = content.content();
                     <span class="kw">let </span>bytes = content.read();
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(response.body(hyper::Body::wrap_stream(bytes))<span class="question-mark">?</span>);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(Response::builder()
+                        .status(status_code)
+                        .header(<span class="string">&quot;Content-Type&quot;</span>, content_type)
+                        .header(<span class="string">&quot;Content-Length&quot;</span>, content.len().to_string())
+                        .body(hyper::Body::wrap_stream(bytes))<span class="question-mark">?</span>);
                 }
             }
             GetFromSourceResult::HttpProxy(proxy_result) =&gt; {

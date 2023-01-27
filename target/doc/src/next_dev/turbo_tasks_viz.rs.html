@@ -113,6 +113,7 @@
 <span id="113">113</span>
 <span id="114">114</span>
 <span id="115">115</span>
+<span id="116">116</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{sync::Arc, time::Duration};
 
 <span class="kw">use </span>anyhow::Result;
@@ -125,7 +126,7 @@
 };
 <span class="kw">use </span>turbopack_core::asset::AssetContentVc;
 <span class="kw">use </span>turbopack_dev_server::source::{
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceDataFilter,
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataFilter,
     ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc, NeededData,
 };
 
@@ -221,9 +222,10 @@
             <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
         };
         <span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-            ContentSourceContentVc::static_content(
+            ContentSourceContent::Static(
                 AssetContentVc::from(File::from(html).with_content_type(TEXT_HTML_UTF_8)).into(),
             )
+            .cell()
             .into(),
         ))
     }

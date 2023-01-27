@@ -1628,6 +1628,18 @@
 <span id="1628">1628</span>
 <span id="1629">1629</span>
 <span id="1630">1630</span>
+<span id="1631">1631</span>
+<span id="1632">1632</span>
+<span id="1633">1633</span>
+<span id="1634">1634</span>
+<span id="1635">1635</span>
+<span id="1636">1636</span>
+<span id="1637">1637</span>
+<span id="1638">1638</span>
+<span id="1639">1639</span>
+<span id="1640">1640</span>
+<span id="1641">1641</span>
+<span id="1642">1642</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -2868,16 +2880,26 @@
         }
     }
 
-    <span class="doccomment">/// Returns the content type associated with this file.
-    </span><span class="kw">pub fn </span>content_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Mime&gt; {
+    <span class="kw">pub fn </span>content_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Mime&gt; {
         <span class="self">self</span>.meta.content_type.as_ref()
     }
 
-    <span class="doccomment">/// Sets the content type associated with this file.
-    </span><span class="kw">pub fn </span>with_content_type(<span class="kw-2">mut </span><span class="self">self</span>, content_type: Mime) -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Returns the status code associated with this file.
+    </span><span class="kw">pub fn </span>status_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u16&gt; {
+        <span class="self">self</span>.meta.status_code
+    }
+
+    <span class="kw">pub fn </span>with_content_type(<span class="kw-2">mut </span><span class="self">self</span>, content_type: Mime) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.meta.content_type = <span class="prelude-val">Some</span>(content_type);
         <span class="self">self
     </span>}
+
+    <span class="doccomment">/// Sets the status code associated with this file.
+    </span><span class="kw">pub fn </span>with_status_code(<span class="kw-2">mut </span><span class="self">self</span>, status_code: u16) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.meta.status_code = <span class="prelude-val">Some</span>(status_code);
+        <span class="self">self
+    </span>}
+
     <span class="doccomment">/// Returns a Read/AsyncRead/Stream/Iterator to access the File&#39;s contents.
     </span><span class="kw">pub fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RopeReader {
         <span class="self">self</span>.content.read()
@@ -3009,6 +3031,7 @@
     <span class="attr">#[serde(with = <span class="string">&quot;mime_option_serde&quot;</span>)]
     #[turbo_tasks(trace_ignore)]
     </span>content_type: <span class="prelude-ty">Option</span>&lt;Mime&gt;,
+    status_code: <span class="prelude-ty">Option</span>&lt;u16&gt;,
 }
 
 <span class="kw">impl </span>From&lt;std::fs::Metadata&gt; <span class="kw">for </span>FileMeta {
@@ -3018,6 +3041,7 @@
         <span class="self">Self </span>{
             permissions,
             content_type: <span class="prelude-val">None</span>,
+            status_code: <span class="prelude-val">None</span>,
         }
     }
 }
