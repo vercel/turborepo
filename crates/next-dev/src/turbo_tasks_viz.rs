@@ -10,7 +10,7 @@ use turbo_tasks_memory::{
 };
 use turbopack_core::asset::AssetContentVc;
 use turbopack_dev_server::source::{
-    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataFilter,
+    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceDataFilter,
     ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc, NeededData,
 };
 
@@ -86,17 +86,14 @@ impl ContentSource for TurboTasksSource {
                     let table = viz::table::create_table(tree, tt.stats_type());
                     viz::table::wrap_html(&table)
                 } else {
-                    return Ok(ContentSourceResultVc::exact(
-                        ContentSourceContent::NeedData(NeededData {
-                            source: self_vc.into(),
-                            path: path.to_string(),
-                            vary: ContentSourceDataVary {
-                                query: Some(ContentSourceDataFilter::All),
-                                ..Default::default()
-                            },
-                        })
-                        .cell(),
-                    ));
+                    return Ok(ContentSourceResultVc::need_data(Value::new(NeededData {
+                        source: self_vc.into(),
+                        path: path.to_string(),
+                        vary: ContentSourceDataVary {
+                            query: Some(ContentSourceDataFilter::All),
+                            ..Default::default()
+                        },
+                    })));
                 }
             }
             "reset" => {
@@ -109,10 +106,10 @@ impl ContentSource for TurboTasksSource {
             _ => return Ok(ContentSourceResultVc::not_found()),
         };
         Ok(ContentSourceResultVc::exact(
-            ContentSourceContent::Static(
+            ContentSourceContentVc::static_content(
                 AssetContentVc::from(File::from(html).with_content_type(TEXT_HTML_UTF_8)).into(),
             )
-            .cell(),
+            .into(),
         ))
     }
 }

@@ -1,19 +1,48 @@
 use anyhow::{bail, Context, Result};
-use mime::TEXT_HTML_UTF_8;
 use turbo_tasks::primitives::StringVc;
 use turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::ChunkingContextVc,
 };
-use turbopack_dev_server::html::DevHtmlAssetVc;
+use turbopack_dev_server::{
+    html::DevHtmlAssetVc,
+    source::{HeaderListVc, RewriteVc},
+};
 use turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
 
 use super::{
-    issue::RenderingIssue, RenderDataVc, RenderResult, RenderStaticIncomingMessage,
-    RenderStaticOutgoingMessage,
+    issue::RenderingIssue, RenderDataVc, RenderStaticIncomingMessage, RenderStaticOutgoingMessage,
 };
 use crate::{get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation, trace_stack};
+
+#[turbo_tasks::value]
+pub enum StaticResult {
+    Content {
+        content: AssetContentVc,
+        status_code: u16,
+        headers: HeaderListVc,
+    },
+    Rewrite(RewriteVc),
+}
+
+#[turbo_tasks::value_impl]
+impl StaticResultVc {
+    #[turbo_tasks::function]
+    pub fn content(content: AssetContentVc, status_code: u16, headers: HeaderListVc) -> Self {
+        StaticResult::Content {
+            content,
+            status_code,
+            headers,
+        }
+        .cell()
+    }
+
+    #[turbo_tasks::function]
+    pub fn rewrite(rewrite: RewriteVc) -> Self {
+        StaticResult::Rewrite(rewrite).cell()
+    }
+}
 
 /// Renders a module as static HTML in a node.js process.
 #[turbo_tasks::function]
@@ -24,8 +53,9 @@ pub async fn render_static(
     fallback_page: DevHtmlAssetVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
+    output_root: FileSystemPathVc,
     data: RenderDataVc,
-) -> Result<AssetContentVc> {
+) -> Result<StaticResultVc> {
     let intermediate_asset = get_intermediate_asset(
         module.as_evaluated_chunk(chunking_context, Some(runtime_entries)),
         intermediate_output_path,
@@ -33,6 +63,7 @@ pub async fn render_static(
     let renderer_pool = get_renderer_pool(
         intermediate_asset,
         intermediate_output_path,
+        output_root,
         /* debug */ false,
     );
     // Read this strongly consistent, since we don't want to run inconsistent
@@ -40,20 +71,32 @@ pub async fn render_static(
     let pool = renderer_pool.strongly_consistent().await?;
     let mut operation = match pool.operation().await {
         Ok(operation) => operation,
-        Err(err) => return static_error(path, err, None, fallback_page).await,
+        Err(err) => {
+            return Ok(StaticResultVc::content(
+                static_error(path, err, None, fallback_page).await?,
+                500,
+                HeaderListVc::empty(),
+            ))
+        }
     };
 
-    match run_static_operation(
-        &mut operation,
-        data,
-        intermediate_asset,
-        intermediate_output_path,
+    Ok(
+        match run_static_operation(
+            &mut operation,
+            data,
+            intermediate_asset,
+            intermediate_output_path,
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(err) => StaticResultVc::content(
+                static_error(path, err, Some(operation), fallback_page).await?,
+                500,
+                HeaderListVc::empty(),
+            ),
+        },
     )
-    .await
-    {
-        Ok(asset) => Ok(asset),
-        Err(err) => static_error(path, err, Some(operation), fallback_page).await,
-    }
 }
 
 async fn run_static_operation(
@@ -61,32 +104,36 @@ async fn run_static_operation(
     data: RenderDataVc,
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
-) -> Result<AssetContentVc> {
+) -> Result<StaticResultVc> {
     let data = data.await?;
 
     operation
         .send(RenderStaticOutgoingMessage::Headers { data: &data })
         .await
         .context("sending headers to node.js process")?;
-    match operation
-        .recv()
-        .await
-        .context("receiving from node.js process")?
-    {
-        RenderStaticIncomingMessage::Result {
-            result: RenderResult::Simple(body),
-        } => Ok(FileContent::Content(File::from(body).with_content_type(TEXT_HTML_UTF_8)).into()),
-        RenderStaticIncomingMessage::Result {
-            result: RenderResult::Advanced { body, content_type },
-        } => Ok(FileContent::Content(
-            File::from(body)
-                .with_content_type(content_type.map_or(Ok(TEXT_HTML_UTF_8), |c| c.parse())?),
-        )
-        .into()),
-        RenderStaticIncomingMessage::Error(error) => {
-            bail!(trace_stack(error, intermediate_asset, intermediate_output_path).await?)
-        }
-    }
+    Ok(
+        match operation
+            .recv()
+            .await
+            .context("receiving from node.js process")?
+        {
+            RenderStaticIncomingMessage::Rewrite { path } => {
+                StaticResultVc::rewrite(RewriteVc::new(path))
+            }
+            RenderStaticIncomingMessage::Response {
+                status_code,
+                headers,
+                body,
+            } => StaticResultVc::content(
+                FileContent::Content({ File::from(body) }.into()).into(),
+                status_code,
+                HeaderListVc::cell(headers),
+            ),
+            RenderStaticIncomingMessage::Error(error) => {
+                bail!(trace_stack(error, intermediate_asset, intermediate_output_path).await?)
+            }
+        },
+    )
 }
 
 async fn static_error(
