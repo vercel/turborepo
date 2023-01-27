@@ -1,8 +1,5 @@
 use anyhow::Result;
-use swc_core::{
-    common::DUMMY_SP,
-    ecma::ast::{Expr, Lit, Null},
-};
+use swc_core::{ecma::ast::Expr, quote};
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbopack_core::{
     chunk::{
@@ -84,9 +81,7 @@ impl CodeGenerateable for EsmModuleIdAssetReference {
             // to anything.
             visitors.push(
                 create_visitor!(self.ast_path.await?, visit_mut_expr(expr: &mut Expr) {
-                    *expr = Expr::Lit(Lit::Null(Null {
-                        span: DUMMY_SP
-                    }));
+                    *expr = quote!("null" as Expr);
                 }),
             );
         }

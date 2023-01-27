@@ -1,4 +1,3 @@
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::primitives::BoolVc;
 use turbopack_node::route_matcher::{ParamsVc, RouteMatcher};
@@ -28,18 +27,9 @@ where
         }
     }
 
-    fn strip_prefix_and_suffix<'a, 'b>(&'a self, path: &'b str) -> Result<Option<&'b str>> {
-        let path = match path.strip_prefix(self.prefix.as_str()) {
-            Some(path) => path,
-            None => return Ok(None),
-        };
-
-        let path = match path.strip_suffix(self.suffix.as_str()) {
-            Some(path) => path,
-            None => return Ok(None),
-        };
-
-        Ok(Some(path))
+    fn strip_prefix_and_suffix<'a, 'b>(&'a self, path: &'b str) -> Option<&'b str> {
+        path.strip_prefix(self.prefix.as_str())?
+            .strip_suffix(self.suffix.as_str())
     }
 }
 
@@ -48,7 +38,7 @@ where
     T: RouteMatcher,
 {
     fn matches(&self, path: &str) -> BoolVc {
-        if let Some(path) = self.strip_prefix_and_suffix(path).unwrap() {
+        if let Some(path) = self.strip_prefix_and_suffix(path) {
             self.inner.matches(path)
         } else {
             BoolVc::cell(false)
@@ -56,7 +46,7 @@ where
     }
 
     fn params(&self, path: &str) -> ParamsVc {
-        if let Some(path) = self.strip_prefix_and_suffix(path).unwrap() {
+        if let Some(path) = self.strip_prefix_and_suffix(path) {
             self.inner.params(path)
         } else {
             ParamsVc::cell(None)
