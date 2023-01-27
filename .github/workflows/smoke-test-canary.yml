@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         test: ["local", "global", "both"]
-        packageManager: ["npm", "pnpm"]
+        packageManager: ["yarn", "pnpm"]
         
     steps:
       - name: Configure git
@@ -25,6 +25,9 @@ jobs:
         if: ${{ matrix.packageManager == 'pnpm' }}
         with:
           version: 7.12.1
+      - name: Setup yarn
+        if: ${{ matrix.packageManager == 'yarn' }}
+        run: npm install -g yarn
       - name: Checkout test file
         uses: Bhacaz/checkout-files@v2
         with:
