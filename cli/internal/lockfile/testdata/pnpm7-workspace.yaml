@@ -24,6 +24,7 @@ importers:
       "@babel/core": ^7.0.0
       "@types/node": ^17.0.12
       "@types/react": 18.0.17
+      dashboard-icons: github:peerigon/dashboard-icons
       eslint: 7.32.0
       eslint-config-custom: workspace:*
       next: 12.2.5
@@ -35,6 +36,7 @@ importers:
       ui: workspace:*
       underscore: ^1.13.4
     dependencies:
+      dashboard-icons: github.com/peerigon/dashboard-icons/ce27ef933144e09cef3911025f3649040a8571b6
       next: 12.2.5_ir3quccc6i62x6qn6jjhyjjiey
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
@@ -3431,4 +3433,13 @@ packages:
     resolution: { directory: packages/ui, type: directory }
     name: ui
     version: 0.0.0
+    dev: false
+
+  github.com/peerigon/dashboard-icons/ce27ef933144e09cef3911025f3649040a8571b6:
+    resolution:
+      {
+        tarball: https://codeload.github.com/peerigon/dashboard-icons/tar.gz/ce27ef933144e09cef3911025f3649040a8571b,
+      }
+    name: dashboard-icons
+    version: 1.0.0
     dev: false
