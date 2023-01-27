@@ -51,4 +51,22 @@ jobs:
       - name: Build
         run: turbo build
       - name: Build Again (Cache Hit)
-        run: pnpm turbo build
+        run: turbo build
+  test-both:
+    name: "Test global & local turbo (inference)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2.2.4
+        with:
+          version: 7.12.1
+      - name: Setup Global Turbo
+        run: pnpm install turbo@canary --global
+      - name: Setup Basic Example
+        run: npx create-turbo@canary --help --use-pnpm .
+      - name: Check turbo bin
+        run: pwd && turbo bin
+      - name: Build
+        run: turbo build
+      - name: Build Again (Cache Hit)
+        run: turbo build
