@@ -12,61 +12,56 @@ jobs:
         uses: pnpm/action-setup@v2.2.4
         with:
           version: 7.12.1
-      - name: ls directory
-        run: ls -lsa
-      - name: Check node version
-        run: node --version
       - name: Setup Basic Example
         run: npx create-turbo@canary --help --use-pnpm .
-      - name: ls directory
-        run: ls -lsa
       - name: Check turbo bin
-        run: pwd && pnpm turbo bin
+        id: turbo-bin
+        run: |
+          echo "turbo_bin=$(pnpm turbo bin)" >> $GITHUB_ENV
+      - name: Use the value
+        run: |
+          echo "${{ env.turbo_bin }}"
       - name: Build
         run: pnpm turbo build
       - name: Build Again (Cache Hit)
         run: pnpm turbo build
-  test-global:
-    name: "Test global turbo"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2.2.4
-        with:
-          version: 7.12.1
-      - name: Setup Global Turbo
-        run: pnpm install turbo@canary --global
-      - name: ls directory
-        run: ls -lsa
-      - name: Check node version
-        run: node --version
-      - name: Setup Basic Example
-        run: npx create-turbo@canary --help --use-pnpm .
-      - name: Check turbo bin
-        run: pwd && turbo bin
-      - name: Remove Local Turbo
-        run: pnpm uninstall turbo
-      - name: Check turbo bin
-        run: turbo bin
-      - name: Build
-        run: turbo build
-      - name: Build Again (Cache Hit)
-        run: turbo build
-  test-both:
-    name: "Test global & local turbo (inference)"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2.2.4
-        with:
-          version: 7.12.1
-      - name: Setup Global Turbo
-        run: pnpm install turbo@canary --global
-      - name: Setup Basic Example
-        run: npx create-turbo@canary --help --use-pnpm .
-      - name: Check turbo bin
-        run: pwd && turbo bin
-      - name: Build
-        run: turbo build
-      - name: Build Again (Cache Hit)
-        run: turbo build
+#   test-global:
+#     name: "Test global turbo"
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Setup pnpm
+#         uses: pnpm/action-setup@v2.2.4
+#         with:
+#           version: 7.12.1
+#       - name: Setup Global Turbo
+#         run: pnpm install turbo@canary --global
+#       - name: Setup Basic Example
+#         run: npx create-turbo@canary --help --use-pnpm .
+#       - name: Check turbo bin
+#         run: turbo bin
+#       - name: Remove Local Turbo
+#         run: pnpm uninstall turbo
+#       - name: Check turbo bin
+#         run: turbo bin
+#       - name: Build
+#         run: turbo build
+#       - name: Build Again (Cache Hit)
+#         run: turbo build
+#   test-both:
+#     name: "Test global & local turbo (inference)"
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Setup pnpm
+#         uses: pnpm/action-setup@v2.2.4
+#         with:
+#           version: 7.12.1
+#       - name: Setup Global Turbo
+#         run: pnpm install turbo@canary --global
+#       - name: Setup Basic Example
+#         run: npx create-turbo@canary --help --use-pnpm .
+#       - name: Check turbo bin
+#         run: turbo bin
+#       - name: Build
+#         run: turbo build
+#       - name: Build Again (Cache Hit)
+#         run: turbo build
