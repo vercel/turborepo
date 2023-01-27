@@ -902,6 +902,7 @@ jobs:
       - go_lint
       - go_unit
       - go_examples
+      - go_e2e
       - rust_lint
       - rust_check
       - rust_test
@@ -949,6 +950,12 @@ jobs:
         if: always() && needs.go_examples.result != 'success' && needs.go_examples.result != 'skipped'
         run: |
           echo "- Go Examples" >> failures.md
+          exit 1
+
+      - name: Go E2E failed
+        if: always() && needs.go_e2e.result != 'success' && needs.go_e2e.result != 'skipped'
+        run: |
+          echo "- Go E2E" >> failures.md
           exit 1
 
       - name: Rust Linting failed
