@@ -147,6 +147,43 @@ For instance, if we want `apps/docs` to import `packages/shared-utils`, we'd nee
   of our packages change.
 </Callout>
 
+However if `shared-utils` includes an npm organization or user space in its name, for instance if it is named `@mycompany/shared-utils` in its `package.json` as described in the previous section, then you'll import it as follows:
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+
+```json filename="apps/docs/package.json"
+{
+  "dependencies": {
+    "@mycompany/shared-utils": "*"
+  }
+}
+```
+
+  </Tab>
+  <Tab>
+```json filename="apps/docs/package.json"
+{
+  "dependencies": {
+    "@mycompany/shared-utils": "*"
+  }
+}
+```
+
+  </Tab>
+
+  <Tab>
+```json filename="apps/docs/package.json"
+{
+  "dependencies": {
+    "@mycompany/shared-utils": "workspace:*"
+  }
+}
+```
+
+  </Tab>
+</Tabs>
+
 Just like a normal package, we'd need to run `install` from root afterwards. Once installed, we can use the workspace as if it were any other package from `node_modules`. See our [section on sharing code](/repo/docs/handbook/sharing-code) for more information.
 
 ## Managing workspaces
