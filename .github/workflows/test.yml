@@ -904,6 +904,7 @@ jobs:
       - go_unit
       - go_examples
       - go_e2e
+      - go_integration
       - rust_lint
       - rust_check
       - rust_test
@@ -945,6 +946,12 @@ jobs:
         if: always() && needs.go_unit.result != 'success' && needs.go_unit.result != 'skipped'
         run: |
           echo "- Go Unit Tests" >> failures.md
+          exit 1
+
+      - name: Go Integration Tests failed
+        if: always() && needs.go_integration.result != 'success' && needs.go_integration.result != 'skipped'
+        run: |
+          echo "- Go Integration Tests" >> failures.md
           exit 1
 
       - name: Go Examples failed
