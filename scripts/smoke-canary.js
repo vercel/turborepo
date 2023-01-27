@@ -51,8 +51,7 @@ function local({ version, packageManager }) {
   assert(turboSecondBuildOutput.includes("FULL TURBO"));
 }
 
-function global() {
-  const version = "canary";
+function global({ version, packageManager }) {
   const createTurboOutput = exec({
     command: `npx create-turbo@${version} --help --use-${packageManager} .`,
   });
@@ -96,8 +95,7 @@ function global() {
   assert(turboSecondBuildOutput.includes("FULL TURBO"));
 }
 
-function both() {
-  const version = "canary";
+function both({ version, packageManager }) {
   const createTurboOutput = exec({
     command: `npx create-turbo@${version} --help --use-${packageManager} .`,
   });
@@ -141,10 +139,10 @@ function test() {
   const [
     testName = "local",
     version = "canary",
-    packageManager = "${packageManager}",
+    packageManager = "pnpm",
   ] = args;
 
-  console.log(`Running test: "${testName}" with version: "${version}"`);
+  console.log(`Running test: "${testName}" with version: "turbo@${version}" using ${packageManager}`);
   tests[testName]({ version, packageManager });
   console.log("Tests passed!");
 }
