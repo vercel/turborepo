@@ -87,13 +87,14 @@ jobs:
         with:
           PATTERNS: |
             cli/**
+
       - name: Go E2E related changes
         id: go_e2e
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
-            shim/**
             crates/turborepo*
+            crates/turbo-updater
             Cargo.lock
 
       - name: Examples related changes
