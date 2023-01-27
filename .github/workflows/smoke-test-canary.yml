@@ -8,11 +8,13 @@ on:
 
 jobs:
   test_matrix:
+    name: "Smoke Test Canary"
     runs-on: ubuntu-latest
     strategy:
       matrix:
         test: ["local", "global", "both"]
         packageManager: ["npm", "pnpm"]
+        
   steps:
     runs-on: ubuntu-latest
     name: "Test ${{ matrix.test }} install of turbo with ${{ matrix.packageManager }}"
