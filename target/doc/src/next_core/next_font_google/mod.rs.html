@@ -361,12 +361,26 @@
 <span id="361">361</span>
 <span id="362">362</span>
 <span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>indoc::formatdoc;
 <span class="kw">use </span>once_cell::sync::Lazy;
 <span class="kw">use </span>turbo_tasks::primitives::{OptionStringVc, OptionU16Vc, StringVc, U32Vc};
-<span class="kw">use </span>turbo_tasks_env::{CommandLineProcessEnvVc, ProcessEnv};
+<span class="attr">#[allow(unused_imports, <span class="comment">/* reason = &quot;this is used in tests&quot; */</span>)]
+</span><span class="kw">use </span>turbo_tasks_env::{CommandLineProcessEnvVc, ProcessEnv};
 <span class="kw">use </span>turbo_tasks_fetch::fetch;
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
@@ -450,7 +464,8 @@
                                 style: {{
                                     fontFamily: &quot;{}&quot;,
                                     {}{}
-                                }}
+                                }},
+                                variable: cssModule.variable
                             }};
                         &quot;#</span>,
                         <span class="comment">// Pass along whichever options we received to the css handler
@@ -550,6 +565,7 @@
         };
 
         <span class="kw">let </span>properties = get_font_css_properties(scoped_font_family, options).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>font_family = properties.font_family.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>css_asset = VirtualAssetVc::new(
             css_virtual_path,
             FileContent::Content(
@@ -561,9 +577,11 @@
                             font-family: {};
                             {}{}
                         }}
+
+                        {}
                         &quot;#</span>,
                     stylesheet.unwrap_or_else(|| <span class="string">&quot;&quot;</span>.to_owned()),
-                    properties.font_family.<span class="kw">await</span><span class="question-mark">?</span>,
+                    font_family,
                     properties
                         .weight
                         .<span class="kw">await</span><span class="question-mark">?
@@ -575,6 +593,12 @@
                         </span>.as_ref()
                         .map(|s| <span class="macro">format!</span>(<span class="string">&quot;font-style: {};\n&quot;</span>, s))
                         .unwrap_or_else(|| <span class="string">&quot;&quot;</span>.to_owned()),
+                    properties
+                        .variable
+                        .<span class="kw">await</span><span class="question-mark">?
+                        </span>.as_ref()
+                        .map(|v| { <span class="macro">format!</span>(<span class="string">&quot;.variable {{ {}: {}; }} &quot;</span>, v, <span class="kw-2">*</span>font_family) })
+                        .unwrap_or_else(|| <span class="string">&quot;&quot;</span>.to_owned())
                 )
                 .into(),
             )
@@ -673,6 +697,7 @@
     font_family: StringVc,
     weight: OptionU16Vc,
     style: OptionStringVc,
+    variable: OptionStringVc,
 }
 
 <span class="attr">#[turbo_tasks::function]
@@ -701,6 +726,7 @@
             FontWeights::Fixed(weights) =&gt; weights.first().cloned(),
         }),
         style: OptionStringVc::cell(options.styles.first().cloned()),
+        variable: OptionStringVc::cell(options.variable.clone()),
     }))
 }
 
