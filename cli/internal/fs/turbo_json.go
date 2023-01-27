@@ -352,17 +352,21 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	sort.Strings(c.TopologicalDependencies)
 
 	// Append env key into EnvVarDependencies
-	for _, value := range task.Env {
-		if strings.HasPrefix(value, envPipelineDelimiter) {
-			// Hard error to help people specify this correctly during migration.
-			// TODO: Remove this error after we have run summary.
-			return fmt.Errorf("You specified \"%s\" in the \"env\" key. You should not prefix your environment variables with \"$\"", value)
+	if task.Env != nil {
+		c.FieldsMeta["HasEnvVarDependencies"] = true
+		for _, value := range task.Env {
+			if strings.HasPrefix(value, envPipelineDelimiter) {
+				// Hard error to help people specify this correctly during migration.
+				// TODO: Remove this error after we have run summary.
+				return fmt.Errorf("You specified \"%s\" in the \"env\" key. You should not prefix your environment variables with \"$\"", value)
+			}
+
+			envVarDependencies.Add(value)
 		}
 
-		envVarDependencies.Add(value)
+		c.EnvVarDependencies = envVarDependencies.UnsafeListOfStrings()
 	}
 
-	c.EnvVarDependencies = envVarDependencies.UnsafeListOfStrings()
 	sort.Strings(c.EnvVarDependencies)
 
 	if task.Inputs != nil {
