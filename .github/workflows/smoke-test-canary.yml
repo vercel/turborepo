@@ -7,9 +7,15 @@ on:
       - webhook
 
 jobs:
-  test-local:
-    name: "Test local turbo"
+  test_matrix:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test: ["local", "global", "both"]
+        packageManager: ["npm", "pnpm"]
+  steps:
+    runs-on: ubuntu-latest
+    name: "Test ${{ matrix.test }} install of turbo with ${{ matrix.packageManager }}"
     steps:
       - name: Setup pnpm
         uses: pnpm/action-setup@v2.2.4
@@ -20,4 +26,4 @@ jobs:
         with:
          files: scripts/smoke-canary.js
       - name: Run Test
-        run: node scripts/smoke-canary.js local canary pnpm
+        run: node scripts/smoke-canary.js ${{ matrix.test }} canary ${{ matrix.packageManager }}
