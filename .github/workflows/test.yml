@@ -108,15 +108,7 @@ jobs:
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
-            *.yaml
-            *.md
-            *.mdx
-            *.js
-            *.jsx
-            *.ts
-            *.tsx
-            *.json
-            *.toml
+            **/*.{yaml,md,mdx,js,jsx,ts,tsx,json,toml}
 
     outputs:
       rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
