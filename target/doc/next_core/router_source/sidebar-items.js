@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["NextRouterContentSource",""],["NextRouterContentSourceVc","Vc for [`NextRouterContentSource`]"]],"type":[["NextRouterContentSourceReadRef","see [turbo_tasks::ReadRef]"]]};

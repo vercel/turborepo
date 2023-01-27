@@ -403,69 +403,10 @@
 <span id="403">403</span>
 <span id="404">404</span>
 <span id="405">405</span>
-<span id="406">406</span>
-<span id="407">407</span>
-<span id="408">408</span>
-<span id="409">409</span>
-<span id="410">410</span>
-<span id="411">411</span>
-<span id="412">412</span>
-<span id="413">413</span>
-<span id="414">414</span>
-<span id="415">415</span>
-<span id="416">416</span>
-<span id="417">417</span>
-<span id="418">418</span>
-<span id="419">419</span>
-<span id="420">420</span>
-<span id="421">421</span>
-<span id="422">422</span>
-<span id="423">423</span>
-<span id="424">424</span>
-<span id="425">425</span>
-<span id="426">426</span>
-<span id="427">427</span>
-<span id="428">428</span>
-<span id="429">429</span>
-<span id="430">430</span>
-<span id="431">431</span>
-<span id="432">432</span>
-<span id="433">433</span>
-<span id="434">434</span>
-<span id="435">435</span>
-<span id="436">436</span>
-<span id="437">437</span>
-<span id="438">438</span>
-<span id="439">439</span>
-<span id="440">440</span>
-<span id="441">441</span>
-<span id="442">442</span>
-<span id="443">443</span>
-<span id="444">444</span>
-<span id="445">445</span>
-<span id="446">446</span>
-<span id="447">447</span>
-<span id="448">448</span>
-<span id="449">449</span>
-<span id="450">450</span>
-<span id="451">451</span>
-<span id="452">452</span>
-<span id="453">453</span>
-<span id="454">454</span>
-<span id="455">455</span>
-<span id="456">456</span>
-<span id="457">457</span>
-<span id="458">458</span>
-<span id="459">459</span>
-<span id="460">460</span>
-<span id="461">461</span>
-<span id="462">462</span>
-<span id="463">463</span>
-<span id="464">464</span>
-<span id="465">465</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset_graph;
 <span class="kw">pub mod </span>combined;
 <span class="kw">pub mod </span>conditional;
+<span class="kw">pub mod </span>headers;
 <span class="kw">pub mod </span>lazy_instatiated;
 <span class="kw">pub mod </span>query;
 <span class="kw">pub mod </span>router;
@@ -473,11 +414,7 @@
 <span class="kw">pub mod </span>specificity;
 <span class="kw">pub mod </span>static_assets;
 
-<span class="kw">use </span>std::{
-    collections::{BTreeMap, BTreeSet},
-    hash::Hash,
-    mem::replace,
-};
+<span class="kw">use </span>std::collections::BTreeSet;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize, Serializer};
@@ -485,7 +422,7 @@
 <span class="kw">use </span>turbo_tasks_fs::rope::Rope;
 <span class="kw">use </span>turbopack_core::version::VersionedContentVc;
 
-<span class="kw">use </span><span class="self">self</span>::{query::Query, specificity::SpecificityVc};
+<span class="kw">use </span><span class="self">self</span>::{headers::Headers, query::Query, specificity::SpecificityVc};
 
 <span class="doccomment">/// The result of proxying a request to another HTTP server.
 </span><span class="attr">#[turbo_tasks::value(shared)]
@@ -615,63 +552,6 @@
     }
 }
 
-<span class="doccomment">/// The value of an http header. HTTP headers might contain non-utf-8 bytes. An
-/// header might also occur multiple times.
-</span><span class="attr">#[derive(
-    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, TraceRawVcs, Serialize, Deserialize,
-)]
-#[serde(untagged)]
-</span><span class="kw">pub enum </span>HeaderValue {
-    SingleString(String),
-    SingleBytes(Vec&lt;u8&gt;),
-    MultiStrings(Vec&lt;String&gt;),
-    MultiBytes(Vec&lt;Vec&lt;u8&gt;&gt;),
-}
-
-<span class="kw">impl </span>HeaderValue {
-    <span class="doccomment">/// Extends the current value with another occurrence of that header which
-    /// is a string
-    </span><span class="kw">pub fn </span>extend_with_string(<span class="kw-2">&amp;mut </span><span class="self">self</span>, new: String) {
-        <span class="kw-2">*</span><span class="self">self </span>= <span class="kw">match </span>replace(<span class="self">self</span>, HeaderValue::SingleBytes(Vec::new())) {
-            HeaderValue::SingleString(s) =&gt; HeaderValue::MultiStrings(<span class="macro">vec!</span>[s, new]),
-            HeaderValue::SingleBytes(b) =&gt; HeaderValue::MultiBytes(<span class="macro">vec!</span>[b, new.into()]),
-            HeaderValue::MultiStrings(<span class="kw-2">mut </span>v) =&gt; {
-                v.push(new);
-                HeaderValue::MultiStrings(v)
-            }
-            HeaderValue::MultiBytes(<span class="kw-2">mut </span>v) =&gt; {
-                v.push(new.into());
-                HeaderValue::MultiBytes(v)
-            }
-        }
-    }
-    <span class="doccomment">/// Extends the current value with another occurrence of that header which
-    /// is a non-utf-8 valid byte sequence
-    </span><span class="kw">pub fn </span>extend_with_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, new: Vec&lt;u8&gt;) {
-        <span class="kw-2">*</span><span class="self">self </span>= <span class="kw">match </span>replace(<span class="self">self</span>, HeaderValue::SingleBytes(Vec::new())) {
-            HeaderValue::SingleString(s) =&gt; HeaderValue::MultiBytes(<span class="macro">vec!</span>[s.into(), new]),
-            HeaderValue::SingleBytes(b) =&gt; HeaderValue::MultiBytes(<span class="macro">vec!</span>[b, new]),
-            HeaderValue::MultiStrings(v) =&gt; {
-                <span class="kw">let </span><span class="kw-2">mut </span>v: Vec&lt;Vec&lt;u8&gt;&gt; = v.into_iter().map(|s| s.into()).collect();
-                v.push(new);
-                HeaderValue::MultiBytes(v)
-            }
-            HeaderValue::MultiBytes(<span class="kw-2">mut </span>v) =&gt; {
-                v.push(new);
-                HeaderValue::MultiBytes(v)
-            }
-        }
-    }
-
-    <span class="kw">pub fn </span>contains(<span class="kw-2">&amp;</span><span class="self">self</span>, string_value: <span class="kw-2">&amp;</span>str) -&gt; bool {
-        <span class="kw">match </span><span class="self">self </span>{
-            HeaderValue::SingleString(s) =&gt; s.contains(string_value),
-            HeaderValue::MultiStrings(s) =&gt; s.iter().any(|s| s.contains(string_value)),
-            <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
-        }
-    }
-}
-
 <span class="doccomment">/// Additional info passed to the ContentSource. It was extracted from the http
 /// request.
 ///
@@ -689,7 +569,7 @@
     </span><span class="kw">pub </span>query: <span class="prelude-ty">Option</span>&lt;Query&gt;,
     <span class="doccomment">/// http headers, might contain multiple headers with the same name, if
     /// requested
-    </span><span class="kw">pub </span>headers: <span class="prelude-ty">Option</span>&lt;BTreeMap&lt;String, HeaderValue&gt;&gt;,
+    </span><span class="kw">pub </span>headers: <span class="prelude-ty">Option</span>&lt;Headers&gt;,
     <span class="doccomment">/// request body, if requested
     </span><span class="kw">pub </span>body: <span class="prelude-ty">Option</span>&lt;BodyVc&gt;,
     <span class="doccomment">/// see [ContentSourceDataVary::cache_buster]

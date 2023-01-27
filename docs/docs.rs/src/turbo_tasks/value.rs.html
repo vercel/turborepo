@@ -162,6 +162,12 @@
 <span id="162">162</span>
 <span id="163">163</span>
 <span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Debug, marker::PhantomData, ops::Deref, sync::Arc};
 
 <span class="kw">use crate</span>::{SharedReference, Typed};
@@ -181,6 +187,12 @@
 
     <span class="kw">pub fn </span>into_value(<span class="self">self</span>) -&gt; T {
         <span class="self">self</span>.inner
+    }
+}
+
+<span class="kw">impl</span>&lt;T: Typed&gt; From&lt;T&gt; <span class="kw">for </span>Value&lt;T&gt; {
+    <span class="kw">fn </span>from(value: T) -&gt; <span class="self">Self </span>{
+        Value::new(value)
     }
 }
 
