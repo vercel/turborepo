@@ -24,6 +24,22 @@
       "env": ["SOME_VAR"],
       "outputMode": "new-only"
     },
+
+    "missing-workspace-config-task-with-deps": {
+      "dependsOn": ["missing-workspace-config-underlying-task", "^missing-workspace-config-underlying-topo-task"],
+      "outputs": ["out/**"]
+    },
+    "missing-workspace-config-underlying-task": {},
+    "missing-workspace-config-underlying-topo-task": {},
+
+    "missing-workspace-config-task": {
+      "inputs": ["src/foo.txt"],
+      "outputs": ["out/**"],
+      "env": ["SOME_VAR"],
+      "outputMode": "new-only"
+    },
+
+
     "compile": {},
     "beforecompile": {},
     "somethingelse": {}
