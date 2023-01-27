@@ -364,9 +364,14 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 
 	c.EnvVarDependencies = envVarDependencies.UnsafeListOfStrings()
 	sort.Strings(c.EnvVarDependencies)
-	// Note that we don't require Inputs to be sorted, we're going to
-	// hash the resulting files and sort that instead
-	c.Inputs = task.Inputs
+
+	if task.Inputs != nil {
+		// Note that we don't require Inputs to be sorted, we're going to
+		// hash the resulting files and sort that instead
+		c.FieldsMeta["HasInputs"] = true
+		c.Inputs = task.Inputs
+	}
+
 	if task.OutputMode != nil {
 		c.FieldsMeta["HasOutputMode"] = true
 		c.OutputMode = *task.OutputMode

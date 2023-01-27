@@ -15,13 +15,13 @@ Setup
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  add-keys:add-keys-underlying-task: cache miss, executing face440870a606c3
+  add-keys:add-keys-underlying-task: cache miss, executing 578790e9f75adbd8
   add-keys:add-keys-underlying-task: 
   add-keys:add-keys-underlying-task: > add-keys-underlying-task
   add-keys:add-keys-underlying-task: > echo "running add-keys-underlying-task"
   add-keys:add-keys-underlying-task: 
   add-keys:add-keys-underlying-task: running add-keys-underlying-task
-  add-keys:add-keys-task: cache miss, executing 741fe2018100e891
+  add-keys:add-keys-task: cache miss, executing a653ab993c90230a
   add-keys:add-keys-task: 
   add-keys:add-keys-task: > add-keys-task
   add-keys:add-keys-task: > echo "running add-keys-task" > out/foo.min.txt
@@ -43,13 +43,13 @@ Setup
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  add-keys:add-keys-underlying-task: cache hit, replaying output face440870a606c3
+  add-keys:add-keys-underlying-task: cache hit, replaying output 578790e9f75adbd8
   add-keys:add-keys-underlying-task: 
   add-keys:add-keys-underlying-task: > add-keys-underlying-task
   add-keys:add-keys-underlying-task: > echo "running add-keys-underlying-task"
   add-keys:add-keys-underlying-task: 
   add-keys:add-keys-underlying-task: running add-keys-underlying-task
-  add-keys:add-keys-task: cache hit, suppressing output 741fe2018100e891
+  add-keys:add-keys-task: cache hit, suppressing output a653ab993c90230a
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total
@@ -61,13 +61,13 @@ Setup
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  add-keys:add-keys-underlying-task: cache miss, executing d64646b713dc5281
+  add-keys:add-keys-underlying-task: cache miss, executing d6295f165a4f964c
   add-keys:add-keys-underlying-task: 
   add-keys:add-keys-underlying-task: > add-keys-underlying-task
   add-keys:add-keys-underlying-task: > echo "running add-keys-underlying-task"
   add-keys:add-keys-underlying-task: 
   add-keys:add-keys-underlying-task: running add-keys-underlying-task
-  add-keys:add-keys-task: cache miss, executing 89a96d6398c75a45
+  add-keys:add-keys-task: cache miss, executing a476c82eb51683b6
   add-keys:add-keys-task: 
   add-keys:add-keys-task: > add-keys-task
   add-keys:add-keys-task: > echo "running add-keys-task" > out/foo.min.txt
@@ -82,13 +82,13 @@ Setup
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  add-keys:add-keys-underlying-task: cache hit, replaying output d64646b713dc5281
+  add-keys:add-keys-underlying-task: cache hit, replaying output d6295f165a4f964c
   add-keys:add-keys-underlying-task: 
   add-keys:add-keys-underlying-task: > add-keys-underlying-task
   add-keys:add-keys-underlying-task: > echo "running add-keys-underlying-task"
   add-keys:add-keys-underlying-task: 
   add-keys:add-keys-underlying-task: running add-keys-underlying-task
-  add-keys:add-keys-task: cache miss, executing 326598cadd9dec6c
+  add-keys:add-keys-task: cache miss, executing ac9a0b82a69d5aa3
   add-keys:add-keys-task: 
   add-keys:add-keys-task: > add-keys-task
   add-keys:add-keys-task: > echo "running add-keys-task" > out/foo.min.txt

@@ -11,16 +11,19 @@
     "add-keys-underlying-task": {},
 
 
-    "omit-keys-task": {
+    "omit-keys-task-with-deps": {
       "dependsOn": ["omit-keys-underlying-task", "^omit-keys-underlying-topo-task"],
+      "outputs": ["out/**"]
+    },
+    "omit-keys-underlying-task": {},
+    "omit-keys-underlying-topo-task": {},
+
+    "omit-keys-task": {
       "inputs": ["src/foo.txt"],
       "outputs": ["out/**"],
       "env": ["SOME_ENV"],
       "outputMode": "new-only"
     },
-    "omit-keys-underlying-task": {},
-    "omit-keys-underlying-topo-task": {},
-
     "compile": {},
     "beforecompile": {},
     "somethingelse": {}

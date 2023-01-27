@@ -54,6 +54,7 @@ func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, worksp
 type packageFileSpec struct {
 	pkg    string
 	inputs []string
+	taskID string
 }
 
 func specFromPackageTask(packageTask *nodes.PackageTask) packageFileSpec {
@@ -92,6 +93,7 @@ func (pfs *packageFileSpec) hash(pkg *fs.PackageJSON, repoRoot turbopath.Absolut
 		}
 		hashObject = manualHashObject
 	}
+
 	hashOfFiles, otherErr := fs.HashObject(hashObject)
 	if otherErr != nil {
 		return "", otherErr
@@ -187,6 +189,7 @@ func (th *Tracker) CalculateFileHashes(
 		pfs := &packageFileSpec{
 			pkg:    pkgName,
 			inputs: taskDefinition.Inputs,
+			taskID: taskID,
 		}
 
 		hashTasks.Add(pfs)

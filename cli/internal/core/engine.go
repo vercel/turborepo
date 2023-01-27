@@ -433,7 +433,11 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 			mergedTaskDefinition.TaskDependencies = taskDef.TaskDependencies
 		}
 
-		mergedTaskDefinition.Inputs = taskDef.Inputs
+		// fmt.Printf("[debug] %v: Assigning inputs: %#v\n", taskID, taskDef.Inputs)
+		if _, ok := taskDef.FieldsMeta["HasInputs"]; ok {
+			mergedTaskDefinition.Inputs = taskDef.Inputs
+		}
+
 		if _, ok := taskDef.FieldsMeta["HasOutputMode"]; ok {
 			mergedTaskDefinition.OutputMode = taskDef.OutputMode
 		}
@@ -447,6 +451,8 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 			Exclusions: []string{},
 		}
 	}
+
+	// fmt.Printf("[debug] %v Merged taskDef %#v\n", taskID, mergedTaskDefinition)
 
 	return mergedTaskDefinition, nil
 }
