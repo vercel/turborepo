@@ -13,13 +13,19 @@ pub trait UserClient {
     fn set_token(&mut self, token: String);
     async fn get_user(&self) -> Result<UserResponse>;
     async fn get_teams(&self) -> Result<TeamsResponse>;
+    async fn get_caching_status(&self, team_id: &str) -> Result<CachingStatus>;
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Pagination {
-    count: usize,
-    next: usize,
-    previous: usize,
+pub enum CachingStatus {
+    #[serde(rename = "disabled")]
+    Disabled,
+    #[serde(rename = "enabled")]
+    Enabled,
+    #[serde(rename = "over_limit")]
+    OverLimit,
+    #[serde(rename = "paused")]
+    Paused,
 }
 
 /// Membership is the relationship between the logged-in user and a particular
@@ -35,15 +41,20 @@ pub struct Team {
     pub slug: String,
     pub name: String,
     #[serde(rename = "createdAt")]
-    pub created_at: String,
-    pub created: String,
+    pub created_at: u64,
+    pub created: chrono::DateTime<chrono::Utc>,
     pub membership: Membership,
+}
+
+impl Team {
+    pub fn is_owner(&self) -> bool {
+        self.membership.role == "OWNER"
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct TeamsResponse {
     pub teams: Vec<Team>,
-    pub pagination: Pagination,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -51,7 +62,7 @@ pub struct User {
     pub id: String,
     pub username: String,
     pub email: String,
-    pub name: String,
+    pub name: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: u64,
 }
@@ -120,7 +131,7 @@ impl UserClient for APIClient {
 
         match response {
             Ok(response) => {
-                let teams_response = response.json::<TeamsResponse>().await?;
+                let teams_response = response.json().await?;
                 Ok(teams_response)
             }
             Err(error) => {
@@ -133,6 +144,24 @@ impl UserClient for APIClient {
                 Err(error)
             }
         }
+    }
+
+    async fn get_caching_status(&self, team_id: &str) -> Result<CachingStatus> {
+        let response = self
+            .make_retryable_request(|| {
+                let request_builder = self
+                    .client
+                    .get(self.make_url("/v8/artifacts/status"))
+                    .query(&[("teamId", team_id)])
+                    .header("User-Agent", USER_AGENT.clone())
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", format!("Bearer {}", self.token));
+
+                request_builder.send()
+            })
+            .await?;
+
+        Ok(response.json().await?)
     }
 }
 
