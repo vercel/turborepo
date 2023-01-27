@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         test: ["local", "global", "both"]
-        packageManager: ["yarn", "pnpm"]
+        packageManager: ["yarn", "pnpm", "npm"]
         
     steps:
       - name: Configure git
