@@ -8,19 +8,21 @@ jobs:
     name: "test local turbo"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
       - name: Setup Basic Example
         run: npx create-turbo@canary --help --use-pnpm basic-test
+      - name: Enter project directory
+        run: cd ./basic-test
+      - name: Check turbo bin
+        run: pwd && pnpm turbo bin
       - name: Build
-        run: cd basic-test && pnpm build
+        run: pnpm turbo build
   test-global:
     name: "test global turbo"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
@@ -28,7 +30,13 @@ jobs:
         run: pnpm install turbo@canary --global
       - name: Setup Basic Example
         run: npx create-turbo@canary --help --use-pnpm basic-test
+      - name: Enter project directory
+        run: cd ./basic-test
+      - name: Check turbo bin
+        run: pwd && turbo bin
       - name: Remove Local Turbo
-        run: cd basic-test && pnpm uninstall turbo
+        run: pnpm uninstall turbo
+      - name: Check turbo bin
+        run: turbo bin
       - name: Build
-        run: pnpm build
+        run: turbo build
