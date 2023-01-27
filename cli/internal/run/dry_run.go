@@ -22,6 +22,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/inference"
 	"github.com/vercel/turbo/cli/internal/nodes"
+	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/runcache"
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -31,10 +32,12 @@ import (
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed
 type dryRunSummary struct {
-	TurboVersion string                  `json:"turboVersion"`
-	Packages     []string                `json:"packages"`
-	ExitCode     int                     `json:"exitCode"`
-	Tasks        map[string]*taskSummary `json:"tasks"`
+	TurboVersion     string                         `json:"turboVersion"`
+	GlobalHashInputs *GlobalTracker                 `json:"globalHashInputs"`
+	PackageManager   *packagemanager.PackageManager `json:"packageManager"`
+	Packages         []string                       `json:"packages"`
+	ExitCode         int                            `json:"exitCode"`
+	Tasks            map[string]*taskSummary        `json:"tasks"`
 }
 
 // DryRunSummarySinglePackage is the same as DryRunSummary with some adjustments
