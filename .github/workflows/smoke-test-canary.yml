@@ -47,7 +47,7 @@ jobs:
       - name: Verify Binary Location
         uses: GuillaumeFalourd/assert-command-line-output@v2.1
         with:
-          command_line: pnpm turbo bin
+          command_line: turbo bin
           contains: "global"
           expected_result: FAILED
       - name: Remove Local Turbo
@@ -55,36 +55,48 @@ jobs:
       - name: Verify Binary Location
         uses: GuillaumeFalourd/assert-command-line-output@v2.1
         with:
-          command_line: pnpm turbo bin
+          command_line: turbo bin
           contains: "global"
           expected_result: SUCCESS
       - name: Build
         uses: GuillaumeFalourd/assert-command-line-output@v2.1
         with:
-          command_line: pnpm turbo build
+          command_line: turbo build
           contains: "FULL TURBO"
           expected_result: FAILED
       - name: Build Again (Cache Hit)
         uses: GuillaumeFalourd/assert-command-line-output@v2.1
         with:
-          command_line: pnpm turbo build
+          command_line: turbo build
           contains: "FULL TURBO"
           expected_result: SUCCESS
-#   test-both:
-#     name: "Test global & local turbo (inference)"
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Setup pnpm
-#         uses: pnpm/action-setup@v2.2.4
-#         with:
-#           version: 7.12.1
-#       - name: Setup Global Turbo
-#         run: pnpm install turbo@canary --global
-#       - name: Setup Basic Example
-#         run: npx create-turbo@canary --help --use-pnpm .
-#       - name: Check turbo bin
-#         run: turbo bin
-#       - name: Build
-#         run: turbo build
-#       - name: Build Again (Cache Hit)
-#         run: turbo build
+  test-both:
+    name: "Test global & local turbo (inference)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2.2.4
+        with:
+          version: 7.12.1
+      - name: Setup Global Turbo
+        run: pnpm install turbo@canary --global
+      - name: Setup Basic Example
+        run: npx create-turbo@canary --help --use-pnpm .
+      - name: Verify Binary Location
+        uses: GuillaumeFalourd/assert-command-line-output@v2.1
+        with:
+          command_line: turbo bin
+          contains: "global"
+          expected_result: SUCCESS
+      - name: Build
+        uses: GuillaumeFalourd/assert-command-line-output@v2.1
+        with:
+          command_line: turbo build
+          contains: "FULL TURBO"
+          expected_result: FAILED
+      - name: Build Again (Cache Hit)
+        uses: GuillaumeFalourd/assert-command-line-output@v2.1
+        with:
+          command_line: turbo build
+          contains: "FULL TURBO"
+          expected_result: SUCCESS
