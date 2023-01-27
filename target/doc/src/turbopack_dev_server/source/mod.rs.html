@@ -426,6 +426,46 @@
 <span id="426">426</span>
 <span id="427">427</span>
 <span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset_graph;
 <span class="kw">pub mod </span>combined;
 <span class="kw">pub mod </span>conditional;
@@ -527,7 +567,11 @@
 </span><span class="doccomment">/// The content of a result that is returned by a content source.
 </span><span class="kw">pub enum </span>ContentSourceContent {
     NotFound,
-    Static(VersionedContentVc),
+    Static {
+        content: VersionedContentVc,
+        status_code: u16,
+        headers: HeaderListVc,
+    },
     HttpProxy(ProxyResultVc),
     Rewrite(RewriteVc),
 }
@@ -546,8 +590,44 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ContentSourceContentVc {
     <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>static_content(content: VersionedContentVc) -&gt; ContentSourceContentVc {
+        ContentSourceContent::Static {
+            content,
+            status_code: <span class="number">200</span>,
+            headers: HeaderListVc::empty(),
+        }
+        .cell()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>static_with_headers(
+        content: VersionedContentVc,
+        status_code: u16,
+        headers: HeaderListVc,
+    ) -&gt; ContentSourceContentVc {
+        ContentSourceContent::Static {
+            content,
+            status_code,
+            headers,
+        }
+        .cell()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>not_found() -&gt; ContentSourceContentVc {
         ContentSourceContent::NotFound.cell()
+    }
+}
+
+<span class="doccomment">/// A list of headers arranged as contiguous (name, value) pairs.
+</span><span class="attr">#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>HeaderList(Vec&lt;(String, String)&gt;);
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>HeaderListVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>empty() -&gt; HeaderListVc {
+        HeaderList(<span class="macro">vec!</span>[]).cell()
     }
 }
 
@@ -572,7 +652,7 @@
 
 <span class="kw">impl </span>From&lt;VersionedContentVc&gt; <span class="kw">for </span>ContentSourceContentVc {
     <span class="kw">fn </span>from(content: VersionedContentVc) -&gt; <span class="self">Self </span>{
-        ContentSourceContent::Static(content).cell()
+        ContentSourceContentVc::static_content(content)
     }
 }
 
