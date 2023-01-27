@@ -14,36 +14,24 @@ jobs:
           version: 7.12.1
       - name: Setup Basic Example
         run: npx create-turbo@canary --help --use-pnpm .
-      - name: Check turbo bin
-        id: turbo-bin
-        run: |
-          echo "turbo_bin=$(pnpm turbo bin)" >> $GITHUB_ENV
-      - name: Verify binary location
-        uses: nick-fields/assert-action@v1
+      - name: Verify Binary Location
+        uses: GuillaumeFalourd/assert-command-line-output@v2.1
         with:
-          expected: global
-          actual: ${{ env.turbo_bin }}
-          comparison: notContains
+          command_line: pnpm turbo bin
+          contains: "global"
+          expected_result: FAILED
       - name: Build
-        id: turbo-build-1
-        run: |
-          echo "turbo_build_1=$(pnpm turbo build)" >> $GITHUB_ENV
+        uses: GuillaumeFalourd/assert-command-line-output@v2.1
+        with:
+          command_line: pnpm turbo build
+          contains: "2 successful, 2 total"
+          expected_result: SUCCESS
       - name: Build Again (Cache Hit)
-        id: turbo-build-2
-        run: |
-          echo "turbo_build_2=$(pnpm turbo build)" >> $GITHUB_ENV
-      - name: Verify first build result
-        uses: nick-fields/assert-action@v1
+        uses: GuillaumeFalourd/assert-command-line-output@v2.1
         with:
-          expected: "FULL TURBO"
-          actual: ${{ env.turbo_build_1 }}
-          comparison: notContains 
-      - name: Verify full turbo
-        uses: nick-fields/assert-action@v1
-        with:
-          expected: "FULL TURBO"
-          actual: ${{ env.turbo_build_2 }}
-          comparison: contains 
+          command_line: pnpm turbo build
+          contains: "FULL TURBO"
+          expected_result: SUCCESS
 #   test-global:
 #     name: "Test global turbo"
 #     runs-on: ubuntu-latest
