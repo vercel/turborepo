@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 
 const { execSync } = require("child_process");
-const { assert } = require("console");
 
-function exec({ command, options }) {
+function exec({ command, options, conditions }) {
   console.log(`Running: "${command}"`);
   try {
     const result = execSync(command, options).toString();
@@ -15,12 +14,50 @@ function exec({ command, options }) {
       console.log(result);
     }
 
-    return result;
+    if (conditions && conditions.length > 0) {
+      conditions.forEach((condition) => {
+        assertOutput({ output: result, command, ...condition });
+      });
+    } else {
+      return result;
+    }
   } catch (err) {
     console.error(err);
     console.error(err.stdout.toString());
     process.exit(1);
   }
+}
+
+function assertOutput({ output, command, expected, condition }) {
+  if (condition === "includes") {
+    if (output.includes(expected)) {
+      console.log(`"✅ ${command}" output includes "${expected}"`);
+    } else {
+      console.error(`"❌ ${command}" output does not include "${expected}"`);
+      process.exit(1);
+    }
+  }
+
+  if (condition === "notIncludes") {
+    if (!output.includes(expected)) {
+      console.log(`"✅ ${command}" output does not include "${expected}"`);
+    } else {
+      console.error(`"❌ ${command}" output does not include "${expected}"`);
+      process.exit(1);
+    }
+  }
+}
+
+function installExample({ version, packageManager }) {
+  exec({
+    command: `npx create-turbo@${version} --help --use-${packageManager} .`,
+    conditions: [
+      {
+        expected: "Success! Your new Turborepo is ready.",
+        condition: "includes",
+      },
+    ],
+  });
 }
 
 function installGlobalTurbo({ packageManager }) {
@@ -37,107 +74,103 @@ function uninstallLocalTurbo({ packageManager }) {
   if (packageManager === "pnpm" || packageManager === "npm") {
     exec({ command: `${packageManager} uninstall turbo` });
   } else {
-    exec({ command: `${packageManager} remove turbo` });
+    exec({ command: `${packageManager} remove turbo -W` });
   }
 }
 
-function local({ version, packageManager }) {
-  const createTurboOutput = exec({
-    command: `npx create-turbo@${version} --help --use-${packageManager} .`,
-  });
-  assert(createTurboOutput.includes("Success! Your new Turborepo is ready."));
+function getTurboBinary({ installType, packageManager }) {
+  if (installType === "global") {
+    return "turbo";
+  } else {
+    if (packageManager === "npm") {
+      return "./node_modules/.bin/turbo";
+    } else {
+      return `${packageManager} turbo`;
+    }
+  }
+}
 
+function logTurboDetails({ installType, packageManager }) {
   console.log("Turbo details");
-  exec({ command: `${packageManager} turbo --version` });
-  exec({ command: `${packageManager} turbo bin` });
 
+  const turboBinary = getTurboBinary({ installType, packageManager });
+  exec({ command: `${turboBinary} --version` });
+  exec({ command: `${turboBinary} bin` });
+}
+
+function verifyLocalBinary({ installType, packageManager }) {
   console.log("Verify binary is not global");
-  const turboBin = exec({ command: `${packageManager} turbo bin` });
-  assert(!turboBin.includes("global"));
+  const turboBinary = getTurboBinary({ installType, packageManager });
+  exec({
+    command: `${turboBinary} bin`,
+    conditions: [{ expected: "global", condition: "notIncludes" }],
+  });
+}
 
+function verifyGlobalBinary({ installType, packageManager }) {
+  console.log("Verify binary is global");
+  const turboBinary = getTurboBinary({ installType, packageManager });
+  exec({
+    command: `${turboBinary} bin`,
+    conditions: [{ expected: "global", condition: "includes" }],
+  });
+}
+
+function verifyFirstBuild({ installType, packageManager }) {
   console.log("Verify turbo build");
-  const turboFirstBuildOutput = exec({
-    command: `${packageManager} turbo build`,
-  });
-  assert(turboFirstBuildOutput.includes("2 successful, 2 total"));
-  assert(turboFirstBuildOutput.includes("0 cached, 2 total"));
-  assert(!turboFirstBuildOutput.includes("FULL_TURBO"));
 
-  console.log("Verify turbo build (cached)");
-  const turboSecondBuildOutput = exec({
-    command: `${packageManager} turbo build`,
+  const turboBinary = getTurboBinary({ installType, packageManager });
+  exec({
+    command: `${turboBinary} build`,
+    conditions: [
+      { expected: "2 successful, 2 total", condition: "includes" },
+      { expected: "0 cached, 2 total", condition: "includes" },
+      { expected: "FULL_TURBO", condition: "notIncludes" },
+    ],
   });
-  assert(turboSecondBuildOutput.includes("2 successful, 2 total"));
-  assert(turboSecondBuildOutput.includes("2 cached, 2 total"));
-  assert(turboSecondBuildOutput.includes("FULL TURBO"));
+}
+
+function verifySecondBuild({ installType, packageManager }) {
+  console.log("Verify turbo build (cached)");
+
+  const turboBinary = getTurboBinary({ installType, packageManager });
+  exec({
+    command: `${turboBinary} build`,
+    conditions: [
+      { expected: "2 successful, 2 total", condition: "includes" },
+      { expected: "2 cached, 2 total", condition: "includes" },
+      { expected: "FULL TURBO", condition: "includes" },
+    ],
+  });
+}
+
+function local({ version, packageManager }) {
+  installExample({ version, packageManager });
+  logTurboDetails({ installType: "local", packageManager});
+  verifyLocalBinary({ installType: "local", packageManager});
+  verifyFirstBuild({ installType: "local", packageManager});
+  verifySecondBuild({ installType: "local", packageManager});
 }
 
 function global({ version, packageManager }) {
-  const createTurboOutput = exec({
-    command: `npx create-turbo@${version} --help --use-${packageManager} .`,
-  });
-  assert(createTurboOutput.includes("Success! Your new Turborepo is ready."));
-
+  installExample({ version, packageManager });
   installGlobalTurbo({ packageManager });
-
-  console.log("Turbo details");
-  exec({ command: `turbo --version` });
-  exec({ command: `turbo bin` });
-
-  console.log("Verify binary is not global");
-  const turboFirstBin = exec({ command: `turbo bin` });
-  assert(!turboFirstBin.includes("global"));
-
+  logTurboDetails({ installType: "global", packageManager});
+  verifyLocalBinary({ installType: "global", packageManager});
   uninstallLocalTurbo({ packageManager });
-
-  console.log("Turbo details");
-  exec({ command: `turbo --version` });
-  exec({ command: `turbo bin` });
-
-  console.log("Verify binary is global");
-  const turboSecondBin = exec({ command: `turbo bin` });
-  assert(turboSecondBin.includes("global"));
-
-  console.log("Verify turbo build");
-  const turboFirstBuildOutput = exec({ command: `turbo build` });
-  assert(turboFirstBuildOutput.includes("2 successful, 2 total"));
-  assert(turboFirstBuildOutput.includes("0 cached, 2 total"));
-  assert(!turboFirstBuildOutput.includes("FULL_TURBO"));
-
-  console.log("Verify turbo build (cached)");
-  const turboSecondBuildOutput = exec({ command: `turbo build` });
-  assert(turboSecondBuildOutput.includes("2 successful, 2 total"));
-  assert(turboSecondBuildOutput.includes("2 cached, 2 total"));
-  assert(turboSecondBuildOutput.includes("FULL TURBO"));
+  logTurboDetails({ installType: "global", packageManager});
+  verifyGlobalBinary({ installType: "global", packageManager});
+  verifyFirstBuild({ installType: "global", packageManager});
+  verifySecondBuild({ installType: "global", packageManager});
 }
 
 function both({ version, packageManager }) {
-  const createTurboOutput = exec({
-    command: `npx create-turbo@${version} --help --use-${packageManager} .`,
-  });
-  assert(createTurboOutput.includes("Success! Your new Turborepo is ready."));
-
+  installExample({ version, packageManager });
   installGlobalTurbo({ packageManager });
-
-  console.log("Turbo details");
-  exec({ command: `turbo --version` });
-  exec({ command: `turbo bin` });
-
-  console.log("Verify binary is not global");
-  const turboFirstBin = exec({ command: `turbo bin` });
-  assert(!turboFirstBin.includes("global"));
-
-  console.log("Verify turbo build");
-  const turboFirstBuildOutput = exec({ command: `turbo build` });
-  assert(turboFirstBuildOutput.includes("2 successful, 2 total"));
-  assert(turboFirstBuildOutput.includes("0 cached, 2 total"));
-  assert(!turboFirstBuildOutput.includes("FULL_TURBO"));
-
-  console.log("Verify turbo build (cached)");
-  const turboSecondBuildOutput = exec({ command: `turbo build` });
-  assert(turboSecondBuildOutput.includes("2 successful, 2 total"));
-  assert(turboSecondBuildOutput.includes("2 cached, 2 total"));
-  assert(turboSecondBuildOutput.includes("FULL TURBO"));
+  logTurboDetails({ installType: "global", packageManager});
+  verifyLocalBinary({ installType: "global", packageManager});
+  verifyFirstBuild({ installType: "global", packageManager});
+  verifySecondBuild({ installType: "global", packageManager});
 }
 
 const tests = {
