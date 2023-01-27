@@ -17,15 +17,15 @@ export default async function getLatestVersion({
   to,
 }: MigrateCommandOptions): Promise<string | undefined> {
   const packageDetails = await getPackageDetails({ packageName: "turbo" });
-  const versions = packageDetails["dist-tags"];
+  const { "dist-tags": tags, versions } = packageDetails;
 
   if (to) {
-    if (packageDetails[to]) {
+    if (tags[to] || versions[to]) {
       return to;
     } else {
       throw new Error(`turbo@${to} does not exist`);
     }
   }
 
-  return versions.latest as string;
+  return tags.latest as string;
 }

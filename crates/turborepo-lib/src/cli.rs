@@ -13,7 +13,7 @@ use log::{debug, error};
 use serde::Serialize;
 
 use crate::{
-    commands::{bin, logout, CommandBase},
+    commands::{bin, login, logout, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     ui::UI,
@@ -376,7 +376,8 @@ pub struct RunArgs {
 /// we use it here to modify clap's arguments.
 ///
 /// returns: Result<Payload, Error>
-pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
+#[tokio::main]
+pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
     let mut clap_args = Args::new()?;
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
@@ -443,8 +444,24 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Login { .. }
-        | Command::Link { .. }
+        Command::Login { sso_team } => {
+            if clap_args.test_run {
+                println!("Login test run successful");
+                return Ok(Payload::Rust(Ok(0)));
+            }
+
+            // We haven't implemented sso_team yet so we delegate to Go
+            if sso_team.is_some() {
+                return Ok(Payload::Go(Box::new(clap_args)));
+            }
+
+            let base = CommandBase::new(clap_args, repo_root)?;
+
+            login::login(base).await?;
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Link { .. }
         | Command::Unlink { .. }
         | Command::Daemon { .. }
         | Command::Prune { .. }

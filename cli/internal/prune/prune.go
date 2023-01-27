@@ -11,6 +11,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
@@ -190,9 +191,47 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 		}
 	}
 
-	if fs.FileExists("turbo.json") {
-		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin("turbo.json")}, fullDir.UntypedJoin("turbo.json").ToStringDuringMigration()); err != nil {
-			return errors.Wrap(err, "failed to copy root turbo.json")
+	if fs.FileExists(".npmrc") {
+		if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin(".npmrc")}, fullDir.UntypedJoin(".npmrc").ToStringDuringMigration()); err != nil {
+			return errors.Wrap(err, "failed to copy root .npmrc")
+		}
+		if opts.Docker {
+			if err := fs.CopyFile(&fs.LstatCachedFile{Path: p.base.RepoRoot.UntypedJoin(".npmrc")}, outDir.UntypedJoin("json/.npmrc").ToStringDuringMigration()); err != nil {
+				return errors.Wrap(err, "failed to copy root .npmrc")
+			}
+		}
+	}
+
+	turboJSON, err := fs.LoadTurboConfig(p.base.RepoRoot, rootPackageJSON, false)
+	if err != nil {
+		return errors.Wrap(err, "failed to read turbo.json")
+	}
+	if turboJSON != nil {
+		// when executing a prune, it is not enough to simply copy the file, as
+		// tasks may refer to scopes that no longer exist. to remedy this, we need
+		// to remove from the Pipeline the TaskDefinitions that no longer apply
+		for pipelineTask := range turboJSON.Pipeline {
+			includeTask := false
+			for _, includedPackage := range targets {
+				if util.IsTaskInPackage(pipelineTask, includedPackage) {
+					includeTask = true
+					break
+				}
+			}
+
+			if !includeTask {
+				delete(turboJSON.Pipeline, pipelineTask)
+			}
+		}
+
+		bytes, err := turboJSON.MarshalJSON()
+
+		if err != nil {
+			return errors.Wrap(err, "failed to write turbo.json")
+		}
+
+		if err := fullDir.UntypedJoin("turbo.json").WriteFile(bytes, 0644); err != nil {
+			return errors.Wrap(err, "failed to prune workspace tasks from turbo.json")
 		}
 	}
 
