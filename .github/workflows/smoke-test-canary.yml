@@ -8,12 +8,15 @@ jobs:
     name: "test local turbo"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-        with: 
-          path: repo
-      - uses: ./repo/.github/actions/setup-node
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2.2.4
         with:
-          enable-corepack: false
+          version: 7.12.1
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: pnpm
       - name: ls directory
         run: ls -lsa
       - name: Setup Basic Example
