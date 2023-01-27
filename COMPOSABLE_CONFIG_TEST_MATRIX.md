@@ -22,13 +22,12 @@
   - [ ] env
   - [ ] cache
   - [ ] outputMode
-- [ ] missing-workspace-config
-  - [ ] dependsOn
-  - [ ] inputs
-  - [ ] outputs
-  - [ ] env
-  - [ ] cache
-  - [ ] outputMode
+- [x] missing-workspace-config
+  - [x] dependsOn
+  - [x] inputs
+  - [x] outputs
+  - [x] env
+  - [x] outputMode
 - [ ]`cache`
   - [ ] Task that has cache:false in root can be overriden to cache:true in workspace
   - [ ] Task that has cache:true in root can be overriden to cache:false in workspace
