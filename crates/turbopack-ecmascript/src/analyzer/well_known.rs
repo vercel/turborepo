@@ -26,6 +26,7 @@ pub async fn replace_well_known(
         ),
         JsValue::Call(usize, callee, args) => {
             // var fs = require('fs'), fs = __importStar(fs);
+            // TODO this is not correct and has many false positives!
             if args.len() == 1 {
                 if let JsValue::WellKnownObject(_) = &args[0] {
                     return Ok((args[0].clone(), true));
@@ -241,7 +242,7 @@ pub fn path_resolve(cwd: JsValue, mut args: Vec<JsValue>) -> JsValue {
     let first = iter.next().unwrap();
 
     let is_already_absolute =
-        first.as_str().map_or(false, |s| s.is_empty()) || first.starts_with("/");
+        first.is_empty_string() == Some(true) || first.starts_with("/") == Some(true);
 
     let mut last_was_str = first.as_str().is_some();
 

@@ -1539,25 +1539,19 @@ async fn value_visitor_inner(
                     )
                 }
             }
-            JsValue::FreeVar(FreeVarKind::Dirname) => as_abs_path(source.path().parent()).await?,
-            JsValue::FreeVar(FreeVarKind::Filename) => as_abs_path(source.path()).await?,
+            JsValue::FreeVar(ref kind) => match kind {
+                FreeVarKind::Dirname => as_abs_path(source.path().parent()).await?,
+                FreeVarKind::Filename => as_abs_path(source.path()).await?,
 
-            JsValue::FreeVar(FreeVarKind::Require) => {
-                JsValue::WellKnownFunction(WellKnownFunctionKind::Require)
-            }
-            JsValue::FreeVar(FreeVarKind::Define) => {
-                JsValue::WellKnownFunction(WellKnownFunctionKind::Define)
-            }
-            JsValue::FreeVar(FreeVarKind::Import) => {
-                JsValue::WellKnownFunction(WellKnownFunctionKind::Import)
-            }
-            JsValue::FreeVar(FreeVarKind::NodeProcess) => {
-                JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess)
-            }
-            JsValue::FreeVar(FreeVarKind::Object) => {
-                JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject)
-            }
-            JsValue::FreeVar(_) => JsValue::Unknown(Some(Arc::new(v)), "unknown global"),
+                FreeVarKind::Require => JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
+                FreeVarKind::Define => JsValue::WellKnownFunction(WellKnownFunctionKind::Define),
+                FreeVarKind::Import => JsValue::WellKnownFunction(WellKnownFunctionKind::Import),
+                FreeVarKind::NodeProcess => {
+                    JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess)
+                }
+                FreeVarKind::Object => JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject),
+                _ => JsValue::Unknown(Some(Arc::new(v)), "unknown global"),
+            },
             JsValue::Module(ModuleValue {
                 module: ref name, ..
             }) => match &**name {
@@ -1618,6 +1612,7 @@ async fn value_visitor_inner(
             _ => {
                 let (mut v, mut modified) = replace_well_known(v, environment).await?;
                 modified = replace_builtin(&mut v) || modified;
+                modified = modified || v.make_nested_operations_unknown();
                 return Ok((v, modified));
             }
         },

@@ -56,22 +56,22 @@ d#13 = arguments[3]
 d#5 = ???*0*
 - *0* max number of linking steps reached
 
-hex = (???*0* | ???*1*)
+hex = (???*0* | ???*1*(???*2*, 16))
 - *0* hex
   ⚠️  pattern without value
-- *1* ???*2*((???*3* + ???*6*), 16)
-  ⚠️  call of unknown function
-- *2* FreeVar(parseInt)
+- *1* FreeVar(parseInt)
   ⚠️  unknown global
+- *2* (???*3* + ???*6*)
+  ⚠️  Nested operation
 - *3* ???*4*(???*5*)
-  ⚠️  call of unknown function
+  ⚠️  Nested operation
 - *4* "0123456789abcdef"["charAt"]
-  ⚠️  property on constant
+  ⚠️  Nested operation
 - *5* unsupported expression
 - *6* ???*7*(???*8*)
-  ⚠️  call of unknown function
+  ⚠️  Nested operation
 - *7* "0123456789abcdef"["charAt"]
-  ⚠️  property on constant
+  ⚠️  Nested operation
 - *8* unsupported expression
 
 hexTab = "0123456789abcdef"
@@ -126,16 +126,14 @@ md5hh = (...) => ???*0*
 md5ii = (...) => ???*0*
 - *0* unsupported expression
 
-msg = ???*0*
-- *0* ???*1*(???*2*)
-  ⚠️  call of unknown function
-- *1* FreeVar(unescape)
+msg = ???*0*(???*1*)
+- *0* FreeVar(unescape)
   ⚠️  unknown global
-- *2* ???*3*((arguments[0] | ???*4*))
-  ⚠️  call of unknown function
-- *3* FreeVar(encodeURIComponent)
+- *1* ???*2*((arguments[0] | ???*3*))
+  ⚠️  Nested operation
+- *2* FreeVar(encodeURIComponent)
   ⚠️  unknown global
-- *4* unknown new expression
+- *3* unknown new expression
 
 msw = (???*0* + ???*1* + ???*2*)
 - *0* unsupported expression

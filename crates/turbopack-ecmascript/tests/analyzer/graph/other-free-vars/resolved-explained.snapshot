@@ -2,22 +2,18 @@ O = ???*0*
 - *0* FreeVar(Object)
   ⚠️  unknown global
 
-a = ???*0*
-- *0* ???*1*(???*3*)
-  ⚠️  call of unknown function
-- *1* ???*2*["keys"]
-  ⚠️  property on unknown
-- *2* FreeVar(Object)
+a = ???*0*(???*2*)
+- *0* ???*1*["keys"]
+  ⚠️  Nested operation
+- *1* FreeVar(Object)
   ⚠️  unknown global
-- *3* FreeVar(Object)
+- *2* FreeVar(Object)
   ⚠️  unknown global
 
-b = ???*0*
-- *0* ???*1*(???*3*)
-  ⚠️  call of unknown function
-- *1* ???*2*["keys"]
-  ⚠️  property on unknown
-- *2* FreeVar(Object)
+b = ???*0*(???*2*)
+- *0* ???*1*["keys"]
+  ⚠️  Nested operation
+- *1* FreeVar(Object)
   ⚠️  unknown global
-- *3* FreeVar(Object)
+- *2* FreeVar(Object)
   ⚠️  unknown global

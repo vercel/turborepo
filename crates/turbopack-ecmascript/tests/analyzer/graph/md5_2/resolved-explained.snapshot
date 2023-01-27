@@ -98,125 +98,52 @@ isBuffer = module<is-buffer, {}>
 l = ???*0*
 - *0* unsupported expression
 
-m = module<crypt, {}>["bytesToWords"](
-    (
-      | arguments[0]
-      | module<charenc, {}>["bin"]["stringToBytes"](???*0*)
-      | module<charenc, {}>["utf8"]["stringToBytes"](???*1*)
-      | ???*2*
-    )
-)
-- *0* message
-  ⚠️  circular variable reference
-- *1* message
-  ⚠️  circular variable reference
-- *2* ???*3*(???*7*, 0)
-  ⚠️  call of unknown function
-- *3* ???*4*["call"]
-  ⚠️  property on unknown
-- *4* ???*5*["slice"]
-  ⚠️  property on unknown
-- *5* ???*6*["prototype"]
-  ⚠️  property on unknown
-- *6* FreeVar(Array)
-  ⚠️  unknown global
-- *7* message
+m = ???*0*((arguments[0] | ???*1*))
+- *0* module<crypt, {}>["bytesToWords"]
+  ⚠️  Nested operation
+- *1* ???*2*(???*4*)
+  ⚠️  Nested operation
+- *2* ???*3*["stringToBytes"]
+  ⚠️  Nested operation
+- *3* module<charenc, {}>["bin"]
+  ⚠️  Nested operation
+- *4* message
   ⚠️  circular variable reference
 
 md5 = ???*0*
 - *0* max number of linking steps reached
 
-message#3 = (
-  | arguments[0]
-  | module<charenc, {}>["bin"]["stringToBytes"](
-        (
-          | arguments[0]
-          | module<charenc, {}>["bin"]["stringToBytes"](???*0*)
-          | module<charenc, {}>["utf8"]["stringToBytes"](???*1*)
-          | ???*2*
-        )
-    )
-  | module<charenc, {}>["utf8"]["stringToBytes"](
-        (
-          | arguments[0]
-          | module<charenc, {}>["bin"]["stringToBytes"](???*8*)
-          | module<charenc, {}>["utf8"]["stringToBytes"](???*9*)
-          | ???*10*
-        )
-    )
-  | ???*16*
-  | arguments[0]["toString"]()
-  | module<charenc, {}>["bin"]["stringToBytes"](???*28*)["toString"]()
-  | module<charenc, {}>["utf8"]["stringToBytes"](???*29*)["toString"]()
-)
-- *0* message
+message#3 = (arguments[0] | ???*0*((arguments[0] | ???*2*)) | ???*6*((arguments[0] | ???*10*), 0) | ???*14*())
+- *0* ???*1*["stringToBytes"]
+  ⚠️  Nested operation
+- *1* module<charenc, {}>["bin"]
+  ⚠️  Nested operation
+- *2* ???*3*(???*5*)
+  ⚠️  Nested operation
+- *3* ???*4*["stringToBytes"]
+  ⚠️  Nested operation
+- *4* module<charenc, {}>["bin"]
+  ⚠️  Nested operation
+- *5* message
   ⚠️  circular variable reference
-- *1* message
-  ⚠️  circular variable reference
-- *2* ???*3*(???*7*, 0)
-  ⚠️  call of unknown function
-- *3* ???*4*["call"]
-  ⚠️  property on unknown
-- *4* ???*5*["slice"]
-  ⚠️  property on unknown
-- *5* ???*6*["prototype"]
-  ⚠️  property on unknown
-- *6* FreeVar(Array)
+- *6* ???*7*["call"]
+  ⚠️  Nested operation
+- *7* ???*8*["slice"]
+  ⚠️  Nested operation
+- *8* ???*9*["prototype"]
+  ⚠️  Nested operation
+- *9* FreeVar(Array)
   ⚠️  unknown global
-- *7* message
+- *10* ???*11*(???*13*)
+  ⚠️  Nested operation
+- *11* ???*12*["stringToBytes"]
+  ⚠️  Nested operation
+- *12* module<charenc, {}>["bin"]
+  ⚠️  Nested operation
+- *13* message
   ⚠️  circular variable reference
-- *8* message
-  ⚠️  circular variable reference
-- *9* message
-  ⚠️  circular variable reference
-- *10* ???*11*(???*15*, 0)
-  ⚠️  call of unknown function
-- *11* ???*12*["call"]
-  ⚠️  property on unknown
-- *12* ???*13*["slice"]
-  ⚠️  property on unknown
-- *13* ???*14*["prototype"]
-  ⚠️  property on unknown
-- *14* FreeVar(Array)
-  ⚠️  unknown global
-- *15* message
-  ⚠️  circular variable reference
-- *16* ???*17*(
-        (
-          | arguments[0]
-          | module<charenc, {}>["bin"]["stringToBytes"](???*21*)
-          | module<charenc, {}>["utf8"]["stringToBytes"](???*22*)
-          | ???*23*
-        ),
-        0
-    )
-  ⚠️  call of unknown function
-- *17* ???*18*["call"]
-  ⚠️  property on unknown
-- *18* ???*19*["slice"]
-  ⚠️  property on unknown
-- *19* ???*20*["prototype"]
-  ⚠️  property on unknown
-- *20* FreeVar(Array)
-  ⚠️  unknown global
-- *21* message
-  ⚠️  circular variable reference
-- *22* message
-  ⚠️  circular variable reference
-- *23* ???*24*(???*27*, 0)
-  ⚠️  call of unknown function
-- *24* ???*25*["call"]
-  ⚠️  property on unknown
-- *25* ???*26*["slice"]
-  ⚠️  property on unknown
-- *26* ???["prototype"]
-  ⚠️  property on unknown
-- *27* message
-  ⚠️  circular variable reference
-- *28* message
-  ⚠️  circular variable reference
-- *29* message
-  ⚠️  circular variable reference
+- *14* arguments[0]["toString"]
+  ⚠️  Nested operation
 
 message#8 = arguments[0]
 

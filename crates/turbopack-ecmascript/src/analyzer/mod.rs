@@ -204,66 +204,106 @@ impl LogicalOperator {
     }
 }
 
+/// The three categories of [JsValue]s.
+enum JsValueMetaKind {
+    /// Doesn't contain nested values.
+    Leaf,
+    /// Contain nested values. Nested values represent some structure and can't
+    /// be replaced during linking. They might contain placeholders.
+    Nested,
+    /// Contain nested values. Operations are replaced during linking. They
+    /// might contain placeholders.
+    Operation,
+    /// These values are replaced during linking.
+    Placeholder,
+}
+
 /// TODO: Use `Arc`
+/// There are 4 kinds of values: Leafs, Nested, Operations, and Placeholders
+/// (see [JsValueMetaKind] for details). Values are processed in two phases:
+/// - Analyse phase: We convert AST into [JsValue]s. We don't have contextual
+///   information so we need to insert placeholders to represent that.
+/// - Link phase: We try to reduce a value to a constant value.
+/// The link phase as 5 substeps that are executed on each node in the graph
+/// depth-first. When a value was modified, we need to visit the new children
+/// again.
+/// - Replace variables with their values. This replaces [JsValue::Variable]. No
+///   variables should be remaining after that.
+/// - Replace placeholders with contextual information. This usually replaces
+///   [JsValue::FreeVar] and [JsValue::Module]. Some [JsValue::Call] on well
+///   known functions might also be replaced. No free vars or modules should be
+///   remaining after that.
+/// - Replace operations on well-known objects and functions. THis handles
+///   [JsValue::Call] and [JsValue::Member] on well-known objects and functions.
+/// - Replace all built-in functions with their values when they are
+///   compile-time constant.
+/// - For optimization any nested operations are replaced with
+///   [JsValue::Unknown]. So only one layer of operation remains.
+/// Any remaining operation or placeholder can be treated as unknown.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum JsValue {
-    /// Denotes a single string literal, which does not have any unknown value.
-    ///
-    /// TODO: Use a type without span
+    // LEAF VALUES
+    // ----------------------------
+    /// A constant primitive value.
     Constant(ConstantValue),
-
-    Array(usize, Vec<JsValue>),
-
-    Object(usize, Vec<ObjectPart>),
-
+    /// An constant URL object.
     Url(Url),
-
-    Alternatives(usize, Vec<JsValue>),
-
-    // TODO no predefined kinds, only JsWord
-    FreeVar(FreeVarKind),
-
-    Variable(Id),
-
-    /// `foo.${unknownVar}.js` => 'foo' + Unknown + '.js'
-    Concat(usize, Vec<JsValue>),
-
-    /// This can be converted to [JsValue::Concat] if the type of the variable
-    /// is string.
-    Add(usize, Vec<JsValue>),
-
-    /// Logical negation `!expr`
-    Not(usize, Box<JsValue>),
-
-    /// Logical operator chain `expr && expr`
-    Logical(usize, LogicalOperator, Vec<JsValue>),
-
-    /// `(callee, args)`
-    Call(usize, Box<JsValue>, Vec<JsValue>),
-
-    /// `(obj, prop, args)`
-    MemberCall(usize, Box<JsValue>, Box<JsValue>, Vec<JsValue>),
-
-    /// `obj[prop]`
-    Member(usize, Box<JsValue>, Box<JsValue>),
-
-    /// This is a reference to a imported module
-    Module(ModuleValue),
-
     /// Some kind of well known object
     /// (must not be an array, otherwise Array.concat need to be changed)
     WellKnownObject(WellKnownObjectKind),
-
     /// Some kind of well known function
     WellKnownFunction(WellKnownFunctionKind),
-
-    /// Not analyzable.
+    /// Not analyzable value. Might contain the original value for additional
+    /// info. Has a reason string for explanation.
     Unknown(Option<Arc<JsValue>>, &'static str),
 
-    /// `(return_value)`
+    // NESTED VALUES
+    // ----------------------------
+    /// An arrow of nested values
+    Array(usize, Vec<JsValue>),
+    /// An object of nested values
+    Object(usize, Vec<ObjectPart>),
+    /// A list of alternative values
+    Alternatives(usize, Vec<JsValue>),
+    /// A function reference. The return value might contain [JsValue::Argument]
+    /// placeholders that need to be replaced when calling this function.
+    /// `(total_node_count, return_value)`
     Function(usize, Box<JsValue>),
 
+    // OPERATIONS
+    // ----------------------------
+    /// A string concatenation of values.
+    /// `foo.${unknownVar}.js` => 'foo' + Unknown + '.js'
+    Concat(usize, Vec<JsValue>),
+    /// An addition of values.
+    /// This can be converted to [JsValue::Concat] if the type of the variable
+    /// is string.
+    Add(usize, Vec<JsValue>),
+    /// Logical negation `!expr`
+    Not(usize, Box<JsValue>),
+    /// Logical operator chain e. g. `expr && expr`
+    Logical(usize, LogicalOperator, Vec<JsValue>),
+    /// A function call without a this context.
+    /// `(total_node_count, callee, args)`
+    Call(usize, Box<JsValue>, Vec<JsValue>),
+    /// A function call with a this context.
+    /// `(total_node_count, obj, prop, args)`
+    MemberCall(usize, Box<JsValue>, Box<JsValue>, Vec<JsValue>),
+    /// A member access `obj[prop]`
+    /// `(total_node_count, obj, prop)`
+    Member(usize, Box<JsValue>, Box<JsValue>),
+
+    // PLACEHOLDERS
+    // ----------------------------
+    /// A reference to a variable.
+    Variable(Id),
+    /// A reference to an function argument.
     Argument(usize),
+    // TODO no predefined kinds, only JsWord
+    /// A reference to a free variable.
+    FreeVar(FreeVarKind),
+    /// This is a reference to a imported module.
+    Module(ModuleValue),
 }
 
 impl From<&'_ str> for JsValue {
@@ -470,14 +510,36 @@ fn total_nodes(vec: &[JsValue]) -> usize {
     vec.iter().map(|v| v.total_nodes()).sum::<usize>()
 }
 
+// Private meta methods
 impl JsValue {
-    pub fn as_str(&self) -> Option<&str> {
+    fn meta_type(&self) -> JsValueMetaKind {
         match self {
-            JsValue::Constant(c) => c.as_str(),
-            _ => None,
+            JsValue::Constant(..)
+            | JsValue::Url(..)
+            | JsValue::WellKnownObject(..)
+            | JsValue::WellKnownFunction(..)
+            | JsValue::Unknown(..) => JsValueMetaKind::Leaf,
+            JsValue::Array(..)
+            | JsValue::Object(..)
+            | JsValue::Alternatives(..)
+            | JsValue::Function(..) => JsValueMetaKind::Nested,
+            JsValue::Concat(..)
+            | JsValue::Add(..)
+            | JsValue::Not(..)
+            | JsValue::Logical(..)
+            | JsValue::Call(..)
+            | JsValue::MemberCall(..)
+            | JsValue::Member(..) => JsValueMetaKind::Operation,
+            JsValue::Variable(..)
+            | JsValue::Argument(..)
+            | JsValue::FreeVar(..)
+            | JsValue::Module(..) => JsValueMetaKind::Placeholder,
         }
     }
+}
 
+// Constructors
+impl JsValue {
     pub fn alternatives(list: Vec<JsValue>) -> Self {
         Self::Alternatives(1 + total_nodes(&list), list)
     }
@@ -546,7 +608,10 @@ impl JsValue {
     pub fn member(o: Box<JsValue>, p: Box<JsValue>) -> Self {
         Self::Member(1 + o.total_nodes() + p.total_nodes(), o, p)
     }
+}
 
+// Methods regarding node count
+impl JsValue {
     pub fn total_nodes(&self) -> usize {
         match self {
             JsValue::Constant(_)
@@ -679,7 +744,10 @@ impl JsValue {
             }
         }
     }
+}
 
+// Methods for explaining a value
+impl JsValue {
     pub fn explain_args(args: &[JsValue], depth: usize, unknown_depth: usize) -> (String, String) {
         let mut hints = Vec::new();
         let args = args
@@ -1132,53 +1200,69 @@ impl JsValue {
             }
         }
     }
+}
 
+// Unknown management
+impl JsValue {
+    /// Convert the value into unknown with a specific reason.
     pub fn make_unknown(&mut self, reason: &'static str) {
         *self = JsValue::Unknown(Some(Arc::new(take(self))), reason);
     }
 
+    /// Convert the value into unknown with a specific reason, but don't retain
+    /// the original value.
     pub fn make_unknown_without_content(&mut self, reason: &'static str) {
         *self = JsValue::Unknown(None, reason);
     }
 
+    /// Make all nested operations unknown when the value is an operation.
+    pub fn make_nested_operations_unknown(&mut self) -> bool {
+        fn inner(this: &mut JsValue) -> bool {
+            if matches!(this.meta_type(), JsValueMetaKind::Operation) {
+                this.make_unknown("Nested operation");
+                true
+            } else {
+                this.for_each_children_mut(&mut inner)
+            }
+        }
+        if matches!(self.meta_type(), JsValueMetaKind::Operation) {
+            self.for_each_children_mut(&mut inner)
+        } else {
+            false
+        }
+    }
+}
+
+// Placeholder management
+impl JsValue {
+    /// Returns true if the value contains or is a placeholder.
     pub fn has_placeholder(&self) -> bool {
-        match self {
-            // These are leafs and not placeholders
-            JsValue::Constant(_)
-            | JsValue::Url(_)
-            | JsValue::WellKnownObject(_)
-            | JsValue::WellKnownFunction(_)
-            | JsValue::Unknown(_, _)
-            | JsValue::Function(..) => false,
-
-            // These must be optimized reduced if they don't contain placeholders
-            // So when we see them, they contain placeholders
-            JsValue::Call(..) | JsValue::MemberCall(..) | JsValue::Member(..) => true,
-
-            // These are nested structures, where we look into children
-            // to see placeholders
-            JsValue::Array(..)
-            | JsValue::Object(..)
-            | JsValue::Alternatives(..)
-            | JsValue::Concat(..)
-            | JsValue::Add(..)
-            | JsValue::Not(..)
-            | JsValue::Logical(..) => {
+        match self.meta_type() {
+            JsValueMetaKind::Placeholder => true,
+            JsValueMetaKind::Leaf => false,
+            JsValueMetaKind::Nested | JsValueMetaKind::Operation => {
                 let mut result = false;
                 self.for_each_children(&mut |child| {
                     result = result || child.has_placeholder();
                 });
                 result
             }
+        }
+    }
+}
 
-            // These are placeholders
-            JsValue::Argument(_)
-            | JsValue::Variable(_)
-            | JsValue::Module(..)
-            | JsValue::FreeVar(_) => true,
+// Compile-time information gathering
+impl JsValue {
+    /// Returns the constant string if the value represents a constant string.
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            JsValue::Constant(c) => c.as_str(),
+            _ => None,
         }
     }
 
+    /// Checks if the value is truthy. Returns None if we don't know. Returns
+    /// Some if we know if or if not the value is truthy.
     pub fn is_truthy(&self) -> Option<bool> {
         match self {
             JsValue::Constant(c) => Some(c.is_truthy()),
@@ -1189,27 +1273,27 @@ impl JsValue {
             | JsValue::WellKnownObject(..)
             | JsValue::WellKnownFunction(..)
             | JsValue::Function(..) => Some(true),
-            JsValue::Alternatives(_, list) => merge_if_known(list.iter().map(|x| x.is_truthy())),
+            JsValue::Alternatives(_, list) => merge_if_known(list, JsValue::is_truthy),
             JsValue::Not(_, value) => value.is_truthy().map(|x| !x),
             JsValue::Logical(_, op, list) => match op {
-                LogicalOperator::And => all_if_known(list.iter().map(|x| x.is_truthy())),
-                LogicalOperator::Or => any_if_known(list.iter().map(|x| x.is_truthy())),
+                LogicalOperator::And => all_if_known(list, JsValue::is_truthy),
+                LogicalOperator::Or => any_if_known(list, JsValue::is_truthy),
                 LogicalOperator::NullishCoalescing => {
-                    if all_if_known(list[..list.len() - 1].iter().map(|x| x.is_nullish()))? {
-                        list.last().unwrap().is_truthy()
-                    } else {
-                        Some(false)
-                    }
+                    shortcircut_if_known(list, JsValue::is_not_nullish, JsValue::is_truthy)
                 }
             },
             _ => None,
         }
     }
 
+    /// Checks if the value is falsy. Returns None if we don't know. Returns
+    /// Some if we know if or if not the value is falsy.
     pub fn is_falsy(&self) -> Option<bool> {
         self.is_truthy().map(|x| !x)
     }
 
+    /// Checks if the value is nullish (null or undefined). Returns None if we
+    /// don't know. Returns Some if we know if or if not the value is nullish.
     pub fn is_nullish(&self) -> Option<bool> {
         match self {
             JsValue::Constant(c) => Some(c.is_nullish()),
@@ -1221,7 +1305,7 @@ impl JsValue {
             | JsValue::WellKnownFunction(..)
             | JsValue::Not(..)
             | JsValue::Function(..) => Some(false),
-            JsValue::Alternatives(_, list) => merge_if_known(list.iter().map(|x| x.is_nullish())),
+            JsValue::Alternatives(_, list) => merge_if_known(list, JsValue::is_nullish),
             JsValue::Logical(_, op, list) => match op {
                 LogicalOperator::And => {
                     shortcircut_if_known(list, JsValue::is_truthy, JsValue::is_nullish)
@@ -1229,21 +1313,27 @@ impl JsValue {
                 LogicalOperator::Or => {
                     shortcircut_if_known(list, JsValue::is_falsy, JsValue::is_nullish)
                 }
-                LogicalOperator::NullishCoalescing => {
-                    all_if_known(list.iter().map(|x| x.is_nullish()))
-                }
+                LogicalOperator::NullishCoalescing => all_if_known(list, JsValue::is_nullish),
             },
             _ => None,
         }
     }
 
+    /// Checks if we known that the value is not nullish. Returns None if we
+    /// don't know. Returns Some if we know if or if not the value is not
+    /// nullish.
+    pub fn is_not_nullish(&self) -> Option<bool> {
+        self.is_nullish().map(|x| !x)
+    }
+
+    /// Checks if we known that the value is an empty string. Returns None if we
+    /// don't know. Returns Some if we know if or if not the value is an empty
+    /// string.
     pub fn is_empty_string(&self) -> Option<bool> {
         match self {
             JsValue::Constant(c) => Some(c.is_empty_string()),
-            JsValue::Concat(_, list) => all_if_known(list.iter().map(|x| x.is_empty_string())),
-            JsValue::Alternatives(_, list) => {
-                merge_if_known(list.iter().map(|x| x.is_empty_string()))
-            }
+            JsValue::Concat(_, list) => all_if_known(list, JsValue::is_empty_string),
+            JsValue::Alternatives(_, list) => merge_if_known(list, JsValue::is_empty_string),
             JsValue::Logical(_, op, list) => match op {
                 LogicalOperator::And => {
                     shortcircut_if_known(list, JsValue::is_truthy, JsValue::is_empty_string)
@@ -1252,7 +1342,7 @@ impl JsValue {
                     shortcircut_if_known(list, JsValue::is_falsy, JsValue::is_empty_string)
                 }
                 LogicalOperator::NullishCoalescing => {
-                    shortcircut_if_known(list, JsValue::is_nullish, JsValue::is_empty_string)
+                    shortcircut_if_known(list, JsValue::is_not_nullish, JsValue::is_empty_string)
                 }
             },
             JsValue::Url(..)
@@ -1265,6 +1355,8 @@ impl JsValue {
         }
     }
 
+    /// Returns true, if the value is unknown and storing it as condition
+    /// doesn't make sense. This is for optimization purposes.
     pub fn is_unknown(&self) -> bool {
         match self {
             JsValue::Unknown(..) => true,
@@ -1272,11 +1364,138 @@ impl JsValue {
             _ => false,
         }
     }
+
+    /// Checks if we known that the value is a string. Returns None if we
+    /// don't know. Returns Some if we know if or if not the value is a string.
+    pub fn is_string(&self) -> Option<bool> {
+        match self {
+            JsValue::Constant(ConstantValue::StrWord(..))
+            | JsValue::Constant(ConstantValue::StrAtom(..))
+            | JsValue::Concat(..) => Some(true),
+
+            JsValue::Constant(..)
+            | JsValue::Array(..)
+            | JsValue::Object(..)
+            | JsValue::Url(..)
+            | JsValue::Module(..)
+            | JsValue::Function(..)
+            | JsValue::WellKnownObject(_)
+            | JsValue::WellKnownFunction(_) => Some(false),
+
+            JsValue::Not(..) => Some(false),
+            JsValue::Add(_, list) => any_if_known(list, JsValue::is_string),
+            JsValue::Logical(_, op, list) => match op {
+                LogicalOperator::And => {
+                    shortcircut_if_known(list, JsValue::is_truthy, JsValue::is_string)
+                }
+                LogicalOperator::Or => {
+                    shortcircut_if_known(list, JsValue::is_falsy, JsValue::is_string)
+                }
+                LogicalOperator::NullishCoalescing => {
+                    shortcircut_if_known(list, JsValue::is_not_nullish, JsValue::is_string)
+                }
+            },
+
+            JsValue::Alternatives(_, v) => merge_if_known(v, JsValue::is_string),
+
+            JsValue::Call(
+                _,
+                box JsValue::WellKnownFunction(
+                    WellKnownFunctionKind::RequireResolve
+                    | WellKnownFunctionKind::PathJoin
+                    | WellKnownFunctionKind::PathResolve(..)
+                    | WellKnownFunctionKind::OsArch
+                    | WellKnownFunctionKind::OsPlatform
+                    | WellKnownFunctionKind::PathDirname
+                    | WellKnownFunctionKind::PathToFileUrl
+                    | WellKnownFunctionKind::ProcessCwd,
+                ),
+                _,
+            ) => Some(true),
+
+            JsValue::FreeVar(..)
+            | JsValue::Variable(_)
+            | JsValue::Unknown(..)
+            | JsValue::Argument(..)
+            | JsValue::Call(..)
+            | JsValue::MemberCall(..)
+            | JsValue::Member(..) => None,
+        }
+    }
+
+    /// Checks if we known that the value starts with a given string. Returns
+    /// None if we don't know. Returns Some if we know if or if not the
+    /// value starts with the given string.
+    pub fn starts_with(&self, str: &str) -> Option<bool> {
+        if let Some(s) = self.as_str() {
+            return Some(s.starts_with(str));
+        }
+        match self {
+            JsValue::Alternatives(_, alts) => merge_if_known(alts, |a| a.starts_with(str)),
+            JsValue::Concat(_, list) => {
+                if let Some(item) = list.iter().next() {
+                    if item.starts_with(str) == Some(true) {
+                        Some(true)
+                    } else {
+                        if let Some(s) = item.as_str() {
+                            if str.starts_with(s) {
+                                None
+                            } else {
+                                Some(false)
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                } else {
+                    Some(false)
+                }
+            }
+
+            _ => None,
+        }
+    }
+
+    /// Checks if we known that the value ends with a given string. Returns
+    /// None if we don't know. Returns Some if we know if or if not the
+    /// value ends with the given string.
+    pub fn ends_with(&self, str: &str) -> Option<bool> {
+        if let Some(s) = self.as_str() {
+            return Some(s.ends_with(str));
+        }
+        match self {
+            JsValue::Alternatives(_, alts) => merge_if_known(alts, |alt| alt.ends_with(str)),
+            JsValue::Concat(_, list) => {
+                if let Some(item) = list.last() {
+                    if item.ends_with(str) == Some(true) {
+                        Some(true)
+                    } else {
+                        if let Some(s) = item.as_str() {
+                            if str.ends_with(s) {
+                                None
+                            } else {
+                                Some(false)
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                } else {
+                    Some(false)
+                }
+            }
+
+            _ => None,
+        }
+    }
 }
 
-fn merge_if_known(list: impl IntoIterator<Item = Option<bool>>) -> Option<bool> {
+fn merge_if_known<T: Copy>(
+    list: impl IntoIterator<Item = T>,
+    func: impl Fn(T) -> Option<bool>,
+) -> Option<bool> {
     let mut current = None;
-    for item in list {
+    for item in list.into_iter().map(func) {
         if item.is_some() {
             if current.is_none() {
                 current = item;
@@ -1290,9 +1509,12 @@ fn merge_if_known(list: impl IntoIterator<Item = Option<bool>>) -> Option<bool> 
     current
 }
 
-fn all_if_known(list: impl IntoIterator<Item = Option<bool>>) -> Option<bool> {
+fn all_if_known<T: Copy>(
+    list: impl IntoIterator<Item = T>,
+    func: impl Fn(T) -> Option<bool>,
+) -> Option<bool> {
     let mut unknown = false;
-    for item in list {
+    for item in list.into_iter().map(func) {
         match item {
             Some(false) => return Some(false),
             None => unknown = true,
@@ -1306,8 +1528,11 @@ fn all_if_known(list: impl IntoIterator<Item = Option<bool>>) -> Option<bool> {
     }
 }
 
-fn any_if_known(list: impl IntoIterator<Item = Option<bool>>) -> Option<bool> {
-    all_if_known(list.into_iter().map(|x| x.map(|x| !x))).map(|x| !x)
+fn any_if_known<T: Copy>(
+    list: impl IntoIterator<Item = T>,
+    func: impl Fn(T) -> Option<bool>,
+) -> Option<bool> {
+    all_if_known(list, |x| func(x).map(|x| !x)).map(|x| !x)
 }
 
 fn shortcircut_if_known<T: Copy>(
@@ -1330,6 +1555,7 @@ fn shortcircut_if_known<T: Copy>(
     None
 }
 
+/// Macro to visit all children of a node with an async function
 macro_rules! for_each_children_async {
     ($value:expr, $visit_fn:expr, $($args:expr),+) => {
         Ok(match &mut $value {
@@ -1443,7 +1669,10 @@ macro_rules! for_each_children_async {
     }
 }
 
+// Visiting
 impl JsValue {
+    /// Visit the node and all its children with a function in a loop until the
+    /// visitor returns false for the node and all children
     pub async fn visit_async_until_settled<'a, F, R, E>(
         self,
         visitor: &mut F,
@@ -1468,6 +1697,8 @@ impl JsValue {
         Ok((v, modified))
     }
 
+    /// Visit all children of the node with an async function in a loop until
+    /// the visitor returns false
     pub async fn visit_each_children_async_until_settled<'a, F, R, E>(
         mut self,
         visitor: &mut F,
@@ -1491,6 +1722,7 @@ impl JsValue {
         Ok(v)
     }
 
+    /// Visit the node and all its children with an async function.
     pub async fn visit_async<'a, F, R, E>(self, visitor: &mut F) -> Result<(Self, bool), E>
     where
         R: 'a + Future<Output = Result<(Self, bool), E>>,
@@ -1505,6 +1737,7 @@ impl JsValue {
         }
     }
 
+    /// Visit all children of the node with an async function.
     pub async fn visit_each_children_async<'a, F, R, E>(
         mut self,
         visitor: &mut F,
@@ -1524,6 +1757,7 @@ impl JsValue {
         for_each_children_async!(self, visit_async_box, visitor)
     }
 
+    /// Call an async function for each child of the node.
     pub async fn for_each_children_async<'a, F, R, E>(
         mut self,
         visitor: &mut F,
@@ -1535,6 +1769,8 @@ impl JsValue {
         for_each_children_async!(self, |v, ()| visitor(v), ())
     }
 
+    /// Visit the node and all its children with a function in a loop until the
+    /// visitor returns false
     pub fn visit_mut_until_settled(&mut self, visitor: &mut impl FnMut(&mut JsValue) -> bool) {
         while visitor(self) {
             self.for_each_children_mut(&mut |value| {
@@ -1544,6 +1780,7 @@ impl JsValue {
         }
     }
 
+    /// Visit the node and all its children with a function.
     pub fn visit_mut(&mut self, visitor: &mut impl FnMut(&mut JsValue) -> bool) -> bool {
         let modified = self.for_each_children_mut(&mut |value| value.visit_mut(visitor));
         if visitor(self) {
@@ -1553,6 +1790,8 @@ impl JsValue {
         }
     }
 
+    /// Visit all children of the node with a function. Only visits nodes where
+    /// the condition is true.
     pub fn visit_mut_conditional(
         &mut self,
         condition: impl Fn(&JsValue) -> bool,
@@ -1570,6 +1809,8 @@ impl JsValue {
         }
     }
 
+    /// Calls a function for each child of the node. Allows mutating the node.
+    /// Updates the total nodes count after mutation.
     pub fn for_each_children_mut(
         &mut self,
         visitor: &mut impl FnMut(&mut JsValue) -> bool,
@@ -1586,12 +1827,16 @@ impl JsValue {
                         modified = true
                     }
                 }
-                self.update_total_nodes();
+                if modified {
+                    self.update_total_nodes();
+                }
                 modified
             }
             JsValue::Not(_, value) => {
                 let modified = visitor(value);
-                self.update_total_nodes();
+                if modified {
+                    self.update_total_nodes();
+                }
                 modified
             }
             JsValue::Object(_, list) => {
@@ -1613,7 +1858,9 @@ impl JsValue {
                         }
                     }
                 }
-                self.update_total_nodes();
+                if modified {
+                    self.update_total_nodes();
+                }
                 modified
             }
             JsValue::Call(_, callee, list) => {
@@ -1623,7 +1870,9 @@ impl JsValue {
                         modified = true
                     }
                 }
-                self.update_total_nodes();
+                if modified {
+                    self.update_total_nodes();
+                }
                 modified
             }
             JsValue::MemberCall(_, obj, prop, list) => {
@@ -1635,20 +1884,27 @@ impl JsValue {
                         modified = true
                     }
                 }
-                self.update_total_nodes();
+                if modified {
+                    self.update_total_nodes();
+                }
                 modified
             }
             JsValue::Function(_, return_value) => {
                 let modified = visitor(return_value);
 
-                self.update_total_nodes();
+                if modified {
+                    self.update_total_nodes();
+                }
                 modified
             }
             JsValue::Member(_, obj, prop) => {
                 let m1 = visitor(obj);
                 let m2 = visitor(prop);
-                self.update_total_nodes();
-                m1 || m2
+                let modified = m1 || m2;
+                if modified {
+                    self.update_total_nodes();
+                }
+                modified
             }
             JsValue::Constant(_)
             | JsValue::FreeVar(_)
@@ -1662,11 +1918,13 @@ impl JsValue {
         }
     }
 
+    /// Visit the node and all its children with a function.
     pub fn visit(&self, visitor: &mut impl FnMut(&JsValue)) {
         self.for_each_children(&mut |value| value.visit(visitor));
         visitor(self);
     }
 
+    /// Calls a function for all children of the node.
     pub fn for_each_children(&self, visitor: &mut impl FnMut(&JsValue)) {
         match self {
             JsValue::Alternatives(_, list)
@@ -1725,150 +1983,13 @@ impl JsValue {
             | JsValue::Argument(..) => {}
         }
     }
+}
 
-    pub fn is_string(&self) -> Option<bool> {
-        match self {
-            JsValue::Constant(ConstantValue::StrWord(..))
-            | JsValue::Constant(ConstantValue::StrAtom(..))
-            | JsValue::Concat(..) => Some(true),
-
-            JsValue::Constant(..)
-            | JsValue::Array(..)
-            | JsValue::Object(..)
-            | JsValue::Url(..)
-            | JsValue::Module(..)
-            | JsValue::Function(..) => Some(false),
-
-            JsValue::FreeVar(FreeVarKind::Dirname | FreeVarKind::Filename) => Some(true),
-            JsValue::FreeVar(
-                FreeVarKind::Object
-                | FreeVarKind::Require
-                | FreeVarKind::Define
-                | FreeVarKind::Import
-                | FreeVarKind::NodeProcess,
-            ) => Some(false),
-            JsValue::FreeVar(FreeVarKind::Other(_)) => None,
-
-            JsValue::Not(..) => Some(false),
-            JsValue::Add(_, list) => any_if_known(list.iter().map(|v| v.is_string())),
-            JsValue::Logical(_, op, list) => match op {
-                LogicalOperator::And => {
-                    shortcircut_if_known(list, JsValue::is_truthy, JsValue::is_string)
-                }
-                LogicalOperator::Or => {
-                    shortcircut_if_known(list, JsValue::is_falsy, JsValue::is_string)
-                }
-                LogicalOperator::NullishCoalescing => {
-                    shortcircut_if_known(list, JsValue::is_nullish, JsValue::is_string)
-                }
-            },
-
-            JsValue::Alternatives(_, v) => merge_if_known(v.iter().map(|v| v.is_string())),
-
-            JsValue::Variable(_) | JsValue::Unknown(..) | JsValue::Argument(..) => None,
-
-            JsValue::Call(
-                _,
-                box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
-                _,
-            ) => Some(true),
-            JsValue::Call(..) | JsValue::MemberCall(..) | JsValue::Member(..) => None,
-            JsValue::WellKnownObject(_) | JsValue::WellKnownFunction(_) => Some(false),
-        }
-    }
-
-    pub fn starts_with(&self, str: &str) -> bool {
-        if let Some(s) = self.as_str() {
-            return s.starts_with(str);
-        }
-        match self {
-            JsValue::Alternatives(_, alts) => alts.iter().all(|alt| alt.starts_with(str)),
-            JsValue::Concat(_, list) => {
-                if let Some(item) = list.iter().next() {
-                    item.starts_with(str)
-                } else {
-                    false
-                }
-            }
-
-            // TODO: JsValue::Url(_) => todo!(),
-            JsValue::WellKnownObject(_) | JsValue::WellKnownFunction(_) | JsValue::Function(..) => {
-                false
-            }
-
-            _ => false,
-        }
-    }
-
-    pub fn starts_not_with(&self, str: &str) -> bool {
-        if let Some(s) = self.as_str() {
-            return !s.starts_with(str);
-        }
-        match self {
-            JsValue::Alternatives(_, alts) => alts.iter().all(|alt| alt.starts_not_with(str)),
-            JsValue::Concat(_, list) => {
-                if let Some(item) = list.iter().next() {
-                    item.starts_not_with(str)
-                } else {
-                    false
-                }
-            }
-
-            // TODO: JsValue::Url(_) => todo!(),
-            JsValue::WellKnownObject(_) | JsValue::WellKnownFunction(_) | JsValue::Function(..) => {
-                false
-            }
-
-            _ => false,
-        }
-    }
-
-    pub fn ends_with(&self, str: &str) -> bool {
-        if let Some(s) = self.as_str() {
-            return s.ends_with(str);
-        }
-        match self {
-            JsValue::Alternatives(_, alts) => alts.iter().all(|alt| alt.ends_with(str)),
-            JsValue::Concat(_, list) => {
-                if let Some(item) = list.last() {
-                    item.ends_with(str)
-                } else {
-                    false
-                }
-            }
-
-            // TODO: JsValue::Url(_) => todo!(),
-            JsValue::WellKnownObject(_) | JsValue::WellKnownFunction(_) | JsValue::Function(..) => {
-                false
-            }
-
-            _ => false,
-        }
-    }
-
-    pub fn ends_not_with(&self, str: &str) -> bool {
-        if let Some(s) = self.as_str() {
-            return !s.ends_with(str);
-        }
-        match self {
-            JsValue::Alternatives(_, alts) => alts.iter().all(|alt| alt.ends_not_with(str)),
-            JsValue::Concat(_, list) => {
-                if let Some(item) = list.last() {
-                    item.ends_not_with(str)
-                } else {
-                    false
-                }
-            }
-
-            // TODO: JsValue::Url(_) => todo!(),
-            JsValue::WellKnownObject(_) | JsValue::WellKnownFunction(_) | JsValue::Function(..) => {
-                false
-            }
-
-            _ => false,
-        }
-    }
-
+// Alternatives management
+impl JsValue {
+    /// Add an alternative to the current value. Might be a no-op if the value
+    /// already contains such alternative. Potentially expensive operation
+    /// as it has to compare the value with all existing alternatives.
     fn add_alt(&mut self, v: Self) {
         if self == &v {
             return;
@@ -1884,7 +2005,12 @@ impl JsValue {
             *self = JsValue::Alternatives(1 + l.total_nodes() + v.total_nodes(), vec![l, v]);
         }
     }
+}
 
+// Normalization
+impl JsValue {
+    /// Normalizes only the current node. Nested alternatives, concatenations,
+    /// or operations are collapsed.
     pub fn normalize_shallow(&mut self) {
         match self {
             JsValue::Alternatives(_, v) => {
@@ -1997,6 +2123,7 @@ impl JsValue {
         }
     }
 
+    /// Normalizes the current node and all nested nodes.
     pub fn normalize(&mut self) {
         self.for_each_children_mut(&mut |child| {
             child.normalize();
@@ -2004,7 +2131,13 @@ impl JsValue {
         });
         self.normalize_shallow();
     }
+}
 
+// Similarity
+// Like equality, but with depth limit
+impl JsValue {
+    /// Check if the values are equal up to the given depth. Might return false
+    /// even if the values are equal when hitting the depth limit.
     fn similar(&self, other: &JsValue, depth: usize) -> bool {
         if depth == 0 {
             return false;
@@ -2082,6 +2215,7 @@ impl JsValue {
         }
     }
 
+    /// Hashes the value up to the given depth.
     fn similar_hash<H: std::hash::Hasher>(&self, state: &mut H, depth: usize) {
         if depth == 0 {
             return;
@@ -2152,6 +2286,8 @@ impl JsValue {
     }
 }
 
+/// A wrapper around `JsValue` that implements `PartialEq` and `Hash` by
+/// comparing the values with a depth of 3.
 struct SimilarJsValue(JsValue);
 
 impl PartialEq for SimilarJsValue {
@@ -2195,6 +2331,7 @@ pub enum FreeVarKind {
     Other(JsWord),
 }
 
+/// A list of well-known objects that have special meaning in the analysis.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum WellKnownObjectKind {
     GlobalObject,
@@ -2216,6 +2353,7 @@ pub enum WellKnownObjectKind {
     RequireCache,
 }
 
+/// A list of well-known functions that have special meaning in the analysis.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum WellKnownFunctionKind {
     ObjectAssign,
@@ -2300,7 +2438,8 @@ pub mod test_utils {
             _ => {
                 let (mut v, m1) = replace_well_known(v, environment).await?;
                 let m2 = replace_builtin(&mut v);
-                return Ok((v, m1 || m2));
+                let m = m1 || m2 || v.make_nested_operations_unknown();
+                return Ok((v, m));
             }
         };
         new_value.normalize_shallow();

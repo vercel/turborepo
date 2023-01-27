@@ -3,21 +3,17 @@ a = 1
 b = "foo"
 
 c = (1 | "foo" | ???*0*)
-- *0* [][???*1*]
+- *0* [][???*1*["index"]]
   ⚠️  unknown array prototype methods or values
-- *1* ???*2*["index"]
-  ⚠️  property on unknown
-- *2* FreeVar(global)
+- *1* FreeVar(global)
   ⚠️  unknown global
 
 d1 = [1, "foo"]
 
 d2 = (1 | "foo" | ???*0*)
-- *0* [][???*1*]
+- *0* [][???*1*["index"]]
   ⚠️  unknown array prototype methods or values
-- *1* ???*2*["index"]
-  ⚠️  property on unknown
-- *2* FreeVar(global)
+- *1* FreeVar(global)
   ⚠️  unknown global
 
 d3 = "foo"
