@@ -1,0 +1,12 @@
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"]
+    },
+    // Add dependsOn if your tests need to run a `build` or another script first
+    "test": {},
+  }
+}
+```

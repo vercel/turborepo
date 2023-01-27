@@ -4,6 +4,7 @@ description: How to use GitLab CI with Turborepo to optimize your CI workflow
 ---
 
 import { Tabs, Tab } from "../../../../components/Tabs";
+import TurboConfigForCI from "../../../../components/ci-recipe-turbo-config.mdx";
 
 # Using Turborepo with GitLab CI
 
@@ -26,19 +27,7 @@ For a given root `package.json`:
 
 And a `turbo.json`:
 
-```json
-{
-  "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
-    "build": {
-      "dependsOn": ["^build"]
-    },
-    "test": {
-      "dependsOn": ["build"]
-    },
-  }
-}
-```
+<TurboConfigForCI />
 
 Create a file called `.gitlab-ci.yml` in your repository with the following contents:
 
