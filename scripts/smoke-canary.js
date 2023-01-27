@@ -5,14 +5,22 @@ const { assert } = require("console");
 
 function exec({ command, options }) {
   console.log(`Running: "${command}"`);
-  const result = execSync(command, options).toString();
-  if (process.env.GITHUB_ACTIONS === "true") {
-    console.log(`::group::"${command}" output`);
-    console.log(result);
-    console.log(`::endgroup::`);
-  } else {
-    console.log(result);
+  try {
+
+    const result = execSync(command, options).toString();
+    if (process.env.GITHUB_ACTIONS === "true") {
+      console.log(`::group::"${command}" output`);
+      console.log(result);
+      console.log(`::endgroup::`);
+    } else {
+      console.log(result);
+    }
+  } catch (err) {
+    console.error(err);
+    console.error(err.stdout.toString());
+    process.exit(1);
   }
+
 
   return result;
 }
