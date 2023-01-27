@@ -22,6 +22,7 @@ jobs:
           git config --global user.email 'turbobot@vercel.com'
       - name: Setup pnpm
         uses: pnpm/action-setup@v2.2.4
+        if: ${{ matrix.packageManager === 'pnpm' }}
         with:
           version: 7.12.1
       - name: Checkout test file
