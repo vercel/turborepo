@@ -13,6 +13,7 @@ on:
       version:
         required: false
         type: string
+  workflow_dispatch:
 
 jobs:
   # Build debug build of next-dev to use in integration test.
@@ -156,3 +157,14 @@ jobs:
         env:
           RECORD_REPLAY_METADATA_TEST_RUN_TITLE: testIntegration / Group ${{ matrix.group }}
           NEXT_INTEGRATION_TEST: true
+
+      - name: Send test data to Slack workflow
+        id: slack
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          payload: |
+            {
+              "text": "Hello from Next.js+Turbo integration tests!"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.NEXT_TURBO_INTEGRATION_SLACK_WEBHOOK_URL }}
