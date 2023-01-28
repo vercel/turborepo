@@ -53,7 +53,7 @@ use turbo_tasks::{
     primitives::{BoolVc, StringReadRef, StringVc},
     spawn_thread,
     trace::TraceRawVcs,
-    CompletionVc, Invalidator, ValueToString, ValueToStringVc,
+    turbo_tasks, CompletionVc, Invalidator, RawVc, ValueToString, ValueToStringVc,
 };
 use turbo_tasks_hash::hash_xxh3_hash64;
 use util::{join_path, normalize_path, sys_to_unix, unix_to_sys};
@@ -474,8 +474,8 @@ impl FileSystem for DiskFileSystem {
     ) -> Result<CompletionVc> {
         let full_path = self.to_sys_path(fs_path).await?;
         let content = content.await?;
-        let old_content = fs_path
-            .read()
+        let old_content = RawVc::from(fs_path.read())
+            .into_read_untracked(&*turbo_tasks())
             .await
             .with_context(|| format!("reading old content of {}", full_path.display()))?;
 
