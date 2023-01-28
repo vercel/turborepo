@@ -687,13 +687,42 @@
 <span id="687">687</span>
 <span id="688">688</span>
 <span id="689">689</span>
+<span id="690">690</span>
+<span id="691">691</span>
+<span id="692">692</span>
+<span id="693">693</span>
+<span id="694">694</span>
+<span id="695">695</span>
+<span id="696">696</span>
+<span id="697">697</span>
+<span id="698">698</span>
+<span id="699">699</span>
+<span id="700">700</span>
+<span id="701">701</span>
+<span id="702">702</span>
+<span id="703">703</span>
+<span id="704">704</span>
+<span id="705">705</span>
+<span id="706">706</span>
+<span id="707">707</span>
+<span id="708">708</span>
+<span id="709">709</span>
+<span id="710">710</span>
+<span id="711">711</span>
+<span id="712">712</span>
+<span id="713">713</span>
+<span id="714">714</span>
+<span id="715">715</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
     io::Write,
 };
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
+<span class="kw">use </span>turbo_tasks::{
+    primitives::{StringVc, StringsVc},
+    TryJoinIterExt, Value, ValueToString,
+};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::{
     rope::RopeBuilder, DirectoryContent, DirectoryEntry, File, FileContent, FileContentVc,
@@ -1003,6 +1032,7 @@
         SpecificityVc::exact(),
         <span class="number">0</span>,
         app_dir,
+        next_config.page_extensions(),
         server_root,
         EcmascriptChunkPlaceablesVc::cell(server_runtime_entries),
         fallback_page,
@@ -1022,6 +1052,7 @@
     specificity: SpecificityVc,
     position: u32,
     input_dir: FileSystemPathVc,
+    page_extensions: StringsVc,
     server_root: FileSystemPathVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
     fallback_page: DevHtmlAssetVc,
@@ -1033,131 +1064,149 @@
     <span class="kw">let </span><span class="kw-2">mut </span>sources = Vec::new();
     <span class="kw">let </span><span class="kw-2">mut </span>page = <span class="prelude-val">None</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>files = HashMap::new();
-    <span class="kw">if let </span>DirectoryContent::Entries(entries) = <span class="kw-2">&amp;*</span>input_dir.read_dir().<span class="kw">await</span><span class="question-mark">? </span>{
-        <span class="kw">for </span>(name, entry) <span class="kw">in </span>entries.iter() {
-            <span class="kw">if let </span><span class="kw-2">&amp;</span>DirectoryEntry::File(file) = entry {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>((name, <span class="kw">_</span>)) = name.rsplit_once(<span class="string">&#39;.&#39;</span>) {
-                    <span class="kw">match </span>name {
-                        <span class="string">&quot;page&quot; </span>=&gt; {
-                            page = <span class="prelude-val">Some</span>(file);
-                        }
-                        <span class="string">&quot;layout&quot; </span>| <span class="string">&quot;error&quot; </span>| <span class="string">&quot;loading&quot; </span>| <span class="string">&quot;template&quot; </span>| <span class="string">&quot;not-found&quot; </span>| <span class="string">&quot;head&quot; </span>=&gt; {
-                            files.insert(name.to_string(), file);
-                        }
-                        <span class="kw">_ </span>=&gt; {
-                            <span class="comment">// Any other file is ignored
-                        </span>}
+
+    <span class="kw">let </span>DirectoryContent::Entries(entries) = <span class="kw-2">&amp;*</span>input_dir.read_dir().<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(CombinedContentSource { sources }.cell());
+    };
+
+    <span class="kw">let </span>allowed_extensions = <span class="kw-2">&amp;*</span>page_extensions.<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">for </span>(name, entry) <span class="kw">in </span>entries.iter() {
+        <span class="kw">if let </span><span class="kw-2">&amp;</span>DirectoryEntry::File(file) = entry {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>((name, ext)) = name.rsplit_once(<span class="string">&#39;.&#39;</span>) {
+                <span class="kw">if </span>!allowed_extensions.iter().any(|allowed| allowed == ext) {
+                    <span class="kw">continue</span>;
+                }
+
+                <span class="kw">match </span>name {
+                    <span class="string">&quot;page&quot; </span>=&gt; {
+                        page = <span class="prelude-val">Some</span>(file);
                     }
+                    <span class="string">&quot;layout&quot; </span>| <span class="string">&quot;error&quot; </span>| <span class="string">&quot;loading&quot; </span>| <span class="string">&quot;template&quot; </span>| <span class="string">&quot;not-found&quot; </span>| <span class="string">&quot;head&quot; </span>=&gt; {
+                        files.insert(name.to_string(), file);
+                    }
+                    <span class="kw">_ </span>=&gt; {
+                        <span class="comment">// Any other file is ignored
+                    </span>}
                 }
-            }
-        }
-
-        <span class="kw">let </span>layout = files.get(<span class="string">&quot;layout&quot;</span>);
-
-        <span class="comment">// If a page exists but no layout exists, create a basic root layout
-        // in `app/layout.js` or `app/layout.tsx`.
-        //
-        // TODO: Use let Some(page_file) = page in expression below when
-        // https://rust-lang.github.io/rfcs/2497-if-let-chains.html lands
-        </span><span class="kw">if let </span>(<span class="prelude-val">Some</span>(page_file), <span class="prelude-val">None</span>, <span class="bool-val">true</span>) = (page, layout, target == server_root) {
-            <span class="comment">// Use the extension to determine if the page file is TypeScript.
-            // TODO: Use the presence of a tsconfig.json instead, like Next.js
-            // stable does.
-            </span><span class="kw">let </span>is_tsx = <span class="kw-2">*</span>page_file.extension().<span class="kw">await</span><span class="question-mark">? </span>== <span class="string">&quot;tsx&quot;</span>;
-
-            <span class="kw">let </span>layout = <span class="kw">if </span>is_tsx {
-                input_dir.join(<span class="string">&quot;layout.tsx&quot;</span>)
-            } <span class="kw">else </span>{
-                input_dir.join(<span class="string">&quot;layout.js&quot;</span>)
-            };
-            files.insert(<span class="string">&quot;layout&quot;</span>.to_string(), layout);
-            <span class="kw">let </span>content = <span class="kw">if </span>is_tsx {
-                <span class="macro">include_str!</span>(<span class="string">&quot;assets/layout.tsx&quot;</span>)
-            } <span class="kw">else </span>{
-                <span class="macro">include_str!</span>(<span class="string">&quot;assets/layout.js&quot;</span>)
-            };
-
-            layout.write(FileContentVc::from(File::from(content)));
-
-            AppSourceIssue {
-                severity: IssueSeverity::Warning.into(),
-                path: page_file,
-                message: StringVc::cell(<span class="macro">format!</span>(
-                    <span class="string">&quot;Your page {} did not have a root layout, we created {} for you.&quot;</span>,
-                    page_file.<span class="kw">await</span><span class="question-mark">?</span>.path,
-                    layout.<span class="kw">await</span><span class="question-mark">?</span>.path,
-                )),
-            }
-            .cell()
-            .as_issue()
-            .emit();
-        }
-
-        <span class="kw">let </span><span class="kw-2">mut </span>list = layouts.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
-        list.push(LayoutSegment { files, target }.cell());
-        layouts = LayoutSegmentsVc::cell(list);
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(page_path) = page {
-            <span class="kw">let </span>pathname = pathname_for_path(server_root, target, <span class="bool-val">false</span>);
-            <span class="kw">let </span>params_matcher = NextParamsMatcherVc::new(pathname);
-
-            sources.push(create_node_rendered_source(
-                specificity,
-                server_root,
-                params_matcher.into(),
-                pathname,
-                AppRenderer {
-                    context_ssr,
-                    context,
-                    server_root,
-                    layout_path: layouts,
-                    page_path,
-                    target,
-                    project_path,
-                    intermediate_output_path,
-                }
-                .cell()
-                .into(),
-                runtime_entries,
-                fallback_page,
-            ));
-        }
-        <span class="kw">for </span>(name, entry) <span class="kw">in </span>entries.iter() {
-            <span class="kw">if let </span>DirectoryEntry::Directory(dir) = entry {
-                <span class="kw">let </span>intermediate_output_path = intermediate_output_path.join(name);
-                <span class="kw">let </span>specificity = <span class="kw">if </span>name.starts_with(<span class="string">&quot;[[&quot;</span>) || name.starts_with(<span class="string">&quot;[...&quot;</span>) {
-                    specificity.with_catch_all(position)
-                } <span class="kw">else if </span>name.starts_with(<span class="string">&#39;[&#39;</span>) {
-                    specificity.with_dynamic_segment(position)
-                } <span class="kw">else </span>{
-                    specificity
-                };
-                <span class="kw">let </span>(new_target, position) = <span class="kw">if </span>name.starts_with(<span class="string">&#39;(&#39;</span>) &amp;&amp; name.ends_with(<span class="string">&#39;)&#39;</span>) {
-                    <span class="comment">// This doesn&#39;t affect the url
-                    </span>(target, position)
-                } <span class="kw">else </span>{
-                    <span class="comment">// This adds to the url
-                    </span>(target.join(name), position + <span class="number">1</span>)
-                };
-                sources.push(
-                    create_app_source_for_directory(
-                        context_ssr,
-                        context,
-                        project_path,
-                        specificity,
-                        position,
-                        <span class="kw-2">*</span>dir,
-                        server_root,
-                        runtime_entries,
-                        fallback_page,
-                        new_target,
-                        layouts,
-                        intermediate_output_path,
-                    )
-                    .into(),
-                );
             }
         }
     }
+
+    <span class="kw">let </span>layout = files.get(<span class="string">&quot;layout&quot;</span>);
+
+    <span class="comment">// If a page exists but no layout exists, create a basic root layout
+    // in `app/layout.js` or `app/layout.tsx`.
+    //
+    // TODO: Use let Some(page_file) = page in expression below when
+    // https://rust-lang.github.io/rfcs/2497-if-let-chains.html lands
+    </span><span class="kw">if let </span>(<span class="prelude-val">Some</span>(page_file), <span class="prelude-val">None</span>, <span class="bool-val">true</span>) = (page, layout, target == server_root) {
+        <span class="comment">// Use the extension to determine if the page file is TypeScript.
+        // TODO: Use the presence of a tsconfig.json instead, like Next.js
+        // stable does.
+        </span><span class="kw">let </span>is_tsx = <span class="kw-2">*</span>page_file.extension().<span class="kw">await</span><span class="question-mark">? </span>== <span class="string">&quot;tsx&quot;</span>;
+
+        <span class="kw">let </span>layout = <span class="kw">if </span>is_tsx {
+            input_dir.join(<span class="string">&quot;layout.tsx&quot;</span>)
+        } <span class="kw">else </span>{
+            input_dir.join(<span class="string">&quot;layout.js&quot;</span>)
+        };
+        files.insert(<span class="string">&quot;layout&quot;</span>.to_string(), layout);
+        <span class="kw">let </span>content = <span class="kw">if </span>is_tsx {
+            <span class="macro">include_str!</span>(<span class="string">&quot;assets/layout.tsx&quot;</span>)
+        } <span class="kw">else </span>{
+            <span class="macro">include_str!</span>(<span class="string">&quot;assets/layout.js&quot;</span>)
+        };
+
+        layout.write(FileContentVc::from(File::from(content)));
+
+        AppSourceIssue {
+            severity: IssueSeverity::Warning.into(),
+            path: page_file,
+            message: StringVc::cell(<span class="macro">format!</span>(
+                <span class="string">&quot;Your page {} did not have a root layout, we created {} for you.&quot;</span>,
+                page_file.<span class="kw">await</span><span class="question-mark">?</span>.path,
+                layout.<span class="kw">await</span><span class="question-mark">?</span>.path,
+            )),
+        }
+        .cell()
+        .as_issue()
+        .emit();
+    }
+
+    <span class="kw">let </span><span class="kw-2">mut </span>list = layouts.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
+    list.push(LayoutSegment { files, target }.cell());
+    layouts = LayoutSegmentsVc::cell(list);
+
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(page_path) = page {
+        <span class="kw">let </span>pathname = pathname_for_path(server_root, target, <span class="bool-val">false</span>);
+        <span class="kw">let </span>params_matcher = NextParamsMatcherVc::new(pathname);
+
+        sources.push(create_node_rendered_source(
+            specificity,
+            server_root,
+            params_matcher.into(),
+            pathname,
+            AppRenderer {
+                context_ssr,
+                context,
+                server_root,
+                layout_path: layouts,
+                page_path,
+                target,
+                project_path,
+                intermediate_output_path,
+            }
+            .cell()
+            .into(),
+            runtime_entries,
+            fallback_page,
+        ));
+    }
+
+    <span class="kw">for </span>(name, entry) <span class="kw">in </span>entries.iter() {
+        <span class="kw">let </span>DirectoryEntry::Directory(dir) = entry <span class="kw">else </span>{
+            <span class="kw">continue</span>;
+        };
+
+        <span class="kw">let </span>intermediate_output_path = intermediate_output_path.join(name);
+
+        <span class="kw">let </span>specificity = <span class="kw">if </span>name.starts_with(<span class="string">&quot;[[&quot;</span>) || name.starts_with(<span class="string">&quot;[...&quot;</span>) {
+            specificity.with_catch_all(position)
+        } <span class="kw">else if </span>name.starts_with(<span class="string">&#39;[&#39;</span>) {
+            specificity.with_dynamic_segment(position)
+        } <span class="kw">else </span>{
+            specificity
+        };
+
+        <span class="kw">let </span>(new_target, position) = <span class="kw">if </span>name.starts_with(<span class="string">&#39;(&#39;</span>) &amp;&amp; name.ends_with(<span class="string">&#39;)&#39;</span>) {
+            <span class="comment">// This doesn&#39;t affect the url
+            </span>(target, position)
+        } <span class="kw">else </span>{
+            <span class="comment">// This adds to the url
+            </span>(target.join(name), position + <span class="number">1</span>)
+        };
+
+        sources.push(
+            create_app_source_for_directory(
+                context_ssr,
+                context,
+                project_path,
+                specificity,
+                position,
+                <span class="kw-2">*</span>dir,
+                page_extensions,
+                server_root,
+                runtime_entries,
+                fallback_page,
+                new_target,
+                layouts,
+                intermediate_output_path,
+            )
+            .into(),
+        );
+    }
+
     <span class="prelude-val">Ok</span>(CombinedContentSource { sources }.cell())
 }
 
@@ -1182,6 +1231,7 @@
         <span class="kw">let </span>page = this.page_path;
         <span class="kw">let </span>path = page.parent();
         <span class="kw">let </span>path_value = <span class="kw-2">&amp;*</span>path.<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="kw">let </span>layout_and_page = layout_path
             .iter()
             .copied()
@@ -1194,6 +1244,7 @@
             ))
             .try_join()
             .<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="kw">let </span>segments: Vec&lt;<span class="kw">_</span>&gt; = layout_and_page
             .into_iter()
             .fold(
@@ -1240,6 +1291,7 @@
             </span>.into_iter()
             .try_join()
             .<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="comment">// IPC need to be the first import to allow it to catch errors happening during
         // the other imports
         </span><span class="kw">let </span><span class="kw-2">mut </span>result =
