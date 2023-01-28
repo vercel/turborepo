@@ -10,13 +10,16 @@ import (
 )
 
 func Test_dontSquashTasks(t *testing.T) {
-	topoGraph := &dag.AcyclicGraph{}
-	topoGraph.Add("a")
-	topoGraph.Add("b")
+	workspaceGraph := &dag.AcyclicGraph{}
+	workspaceGraph.Add("a")
+	workspaceGraph.Add("b")
 	// no dependencies between packages
 
 	pipeline := map[string]fs.TaskDefinition{
 		"build": {
+			FieldsMeta: map[string]bool{
+				"HasTaskDependencies": true,
+			},
 			Outputs:          fs.TaskOutputs{},
 			TaskDependencies: []string{"generate"},
 		},
@@ -36,17 +39,22 @@ func Test_dontSquashTasks(t *testing.T) {
 		Opts:         &Opts{},
 	}
 
-	workspaceInfos := make(graph.WorkspaceInfos)
-	workspaceInfos["a"] = &fs.PackageJSON{
-		Name:    "a",
-		Scripts: map[string]string{},
+	workspaceInfos := graph.WorkspaceInfos{
+		"a": &fs.PackageJSON{
+			Name:    "a",
+			Scripts: map[string]string{},
+		},
+		"b": &fs.PackageJSON{
+			Name:    "b",
+			Scripts: map[string]string{},
+		},
 	}
 
 	completeGraph := &graph.CompleteGraph{
-		WorkspaceGraph:  *topoGraph,
+		WorkspaceGraph:  *workspaceGraph,
 		Pipeline:        pipeline,
 		WorkspaceInfos:  workspaceInfos,
-		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		TaskDefinitions: map[string]*fs.ResolvedTaskDefinition{},
 	}
 
 	engine, err := buildTaskGraphEngine(completeGraph, rs)
@@ -86,7 +94,7 @@ func Test_taskSelfRef(t *testing.T) {
 	completeGraph := &graph.CompleteGraph{
 		WorkspaceGraph:  *topoGraph,
 		Pipeline:        pipeline,
-		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		TaskDefinitions: map[string]*fs.ResolvedTaskDefinition{},
 	}
 
 	_, err := buildTaskGraphEngine(completeGraph, rs)
