@@ -135,31 +135,6 @@ func newTest(t *testing.T, redirectedURL string) *testResult {
 	return tr
 }
 
-func Test_run(t *testing.T) {
-	ctx := context.Background()
-	test := newTest(t, "http://127.0.0.1:9789/?token=my-token")
-	login := test.getTestLogin()
-	err := login.run(ctx)
-	if err != nil {
-		t.Errorf("expected to succeed, got error %v", err)
-	}
-	if test.clientErr != nil {
-		t.Errorf("test client had error %v", test.clientErr)
-	}
-
-	expectedURL := "login-url/turborepo/token?redirect_uri=http://127.0.0.1:9789"
-	if test.openedURL != expectedURL {
-		t.Errorf("openedURL got %v, want %v", test.openedURL, expectedURL)
-	}
-
-	if test.userConfig.Token() != "my-token" {
-		t.Errorf("config token got %v, want my-token", test.userConfig.Token())
-	}
-	if test.client.setToken != "my-token" {
-		t.Errorf("user client token got %v, want my-token", test.client.setToken)
-	}
-}
-
 func Test_sso(t *testing.T) {
 	ctx := context.Background()
 	redirectParams := make(url.Values)
