@@ -486,7 +486,7 @@ func _buildCompleteGraph(workspaceEasyDefinition map[string][]string) (*graph.Co
 	completeGraph := &graph.CompleteGraph{
 		WorkspaceGraph:  workspaceGraph,
 		WorkspaceInfos:  workspaceInfos,
-		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		TaskDefinitions: map[string]*fs.ResolvedTaskDefinition{},
 	}
 
 	return completeGraph, workspaces

@@ -49,7 +49,7 @@ func TestEngineDefault(t *testing.T) {
 	p := NewEngine(&graph.CompleteGraph{
 		WorkspaceGraph:  workspaceGraph,
 		Pipeline:        pipeline,
-		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		TaskDefinitions: map[string]*fs.ResolvedTaskDefinition{},
 		WorkspaceInfos: graph.WorkspaceInfos{
 			"a": &fs.PackageJSON{},
 			"b": &fs.PackageJSON{},
@@ -143,7 +143,7 @@ func TestDependenciesOnUnspecifiedPackages(t *testing.T) {
 	p := NewEngine(&graph.CompleteGraph{
 		WorkspaceGraph:  workspaceGraph,
 		Pipeline:        pipeline,
-		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		TaskDefinitions: map[string]*fs.ResolvedTaskDefinition{},
 		WorkspaceInfos: graph.WorkspaceInfos{
 			"app1": &fs.PackageJSON{},
 			"app2": &fs.PackageJSON{},
@@ -209,7 +209,7 @@ func TestRunPackageTask(t *testing.T) {
 	p := NewEngine(&graph.CompleteGraph{
 		WorkspaceGraph:  workspaceGraph,
 		Pipeline:        pipeline,
-		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		TaskDefinitions: map[string]*fs.ResolvedTaskDefinition{},
 		WorkspaceInfos: graph.WorkspaceInfos{
 			"app1": &fs.PackageJSON{},
 			"libA": &fs.PackageJSON{},
@@ -280,7 +280,7 @@ func TestIncludeRootTasks(t *testing.T) {
 	p := NewEngine(&graph.CompleteGraph{
 		WorkspaceGraph:  workspaceGraph,
 		Pipeline:        pipeline,
-		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		TaskDefinitions: map[string]*fs.ResolvedTaskDefinition{},
 		WorkspaceInfos: graph.WorkspaceInfos{
 			util.RootPkgName: &fs.PackageJSON{},
 			"app1":           &fs.PackageJSON{},
@@ -342,7 +342,7 @@ func TestDependOnRootTask(t *testing.T) {
 	p := NewEngine(&graph.CompleteGraph{
 		WorkspaceGraph:  workspaceGraph,
 		Pipeline:        pipeline,
-		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		TaskDefinitions: map[string]*fs.ResolvedTaskDefinition{},
 		WorkspaceInfos: graph.WorkspaceInfos{
 			util.RootPkgName: &fs.PackageJSON{},
 			"app1":           &fs.PackageJSON{},
@@ -417,7 +417,7 @@ func TestDependOnMultiplePackageTasks(t *testing.T) {
 	p := NewEngine(&graph.CompleteGraph{
 		WorkspaceGraph:  workspaceGraph,
 		Pipeline:        pipeline,
-		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		TaskDefinitions: map[string]*fs.ResolvedTaskDefinition{},
 		WorkspaceInfos: graph.WorkspaceInfos{
 			"app1": &fs.PackageJSON{},
 			"libA": &fs.PackageJSON{},
@@ -508,7 +508,7 @@ func TestEngineTasksOnly(t *testing.T) {
 	p := NewEngine(&graph.CompleteGraph{
 		WorkspaceGraph:  workspaceGraph,
 		Pipeline:        pipeline,
-		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		TaskDefinitions: map[string]*fs.ResolvedTaskDefinition{},
 		WorkspaceInfos: graph.WorkspaceInfos{
 			"a": &fs.PackageJSON{},
 			"b": &fs.PackageJSON{},
