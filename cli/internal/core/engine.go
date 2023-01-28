@@ -349,6 +349,8 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 
 		currentPackageName, currentTaskName := util.GetPackageTaskFromId(vertexName)
 
+		fmt.Printf("[debug] ------------------------\n")
+		fmt.Printf("[debug] CHECKING %s dependencies\n", vertexName)
 		// For each "downEdge" (i.e. each task that _this_ task dependsOn)
 		// check if the downEdge is a Persistent task, and if it actually has the script implemented
 		// in that package's package.json
@@ -363,11 +365,14 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			packageName, taskName := util.GetPackageTaskFromId(depTaskID)
 
 			// Get the Task Definition so we can check if it is Persistent
-			// TODO(mehulkar): Do we need to get a resolved taskDefinition here?
-			depTaskDefinition, taskExists := e.getTaskDefinition(taskName, depTaskID)
-			if taskExists != nil {
+			depTaskDefinition, taskExists := e.completeGraph.TaskDefinitions[depTaskID]
+			// depTaskDefinition, taskExists := e.getTaskDefinition(taskName, depTaskID)
+
+			if !taskExists {
 				return fmt.Errorf("Cannot find task definition for %v in package %v", depTaskID, packageName)
 			}
+
+			fmt.Printf("[debug] %s: persistent? %#v\n", depTaskID, depTaskDefinition.Persistent)
 
 			// Get information about the package
 			pkg, pkgExists := graph.WorkspaceInfos[packageName]
@@ -376,8 +381,10 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			}
 			_, hasScript := pkg.Scripts[taskName]
 
+			fmt.Printf("[debug] %s: has script? %#v\n", depTaskID, hasScript)
+
 			// If both conditions are true set a value and break out of checking the dependencies
-			if depTaskDefinition.TaskDefinition.Persistent && hasScript {
+			if depTaskDefinition.Persistent && hasScript {
 				validationError = fmt.Errorf(
 					"\"%s\" is a persistent task, \"%s\" cannot depend on it",
 					util.GetTaskId(packageName, taskName),
