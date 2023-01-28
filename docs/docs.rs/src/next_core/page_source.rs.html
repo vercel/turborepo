@@ -967,7 +967,7 @@
         server_runtime_entries,
         fallback_page,
         server_root,
-        output_path,
+        output_path.join(<span class="string">&quot;force_not_found&quot;</span>),
         SpecificityVc::exact(),
         NextExactMatcherVc::new(StringVc::cell(<span class="string">&quot;_next/404&quot;</span>.to_string())).into(),
     );
@@ -980,7 +980,7 @@
         server_runtime_entries,
         fallback_page,
         server_root,
-        output_path,
+        output_path.join(<span class="string">&quot;fallback_not_found&quot;</span>),
         SpecificityVc::not_found(),
         NextFallbackMatcherVc::new().into(),
     );
