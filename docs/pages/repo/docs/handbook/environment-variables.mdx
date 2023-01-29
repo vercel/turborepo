@@ -1,0 +1,29 @@
+# Using environment variables
+
+We currently recommend using `dotenv-cli` as the simplest way to bring your environment variables into your development tasks.
+
+We're actively looking forward to improving the developer experience and ergonomics for your environment variables in a future release of Turborepo.
+
+## Guide
+
+1. Place all of your variables into the root of your monorepo as a `.env` file.
+
+2. Install `dotenv-cli` into the root of your repository.
+
+```json
+{
+   "devDependencies": {
++    "dotenv-cli": "latest"
+  }
+}
+```
+
+3. Adjust your scripts to inject the environment variables into the `turbo` command.
+
+```json
+{
+  "scripts": {
+    "dev": "dotenv -- turbo dev"
+  }
+}
+```
