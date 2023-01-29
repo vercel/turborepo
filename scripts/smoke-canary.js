@@ -59,7 +59,7 @@ function assertOutput({ output, command, expected, condition }) {
     }
   }
 
-  if (conditions === "startsWith") {
+  if (condition === "startsWith") {
     if (output.startsWith(expected)) {
       console.log(`✅ "${condition}" starts with "${expected}"`);
     } else {
