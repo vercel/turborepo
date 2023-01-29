@@ -242,7 +242,7 @@ function test() {
   };
 
   console.log(
-    `Running test: "${testName}" with version: "turbo@${version}" using ${packageManager}`
+    `Running test: "${testName}" with local version: "turbo@${localVersion}" and global version: turbo@${globalVersion} using ${packageManager}`
   );
   tests[testName]({ local, global, packageManager });
   console.log("Tests passed!");
