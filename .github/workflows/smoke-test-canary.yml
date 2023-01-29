@@ -33,4 +33,4 @@ jobs:
         with:
          files: scripts/smoke-canary.js
       - name: Run Test
-        run: node scripts/smoke-canary.js ${{ matrix.test }} canary ${{ matrix.packageManager }}
+        run: node scripts/smoke-canary.js ${{ matrix.test }} ${{ matrix.packageManager }}
