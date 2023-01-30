@@ -25,7 +25,7 @@ func getPnpmPackageJSON(t *testing.T) *fs.PackageJSON {
 	cwd, err := fs.CheckedToAbsoluteSystemPath(rawCwd)
 	assert.NilError(t, err)
 	pkgJSONPath := cwd.Join("fixtures", "pnpm-patches.json")
-	pkgJSON, err := fs.ReadPackageJSON(rootpath, pkgJSONPath)
+	pkgJSON, err := fs.ReadPackageJSON(cwd, pkgJSONPath)
 	assert.NilError(t, err)
 	return pkgJSON
 }
