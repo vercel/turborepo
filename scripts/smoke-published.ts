@@ -1,8 +1,37 @@
 #!/usr/bin/env node
 
-const { execSync } = require("child_process");
+import { execSync, ExecSyncOptions, ExecException } from "child_process";
 
-function exec({ title, command, options, conditions }) {
+type PackageManager = "yarn" | "npm" | "pnpm";
+type InstallType = "local" | "global";
+type VersionInput = {
+  version: string;
+  type: InstallType;
+};
+type Condition = {
+  expected: string;
+  operator: "includes" | "notIncludes" | "startsWith";
+};
+
+type TestInput = {
+  local: VersionInput;
+  global: VersionInput;
+  packageManager: PackageManager;
+};
+
+type Args = [keyof typeof tests, PackageManager, string, string];
+
+function exec({
+  command,
+  title,
+  options,
+  conditions,
+}: {
+  command: string;
+  title?: string;
+  options?: ExecSyncOptions;
+  conditions?: Array<Condition>;
+}) {
   console.log();
   if (title) {
     console.log(`ℹ️ ${title}`);
@@ -20,31 +49,48 @@ function exec({ title, command, options, conditions }) {
 
     if (conditions && conditions.length > 0) {
       conditions.forEach((condition) => {
-        assertOutput({ output: result, command, ...condition });
+        assertOutput({ output: result, command, condition });
       });
     } else {
       return result;
     }
   } catch (err) {
+    let message = "Unknown error";
+    if (err instanceof Error) {
+      message = err.message;
+    }
     console.error(err);
-    console.error(err.stdout.toString());
+    console.error(message);
     process.exit(1);
   }
 }
 
-function getGlobalBinaryPath({ packageManager }) {
+function getGlobalBinaryPath({
+  packageManager,
+}: {
+  packageManager: PackageManager;
+}) {
   switch (packageManager) {
     case "yarn":
-      return '/yarn/global/node_modules/';
+      return "/yarn/global/node_modules/";
     case "npm":
-      return '/usr/local/lib/node_modules';
+      return "/usr/local/lib/node_modules";
     case "pnpm":
-      return '/pnpm/global/';
+      return "/pnpm/global/";
   }
 }
 
-function assertOutput({ output, command, expected, condition }) {
-  if (condition === "includes") {
+function assertOutput({
+  output,
+  command,
+  condition,
+}: {
+  output: string;
+  command: string;
+  condition: Condition;
+}) {
+  const { operator, expected } = condition;
+  if (operator === "includes") {
     if (output.includes(expected)) {
       console.log(`✅ "${command}" output includes "${expected}"`);
     } else {
@@ -53,7 +99,7 @@ function assertOutput({ output, command, expected, condition }) {
     }
   }
 
-  if (condition === "notIncludes") {
+  if (operator === "notIncludes") {
     if (!output.includes(expected)) {
       console.log(`✅ "${command}" output does not include "${expected}"`);
     } else {
@@ -62,7 +108,7 @@ function assertOutput({ output, command, expected, condition }) {
     }
   }
 
-  if (condition === "startsWith") {
+  if (operator === "startsWith") {
     if (output.startsWith(expected)) {
       console.log(`✅ "${command}" output starts with "${expected}"`);
     } else {
@@ -72,19 +118,38 @@ function assertOutput({ output, command, expected, condition }) {
   }
 }
 
-function installExample({ version, packageManager }) {
+function installExample({
+  version,
+  packageManager,
+}: {
+  version: string;
+  packageManager: PackageManager;
+}) {
   exec({
+    title: "Install example",
     command: `npx create-turbo@${version} --use-${packageManager} .`,
     conditions: [
       {
         expected: "Success! Your new Turborepo is ready.",
-        condition: "includes",
+        operator: "includes",
       },
     ],
   });
+  if (version !== "latest" && version !== "canary") {
+    exec({
+      title: "Install exact turbo version",
+      command: `${packageManager} install turbo@${version} --save-dev`,
+    });
+  }
 }
 
-function installGlobalTurbo({ version, packageManager }) {
+function installGlobalTurbo({
+  version,
+  packageManager,
+}: {
+  version: string;
+  packageManager: PackageManager;
+}) {
   if (packageManager === "pnpm" || packageManager === "npm") {
     exec({
       title: "Install global turbo",
@@ -98,7 +163,11 @@ function installGlobalTurbo({ version, packageManager }) {
   }
 }
 
-function uninstallLocalTurbo({ packageManager }) {
+function uninstallLocalTurbo({
+  packageManager,
+}: {
+  packageManager: PackageManager;
+}) {
   if (packageManager === "pnpm" || packageManager === "npm") {
     exec({
       title: "Uninstall local turbo",
@@ -112,7 +181,13 @@ function uninstallLocalTurbo({ packageManager }) {
   }
 }
 
-function getTurboBinary({ installType, packageManager }) {
+function getTurboBinary({
+  installType,
+  packageManager,
+}: {
+  installType: InstallType;
+  packageManager: PackageManager;
+}) {
   if (installType === "global") {
     return "turbo";
   } else {
@@ -124,13 +199,25 @@ function getTurboBinary({ installType, packageManager }) {
   }
 }
 
-function logTurboDetails({ installType, packageManager }) {
+function logTurboDetails({
+  installType,
+  packageManager,
+}: {
+  installType: InstallType;
+  packageManager: PackageManager;
+}) {
   const turboBinary = getTurboBinary({ installType, packageManager });
   exec({ command: `${turboBinary} --version` });
   exec({ command: `${turboBinary} bin` });
 }
 
-function verifyLocalBinary({ installType, packageManager }) {
+function verifyLocalBinary({
+  installType,
+  packageManager,
+}: {
+  installType: InstallType;
+  packageManager: PackageManager;
+}) {
   const turboBinary = getTurboBinary({ installType, packageManager });
   exec({
     title: "Verify binary is not installed globally",
@@ -139,13 +226,19 @@ function verifyLocalBinary({ installType, packageManager }) {
       {
         expected:
           packageManager === "npm" ? "/usr/local/lib/node_modules" : "global",
-        condition: "notIncludes",
+        operator: "notIncludes",
       },
     ],
   });
 }
 
-function verifyGlobalBinary({ installType, packageManager }) {
+function verifyGlobalBinary({
+  installType,
+  packageManager,
+}: {
+  installType: InstallType;
+  packageManager: PackageManager;
+}) {
   const packageManagerGlobalBinPath = getGlobalBinaryPath({ packageManager });
   const turboBinary = getTurboBinary({ installType, packageManager });
   exec({
@@ -154,39 +247,51 @@ function verifyGlobalBinary({ installType, packageManager }) {
     conditions: [
       {
         expected: packageManagerGlobalBinPath,
-        condition: "includes",
+        operator: "includes",
       },
     ],
   });
 }
 
-function verifyFirstBuild({ installType, packageManager }) {
+function verifyFirstBuild({
+  installType,
+  packageManager,
+}: {
+  installType: InstallType;
+  packageManager: PackageManager;
+}) {
   const turboBinary = getTurboBinary({ installType, packageManager });
   exec({
     title: "Verify first turbo build is successful and not cached",
     command: `${turboBinary} build`,
     conditions: [
-      { expected: "2 successful, 2 total", condition: "includes" },
-      { expected: "0 cached, 2 total", condition: "includes" },
-      { expected: "FULL TURBO", condition: "notIncludes" },
+      { expected: "2 successful, 2 total", operator: "includes" },
+      { expected: "0 cached, 2 total", operator: "includes" },
+      { expected: "FULL TURBO", operator: "notIncludes" },
     ],
   });
 }
 
-function verifySecondBuild({ installType, packageManager }) {
+function verifySecondBuild({
+  installType,
+  packageManager,
+}: {
+  installType: InstallType;
+  packageManager: PackageManager;
+}) {
   const turboBinary = getTurboBinary({ installType, packageManager });
   exec({
     title: "Verify second turbo build is successful and cached",
     command: `${turboBinary} build`,
     conditions: [
-      { expected: "2 successful, 2 total", condition: "includes" },
-      { expected: "2 cached, 2 total", condition: "includes" },
-      { expected: "FULL TURBO", condition: "includes" },
+      { expected: "2 successful, 2 total", operator: "includes" },
+      { expected: "2 cached, 2 total", operator: "includes" },
+      { expected: "FULL TURBO", operator: "includes" },
     ],
   });
 }
 
-function local({ local, packageManager }) {
+function local({ local, packageManager }: TestInput) {
   // setup example
   installExample({ version: local.version, packageManager });
   verifyLocalBinary({ installType: "local", packageManager });
@@ -197,7 +302,7 @@ function local({ local, packageManager }) {
   verifySecondBuild({ installType: "local", packageManager });
 }
 
-function global({ local, global, packageManager }) {
+function global({ local, global, packageManager }: TestInput) {
   // setup example
   installExample({ version: local.version, packageManager });
   installGlobalTurbo({ version: global.version, packageManager });
@@ -213,7 +318,7 @@ function global({ local, global, packageManager }) {
   verifySecondBuild({ installType: "global", packageManager });
 }
 
-function both({ local, global, packageManager }) {
+function both({ local, global, packageManager }: TestInput) {
   // setup example
   installExample({ version: local.version, packageManager });
   installGlobalTurbo({ version: global.version, packageManager });
@@ -232,7 +337,7 @@ const tests = {
 };
 
 function test() {
-  const args = process.argv.slice(2);
+  const args = process.argv.slice(2) as Args;
   const [
     testName = "local",
     packageManager = "pnpm",
@@ -240,11 +345,11 @@ function test() {
     globalVersion = "canary",
   ] = args;
 
-  const local = {
+  const local: VersionInput = {
     type: "local",
     version: localVersion,
   };
-  const global = {
+  const global: VersionInput = {
     type: "global",
     version: globalVersion,
   };
