@@ -593,6 +593,11 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
 
+      - name: Setup Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Prepare toolchain on Windows
         run: |
           pnpx node-gyp install
