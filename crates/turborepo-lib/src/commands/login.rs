@@ -7,7 +7,7 @@ use serde::Deserialize;
 use tokio::sync::OnceCell;
 
 use crate::{
-    client::{APIClient, UserClient},
+    client::UserClient,
     commands::CommandBase,
     get_version,
     ui::{start_spinner, BOLD, CYAN},
@@ -43,7 +43,7 @@ pub async fn login(mut base: CommandBase) -> Result<()> {
 
     base.user_config_mut()?.set_token(Some(token.to_string()))?;
 
-    let client = APIClient::new(token, base.repo_config()?.api_url())?;
+    let client = base.api_client()?.unwrap();
     let user_response = client.get_user().await?;
 
     let ui = base.ui;

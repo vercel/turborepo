@@ -13,27 +13,38 @@ pub trait UserClient {
     fn set_token(&mut self, token: String);
     async fn get_user(&self) -> Result<UserResponse>;
     async fn get_teams(&self) -> Result<TeamsResponse>;
-    async fn get_caching_status(&self, team_id: &str) -> Result<CachingStatus>;
+    async fn get_caching_status(&self, team_id: &str) -> Result<CachingStatusResponse>;
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "status")]
+#[serde(rename_all = "snake_case")]
 pub enum CachingStatus {
-    #[serde(rename = "disabled")]
     Disabled,
-    #[serde(rename = "enabled")]
     Enabled,
-    #[serde(rename = "over_limit")]
     OverLimit,
-    #[serde(rename = "paused")]
     Paused,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CachingStatusResponse {
+    pub status: CachingStatus,
 }
 
 /// Membership is the relationship between the logged-in user and a particular
 /// team
 #[derive(Debug, Clone, Deserialize)]
 pub struct Membership {
-    role: String,
+    role: Role,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum Role {
+    Member,
+    Owner,
+    Viewer,
+    Developer,
+    Billing,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -49,7 +60,7 @@ pub struct Team {
 
 impl Team {
     pub fn is_owner(&self) -> bool {
-        self.membership.role == "OWNER"
+        matches!(self.membership.role, Role::Owner)
     }
 }
 
@@ -147,7 +158,7 @@ impl UserClient for APIClient {
         }
     }
 
-    async fn get_caching_status(&self, team_id: &str) -> Result<CachingStatus> {
+    async fn get_caching_status(&self, team_id: &str) -> Result<CachingStatusResponse> {
         let response = self
             .make_retryable_request(|| {
                 let mut request_builder = self

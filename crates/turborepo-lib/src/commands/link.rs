@@ -72,8 +72,8 @@ pub async fn link(mut base: CommandBase, modify_gitignore: bool) -> Result<()> {
         SelectedTeam::User => user_response.user.id.as_str(),
         SelectedTeam::Team(team) => team.id.as_str(),
     };
-    let caching_status = api_client.get_caching_status(team_id).await?;
-    match caching_status {
+    let response = api_client.get_caching_status(team_id).await?;
+    match response.status {
         CachingStatus::Disabled => {
             let should_enable = should_enable_caching()?;
             if should_enable {
