@@ -9,7 +9,7 @@ function exec({ title, command, options, conditions }) {
   }
   console.log(`Running: "${command}"`);
   try {
-    const result = execSync(command, options).toString();
+    const result = execSync(command, options).toString().trim();
     if (process.env.GITHUB_ACTIONS === "true") {
       console.log(`::group::"${command}" output`);
       console.log(result);
@@ -39,7 +39,7 @@ function getGlobalBinaryPath({ packageManager }) {
     case "npm":
       return execSync(`npm root --global`).toString().trim();
     case "pnpm":
-      return execSync(`pnpm root --global`).toString().trim();
+      return execSync(`pnpm bin --global`).toString().trim();
   }
 }
 
@@ -205,8 +205,8 @@ function global({ local, global, packageManager }) {
 
   verifyLocalBinary({ installType: "global", packageManager });
   uninstallLocalTurbo({ packageManager });
-  verifyGlobalBinary({ installType: "global", packageManager });
   logTurboDetails({ installType: "global", packageManager });
+  verifyGlobalBinary({ installType: "global", packageManager });
 
   // verify build is correctly cached
   verifyFirstBuild({ installType: "global", packageManager });
@@ -218,7 +218,6 @@ function both({ local, global, packageManager }) {
   installExample({ version: local.version, packageManager });
   installGlobalTurbo({ version: global.version, packageManager });
   logTurboDetails({ installType: "global", packageManager });
-
   verifyLocalBinary({ installType: "global", packageManager });
 
   // verify build is correctly cached
