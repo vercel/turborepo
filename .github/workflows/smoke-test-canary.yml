@@ -1,4 +1,4 @@
-name: Smoke Test Canary
+name: Smoke Test Published
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   test_matrix:
-    name: "Smoke Published"
+    name: "Test local turbo@{{ localVersion }} with global turbo@{{ globalVersion }} ({{ packageManager }}, {{ test }})"
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -30,6 +30,6 @@ jobs:
       - name: Checkout test file
         uses: Bhacaz/checkout-files@v2
         with:
-         files: scripts/smoke-canary.js
+         files: scripts/smoke-published.ts
       - name: Run Test
         run: ts-node scripts/smoke-published.ts ${{ matrix.test }} ${{ matrix.packageManager }} ${{ matrix.localVersion }} ${{ matrix.globalVersion }}
