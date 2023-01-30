@@ -8,7 +8,7 @@ on:
 
 jobs:
   test_matrix:
-    name: "Test local turbo@{{ localVersion }} with global turbo@{{ globalVersion }} ({{ packageManager }}, {{ test }})"
+    name: "Test local turbo@${{ localVersion }} with global turbo@${{ globalVersion }} (${{ packageManager }}, ${{ test }})"
     runs-on: ubuntu-latest
     strategy:
       matrix:
