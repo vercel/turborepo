@@ -56,23 +56,18 @@ d#13 = arguments[3]
 d#5 = ???*0*
 - *0* max number of linking steps reached
 
-hex = (???*0* | ???*1*(???*2*, 16))
+hex = (???*0* | ???*1*)
 - *0* hex
   ⚠️  pattern without value
-- *1* FreeVar(parseInt)
+- *1* ???*2*(
+        (hexTab["charAt"](???*3*) + hexTab["charAt"](???*4*)),
+        16
+    )
+  ⚠️  unknown callee
+- *2* FreeVar(parseInt)
   ⚠️  unknown global
-- *2* (???*3* + ???*6*)
-  ⚠️  Nested operation
-- *3* ???*4*(???*5*)
-  ⚠️  Nested operation
-- *4* "0123456789abcdef"["charAt"]
-  ⚠️  Nested operation
-- *5* unsupported expression
-- *6* ???*7*(???*8*)
-  ⚠️  Nested operation
-- *7* "0123456789abcdef"["charAt"]
-  ⚠️  Nested operation
-- *8* unsupported expression
+- *3* unsupported expression
+- *4* unsupported expression
 
 hexTab = "0123456789abcdef"
 
@@ -126,14 +121,11 @@ md5hh = (...) => ???*0*
 md5ii = (...) => ???*0*
 - *0* unsupported expression
 
-msg = ???*0*(???*1*)
-- *0* FreeVar(unescape)
+msg = ???*0*
+- *0* ???*1*(FreeVar(encodeURIComponent)(bytes))
+  ⚠️  unknown callee
+- *1* FreeVar(unescape)
   ⚠️  unknown global
-- *1* ???*2*((arguments[0] | ???*3*))
-  ⚠️  Nested operation
-- *2* FreeVar(encodeURIComponent)
-  ⚠️  unknown global
-- *3* unknown new expression
 
 msw = (???*0* + ???*1* + ???*2*)
 - *0* unsupported expression

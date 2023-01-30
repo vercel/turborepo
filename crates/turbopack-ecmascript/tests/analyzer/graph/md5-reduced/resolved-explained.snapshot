@@ -28,44 +28,28 @@ i = (???*0* | 0)
 
 len = arguments[1]
 
-md5cmn = (...) => ???*0*(???*1*, arguments[2])
-- *0* FreeVar(safeAdd)
-  ⚠️  unknown global
-- *1* ???*2*(???*3*, arguments[4])
-  ⚠️  Nested operation
-- *2* FreeVar(bitRotateLeft)
-  ⚠️  unknown global
-- *3* ???*4*(???*5*, ???*7*)
-  ⚠️  Nested operation
-- *4* FreeVar(safeAdd)
-  ⚠️  unknown global
-- *5* ???*6*(arguments[1], arguments[0])
-  ⚠️  Nested operation
-- *6* FreeVar(safeAdd)
-  ⚠️  unknown global
-- *7* ???*8*(arguments[3], arguments[5])
-  ⚠️  Nested operation
-- *8* FreeVar(safeAdd)
+md5cmn = (...) => ???*0*
+- *0* ???*1*(
+        FreeVar(bitRotateLeft)(
+            FreeVar(safeAdd)(FreeVar(safeAdd)(a, q), FreeVar(safeAdd)(x, t)),
+            s
+        ),
+        b
+    )
+  ⚠️  unknown callee
+- *1* FreeVar(safeAdd)
   ⚠️  unknown global
 
-md5ff = (...) => ???*0*(???*1*, arguments[1])
-- *0* FreeVar(safeAdd)
-  ⚠️  unknown global
-- *1* ???*2*(???*3*, arguments[4])
-  ⚠️  Nested operation
-- *2* FreeVar(bitRotateLeft)
-  ⚠️  unknown global
-- *3* ???*4*(???*5*, ???*7*)
-  ⚠️  Nested operation
-- *4* FreeVar(safeAdd)
-  ⚠️  unknown global
-- *5* ???*6*(arguments[1], arguments[0])
-  ⚠️  Nested operation
-- *6* FreeVar(safeAdd)
-  ⚠️  unknown global
-- *7* ???*8*(arguments[3], arguments[5])
-  ⚠️  Nested operation
-- *8* FreeVar(safeAdd)
+md5ff = (...) => ???*0*
+- *0* ???*1*(
+        FreeVar(bitRotateLeft)(
+            FreeVar(safeAdd)(FreeVar(safeAdd)(a, q), FreeVar(safeAdd)(x, t)),
+            s
+        ),
+        b
+    )
+  ⚠️  unknown callee
+- *1* FreeVar(safeAdd)
   ⚠️  unknown global
 
 olda = ???*0*

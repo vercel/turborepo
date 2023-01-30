@@ -2,18 +2,14 @@ O = ???*0*
 - *0* FreeVar(Object)
   ⚠️  unknown global
 
-a = ???*0*(???*2*)
-- *0* ???*1*["keys"]
-  ⚠️  Nested operation
+a = ???*0*
+- *0* ???*1*["keys"](O)
+  ⚠️  unknown callee object
 - *1* FreeVar(Object)
-  ⚠️  unknown global
-- *2* FreeVar(Object)
   ⚠️  unknown global
 
-b = ???*0*(???*2*)
-- *0* ???*1*["keys"]
-  ⚠️  Nested operation
+b = ???*0*
+- *0* ???*1*["keys"](FreeVar(Object))
+  ⚠️  unknown callee object
 - *1* FreeVar(Object)
-  ⚠️  unknown global
-- *2* FreeVar(Object)
   ⚠️  unknown global

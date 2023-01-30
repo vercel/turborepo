@@ -1219,7 +1219,7 @@ impl JsValue {
     pub fn make_nested_operations_unknown(&mut self) -> bool {
         fn inner(this: &mut JsValue) -> bool {
             if matches!(this.meta_type(), JsValueMetaKind::Operation) {
-                this.make_unknown("Nested operation");
+                this.make_unknown("nested operation");
                 true
             } else {
                 this.for_each_children_mut(&mut inner)
@@ -1928,6 +1928,81 @@ impl JsValue {
         }
     }
 
+    /// Calls a function for only early or lazy children. Allows mutating the
+    /// node. Updates the total nodes count after mutation.
+    pub fn for_each_early_children_mut(
+        &mut self,
+        early: bool,
+        visitor: &mut impl FnMut(&mut JsValue) -> bool,
+    ) -> bool {
+        match self {
+            JsValue::Call(_, callee, list) if !list.is_empty() => {
+                if early {
+                    let m = visitor(callee);
+                    if m {
+                        self.update_total_nodes();
+                    }
+                    m
+                } else {
+                    let mut modified = false;
+                    for item in list.iter_mut() {
+                        if visitor(item) {
+                            modified = true
+                        }
+                    }
+                    if modified {
+                        self.update_total_nodes();
+                    }
+                    modified
+                }
+            }
+            JsValue::MemberCall(_, obj, prop, list) if !list.is_empty() => {
+                if early {
+                    let m1 = visitor(obj);
+                    let m2 = visitor(prop);
+                    let modified = m1 || m2;
+                    if modified {
+                        self.update_total_nodes();
+                    }
+                    modified
+                } else {
+                    let mut modified = false;
+                    for item in list.iter_mut() {
+                        if visitor(item) {
+                            modified = true
+                        }
+                    }
+                    if modified {
+                        self.update_total_nodes();
+                    }
+                    modified
+                }
+            }
+            JsValue::Member(_, obj, prop) => {
+                if early {
+                    let m = visitor(obj);
+                    if m {
+                        self.update_total_nodes();
+                    }
+                    m
+                } else {
+                    let m = visitor(prop);
+                    if m {
+                        self.update_total_nodes();
+                    }
+                    m
+                }
+            }
+            _ => {
+                if early {
+                    false
+                } else {
+                    self.for_each_children_mut(visitor)
+                }
+            }
+        }
+    }
+
     /// Visit the node and all its children with a function.
     pub fn visit(&self, visitor: &mut impl FnMut(&JsValue)) {
         self.for_each_children(&mut |value| value.visit(visitor));
@@ -2409,10 +2484,15 @@ pub mod test_utils {
     use turbopack_core::environment::EnvironmentVc;
 
     use super::{
-        well_known::replace_well_known, FreeVarKind, JsValue, ModuleValue, WellKnownFunctionKind,
-        WellKnownObjectKind,
+        builtin::early_replace_builtin, well_known::replace_well_known, FreeVarKind, JsValue,
+        ModuleValue, WellKnownFunctionKind, WellKnownObjectKind,
     };
     use crate::analyzer::builtin::replace_builtin;
+
+    pub async fn early_visitor(mut v: JsValue) -> Result<(JsValue, bool)> {
+        let m = early_replace_builtin(&mut v);
+        Ok((v, m))
+    }
 
     pub async fn visitor(v: JsValue, environment: EnvironmentVc) -> Result<(JsValue, bool)> {
         let mut new_value = match v {
@@ -2578,8 +2658,9 @@ mod tests {
                         let mut res = turbo_tasks_testing::VcStorage::with(link(
                             &var_graph,
                             val,
+                            &(|val| super::test_utils::early_visitor(val)),
                             &(|val| {
-                                Box::pin(super::test_utils::visitor(
+                                super::test_utils::visitor(
                                     val,
                                     EnvironmentVc::new(
                                         Value::new(ExecutionEnvironment::NodeJsLambda(
@@ -2597,7 +2678,7 @@ mod tests {
                                         )),
                                         Value::new(EnvironmentIntention::ServerRendering),
                                     ),
-                                ))
+                                )
                             }),
                             &cache,
                         ))

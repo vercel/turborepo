@@ -24,7 +24,7 @@ use turbopack_core::{
 use turbopack_ecmascript::analyzer::{
     graph::{create_graph, EvalContext, VarGraph},
     linker::{link, LinkCache},
-    test_utils::visitor,
+    test_utils::{early_visitor, visitor},
 };
 
 pub fn benchmark(c: &mut Criterion) {
@@ -98,24 +98,21 @@ fn bench_link(b: &mut Bencher, input: &BenchInput) {
         let cache = Mutex::new(LinkCache::new());
         for val in input.var_graph.values.values() {
             VcStorage::with(async {
+                let env = EnvironmentVc::new(
+                    Value::new(ExecutionEnvironment::NodeJsLambda(
+                        NodeJsEnvironment {
+                            compile_target: CompileTargetVc::unknown(),
+                            ..Default::default()
+                        }
+                        .into(),
+                    )),
+                    Value::new(EnvironmentIntention::ServerRendering),
+                );
                 link(
                     &input.var_graph,
                     val.clone(),
-                    &(|val| {
-                        Box::pin(visitor(
-                            val,
-                            EnvironmentVc::new(
-                                Value::new(ExecutionEnvironment::NodeJsLambda(
-                                    NodeJsEnvironment {
-                                        compile_target: CompileTargetVc::unknown(),
-                                        ..Default::default()
-                                    }
-                                    .into(),
-                                )),
-                                Value::new(EnvironmentIntention::ServerRendering),
-                            ),
-                        ))
-                    }),
+                    &(|val| early_visitor(val)),
+                    &(|val| visitor(val, env)),
                     &cache,
                 )
                 .await

@@ -95,51 +95,42 @@ impl LinkCache {
     }
 }
 
-// pub async fn link<'a, F, R>(
-//     graph: &VarGraph,
-//     mut val: JsValue,
-//     visitor: &F,
-//     cache: &Mutex<LinkCache>,
-// ) -> Result<JsValue>
-// where
-//     R: 'a + Future<Output = Result<(JsValue, bool)>> + Send,
-//     F: 'a + Fn(JsValue) -> R + Sync,
-// {
-//     val.normalize();
-//     let (val, _) = link_internal(graph, val, visitor, cache, &mut
-// HashSet::new()).await?;     Ok(val)
-// }
-
-pub async fn link<'a, F, R>(
+pub async fn link<'a, B, RB, F, RF>(
     graph: &VarGraph,
     mut val: JsValue,
+    early_visitor: &B,
     visitor: &F,
     cache: &Mutex<LinkCache>,
 ) -> Result<JsValue>
 where
-    R: 'a + Future<Output = Result<(JsValue, bool)>> + Send,
-    F: 'a + Fn(JsValue) -> R + Sync,
+    RB: 'a + Future<Output = Result<(JsValue, bool)>> + Send,
+    B: 'a + Fn(JsValue) -> RB + Sync,
+    RF: 'a + Future<Output = Result<(JsValue, bool)>> + Send,
+    F: 'a + Fn(JsValue) -> RF + Sync,
 {
     val.normalize();
     let mut c = take(&mut *cache.lock().unwrap());
-    let val = link_internal_iterative(graph, val, visitor, &mut c).await?;
+    let val = link_internal_iterative(graph, val, early_visitor, visitor, &mut c).await?;
     *cache.lock().unwrap() = c;
     Ok(val)
 }
 
-const LIMIT_NODE_SIZE: usize = 1000;
-const LIMIT_IN_PROGRESS_NODES: usize = 2000;
-const LIMIT_LINK_STEPS: usize = 10000;
+const LIMIT_NODE_SIZE: usize = 300;
+const LIMIT_IN_PROGRESS_NODES: usize = 1000;
+const LIMIT_LINK_STEPS: usize = 1000;
 
-pub(crate) async fn link_internal_iterative<'a, F, R>(
+pub(crate) async fn link_internal_iterative<'a, B, RB, F, RF>(
     graph: &'a VarGraph,
     val: JsValue,
+    mut early_visitor: &'a B,
     mut visitor: &'a F,
     cache: &mut LinkCache,
 ) -> Result<JsValue>
 where
-    R: 'a + Future<Output = Result<(JsValue, bool)>> + Send,
-    F: 'a + Fn(JsValue) -> R + Sync,
+    RB: 'a + Future<Output = Result<(JsValue, bool)>> + Send,
+    B: 'a + Fn(JsValue) -> RB + Sync,
+    RF: 'a + Future<Output = Result<(JsValue, bool)>> + Send,
+    F: 'a + Fn(JsValue) -> RF + Sync,
 {
     fn swap_extend(
         replaced_references: &mut (HashSet<Id>, HashSet<Id>),
@@ -155,7 +146,14 @@ where
         replaced_references.1.extend(prev_replaced_references.1);
     }
 
-    let mut queue: Vec<(bool, JsValue)> = Vec::new();
+    enum Step {
+        Enter,
+        EarlyVisit,
+        Leave,
+        LeaveLate(bool),
+    }
+
+    let mut queue: Vec<(Step, JsValue)> = Vec::new();
     let mut done: Vec<(JsValue, bool)> = Vec::new();
     // Tracks the number of nodes in the queue and done combined
     let mut total_nodes = 0;
@@ -166,7 +164,7 @@ where
     let mut steps = 0;
 
     total_nodes += val.total_nodes();
-    queue.push((true, val));
+    queue.push((Step::Enter, val));
 
     while let Some((enter, val)) = queue.pop() {
         steps += 1;
@@ -175,7 +173,7 @@ where
             // - replace it with value from graph
             // - process value
             // - on leave: cache value
-            (true, JsValue::Variable(var)) => {
+            (Step::Enter, JsValue::Variable(var)) => {
                 // Replace with unknown for now
                 if cycle_stack.contains(&var) {
                     replaced_references.0.insert(var.clone());
@@ -206,9 +204,9 @@ where
                     if let Some(val) = graph.values.get(&var) {
                         cycle_stack.insert(var.clone());
                         replaced_references_stack.push(take(&mut replaced_references));
-                        queue.push((false, JsValue::Variable(var)));
+                        queue.push((Step::Leave, JsValue::Variable(var)));
                         total_nodes += val.total_nodes();
-                        queue.push((true, val.clone()));
+                        queue.push((Step::Enter, val.clone()));
                     } else {
                         replaced_references.1.insert(var.clone());
                         total_nodes += 1;
@@ -223,7 +221,7 @@ where
                 }
             }
             // Leave a variable
-            (false, JsValue::Variable(var)) => {
+            (Step::Leave, JsValue::Variable(var)) => {
                 let (val, _) = done.pop().unwrap();
                 cache.store(var.clone(), false, &val, &replaced_references);
                 swap_extend(
@@ -238,22 +236,91 @@ where
             // Enter a value
             // - take and queue children for processing
             // - on leave: insert children again and optimize
-            (true, mut val) => {
+            (Step::Enter, mut val) => {
                 let i = queue.len();
-                queue.push((false, JsValue::default()));
-                val.for_each_children_mut(&mut |child| {
-                    queue.push((true, take(child)));
+                queue.push((Step::Leave, JsValue::default()));
+                let mut has_early_children = false;
+                val.for_each_early_children_mut(true, &mut |child| {
+                    has_early_children = true;
+                    queue.push((Step::Enter, take(child)));
+                    false
+                });
+                if has_early_children {
+                    queue[i].0 = Step::EarlyVisit;
+                } else {
+                    val.for_each_children_mut(&mut |child| {
+                        queue.push((Step::Enter, take(child)));
+                        false
+                    });
+                }
+                queue[i].1 = val;
+            }
+            // Early visit a value
+            (Step::EarlyVisit, mut val) => {
+                let mut modified = val.for_each_early_children_mut(true, &mut |child| {
+                    let (val, modified) = done.pop().unwrap();
+                    *child = val;
+                    modified
+                });
+                val.update_total_nodes();
+                total_nodes -= val.total_nodes();
+                if modified {
+                    if val.total_nodes() > LIMIT_NODE_SIZE {
+                        total_nodes += 1;
+                        done.push((JsValue::Unknown(None, "node limit reached"), true));
+                        continue;
+                    }
+                }
+
+                let (mut val, visit_modified) =
+                    val.visit_async_until_settled(&mut early_visitor).await?;
+                if visit_modified {
+                    if val.total_nodes() > LIMIT_NODE_SIZE {
+                        total_nodes += 1;
+                        done.push((JsValue::Unknown(None, "node limit reached"), true));
+                        continue;
+                    }
+                    modified = true;
+                }
+
+                let count = val.total_nodes();
+                if total_nodes + count > LIMIT_IN_PROGRESS_NODES {
+                    // There is always space for one more node since we just popped at least one
+                    // count
+                    total_nodes += 1;
+                    done.push((
+                        JsValue::Unknown(None, "in progress nodes limit reached"),
+                        true,
+                    ));
+                    continue;
+                }
+                total_nodes += count;
+
+                let i = queue.len();
+                queue.push((Step::LeaveLate(modified), JsValue::default()));
+                val.for_each_early_children_mut(false, &mut |child| {
+                    queue.push((Step::Enter, take(child)));
                     false
                 });
                 queue[i].1 = val;
             }
             // Leave a value
-            (false, mut val) => {
-                let mut modified = val.for_each_children_mut(&mut |child| {
-                    let (val, modified) = done.pop().unwrap();
-                    *child = val;
-                    modified
-                });
+            (step @ (Step::Leave | Step::LeaveLate(_)), mut val) => {
+                let mut modified = match step {
+                    Step::LeaveLate(modified) => {
+                        val.for_each_early_children_mut(false, &mut |child| {
+                            let (val, modified) = done.pop().unwrap();
+                            *child = val;
+                            modified
+                        }) || modified
+                    }
+                    Step::Leave => val.for_each_children_mut(&mut |child| {
+                        let (val, modified) = done.pop().unwrap();
+                        *child = val;
+                        modified
+                    }),
+                    _ => unreachable!(),
+                };
                 val.update_total_nodes();
                 total_nodes -= val.total_nodes();
 
@@ -306,7 +373,7 @@ where
     // we reached the node limit and want to store
     // each open variable as "reached node limit"
     while let Some((enter, val)) = queue.pop() {
-        if let (false, JsValue::Variable(var)) = (enter, val) {
+        if let (Step::Leave, JsValue::Variable(var)) = (enter, val) {
             cache.store(var.clone(), true, &final_value, &replaced_references);
             swap_extend(
                 &mut replaced_references,

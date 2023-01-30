@@ -3,6 +3,53 @@ use std::{mem::take, sync::Arc};
 use super::{ConstantNumber, ConstantValue, JsValue, LogicalOperator, ObjectPart};
 use crate::analyzer::FreeVarKind;
 
+/// Replaces some builtin values with their resulting values. Called early
+/// without lazy nested values.
+pub fn early_replace_builtin(value: &mut JsValue) -> bool {
+    match value {
+        JsValue::Call(_, box ref mut callee, _) => match callee {
+            JsValue::Unknown(_, _) => {
+                value.make_unknown("unknown callee");
+                true
+            }
+            JsValue::Constant(_)
+            | JsValue::Url(_)
+            | JsValue::WellKnownObject(_)
+            | JsValue::Array(_, _)
+            | JsValue::Object(_, _)
+            | JsValue::Alternatives(_, _)
+            | JsValue::Concat(_, _)
+            | JsValue::Add(_, _)
+            | JsValue::Not(_, _) => {
+                value.make_unknown("non-function callee");
+                true
+            }
+            _ => false,
+        },
+        JsValue::MemberCall(_, box ref mut obj, box ref mut prop, _) => match obj {
+            JsValue::Unknown(_, _) => {
+                value.make_unknown("unknown callee object");
+                true
+            }
+            _ => match prop {
+                JsValue::Unknown(_, _) => {
+                    value.make_unknown("unknown calee property");
+                    true
+                }
+                _ => false,
+            },
+        },
+        JsValue::Member(_, box ref mut obj, _) => match obj {
+            JsValue::Unknown(_, _) => {
+                value.make_unknown("unknown object");
+                true
+            }
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
 pub fn replace_builtin(value: &mut JsValue) -> bool {
     match value {
         // Accessing a property on something can be handled in some cases

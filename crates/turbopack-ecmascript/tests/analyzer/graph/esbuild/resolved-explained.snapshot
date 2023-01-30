@@ -1,26 +1,20 @@
 *arrow function 2666* = (...) => (
   | ["node", ["bin/esbuild"]]
   | [
-        (
-          | ???*0*
-          | `"esbuild"/resolved/lib${("/" | "")}${???*1*}`
-          | ???*8*
-          | ???*9*
-          | ???*14*((???*15* | ???*16* | "esbuild-linux-64"), (???*17* | "esbuild.exe" | "bin/esbuild"))
-        ),
+        (???*0* | `"esbuild"/resolved/lib${("/" | "")}${???*1*}` | ???*8* | ???*9* | ???*14*),
         []
     ]
 )
 - *0* FreeVar(ESBUILD_BINARY_PATH)
   ⚠️  unknown global
 - *1* `pnpapi-${(???*2* | ???*3* | "esbuild-linux-64")}-${???*4*}`
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *2* pkg
   ⚠️  pattern without value
 - *3* FreeVar(undefined)
   ⚠️  unknown global
 - *4* ???*5*((???*7* | "esbuild.exe" | "bin/esbuild"))
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *5* path*6*["basename"]
   ⚠️  unsupported property on Node.js path module
 - *6* path: The Node.js path module: https://nodejs.org/api/path.html
@@ -39,22 +33,14 @@
   ⚠️  unknown global
 - *13* subpath
   ⚠️  pattern without value
-- *14* FreeVar(downloadedBinPath)
+- *14* ???*15*(pkg, subpath)
+  ⚠️  unknown callee
+- *15* FreeVar(downloadedBinPath)
   ⚠️  unknown global
-- *15* pkg
-  ⚠️  pattern without value
-- *16* FreeVar(undefined)
-  ⚠️  unknown global
-- *17* subpath
-  ⚠️  pattern without value
 
 args = (["bin/esbuild"] | [])
 
-binPath = (
-  | ???*0*
-  | ???*1*
-  | ???*6*((???*7* | ???*8* | "esbuild-linux-64"), (???*9* | "esbuild.exe" | "bin/esbuild"))
-)
+binPath = (???*0* | ???*1* | ???*6*)
 - *0* binPath
   ⚠️  pattern without value
 - *1* require.resolve*2*(
@@ -68,48 +54,37 @@ binPath = (
   ⚠️  unknown global
 - *5* subpath
   ⚠️  pattern without value
-- *6* FreeVar(downloadedBinPath)
+- *6* ???*7*(pkg, subpath)
+  ⚠️  unknown callee
+- *7* FreeVar(downloadedBinPath)
   ⚠️  unknown global
-- *7* pkg
-  ⚠️  pattern without value
-- *8* FreeVar(undefined)
-  ⚠️  unknown global
-- *9* subpath
-  ⚠️  pattern without value
 
 binTargetPath = `"esbuild"/resolved/lib${("/" | "")}${???*0*}`
 - *0* `pnpapi-${(???*1* | ???*2* | "esbuild-linux-64")}-${???*3*}`
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *1* pkg
   ⚠️  pattern without value
 - *2* FreeVar(undefined)
   ⚠️  unknown global
 - *3* ???*4*((???*6* | "esbuild.exe" | "bin/esbuild"))
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *4* path*5*["basename"]
   ⚠️  unsupported property on Node.js path module
 - *5* path: The Node.js path module: https://nodejs.org/api/path.html
 - *6* subpath
   ⚠️  pattern without value
 
-command = (
-  | "node"
-  | ???*0*
-  | `"esbuild"/resolved/lib${("/" | "")}${???*1*}`
-  | ???*8*
-  | ???*9*
-  | ???*14*((???*15* | ???*16* | "esbuild-linux-64"), (???*17* | "esbuild.exe" | "bin/esbuild"))
-)
+command = ("node" | ???*0* | `"esbuild"/resolved/lib${("/" | "")}${???*1*}` | ???*8* | ???*9* | ???*14*)
 - *0* FreeVar(ESBUILD_BINARY_PATH)
   ⚠️  unknown global
 - *1* `pnpapi-${(???*2* | ???*3* | "esbuild-linux-64")}-${???*4*}`
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *2* pkg
   ⚠️  pattern without value
 - *3* FreeVar(undefined)
   ⚠️  unknown global
 - *4* ???*5*((???*7* | "esbuild.exe" | "bin/esbuild"))
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *5* path*6*["basename"]
   ⚠️  unsupported property on Node.js path module
 - *6* path: The Node.js path module: https://nodejs.org/api/path.html
@@ -128,14 +103,10 @@ command = (
   ⚠️  unknown global
 - *13* subpath
   ⚠️  pattern without value
-- *14* FreeVar(downloadedBinPath)
+- *14* ???*15*(pkg, subpath)
+  ⚠️  unknown callee
+- *15* FreeVar(downloadedBinPath)
   ⚠️  unknown global
-- *15* pkg
-  ⚠️  pattern without value
-- *16* FreeVar(undefined)
-  ⚠️  unknown global
-- *17* subpath
-  ⚠️  pattern without value
 
 e#5 = ???*0*
 - *0* e
@@ -148,26 +119,20 @@ e#6 = ???*0*
 esbuildCommandAndArgs = (...) => (
   | ["node", ["bin/esbuild"]]
   | [
-        (
-          | ???*0*
-          | `"esbuild"/resolved/lib${("/" | "")}${???*1*}`
-          | ???*8*
-          | ???*9*
-          | ???*14*((???*15* | ???*16* | "esbuild-linux-64"), (???*17* | "esbuild.exe" | "bin/esbuild"))
-        ),
+        (???*0* | `"esbuild"/resolved/lib${("/" | "")}${???*1*}` | ???*8* | ???*9* | ???*14*),
         []
     ]
 )
 - *0* FreeVar(ESBUILD_BINARY_PATH)
   ⚠️  unknown global
 - *1* `pnpapi-${(???*2* | ???*3* | "esbuild-linux-64")}-${???*4*}`
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *2* pkg
   ⚠️  pattern without value
 - *3* FreeVar(undefined)
   ⚠️  unknown global
 - *4* ???*5*((???*7* | "esbuild.exe" | "bin/esbuild"))
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *5* path*6*["basename"]
   ⚠️  unsupported property on Node.js path module
 - *6* path: The Node.js path module: https://nodejs.org/api/path.html
@@ -186,34 +151,24 @@ esbuildCommandAndArgs = (...) => (
   ⚠️  unknown global
 - *13* subpath
   ⚠️  pattern without value
-- *14* FreeVar(downloadedBinPath)
+- *14* ???*15*(pkg, subpath)
+  ⚠️  unknown callee
+- *15* FreeVar(downloadedBinPath)
   ⚠️  unknown global
-- *15* pkg
-  ⚠️  pattern without value
-- *16* FreeVar(undefined)
-  ⚠️  unknown global
-- *17* subpath
-  ⚠️  pattern without value
 
 esbuildLibDir = ""esbuild"/resolved/lib"
 
-generateBinPath = (...) => (
-  | ???*0*
-  | `"esbuild"/resolved/lib${("/" | "")}${???*1*}`
-  | ???*8*
-  | ???*9*
-  | ???*14*((???*15* | ???*16* | "esbuild-linux-64"), (???*17* | "esbuild.exe" | "bin/esbuild"))
-)
+generateBinPath = (...) => (???*0* | `"esbuild"/resolved/lib${("/" | "")}${???*1*}` | ???*8* | ???*9* | ???*14*)
 - *0* FreeVar(ESBUILD_BINARY_PATH)
   ⚠️  unknown global
 - *1* `pnpapi-${(???*2* | ???*3* | "esbuild-linux-64")}-${???*4*}`
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *2* pkg
   ⚠️  pattern without value
 - *3* FreeVar(undefined)
   ⚠️  unknown global
 - *4* ???*5*((???*7* | "esbuild.exe" | "bin/esbuild"))
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *5* path*6*["basename"]
   ⚠️  unsupported property on Node.js path module
 - *6* path: The Node.js path module: https://nodejs.org/api/path.html
@@ -232,14 +187,10 @@ generateBinPath = (...) => (
   ⚠️  unknown global
 - *13* subpath
   ⚠️  pattern without value
-- *14* FreeVar(downloadedBinPath)
+- *14* ???*15*(pkg, subpath)
+  ⚠️  unknown callee
+- *15* FreeVar(downloadedBinPath)
   ⚠️  unknown global
-- *15* pkg
-  ⚠️  pattern without value
-- *16* FreeVar(undefined)
-  ⚠️  unknown global
-- *17* subpath
-  ⚠️  pattern without value
 
 isYarnPnP = (false | true)
 

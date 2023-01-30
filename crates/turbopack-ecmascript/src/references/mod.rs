@@ -86,6 +86,7 @@ use super::{
 };
 use crate::{
     analyzer::{
+        builtin::early_replace_builtin,
         graph::{ConditionalKind, EvalContext},
         imports::Reexport,
         ModuleValue,
@@ -1075,9 +1076,10 @@ pub(crate) async fn analyze_ecmascript_module(
             }
 
             let cache = Mutex::new(LinkCache::new());
+            let early_linker = |value| early_value_visitor(value);
             let linker = |value| value_visitor(source, origin, value, environment);
             let effects = take(&mut var_graph.effects);
-            let link_value = |value| link(&var_graph, value, &linker, &cache);
+            let link_value = |value| link(&var_graph, value, &early_linker, &linker, &cache);
             // There can be many references to import.meta, but only the first should hoist
             // the object allocation.
             let mut first_import_meta = true;
@@ -1488,6 +1490,11 @@ pub async fn as_abs_path(path: FileSystemPathVc) -> Result<JsValue> {
 /// Generates an absolute path usable for `require.resolve()` calls.
 async fn require_resolve(path: FileSystemPathVc) -> Result<JsValue> {
     Ok(format!("/ROOT/{}", path.await?.path.as_str()).into())
+}
+
+async fn early_value_visitor(mut v: JsValue) -> Result<(JsValue, bool)> {
+    let modified = early_replace_builtin(&mut v);
+    Ok((v, modified))
 }
 
 async fn value_visitor(

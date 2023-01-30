@@ -98,52 +98,60 @@ isBuffer = module<is-buffer, {}>
 l = ???*0*
 - *0* unsupported expression
 
-m = ???*0*((arguments[0] | ???*1*))
+m = ???*0*((arguments[0] | ???*1* | ???*5*))
 - *0* module<crypt, {}>["bytesToWords"]
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *1* ???*2*(???*4*)
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *2* ???*3*["stringToBytes"]
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *3* module<charenc, {}>["bin"]
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *4* message
   ⚠️  circular variable reference
+- *5* ???*6*["call"](message, 0)
+  ⚠️  unknown callee object
+- *6* ???*7*["slice"]
+  ⚠️  unknown object
+- *7* ???*8*["prototype"]
+  ⚠️  unknown object
+- *8* FreeVar(Array)
+  ⚠️  unknown global
 
 md5 = ???*0*
 - *0* max number of linking steps reached
 
-message#3 = (arguments[0] | ???*0*((arguments[0] | ???*2*)) | ???*6*((arguments[0] | ???*10*), 0) | ???*14*())
+message#3 = (arguments[0] | ???*0*((arguments[0] | ???*2* | ???*6*)) | ???*10* | ???*14*())
 - *0* ???*1*["stringToBytes"]
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *1* module<charenc, {}>["bin"]
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *2* ???*3*(???*5*)
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *3* ???*4*["stringToBytes"]
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *4* module<charenc, {}>["bin"]
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *5* message
   ⚠️  circular variable reference
-- *6* ???*7*["call"]
-  ⚠️  Nested operation
+- *6* ???*7*["call"](message, 0)
+  ⚠️  unknown callee object
 - *7* ???*8*["slice"]
-  ⚠️  Nested operation
+  ⚠️  unknown object
 - *8* ???*9*["prototype"]
-  ⚠️  Nested operation
+  ⚠️  unknown object
 - *9* FreeVar(Array)
   ⚠️  unknown global
-- *10* ???*11*(???*13*)
-  ⚠️  Nested operation
-- *11* ???*12*["stringToBytes"]
-  ⚠️  Nested operation
-- *12* module<charenc, {}>["bin"]
-  ⚠️  Nested operation
-- *13* message
-  ⚠️  circular variable reference
+- *10* ???*11*["call"](message, 0)
+  ⚠️  unknown callee object
+- *11* ???*12*["slice"]
+  ⚠️  unknown object
+- *12* ???*13*["prototype"]
+  ⚠️  unknown object
+- *13* FreeVar(Array)
+  ⚠️  unknown global
 - *14* arguments[0]["toString"]
-  ⚠️  Nested operation
+  ⚠️  nested operation
 
 message#8 = arguments[0]
 
