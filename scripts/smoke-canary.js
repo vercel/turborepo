@@ -35,7 +35,7 @@ function exec({ title, command, options, conditions }) {
 function getGlobalBinaryPath({ packageManager }) {
   switch (packageManager) {
     case "yarn":
-      return execSync(`yarn global bin`).toString().trim();
+      return '/usr/local/bin';
     case "npm":
       return '/usr/local/lib/node_modules';
     case "pnpm":
@@ -147,7 +147,6 @@ function verifyLocalBinary({ installType, packageManager }) {
 
 function verifyGlobalBinary({ installType, packageManager }) {
   const packageManagerGlobalBinPath = getGlobalBinaryPath({ packageManager });
-  console.log("Package manager global path", packageManagerGlobalBinPath);
   const turboBinary = getTurboBinary({ installType, packageManager });
   exec({
     title: "Verify binary is installed globally",
