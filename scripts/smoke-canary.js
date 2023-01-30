@@ -35,7 +35,7 @@ function exec({ title, command, options, conditions }) {
 function getGlobalBinaryPath({ packageManager }) {
   switch (packageManager) {
     case "yarn":
-      return '/usr/local/bin';
+      return '/yarn/global/node_modules/';
     case "npm":
       return '/usr/local/lib/node_modules';
     case "pnpm":
