@@ -39,7 +39,7 @@ function getGlobalBinaryPath({ packageManager }) {
     case "npm":
       return execSync(`npm root --global`).toString().trim();
     case "pnpm":
-      return execSync(`pnpm root --global`).toString().trim();
+      return '/pnpm/global/';
   }
 }
 
