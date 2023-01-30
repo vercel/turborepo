@@ -128,6 +128,20 @@ fn run(input: PathBuf) {
         writeln!(s, "# Phase 4").unwrap();
         writeln!(s, "```mermaid\n{}```", render_graph(&mut analyzer)).unwrap();
 
+        let graph = analyzer.g.inner.clone().into_graph();
+
+        let mut condensed: petgraph::Graph<_, _, _, u32> =
+            petgraph::algo::condensation(graph, false);
+
+        condensed.retain_edges(|graph, edge| {
+            graph
+                .next_edge(edge, petgraph::Direction::Outgoing)
+                .is_none()
+        });
+
+        let dot = petgraph::dot::Dot::with_config(&condensed, &[]);
+        println!("DOT!\n{:?}", dot);
+
         NormalizedOutput::from(s)
             .compare_to_file(input.with_file_name("output.md"))
             .unwrap();
