@@ -602,6 +602,13 @@
 <span id="602">602</span>
 <span id="603">603</span>
 <span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>nft_json;
@@ -734,6 +741,12 @@
     </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(short, long))]
     #[cfg_attr(feature = <span class="string">&quot;node-api&quot;</span>, serde(default))]
     </span>enable_mdx: bool,
+
+    <span class="doccomment">/// Enable experimental garbage collection with the provided memory limit in
+    /// MB.
+    </span><span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, clap(long))]
+    #[cfg_attr(feature = <span class="string">&quot;serializable&quot;</span>, serde(default))]
+    </span><span class="kw">pub </span>memory_limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
 }
 
 <span class="attr">#[cfg_attr(feature = <span class="string">&quot;cli&quot;</span>, derive(Parser))]
@@ -945,6 +958,7 @@
     register();
     <span class="kw">let </span><span class="kw-2">&amp;</span>CommonArgs {
         visualize_graph,
+        memory_limit,
         <span class="attr">#[cfg(feature = <span class="string">&quot;persistent_cache&quot;</span>)]
             </span>cache: CacheArgs {
             <span class="kw-2">ref </span>cache,
@@ -1003,7 +1017,7 @@
 
     run(
         args.clone(),
-        || TurboTasks::new(MemoryBackend::default()),
+        || TurboTasks::new(MemoryBackend::new(memory_limit.unwrap_or(usize::MAX))),
         |tt, root_task, <span class="kw">_</span>| <span class="kw">async move </span>{
             <span class="kw">if </span>visualize_graph {
                 <span class="kw">let </span><span class="kw-2">mut </span>stats = Stats::new();
