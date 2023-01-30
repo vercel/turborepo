@@ -2,9 +2,52 @@ const { context, getOctokit } = require("@actions/github");
 const { info, getInput } = require("@actions/core");
 const { default: stripAnsi } = require("strip-ansi");
 const { default: fetch } = require("node-fetch");
+const fs = require("fs");
 
 // A comment marker to identify the comment created by this action.
 const BOT_COMMENT_MARKER = `<!-- __marker__ next.js integration stats __marker__ -->`;
+
+// Download logs for a job in a workflow run by reading redirect url from workflow log response.
+async function fetchJobLogsFromWorkflow(octokit, token, job) {
+  console.log("Checking test results for the job ", job.name);
+
+  // downloadJobLogsForWorkflowRun returns a redirect to the actual logs
+  const jobLogRedirectResponse =
+    await octokit.rest.actions.downloadJobLogsForWorkflowRun({
+      accept: "application/vnd.github+json",
+      ...context.repo,
+      job_id: job.id,
+    });
+
+  // fetch the actual logs
+  const jobLogsResponse = await fetch(jobLogRedirectResponse.url, {
+    headers: {
+      Authorization: `token ${token}`,
+    },
+  });
+
+  if (!jobLogsResponse.ok) {
+    throw new Error(
+      `Failed to get logsUrl, got status ${jobLogsResponse.status}`
+    );
+  }
+
+  // this should be the check_run's raw logs including each line
+  // prefixed with a timestamp in format 2020-03-02T18:42:30.8504261Z
+  const logText = await jobLogsResponse.text();
+  const dateTimeStripped = logText
+    .split("\n")
+    .map((line) => line.substr("2020-03-02T19:39:16.8832288Z ".length));
+
+  const nextjsVersion = dateTimeStripped
+    .find((x) => x.includes("RUNNING NEXTJS VERSION:") && !x.includes("$("))
+    ?.split("RUNNING NEXTJS VERSION:")
+    .pop()
+    ?.trim();
+  const logs = dateTimeStripped.join("\n");
+
+  return { nextjsVersion, logs };
+}
 
 // An action report failed next.js integration test with --turbo
 async function run() {
@@ -14,27 +57,29 @@ async function run() {
   const prNumber = context?.payload?.pull_request?.number;
   const prSha = context?.sha;
 
-  console.log("Trying to collect integration stats for PR", {
-    prNumber,
-    sha: prSha,
-  });
+  let comments = null;
+  let existingComment = null;
 
-  if (!prNumber) {
-    info("No PR number found in context, skipping action.");
-    return;
+  if (prNumber) {
+    console.log("Trying to collect integration stats for PR", {
+      prNumber,
+      sha: prSha,
+    });
+
+    comments = await octokit.rest.issues.listComments({
+      ...context.repo,
+      issue_number: prNumber,
+    });
+
+    // Get a comment from the bot if it exists
+    existingComment = comments?.data.find(
+      (comment) =>
+        comment?.user?.login === "github-actions[bot]" &&
+        comment?.body?.includes(BOT_COMMENT_MARKER)
+    );
+  } else {
+    info("No PR number found in context, will not try to post comment.");
   }
-
-  const comments = await octokit.rest.issues.listComments({
-    ...context.repo,
-    issue_number: prNumber,
-  });
-
-  // Get a comment from the bot if it exists
-  const existingComment = comments?.data.find(
-    (comment) =>
-      comment?.user?.login === "github-actions[bot]" &&
-      comment?.body?.includes(BOT_COMMENT_MARKER)
-  );
 
   // Iterate all the jobs in the current workflow run
   console.log("Trying to collect next.js integration test logs");
@@ -64,36 +109,11 @@ async function run() {
 
   let commentToPost = "";
   for (const job of integrationTestJobs) {
-    console.log("Checking test results for the job ", job.name);
-
-    // downloadJobLogsForWorkflowRun returns a redirect to the actual logs
-    const jobLogRedirectResponse =
-      await octokit.rest.actions.downloadJobLogsForWorkflowRun({
-        accept: "application/vnd.github+json",
-        ...context.repo,
-        job_id: job.id,
-      });
-
-    // fetch the actual logs
-    const jobLogsResponse = await fetch(jobLogRedirectResponse.url, {
-      headers: {
-        Authorization: `token ${token}`,
-      },
-    });
-
-    if (!jobLogsResponse.ok) {
-      throw new Error(
-        `Failed to get logsUrl, got status ${jobLogsResponse.status}`
-      );
-    }
-
-    // this should be the check_run's raw logs including each line
-    // prefixed with a timestamp in format 2020-03-02T18:42:30.8504261Z
-    const logText = await jobLogsResponse.text();
-    const logs = logText
-      .split("\n")
-      .map((line) => line.substr("2020-03-02T19:39:16.8832288Z ".length))
-      .join("\n");
+    const { logs, nextjsVersion } = await fetchJobLogsFromWorkflow(
+      octokit,
+      token,
+      job
+    );
 
     if (
       !logs.includes(`failed to pass within`) ||
@@ -107,6 +127,14 @@ async function run() {
     const splittedLogs = logs
       .split("NEXT_INTEGRATION_TEST: true")
       .filter((log) => log.includes("--test output start--"));
+
+    // Collect all test results into single manifest to store into file. This'll allow to upload / compare test results
+    // across different runs.
+    const testResultsManifest = {
+      nextjsVersion,
+      ref: prSha,
+      result: [],
+    };
 
     // Iterate each chunk of logs, find out test name and corresponding test data
     splittedLogs.forEach((logs) => {
@@ -138,6 +166,12 @@ async function run() {
             ?.trim();
 
           testData = JSON.parse(testData);
+
+          testResultsManifest.result.push({
+            job: job.name,
+            name: failedTest,
+            data: testData,
+          });
         } catch (_) {
           console.log(`Failed to parse test data`);
         }
@@ -186,6 +220,12 @@ async function run() {
         commentToPost += `\n</details>\n`;
       }
     });
+
+    // store collected test results into file for external usage.
+    fs.writeFileSync(
+      "./nextjs-test-results.json",
+      JSON.stringify(testResultsManifest, null, 2)
+    );
   }
 
   if (!commentToPost || commentToPost.length === 0) {
@@ -194,30 +234,31 @@ async function run() {
   }
 
   try {
+    if (!prNumber) {
+      return;
+    }
+
     if (!existingComment) {
       info("No existing comment found, creating a new one");
-      await octokit.rest.issues.createComment({
+      const result = await octokit.rest.issues.createComment({
         ...context.repo,
         issue_number: prNumber,
         body: commentToPost,
       });
-      return;
+
+      console.log("Created a new comment", result.data.html_url);
     } else {
       info("Existing comment found, updating it");
-      await octokit.rest.issues.updateComment({
+      const result = await octokit.rest.issues.updateComment({
         ...context.repo,
         comment_id: existingComment.id,
         body: commentToPost,
       });
-      return;
+
+      console.log("Updated existing comment", result.data.html_url);
     }
   } catch (error) {
-    if (error.status === 403) {
-      info(
-        "No permission to create a comment. This can happen if PR is created from a fork."
-      );
-      return;
-    }
+    console.error("Failed to post comment", error);
   }
 }
 
