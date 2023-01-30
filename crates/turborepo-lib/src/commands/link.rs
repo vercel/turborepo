@@ -1,9 +1,10 @@
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::{
     fs,
     fs::{File, OpenOptions},
     io,
     io::{BufRead, Write},
-    os::unix::fs::PermissionsExt,
 };
 
 use anyhow::{anyhow, Context, Result};
@@ -157,6 +158,11 @@ fn select_team<'a>(teams: &'a [Team], user_display_name: &'a str) -> Result<Sele
 }
 
 fn should_link(base: &CommandBase, location: &str) -> Result<bool> {
+    #[cfg(test)]
+    {
+        return Ok(true);
+    }
+
     let prompt = format!(
         "{}{} {}",
         BOLD.apply_to(GREY.apply_to("? ")),
