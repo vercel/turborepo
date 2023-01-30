@@ -1490,6 +1490,8 @@ impl JsValue {
     }
 }
 
+/// Compute the compile-time value of all elements of the list. If all evaluate
+/// to the same value return that. Otherwise return None.
 fn merge_if_known<T: Copy>(
     list: impl IntoIterator<Item = T>,
     func: impl Fn(T) -> Option<bool>,
@@ -1509,6 +1511,9 @@ fn merge_if_known<T: Copy>(
     current
 }
 
+/// Evaluates all elements of the list and returns Some(true) if all elements
+/// are compile-time true. If any element is compile-time false, return
+/// Some(false). Otherwise return None.
 fn all_if_known<T: Copy>(
     list: impl IntoIterator<Item = T>,
     func: impl Fn(T) -> Option<bool>,
@@ -1528,6 +1533,9 @@ fn all_if_known<T: Copy>(
     }
 }
 
+/// Evaluates all elements of the list and returns Some(true) if any element is
+/// compile-time true. If all elements are compile-time false, return
+/// Some(false). Otherwise return None.
 fn any_if_known<T: Copy>(
     list: impl IntoIterator<Item = T>,
     func: impl Fn(T) -> Option<bool>,
@@ -1535,6 +1543,8 @@ fn any_if_known<T: Copy>(
     all_if_known(list, |x| func(x).map(|x| !x)).map(|x| !x)
 }
 
+/// Selects the first element of the list where `use_item` is compile-time true.
+/// For this element returns the result of `item_value`. Otherwise returns None.
 fn shortcircut_if_known<T: Copy>(
     list: impl IntoIterator<Item = T>,
     use_item: impl Fn(T) -> Option<bool>,
@@ -2098,6 +2108,8 @@ impl JsValue {
                 }
             }
             JsValue::Logical(_, op, list) => {
+                // Nested logical expressions can be normalized: e. g. `a && (b && c)` => `a &&
+                // b && c`
                 if list.iter().any(|v| {
                     if let JsValue::Logical(_, inner_op, _) = v {
                         inner_op == op
@@ -2105,6 +2117,7 @@ impl JsValue {
                         false
                     }
                 }) {
+                    // Taking the old list and constructing a new merged list
                     for mut v in take(list).into_iter() {
                         if let JsValue::Logical(_, inner_op, inner_list) = &mut v {
                             if inner_op == op {

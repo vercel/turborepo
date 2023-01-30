@@ -86,8 +86,8 @@ impl ConditionalKind {
 
 #[derive(Debug, Clone)]
 pub enum Effect {
-    /// Some condition which effects which effects might be executed. When the
-    /// condition evaluates to something compile-time constant we can use that
+    /// Some condition which affects which effects might be executed. If the
+    /// condition evaluates to some compile-time constant, we can use that
     /// to determine which effects are executed and remove the others.
     Conditional {
         condition: JsValue,

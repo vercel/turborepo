@@ -36,11 +36,14 @@ it("should allow replacements in IIFEs", () => {
 });
 
 it("should evaluate process.turbopack", () => {
+  let ok = false;
   if (process.turbopack) {
+    ok = true;
   } else {
     require("fail");
     import("fail");
   }
+  expect(ok).toBe(true);
 });
 
 it("should evaluate !process.turbopack", () => {

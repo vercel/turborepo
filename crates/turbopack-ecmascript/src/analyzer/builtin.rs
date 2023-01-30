@@ -3,8 +3,6 @@ use std::{mem::take, sync::Arc};
 use super::{ConstantNumber, ConstantValue, JsValue, LogicalOperator, ObjectPart};
 use crate::analyzer::FreeVarKind;
 
-const ARRAY_METHODS: [&str; 2] = ["concat", "map"];
-
 pub fn replace_builtin(value: &mut JsValue) -> bool {
     match value {
         // Accessing a property on something can be handled in some cases
@@ -43,12 +41,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                             true
                         }
                     }
-                    JsValue::Constant(c) => {
-                        // if let Some(s) = c.as_str() {
-                        //     if ARRAY_METHODS.iter().any(|method| *method == s) {
-                        //         return false;
-                        //     }
-                        // }
+                    JsValue::Constant(_) => {
                         value.make_unknown("non-num constant property on array");
                         true
                     }
@@ -279,10 +272,12 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
         JsValue::Logical(_, op, ref mut parts) => {
             let len = parts.len();
             for (i, part) in take(parts).into_iter().enumerate() {
+                // The last part is never skipped.
                 if i == len - 1 {
                     parts.push(part);
                     break;
                 }
+                // We might know at compile-time if a part is skipped or the final value.
                 let skip_part = match op {
                     LogicalOperator::And => part.is_truthy(),
                     LogicalOperator::Or => part.is_falsy(),
@@ -290,28 +285,29 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 };
                 match skip_part {
                     Some(true) => {
+                        // We known this part is skipped, so we can remove it.
                         continue;
                     }
                     Some(false) => {
+                        // We known this part is the final value, so we can remove the rest.
                         parts.push(part);
                         break;
                     }
                     None => {
+                        // We don't know if this part is skipped or the final value, so we keep it.
                         parts.push(part);
                         continue;
                     }
                 }
             }
+            // If we reduced the expression to a single value, we can replace it.
             if parts.len() == 1 {
                 *value = parts.pop().unwrap();
                 true
             } else {
-                if parts.iter().all(|part| !part.has_placeholder()) {
-                    *value = JsValue::alternatives(take(parts));
-                    true
-                } else {
-                    parts.len() != len
-                }
+                // If not, we known that it will be one of the remaining values.
+                *value = JsValue::alternatives(take(parts));
+                true
             }
         }
         // Evaluate not when the inner value is truthy or falsy

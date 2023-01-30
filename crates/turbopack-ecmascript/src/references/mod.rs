@@ -1082,10 +1082,14 @@ pub(crate) async fn analyze_ecmascript_module(
             // the object allocation.
             let mut first_import_meta = true;
 
-            let mut queue = Vec::new();
-            queue.extend(effects.into_iter().rev());
+            // This is a stack of effects to process. We use a stack since during processing
+            // of an effect we might want to add more effects into the middle of the
+            // processing. Using a stack where effects are appended in reverse
+            // order allows us to do that. It's recursion implemented as Stack.
+            let mut queue_stack = Vec::new();
+            queue_stack.extend(effects.into_iter().rev());
 
-            while let Some(effect) = queue.pop() {
+            while let Some(effect) = queue_stack.pop() {
                 match effect {
                     Effect::Conditional {
                         condition,
@@ -1111,76 +1115,80 @@ pub(crate) async fn analyze_ecmascript_module(
                         }
                         macro_rules! active {
                             ($block:ident) => {
-                                queue.extend($block.effects.into_iter().rev());
+                                queue_stack.extend($block.effects.into_iter().rev());
                             };
                         }
                         match *kind {
-                            ConditionalKind::If { then } => {
-                                if let Some(value) = condition.is_truthy() {
-                                    if value {
-                                        condition!(ConstantConditionValue::Truthy);
-                                        active!(then);
-                                    } else {
-                                        condition!(ConstantConditionValue::Falsy);
-                                        inactive!(then);
-                                    }
-                                } else {
+                            ConditionalKind::If { then } => match condition.is_truthy() {
+                                Some(true) => {
+                                    condition!(ConstantConditionValue::Truthy);
                                     active!(then);
                                 }
-                            }
+                                Some(false) => {
+                                    condition!(ConstantConditionValue::Falsy);
+                                    inactive!(then);
+                                }
+                                None => {
+                                    active!(then);
+                                }
+                            },
                             ConditionalKind::IfElse { then, r#else }
                             | ConditionalKind::Ternary { then, r#else } => {
-                                if let Some(value) = condition.is_truthy() {
-                                    if value {
+                                match condition.is_truthy() {
+                                    Some(true) => {
                                         condition!(ConstantConditionValue::Truthy);
                                         active!(then);
                                         inactive!(r#else);
-                                    } else {
+                                    }
+                                    Some(false) => {
                                         condition!(ConstantConditionValue::Falsy);
                                         active!(r#else);
                                         inactive!(then);
                                     }
-                                } else {
-                                    active!(then);
-                                    active!(r#else);
+                                    None => {
+                                        active!(then);
+                                        active!(r#else);
+                                    }
                                 }
                             }
-                            ConditionalKind::And { expr } => {
-                                if let Some(value) = condition.is_truthy() {
-                                    if value {
-                                        condition!(ConstantConditionValue::Truthy);
-                                        active!(expr);
-                                    } else {
-                                        // The condition value need to stay since it's used
-                                        inactive!(expr);
-                                    }
-                                } else {
+                            ConditionalKind::And { expr } => match condition.is_truthy() {
+                                Some(true) => {
+                                    condition!(ConstantConditionValue::Truthy);
                                     active!(expr);
                                 }
-                            }
-                            ConditionalKind::Or { expr } => {
-                                if let Some(value) = condition.is_truthy() {
-                                    if value {
-                                        // The condition value need to stay since it's used
-                                        inactive!(expr);
-                                    } else {
-                                        condition!(ConstantConditionValue::Falsy);
-                                        active!(expr);
-                                    }
-                                } else {
+                                Some(false) => {
+                                    // The condition value need to stay since it's used
+                                    inactive!(expr);
+                                }
+                                None => {
                                     active!(expr);
                                 }
-                            }
+                            },
+                            ConditionalKind::Or { expr } => match condition.is_truthy() {
+                                Some(true) => {
+                                    // The condition value need to stay since it's used
+                                    inactive!(expr);
+                                }
+                                Some(false) => {
+                                    condition!(ConstantConditionValue::Falsy);
+                                    active!(expr);
+                                }
+                                None => {
+                                    active!(expr);
+                                }
+                            },
                             ConditionalKind::NullishCoalescing { expr } => {
-                                if let Some(value) = condition.is_nullish() {
-                                    if value {
+                                match condition.is_nullish() {
+                                    Some(true) => {
                                         condition!(ConstantConditionValue::Nullish);
                                         active!(expr);
-                                    } else {
+                                    }
+                                    Some(false) => {
                                         inactive!(expr);
                                     }
-                                } else {
-                                    active!(expr);
+                                    None => {
+                                        active!(expr);
+                                    }
                                 }
                             }
                         }
