@@ -215,9 +215,9 @@
 }
 
 <span class="kw">impl</span>&lt;T, U: ValueDebugFormat + <span class="lifetime">&#39;static</span>&gt; ValueDebugFormat <span class="kw">for </span>ReadRef&lt;T, U&gt; {
-    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ValueDebugFormatString {
+    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; ValueDebugFormatString {
         <span class="kw">let </span>value = <span class="kw-2">&amp;**</span><span class="self">self</span>;
-        value.value_debug_format()
+        value.value_debug_format(depth)
     }
 }
 

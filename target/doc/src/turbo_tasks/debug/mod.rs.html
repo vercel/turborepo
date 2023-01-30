@@ -272,6 +272,47 @@
 <span id="272">272</span>
 <span id="273">273</span>
 <span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::{Debug, Display};
 
 <span class="kw">use </span>auto_hash_map::{AutoMap, AutoSet};
@@ -328,13 +369,16 @@
 </span><span class="attr">#[turbo_tasks::value_trait(no_debug)]
 </span><span class="kw">pub trait </span>ValueDebug {
     <span class="kw">fn </span>dbg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ValueDebugStringVc;
+
+    <span class="doccomment">/// Like `dbg`, but with a depth limit.
+    </span><span class="kw">fn </span>dbg_depth(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; ValueDebugStringVc;
 }
 
 <span class="doccomment">/// Use [autoref specialization] to implement `ValueDebug` for `T: Debug`.
 ///
 /// [autoref specialization] https://github.com/dtolnay/case-studies/blob/master/autoref-specialization/README.md
 </span><span class="kw">pub trait </span>ValueDebugFormat {
-    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ValueDebugFormatString;
+    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; ValueDebugFormatString;
 }
 
 <span class="comment">// Use autoref specialization [1] to implement `ValueDebugFormat` for `T:
@@ -346,7 +390,11 @@
 <span class="kw">where
     </span>T: Debug,
 {
-    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ValueDebugFormatString {
+    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; ValueDebugFormatString {
+        <span class="kw">if </span>depth == <span class="number">0 </span>{
+            <span class="kw">return </span>ValueDebugFormatString::Sync(std::any::type_name::&lt;<span class="self">Self</span>&gt;().to_string());
+        }
+
         ValueDebugFormatString::Sync(<span class="macro">format!</span>(<span class="string">&quot;{:#?}&quot;</span>, <span class="self">self</span>))
     }
 }
@@ -355,10 +403,14 @@
 <span class="kw">where
     </span>T: ValueDebugFormat,
 {
-    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ValueDebugFormatString {
+    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; ValueDebugFormatString {
+        <span class="kw">if </span>depth == <span class="number">0 </span>{
+            <span class="kw">return </span>ValueDebugFormatString::Sync(std::any::type_name::&lt;<span class="self">Self</span>&gt;().to_string());
+        }
+
         <span class="kw">match </span><span class="self">self </span>{
             <span class="prelude-val">None </span>=&gt; ValueDebugFormatString::Sync(<span class="macro">format!</span>(<span class="string">&quot;{:#?}&quot;</span>, <span class="prelude-ty">Option</span>::&lt;()&gt;::None)),
-            <span class="prelude-val">Some</span>(value) =&gt; <span class="kw">match </span>value.value_debug_format() {
+            <span class="prelude-val">Some</span>(value) =&gt; <span class="kw">match </span>value.value_debug_format(depth.saturating_sub(<span class="number">1</span>)) {
                 ValueDebugFormatString::Sync(string) =&gt; ValueDebugFormatString::Sync(<span class="macro">format!</span>(
                     <span class="string">&quot;{:#?}&quot;</span>,
                     <span class="prelude-val">Some</span>(PassthroughDebug::new_string(string))
@@ -378,10 +430,14 @@
 <span class="kw">where
     </span>T: ValueDebugFormat,
 {
-    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ValueDebugFormatString {
+    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; ValueDebugFormatString {
+        <span class="kw">if </span>depth == <span class="number">0 </span>{
+            <span class="kw">return </span>ValueDebugFormatString::Sync(std::any::type_name::&lt;<span class="self">Self</span>&gt;().to_string());
+        }
+
         <span class="kw">let </span>values = <span class="self">self
             </span>.iter()
-            .map(|value| value.value_debug_format())
+            .map(|value| value.value_debug_format(depth.saturating_sub(<span class="number">1</span>)))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         ValueDebugFormatString::Async(Box::pin(<span class="kw">async move </span>{
@@ -405,10 +461,14 @@
 <span class="kw">where
     </span>K: ValueDebugFormat,
 {
-    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ValueDebugFormatString {
+    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; ValueDebugFormatString {
+        <span class="kw">if </span>depth == <span class="number">0 </span>{
+            <span class="kw">return </span>ValueDebugFormatString::Sync(std::any::type_name::&lt;<span class="self">Self</span>&gt;().to_string());
+        }
+
         <span class="kw">let </span>values = <span class="self">self
             </span>.iter()
-            .map(|item| item.value_debug_format())
+            .map(|item| item.value_debug_format(depth.saturating_sub(<span class="number">1</span>)))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         ValueDebugFormatString::Async(Box::pin(<span class="kw">async move </span>{
@@ -433,10 +493,19 @@
     </span>K: Debug,
     V: ValueDebugFormat,
 {
-    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ValueDebugFormatString {
+    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; ValueDebugFormatString {
+        <span class="kw">if </span>depth == <span class="number">0 </span>{
+            <span class="kw">return </span>ValueDebugFormatString::Sync(std::any::type_name::&lt;<span class="self">Self</span>&gt;().to_string());
+        }
+
         <span class="kw">let </span>values = <span class="self">self
             </span>.iter()
-            .map(|(key, value)| (<span class="macro">format!</span>(<span class="string">&quot;{:#?}&quot;</span>, key), value.value_debug_format()))
+            .map(|(key, value)| {
+                (
+                    <span class="macro">format!</span>(<span class="string">&quot;{:#?}&quot;</span>, key),
+                    value.value_debug_format(depth.saturating_sub(<span class="number">1</span>)),
+                )
+            })
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         ValueDebugFormatString::Async(Box::pin(<span class="kw">async move </span>{
@@ -461,10 +530,19 @@
     </span>K: Debug,
     V: ValueDebugFormat,
 {
-    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ValueDebugFormatString {
+    <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; ValueDebugFormatString {
+        <span class="kw">if </span>depth == <span class="number">0 </span>{
+            <span class="kw">return </span>ValueDebugFormatString::Sync(std::any::type_name::&lt;<span class="self">Self</span>&gt;().to_string());
+        }
+
         <span class="kw">let </span>values = <span class="self">self
             </span>.iter()
-            .map(|(key, value)| (<span class="macro">format!</span>(<span class="string">&quot;{:#?}&quot;</span>, key), value.value_debug_format()))
+            .map(|(key, value)| {
+                (
+                    <span class="macro">format!</span>(<span class="string">&quot;{:#?}&quot;</span>, key),
+                    value.value_debug_format(depth.saturating_sub(<span class="number">1</span>)),
+                )
+            })
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         ValueDebugFormatString::Async(Box::pin(<span class="kw">async move </span>{
@@ -489,9 +567,13 @@
         <span class="kw">impl</span>&lt;$(<span class="macro-nonterminal">$name</span>: ValueDebugFormat),+&gt; ValueDebugFormat <span class="kw">for </span>($(<span class="macro-nonterminal">$name</span>,)+)
         {
             <span class="attr">#[allow(non_snake_case)]
-            </span><span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ValueDebugFormatString {
+            </span><span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; ValueDebugFormatString {
+                <span class="kw">if </span>depth == <span class="number">0 </span>{
+                    <span class="kw">return </span>ValueDebugFormatString::Sync(std::any::type_name::&lt;<span class="self">Self</span>&gt;().to_string());
+                }
+
                 <span class="kw">let </span>($(<span class="macro-nonterminal">$name</span>,)+) = <span class="self">self</span>;
-                <span class="kw">let </span>($(<span class="macro-nonterminal">$name</span>,)+) = ($(<span class="macro-nonterminal">$name</span>.value_debug_format(),)+);
+                <span class="kw">let </span>($(<span class="macro-nonterminal">$name</span>,)+) = ($(<span class="macro-nonterminal">$name</span>.value_debug_format(depth.saturating_sub(<span class="number">1</span>)),)+);
 
                 ValueDebugFormatString::Async(Box::pin(<span class="kw">async move </span>{
                     <span class="kw">let </span>values = ($(PassthroughDebug::new_string(<span class="macro-nonterminal">$name</span>.try_to_string().<span class="kw">await</span><span class="question-mark">?</span>),)+);

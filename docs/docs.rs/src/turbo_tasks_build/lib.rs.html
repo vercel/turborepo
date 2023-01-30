@@ -454,6 +454,10 @@
 <span id="454">454</span>
 <span id="455">455</span>
 <span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{HashMap, HashSet},
     env::{<span class="self">self</span>, current_dir},
@@ -853,23 +857,27 @@
 
     <span class="doccomment">/// Declares the default derive of the `ValueDebug` trait.
     </span><span class="kw">fn </span>register_debug_impl(<span class="kw-2">&amp;mut </span><span class="self">self</span>, ident: <span class="kw-2">&amp;</span>Ident, dbg_ty: DebugType) -&gt; std::fmt::Result {
-        <span class="kw">let </span>fn_ident = Ident::new(<span class="string">&quot;dbg&quot;</span>, ident.span());
+        <span class="kw">for </span>fn_name <span class="kw">in </span>[<span class="string">&quot;dbg&quot;</span>, <span class="string">&quot;dbg_depth&quot;</span>] {
+            <span class="kw">let </span>fn_ident = Ident::new(fn_name, ident.span());
 
-        <span class="kw">let </span>(impl_fn_ident, global_name) = <span class="kw">match </span>dbg_ty {
-            DebugType::Value =&gt; {
-                <span class="kw">let </span>trait_ident = Ident::new(<span class="string">&quot;ValueDebug&quot;</span>, ident.span());
-                (
-                    get_trait_impl_function_ident(ident, <span class="kw-2">&amp;</span>trait_ident, <span class="kw-2">&amp;</span>fn_ident),
-                    <span class="self">self</span>.get_global_name(<span class="kw-2">&amp;</span>[ident, <span class="kw-2">&amp;</span>trait_ident, <span class="kw-2">&amp;</span>fn_ident]),
-                )
-            }
-            DebugType::Trait =&gt; (
-                get_impl_function_ident(ident, <span class="kw-2">&amp;</span>fn_ident),
-                <span class="self">self</span>.get_global_name(<span class="kw-2">&amp;</span>[ident, <span class="kw-2">&amp;</span>fn_ident]),
-            ),
-        };
+            <span class="kw">let </span>(impl_fn_ident, global_name) = <span class="kw">match </span>dbg_ty {
+                DebugType::Value =&gt; {
+                    <span class="kw">let </span>trait_ident = Ident::new(<span class="string">&quot;ValueDebug&quot;</span>, ident.span());
+                    (
+                        get_trait_impl_function_ident(ident, <span class="kw-2">&amp;</span>trait_ident, <span class="kw-2">&amp;</span>fn_ident),
+                        <span class="self">self</span>.get_global_name(<span class="kw-2">&amp;</span>[ident, <span class="kw-2">&amp;</span>trait_ident, <span class="kw-2">&amp;</span>fn_ident]),
+                    )
+                }
+                DebugType::Trait =&gt; (
+                    get_impl_function_ident(ident, <span class="kw-2">&amp;</span>fn_ident),
+                    <span class="self">self</span>.get_global_name(<span class="kw-2">&amp;</span>[ident, <span class="kw-2">&amp;</span>fn_ident]),
+                ),
+            };
 
-        <span class="self">self</span>.register(impl_fn_ident, global_name)
+            <span class="self">self</span>.register(impl_fn_ident, global_name)<span class="question-mark">?</span>;
+        }
+
+        <span class="prelude-val">Ok</span>(())
     }
 }
 

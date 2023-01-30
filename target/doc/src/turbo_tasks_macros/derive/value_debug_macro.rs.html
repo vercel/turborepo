@@ -23,6 +23,11 @@
 <span id="23">23</span>
 <span id="24">24</span>
 <span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>quote::quote;
 <span class="kw">use </span>syn::{parse_macro_input, DeriveInput};
@@ -42,7 +47,12 @@
         </span><span class="kw">impl </span>turbo_tasks::debug::ValueDebug <span class="kw">for </span>#ident {
             <span class="attr">#[turbo_tasks::function]
             </span><span class="kw">async fn </span>dbg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;turbo_tasks::debug::ValueDebugStringVc&gt; {
-                <span class="self">self</span>.#value_debug_format_ident().<span class="kw">await
+                <span class="self">self</span>.#value_debug_format_ident(usize::MAX).<span class="kw">await
+            </span>}
+
+            <span class="attr">#[turbo_tasks::function]
+            </span><span class="kw">async fn </span>dbg_depth(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; anyhow::Result&lt;turbo_tasks::debug::ValueDebugStringVc&gt; {
+                <span class="self">self</span>.#value_debug_format_ident(depth).<span class="kw">await
             </span>}
         }
     }

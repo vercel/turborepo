@@ -101,6 +101,10 @@
 <span id="101">101</span>
 <span id="102">102</span>
 <span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::{Ident, TokenStream <span class="kw">as </span>TokenStream2};
 <span class="kw">use </span>quote::quote;
@@ -131,7 +135,11 @@
         <span class="kw">impl </span>#ident {
             <span class="attr">#[doc(hidden)]
             #[allow(non_snake_case)]
-            </span><span class="kw">async fn </span>#value_debug_format_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;turbo_tasks::debug::ValueDebugStringVc&gt; {
+            </span><span class="kw">async fn </span>#value_debug_format_ident(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; anyhow::Result&lt;turbo_tasks::debug::ValueDebugStringVc&gt; {
+                <span class="kw">if </span>depth == <span class="number">0 </span>{
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(turbo_tasks::debug::ValueDebugStringVc::new(<span class="macro">stringify!</span>(#ident).to_string()));
+                }
+
                 <span class="kw">use </span>turbo_tasks::debug::internal::<span class="kw-2">*</span>;
                 <span class="kw">use </span>turbo_tasks::debug::ValueDebugFormat;
                 <span class="prelude-val">Ok</span>(turbo_tasks::debug::ValueDebugStringVc::new(<span class="macro">format!</span>(<span class="string">&quot;{:#?}&quot;</span>, #formatting_logic)))
@@ -139,10 +147,10 @@
         }
 
         <span class="kw">impl </span>turbo_tasks::debug::ValueDebugFormat <span class="kw">for </span>#ident {
-            <span class="kw">fn </span>value_debug_format&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; turbo_tasks::debug::ValueDebugFormatString&lt;<span class="lifetime">&#39;a</span>&gt; {
+            <span class="kw">fn </span>value_debug_format&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, depth: usize) -&gt; turbo_tasks::debug::ValueDebugFormatString&lt;<span class="lifetime">&#39;a</span>&gt; {
                 turbo_tasks::debug::ValueDebugFormatString::Async(
                     Box::pin(<span class="kw">async move </span>{
-                        <span class="prelude-val">Ok</span>(<span class="self">self</span>.#value_debug_format_ident().<span class="kw">await</span><span class="question-mark">?</span>.<span class="kw">await</span><span class="question-mark">?</span>.to_string())
+                        <span class="prelude-val">Ok</span>(<span class="self">self</span>.#value_debug_format_ident(depth).<span class="kw">await</span><span class="question-mark">?</span>.<span class="kw">await</span><span class="question-mark">?</span>.to_string())
                     })
                 )
             }
@@ -163,7 +171,7 @@
                 <span class="macro">vec!</span>[#(
                     FormattingField::new(
                         <span class="macro">stringify!</span>(#fields_idents),
-                        #fields_idents.value_debug_format().try_to_value_debug_string().<span class="kw">await</span><span class="question-mark">?</span>.<span class="kw">await</span><span class="question-mark">?</span>.to_string(),
+                        #fields_idents.value_debug_format(depth.saturating_sub(<span class="number">1</span>)).try_to_value_debug_string().<span class="kw">await</span><span class="question-mark">?</span>.<span class="kw">await</span><span class="question-mark">?</span>.to_string(),
                     ),
                 )<span class="kw-2">*</span>],
             )
@@ -181,7 +189,7 @@
             FormattingStruct::new_unnamed(
                 <span class="macro">stringify!</span>(#ident),
                 <span class="macro">vec!</span>[#(
-                    #fields_idents.value_debug_format().try_to_value_debug_string().<span class="kw">await</span><span class="question-mark">?</span>.<span class="kw">await</span><span class="question-mark">?</span>.to_string(),
+                    #fields_idents.value_debug_format(depth.saturating_sub(<span class="number">1</span>)).try_to_value_debug_string().<span class="kw">await</span><span class="question-mark">?</span>.<span class="kw">await</span><span class="question-mark">?</span>.to_string(),
                 )<span class="kw-2">*</span>],
             )
         },

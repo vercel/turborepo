@@ -315,6 +315,12 @@
 <span id="315">315</span>
 <span id="316">316</span>
 <span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::{Ident, TokenStream <span class="kw">as </span>TokenStream2};
 <span class="kw">use </span>quote::quote;
@@ -466,7 +472,13 @@
                 <span class="attr">#[turbo_tasks::function]
                 </span><span class="kw">pub async fn </span>dbg(<span class="self">self</span>) -&gt; anyhow::Result&lt;turbo_tasks::debug::ValueDebugStringVc&gt; {
                     <span class="kw">use </span>turbo_tasks::debug::ValueDebugFormat;
-                    <span class="self">self</span>.value_debug_format().try_to_value_debug_string().<span class="kw">await
+                    <span class="self">self</span>.value_debug_format(usize::MAX).try_to_value_debug_string().<span class="kw">await
+                </span>}
+
+                <span class="attr">#[turbo_tasks::function]
+                </span><span class="kw">pub async fn </span>dbg_depth(<span class="self">self</span>, depth: usize) -&gt; anyhow::Result&lt;turbo_tasks::debug::ValueDebugStringVc&gt; {
+                    <span class="kw">use </span>turbo_tasks::debug::ValueDebugFormat;
+                    <span class="self">self</span>.value_debug_format(depth).try_to_value_debug_string().<span class="kw">await
                 </span>}
             }
         }
@@ -476,10 +488,10 @@
 
     <span class="kw">let </span>value_debug_format_impl = <span class="macro">quote! </span>{
         <span class="kw">impl </span>turbo_tasks::debug::ValueDebugFormat <span class="kw">for </span>#ref_ident {
-            <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; turbo_tasks::debug::ValueDebugFormatString {
+            <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; turbo_tasks::debug::ValueDebugFormatString {
                 turbo_tasks::debug::ValueDebugFormatString::Async(Box::pin(<span class="kw">async move </span>{
                     <span class="prelude-val">Ok</span>(<span class="kw">if let </span><span class="prelude-val">Some</span>(value_debug) = turbo_tasks::debug::ValueDebugVc::resolve_from(<span class="self">self</span>).<span class="kw">await</span><span class="question-mark">? </span>{
-                        <span class="macro">format!</span>(<span class="macro">concat!</span>(<span class="macro">stringify!</span>(#ident), <span class="string">&quot;({})&quot;</span>), value_debug.dbg().<span class="kw">await</span><span class="question-mark">?</span>.as_str())
+                        <span class="macro">format!</span>(<span class="macro">concat!</span>(<span class="macro">stringify!</span>(#ident), <span class="string">&quot;({})&quot;</span>), value_debug.dbg_depth(depth).<span class="kw">await</span><span class="question-mark">?</span>.as_str())
                     } <span class="kw">else </span>{
                         <span class="comment">// This case means the `Vc` pointed to by this `Vc` does not implement `ValueDebug`.
                         // This could happen if we provide a way to opt-out of the default `ValueDebug` derive,
