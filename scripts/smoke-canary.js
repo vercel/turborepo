@@ -39,7 +39,7 @@ function getGlobalBinaryPath({ packageManager }) {
     case "npm":
       return execSync(`npm root --global`).toString().trim();
     case "pnpm":
-      return execSync(`pnpm bin --global`).toString().trim();
+      return execSync(`pnpm root --global`).toString().trim();
   }
 }
 
@@ -147,7 +147,7 @@ function verifyLocalBinary({ installType, packageManager }) {
 
 function verifyGlobalBinary({ installType, packageManager }) {
   const packageManagerGlobalBinPath = getGlobalBinaryPath({ packageManager });
-  console.log("packageManagerGlobalBinPath", packageManagerGlobalBinPath);
+  console.log("Package manager global path", packageManagerGlobalBinPath);
   const turboBinary = getTurboBinary({ installType, packageManager });
   exec({
     title: "Verify binary is installed globally",
