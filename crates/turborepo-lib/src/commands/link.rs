@@ -160,6 +160,11 @@ fn select_team<'a>(teams: &'a [Team], user_display_name: &'a str) -> Result<Sele
 }
 
 fn should_link(base: &CommandBase, location: &str) -> Result<bool> {
+    #[cfg(test)]
+    {
+        return Ok(true);
+    }
+
     let prompt = format!(
         "{}{} {}",
         BOLD.apply_to(GREY.apply_to("? ")),
