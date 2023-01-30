@@ -29,7 +29,7 @@ function exec({ command, options, conditions }) {
   }
 }
 
-function getGlobalBinaryPaths({ packageManager }) {
+function getGlobalBinaryPath({ packageManager }) {
   switch (packageManager) {
     case "yarn":
       return execSync(`yarn global bin`).toString().trim();
@@ -134,12 +134,11 @@ function verifyLocalBinary({ installType, packageManager }) {
   });
 }
 
-function verifyGlobalBinary({ installType, packageManager }) {
+function verifyGlobalBinary({ packageManager }) {
   console.log("Verify binary is global");
-  const packageManagerGlobalBinPath = getGlobalBinaryPaths({ packageManager });
-  const turboBinary = getTurboBinary({ installType, packageManager });
+  const packageManagerGlobalBinPath = getGlobalBinaryPath({ packageManager });
   exec({
-    command: `${turboBinary} bin`,
+    command: `turbo bin`,
     conditions: [
       {
         expected: packageManagerGlobalBinPath,
@@ -158,7 +157,7 @@ function verifyFirstBuild({ installType, packageManager }) {
     conditions: [
       { expected: "2 successful, 2 total", condition: "includes" },
       { expected: "0 cached, 2 total", condition: "includes" },
-      { expected: "FULL_TURBO", condition: "notIncludes" },
+      { expected: "FULL TURBO", condition: "notIncludes" },
     ],
   });
 }
@@ -196,7 +195,7 @@ function global({ local, global, packageManager }) {
 
   verifyLocalBinary({ installType: "global", packageManager });
   uninstallLocalTurbo({ packageManager });
-  verifyGlobalBinary({ installType: "global", packageManager });
+  verifyGlobalBinary({ packageManager });
   logTurboDetails({ installType: "global", packageManager });
 
   // verify build is correctly cached
