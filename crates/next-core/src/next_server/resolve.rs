@@ -4,8 +4,8 @@ use turbo_tasks_fs::{glob::GlobVc, FileJsonContent, FileSystemPathVc};
 use turbopack_core::resolve::{
     find_context_file, package_json,
     parse::RequestVc,
-    plugin::{ResolvePlugin, ResolvePluginConditionVc, ResolvePluginVc, ResolveResultOptionVc},
-    FindContextFileResult, ResolveResult, SpecialType,
+    plugin::{ResolvePlugin, ResolvePluginConditionVc, ResolvePluginVc},
+    FindContextFileResult, ResolveResult, ResolveResultOptionVc, SpecialType,
 };
 
 #[turbo_tasks::value]
