@@ -165,8 +165,8 @@ fn run(input: PathBuf) {
                 for index in indexes {
                     let item_id = analyzer.g.graph_ix.get_index(*index as _).unwrap();
 
-                    let rendered =
-                        render_item_id(&item_id.kind).unwrap_or_else(|| format!("{:?}", item_id));
+                    let rendered = render_item_id(&item_id.kind)
+                        .unwrap_or_else(|| print(&cm, &[&module.body[item_id.index]]));
                     buf.push(rendered);
                 }
 
