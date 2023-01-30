@@ -159,6 +159,22 @@ fn run(input: PathBuf) {
                 .is_none()
         });
 
+        let condensed = condensed.map(
+            |ix, indexes| {
+                let mut buf = vec![];
+                for index in indexes {
+                    let item_id = analyzer.g.graph_ix.get_index(*index as _).unwrap();
+
+                    let rendered =
+                        render_item_id(&item_id.kind).unwrap_or_else(|| format!("{:?}", item_id));
+                    buf.push(rendered);
+                }
+
+                buf
+            },
+            |ix, edge| edge,
+        );
+
         let dot = petgraph::dot::Dot::with_config(&condensed, &[]);
         println!("DOT!\n{:?}", dot);
 
