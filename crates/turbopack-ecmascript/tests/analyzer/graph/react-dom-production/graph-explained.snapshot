@@ -12,8 +12,7 @@ $e = Ze("animationend")
 
 $f = (...) => FreeVar(undefined)
 
-$g = ???*0*
-- *0* unsupported expression
+$g = (!(1) | !(0))
 
 $h = {
     "readContext": Vg,
@@ -33,9 +32,8 @@ $h = {
     "useMutableSource": hi,
     "useSyncExternalStore": ii,
     "useId": Fi,
-    "unstable_isNewReconciler": ???*0*
+    "unstable_isNewReconciler": !(1)
 }
-- *0* unsupported expression
 
 $i = (...) => (null | b["child"])
 
@@ -64,11 +62,10 @@ $k = (...) => (1 | 0 | 11 | 14 | 2)
   | Zi(a, b, d, e, c)
   | aj(a, b, d, e, c)
   | cj(a, b, b["type"], b["pendingProps"], c)
-  | kj(null, b, d, ???*0*, a, c)
+  | kj(null, b, d, !(0), a, c)
   | yj(a, b, c)
   | ej(a, b, c)
 )
-- *0* unsupported expression
 
 *anonymous function 126145* = (...) => FreeVar(undefined)
 
@@ -113,24 +110,20 @@ $k = (...) => (1 | 0 | 11 | 14 | 2)
 
 *anonymous function 130523* = (...) => Sk(a)
 
-*anonymous function 130565* = (...) => sl(null, a, b, ???*0*, c)
-- *0* unsupported expression
+*anonymous function 130565* = (...) => sl(null, a, b, !(0), c)
 
 *anonymous function 130658* = (...) => ???*0*
 - *0* unknown new expression
 
-*anonymous function 131212* = (...) => sl(null, a, b, ???*0*, c)
-- *0* unsupported expression
+*anonymous function 131212* = (...) => sl(null, a, b, !(1), c)
 
-*anonymous function 131315* = (...) => ???*0*
-- *0* unsupported expression
+*anonymous function 131315* = (...) => (!(0) | !(1))
 
 *anonymous function 131389* = (...) => FreeVar(undefined)
 
 *anonymous function 131418* = (...) => FreeVar(undefined)
 
-*anonymous function 131559* = (...) => sl(a, b, c, ???*0*, d)
-- *0* unsupported expression
+*anonymous function 131559* = (...) => sl(a, b, c, !(1), d)
 
 *anonymous function 13525* = (...) => FreeVar(undefined)
 
@@ -162,7 +155,7 @@ $k = (...) => (1 | 0 | 11 | 14 | 2)
 
 *anonymous function 28013* = (...) => FreeVar(undefined)
 
-*anonymous function 28108* = (...) => (a["timeStamp"] | FreeVar(Date)["now"]())
+*anonymous function 28108* = (...) => (a["timeStamp"] || FreeVar(Date)["now"]())
 
 *anonymous function 28404* = (...) => (a["toElement"] | a["fromElement"] | a["relatedTarget"])
 
@@ -172,8 +165,7 @@ $k = (...) => (1 | 0 | 11 | 14 | 2)
 
 *anonymous function 28936* = (...) => (a["clipboardData"] | FreeVar(window)["clipboardData"])
 
-*anonymous function 29891* = (...) => (b | ???*0* | Nd[a["keyCode"]] | "Unidentified" | "")
-- *0* unsupported expression
+*anonymous function 29891* = (...) => (b | "Enter" | FreeVar(String)["fromCharCode"](a) | (Nd[a["keyCode"]] || "Unidentified") | "")
 
 *anonymous function 3008* = (...) => FreeVar(undefined)
 
@@ -215,7 +207,7 @@ $k = (...) => (1 | 0 | 11 | 14 | 2)
 
 *anonymous function 5213* = (...) => FreeVar(undefined)
 
-*anonymous function 55504* = (...) => ???*0*
+*anonymous function 55504* = (...) => (???*0* | !(1))
 - *0* unsupported expression
 
 *anonymous function 55574* = (...) => FreeVar(undefined)
@@ -368,8 +360,7 @@ Bf = (...) => FreeVar(undefined)
 Bg = (...) => ???*0*
 - *0* unknown new expression
 
-Bh = vh(???*0*)
-- *0* unsupported expression
+Bh = vh(!(0))
 
 Bi = (...) => (d[0] | a)
 
@@ -394,11 +385,9 @@ Ce = (...) => FreeVar(undefined)
 
 Cf = (null | dd)
 
-Cg = (...) => ???*0*
-- *0* unsupported expression
+Cg = (...) => (!(0) | !(1))
 
-Ch = vh(???*0*)
-- *0* unsupported expression
+Ch = vh(!(1))
 
 Ci = (...) => (d[0] | a)
 
@@ -412,7 +401,7 @@ D = (...) => FreeVar(undefined)
 
 Da = FreeVar(Symbol)["for"]("react.forward_ref")
 
-Db = (...) => (a[Pf] | null)
+Db = (...) => (a[Pf] || null)
 
 Dc = (...) => (16 | 536870912 | 4 | 1)
 
@@ -423,8 +412,9 @@ De = (...) => te(qe)
 Df = (null | {"focusedElem": a, "selectionRange": c} | ???*0*)
 - *0* unsupported expression
 
-Dg = (...) => ???*0*
+Dg = (...) => (???*0* && ???*1*)
 - *0* unsupported expression
+- *1* unsupported expression
 
 Dh = {}
 
@@ -451,8 +441,14 @@ Ed = A({}, ud, {"relatedTarget": 0})
 
 Ee = (...) => te(b)
 
-Ef = (...) => ???*0*
+Ef = (...) => (???*0* || ???*1* || ???*2* || ???*3* || (???*4* && ???*5* && ???*6*))
 - *0* unsupported expression
+- *1* unsupported expression
+- *2* unsupported expression
+- *3* unsupported expression
+- *4* unsupported expression
+- *5* unsupported expression
+- *6* unsupported expression
 
 Eg = (...) => FreeVar(undefined)
 
@@ -519,14 +515,17 @@ Gd = A(
     {"animationName": 0, "elapsedTime": 0, "pseudoElement": 0}
 )
 
-Ge = (...) => ???*0*
+Ge = (...) => ((???*0* && (???*1* || ???*2*)) || (???*3* && ???*4*))
 - *0* unsupported expression
+- *1* unsupported expression
+- *2* unsupported expression
+- *3* unsupported expression
+- *4* unsupported expression
 
 Gf = (FreeVar(clearTimeout) | ???*0*)
 - *0* unsupported expression
 
-Gg = (...) => ???*0*
-- *0* unsupported expression
+Gg = (...) => (!(1) | !(0))
 
 Gh = Uf(Dh)
 
@@ -557,20 +556,20 @@ Hg = (...) => FreeVar(undefined)
 
 Hh = (...) => a
 
-Hi = (...) => ???*0*
+Hi = (...) => (???*0* || (???*1* && ???*2*))
 - *0* unsupported expression
+- *1* unsupported expression
+- *2* unsupported expression
 
 Hj = (FreeVar(Infinity) | (B() + 500))
 
 Hk = (...) => (null | Hk["bind"](null, a))
 
-I = ???*0*
-- *0* unsupported expression
+I = (!(1) | !(0))
 
 Ia = FreeVar(Symbol)["for"]("react.offscreen")
 
-Ib = ???*0*
-- *0* unsupported expression
+Ib = (!(1) | !(0))
 
 Ic = (???*0* | *anonymous function 128157*)
 - *0* Ic
@@ -578,8 +577,7 @@ Ic = (???*0* | *anonymous function 128157*)
 
 Id = A({}, sd, {"clipboardData": *anonymous function 28936*})
 
-Ie = (...) => ???*0*
-- *0* unsupported expression
+Ie = (...) => (!(0) | !(1))
 
 If = (...) => FreeVar(undefined)
 
@@ -591,14 +589,12 @@ Ii = (...) => FreeVar(undefined)
 
 Ij = (...) => FreeVar(undefined)
 
-Ik = (...) => (d | ???*0*)
+Ik = (...) => (d | !(1))
+
+J#170 = ((!(t) && ???*0*) | Vb(n) | h | ue(k) | F)
 - *0* unsupported expression
 
-J#170 = (???*0* | Vb(n) | h | ue(k) | F)
-- *0* unsupported expression
-
-J#241 = (...) => (g(a) | J(a, d, l(f["_payload"]), h) | n(a, d, f, h) | t(a, d, f, h) | ???*0* | c(a, d))
-- *0* unsupported expression
+J#241 = (...) => (g(a) | J(a, d, l(f["_payload"]), h) | n(a, d, f, h) | t(a, d, f, h) | c(a, d))
 
 J#360 = n["memoizedState"]
 
@@ -610,8 +606,7 @@ Ja = FreeVar(Symbol)["iterator"]
 
 Jb = (...) => (a(b, c) | Gb(a, b, c))
 
-Jc = ???*0*
-- *0* unsupported expression
+Jc = (!(1) | !(0))
 
 Jd = rd(Id)
 
@@ -625,8 +620,7 @@ Jh = (...) => FreeVar(undefined)
 
 Ji = (...) => FreeVar(undefined)
 
-Jj = (...) => (???*0* | null)
-- *0* unsupported expression
+Jj = (...) => (b | null)
 
 Jk = (...) => T
 
@@ -651,27 +645,24 @@ Kh = (...) => FreeVar(undefined)
 
 Ki = (...) => {"value": a, "source": b, "stack": e, "digest": null}
 
-Kj = (???*0* | g | h)
-- *0* unsupported expression
+Kj = (!(1) | g | h)
 
 Kk = (...) => (ai | a)
 
 L = (...) => (B() | Bk | ???*0*)
 - *0* unsupported expression
 
-La = (???*0* | ???*1* | "")
+La = (???*0* | ((b && b[1]) || ""))
 - *0* La
   ⚠️  pattern without value
-- *1* unsupported expression
 
-Lb = ???*0*
-- *0* unsupported expression
+Lb = (!(1) | !(0))
 
 Lc = (null | Tc(Lc, a, b, c, d, e))
 
 Ld = rd(Kd)
 
-Le = (...) => (???*0* | Le(a, b["parentNode"]) | a["contains"](b))
+Le = (...) => (!(0) | !(1) | Le(a, b["parentNode"]) | a["contains"](b) | !(!(???*0*)))
 - *0* unsupported expression
 
 Lf = (...) => (null | a)
@@ -726,8 +717,7 @@ Mk = (...) => FreeVar(undefined)
 
 N = (null | b)
 
-Na = ???*0*
-- *0* unsupported expression
+Na = (!(1) | !(0))
 
 Nb = (...) => FreeVar(undefined)
 
@@ -772,8 +762,22 @@ Nd = {
     224: "Meta"
 }
 
-Ne = (...) => ???*0*
+Ne = (...) => (
+ && b
+ && (
+     || (???*0* && (???*1* || ???*2* || ???*3* || ???*4* || ???*5*))
+     || ???*6*
+     || ???*7*
+    )
+)
 - *0* unsupported expression
+- *1* unsupported expression
+- *2* unsupported expression
+- *3* unsupported expression
+- *4* unsupported expression
+- *5* unsupported expression
+- *6* unsupported expression
+- *7* unsupported expression
 
 Nf = FreeVar(Math)["random"]()["toString"](36)["slice"](2)
 
@@ -792,8 +796,7 @@ O = (null | ???*0* | a)
 
 Oa = (...) => ("" | k | Ma(a))
 
-Ob = ???*0*
-- *0* unsupported expression
+Ob = (!(1) | !(0))
 
 Oc = ???*0*
 - *0* unknown new expression
@@ -811,8 +814,7 @@ Oh = (...) => FreeVar(undefined)
 
 Oi = (...) => c
 
-Oj = ???*0*
-- *0* unsupported expression
+Oj = !(1)
 
 Ok = (...) => a
 
@@ -826,11 +828,11 @@ Pb = (null | a)
 Pc = ???*0*
 - *0* unknown new expression
 
-Pd = (...) => (b["getModifierState"](a) | ???*0*)
-- *0* unsupported expression
+Pd = (...) => (b["getModifierState"](a) | !(!(b[a])) | !(1))
 
-Pe = ???*0*
+Pe = (ia && ???*0* && ???*1*)
 - *0* unsupported expression
+- *1* unsupported expression
 
 Pf = `__reactProps$${Nf}`
 
@@ -839,20 +841,17 @@ Pg = (null | ???*0*)
 
 Ph = ua["ReactCurrentDispatcher"]
 
-Pi = ???*0*
-- *0* unsupported expression
+Pi = (!(0) | !(1))
 
 Pj = (...) => n
 
-Pk = (...) => ???*0*
-- *0* unsupported expression
+Pk = (...) => (!(1) | !(0))
 
 Q = (...) => FreeVar(undefined)
 
 Qa = (...) => (
   | null
-  | a["displayName"]
-  | a["name"]
+  | (a["displayName"] || a["name"] || null)
   | a
   | "Fragment"
   | "Portal"
@@ -860,18 +859,14 @@ Qa = (...) => (
   | "StrictMode"
   | "Suspense"
   | "SuspenseList"
-  | `${???*0*}.Consumer`
-  | `${???*1*}.Provider`
+  | `${(a["displayName"] || "Context")}.Consumer`
+  | `${(a["_context"]["displayName"] || "Context")}.Provider`
   | b
-  | Qa(a["type"])
-  | "Memo"
+  | (Qa(a["type"]) || "Memo")
   | Qa(a(b))
 )
-- *0* unsupported expression
-- *1* unsupported expression
 
-Qb = ???*0*
-- *0* unsupported expression
+Qb = (!(1) | !(0))
 
 Qc = []
 
@@ -913,11 +908,10 @@ R = (null | a)
 
 Ra = (...) => (
   | "Cache"
-  | `${???*0*}.Consumer`
-  | `${???*1*}.Provider`
+  | `${(b["displayName"] || "Context")}.Consumer`
+  | `${(b["_context"]["displayName"] || "Context")}.Provider`
   | "DehydratedFragment"
-  | b["displayName"]
-  | ???*2*
+  | (b["displayName"] || (`ForwardRef(${a})` | "ForwardRef"))
   | "Fragment"
   | b
   | "Portal"
@@ -932,12 +926,9 @@ Ra = (...) => (
   | "Suspense"
   | "SuspenseList"
   | "TracingMarker"
-  | b["name"]
+  | (b["displayName"] || b["name"] || null)
   | null
 )
-- *0* unsupported expression
-- *1* unsupported expression
-- *2* unsupported expression
 
 Rb = (null | l)
 
@@ -992,8 +983,7 @@ Sf = []
 
 Sg = (...) => FreeVar(undefined)
 
-Sh = ???*0*
-- *0* unsupported expression
+Sh = (!(1) | !(0))
 
 Si = (???*0* | null)
 - *0* unknown new expression
@@ -1004,8 +994,11 @@ Sk = (...) => a()
 
 T = (3 | 0 | 1 | 2 | 4 | 6 | 5)
 
-Ta = (...) => ???*0*
+Ta = (...) => (???*0* && ???*1* && (???*2* || ???*3*))
 - *0* unsupported expression
+- *1* unsupported expression
+- *2* unsupported expression
+- *3* unsupported expression
 
 Tb = (...) => FreeVar(undefined)
 
@@ -1013,15 +1006,14 @@ Tc = (...) => a
 
 Td = rd(Sd)
 
-Te = ???*0*
-- *0* unsupported expression
+Te = (!(1) | !(0))
 
 Tf = ???*0*
 - *0* unsupported expression
 
 Tg = (...) => FreeVar(undefined)
 
-Th = ???*0*
+Th = (!(1) | ???*0*)
 - *0* unsupported expression
 
 Ti = (...) => FreeVar(undefined)
@@ -1030,8 +1022,10 @@ Tj = (...) => FreeVar(undefined)
 
 Tk = (...) => FreeVar(undefined)
 
-U = (???*0* | d | m | l | k | l)
+U = (!(1) | (???*0* || ???*1*) | d | (???*2* || m) | l | k | l)
 - *0* unsupported expression
+- *1* unsupported expression
+- *2* unsupported expression
 
 Ua = (...) => {
     "getValue": *anonymous function 10089*,
@@ -1041,8 +1035,7 @@ Ua = (...) => {
 
 Ub = (...) => FreeVar(undefined)
 
-Uc = (...) => ???*0*
-- *0* unsupported expression
+Uc = (...) => (!(0) | !(1))
 
 Ud = A(
     {},
@@ -1063,15 +1056,16 @@ Ue = (...) => FreeVar(undefined)
 
 Uf = (...) => {"current": a}
 
-Ug = ???*0*
-- *0* unsupported expression
+Ug = (!(0) | !(1))
 
 Uh = 0
 
 Ui = (...) => FreeVar(undefined)
 
-Uj = (...) => ???*0*
+Uj = (...) => (???*0* || ???*1* || ???*2*)
 - *0* unsupported expression
+- *1* unsupported expression
+- *2* unsupported expression
 
 Uk = (...) => FreeVar(undefined)
 
@@ -1132,8 +1126,7 @@ Vk = (...) => FreeVar(undefined)
 
 W = (...) => FreeVar(undefined)
 
-Wa = (...) => ???*0*
-- *0* unsupported expression
+Wa = (...) => (!(1) | !(0))
 
 Wb = (...) => (b["dehydrated"] | null)
 
@@ -1152,13 +1145,11 @@ We = {
     "transitionend": Ve("Transition", "TransitionEnd")
 }
 
-Wf = Uf(???*0*)
-- *0* unsupported expression
+Wf = Uf(!(1))
 
 Wg = (null | [a])
 
-Wh = (...) => ???*0*
-- *0* unsupported expression
+Wh = (...) => (!(1) | !(0))
 
 Wi = (...) => a
 
@@ -1170,12 +1161,11 @@ Wk = (???*0* | *anonymous function 117815*)
 
 X = (null | d | c["stateNode"]["containerInfo"] | h["stateNode"] | h["stateNode"]["containerInfo"])
 
-Xa = (...) => (null | a["activeElement"] | a["body"])
+Xa = (...) => (null | (a["activeElement"] || a["body"]) | a["body"])
 
 Xb = (...) => FreeVar(undefined)
 
-Xc = (...) => ???*0*
-- *0* unsupported expression
+Xc = (...) => (!(1) | !(0))
 
 Xd = rd(Wd)
 
@@ -1249,14 +1239,12 @@ Yh = {
     "useMutableSource": *anonymous function 72018*,
     "useSyncExternalStore": *anonymous function 72052*,
     "useId": *anonymous function 72352*,
-    "unstable_isNewReconciler": ???*0*
+    "unstable_isNewReconciler": !(1)
 }
-- *0* unsupported expression
 
 Yi = (...) => FreeVar(undefined)
 
-Yj = (???*0* | e)
-- *0* unsupported expression
+Yj = (!(1) | e | !(0))
 
 Yk = (...) => FreeVar(undefined)
 
@@ -1274,8 +1262,9 @@ Zd = rd(Yd)
 Ze = (...) => (Xe[a] | a | ???*0*)
 - *0* unsupported expression
 
-Zf = (...) => ???*0*
+Zf = (...) => (???*0* && ???*1*)
 - *0* unsupported expression
+- *1* unsupported expression
 
 Zg = (...) => (c["stateNode"] | null)
 
@@ -1297,9 +1286,8 @@ Zh = {
     "useMutableSource": hi,
     "useSyncExternalStore": ii,
     "useId": Fi,
-    "unstable_isNewReconciler": ???*0*
+    "unstable_isNewReconciler": !(1)
 }
-- *0* unsupported expression
 
 Zi = (...) => ($i(a, b, e) | b["child"])
 
@@ -1444,8 +1432,7 @@ a#157 = (
   | arguments[0]
   | d["end"]
   | b
-  | ???*0*
-  | FreeVar(window)
+  | ((???*0* && b["defaultView"]) || FreeVar(window))
   | a["getSelection"]()
   | c
   | a["parentNode"]
@@ -1507,7 +1494,7 @@ a#182 = (arguments[0] | a["previousSibling"])
 
 a#183 = (arguments[0] | Mf(a) | c)
 
-a#184 = (arguments[0] | a[Of] | a[uf])
+a#184 = (arguments[0] | (a[Of] || a[uf]))
 
 a#185 = arguments[0]
 
@@ -1529,7 +1516,14 @@ a#192 = arguments[0]
 
 a#193 = arguments[0]
 
-a#194 = (arguments[0] | ???*0* | Vf | a["stateNode"])
+a#194 = (
+  | arguments[0]
+  | (
+     || (???*0* && a["__reactInternalMemoizedMergedChildContext"])
+     || Vf
+    )
+  | a["stateNode"]
+)
 - *0* unsupported expression
 
 a#195 = (arguments[0] | bg(a, b, Xf))
@@ -1656,7 +1650,7 @@ a#252 = arguments[0]
 
 a#253 = arguments[0]
 
-a#254 = (arguments[0] | a["get"](c) | null | a["get"]((c | d["key"])))
+a#254 = (arguments[0] | (a["get"](c) || null) | (a["get"]((c | d["key"])) || null))
 
 a#256 = arguments[0]
 
@@ -1664,8 +1658,7 @@ a#258 = arguments[0]
 
 a#259 = (arguments[0] | d | h)
 
-a#26 = (arguments[0] | ???*0* | a["@@iterator"])
-- *0* unsupported expression
+a#26 = (arguments[0] | ((Ja && a[Ja]) || a["@@iterator"]))
 
 a#260 = arguments[0]
 
@@ -1756,7 +1749,7 @@ a#288 = arguments[0]
 
 a#289 = (arguments[0] | a())
 
-a#29 = (arguments[0] | a["displayName"] | a["name"] | "")
+a#29 = (arguments[0] | (a["displayName"] || a["name"]) | "")
 
 a#290 = arguments[0]
 
@@ -1808,8 +1801,7 @@ a#307 = (arguments[0] | {"current": a})
 
 a#308 = arguments[0]
 
-a#309 = (qi(???*0*) | Ei["bind"](null, a[1]))
-- *0* unsupported expression
+a#309 = (qi(!(1)) | Ei["bind"](null, a[1]))
 
 a#310 = arguments[0]
 
@@ -1873,9 +1865,7 @@ a#339 = (
   | f["sibling"]
 )
 
-a#34 = (arguments[0] | Oa(a["type"], ???*0*) | Oa(a["type"]["render"], ???*1*))
-- *0* unsupported expression
-- *1* unsupported expression
+a#34 = (arguments[0] | Oa(a["type"], !(1)) | Oa(a["type"]["render"], !(1)) | Oa(a["type"], !(0)))
 
 a#340 = arguments[0]
 
@@ -1909,9 +1899,7 @@ a#349 = arguments[0]
 a#35 = (
   | arguments[0]
   | a["displayName"]
-  | b["displayName"]
-  | b["name"]
-  | ""
+  | (b["displayName"] || b["name"] || "")
   | `ForwardRef(${a})`
   | "ForwardRef"
   | a["_init"]
@@ -1966,7 +1954,7 @@ a#368 = (arguments[0] | a["return"] | a["sibling"] | a["child"])
 
 a#369 = (arguments[0] | a["stateNode"] | a["child"] | a["sibling"])
 
-a#37 = (arguments[0] | b["render"] | a["displayName"] | a["name"] | "")
+a#37 = (arguments[0] | b["render"] | (a["displayName"] || a["name"] || ""))
 
 a#370 = (arguments[0] | a["stateNode"] | a["child"] | a["sibling"])
 
@@ -2058,8 +2046,7 @@ a#432 = arguments[0]
 
 a#433 = arguments[0]
 
-a#434 = (arguments[0] | b["pendingProps"] | Lg(d, a) | ???*0*)
-- *0* unsupported expression
+a#434 = (arguments[0] | b["pendingProps"] | Lg(d, a) | !(0) | !(1))
 
 a#435 = arguments[0]
 
@@ -2095,11 +2082,10 @@ a#448 = arguments[0]
 
 a#449 = (arguments[0] | a["_reactInternals"])
 
-a#45 = (arguments[0] | a | ???*0*)
+a#45 = (arguments[0] | (a || (FreeVar(document) | ???*0*)))
 - *0* unsupported expression
 
-a#450 = (arguments[0] | cl(c, d, ???*0*, a, e, f, g, h, k))
-- *0* unsupported expression
+a#450 = (arguments[0] | cl(c, d, !(0), a, e, f, g, h, k))
 
 a#451 = (arguments[0] | dh(e, b, g))
 
@@ -2218,7 +2204,11 @@ a#69 = arguments[0]
 
 a#7 = (arguments[0] | a["toLowerCase"]()["slice"](0, 5))
 
-a#70 = (arguments[0] | a["target"] | a["srcElement"] | FreeVar(window) | a["correspondingUseElement"])
+a#70 = (
+  | arguments[0]
+  | (a["target"] || a["srcElement"] || FreeVar(window))
+  | a["correspondingUseElement"]
+)
 
 a#71 = (arguments[0] | Cb(a))
 
@@ -2230,8 +2220,7 @@ a#74 = arguments[0]
 
 a#75 = arguments[0]
 
-a#76 = (arguments[0] | a["type"] | ???*0*)
-- *0* unsupported expression
+a#76 = (arguments[0] | a["type"] | !(d) | !(1))
 
 a#77 = ???*0*
 - *0* a
@@ -2290,7 +2279,7 @@ ac = ca["unstable_scheduleCallback"]
 
 ad = (...) => FreeVar(undefined)
 
-ae = ???*0*
+ae = (ia && ???*0*)
 - *0* unsupported expression
 
 af = Ze("animationiteration")
@@ -2317,9 +2306,8 @@ ai = {
     "useMutableSource": Q,
     "useSyncExternalStore": Q,
     "useId": Q,
-    "unstable_isNewReconciler": ???*0*
+    "unstable_isNewReconciler": !(1)
 }
-- *0* unsupported expression
 
 aj = (...) => (cj(a, b, f, d, e) | ???*0* | $i(a, b, e))
 - *0* unsupported expression
@@ -2372,7 +2360,7 @@ b#120 = (arguments[0] | a[c])
 b#128 = ???*0*["nativeEvent"]
 - *0* unsupported expression
 
-b#129 = (Md[a["key"]] | a["key"])
+b#129 = (Md[a["key"]] || a["key"])
 
 b#135 = arguments[1]
 
@@ -2380,8 +2368,7 @@ b#137 = arguments[1]
 
 b#138 = arguments[1]
 
-b#139 = ???*0*
-- *0* unsupported expression
+b#139 = (a && a["nodeName"] && a["nodeName"]["toLowerCase"]())
 
 b#140 = (arguments[1] | oe(b, "onChange"))
 
@@ -2407,10 +2394,9 @@ b#153 = arguments[1]
 
 b#154 = (Xa() | Xa(a["document"]))
 
-b#156 = ???*0*
-- *0* unsupported expression
+b#156 = (a && a["nodeName"] && a["nodeName"]["toLowerCase"]())
 
-b#157 = (Me() | d["start"] | c["ownerDocument"] | FreeVar(document) | b["createRange"]() | [])
+b#157 = (Me() | d["start"] | (c["ownerDocument"] || FreeVar(document)) | b["createRange"]() | [])
 
 b#158 = (arguments[1] | ???*0*)
 - *0* unknown new expression
@@ -2454,7 +2440,7 @@ b#181 = (a["nodeType"] | a["data"])
 
 b#182 = 0
 
-b#183 = (a[Of] | c[uf] | c[Of])
+b#183 = (a[Of] | (c[uf] || c[Of]))
 
 b#189 = arguments[1]
 
@@ -2480,10 +2466,20 @@ b#205 = (arguments[1] | null | b)
 
 b#207 = (yg | Lf(c["nextSibling"]))
 
-b#209 = (???*0* | ???*1* | a["type"] | yg | Lf(b["nextSibling"]) | 0)
+b#209 = (
+  | ???*0*
+  | ???*1*
+  | a["type"]
+  | (???*2* && ???*3* && !(Ef(a["type"], a["memoizedProps"])))
+  | yg
+  | Lf(b["nextSibling"])
+  | 0
+)
 - *0* b
   ⚠️  pattern without value
 - *1* unsupported expression
+- *2* unsupported expression
+- *3* unsupported expression
 
 b#21 = a["replace"](ra, sa)
 
@@ -2561,7 +2557,7 @@ b#249 = arguments[1]
 
 b#25 = (arguments[1] | e["attributeName"])
 
-b#250 = (arguments[1] | zh(c, a["mode"], d) | e(b, (c["children"] | [])))
+b#250 = (arguments[1] | zh(c, a["mode"], d) | e(b, (c["children"] || [])))
 
 b#251 = (arguments[1] | Ah(c, a["mode"], d, f) | e(b, c))
 
@@ -2576,8 +2572,7 @@ b#261 = (
   | b["namespaceURI"]
   | lb(null, "")
   | b["documentElement"]
-  | a["namespaceURI"]
-  | null
+  | (a["namespaceURI"] || null)
   | lb(b, a)
 )
 
@@ -2587,8 +2582,9 @@ b#264 = (a | b["child"] | b["return"] | b["sibling"])
 
 b#266 = arguments[1]
 
-b#267 = (arguments[1] | ???*0*)
+b#267 = (arguments[1] | (???*0* && ???*1*))
 - *0* unsupported expression
+- *1* unsupported expression
 
 b#27 = c["stack"]["trim"]()["match"](/\n( *(at )?)/)
 
@@ -2694,7 +2690,7 @@ b#322 = arguments[1]
 
 b#324 = arguments[1]
 
-b#325 = (???*0* | ???*1* | a["memoizedState"])
+b#325 = (???*0* | ???*1* | a["memoizedState"] | !(0) | !(1))
 - *0* b
   ⚠️  pattern without value
 - *1* unsupported expression
@@ -2749,7 +2745,7 @@ b#348 = arguments[1]
 
 b#349 = arguments[1]
 
-b#35 = (a["render"] | a["displayName"] | null | a["_payload"])
+b#35 = (a["render"] | (a["displayName"] || null) | a["_payload"])
 
 b#350 = arguments[1]
 
@@ -2757,8 +2753,9 @@ b#351 = arguments[1]
 
 b#352 = (arguments[1] | a["tail"] | b["sibling"])
 
-b#353 = ???*0*
+b#353 = (???*0* && ???*1*)
 - *0* unsupported expression
+- *1* unsupported expression
 
 b#354 = (arguments[1] | f["tail"])
 
@@ -2864,7 +2861,7 @@ b#433 = arguments[1]
 
 b#434 = (
   | arguments[1]
-  | kj(null, b, d, ???*0*, f, c)
+  | kj(null, b, d, !(0), f, c)
   | b["child"]
   | dj(null, b, d, a, c)
   | ij(null, b, d, a, c)
@@ -2873,7 +2870,6 @@ b#434 = (
   | mj(a, b, d, c, e)
   | $i(a, b, c)
 )
-- *0* unsupported expression
 
 b#435 = arguments[1]
 
@@ -2947,9 +2943,7 @@ b#473 = (arguments[1] | c["name"] | 0 | c["value"])
 
 b#476 = arguments[1]
 
-b#477 = (arguments[1] | cl(a, 1, ???*0*, null, null, c, ???*1*, d, e))
-- *0* unsupported expression
-- *1* unsupported expression
+b#477 = (arguments[1] | cl(a, 1, !(1), null, null, c, !(1), d, e))
 
 b#478 = a["_reactInternals"]
 
@@ -2957,8 +2951,7 @@ b#48 = arguments[1]
 
 b#480 = arguments[1]
 
-b#481 = (arguments[1] | fl(b, null, a, 1, (c | null), e, ???*0*, f, g))
-- *0* unsupported expression
+b#481 = (arguments[1] | fl(b, null, a, 1, (c | null), e, !(1), f, g))
 
 b#482 = arguments[1]
 
@@ -3070,8 +3063,7 @@ bh = (...) => FreeVar(undefined)
 
 bi = (...) => a
 
-bj = (...) => ???*0*
-- *0* unsupported expression
+bj = (...) => !((!(a) || !(a["isReactComponent"])))
 
 bk = (...) => FreeVar(undefined)
 
@@ -3122,7 +3114,7 @@ c#150 = FreeVar(Object)["keys"](a)
 c#152 = (Je(a) | c["nextSibling"] | c["parentNode"] | ???*0* | Je(c))
 - *0* unsupported expression
 
-c#154 = ???*0*
+c#154 = (???*0* | !(1))
 - *0* unsupported expression
 
 c#157 = (a["focusedElem"] | 0)
@@ -3304,10 +3296,9 @@ c#294 = C
 
 c#295 = (
   | arguments[2]
-  | {"lane": d, "action": c, "hasEagerState": ???*0*, "eagerState": null, "next": null}
+  | {"lane": d, "action": c, "hasEagerState": !(1), "eagerState": null, "next": null}
   | Yg(a, b, c, d)
 )
-- *0* unsupported expression
 
 c#296 = (arguments[2] | Yg(a, b, e, d))
 
@@ -3418,14 +3409,12 @@ c#36 = ???*0*
 
 c#360 = (
   | {"start": a["selectionStart"], "end": a["selectionEnd"]}
-  | ???*0*
-  | FreeVar(window)
+  | ((???*0* && c["defaultView"]) || FreeVar(window))
   | a["ownerDocument"]
   | d["anchorNode"]
   | null
   | {"start": h, "end": k}
-  | c
-  | {"start": 0, "end": 0}
+  | (c || {"start": 0, "end": 0})
 )
 - *0* unsupported expression
 
@@ -3573,8 +3562,7 @@ c#473 = (
 
 c#476 = (FreeVar(arguments)[2] | null)
 
-c#477 = ???*0*
-- *0* unsupported expression
+c#477 = (!(1) | !(0))
 
 c#48 = ("" | b["defaultValue"] | Sa((b["value"] | c)))
 
@@ -3645,13 +3633,12 @@ cc = ca["unstable_shouldYield"]
 
 cd = ua["ReactCurrentBatchConfig"]
 
-ce = ???*0*
+ce = (ia && ???*0* && !(be))
 - *0* unsupported expression
 
 cf = Ze("transitionend")
 
-cg = (...) => ???*0*
-- *0* unsupported expression
+cg = (...) => !(0)
 
 ch = (...) => {"eventTime": a, "lane": b, "tag": 0, "payload": null, "callback": null, "next": null}
 
@@ -3711,7 +3698,10 @@ d#158 = (
   | c["ownerDocument"]
   | Qe
   | {"start": d["selectionStart"], "end": d["selectionEnd"]}
-  | ???*0*["getSelection"]()
+  | (
+     || (d["ownerDocument"] && d["ownerDocument"]["defaultView"])
+     || FreeVar(window)
+    )["getSelection"]()
   | {
         "anchorNode": d["anchorNode"],
         "anchorOffset": d["anchorOffset"],
@@ -3720,9 +3710,8 @@ d#158 = (
     }
   | oe(Re, "onSelect")
 )
-- *0* unsupported expression
 
-d#162 = (a["type"] | "unknown-event")
+d#162 = (a["type"] || "unknown-event")
 
 d#163 = (a[c] | d["listeners"])
 
@@ -3749,8 +3738,7 @@ d#193 = (a["stateNode"] | d["getChildContext"]())
 
 d#195 = a["stateNode"]
 
-d#198 = (c[a] | d(???*0*))
-- *0* unsupported expression
+d#198 = (c[a] | d(!(0)))
 
 d#201 = rg
 
@@ -3780,8 +3768,9 @@ d#232 = lh(a)
 
 d#233 = arguments[3]
 
-d#234 = (???*0* | b["contextTypes"])
+d#234 = (!(1) | b["contextTypes"] | (???*0* && ???*1*))
 - *0* unsupported expression
+- *1* unsupported expression
 
 d#235 = arguments[3]
 
@@ -3822,7 +3811,7 @@ d#259 = (
   | e(l, f["props"]["children"])
   | e(l, f["props"])
   | Ah(f["props"]["children"], a["mode"], h, f["key"])
-  | e(d, (f["children"] | []))
+  | e(d, (f["children"] || []))
   | d["sibling"]
   | zh(f, a["mode"], h)
   | e(d, f)
@@ -3893,8 +3882,7 @@ d#331 = (b["pendingProps"] | f["baseLanes"] | c | ???*0*)
 
 d#333 = (arguments[3] | bi())
 
-d#334 = (arguments[3] | ???*0* | h | l)
-- *0* unsupported expression
+d#334 = (arguments[3] | !(0) | h | !(1) | l)
 
 d#335 = (arguments[3] | b["stateNode"])
 
@@ -3915,14 +3903,13 @@ d#342 = (
   | arguments[3]
   | Li(FreeVar(Error)(p(422)))
   | qj({"mode": "visible", "children": d["children"]}, e, 0, null)
-  | ???*0*
+  | (e["nextSibling"] && e["nextSibling"]["dataset"])
   | h
-  | Li(f, d, ???*1*)
+  | Li(f, d, ???*0*)
   | R
   | Li(FreeVar(Error)(p(421)))
 )
 - *0* unsupported expression
-- *1* unsupported expression
 
 d#343 = a["alternate"]
 
@@ -3947,14 +3934,16 @@ d#354 = (
   | b["pendingProps"]
   | b["stateNode"]
   | e
-  | ???*0*
-  | ???*1*["createTextNode"](d)
+  | !(!(d["autoFocus"]))
+  | !(0)
+  | !(1)
+  | (c | c["ownerDocument"])["createTextNode"](d)
   | b["memoizedState"]
+  | ???*0*
   | g["updateQueue"]
   | c
 )
 - *0* unsupported expression
-- *1* unsupported expression
 
 d#357 = ???*0*
 - *0* d
@@ -3964,8 +3953,7 @@ d#359 = ???*0*
 - *0* d
   ⚠️  pattern without value
 
-d#360 = (???*0* | d["focusOffset"])
-- *0* unsupported expression
+d#360 = ((c["getSelection"] && c["getSelection"]()) | d["focusOffset"])
 
 d#363 = (b["updateQueue"] | d["lastEffect"] | null | d["next"])
 
@@ -4020,8 +4008,7 @@ d#423 = C
 
 d#424 = (arguments[3] | a["onRecoverableError"])
 
-d#425 = ???*0*
-- *0* unsupported expression
+d#425 = (!(1) | !(0))
 
 d#429 = b["stateNode"]
 
@@ -4074,7 +4061,7 @@ d#477 = ("" | b["identifierPrefix"])
 
 d#48 = (b["checked"] | b["defaultChecked"])
 
-d#481 = (???*0* | null)
+d#481 = ((???*0* && c["hydratedSources"]) || null)
 - *0* unsupported expression
 
 d#484 = arguments[3]
@@ -4094,8 +4081,11 @@ d#67 = ???*0*
 
 d#7 = arguments[3]
 
-d#76 = (Db(c) | ???*0*)
+d#76 = (Db(c) | !(d["disabled"]) | !((???*0* || ???*1* || ???*2* || ???*3*)))
 - *0* unsupported expression
+- *1* unsupported expression
+- *2* unsupported expression
+- *3* unsupported expression
 
 d#78 = arguments[3]
 
@@ -4120,11 +4110,11 @@ db = (...) => FreeVar(undefined)
 
 dc = ca["unstable_requestPaint"]
 
-dd = ???*0*
-- *0* unsupported expression
+dd = (!(0) | !(1) | !(!(Cf)))
 
-de = ???*0*
+de = (ia && (!(ae) || (be && ???*0* && ???*1*)))
 - *0* unsupported expression
+- *1* unsupported expression
 
 df = ???*0*
 - *0* unknown new expression
@@ -4167,7 +4157,7 @@ e#157 = (c["textContent"]["length"] | d | Ke(c, f))
 
 e#163 = d["event"]
 
-e#168 = (ed | gd | fd | ???*0*)
+e#168 = (ed | gd | fd | ???*0* | !(0))
 - *0* unsupported expression
 
 e#169 = arguments[4]
@@ -4251,10 +4241,9 @@ e#29 = l["stack"]["split"](
 e#295 = L()
 
 e#296 = (
-  | {"lane": d, "action": c, "hasEagerState": ???*0*, "eagerState": null, "next": null}
+  | {"lane": d, "action": c, "hasEagerState": !(1), "eagerState": null, "next": null}
   | L()
 )
-- *0* unsupported expression
 
 e#310 = ci()
 
@@ -4395,8 +4384,7 @@ e#473 = Db(d)
 
 e#477 = (ll | b["onRecoverableError"])
 
-e#481 = (???*0* | c["_getVersion"] | e(c["_source"]))
-- *0* unsupported expression
+e#481 = (!(1) | !(0) | c["_getVersion"] | e(c["_source"]))
 
 e#53 = (0 | b["hasOwnProperty"](`$${a[c]["value"]}`))
 
@@ -4496,8 +4484,7 @@ f#236 = (b["contextType"] | Xf | H["current"] | b["getDerivedStateFromProps"])
 
 f#237 = `${a}`
 
-f#241 = (...) => (c | ???*0* | d)
-- *0* unsupported expression
+f#241 = (...) => (c | d)
 
 f#249 = c["type"]
 
@@ -4513,8 +4500,7 @@ f#272 = (c["pending"] | e["next"] | e["lane"])
 
 f#273 = (b["memoizedState"] | a(f, g["action"]))
 
-f#274 = ???*0*
-- *0* unsupported expression
+f#274 = !(He(d["memoizedState"], e))
 
 f#284 = (???*0* | g["destroy"])
 - *0* unsupported expression
@@ -4544,13 +4530,13 @@ f#331 = (a["memoizedState"] | null)
 
 f#333 = (Xf | H["current"] | Yf(b, f))
 
-f#334 = ???*0*
-- *0* unsupported expression
+f#334 = (!(0) | !(1))
 
 f#335 = arguments[5]
 
 f#339 = (
-  | ???*0*
+  | !(1)
+  | !(0)
   | b["child"]
   | qj(g, d, 0, null)
   | d["fallback"]
@@ -4558,7 +4544,6 @@ f#339 = (
   | Ah(f, g, c, null)
   | a["child"]
 )
-- *0* unsupported expression
 
 f#342 = (arguments[5] | d["fallback"] | Ah(f, e, g, null) | FreeVar(Error)(p(419)))
 
@@ -4566,17 +4551,19 @@ f#344 = a["memoizedState"]
 
 f#345 = d["tail"]
 
-f#350 = (null | [] | f)
+f#350 = (null | [] | (f || []))
 
 f#354 = (
   | b["memoizedProps"]
   | ???*0*
   | d["value"]
   | ???*1*
+  | !(1)
   | Gg(b)
   | b["memoizedState"]
   | f["dehydrated"]
   | null
+  | !(0)
   | c
 )
 - *0* f
@@ -4621,11 +4608,12 @@ f#425 = V
 
 f#434 = (
   | bi()
-  | ???*0*
+  | !(0)
+  | !(1)
   | b["memoizedState"]
   | {
         "element": d,
-        "isDehydrated": ???*1*,
+        "isDehydrated": !(1),
         "cache": g["cache"],
         "pendingSuspenseBoundaries": g["pendingSuspenseBoundaries"],
         "transitions": g["transitions"]
@@ -4637,8 +4625,6 @@ f#434 = (
   | g["sibling"]
   | g
 )
-- *0* unsupported expression
-- *1* unsupported expression
 
 f#441 = arguments[5]
 
@@ -4677,13 +4663,11 @@ fc = ca["unstable_ImmediatePriority"]
 
 fd = (...) => FreeVar(undefined)
 
-fe = ???*0*
-- *0* unsupported expression
+fe = (!(1) | !(0))
 
 ff = (...) => FreeVar(undefined)
 
-fg = ???*0*
-- *0* unsupported expression
+fg = (!(1) | !(0))
 
 fh = (...) => FreeVar(undefined)
 
@@ -4784,7 +4768,7 @@ g#379 = (c["memoizedProps"] | f | 0 | k["display"] | null)
 
 g#389 = d["stateNode"]["containerInfo"]
 
-g#392 = (???*0* | Kj | V)
+g#392 = ((???*0* || Kj) | V)
 - *0* unsupported expression
 
 g#393 = b["updateQueue"]
@@ -4826,9 +4810,7 @@ g#450 = arguments[6]
 
 g#451 = lh(e)
 
-g#463 = fl(b, d, a, 0, null, ???*0*, ???*1*, "", ql)
-- *0* unsupported expression
-- *1* unsupported expression
+g#463 = fl(b, d, a, 0, null, !(1), !(1), "", ql)
 
 g#466 = (f | rl(c, b, a, e, d))
 
@@ -4840,8 +4822,7 @@ g#81 = arguments[6]
 
 g#82 = arguments[6]
 
-g#86 = ???*0*
-- *0* unsupported expression
+g#86 = (!(1) | !(0))
 
 g#9 = arguments[6]
 
@@ -4867,13 +4848,12 @@ gc = ca["unstable_UserBlockingPriority"]
 
 gd = (...) => FreeVar(undefined)
 
-ge = (...) => ???*0*
+ge = (...) => (???*0* | !(0) | !(1))
 - *0* unsupported expression
 
 gf = 0
 
-gg = ???*0*
-- *0* unsupported expression
+gg = (!(1) | !(0))
 
 gh = (...) => FreeVar(undefined)
 
@@ -4892,16 +4872,16 @@ h#169 = (d["stateNode"]["containerInfo"] | h["parentNode"])
 h#170 = (
   | df["get"](a)
   | ???*0*
-  | ???*1*
+  | (???*1* || ???*2*)
   | e
-  | h["defaultView"]
-  | h["parentWindow"]
+  | (h["defaultView"] || h["parentWindow"])
   | FreeVar(window)
   | e["ownerDocument"]
   | ue(d)
 )
 - *0* unknown new expression
 - *1* unsupported expression
+- *2* unsupported expression
 
 h#174 = (c | l)
 
@@ -4926,11 +4906,11 @@ h#29 = ???*0*
 
 h#296 = f(g, c)
 
-h#334 = (b["memoizedProps"] | $g | oh(b, c, h, d, r, k, l))
+h#334 = (b["memoizedProps"] | ($g || oh(b, c, h, d, r, k, l)))
 
 h#335 = (null | d["render"]())
 
-h#339 = (???*0* | g | ???*1* | e["dehydrated"] | e["sibling"])
+h#339 = (???*0* | g | !(1) | ???*1* | e["dehydrated"] | e["sibling"])
 - *0* h
   ⚠️  pattern without value
 - *1* unsupported expression
@@ -5024,8 +5004,10 @@ hk = (...) => FreeVar(undefined)
 
 hl = (...) => (null | a["child"]["stateNode"])
 
-ia = ???*0*
+ia = !((???*0* || ???*1* || ???*2*))
 - *0* unsupported expression
+- *1* unsupported expression
+- *2* unsupported expression
 
 ib = (...) => FreeVar(undefined)
 
@@ -5033,8 +5015,7 @@ ic = ca["unstable_LowPriority"]
 
 id = (null | a)
 
-ie = ???*0*
-- *0* unsupported expression
+ie = (!(1) | !(0))
 
 ig = (...) => FreeVar(undefined)
 
@@ -5063,7 +5044,7 @@ jf = hf["toLowerCase"]()
 jg = (...) => null
 
 jh = ???*0*["refs"]
-- *0* unsupported expression
+- *0* unknown new expression
 
 ji = (...) => ui(2048, 8, a, b)
 
@@ -5077,8 +5058,27 @@ k#163 = h["instance"]
 
 k#169 = (g["tag"] | g["stateNode"]["containerInfo"])
 
-k#170 = (td | Rd | Fd | Bd | Dd | Vd | Hd | Xd | vd | Zd | Jd | Td | ???*0* | d | null | h["nodeName"])
+k#170 = (
+  | td
+  | Rd
+  | Fd
+  | Bd
+  | Dd
+  | Vd
+  | Hd
+  | Xd
+  | vd
+  | Zd
+  | Jd
+  | Td
+  | (???*0* || ???*1*)
+  | d
+  | null
+  | (h["nodeName"] && h["nodeName"]["toLowerCase"]())
+  | h["nodeName"]
+)
 - *0* unsupported expression
+- *1* unsupported expression
 
 k#174 = (h["alternate"] | Kb(c, f))
 
@@ -5124,8 +5124,9 @@ k#390 = ???*0*
 - *0* k
   ⚠️  pattern without value
 
-k#392 = (???*0* | U | g["child"])
+k#392 = (((???*0* && ???*1*) || U) | g["child"])
 - *0* unsupported expression
+- *1* unsupported expression
 
 k#393 = b["memoizedProps"]
 
@@ -5161,10 +5162,7 @@ k#447 = arguments[8]
 
 k#450 = arguments[8]
 
-k#463 = cl(a, 0, ???*0*, null, null, ???*1*, ???*2*, "", ql)
-- *0* unsupported expression
-- *1* unsupported expression
-- *2* unsupported expression
+k#463 = cl(a, 0, !(1), null, null, !(1), !(1), "", ql)
 
 k#78 = arguments[8]
 
@@ -5186,8 +5184,7 @@ kc = (null | wl["inject"](vl))
 
 kd = (null | e)
 
-ke = (...) => (???*0* | null | b["char"] | FreeVar(String)["fromCharCode"](b["which"]) | b["data"])
-- *0* unsupported expression
+ke = (...) => (a | null | b["char"] | FreeVar(String)["fromCharCode"](b["which"]) | b["data"])
 
 kf = (hf[0]["toUpperCase"]() + hf["slice"](1))
 
@@ -5248,11 +5245,8 @@ l#334 = (
   | Yf(b, l)
   | h
   | Lg(b["type"], h)
-  | $g
-  | oh(b, c, l, d, r, n, k)
-  | ???*0*
+  | ($g || oh(b, c, l, d, r, n, k) || !(1))
 )
-- *0* unsupported expression
 
 l#350 = (???*0* | f)
 - *0* l
@@ -5291,37 +5285,22 @@ ld = (null | ???*0* | kd["value"] | kd["textContent"])
 - *0* unsupported expression
 
 le = {
-    "color": ???*0*,
-    "date": ???*1*,
-    "datetime": ???*2*,
-    "datetime-local": ???*3*,
-    "email": ???*4*,
-    "month": ???*5*,
-    "number": ???*6*,
-    "password": ???*7*,
-    "range": ???*8*,
-    "search": ???*9*,
-    "tel": ???*10*,
-    "text": ???*11*,
-    "time": ???*12*,
-    "url": ???*13*,
-    "week": ???*14*
+    "color": !(0),
+    "date": !(0),
+    "datetime": !(0),
+    "datetime-local": !(0),
+    "email": !(0),
+    "month": !(0),
+    "number": !(0),
+    "password": !(0),
+    "range": !(0),
+    "search": !(0),
+    "tel": !(0),
+    "text": !(0),
+    "time": !(0),
+    "url": !(0),
+    "week": !(0)
 }
-- *0* unsupported expression
-- *1* unsupported expression
-- *2* unsupported expression
-- *3* unsupported expression
-- *4* unsupported expression
-- *5* unsupported expression
-- *6* unsupported expression
-- *7* unsupported expression
-- *8* unsupported expression
-- *9* unsupported expression
-- *10* unsupported expression
-- *11* unsupported expression
-- *12* unsupported expression
-- *13* unsupported expression
-- *14* unsupported expression
 
 lf = "abort canplay canplaythrough durationchange emptied encrypted ended error loadeddata loadedmetadata loadstart pause play playing progress ratechange resize seeked seeking stalled suspend timeupdate volumechange waiting"["split"](" ")
 
@@ -5349,13 +5328,15 @@ m#257 = (g | null | x | d(e, m))
 
 m#272 = l["lane"]
 
-m#334 = (c["getDerivedStateFromProps"] | ???*0*)
+m#334 = (c["getDerivedStateFromProps"] | (???*0* || ???*1*))
 - *0* unsupported expression
+- *1* unsupported expression
 
 m#360 = 0
 
-m#379 = (k[g] | ???*0* | a["child"] | m["sibling"] | null | q)
+m#379 = (k[g] | (???*0* && ???*1*) | a["child"] | m["sibling"] | null | q)
 - *0* unsupported expression
+- *1* unsupported expression
 
 m#393 = l["memoizedState"]
 
@@ -5371,7 +5352,7 @@ m#79 = ???*0*
 
 ma = {}
 
-mb = (???*0* | mb | FreeVar(document)["createElement"]("div"))
+mb = (???*0* | (mb || FreeVar(document)["createElement"]("div")))
 - *0* mb
   ⚠️  pattern without value
 
@@ -5381,8 +5362,7 @@ md = (null | e["slice"](a, ???*0*) | ???*1*)
 - *0* unsupported expression
 - *1* unsupported expression
 
-me = (...) => ???*0*
-- *0* unsupported expression
+me = (...) => (!(!(le[a["type"]])) | !(0) | !(1))
 
 mf = ???*0*
 - *0* unknown new expression
@@ -5400,7 +5380,16 @@ mk = FreeVar(Math)["ceil"]
 
 ml = (...) => FreeVar(undefined)
 
-n#170 = (a | "focus" | "blur" | c["relatedTarget"] | c["fromElement"] | c["toElement"] | Wc(n) | null | d)
+n#170 = (
+  | a
+  | "focus"
+  | "blur"
+  | (c["relatedTarget"] || c["fromElement"])
+  | (c["relatedTarget"] || c["toElement"])
+  | Wc(n)
+  | null
+  | d
+)
 
 n#226 = (a | t["payload"])
 
@@ -5464,7 +5453,7 @@ nk = ua["ReactCurrentDispatcher"]
 
 nl = (...) => FreeVar(undefined)
 
-oa = (...) => ???*0*
+oa = (...) => (!(0) | !(1) | ???*0*)
 - *0* unsupported expression
 
 ob = (...) => FreeVar(undefined)
@@ -5479,117 +5468,74 @@ of = `__reactEvents$${Nf}`
 
 og = []
 
-oh = (...) => (a["shouldComponentUpdate"](d, f, g) | ???*0*)
-- *0* unsupported expression
+oh = (...) => (a["shouldComponentUpdate"](d, f, g) | (!(Ie(c, d)) || !(Ie(e, f))) | !(0))
 
-oi = (...) => ???*0*
-- *0* unsupported expression
+oi = (...) => (!(He(a, c)) | !(0))
 
 oj = (...) => {"baseLanes": a, "cachePool": null, "transitions": null}
 
 ok = ua["ReactCurrentOwner"]
 
-ol = (...) => ???*0*
-- *0* unsupported expression
-
-p = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
-
-pa = (...) => ???*0*
-- *0* unsupported expression
-
-pb = {
-    "animationIterationCount": ???*0*,
-    "aspectRatio": ???*1*,
-    "borderImageOutset": ???*2*,
-    "borderImageSlice": ???*3*,
-    "borderImageWidth": ???*4*,
-    "boxFlex": ???*5*,
-    "boxFlexGroup": ???*6*,
-    "boxOrdinalGroup": ???*7*,
-    "columnCount": ???*8*,
-    "columns": ???*9*,
-    "flex": ???*10*,
-    "flexGrow": ???*11*,
-    "flexPositive": ???*12*,
-    "flexShrink": ???*13*,
-    "flexNegative": ???*14*,
-    "flexOrder": ???*15*,
-    "gridArea": ???*16*,
-    "gridRow": ???*17*,
-    "gridRowEnd": ???*18*,
-    "gridRowSpan": ???*19*,
-    "gridRowStart": ???*20*,
-    "gridColumn": ???*21*,
-    "gridColumnEnd": ???*22*,
-    "gridColumnSpan": ???*23*,
-    "gridColumnStart": ???*24*,
-    "fontWeight": ???*25*,
-    "lineClamp": ???*26*,
-    "lineHeight": ???*27*,
-    "opacity": ???*28*,
-    "order": ???*29*,
-    "orphans": ???*30*,
-    "tabSize": ???*31*,
-    "widows": ???*32*,
-    "zIndex": ???*33*,
-    "zoom": ???*34*,
-    "fillOpacity": ???*35*,
-    "floodOpacity": ???*36*,
-    "stopOpacity": ???*37*,
-    "strokeDasharray": ???*38*,
-    "strokeDashoffset": ???*39*,
-    "strokeMiterlimit": ???*40*,
-    "strokeOpacity": ???*41*,
-    "strokeWidth": ???*42*
-}
+ol = (...) => !((!(a) || (???*0* && ???*1* && ???*2*)))
 - *0* unsupported expression
 - *1* unsupported expression
 - *2* unsupported expression
-- *3* unsupported expression
-- *4* unsupported expression
-- *5* unsupported expression
-- *6* unsupported expression
-- *7* unsupported expression
-- *8* unsupported expression
-- *9* unsupported expression
-- *10* unsupported expression
-- *11* unsupported expression
-- *12* unsupported expression
-- *13* unsupported expression
-- *14* unsupported expression
-- *15* unsupported expression
-- *16* unsupported expression
-- *17* unsupported expression
-- *18* unsupported expression
-- *19* unsupported expression
-- *20* unsupported expression
-- *21* unsupported expression
-- *22* unsupported expression
-- *23* unsupported expression
-- *24* unsupported expression
-- *25* unsupported expression
-- *26* unsupported expression
-- *27* unsupported expression
-- *28* unsupported expression
-- *29* unsupported expression
-- *30* unsupported expression
-- *31* unsupported expression
-- *32* unsupported expression
-- *33* unsupported expression
-- *34* unsupported expression
-- *35* unsupported expression
-- *36* unsupported expression
-- *37* unsupported expression
-- *38* unsupported expression
-- *39* unsupported expression
-- *40* unsupported expression
-- *41* unsupported expression
-- *42* unsupported expression
+
+p = (...) => `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
+
+pa = (...) => (!(1) | !(0) | !(c["acceptsBooleans"]) | (???*0* && ???*1*))
+- *0* unsupported expression
+- *1* unsupported expression
+
+pb = {
+    "animationIterationCount": !(0),
+    "aspectRatio": !(0),
+    "borderImageOutset": !(0),
+    "borderImageSlice": !(0),
+    "borderImageWidth": !(0),
+    "boxFlex": !(0),
+    "boxFlexGroup": !(0),
+    "boxOrdinalGroup": !(0),
+    "columnCount": !(0),
+    "columns": !(0),
+    "flex": !(0),
+    "flexGrow": !(0),
+    "flexPositive": !(0),
+    "flexShrink": !(0),
+    "flexNegative": !(0),
+    "flexOrder": !(0),
+    "gridArea": !(0),
+    "gridRow": !(0),
+    "gridRowEnd": !(0),
+    "gridRowSpan": !(0),
+    "gridRowStart": !(0),
+    "gridColumn": !(0),
+    "gridColumnEnd": !(0),
+    "gridColumnSpan": !(0),
+    "gridColumnStart": !(0),
+    "fontWeight": !(0),
+    "lineClamp": !(0),
+    "lineHeight": !(0),
+    "opacity": !(0),
+    "order": !(0),
+    "orphans": !(0),
+    "tabSize": !(0),
+    "widows": !(0),
+    "zIndex": !(0),
+    "zoom": !(0),
+    "fillOpacity": !(0),
+    "floodOpacity": !(0),
+    "stopOpacity": !(0),
+    "strokeDasharray": !(0),
+    "strokeDashoffset": !(0),
+    "strokeMiterlimit": !(0),
+    "strokeOpacity": !(0),
+    "strokeWidth": !(0)
+}
 
 pc = FreeVar(Math)["log"]
 
-pd = (...) => ???*0*
-- *0* unsupported expression
+pd = (...) => !(0)
 
 pe = (null | b)
 
@@ -5601,13 +5547,16 @@ ph = (...) => b
 
 pi = (...) => FreeVar(undefined)
 
-pj = (...) => (null | ???*0* | rj(b, g) | sj(a, b, g, d, h, e, c) | d)
-- *0* unsupported expression
+pj = (...) => (null | a | rj(b, g) | sj(a, b, g, d, h, e, c) | d)
 
 pk = ua["ReactCurrentBatchConfig"]
 
-pl = (...) => ???*0*
+pl = (...) => !((!(a) || (???*0* && ???*1* && ???*2* && (???*3* || ???*4*))))
 - *0* unsupported expression
+- *1* unsupported expression
+- *2* unsupported expression
+- *3* unsupported expression
+- *4* unsupported expression
 
 q#226 = (e["baseState"] | n["call"](y, q, r) | n | A({}, q, r))
 
@@ -5621,8 +5570,9 @@ q#272 = {
     "next": null
 }
 
-q#334 = (???*0* | b["pendingProps"])
+q#334 = ((???*0* || ???*1*) | b["pendingProps"])
 - *0* unsupported expression
+- *1* unsupported expression
 
 q#360 = (a | y | r)
 
@@ -5635,15 +5585,15 @@ q#416 = m["tag"]
 
 q#425 = m["child"]
 
-qa = (...) => (???*0* | FreeVar(isNaN)(b))
+qa = (...) => (!(0) | !(1) | !(b) | ???*0* | FreeVar(isNaN)(b) | (FreeVar(isNaN)(b) || ???*1*))
 - *0* unsupported expression
+- *1* unsupported expression
 
 qb = ["Webkit", "ms", "Moz", "O"]
 
 qc = FreeVar(Math)["LN2"]
 
-qd = (...) => ???*0*
-- *0* unsupported expression
+qd = (...) => !(1)
 
 qe = (null | ???*0* | c)
 - *0* unsupported expression
@@ -5690,8 +5640,7 @@ r#425 = m["sibling"]
 
 ra = /[\-:]([a-z])/g
 
-rb = (...) => ("" | ???*0*["trim"]() | `${b}px`)
-- *0* unsupported expression
+rb = (...) => ("" | `${b}`["trim"]() | `${b}px`)
 
 rc = 64
 
@@ -5806,41 +5755,25 @@ t#425 = (n["child"] | J)
 ta = (...) => FreeVar(undefined)
 
 tb = A(
-    {"menuitem": ???*0*},
+    {"menuitem": !(0)},
     {
-        "area": ???*1*,
-        "base": ???*2*,
-        "br": ???*3*,
-        "col": ???*4*,
-        "embed": ???*5*,
-        "hr": ???*6*,
-        "img": ???*7*,
-        "input": ???*8*,
-        "keygen": ???*9*,
-        "link": ???*10*,
-        "meta": ???*11*,
-        "param": ???*12*,
-        "source": ???*13*,
-        "track": ???*14*,
-        "wbr": ???*15*
+        "area": !(0),
+        "base": !(0),
+        "br": !(0),
+        "col": !(0),
+        "embed": !(0),
+        "hr": !(0),
+        "img": !(0),
+        "input": !(0),
+        "keygen": !(0),
+        "link": !(0),
+        "meta": !(0),
+        "param": !(0),
+        "source": !(0),
+        "track": !(0),
+        "wbr": !(0)
     }
 )
-- *0* unsupported expression
-- *1* unsupported expression
-- *2* unsupported expression
-- *3* unsupported expression
-- *4* unsupported expression
-- *5* unsupported expression
-- *6* unsupported expression
-- *7* unsupported expression
-- *8* unsupported expression
-- *9* unsupported expression
-- *10* unsupported expression
-- *11* unsupported expression
-- *12* unsupported expression
-- *13* unsupported expression
-- *14* unsupported expression
-- *15* unsupported expression
 
 tc = (...) => (1 | 2 | 4 | 8 | 16 | 32 | ???*0* | 134217728 | 268435456 | 536870912 | 1073741824 | a)
 - *0* unsupported expression
@@ -5861,8 +5794,7 @@ tj = (...) => a
 
 tk = (null | [f])
 
-tl = {"usingClientEntryPoint": ???*0*, "Events": [Cb, ue, Db, Eb, Fb, Rk]}
-- *0* unsupported expression
+tl = {"usingClientEntryPoint": !(1), "Events": [Cb, ue, Db, Eb, Fb, Rk]}
 
 u#170 = (???*0* | w | F | h | ue(n) | t | vf(u) | 0)
 - *0* u
@@ -5913,7 +5845,7 @@ v = (...) => FreeVar(undefined)
 
 va = FreeVar(Symbol)["for"]("react.element")
 
-vb = (...) => ???*0*
+vb = (...) => (???*0* | !(1) | !(0))
 - *0* unsupported expression
 
 vc = (...) => ((b + 250) | (b + 5000) | ???*0*)
@@ -5951,7 +5883,7 @@ vl = {
     "scheduleUpdate": null,
     "currentDispatcherRef": ua["ReactCurrentDispatcher"],
     "findHostInstanceByFiber": *anonymous function 129223*,
-    "findFiberByHostInstance": (ul["findFiberByHostInstance"] | kl),
+    "findFiberByHostInstance": (ul["findFiberByHostInstance"] || kl),
     "findHostInstancesForRefresh": null,
     "scheduleRefresh": null,
     "scheduleRoot": null,
@@ -5985,7 +5917,10 @@ wd = (???*0* | ???*1* | 0)
   ⚠️  pattern without value
 - *1* unsupported expression
 
-we = ???*0*
+we = (
+  | !(1)
+  | (xe && (!(FreeVar(document)["documentMode"]) || ???*0*))
+)
 - *0* unsupported expression
 
 wf = (...) => FreeVar(undefined)
@@ -5998,8 +5933,7 @@ wi = (...) => ui(4, 2, a, b)
 
 wj = (...) => FreeVar(undefined)
 
-wk = ???*0*
-- *0* unsupported expression
+wk = (!(1) | !(0))
 
 wl = FreeVar(__REACT_DEVTOOLS_GLOBAL_HOOK__)
 
@@ -6026,10 +5960,9 @@ xd = (???*0* | ???*1*)
   ⚠️  pattern without value
 - *1* unsupported expression
 
-xe = (???*0* | ye | ???*1*)
+xe = (???*0* | ye | !(1))
 - *0* xe
   ⚠️  pattern without value
-- *1* unsupported expression
 
 xf = /\r\n?/g
 
@@ -6123,12 +6056,11 @@ zd = (...) => Pd
 
 ze = FreeVar(document)["createElement"]("div")
 
-zf = (...) => ???*0*["replace"](
+zf = (...) => (a | `${a}`)["replace"](
     xf,
     "
 "
 )["replace"](yf, "")
-- *0* unsupported expression
 
 zg = (null | [a])
 
