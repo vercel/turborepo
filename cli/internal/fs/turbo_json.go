@@ -83,7 +83,16 @@ type Pipeline map[string]TaskDefinition
 
 // TaskDefinition is a representation of the configFile pipeline for further computation.
 type TaskDefinition struct {
-	FieldsMeta  map[string]bool
+	// FieldsMeta has a set of keys which tell us whether the turbo.json had a key
+	// or not. We need to do this internal bookkeeping, because this struct assigns "0-values"
+	// in Golang, which are indistinguishable from missing keys in the underlying JSON.
+	// We need to know whether a key was set to a "0-value", or if the key was missing
+	// so that when we can merge  TaskDefinitions correctly.
+	// FieldsMeta should ideally be a private key, with a method that looks it up, but
+	// we have a lot of unit tests that would fail without the ability to set this field
+	// (i.e. unit tests that don't go through Unmarshalling the underlying turbo.json from a file).
+	FieldsMeta map[string]bool
+
 	Outputs     TaskOutputs
 	ShouldCache bool
 
