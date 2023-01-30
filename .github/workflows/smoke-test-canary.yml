@@ -14,7 +14,8 @@ jobs:
       matrix:
         test: ["local", "global", "both"]
         packageManager: ["yarn", "pnpm", "npm"]
-        
+        localVersion: ["latest", "canary"]
+        globalVersion: ["latest", "canary"]
     steps:
       - name: Configure git
         run: |
@@ -33,4 +34,4 @@ jobs:
         with:
          files: scripts/smoke-canary.js
       - name: Run Test
-        run: node scripts/smoke-canary.js ${{ matrix.test }} ${{ matrix.packageManager }}
+        run: node scripts/smoke-canary.js ${{ matrix.test }} ${{ matrix.packageManager }} ${{ matrix.localVersion }} ${{ matrix.globalVersion }}
