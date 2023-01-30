@@ -40,32 +40,97 @@ const basicPipeline = {
   globalEnv: ["GLOBAL_ENV_DEPENDENCY"],
 };
 
+const prunePipeline = {
+  ...basicPipeline,
+  pipeline: {
+    ...basicPipeline.pipeline,
+    // add some package specific pipeline tasks to test pruning
+    "a#build": {
+      outputs: ["dist/**", "!dist/cache/**"],
+    },
+    "c#build": {
+      outputs: ["dist/**", "!dist/cache/**"],
+    },
+  },
+};
+
+const explicitPrunePipeline = {
+  ...basicPipeline,
+  pipeline: {
+    ...basicPipeline.pipeline,
+    // add some package specific pipeline tasks to test pruning
+    "a#build": {
+      dependsOn: ["b#build"],
+      outputs: ["dist/**", "!dist/cache/**"],
+    },
+    "b#build": {
+      outputs: ["dist/**", "!dist/cache/**"],
+    },
+    "c#build": {
+      outputs: ["dist/**", "!dist/cache/**"],
+    },
+  },
+};
+
+const testCombinations = [
+  { npmClient: "yarn" as const, pipeline: basicPipeline },
+  { npmClient: "berry" as const, pipeline: basicPipeline },
+  { npmClient: "pnpm6" as const, pipeline: basicPipeline },
+  { npmClient: "pnpm" as const, pipeline: basicPipeline },
+  { npmClient: "npm" as const, pipeline: basicPipeline },
+
+  // there is probably no need to test every
+  // pipeline against every package manager,
+  // so specify directly rather than use the
+  // cartesian product
+  {
+    npmClient: "yarn" as const,
+    pipeline: prunePipeline,
+    name: "basicPrune",
+    excludePrune: ["c#build"],
+    includePrune: ["a#build"],
+  }, // expect c#build to be removed, since there is no dep between a -> c
+  {
+    npmClient: "yarn" as const,
+    pipeline: explicitPrunePipeline,
+    name: "explicitDepPrune",
+    excludePrune: ["c#build"],
+    includePrune: ["a#build", "b#build"],
+  }, // expect c#build to be included, since a depends on c
+];
+
 // This is injected by github actions
 process.env.TURBO_TOKEN = "";
 
 let suites: uvu.uvu.Test<uvu.Context>[] = [];
-for (let npmClient of ["yarn", "berry", "pnpm6", "pnpm", "npm"] as const) {
-  const Suite = uvu.suite(`${npmClient}`);
+for (let {
+  npmClient,
+  pipeline,
+  name,
+  includePrune,
+  excludePrune,
+} of testCombinations) {
+  const Suite = uvu.suite(`${name ?? npmClient}`);
 
   const repo = new Monorepo("basics");
-  repo.init(npmClient, basicPipeline);
+  repo.init(npmClient, pipeline);
   repo.install();
   repo.addPackage("a", ["b"]);
   repo.addPackage("b");
   repo.addPackage("c");
   repo.linkPackages();
   repo.expectCleanGitStatus();
-  runSmokeTests(Suite, repo, npmClient);
+  runSmokeTests(Suite, repo, npmClient, includePrune ?? [], excludePrune ?? []);
 
   const sub = new Monorepo("in-subdirectory");
-  sub.init(npmClient, basicPipeline, "js");
+  sub.init(npmClient, pipeline, "js");
   sub.install();
   sub.addPackage("a", ["b"]);
   sub.addPackage("b");
   sub.addPackage("c");
   sub.linkPackages();
 
-  runSmokeTests(Suite, sub, npmClient, {
+  runSmokeTests(Suite, sub, npmClient, includePrune ?? [], excludePrune ?? [], {
     cwd: sub.subdir ? path.join(sub.root, sub.subdir) : sub.root,
   });
 
@@ -123,6 +188,8 @@ function runSmokeTests<T>(
   suite: uvu.Test<T>,
   repo: Monorepo,
   npmClient: "yarn" | "berry" | "pnpm6" | "pnpm" | "npm",
+  includePrune: string[],
+  excludePrune: string[],
   options: execa.SyncOptions<string> = {}
 ) {
   suite.after(() => {
@@ -557,8 +624,9 @@ function runSmokeTests<T>(
     suite(
       `${npmClient} + turbo prune${options.cwd ? " from " + options.cwd : ""}`,
       async () => {
+        const scope = "a";
         const pruneCommandOutput = getCommandOutputAsArray(
-          repo.turbo("prune", ["--scope=a"], options)
+          repo.turbo("prune", [`--scope=${scope}`], options)
         );
         assert.fixture(pruneCommandOutput[1], " - Added a");
         assert.fixture(pruneCommandOutput[2], " - Added b");
@@ -588,6 +656,31 @@ function runSmokeTests<T>(
             `Expected file ${file} to be generated`
           );
         }
+
+        // grab the first turbo.json in an out folder
+        let turbos = repo
+          .globbySync("**/out/turbo.json")
+          .map((t: string) => JSON.parse(repo.readFileSync(t)));
+        for (const turbo of turbos) {
+          const pipelines = Object.keys(turbo.pipeline);
+          const missingInclude = includePrune.filter(
+            (i) => !pipelines.includes(i)
+          );
+          const presentExclude = excludePrune.filter((i) =>
+            pipelines.includes(i)
+          );
+
+          if (missingInclude.length || presentExclude.length) {
+            assert.unreachable(
+              "failed to validate prune in pipeline" +
+                (missingInclude.length ? `, expecting ${missingInclude}` : "") +
+                (presentExclude.length
+                  ? `, not expecting ${presentExclude}`
+                  : "")
+            );
+          }
+        }
+
         const install = repo.run(installCmd, installArgs, {
           cwd: options.cwd
             ? path.join(options.cwd, "out")
@@ -606,8 +699,9 @@ function runSmokeTests<T>(
         options.cwd ? " from " + options.cwd : ""
       }`,
       async () => {
+        const scope = "a";
         const pruneCommandOutput = getCommandOutputAsArray(
-          repo.turbo("prune", ["--scope=a", "--docker"], options)
+          repo.turbo("prune", [`--scope=${scope}`, "--docker"], options)
         );
         assert.fixture(pruneCommandOutput[1], " - Added a");
         assert.fixture(pruneCommandOutput[2], " - Added b");
@@ -640,6 +734,31 @@ function runSmokeTests<T>(
             `Expected file ${file} to be generated`
           );
         }
+
+        // grab the first turbo.json in an out folder
+        let turbos = repo
+          .globbySync("**/out/turbo.json")
+          .map((t: string) => JSON.parse(repo.readFileSync(t)));
+        for (const turbo of turbos) {
+          const pipelines = Object.keys(turbo.pipeline);
+          const missingInclude = includePrune.filter(
+            (i) => !pipelines.includes(i)
+          );
+          const presentExclude = excludePrune.filter((i) =>
+            pipelines.includes(i)
+          );
+
+          if (missingInclude.length || presentExclude.length) {
+            assert.unreachable(
+              "failed to validate prune in pipeline" +
+                (missingInclude.length ? `, expecting ${missingInclude}` : "") +
+                (presentExclude.length
+                  ? `, not expecting ${presentExclude}`
+                  : "")
+            );
+          }
+        }
+
         const install = repo.run(installCmd, installArgs, {
           cwd: options.cwd
             ? path.join(options.cwd, "out")
