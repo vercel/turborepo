@@ -440,6 +440,15 @@ impl Task {
         }
     }
 
+    pub(crate) fn get_function_name(&self) -> Option<&'static str> {
+        if let TaskType::Persistent(ty) = &self.ty {
+            if let PersistentTaskType::Native(native_fn, _) = &**ty {
+                return Some(&registry::get_function(*native_fn).name);
+            }
+        }
+        None
+    }
+
     pub(crate) fn get_description(&self) -> String {
         match &self.ty {
             TaskType::Root(..) => format!("[{}] root", self.id),
@@ -701,13 +710,8 @@ impl Task {
             InProgress { .. } => match result {
                 Ok(Ok(result)) => state.output.link(result, turbo_tasks),
                 Ok(Err(mut err)) => {
-                    if let TaskType::Persistent(ty) = &self.ty {
-                        if let PersistentTaskType::Native(native_fn, _) = &**ty {
-                            err = err.context(format!(
-                                "Execution of {} failed",
-                                registry::get_function(*native_fn).name
-                            ));
-                        }
+                    if let Some(name) = self.get_function_name() {
+                        err = err.context(format!("Execution of {} failed", name));
                     }
                     state.output.error(err, turbo_tasks)
                 }
