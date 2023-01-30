@@ -69,7 +69,6 @@ const bar = "bar";
 foobar += bar;
 ```
 
-- Side effects
 - Reads: "`bar`"
 - Write: "`foobar`"
 
@@ -90,7 +89,6 @@ let foobarCopy = foobar;
 foobar += "foo";
 ```
 
-- Side effects
 - Write: "`foobar`"
 
 ## Item 10: Stmt 8, `Normal`
@@ -108,7 +106,6 @@ console.log(foobarCopy);
 foobarCopy += "Unused";
 ```
 
-- Side effects
 - Write: "`foobarCopy`"
 
 ## Item 12: Stmt 10, `Normal`
@@ -216,35 +213,22 @@ graph TD
     Item7 -.-> Item4;
     Item8 --> Item7;
     Item8 -.-> Item6;
-    Item8 -.-> Item13;
-    Item8 -.-> Item5;
-    Item8 -.-> Item4;
     Item9 --> Item5;
     Item9 --> Item8;
+    Item9 --> Item7;
     Item9 -.-> Item13;
     Item9 -.-> Item6;
     Item9 -.-> Item4;
     Item10 -.-> Item6;
-    Item10 --> Item9;
-    Item10 -.-> Item13;
-    Item10 -.-> Item5;
-    Item10 -.-> Item8;
-    Item10 -.-> Item4;
+    Item10 -.-> Item9;
     Item11 --> Item9;
-    Item11 --> Item10;
     Item11 -.-> Item13;
     Item11 -.-> Item5;
     Item11 -.-> Item8;
+    Item11 -.-> Item10;
     Item11 -.-> Item6;
     Item11 -.-> Item4;
-    Item12 --> Item11;
-    Item12 -.-> Item13;
-    Item12 -.-> Item5;
-    Item12 -.-> Item8;
-    Item12 -.-> Item10;
-    Item12 -.-> Item6;
-    Item12 -.-> Item9;
-    Item12 -.-> Item4;
+    Item12 -.-> Item11;
 ```
 
 # Phase 3
@@ -288,35 +272,22 @@ graph TD
     Item7 -.-> Item4;
     Item8 --> Item7;
     Item8 -.-> Item6;
-    Item8 -.-> Item13;
-    Item8 -.-> Item5;
-    Item8 -.-> Item4;
     Item9 --> Item5;
     Item9 --> Item8;
+    Item9 --> Item7;
     Item9 -.-> Item13;
     Item9 -.-> Item6;
     Item9 -.-> Item4;
     Item10 -.-> Item6;
-    Item10 --> Item9;
-    Item10 -.-> Item13;
-    Item10 -.-> Item5;
-    Item10 -.-> Item8;
-    Item10 -.-> Item4;
+    Item10 -.-> Item9;
     Item11 --> Item9;
-    Item11 --> Item10;
     Item11 -.-> Item13;
     Item11 -.-> Item5;
     Item11 -.-> Item8;
+    Item11 -.-> Item10;
     Item11 -.-> Item6;
     Item11 -.-> Item4;
-    Item12 --> Item11;
-    Item12 -.-> Item13;
-    Item12 -.-> Item5;
-    Item12 -.-> Item8;
-    Item12 -.-> Item10;
-    Item12 -.-> Item6;
-    Item12 -.-> Item9;
-    Item12 -.-> Item4;
+    Item12 -.-> Item11;
     Item3 --> Item13;
     Item3 --> Item5;
     Item3 --> Item8;
@@ -370,35 +341,22 @@ graph TD
     Item7 -.-> Item4;
     Item8 --> Item7;
     Item8 -.-> Item6;
-    Item8 -.-> Item13;
-    Item8 -.-> Item5;
-    Item8 -.-> Item4;
     Item9 --> Item5;
     Item9 --> Item8;
+    Item9 --> Item7;
     Item9 -.-> Item13;
     Item9 -.-> Item6;
     Item9 -.-> Item4;
     Item10 -.-> Item6;
-    Item10 --> Item9;
-    Item10 -.-> Item13;
-    Item10 -.-> Item5;
-    Item10 -.-> Item8;
-    Item10 -.-> Item4;
+    Item10 -.-> Item9;
     Item11 --> Item9;
-    Item11 --> Item10;
     Item11 -.-> Item13;
     Item11 -.-> Item5;
     Item11 -.-> Item8;
+    Item11 -.-> Item10;
     Item11 -.-> Item6;
     Item11 -.-> Item4;
-    Item12 --> Item11;
-    Item12 -.-> Item13;
-    Item12 -.-> Item5;
-    Item12 -.-> Item8;
-    Item12 -.-> Item10;
-    Item12 -.-> Item6;
-    Item12 -.-> Item9;
-    Item12 -.-> Item4;
+    Item12 -.-> Item11;
     Item3 --> Item13;
     Item3 --> Item5;
     Item3 --> Item8;
@@ -409,9 +367,8 @@ graph TD
     Item13 --> Item10;
     Item14 -.-> Item6;
     Item14 -.-> Item9;
-    Item15 --> Item12;
+    Item15 --> Item11;
     Item15 -.-> Item3;
-    Item15 -.-> Item11;
     Item15 -.-> Item4;
     Item15 -.-> Item5;
     Item15 -.-> Item8;
@@ -419,6 +376,7 @@ graph TD
     Item15 -.-> Item6;
     Item15 -.-> Item9;
     Item15 -.-> Item7;
+    Item15 -.-> Item12;
     Item15 -.-> Item13;
     Item15 -.-> Item14;
     Item16 --> Item3;

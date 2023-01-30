@@ -18,7 +18,6 @@ let dog = "dog";
 dog += "!";
 ```
 
-- Side effects
 - Write: "`dog`"
 
 ## Item 3: Stmt 2, `Normal`
@@ -48,7 +47,6 @@ function getDog() {
 dog += "!";
 ```
 
-- Side effects
 - Write: "`dog`"
 
 ## Item 6: Stmt 5, `Normal`
@@ -79,7 +77,6 @@ function setDog(newDog) {
 dog += "!";
 ```
 
-- Side effects
 - Write: "`dog`"
 
 ## Item 9: Stmt 8, `Normal`
@@ -195,27 +192,21 @@ graph TD
     Item17["export initialCat"];
     Item18;
     Item18["export getChimera"];
-    Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
-    Item5 --> Item3;
-    Item5 -.-> Item1;
-    Item5 -.-> Item2;
+    Item5 -.-> Item3;
     Item6 --> Item1;
     Item6 --> Item2;
     Item6 --> Item5;
-    Item6 -.-> Item3;
+    Item6 --> Item3;
     Item8 -.-> Item3;
-    Item8 --> Item6;
-    Item8 -.-> Item1;
-    Item8 -.-> Item2;
-    Item8 -.-> Item5;
+    Item8 -.-> Item6;
     Item9 --> Item1;
     Item9 --> Item2;
     Item9 --> Item5;
     Item9 --> Item8;
+    Item9 --> Item6;
     Item9 -.-> Item3;
-    Item9 -.-> Item6;
     Item10 --> Item1;
     Item10 --> Item2;
     Item10 --> Item5;
@@ -271,27 +262,21 @@ graph TD
     Item17["export initialCat"];
     Item18;
     Item18["export getChimera"];
-    Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
-    Item5 --> Item3;
-    Item5 -.-> Item1;
-    Item5 -.-> Item2;
+    Item5 -.-> Item3;
     Item6 --> Item1;
     Item6 --> Item2;
     Item6 --> Item5;
-    Item6 -.-> Item3;
+    Item6 --> Item3;
     Item8 -.-> Item3;
-    Item8 --> Item6;
-    Item8 -.-> Item1;
-    Item8 -.-> Item2;
-    Item8 -.-> Item5;
+    Item8 -.-> Item6;
     Item9 --> Item1;
     Item9 --> Item2;
     Item9 --> Item5;
     Item9 --> Item8;
+    Item9 --> Item6;
     Item9 -.-> Item3;
-    Item9 -.-> Item6;
     Item10 --> Item1;
     Item10 --> Item2;
     Item10 --> Item5;
@@ -360,27 +345,21 @@ graph TD
     Item17["export initialCat"];
     Item18;
     Item18["export getChimera"];
-    Item2 --> Item1;
     Item3 --> Item1;
     Item3 --> Item2;
-    Item5 --> Item3;
-    Item5 -.-> Item1;
-    Item5 -.-> Item2;
+    Item5 -.-> Item3;
     Item6 --> Item1;
     Item6 --> Item2;
     Item6 --> Item5;
-    Item6 -.-> Item3;
+    Item6 --> Item3;
     Item8 -.-> Item3;
-    Item8 --> Item6;
-    Item8 -.-> Item1;
-    Item8 -.-> Item2;
-    Item8 -.-> Item5;
+    Item8 -.-> Item6;
     Item9 --> Item1;
     Item9 --> Item2;
     Item9 --> Item5;
     Item9 --> Item8;
+    Item9 --> Item6;
     Item9 -.-> Item3;
-    Item9 -.-> Item6;
     Item10 --> Item1;
     Item10 --> Item2;
     Item10 --> Item5;
