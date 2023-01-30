@@ -25,17 +25,16 @@ enum SelectedTeam<'a> {
 pub async fn link(mut base: CommandBase, modify_gitignore: bool) -> Result<()> {
     let homedir_path = home_dir().ok_or_else(|| anyhow!("could not find home directory."))?;
     let homedir = homedir_path.to_string_lossy();
-    println!(">>> Remote Caching");
-    println!();
-    println!("  Remote Caching shares your cached Turborepo task outputs and logs across");
-    println!("  all your team’s Vercel projects. It also can share outputs");
-    println!("  with other services that enable Remote Caching, like CI/CD systems.");
-    println!("  This results in faster build times and deployments for your team.");
     println!(
-        "  For more info, see {}",
+        ">>> Remote Caching
+  Remote Caching shares your cached Turborepo task outputs and logs across
+  all your team’s Vercel projects. It also can share outputs
+  with other services that enable Remote Caching, like CI/CD systems.
+  This results in faster build times and deployments for your team.
+  For more info, see {}
+",
         UNDERLINE.apply_to("https://turbo.build/repo/docs/core-concepts/remote-caching")
     );
-    println!();
 
     let repo_root_with_tilde = base.repo_root.to_string_lossy().replacen(&*homedir, "~", 1);
 

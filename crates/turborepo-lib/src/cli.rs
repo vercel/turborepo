@@ -470,7 +470,9 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             let modify_gitignore = !*no_gitignore;
             let base = CommandBase::new(clap_args, repo_root)?;
 
-            link::link(base, modify_gitignore).await?;
+            if let Err(err) = link::link(base, modify_gitignore).await {
+                error!("error: {}", err.to_string())
+            };
 
             Ok(Payload::Rust(Ok(0)))
         }
