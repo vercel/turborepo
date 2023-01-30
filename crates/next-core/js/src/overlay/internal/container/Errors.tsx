@@ -141,7 +141,6 @@ type DisplayStateActions = {
 function useDisplayState(
   initialState: DisplayState
 ): [DisplayState, DisplayStateActions] {
-  /// eslint-disable-next-line prefer-const
   const [displayState, setDisplayState] =
     React.useState<DisplayState>(initialState);
 
@@ -200,10 +199,10 @@ export function Errors({ issues, errors }: ErrorsProps) {
 
   const onlyHasWarnings = !hasErrors && !hasIssueWithError;
 
-  // eslint-disable-next-line prefer-const
-  let [displayState, { fullscreen, minimize, hide }] = useDisplayState(
+  const [stateDisplayState, { fullscreen, minimize, hide }] = useDisplayState(
     onlyHasWarnings ? DisplayState.Minimized : DisplayState.Fullscreen
   );
+  let displayState = stateDisplayState;
 
   if (!isClosable) {
     displayState = DisplayState.Fullscreen;

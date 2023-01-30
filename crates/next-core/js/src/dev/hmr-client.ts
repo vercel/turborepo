@@ -270,8 +270,8 @@ const CATEGORY_ORDER = [
   "other",
 ];
 
-function sortIssues(issues: Issue[]): Issue[] {
-  return issues.sort((a, b) => {
+function sortIssues(issues: Issue[]) {
+  issues.sort((a, b) => {
     const first = compareByList(SEVERITY_ORDER, a.severity, b.severity);
     if (first !== 0) return first;
     return compareByList(CATEGORY_ORDER, a.category, b.category);
