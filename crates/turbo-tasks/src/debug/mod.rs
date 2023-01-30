@@ -55,6 +55,7 @@ impl ValueDebugStringVc {
 pub trait ValueDebug {
     fn dbg(&self) -> ValueDebugStringVc;
 
+    /// Like `dbg`, but with a depth limit.
     fn dbg_depth(&self, depth: usize) -> ValueDebugStringVc;
 }
 
