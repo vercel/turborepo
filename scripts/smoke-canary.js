@@ -147,6 +147,7 @@ function verifyLocalBinary({ installType, packageManager }) {
 
 function verifyGlobalBinary({ installType, packageManager }) {
   const packageManagerGlobalBinPath = getGlobalBinaryPath({ packageManager });
+  console.log("packageManagerGlobalBinPath", packageManagerGlobalBinPath);
   const turboBinary = getTurboBinary({ installType, packageManager });
   exec({
     title: "Verify binary is installed globally",
