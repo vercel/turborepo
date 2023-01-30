@@ -9,7 +9,7 @@ Setup
   
   No tasks were executed as part of this run.
   
-   Tasks:    0 successful, 0 total
-  Cached:    0 cached, 0 total
+   Tasks:    1 successful, 1 total
+  Cached:    0 cached, 1 total
     Time:\s+[.0-9]+m?s  (re)
   
