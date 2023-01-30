@@ -8,7 +8,7 @@ on:
 
 jobs:
   test_matrix:
-    name: "Smoke Test Canary"
+    name: "Smoke Published"
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -32,4 +32,4 @@ jobs:
         with:
          files: scripts/smoke-canary.js
       - name: Run Test
-        run: ts-node scripts/smoke-canary.js ${{ matrix.test }} ${{ matrix.packageManager }} ${{ matrix.localVersion }} ${{ matrix.globalVersion }}
+        run: ts-node scripts/smoke-published.ts ${{ matrix.test }} ${{ matrix.packageManager }} ${{ matrix.localVersion }} ${{ matrix.globalVersion }}
