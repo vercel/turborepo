@@ -193,7 +193,6 @@ graph TD
     Item18["export external2"];
     Item3 --> Item1;
     Item3 -.-> Item2;
-    Item3 -.-> Item3;
     Item3 -.-> Item11;
     Item4 --> Item3;
     Item4 -.-> Item2;
@@ -264,7 +263,6 @@ graph TD
     Item18["export external2"];
     Item3 --> Item1;
     Item3 -.-> Item2;
-    Item3 -.-> Item3;
     Item3 -.-> Item11;
     Item4 --> Item3;
     Item4 -.-> Item2;
@@ -345,7 +343,6 @@ graph TD
     Item18["export external2"];
     Item3 --> Item1;
     Item3 -.-> Item2;
-    Item3 -.-> Item3;
     Item3 -.-> Item11;
     Item4 --> Item3;
     Item4 -.-> Item2;

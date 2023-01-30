@@ -206,7 +206,6 @@ graph TD
     Item1 --> Item2;
     Item5 --> Item1;
     Item5 -.-> Item13;
-    Item5 -.-> Item5;
     Item5 -.-> Item4;
     Item6 --> Item5;
     Item6 -.-> Item13;
@@ -279,7 +278,6 @@ graph TD
     Item1 --> Item2;
     Item5 --> Item1;
     Item5 -.-> Item13;
-    Item5 -.-> Item5;
     Item5 -.-> Item4;
     Item6 --> Item5;
     Item6 -.-> Item13;
@@ -362,7 +360,6 @@ graph TD
     Item1 --> Item2;
     Item5 --> Item1;
     Item5 -.-> Item13;
-    Item5 -.-> Item5;
     Item5 -.-> Item4;
     Item6 --> Item5;
     Item6 -.-> Item13;
