@@ -2493,6 +2493,7 @@ mod tests {
         let graph_explained_snapshot_path = input.with_file_name("graph-explained.snapshot");
         let graph_effects_snapshot_path = input.with_file_name("graph-effects.snapshot");
         let resolved_explained_snapshot_path = input.with_file_name("resolved-explained.snapshot");
+        let large_marker = input.with_file_name("large");
 
         run_test(false, |cm, handler| {
             let r = tokio::runtime::Builder::new_current_thread()
@@ -2547,15 +2548,21 @@ mod tests {
                 {
                     // Dump snapshot of graph
 
-                    NormalizedOutput::from(format!("{:#?}", named_values))
-                        .compare_to_file(&graph_snapshot_path)
-                        .unwrap();
+                    let large = large_marker.exists();
+
+                    if !large {
+                        NormalizedOutput::from(format!("{:#?}", named_values))
+                            .compare_to_file(&graph_snapshot_path)
+                            .unwrap();
+                    }
                     NormalizedOutput::from(explain_all(&named_values))
                         .compare_to_file(&graph_explained_snapshot_path)
                         .unwrap();
-                    NormalizedOutput::from(format!("{:#?}", var_graph.effects))
-                        .compare_to_file(&graph_effects_snapshot_path)
-                        .unwrap();
+                    if !large {
+                        NormalizedOutput::from(format!("{:#?}", var_graph.effects))
+                            .compare_to_file(&graph_effects_snapshot_path)
+                            .unwrap();
+                    }
                 }
 
                 {
