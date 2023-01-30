@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -49,7 +50,14 @@ func Test_Roundtrip(t *testing.T) {
 			t.Errorf("decoding failed %s", err)
 		}
 
-		assert.DeepEqual(t, lockfile, newLockfile)
+		assert.DeepEqual(
+			t,
+			lockfile,
+			newLockfile,
+			// Skip over fields that don't get serialized
+			cmpopts.IgnoreUnexported(PnpmLockfile{}),
+			cmpopts.IgnoreTypes(yaml.Node{}),
+		)
 	}
 }
 
@@ -58,8 +66,7 @@ func Test_SpecifierResolution(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	untypedLockfile, err := DecodePnpmLockfile(contents)
-	lockfile := untypedLockfile.(*PnpmLockfile)
+	lockfile, err := DecodePnpmLockfile(contents)
 	if err != nil {
 		t.Errorf("failure decoding lockfile: %v", err)
 	}
@@ -99,8 +106,7 @@ func Test_SpecifierResolutionV6(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	untypedLockfile, err := DecodePnpmLockfile(contents)
-	lockfile := untypedLockfile.(*PnpmLockfileV6)
+	lockfile, err := DecodePnpmLockfile(contents)
 	if err != nil {
 		t.Errorf("failure decoding lockfile: %v", err)
 	}
@@ -237,4 +243,20 @@ func Test_PnpmAbsoluteDependency(t *testing.T) {
 		assert.DeepEqual(t, pkg.Key, tc.key)
 		assert.DeepEqual(t, pkg.Version, "1.0.0")
 	}
+}
+
+func Test_LockfilePeer(t *testing.T) {
+	contents, err := getFixture(t, "pnpm-peer-v6.yaml")
+	if err != nil {
+		t.Error(err)
+	}
+	assert.NilError(t, err, "read fixture")
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err, "parse lockfile")
+
+	pkg, err := lockfile.ResolvePackage(turbopath.AnchoredUnixPath("apps/web"), "next", "13.0.4")
+	assert.NilError(t, err, "read lockfile")
+	assert.Assert(t, pkg.Found)
+	assert.DeepEqual(t, pkg.Version, "13.0.4(react-dom@18.2.0)(react@18.2.0)")
+	assert.DeepEqual(t, pkg.Key, "/next@13.0.4(react-dom@18.2.0)(react@18.2.0)")
 }

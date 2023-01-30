@@ -1,0 +1,27 @@
+lockfileVersion: 5.4
+
+importers:
+
+  .:
+    specifiers:
+      util: workspace:*
+    devDependencies:
+      util: link:packages/util
+
+  apps/docs:
+    specifiers:
+      shared: workspace:*
+    dependencies:
+      shared: link:../../packages/shared
+
+  apps/web:
+    specifiers:
+      shared: workspace:*
+    dependencies:
+      shared: link:../../packages/shared
+
+  packages/shared:
+    specifiers: {}
+
+  packages/util:
+    specifiers: {}
