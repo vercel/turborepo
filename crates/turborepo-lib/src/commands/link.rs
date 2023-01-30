@@ -138,6 +138,12 @@ fn should_enable_caching() -> Result<bool> {
         .interact()?)
 }
 
+#[cfg(test)]
+fn select_team<'a>(teams: &'a [Team], user_display_name: &'a str) -> Result<SelectedTeam<'a>> {
+    Ok(SelectedTeam::User)
+}
+
+#[cfg(not(test))]
 fn select_team<'a>(teams: &'a [Team], user_display_name: &'a str) -> Result<SelectedTeam<'a>> {
     let mut team_names = vec![user_display_name];
     team_names.extend(teams.iter().map(|team| team.name.as_str()));
@@ -159,12 +165,13 @@ fn select_team<'a>(teams: &'a [Team], user_display_name: &'a str) -> Result<Sele
     }
 }
 
-fn should_link(base: &CommandBase, location: &str) -> Result<bool> {
-    #[cfg(test)]
-    {
-        return Ok(true);
-    }
+#[cfg(test)]
+fn should_link(_: &CommandBase, _: &str) -> Result<bool> {
+    Ok(true)
+}
 
+#[cfg(not(test))]
+fn should_link(base: &CommandBase, location: &str) -> Result<bool> {
     let prompt = format!(
         "{}{} {}",
         BOLD.apply_to(GREY.apply_to("? ")),
