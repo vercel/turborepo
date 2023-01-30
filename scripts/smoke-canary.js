@@ -2,8 +2,11 @@
 
 const { execSync } = require("child_process");
 
-function exec({ command, options, conditions }) {
+function exec({ title, command, options, conditions }) {
   console.log();
+  if (title) {
+    console.log(`▶️ ${title}`);
+  }
   console.log(`Running: "${command}"`);
   try {
     const result = execSync(command, options).toString();
@@ -34,7 +37,7 @@ function getGlobalBinaryPath({ packageManager }) {
     case "yarn":
       return execSync(`yarn global bin`).toString().trim();
     case "npm":
-      return execSync(`npm bin --global`).toString().trim();
+      return execSync(`npm root --global`).toString().trim();
     case "pnpm":
       return execSync(`pnpm  bin --global`).toString().trim();
   }
@@ -82,20 +85,30 @@ function installExample({ version, packageManager }) {
 }
 
 function installGlobalTurbo({ version, packageManager }) {
-  console.log("Install global turbo");
   if (packageManager === "pnpm" || packageManager === "npm") {
-    exec({ command: `${packageManager} install turbo@${version} --global` });
+    exec({
+      title: "Install global turbo",
+      command: `${packageManager} install turbo@${version} --global`,
+    });
   } else {
-    exec({ command: `${packageManager} global add turbo@${version}` });
+    exec({
+      title: "Install global turbo",
+      command: `${packageManager} global add turbo@${version}`,
+    });
   }
 }
 
 function uninstallLocalTurbo({ packageManager }) {
-  console.log("Uninstall local turbo");
   if (packageManager === "pnpm" || packageManager === "npm") {
-    exec({ command: `${packageManager} uninstall turbo` });
+    exec({
+      title: "Uninstall local turbo",
+      command: `${packageManager} uninstall turbo`,
+    });
   } else {
-    exec({ command: `${packageManager} remove turbo -W` });
+    exec({
+      title: "Uninstall local turbo",
+      command: `${packageManager} remove turbo -W`,
+    });
   }
 }
 
@@ -112,17 +125,15 @@ function getTurboBinary({ installType, packageManager }) {
 }
 
 function logTurboDetails({ installType, packageManager }) {
-  console.log("Turbo details");
-
   const turboBinary = getTurboBinary({ installType, packageManager });
   exec({ command: `${turboBinary} --version` });
   exec({ command: `${turboBinary} bin` });
 }
 
 function verifyLocalBinary({ installType, packageManager }) {
-  console.log("Verify binary is not global");
   const turboBinary = getTurboBinary({ installType, packageManager });
   exec({
+    title: "Verify binary is not installed globally",
     command: `${turboBinary} bin`,
     conditions: [
       {
@@ -134,11 +145,12 @@ function verifyLocalBinary({ installType, packageManager }) {
   });
 }
 
-function verifyGlobalBinary({ packageManager }) {
-  console.log("Verify binary is global");
+function verifyGlobalBinary({ installType, packageManager }) {
   const packageManagerGlobalBinPath = getGlobalBinaryPath({ packageManager });
+  const turboBinary = getTurboBinary({ installType, packageManager });
   exec({
-    command: `turbo bin`,
+    title: "Verify binary is installed globally",
+    command: `${turboBinary} bin`,
     conditions: [
       {
         expected: packageManagerGlobalBinPath,
@@ -149,10 +161,9 @@ function verifyGlobalBinary({ packageManager }) {
 }
 
 function verifyFirstBuild({ installType, packageManager }) {
-  console.log("Verify turbo build");
-
   const turboBinary = getTurboBinary({ installType, packageManager });
   exec({
+    title: "Verify first turbo build is successful and not cached",
     command: `${turboBinary} build`,
     conditions: [
       { expected: "2 successful, 2 total", condition: "includes" },
@@ -163,10 +174,9 @@ function verifyFirstBuild({ installType, packageManager }) {
 }
 
 function verifySecondBuild({ installType, packageManager }) {
-  console.log("Verify turbo build (cached)");
-
   const turboBinary = getTurboBinary({ installType, packageManager });
   exec({
+    title: "Verify second turbo build is successful and cached",
     command: `${turboBinary} build`,
     conditions: [
       { expected: "2 successful, 2 total", condition: "includes" },
@@ -195,7 +205,7 @@ function global({ local, global, packageManager }) {
 
   verifyLocalBinary({ installType: "global", packageManager });
   uninstallLocalTurbo({ packageManager });
-  verifyGlobalBinary({ packageManager });
+  verifyGlobalBinary({ installType: "global", packageManager });
   logTurboDetails({ installType: "global", packageManager });
 
   // verify build is correctly cached
