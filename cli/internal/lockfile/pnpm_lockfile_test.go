@@ -29,7 +29,7 @@ func getFixture(t *testing.T, name string) ([]byte, error) {
 }
 
 func Test_Roundtrip(t *testing.T) {
-	lockfiles := []string{"pnpm6-workspace.yaml", "pnpm7-workspace.yaml"}
+	lockfiles := []string{"pnpm6-workspace.yaml", "pnpm7-workspace.yaml", "pnpm8.yaml"}
 
 	for _, lockfilePath := range lockfiles {
 		lockfileContent, err := getFixture(t, lockfilePath)
@@ -58,7 +58,8 @@ func Test_SpecifierResolution(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	lockfile, err := DecodePnpmLockfile(contents)
+	untypedLockfile, err := DecodePnpmLockfile(contents)
+	lockfile := untypedLockfile.(*PnpmLockfile)
 	if err != nil {
 		t.Errorf("failure decoding lockfile: %v", err)
 	}
@@ -79,6 +80,44 @@ func Test_SpecifierResolution(t *testing.T) {
 		{workspacePath: "apps/web", pkg: "lodash", specifier: "bad-tag", version: "", found: false},
 		{workspacePath: "apps/web", pkg: "lodash", specifier: "^4.17.21", version: "4.17.21_ehchni3mpmovsvjxesffg2i5a4", found: true},
 		{workspacePath: "", pkg: "turbo", specifier: "latest", version: "1.4.6", found: true},
+		{workspacePath: "apps/bad_workspace", pkg: "turbo", specifier: "latest", version: "1.4.6", err: "no workspace 'apps/bad_workspace' found in lockfile"},
+	}
+
+	for _, testCase := range cases {
+		actualVersion, actualFound, err := lockfile.resolveSpecifier(testCase.workspacePath, testCase.pkg, testCase.specifier)
+		if testCase.err != "" {
+			assert.Error(t, err, testCase.err)
+		} else {
+			assert.Equal(t, actualFound, testCase.found, "%s@%s", testCase.pkg, testCase.version)
+			assert.Equal(t, actualVersion, testCase.version, "%s@%s", testCase.pkg, testCase.version)
+		}
+	}
+}
+
+func Test_SpecifierResolutionV6(t *testing.T) {
+	contents, err := getFixture(t, "pnpm8.yaml")
+	if err != nil {
+		t.Error(err)
+	}
+	untypedLockfile, err := DecodePnpmLockfile(contents)
+	lockfile := untypedLockfile.(*PnpmLockfileV6)
+	if err != nil {
+		t.Errorf("failure decoding lockfile: %v", err)
+	}
+
+	type Case struct {
+		workspacePath turbopath.AnchoredUnixPath
+		pkg           string
+		specifier     string
+		version       string
+		found         bool
+		err           string
+	}
+
+	cases := []Case{
+		{workspacePath: "packages/a", pkg: "c", specifier: "workspace:*", version: "link:../c", found: true},
+		{workspacePath: "packages/a", pkg: "is-odd", specifier: "^3.0.1", version: "3.0.1", found: true},
+		{workspacePath: "packages/b", pkg: "is-odd", specifier: "^3.0.1", version: "3.0.1", err: "Unable to find resolved version for is-odd@^3.0.1 in packages/b"},
 		{workspacePath: "apps/bad_workspace", pkg: "turbo", specifier: "latest", version: "1.4.6", err: "no workspace 'apps/bad_workspace' found in lockfile"},
 	}
 
@@ -150,4 +189,52 @@ func Test_PnpmPrunePatches(t *testing.T) {
 	assert.NilError(t, err)
 
 	assert.Equal(t, len(prunedLockfile.Patches()), 2)
+}
+
+func Test_PnpmPrunePatchesV6(t *testing.T) {
+	contents, err := getFixture(t, "pnpm-patch-v6.yaml")
+	assert.NilError(t, err)
+
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err)
+
+	prunedLockfile, err := lockfile.Subgraph(
+		[]turbopath.AnchoredSystemPath{turbopath.AnchoredSystemPath("packages/a")},
+		[]string{"/lodash@4.17.21"},
+	)
+	assert.NilError(t, err)
+
+	assert.Equal(t, len(prunedLockfile.Patches()), 1)
+
+	prunedLockfile, err = lockfile.Subgraph(
+		[]turbopath.AnchoredSystemPath{turbopath.AnchoredSystemPath("packages/b")},
+		[]string{"/@babel/helper-string-parser@7.19.4"},
+	)
+	assert.NilError(t, err)
+
+	assert.Equal(t, len(prunedLockfile.Patches()), 1)
+}
+
+func Test_PnpmAbsoluteDependency(t *testing.T) {
+	type testCase struct {
+		fixture string
+		key     string
+	}
+	testcases := []testCase{
+		{"pnpm-absolute.yaml", "/@scope/child/1.0.0"},
+		{"pnpm-absolute-v6.yaml", "/@scope/child@1.0.0"},
+	}
+	for _, tc := range testcases {
+		contents, err := getFixture(t, tc.fixture)
+		assert.NilError(t, err, tc.fixture)
+
+		lockfile, err := DecodePnpmLockfile(contents)
+		assert.NilError(t, err, tc.fixture)
+
+		pkg, err := lockfile.ResolvePackage(turbopath.AnchoredUnixPath("packages/a"), "child", tc.key)
+		assert.NilError(t, err, "resolve")
+		assert.Assert(t, pkg.Found, tc.fixture)
+		assert.DeepEqual(t, pkg.Key, tc.key)
+		assert.DeepEqual(t, pkg.Version, "1.0.0")
+	}
 }

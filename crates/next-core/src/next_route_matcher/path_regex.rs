@@ -1,29 +1,29 @@
 use anyhow::{Context, Result};
-use indexmap::IndexMap;
-use turbo_tasks::{
-    primitives::{Regex, StringVc},
-    ValueToString, ValueToStringVc,
-};
+use serde::{Deserialize, Serialize};
+use turbo_tasks::primitives::{BoolVc, Regex};
+use turbopack_node::route_matcher::{ParamsVc, RouteMatcher};
 
 /// A regular expression that matches a path, with named capture groups for the
 /// dynamic parts of the path.
-#[turbo_tasks::value(shared)]
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct PathRegex {
     regex: Regex,
     named_params: Vec<String>,
 }
 
-impl PathRegex {
-    /// Returns true if the given path matches the regular expression.
-    pub fn is_match(&self, path: &str) -> bool {
-        self.regex.is_match(path)
+impl std::fmt::Display for PathRegex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.regex.as_str())
+    }
+}
+
+impl RouteMatcher for PathRegex {
+    fn matches(&self, path: &str) -> BoolVc {
+        BoolVc::cell(self.regex.is_match(path))
     }
 
-    /// Matches a path with the regular expression and returns a map with the
-    /// named captures.
-    pub fn get_matches(&self, path: &str) -> Option<IndexMap<String, String>> {
-        self.regex.captures(path).map(|capture| {
+    fn params(&self, path: &str) -> ParamsVc {
+        ParamsVc::cell(self.regex.captures(path).map(|capture| {
             self.named_params
                 .iter()
                 .enumerate()
@@ -35,15 +35,7 @@ impl PathRegex {
                     Some((name.to_string(), value.as_str().to_string()))
                 })
                 .collect()
-        })
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl ValueToString for PathRegex {
-    #[turbo_tasks::function]
-    fn to_string(&self) -> StringVc {
-        StringVc::cell(self.regex.as_str().to_string())
+        }))
     }
 }
 
