@@ -5,7 +5,7 @@ const { execSync } = require("child_process");
 function exec({ title, command, options, conditions }) {
   console.log();
   if (title) {
-    console.log(`▶️ ${title}`);
+    console.log(`ℹ️ ${title}`);
   }
   console.log(`Running: "${command}"`);
   try {
@@ -39,7 +39,7 @@ function getGlobalBinaryPath({ packageManager }) {
     case "npm":
       return execSync(`npm root --global`).toString().trim();
     case "pnpm":
-      return execSync(`pnpm  bin --global`).toString().trim();
+      return execSync(`pnpm root --global`).toString().trim();
   }
 }
 
@@ -64,7 +64,7 @@ function assertOutput({ output, command, expected, condition }) {
 
   if (condition === "startsWith") {
     if (output.startsWith(expected)) {
-      console.log(`✅ "${condition}" starts with "${expected}"`);
+      console.log(`✅ "${command}" output starts with "${expected}"`);
     } else {
       console.error(`❌ "${command}" output does not start with "${expected}"`);
       process.exit(1);
