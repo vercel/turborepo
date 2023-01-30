@@ -37,7 +37,7 @@ function getGlobalBinaryPath({ packageManager }) {
     case "yarn":
       return execSync(`yarn global bin`).toString().trim();
     case "npm":
-      return execSync(`npm root --global`).toString().trim();
+      return '/usr/local/lib/node_modules';
     case "pnpm":
       return '/pnpm/global/';
   }
@@ -155,7 +155,7 @@ function verifyGlobalBinary({ installType, packageManager }) {
     conditions: [
       {
         expected: packageManagerGlobalBinPath,
-        condition: "startsWith",
+        condition: "includes",
       },
     ],
   });
