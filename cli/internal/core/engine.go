@@ -349,8 +349,6 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 
 		currentPackageName, currentTaskName := util.GetPackageTaskFromId(vertexName)
 
-		fmt.Printf("[debug] ------------------------\n")
-		fmt.Printf("[debug] CHECKING %s dependencies\n", vertexName)
 		// For each "downEdge" (i.e. each task that _this_ task dependsOn)
 		// check if the downEdge is a Persistent task, and if it actually has the script implemented
 		// in that package's package.json
@@ -372,16 +370,12 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 				return fmt.Errorf("Cannot find task definition for %v in package %v", depTaskID, packageName)
 			}
 
-			fmt.Printf("[debug] %s: persistent? %#v\n", depTaskID, depTaskDefinition.Persistent)
-
 			// Get information about the package
 			pkg, pkgExists := graph.WorkspaceInfos[packageName]
 			if !pkgExists {
 				return fmt.Errorf("Cannot find package %v", packageName)
 			}
 			_, hasScript := pkg.Scripts[taskName]
-
-			fmt.Printf("[debug] %s: has script? %#v\n", depTaskID, hasScript)
 
 			// If both conditions are true set a value and break out of checking the dependencies
 			if depTaskDefinition.Persistent && hasScript {
@@ -434,7 +428,6 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 		}
 
 		if _, ok := taskDef.FieldsMeta["HasTopologicalDependencies"]; ok {
-			// fmt.Printf("[debug] Assigning topoDeps %#v\n", taskDef.TopologicalDependencies)
 			mergedTaskDefinition.TopologicalDependencies = taskDef.TopologicalDependencies
 		}
 
@@ -442,7 +435,6 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 			mergedTaskDefinition.TaskDependencies = taskDef.TaskDependencies
 		}
 
-		// fmt.Printf("[debug] %v: Assigning inputs: %#v\n", taskID, taskDef.Inputs)
 		if _, ok := taskDef.FieldsMeta["HasInputs"]; ok {
 			mergedTaskDefinition.Inputs = taskDef.Inputs
 		}

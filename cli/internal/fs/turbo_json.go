@@ -326,8 +326,8 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 
 	c.TopologicalDependencies = []string{} // TODO @mehulkar: this should be a set
 	c.TaskDependencies = []string{}        // TODO @mehulkar: this should be a set
-	if task.DependsOn != nil {
 
+	if task.DependsOn != nil {
 		for _, dependency := range task.DependsOn {
 			if strings.HasPrefix(dependency, envPipelineDelimiter) {
 				log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)

@@ -22,7 +22,13 @@ var _workspaceGraphDefinition = map[string][]string{
 func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 
-	devTask := fs.TaskDefinition{Persistent: true, TopologicalDependencies: []string{"dev"}}
+	devTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTopologicalDependencies": true,
+		},
+		Persistent:              true,
+		TopologicalDependencies: []string{"dev"},
+	}
 	completeGraph.Pipeline = fs.Pipeline{"dev": devTask}
 
 	engine := NewEngine(completeGraph)
@@ -61,7 +67,13 @@ func TestPrepare_PersistentDependencies_Topological(t *testing.T) {
 func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
 
-	buildTask := fs.TaskDefinition{Persistent: false, TaskDependencies: []string{"dev"}}
+	buildTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTaskDependencies": true,
+		},
+		Persistent:       false,
+		TaskDependencies: []string{"dev"},
+	}
 	devTask := fs.TaskDefinition{Persistent: true}
 
 	completeGraph.Pipeline = fs.Pipeline{
@@ -108,7 +120,13 @@ func TestPrepare_PersistentDependencies_SameWorkspace(t *testing.T) {
 
 func TestPrepare_PersistentDependencies_WorkspaceSpecific(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
-	buildTask := fs.TaskDefinition{Persistent: false, TaskDependencies: []string{"workspace-b#dev"}}
+	buildTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTaskDependencies": true,
+		},
+		Persistent:       false,
+		TaskDependencies: []string{"workspace-b#dev"},
+	}
 	bDevTask := fs.TaskDefinition{Persistent: true}
 	completeGraph.Pipeline = fs.Pipeline{
 		"build":           buildTask,
@@ -155,7 +173,17 @@ func TestPrepare_PersistentDependencies_WorkspaceSpecific(t *testing.T) {
 
 func TestPrepare_PersistentDependencies_CrossWorkspace(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
-	aDevTask := fs.TaskDefinition{Persistent: true, TaskDependencies: []string{"workspace-b#dev"}}
+	aDevTask := fs.TaskDefinition{
+		// Note(mehulkar): This test doesn't need FieldsMeta to pass,
+		// becuase package-task dependencies are connected into the TaskGraph
+		// differently. But adding it in anyway, since this would be set
+		// in a real world scenario if this TaskDefinition was unmarshalled from a json file.
+		FieldsMeta: map[string]bool{
+			"HasTaskDependencies": true,
+		},
+		Persistent:       true,
+		TaskDependencies: []string{"workspace-b#dev"},
+	}
 	bDevTask := fs.TaskDefinition{Persistent: true}
 	completeGraph.Pipeline = fs.Pipeline{
 		"workspace-a#dev": aDevTask,
@@ -195,7 +223,12 @@ func TestPrepare_PersistentDependencies_RootWorkspace(t *testing.T) {
 	// Add in a "dev" task into the root workspace, so it exists
 	completeGraph.WorkspaceInfos["//"].Scripts["dev"] = "echo \"root dev task\""
 
-	buildTask := fs.TaskDefinition{TaskDependencies: []string{"//#dev"}}
+	buildTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTaskDependencies": true,
+		},
+		TaskDependencies: []string{"//#dev"},
+	}
 	rootDevTask := fs.TaskDefinition{Persistent: true}
 	completeGraph.Pipeline = fs.Pipeline{
 		"build":  buildTask,
@@ -241,7 +274,13 @@ func TestPrepare_PersistentDependencies_RootWorkspace(t *testing.T) {
 
 func TestPrepare_PersistentDependencies_Unimplemented(t *testing.T) {
 	completeGraph, workspaces := _buildCompleteGraph(_workspaceGraphDefinition)
-	devTask := fs.TaskDefinition{Persistent: true, TopologicalDependencies: []string{"dev"}}
+	devTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTopologicalDependencies": true,
+		},
+		Persistent:              true,
+		TopologicalDependencies: []string{"dev"},
+	}
 	completeGraph.Pipeline = fs.Pipeline{
 		"dev": devTask,
 	}
@@ -285,7 +324,13 @@ func TestPrepare_PersistentDependencies_Topological_SkipDepImplementedTask(t *te
 		"workspace-b": {"workspace-c"}, // b depends on c
 		"workspace-c": {},
 	}
-	devTask := fs.TaskDefinition{Persistent: true, TopologicalDependencies: []string{"dev"}}
+	devTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTopologicalDependencies": true,
+		},
+		Persistent:              true,
+		TopologicalDependencies: []string{"dev"},
+	}
 	completeGraph, workspaces := _buildCompleteGraph(workspaceGraphDefinition)
 	completeGraph.Pipeline = fs.Pipeline{"dev": devTask}
 
