@@ -3,8 +3,8 @@ use indexmap::IndexSet;
 use petgraph::prelude::DiGraphMap;
 use swc_core::ecma::{
     ast::{
-        ClassDecl, Decl, ExportDecl, ExportSpecifier, FnDecl, Id, ImportSpecifier, Module,
-        ModuleDecl, ModuleExportName, ModuleItem, Stmt,
+        ClassDecl, Decl, ExportDecl, ExportSpecifier, Expr, ExprStmt, FnDecl, Id, ImportSpecifier,
+        Module, ModuleDecl, ModuleExportName, ModuleItem, Stmt,
     },
     atoms::js_word,
     utils::find_pat_ids,
@@ -255,6 +255,29 @@ impl Graph {
                         );
                     }
 
+                    continue;
+                }
+
+                ModuleItem::Stmt(Stmt::Expr(ExprStmt {
+                    expr: box Expr::Assign(assign),
+                    ..
+                })) => {
+                    let used_ids = ids_used_by_ignoring_nested(item);
+                    let captured_ids = ids_captured_by(item);
+                    let data = ItemData {
+                        read_vars: used_ids.0,
+                        eventual_read_vars: captured_ids.0,
+                        write_vars: used_ids.1,
+                        eventual_write_vars: captured_ids.1,
+                        ..Default::default()
+                    };
+
+                    let id = ItemId {
+                        index,
+                        kind: ItemIdKind::Normal,
+                    };
+                    ids.push(id.clone());
+                    items.insert(id, data);
                     continue;
                 }
                 _ => {}
