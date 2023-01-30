@@ -2099,24 +2099,28 @@ impl JsValue {
     pub fn normalize_shallow(&mut self) {
         match self {
             JsValue::Alternatives(_, v) => {
-                let mut set = IndexSet::new();
-                for v in take(v) {
-                    match v {
-                        JsValue::Alternatives(_, v) => {
-                            for v in v {
+                if v.len() == 1 {
+                    *self = take(&mut v[0]);
+                } else {
+                    let mut set = IndexSet::with_capacity(v.len());
+                    for v in take(v) {
+                        match v {
+                            JsValue::Alternatives(_, v) => {
+                                for v in v {
+                                    set.insert(SimilarJsValue(v));
+                                }
+                            }
+                            v => {
                                 set.insert(SimilarJsValue(v));
                             }
                         }
-                        v => {
-                            set.insert(SimilarJsValue(v));
-                        }
                     }
-                }
-                if set.len() == 1 {
-                    *self = set.into_iter().next().unwrap().0;
-                } else {
-                    *v = set.into_iter().map(|v| v.0).collect();
-                    self.update_total_nodes();
+                    if set.len() == 1 {
+                        *self = set.into_iter().next().unwrap().0;
+                    } else {
+                        *v = set.into_iter().map(|v| v.0).collect();
+                        self.update_total_nodes();
+                    }
                 }
             }
             JsValue::Concat(_, v) => {
@@ -2388,7 +2392,7 @@ impl Eq for SimilarJsValue {}
 
 impl Hash for SimilarJsValue {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.similar_hash(state, 3)
+        self.0.similar_hash(state, 2)
     }
 }
 
