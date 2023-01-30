@@ -401,6 +401,8 @@ func DecodeBerryLockfile(contents []byte) (*BerryLockfile, error) {
 	return &lockfile, nil
 }
 
+// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
+// the cache.
 func (l *BerryLockfile) GlobalChange(other Lockfile) bool {
 	otherBerry, ok := other.(*BerryLockfile)
 	return !ok ||

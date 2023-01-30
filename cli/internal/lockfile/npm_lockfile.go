@@ -242,6 +242,8 @@ func DecodeNpmLockfile(content []byte) (*NpmLockfile, error) {
 	return &lockfile, nil
 }
 
+// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
+// the cache.
 func (l *NpmLockfile) GlobalChange(other Lockfile) bool {
 	o, ok := other.(*NpmLockfile)
 	return !ok ||

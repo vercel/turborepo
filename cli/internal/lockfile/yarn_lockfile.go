@@ -106,6 +106,8 @@ func DecodeYarnLockfile(contents []byte) (*YarnLockfile, error) {
 	return &YarnLockfile{lockfile, hasCRLF}, nil
 }
 
+// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
+// the cache.
 func (l *YarnLockfile) GlobalChange(other Lockfile) bool {
 	_, ok := other.(*YarnLockfile)
 	return !ok

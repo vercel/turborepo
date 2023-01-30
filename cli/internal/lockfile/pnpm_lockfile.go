@@ -529,6 +529,8 @@ func (p *PnpmLockfileBase) patches() []turbopath.AnchoredUnixPath {
 	return patchPaths
 }
 
+// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
+// the cache.
 func (p *PnpmLockfile) GlobalChange(other Lockfile) bool {
 	o, ok := other.(*PnpmLockfile)
 	return !ok ||
@@ -538,6 +540,8 @@ func (p *PnpmLockfile) GlobalChange(other Lockfile) bool {
 		!reflect.DeepEqual(p.PatchedDependencies, o.PatchedDependencies)
 }
 
+// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
+// the cache.
 func (p *PnpmLockfileV6) GlobalChange(other Lockfile) bool {
 	o, ok := other.(*PnpmLockfileV6)
 	return !ok ||

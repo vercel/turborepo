@@ -41,6 +41,7 @@ type Package struct {
 	Found bool
 }
 
+// ByKey sort package structures by key
 type ByKey []Package
 
 func (p ByKey) Len() int {
