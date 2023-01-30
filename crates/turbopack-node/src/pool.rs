@@ -76,32 +76,24 @@ async fn handle_output_stream(
             Ok(0) => {
                 break;
             }
-            Ok(_) => {
-                let line = Arc::from(take(&mut buffer).into_boxed_slice());
-                let occurances = match own_output.entry(Arc::clone(&line)) {
-                    Entry::Occupied(mut e) => {
-                        let c = e.get_mut();
-                        *c += 1;
-                        *c
-                    }
-                    Entry::Vacant(e) => {
-                        e.insert(0);
-                        0
-                    }
-                };
-                let new_line = {
-                    let mut shared = shared.lock().unwrap();
-                    shared.insert((line.clone(), occurances))
-                };
-                if new_line {
-                    if final_stream.write(&*line).await.is_err() {
-                        // Whatever happened with stdout/stderr, we can't write to it anymore.
-                        break;
-                    }
-                }
-            }
             Err(err) => {
                 eprintln!("error reading from stream: {}", err);
+                break;
+            }
+            Ok(_) => {}
+        }
+        let line = Arc::from(take(&mut buffer).into_boxed_slice());
+        let occurance_number = *own_output
+            .entry(Arc::clone(&line))
+            .and_modify(|c| *c += 1)
+            .or_insert(0);
+        let new_line = {
+            let mut shared = shared.lock().unwrap();
+            shared.insert((line.clone(), occurance_number))
+        };
+        if new_line {
+            if final_stream.write(&*line).await.is_err() {
+                // Whatever happened with stdout/stderr, we can't write to it anymore.
                 break;
             }
         }
