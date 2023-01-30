@@ -9,7 +9,7 @@ pub mod update;
 
 use std::{
     borrow::Cow,
-    collections::{btree_map::Entry, BTreeMap},
+    collections::btree_map::Entry,
     future::Future,
     net::{SocketAddr, TcpListener},
     pin::Pin,
@@ -29,7 +29,10 @@ use hyper::{
     Request, Response, Server,
 };
 use mime_guess::mime;
-use source::{Body, Bytes};
+use source::{
+    headers::{HeaderValue, Headers},
+    Body, Bytes, RewriteReadRef,
+};
 use turbo_tasks::{
     run_once, trace::TraceRawVcs, util::FormatDuration, RawVc, TransientValue, TurboTasksApi, Value,
 };
@@ -39,12 +42,12 @@ use turbopack_core::asset::AssetContent;
 
 use self::{
     source::{
-        query::Query, ContentSourceContent, ContentSourceDataVary, ContentSourceResultVc,
-        ContentSourceVc, ProxyResultReadRef,
+        query::Query, ContentSourceContent, ContentSourceDataVary, ContentSourceResult,
+        ContentSourceResultVc, ContentSourceVc, ProxyResultReadRef,
     },
     update::{protocol::ResourceIdentifier, UpdateServer},
 };
-use crate::source::{ContentSourceData, HeaderValue};
+use crate::source::ContentSourceData;
 
 pub trait SourceProvider: Send + Clone + 'static {
     /// must call a turbo-tasks function internally
@@ -99,7 +102,12 @@ async fn handle_issues<T: Into<RawVc>>(
 
 #[turbo_tasks::value(serialization = "none")]
 enum GetFromSourceResult {
-    Static(FileContentReadRef),
+    Static {
+        content: FileContentReadRef,
+        status_code: u16,
+        headers: Vec<(String, String)>,
+    },
+    Rewrite(RewriteReadRef),
     HttpProxy(ProxyResultReadRef),
     NeedData {
         source: ContentSourceVc,
@@ -114,37 +122,74 @@ async fn get_from_source(
     source: ContentSourceVc,
     path: &str,
     data: Value<ContentSourceData>,
+    vary: Value<ContentSourceDataVary>,
 ) -> Result<GetFromSourceResultVc> {
-    let content = source.get(path, data).await?.content.await?;
-    Ok(match &*content {
-        ContentSourceContent::Static(content_vc) => {
-            if let AssetContent::File(file) = &*content_vc.content().await? {
-                GetFromSourceResult::Static(file.await?)
-            } else {
-                GetFromSourceResult::NotFound
-            }
-        }
-        ContentSourceContent::HttpProxy(proxy) => GetFromSourceResult::HttpProxy(proxy.await?),
-        ContentSourceContent::NeedData(data) => GetFromSourceResult::NeedData {
+    let result = source.get(path, data.clone()).await?;
+    Ok(match &*result {
+        ContentSourceResult::NotFound => GetFromSourceResult::NotFound,
+        ContentSourceResult::NeedData(data) => GetFromSourceResult::NeedData {
             source: data.source.resolve().await?,
             path: data.path.clone(),
             vary: data.vary.clone(),
         },
-        ContentSourceContent::NotFound => GetFromSourceResult::NotFound,
+        ContentSourceResult::Result { get_content, .. } => {
+            let content_vary = get_content.vary().await?;
+            if *vary != *content_vary {
+                GetFromSourceResult::NeedData {
+                    source: ContentSourceResultVc::exact(*get_content).into(),
+                    path: path.to_string(),
+                    vary: content_vary.clone_value(),
+                }
+            } else {
+                let content = get_content.get(data).await?;
+                match &*content {
+                    ContentSourceContent::Rewrite(rewrite) => {
+                        GetFromSourceResult::Rewrite(rewrite.await?)
+                    }
+                    ContentSourceContent::NotFound => GetFromSourceResult::NotFound,
+                    ContentSourceContent::Static {
+                        content: content_vc,
+                        status_code,
+                        headers,
+                    } => {
+                        if let AssetContent::File(file) = &*content_vc.content().await? {
+                            GetFromSourceResult::Static {
+                                content: file.await?,
+                                status_code: *status_code,
+                                headers: headers.await?.clone(),
+                            }
+                        } else {
+                            GetFromSourceResult::NotFound
+                        }
+                    }
+                    ContentSourceContent::HttpProxy(proxy) => {
+                        GetFromSourceResult::HttpProxy(proxy.await?)
+                    }
+                }
+            }
+        }
     }
     .cell())
 }
 
 async fn process_request_with_content_source(
     path: &str,
-    mut resolved_source: ContentSourceVc,
-    mut asset_path: Cow<'_, str>,
+    source: ContentSourceVc,
+    asset_path: Cow<'_, str>,
     mut request: Request<hyper::Body>,
     console_ui: ConsoleUiVc,
 ) -> Result<Response<hyper::Body>> {
     let mut data = ContentSourceData::default();
+    let mut data_vary = ContentSourceDataVary::default();
+    let mut current_source = source;
+    let mut current_asset_path = asset_path.clone();
     loop {
-        let content_source_result = get_from_source(resolved_source, &asset_path, Value::new(data));
+        let content_source_result = get_from_source(
+            current_source,
+            &current_asset_path,
+            Value::new(data),
+            Value::new(data_vary),
+        );
         handle_issues(
             content_source_result,
             path,
@@ -153,15 +198,37 @@ async fn process_request_with_content_source(
         )
         .await?;
         match &*content_source_result.strongly_consistent().await? {
-            GetFromSourceResult::Static(file) => {
+            GetFromSourceResult::Static {
+                content: file,
+                status_code,
+                headers,
+            } => {
                 if let FileContent::Content(content) = &**file {
-                    let content_type = content.content_type().map_or_else(
-                        || {
-                            let guess =
-                                mime_guess::from_path(asset_path.as_ref()).first_or_octet_stream();
-                            // If a text type, application/javascript, or application/json was
-                            // guessed, use a utf-8 charset as  we most likely generated it as
-                            // such.
+                    let mut response = Response::builder().status(*status_code);
+
+                    let header_map = response.headers_mut().expect("headers must be defined");
+
+                    for (header_name, header_value) in headers {
+                        header_map.append(
+                            HeaderName::try_from(header_name.clone())?,
+                            hyper::header::HeaderValue::try_from(header_value.as_str())?,
+                        );
+                    }
+
+                    if let Some(content_type) = content.content_type() {
+                        header_map.append(
+                            "content-type",
+                            hyper::header::HeaderValue::try_from(content_type.to_string())?,
+                        );
+                    } else if let hyper::header::Entry::Vacant(entry) =
+                        header_map.entry("content-type")
+                    {
+                        let guess =
+                            mime_guess::from_path(asset_path.as_ref()).first_or_octet_stream();
+                        // If a text type, application/javascript, or application/json was
+                        // guessed, use a utf-8 charset as  we most likely generated it as
+                        // such.
+                        entry.insert(hyper::header::HeaderValue::try_from(
                             if (guess.type_() == mime::TEXT
                                 || guess.subtype() == mime::JAVASCRIPT
                                 || guess.subtype() == mime::JSON)
@@ -170,18 +237,18 @@ async fn process_request_with_content_source(
                                 guess.to_string() + "; charset=utf-8"
                             } else {
                                 guess.to_string()
-                            }
-                        },
-                        |m| m.to_string(),
-                    );
+                            },
+                        )?);
+                    }
 
                     let content = content.content();
+                    header_map.insert(
+                        "Content-Length",
+                        hyper::header::HeaderValue::try_from(content.len().to_string())?,
+                    );
+
                     let bytes = content.read();
-                    return Ok(Response::builder()
-                        .status(200)
-                        .header("Content-Type", content_type)
-                        .header("Content-Length", content.len().to_string())
-                        .body(hyper::Body::wrap_stream(bytes))?);
+                    return Ok(response.body(hyper::Body::wrap_stream(bytes))?);
                 }
             }
             GetFromSourceResult::HttpProxy(proxy_result) => {
@@ -197,10 +264,22 @@ async fn process_request_with_content_source(
 
                 return Ok(response.body(hyper::Body::wrap_stream(proxy_result.body.read()))?);
             }
+            GetFromSourceResult::Rewrite(rewrite) => {
+                let new_asset_path = rewrite.path();
+                if asset_path == new_asset_path {
+                    bail!("rewrite loop detected: {}", asset_path);
+                }
+                current_source = source;
+                current_asset_path = Cow::Owned(new_asset_path.to_string());
+                data = ContentSourceData::default();
+                data_vary = ContentSourceDataVary::default();
+                continue;
+            }
             GetFromSourceResult::NeedData { source, path, vary } => {
-                resolved_source = *source;
-                asset_path = Cow::Owned(path.to_string());
+                current_source = *source;
+                current_asset_path = Cow::Owned(path.to_string());
                 data = request_to_data(&mut request, vary).await?;
+                data_vary = vary.clone();
                 continue;
             }
             GetFromSourceResult::NotFound => {}
@@ -293,9 +372,10 @@ impl DevServerBuilder {
                             )
                             .await?;
                             let status = response.status().as_u16();
-                            let success = response.status().is_success();
+                            let is_error = response.status().is_client_error()
+                                || response.status().is_server_error();
                             let elapsed = start.elapsed();
-                            if !success
+                            if is_error
                                 || (cfg!(feature = "log_request_stats")
                                     && elapsed > Duration::from_secs(1))
                             {
@@ -370,7 +450,7 @@ async fn request_to_data(
         }
     }
     if let Some(filter) = vary.headers.as_ref() {
-        let mut headers = BTreeMap::new();
+        let mut headers = Headers::default();
         for (header_name, header_value) in request.headers().iter() {
             if !filter.contains(header_name.as_str()) {
                 continue;
@@ -419,7 +499,7 @@ pub(crate) fn resource_to_data(
         data.query = Some(Query::default())
     }
     if let Some(filter) = vary.headers.as_ref() {
-        let mut headers = BTreeMap::new();
+        let mut headers = Headers::default();
         if let Some(resource_headers) = resource.headers {
             for (header_name, header_value) in resource_headers {
                 if !filter.contains(header_name.as_str()) {

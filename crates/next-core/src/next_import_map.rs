@@ -1,10 +1,14 @@
+use std::collections::{BTreeMap, HashMap};
+
 use anyhow::Result;
 use turbo_tasks::Value;
 use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
-use turbopack::module_options::ResolveAliasOptionsVc;
 use turbopack_core::resolve::{
-    options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap, ResolvedMapVc},
-    AliasPattern,
+    options::{
+        ConditionValue, ImportMap, ImportMapVc, ImportMapping, ImportMappingVc, ResolvedMap,
+        ResolvedMapVc,
+    },
+    AliasPattern, ExportsValue, ResolveAliasMapVc,
 };
 
 use crate::{
@@ -24,10 +28,13 @@ pub async fn get_next_client_import_map(
 ) -> Result<ImportMapVc> {
     let mut import_map = ImportMap::empty();
 
-    insert_next_shared_aliases(
+    insert_next_shared_aliases(&mut import_map, project_path).await?;
+
+    insert_alias_option(
         &mut import_map,
         project_path,
         next_config.resolve_alias_options(),
+        ["browser"],
     )
     .await?;
 
@@ -47,6 +54,14 @@ pub async fn get_next_client_import_map(
                 vec![
                     request_to_import_mapping(pages_dir, "./_document"),
                     request_to_import_mapping(pages_dir, "next/document"),
+                ],
+            );
+            insert_alias_to_alternatives(
+                &mut import_map,
+                format!("{VIRTUAL_PACKAGE_NAME}/internal/_error"),
+                vec![
+                    request_to_import_mapping(pages_dir, "./_error"),
+                    request_to_import_mapping(pages_dir, "next/error"),
                 ],
             );
         }
@@ -108,6 +123,8 @@ pub fn get_next_build_import_map(project_path: FileSystemPathVc) -> ImportMapVc 
 
     import_map.insert_exact_alias("next", ImportMapping::External(None).into());
     import_map.insert_wildcard_alias("next/", ImportMapping::External(None).into());
+    import_map.insert_exact_alias("styled-jsx", ImportMapping::External(None).into());
+    import_map.insert_wildcard_alias("styled-jsx/", ImportMapping::External(None).into());
 
     import_map.cell()
 }
@@ -146,60 +163,32 @@ pub async fn get_next_server_import_map(
 ) -> Result<ImportMapVc> {
     let mut import_map = ImportMap::empty();
 
-    insert_next_shared_aliases(
+    insert_next_shared_aliases(&mut import_map, project_path).await?;
+
+    insert_alias_option(
         &mut import_map,
         project_path,
         next_config.resolve_alias_options(),
+        [],
     )
     .await?;
 
-    match ty.into_value() {
-        ServerContextType::Pages { pages_dir } | ServerContextType::PagesData { pages_dir } => {
-            insert_alias_to_alternatives(
-                &mut import_map,
-                format!("{VIRTUAL_PACKAGE_NAME}/pages/_app"),
-                vec![
-                    request_to_import_mapping(pages_dir, "./_app"),
-                    external_request_to_import_mapping("next/app"),
-                ],
-            );
-            insert_alias_to_alternatives(
-                &mut import_map,
-                format!("{VIRTUAL_PACKAGE_NAME}/pages/_document"),
-                vec![
-                    request_to_import_mapping(pages_dir, "./_document"),
-                    external_request_to_import_mapping("next/document"),
-                ],
-            );
+    let ty = ty.into_value();
 
+    insert_next_server_special_aliases(&mut import_map, ty).await?;
+
+    match ty {
+        ServerContextType::Pages { .. } | ServerContextType::PagesData { .. } => {
             import_map.insert_exact_alias("next", ImportMapping::External(None).into());
             import_map.insert_wildcard_alias("next/", ImportMapping::External(None).into());
             import_map.insert_exact_alias("react", ImportMapping::External(None).into());
             import_map.insert_wildcard_alias("react/", ImportMapping::External(None).into());
             import_map.insert_exact_alias("react-dom", ImportMapping::External(None).into());
             import_map.insert_wildcard_alias("react-dom/", ImportMapping::External(None).into());
+            import_map.insert_exact_alias("styled-jsx", ImportMapping::External(None).into());
+            import_map.insert_wildcard_alias("styled-jsx/", ImportMapping::External(None).into());
         }
-        ServerContextType::AppSSR { app_dir } | ServerContextType::AppRSC { app_dir } => {
-            import_map.insert_exact_alias(
-                "react",
-                request_to_import_mapping(app_dir, "next/dist/compiled/react"),
-            );
-            import_map.insert_wildcard_alias(
-                "react/",
-                request_to_import_mapping(app_dir, "next/dist/compiled/react/*"),
-            );
-            import_map.insert_exact_alias(
-                "react-dom",
-                request_to_import_mapping(
-                    app_dir,
-                    "next/dist/compiled/react-dom/server-rendering-stub.js",
-                ),
-            );
-            import_map.insert_wildcard_alias(
-                "react-dom/",
-                request_to_import_mapping(app_dir, "next/dist/compiled/react-dom/*"),
-            );
-
+        ServerContextType::AppSSR { .. } | ServerContextType::AppRSC { .. } => {
             for external in next_config.server_component_externals().await?.iter() {
                 import_map.insert_exact_alias(external, ImportMapping::External(None).into());
                 import_map.insert_wildcard_alias(
@@ -209,6 +198,32 @@ pub async fn get_next_server_import_map(
             }
         }
     }
+
+    Ok(import_map.cell())
+}
+
+/// Computes the Next-specific edge-side import map.
+#[turbo_tasks::function]
+pub async fn get_next_edge_import_map(
+    project_path: FileSystemPathVc,
+    ty: Value<ServerContextType>,
+    next_config: NextConfigVc,
+) -> Result<ImportMapVc> {
+    let mut import_map = ImportMap::empty();
+
+    insert_next_shared_aliases(&mut import_map, project_path).await?;
+
+    insert_alias_option(
+        &mut import_map,
+        project_path,
+        next_config.resolve_alias_options(),
+        [],
+    )
+    .await?;
+
+    let ty = ty.into_value();
+
+    insert_next_server_special_aliases(&mut import_map, ty).await?;
 
     Ok(import_map.cell())
 }
@@ -263,10 +278,66 @@ static NEXT_ALIASES: [(&str, &str); 23] = [
     ("setImmediate", "next/dist/compiled/setimmediate"),
 ];
 
+pub async fn insert_next_server_special_aliases(
+    import_map: &mut ImportMap,
+    ty: ServerContextType,
+) -> Result<()> {
+    match ty {
+        ServerContextType::Pages { pages_dir } => {
+            insert_alias_to_alternatives(
+                import_map,
+                format!("{VIRTUAL_PACKAGE_NAME}/pages/_app"),
+                vec![
+                    request_to_import_mapping(pages_dir, "./_app"),
+                    external_request_to_import_mapping("next/app"),
+                ],
+            );
+            insert_alias_to_alternatives(
+                import_map,
+                format!("{VIRTUAL_PACKAGE_NAME}/pages/_document"),
+                vec![
+                    request_to_import_mapping(pages_dir, "./_document"),
+                    external_request_to_import_mapping("next/document"),
+                ],
+            );
+            insert_alias_to_alternatives(
+                import_map,
+                format!("{VIRTUAL_PACKAGE_NAME}/internal/_error"),
+                vec![
+                    request_to_import_mapping(pages_dir, "./_error"),
+                    external_request_to_import_mapping("next/error"),
+                ],
+            );
+        }
+        ServerContextType::PagesData { .. } => {}
+        ServerContextType::AppSSR { app_dir } | ServerContextType::AppRSC { app_dir } => {
+            import_map.insert_exact_alias(
+                "react",
+                request_to_import_mapping(app_dir, "next/dist/compiled/react"),
+            );
+            import_map.insert_wildcard_alias(
+                "react/",
+                request_to_import_mapping(app_dir, "next/dist/compiled/react/*"),
+            );
+            import_map.insert_exact_alias(
+                "react-dom",
+                request_to_import_mapping(
+                    app_dir,
+                    "next/dist/compiled/react-dom/server-rendering-stub.js",
+                ),
+            );
+            import_map.insert_wildcard_alias(
+                "react-dom/",
+                request_to_import_mapping(app_dir, "next/dist/compiled/react-dom/*"),
+            );
+        }
+    }
+    Ok(())
+}
+
 pub async fn insert_next_shared_aliases(
     import_map: &mut ImportMap,
     project_path: FileSystemPathVc,
-    alias_options: ResolveAliasOptionsVc,
 ) -> Result<()> {
     let package_root = attached_next_js_package_path(project_path);
 
@@ -294,21 +365,53 @@ pub async fn insert_next_shared_aliases(
         ImportMapping::Dynamic(NextFontGoogleCssModuleReplacerVc::new(project_path).into()).into(),
     );
 
-    for (alias, mappings_vc) in &alias_options.await?.alias_map {
-        let mappings = mappings_vc.await?;
-        import_map.insert_alias(
-            AliasPattern::exact(alias),
-            ImportMapping::Alternatives(
-                mappings
-                    .iter()
-                    .map(|m| ImportMapping::PrimaryAlternative(m.clone(), None).cell())
-                    .collect::<Vec<ImportMappingVc>>(),
-            )
-            .cell(),
-        );
-    }
-
     Ok(())
+}
+
+pub async fn insert_alias_option<const N: usize>(
+    import_map: &mut ImportMap,
+    project_path: FileSystemPathVc,
+    alias_options: ResolveAliasMapVc,
+    conditions: [&'static str; N],
+) -> Result<()> {
+    let conditions = BTreeMap::from(conditions.map(|c| (c.to_string(), ConditionValue::Set)));
+    for (alias, value) in &alias_options.await? {
+        if let Some(mapping) = export_value_to_import_mapping(value, &conditions, project_path) {
+            import_map.insert_alias(alias, mapping);
+        }
+    }
+    Ok(())
+}
+
+fn export_value_to_import_mapping(
+    value: &ExportsValue,
+    conditions: &BTreeMap<String, ConditionValue>,
+    project_path: FileSystemPathVc,
+) -> Option<ImportMappingVc> {
+    let mut result = Vec::new();
+    value.add_results(
+        conditions,
+        &ConditionValue::Unset,
+        &mut HashMap::new(),
+        &mut result,
+    );
+    if result.is_empty() {
+        None
+    } else {
+        Some(if result.len() == 1 {
+            ImportMapping::PrimaryAlternative(result[0].to_string(), Some(project_path)).cell()
+        } else {
+            ImportMapping::Alternatives(
+                result
+                    .iter()
+                    .map(|m| {
+                        ImportMapping::PrimaryAlternative(m.to_string(), Some(project_path)).cell()
+                    })
+                    .collect(),
+            )
+            .cell()
+        })
+    }
 }
 
 /// Inserts an alias to an alternative of import mappings into an import map.

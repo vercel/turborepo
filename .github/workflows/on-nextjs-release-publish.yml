@@ -1,0 +1,26 @@
+# A workflow supposed to run when there is a new release of Next.js.
+# This relies on next.js upstream's `repository_dispatch` workflow.
+name: Next.js Release Publish
+
+on:
+  repository_dispatch:
+    # This is the event type defined by next.js upstream's `repository_dispatch` workflow dispatches.
+    types: [nextjs-release-published]
+
+jobs:
+  # Debug purpose, write down release version.
+  check-release-tag:
+    name: Check latest release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print release tag
+        run: echo "Found a new release ${{ github.event.client_payload.version }}"
+
+  # Trigger actual next.js integration tests.
+  next_js_integration:
+    name: Execute Next.js integration workflow
+    needs: [determine_jobs]
+    if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
+    uses: ./.github/workflows/nextjs-integration-test.yml
+    with:
+    version: ${{ github.event.client_payload.version }}

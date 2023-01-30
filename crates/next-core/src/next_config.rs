@@ -1,6 +1,7 @@
 use anyhow::Result;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use turbo_tasks::{
     primitives::{BoolVc, StringsVc},
     trace::TraceRawVcs,
@@ -9,9 +10,7 @@ use turbo_tasks::{
 use turbo_tasks_env::EnvMapVc;
 use turbopack::{
     evaluate_context::node_evaluate_asset_context,
-    module_options::{
-        ResolveAliasOptions, ResolveAliasOptionsVc, WebpackLoadersOptions, WebpackLoadersOptionsVc,
-    },
+    module_options::{WebpackLoadersOptions, WebpackLoadersOptionsVc},
 };
 use turbopack_core::{
     asset::Asset,
@@ -19,7 +18,7 @@ use turbopack_core::{
     resolve::{
         find_context_file,
         options::{ImportMap, ImportMapping},
-        FindContextFileResult,
+        FindContextFileResult, ResolveAliasMap, ResolveAliasMapVc,
     },
     source_asset::SourceAssetVc,
 };
@@ -38,18 +37,19 @@ use crate::embed_js::next_asset;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NextConfig {
-    pub cross_origin: Option<String>,
     pub config_file: Option<String>,
     pub config_file_name: String,
 
-    pub react_strict_mode: Option<bool>,
-    pub experimental: ExperimentalConfig,
     pub env: IndexMap<String, String>,
-    pub compiler: Option<CompilerConfig>,
+    pub experimental: ExperimentalConfig,
     pub images: ImageConfig,
+    pub page_extensions: Vec<String>,
+    pub react_strict_mode: Option<bool>,
     pub transpile_packages: Option<Vec<String>>,
 
     // unsupported
+    cross_origin: Option<String>,
+    compiler: Option<CompilerConfig>,
     amp: AmpConfig,
     analytics_id: String,
     asset_prefix: String,
@@ -73,7 +73,6 @@ pub struct NextConfig {
     optimize_fonts: bool,
     output: Option<OutputType>,
     output_file_tracing: bool,
-    page_extensions: Vec<String>,
     powered_by_header: bool,
     production_browser_source_maps: bool,
     public_runtime_config: IndexMap<String, serde_json::Value>,
@@ -244,7 +243,7 @@ pub enum RemotePatternProtocal {
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalConfig {
     pub app_dir: Option<bool>,
-    pub resolve_alias: Option<IndexMap<String, Vec<String>>>,
+    pub resolve_alias: Option<IndexMap<String, JsonValue>>,
     pub server_components_external_packages: Option<Vec<String>>,
     pub turbopack_loaders: Option<IndexMap<String, Vec<String>>>,
 
@@ -384,6 +383,11 @@ impl NextConfigVc {
     }
 
     #[turbo_tasks::function]
+    pub async fn page_extensions(self) -> Result<StringsVc> {
+        Ok(StringsVc::cell(self.await?.page_extensions.clone()))
+    }
+
+    #[turbo_tasks::function]
     pub async fn transpile_packages(self) -> Result<StringsVc> {
         Ok(StringsVc::cell(
             self.await?.transpile_packages.clone().unwrap_or_default(),
@@ -407,19 +411,13 @@ impl NextConfigVc {
     }
 
     #[turbo_tasks::function]
-    pub async fn resolve_alias_options(self) -> Result<ResolveAliasOptionsVc> {
-        let Some(ref resolve_alias) = self.await?.experimental.resolve_alias else {
-            return Ok(ResolveAliasOptionsVc::cell(ResolveAliasOptions::default()));
+    pub async fn resolve_alias_options(self) -> Result<ResolveAliasMapVc> {
+        let this = self.await?;
+        let Some(resolve_alias) = this.experimental.resolve_alias.as_ref() else {
+            return Ok(ResolveAliasMapVc::cell(ResolveAliasMap::default()));
         };
-        let mut alias_map = IndexMap::new();
-        for (ext, mappings) in resolve_alias {
-            alias_map.insert(ext.clone(), StringsVc::cell(mappings.clone()));
-        }
-        Ok(ResolveAliasOptions {
-            alias_map,
-            ..Default::default()
-        }
-        .cell())
+        let alias_map: ResolveAliasMap = resolve_alias.try_into()?;
+        Ok(alias_map.cell())
     }
 }
 
@@ -442,6 +440,8 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
 
     import_map.insert_exact_alias("next", ImportMapping::External(None).into());
     import_map.insert_wildcard_alias("next/", ImportMapping::External(None).into());
+    import_map.insert_exact_alias("styled-jsx", ImportMapping::External(None).into());
+    import_map.insert_wildcard_alias("styled-jsx/", ImportMapping::External(None).into());
 
     let context = node_evaluate_asset_context(Some(import_map.cell()));
     let find_config_result = find_context_file(project_root, next_configs());
@@ -478,6 +478,7 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
         intermediate_output_path,
         runtime_entries,
         vec![],
+        /* debug */ false,
     )
     .await?;
     match &*config_value {

@@ -19,6 +19,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/core"
+	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/taskhash"
@@ -142,18 +143,19 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 		}
 
 		taskIDs = append(taskIDs, taskSummary{
-			TaskID:          packageTask.TaskID,
-			Task:            packageTask.Task,
-			Package:         packageTask.PackageName,
-			Hash:            hash,
-			CacheState:      itemStatus,
-			Command:         command,
-			Dir:             packageTask.Pkg.Dir.ToString(),
-			Outputs:         packageTask.TaskDefinition.Outputs.Inclusions,
-			ExcludedOutputs: packageTask.TaskDefinition.Outputs.Exclusions,
-			LogFile:         packageTask.RepoRelativeLogFile(),
-			Dependencies:    stringAncestors,
-			Dependents:      stringDescendents,
+			TaskID:                 packageTask.TaskID,
+			Task:                   packageTask.Task,
+			Package:                packageTask.PackageName,
+			Hash:                   hash,
+			CacheState:             itemStatus,
+			Command:                command,
+			Dir:                    packageTask.Pkg.Dir.ToString(),
+			Outputs:                packageTask.TaskDefinition.Outputs.Inclusions,
+			ExcludedOutputs:        packageTask.TaskDefinition.Outputs.Exclusions,
+			LogFile:                packageTask.RepoRelativeLogFile(),
+			Dependencies:           stringAncestors,
+			Dependents:             stringDescendents,
+			ResolvedTaskDefinition: packageTask.TaskDefinition,
 		})
 		return nil
 	}
@@ -266,6 +268,11 @@ func displayDryTextRun(ui cli.Ui, summary *dryRunSummary, workspaceInfos graph.W
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(dependencies, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(dependents, ", ")))
+		bytes, err := json.Marshal(task.ResolvedTaskDefinition)
+		// If there's an error, we can silently ignore it, we don't need to block the entire print.
+		if err == nil {
+			fmt.Fprintln(w, util.Sprintf("  ${GREY}ResolvedTaskDefinition\t=\t%s\t${RESET}", string(bytes)))
+		}
 
 		if err := w.Flush(); err != nil {
 			return err
@@ -281,31 +288,36 @@ func commandLooksLikeTurbo(command string) bool {
 }
 
 // TODO: put this somewhere else
+// TODO(mehulkar): `Outputs` and `ExcludedOutputs` are slightly redundant
+// as the information is also available in ResolvedTaskDefinition. We could remove them
+// and favor a version of Outputs that is the fully expanded list of files.
 type taskSummary struct {
-	TaskID          string           `json:"taskId"`
-	Task            string           `json:"task"`
-	Package         string           `json:"package"`
-	Hash            string           `json:"hash"`
-	CacheState      cache.ItemStatus `json:"cacheState"`
-	Command         string           `json:"command"`
-	Outputs         []string         `json:"outputs"`
-	ExcludedOutputs []string         `json:"excludedOutputs"`
-	LogFile         string           `json:"logFile"`
-	Dir             string           `json:"directory"`
-	Dependencies    []string         `json:"dependencies"`
-	Dependents      []string         `json:"dependents"`
+	TaskID                 string             `json:"taskId"`
+	Task                   string             `json:"task"`
+	Package                string             `json:"package"`
+	Hash                   string             `json:"hash"`
+	CacheState             cache.ItemStatus   `json:"cacheState"`
+	Command                string             `json:"command"`
+	Outputs                []string           `json:"outputs"`
+	ExcludedOutputs        []string           `json:"excludedOutputs"`
+	LogFile                string             `json:"logFile"`
+	Dir                    string             `json:"directory"`
+	Dependencies           []string           `json:"dependencies"`
+	Dependents             []string           `json:"dependents"`
+	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
 }
 
 type singlePackageTaskSummary struct {
-	Task            string           `json:"task"`
-	Hash            string           `json:"hash"`
-	CacheState      cache.ItemStatus `json:"cacheState"`
-	Command         string           `json:"command"`
-	Outputs         []string         `json:"outputs"`
-	ExcludedOutputs []string         `json:"excludedOutputs"`
-	LogFile         string           `json:"logFile"`
-	Dependencies    []string         `json:"dependencies"`
-	Dependents      []string         `json:"dependents"`
+	Task                   string             `json:"task"`
+	Hash                   string             `json:"hash"`
+	CacheState             cache.ItemStatus   `json:"cacheState"`
+	Command                string             `json:"command"`
+	Outputs                []string           `json:"outputs"`
+	ExcludedOutputs        []string           `json:"excludedOutputs"`
+	LogFile                string             `json:"logFile"`
+	Dependencies           []string           `json:"dependencies"`
+	Dependents             []string           `json:"dependents"`
+	ResolvedTaskDefinition *fs.TaskDefinition `json:"resolvedTaskDefinition"`
 }
 
 func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
@@ -317,14 +329,16 @@ func (ht *taskSummary) toSinglePackageTask() singlePackageTaskSummary {
 	for i, dependent := range ht.Dependents {
 		dependents[i] = util.StripPackageName(dependent)
 	}
+
 	return singlePackageTaskSummary{
-		Task:         util.RootTaskTaskName(ht.TaskID),
-		Hash:         ht.Hash,
-		CacheState:   ht.CacheState,
-		Command:      ht.Command,
-		Outputs:      ht.Outputs,
-		LogFile:      ht.LogFile,
-		Dependencies: dependencies,
-		Dependents:   dependents,
+		Task:                   util.RootTaskTaskName(ht.TaskID),
+		Hash:                   ht.Hash,
+		CacheState:             ht.CacheState,
+		Command:                ht.Command,
+		Outputs:                ht.Outputs,
+		LogFile:                ht.LogFile,
+		Dependencies:           dependencies,
+		Dependents:             dependents,
+		ResolvedTaskDefinition: ht.ResolvedTaskDefinition,
 	}
 }

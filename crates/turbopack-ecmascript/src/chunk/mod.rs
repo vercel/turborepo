@@ -126,6 +126,7 @@ impl EcmascriptChunkVc {
             .resolve()
             .await?;
         for path in paths {
+            let path = path.resolve().await?;
             while !*path.is_inside_or_equal(current).await? {
                 let parent = current.parent().resolve().await?;
                 if parent == current {
@@ -645,7 +646,7 @@ impl EcmascriptChunkContentVc {
             "# };
 
             let specific_runtime_code = match *this.environment.chunk_loading().await? {
-                ChunkLoading::None => return Err(anyhow!("unsupported environment")),
+                ChunkLoading::None => embed_file!("js/src/runtime.none.js").await?,
                 ChunkLoading::NodeJs => embed_file!("js/src/runtime.nodejs.js").await?,
                 ChunkLoading::Dom => embed_file!("js/src/runtime.dom.js").await?,
             };

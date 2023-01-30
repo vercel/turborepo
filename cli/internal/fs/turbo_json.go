@@ -28,7 +28,7 @@ type rawTurboJSON struct {
 	GlobalEnv []string `json:"globalEnv,omitempty"`
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
-	Pipeline Pipeline
+	Pipeline Pipeline `json:"pipeline"`
 	// Configuration options when interfacing with the remote cache
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
 }
@@ -48,14 +48,13 @@ type RemoteCacheOptions struct {
 }
 
 type rawTask struct {
-	Outputs *[]string `json:"outputs,omitempty"`
-
-	Cache      *bool               `json:"cache,omitempty"`
-	DependsOn  []string            `json:"dependsOn,omitempty"`
-	Inputs     []string            `json:"inputs,omitempty"`
-	OutputMode util.TaskOutputMode `json:"outputMode,omitempty"`
-	Env        []string            `json:"env,omitempty"`
-	Persistent bool                `json:"persistent,omitempty"`
+	Outputs    []string            `json:"outputs"`
+	Cache      *bool               `json:"cache"`
+	DependsOn  []string            `json:"dependsOn"`
+	Inputs     []string            `json:"inputs"`
+	OutputMode util.TaskOutputMode `json:"outputMode"`
+	Env        []string            `json:"env"`
+	Persistent bool                `json:"persistent"`
 }
 
 // Pipeline is a struct for deserializing .pipeline in configFile
@@ -91,6 +90,26 @@ type TaskDefinition struct {
 	// Persistent indicates whether the Task is expected to exit or not
 	// Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
 	Persistent bool
+}
+
+// GetTask returns a TaskDefinition based on the ID (package#task format) or name (e.g. "build")
+func (p Pipeline) GetTask(taskID string, taskName string) (*TaskDefinition, error) {
+	// first check for package-tasks
+	taskDefinition, ok := p[taskID]
+	if !ok {
+		// then check for regular tasks
+		fallbackTaskDefinition, notcool := p[taskName]
+		// if neither, then bail
+		if !notcool {
+			// Return an empty TaskDefinition
+			return nil, fmt.Errorf("Could not find task \"%s\" in pipeline", taskID)
+		}
+
+		// override if we need to...
+		taskDefinition = fallbackTaskDefinition
+	}
+
+	return &taskDefinition, nil
 }
 
 // LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
@@ -240,7 +259,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	var exclusions []string
 
 	if task.Outputs != nil {
-		for _, glob := range *task.Outputs {
+		for _, glob := range task.Outputs {
 			if strings.HasPrefix(glob, "!") {
 				exclusions = append(exclusions, glob[1:])
 			} else {
@@ -301,6 +320,54 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON deserializes JSON into a TaskDefinition
+func (c *TaskDefinition) MarshalJSON() ([]byte, error) {
+	// Initialize with empty arrays, so we get empty arrays serialized into JSON
+	task := rawTask{
+		Outputs:   []string{},
+		Inputs:    []string{},
+		Env:       []string{},
+		DependsOn: []string{},
+	}
+
+	task.Persistent = c.Persistent
+	task.Cache = &c.ShouldCache
+	task.OutputMode = c.OutputMode
+
+	if len(c.Inputs) > 0 {
+		task.Inputs = c.Inputs
+	}
+
+	if len(c.EnvVarDependencies) > 0 {
+		task.Env = append(task.Env, c.EnvVarDependencies...)
+	}
+
+	if len(c.Outputs.Inclusions) > 0 {
+		task.Outputs = append(task.Outputs, c.Outputs.Inclusions...)
+	}
+
+	for _, i := range c.Outputs.Exclusions {
+		task.Outputs = append(task.Outputs, "!"+i)
+	}
+
+	if len(c.TaskDependencies) > 0 {
+		task.DependsOn = append(task.DependsOn, c.TaskDependencies...)
+	}
+	for _, i := range c.TopologicalDependencies {
+		task.DependsOn = append(task.DependsOn, "^"+i)
+	}
+
+	// These _should_ already be sorted when the TaskDefinition struct was unmarshaled,
+	// but we want to ensure they're sorted on the way out also, just in case something
+	// in the middle mutates the items.
+	sort.Strings(task.DependsOn)
+	sort.Strings(task.Outputs)
+	sort.Strings(task.Env)
+	sort.Strings(task.Inputs)
+
+	return json.Marshal(task)
+}
+
 // UnmarshalJSON deserializes TurboJSON objects into struct
 func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 	raw := &rawTurboJSON{}
@@ -341,4 +408,16 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 	c.RemoteCacheOptions = raw.RemoteCacheOptions
 
 	return nil
+}
+
+// MarshalJSON converts a TurboJSON into the equivalent json object in bytes
+// note: we go via rawTurboJSON so that the output format is correct
+func (c *TurboJSON) MarshalJSON() ([]byte, error) {
+	raw := rawTurboJSON{}
+	raw.GlobalDependencies = c.GlobalDeps
+	raw.GlobalEnv = c.GlobalEnv
+	raw.Pipeline = c.Pipeline
+	raw.RemoteCacheOptions = c.RemoteCacheOptions
+
+	return json.Marshal(&raw)
 }

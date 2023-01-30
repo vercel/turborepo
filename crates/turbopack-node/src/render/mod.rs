@@ -1,8 +1,6 @@
-use std::collections::BTreeMap;
-
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use turbopack_dev_server::source::{query::Query, HeaderValue};
+use turbopack_dev_server::source::{headers::Headers, query::Query};
 
 use crate::{ResponseHeaders, StructuredError};
 
@@ -18,7 +16,7 @@ pub struct RenderData {
     method: String,
     url: String,
     query: Query,
-    headers: BTreeMap<String, HeaderValue>,
+    headers: Headers,
     path: String,
 }
 
@@ -47,17 +45,14 @@ enum RenderProxyIncomingMessage {
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum RenderStaticIncomingMessage {
-    Result { result: RenderResult },
-    Error(StructuredError),
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-pub enum RenderResult {
-    Simple(String),
-    Advanced {
+    #[serde(rename_all = "camelCase")]
+    Response {
+        status_code: u16,
+        headers: Vec<(String, String)>,
         body: String,
-        #[serde(rename = "contentType")]
-        content_type: Option<String>,
     },
+    Rewrite {
+        path: String,
+    },
+    Error(StructuredError),
 }

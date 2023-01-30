@@ -4,6 +4,7 @@
 #![feature(iter_intersperse)]
 #![feature(str_split_as_str)]
 #![feature(int_roundings)]
+#![feature(slice_group_by)]
 #![recursion_limit = "256"]
 
 pub mod analyzer;
@@ -12,7 +13,7 @@ pub mod chunk_group_files_asset;
 pub mod code_gen;
 mod errors;
 pub mod magic_identifier;
-pub(crate) mod parse;
+pub mod parse;
 mod path_visitor;
 pub(crate) mod references;
 pub mod resolve;
@@ -29,7 +30,8 @@ use chunk::{
     EcmascriptChunkItem, EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
 };
 use code_gen::CodeGenerateableVc;
-use parse::{parse, ParseResult, ParseResultSourceMap};
+use parse::{parse, ParseResult};
+pub use parse::{ParseResultSourceMap, ParseResultSourceMapVc};
 use path_visitor::ApplyVisitors;
 use references::AnalyzeEcmascriptModuleResult;
 use swc_core::{
@@ -56,11 +58,14 @@ use turbopack_core::{
     },
 };
 
-use self::chunk::{
-    EcmascriptChunkItemContent, EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions,
-    EcmascriptExportsVc,
-};
 pub use self::references::AnalyzeEcmascriptModuleResultVc;
+use self::{
+    chunk::{
+        EcmascriptChunkItemContent, EcmascriptChunkItemContentVc, EcmascriptChunkItemOptions,
+        EcmascriptExportsVc,
+    },
+    parse::ParseResultVc,
+};
 use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
     references::analyze_ecmascript_module,
@@ -151,6 +156,12 @@ impl EcmascriptModuleAssetVc {
             this.transforms,
             this.environment,
         ))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn parse(self) -> Result<ParseResultVc> {
+        let this = self.await?;
+        Ok(parse(this.source, Value::new(this.ty), this.transforms))
     }
 }
 

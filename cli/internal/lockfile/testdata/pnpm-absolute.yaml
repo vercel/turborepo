@@ -1,0 +1,17 @@
+lockfileVersion: 5.4
+importers:
+  packages/a:
+    specifiers:
+      "@scope/parent": ^1.0.0
+    dependencies:
+      somepackage: 1.0.0
+packages:
+  /@scope/parent/1.0.0:
+    resolution: { integrity: junk }
+    dependencies:
+      child: /@scope/child/1.0.0
+    dev: false
+
+  /@scope/child/1.0.0:
+    resolution: { integrity: junk }
+    dev: false

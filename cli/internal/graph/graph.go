@@ -30,6 +30,9 @@ type CompleteGraph struct {
 	GlobalHash string
 
 	RootNode string
+
+	// Map of TaskDefinitions by taskID
+	TaskDefinitions map[string]*fs.TaskDefinition
 }
 
 // GetPackageTaskVisitor wraps a `visitor` function that is used for walking the TaskGraph
@@ -38,34 +41,21 @@ type CompleteGraph struct {
 func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor func(ctx gocontext.Context, packageTask *nodes.PackageTask) error) func(taskID string) error {
 	return func(taskID string) error {
 		packageName, taskName := util.GetPackageTaskFromId(taskID)
-
 		pkg, ok := g.WorkspaceInfos[packageName]
 		if !ok {
 			return fmt.Errorf("cannot find package %v for task %v", packageName, taskID)
 		}
-
-		// first check for package-tasks
-		taskDefinition, ok := g.Pipeline[fmt.Sprintf("%v", taskID)]
-
+		taskDefinition, ok := g.TaskDefinitions[taskID]
 		if !ok {
-			// then check for regular tasks
-			fallbackTaskDefinition, notcool := g.Pipeline[taskName]
-			// if neither, then bail
-			if !notcool {
-				return nil
-			}
-			// override if we need to...
-			taskDefinition = fallbackTaskDefinition
+			return fmt.Errorf("Could not find definition for task")
 		}
 
-		packageTask := &nodes.PackageTask{
+		return visitor(ctx, &nodes.PackageTask{
 			TaskID:         taskID,
 			Task:           taskName,
 			PackageName:    packageName,
 			Pkg:            pkg,
-			TaskDefinition: &taskDefinition,
-		}
-
-		return visitor(ctx, packageTask)
+			TaskDefinition: taskDefinition,
+		})
 	}
 }

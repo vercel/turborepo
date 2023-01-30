@@ -36,9 +36,9 @@ mod embed_js;
 pub mod evaluate;
 pub mod execution_context;
 mod node_entry;
-pub mod path_regex;
 mod pool;
 pub mod render;
+pub mod route_matcher;
 pub mod source_map;
 pub mod transforms;
 
@@ -182,6 +182,8 @@ async fn separate_assets(
 pub async fn get_renderer_pool(
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
+    output_root: FileSystemPathVc,
+    debug: bool,
 ) -> Result<NodeJsPoolVc> {
     // Emit a basic package.json that sets the type of the package to commonjs.
     // Currently code generated for Node is CommonJS, while authored code may be
@@ -199,14 +201,14 @@ pub async fn get_renderer_pool(
     )
     .await?;
 
-    emit(intermediate_asset, intermediate_output_path).await?;
+    emit(intermediate_asset, output_root).await?;
 
-    let cwd = intermediate_output_path.root();
+    let cwd = output_root;
     let entrypoint = intermediate_output_path.join("index.js");
 
     if let (Some(cwd), Some(entrypoint)) = (to_sys_path(cwd).await?, to_sys_path(entrypoint).await?)
     {
-        let pool = NodeJsPool::new(cwd, entrypoint, HashMap::new(), 4);
+        let pool = NodeJsPool::new(cwd, entrypoint, HashMap::new(), 4, debug);
         Ok(pool.cell())
     } else {
         Err(anyhow!("can only render from a disk filesystem"))

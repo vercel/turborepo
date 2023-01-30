@@ -1,26 +1,21 @@
 package filter
 
 import (
-	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 func TestParseTargetSelector(t *testing.T) {
-	type args struct {
-		rawSelector string
-		prefix      string
-	}
 	tests := []struct {
-		name    string
-		args    args
-		want    TargetSelector
-		wantErr bool
+		rawSelector string
+		want        *TargetSelector
+		wantErr     bool
 	}{
 		{
 			"foo",
-			args{"foo", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
@@ -33,8 +28,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"foo...",
-			args{"foo...", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
@@ -47,8 +41,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"...foo",
-			args{"...foo", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
@@ -61,8 +54,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"...foo...",
-			args{"...foo...", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
@@ -75,8 +67,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"foo^...",
-			args{"foo^...", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         true,
@@ -89,8 +80,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"...^foo",
-			args{"...^foo", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         true,
@@ -103,8 +93,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"./foo",
-			args{"./foo", "./"},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
@@ -117,22 +106,20 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"../foo",
-			args{"../foo", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
 				includeDependencies: false,
 				includeDependents:   false,
 				namePattern:         "",
-				parentDir:           filepath.FromSlash("../foo"),
+				parentDir:           turbopath.MakeRelativeSystemPath("..", "foo"),
 			},
 			false,
 		},
 		{
 			"...{./foo}",
-			args{"...{./foo}", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
@@ -145,8 +132,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			".",
-			args{".", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
@@ -159,8 +145,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"..",
-			args{"..", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "",
 				exclude:             false,
 				excludeSelf:         false,
@@ -173,8 +158,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"[master]",
-			args{"[master]", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
@@ -187,8 +171,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"[from...to]",
-			args{"[from...to]", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:       "from",
 				toRefOverride: "to",
 			},
@@ -196,8 +179,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"{foo}[master]",
-			args{"{foo}[master]", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
@@ -210,8 +192,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"pattern{foo}[master]",
-			args{"pattern{foo}[master]", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
@@ -224,8 +205,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"[master]...",
-			args{"[master]...", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
@@ -238,8 +218,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"...[master]",
-			args{"...[master]", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
@@ -252,8 +231,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"...[master]...",
-			args{"...[master]...", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "master",
 				exclude:             false,
 				excludeSelf:         false,
@@ -266,8 +244,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"...[from...to]...",
-			args{"...[from...to]...", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "from",
 				toRefOverride:       "to",
 				includeDependencies: true,
@@ -277,8 +254,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"foo...[master]",
-			args{"foo...[master]", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:           "master",
 				namePattern:       "foo",
 				matchDependencies: true,
@@ -287,8 +263,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"foo...[master]...",
-			args{"foo...[master]...", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:             "master",
 				namePattern:         "foo",
 				matchDependencies:   true,
@@ -298,8 +273,7 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"{foo}...[master]",
-			args{"{foo}...[master]", "."},
-			TargetSelector{
+			&TargetSelector{
 				fromRef:           "master",
 				parentDir:         "foo",
 				matchDependencies: true,
@@ -308,14 +282,13 @@ func TestParseTargetSelector(t *testing.T) {
 		},
 		{
 			"......[master]",
-			args{"......[master]", "."},
-			TargetSelector{},
+			&TargetSelector{},
 			true,
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseTargetSelector(tt.args.rawSelector, tt.args.prefix)
+		t.Run(tt.rawSelector, func(t *testing.T) {
+			got, err := ParseTargetSelector(tt.rawSelector)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("ParseTargetSelector() error = %#v, wantErr %#v", err, tt.wantErr)
@@ -323,7 +296,7 @@ func TestParseTargetSelector(t *testing.T) {
 			} else {
 				// copy the raw selector from the args into what we want. This value is used
 				// for reporting errors in the case of a malformed selector
-				tt.want.raw = tt.args.rawSelector
+				tt.want.raw = tt.rawSelector
 				if !reflect.DeepEqual(got, tt.want) {
 					t.Errorf("ParseTargetSelector() = %#v, want %#v", got, tt.want)
 				}

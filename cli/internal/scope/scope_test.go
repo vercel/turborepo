@@ -3,6 +3,7 @@ package scope
 import (
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/context"
+	"github.com/vercel/turbo/cli/internal/fs"
 	internalGraph "github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/packagemanager"
@@ -74,8 +76,17 @@ func (m *mockLockfile) Subgraph(workspaces []turbopath.AnchoredSystemPath, packa
 var _ (lockfile.Lockfile) = (*mockLockfile)(nil)
 
 func TestResolvePackages(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("cwd: %v", err)
+	}
+	root, err := fs.GetCwd(cwd)
+	if err != nil {
+		t.Fatalf("cwd: %v", err)
+	}
 	tui := ui.Default()
 	logger := hclog.Default()
+	// Dependency graph:
 	//
 	// app0 -
 	//        \
@@ -89,6 +100,18 @@ func TestResolvePackages(t *testing.T) {
 	//              /
 	//     app2-a <
 	//
+	// Filesystem layout:
+	//
+	// app/
+	//   app0
+	//   app1
+	//   app2
+	//   app2-a
+	// libs/
+	//   libA
+	//   libB
+	//   libC
+	//   libD
 	graph := dag.AcyclicGraph{}
 	graph.Add("app0")
 	graph.Add("app1")
@@ -107,12 +130,13 @@ func TestResolvePackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app2-a", "libC"))
 	workspaceInfos := internalGraph.WorkspaceInfos{
 		"//": {
-			Dir:                    turbopath.AnchoredUnixPath("package.json").ToSystemPath(),
+			Dir:                    turbopath.AnchoredSystemPath("").ToSystemPath(),
 			UnresolvedExternalDeps: map[string]string{"global": "2"},
 			TransitiveDeps:         []lockfile.Package{{Key: "global2", Version: "2", Found: true}},
 		},
 		"app0": {
 			Dir:                    turbopath.AnchoredUnixPath("app/app0").ToSystemPath(),
+			Name:                   "app0",
 			UnresolvedExternalDeps: map[string]string{"app0-dep": "2"},
 			TransitiveDeps: []lockfile.Package{
 				{Key: "app0-dep2", Version: "2", Found: true},
@@ -120,19 +144,24 @@ func TestResolvePackages(t *testing.T) {
 			},
 		},
 		"app1": {
-			Dir: turbopath.AnchoredUnixPath("app/app1").ToSystemPath(),
+			Dir:  turbopath.AnchoredUnixPath("app/app1").ToSystemPath(),
+			Name: "app1",
 		},
 		"app2": {
-			Dir: turbopath.AnchoredUnixPath("app/app2").ToSystemPath(),
+			Dir:  turbopath.AnchoredUnixPath("app/app2").ToSystemPath(),
+			Name: "app2",
 		},
 		"app2-a": {
-			Dir: turbopath.AnchoredUnixPath("app/app2-a").ToSystemPath(),
+			Dir:  turbopath.AnchoredUnixPath("app/app2-a").ToSystemPath(),
+			Name: "app2-a",
 		},
 		"libA": {
-			Dir: turbopath.AnchoredUnixPath("libs/libA").ToSystemPath(),
+			Dir:  turbopath.AnchoredUnixPath("libs/libA").ToSystemPath(),
+			Name: "libA",
 		},
 		"libB": {
 			Dir:                    turbopath.AnchoredUnixPath("libs/libB").ToSystemPath(),
+			Name:                   "libB",
 			UnresolvedExternalDeps: map[string]string{"external": "1"},
 			TransitiveDeps: []lockfile.Package{
 				{Key: "external-dep-a1", Version: "1", Found: true},
@@ -141,10 +170,12 @@ func TestResolvePackages(t *testing.T) {
 			},
 		},
 		"libC": {
-			Dir: turbopath.AnchoredUnixPath("libs/libC").ToSystemPath(),
+			Dir:  turbopath.AnchoredUnixPath("libs/libC").ToSystemPath(),
+			Name: "libC",
 		},
 		"libD": {
-			Dir: turbopath.AnchoredUnixPath("libs/libD").ToSystemPath(),
+			Dir:  turbopath.AnchoredUnixPath("libs/libD").ToSystemPath(),
+			Name: "libD",
 		},
 	}
 	packageNames := []string{}
@@ -200,6 +231,7 @@ func TestResolvePackages(t *testing.T) {
 		lockfile            string
 		currLockfile        *mockLockfile
 		prevLockfile        *mockLockfile
+		inferPkgPath        string
 	}{
 		{
 			name:                "Just scope and dependencies",
@@ -424,6 +456,40 @@ func TestResolvePackages(t *testing.T) {
 			}),
 			since: "dummy",
 		},
+		{
+			name:         "Infer app2 from directory",
+			inferPkgPath: "app/app2",
+			expected:     []string{"app2"},
+		},
+		{
+			name:         "Infer app2 from a subdirectory",
+			inferPkgPath: "app/app2/src",
+			expected:     []string{"app2"},
+		},
+		{
+			name:         "Infer from a directory with no packages",
+			inferPkgPath: "wrong",
+			expected:     []string{},
+		},
+		{
+			name:         "Infer from a parent directory",
+			inferPkgPath: "app",
+			expected:     []string{"app0", "app1", "app2", "app2-a"},
+		},
+		{
+			name:         "library change, no scope, inferred libs",
+			changed:      []string{"libs/libA/src/index.ts"},
+			expected:     []string{"libA"},
+			since:        "dummy",
+			inferPkgPath: "libs",
+		},
+		{
+			name:         "library change, no scope, inferred app",
+			changed:      []string{"libs/libA/src/index.ts"},
+			expected:     []string{},
+			since:        "dummy",
+			inferPkgPath: "app",
+		},
 	}
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("test #%v %v", i, tc.name), func(t *testing.T) {
@@ -449,9 +515,10 @@ func TestResolvePackages(t *testing.T) {
 					IncludeDependencies: tc.includeDependencies,
 					SkipDependents:      !tc.includeDependents,
 				},
-				IgnorePatterns:    []string{tc.ignore},
-				GlobalDepPatterns: tc.globalDeps,
-			}, filepath.FromSlash("/dummy/repo/root"), scm, &context.Context{
+				IgnorePatterns:       []string{tc.ignore},
+				GlobalDepPatterns:    tc.globalDeps,
+				PackageInferenceRoot: tc.inferPkgPath,
+			}, root, scm, &context.Context{
 				WorkspaceInfos: workspaceInfos,
 				WorkspaceNames: packageNames,
 				PackageManager: &packagemanager.PackageManager{Lockfile: tc.lockfile, UnmarshalLockfile: readLockfile},

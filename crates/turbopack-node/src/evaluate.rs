@@ -1,4 +1,4 @@
-use std::{collections::HashMap, thread::available_parallelism};
+use std::{borrow::Cow, collections::HashMap, thread::available_parallelism};
 
 use anyhow::Result;
 use turbo_tasks::{
@@ -30,7 +30,7 @@ use crate::{
 };
 
 #[turbo_tasks::value(shared)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum JavaScriptValue {
     Error,
     Value(Rope),
@@ -48,6 +48,7 @@ pub async fn get_evaluate_pool(
     context: AssetContextVc,
     intermediate_output_path: FileSystemPathVc,
     runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
+    debug: bool,
 ) -> Result<NodeJsPoolVc> {
     let chunking_context = DevChunkingContextVc::builder(
         context_path,
@@ -68,7 +69,13 @@ pub async fn get_evaluate_pool(
     .as_asset();
 
     let module_path = module_asset.path().await?;
-    let path = intermediate_output_path.join(module_path.file_name());
+    let file_name = module_path.file_name();
+    let file_name = if file_name.ends_with(".js") {
+        Cow::Borrowed(file_name)
+    } else {
+        Cow::Owned(format!("{file_name}.js"))
+    };
+    let path = intermediate_output_path.join(file_name.as_ref());
     let entry_module = EcmascriptModuleAssetVc::new_with_inner_assets(
         VirtualAssetVc::new(
             runtime_asset.path().join("evaluate.js"),
@@ -104,6 +111,7 @@ pub async fn get_evaluate_pool(
         entrypoint,
         HashMap::new(),
         available_parallelism().map_or(1, |v| v.get()),
+        debug,
     );
     Ok(pool.cell())
 }
@@ -120,6 +128,7 @@ pub async fn evaluate(
     intermediate_output_path: FileSystemPathVc,
     runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
     args: Vec<JsonValueVc>,
+    debug: bool,
 ) -> Result<JavaScriptValueVc> {
     let pool = get_evaluate_pool(
         context_path,
@@ -128,6 +137,7 @@ pub async fn evaluate(
         context,
         intermediate_output_path,
         runtime_entries,
+        debug,
     )
     .await?;
     let mut operation = pool.operation().await?;
