@@ -17,10 +17,8 @@ jobs:
         localVersion: ["latest", "canary"]
         globalVersion: ["latest", "canary"]
     steps:
-      - name: Configure git
-        run: |
-          git config --global user.name 'Turbobot'
-          git config --global user.email 'turbobot@vercel.com'
+      - name: Install ts-node
+        run: npm install ts-node --global
       - name: Setup pnpm
         uses: pnpm/action-setup@v2.2.4
         if: ${{ matrix.packageManager == 'pnpm' }}
@@ -34,4 +32,4 @@ jobs:
         with:
          files: scripts/smoke-canary.js
       - name: Run Test
-        run: node scripts/smoke-canary.js ${{ matrix.test }} ${{ matrix.packageManager }} ${{ matrix.localVersion }} ${{ matrix.globalVersion }}
+        run: ts-node scripts/smoke-canary.js ${{ matrix.test }} ${{ matrix.packageManager }} ${{ matrix.localVersion }} ${{ matrix.globalVersion }}
