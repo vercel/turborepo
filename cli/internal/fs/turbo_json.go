@@ -28,7 +28,7 @@ type rawTurboJSON struct {
 	GlobalEnv []string `json:"globalEnv,omitempty"`
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
-	Pipeline Pipeline
+	Pipeline Pipeline `json:"pipeline"`
 	// Configuration options when interfacing with the remote cache
 	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
 }
@@ -90,6 +90,26 @@ type TaskDefinition struct {
 	// Persistent indicates whether the Task is expected to exit or not
 	// Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
 	Persistent bool
+}
+
+// GetTask returns a TaskDefinition based on the ID (package#task format) or name (e.g. "build")
+func (p Pipeline) GetTask(taskID string, taskName string) (*TaskDefinition, error) {
+	// first check for package-tasks
+	taskDefinition, ok := p[taskID]
+	if !ok {
+		// then check for regular tasks
+		fallbackTaskDefinition, notcool := p[taskName]
+		// if neither, then bail
+		if !notcool {
+			// Return an empty TaskDefinition
+			return nil, fmt.Errorf("Could not find task \"%s\" in pipeline", taskID)
+		}
+
+		// override if we need to...
+		taskDefinition = fallbackTaskDefinition
+	}
+
+	return &taskDefinition, nil
 }
 
 // LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
@@ -388,4 +408,16 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 	c.RemoteCacheOptions = raw.RemoteCacheOptions
 
 	return nil
+}
+
+// MarshalJSON converts a TurboJSON into the equivalent json object in bytes
+// note: we go via rawTurboJSON so that the output format is correct
+func (c *TurboJSON) MarshalJSON() ([]byte, error) {
+	raw := rawTurboJSON{}
+	raw.GlobalDependencies = c.GlobalDeps
+	raw.GlobalEnv = c.GlobalEnv
+	raw.Pipeline = c.Pipeline
+	raw.RemoteCacheOptions = c.RemoteCacheOptions
+
+	return json.Marshal(&raw)
 }

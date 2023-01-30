@@ -1,6 +1,6 @@
 {
   "name": "turbo-ignore",
-  "version": "0.5.0",
+  "version": "1.7.1-canary.7",
   "description": "",
   "homepage": "https://turbo.build/repo",
   "keywords": [],
@@ -14,17 +14,18 @@
   "bugs": {
     "url": "https://github.com/vercel/turbo/issues"
   },
-  "main": "index.js",
-  "bin": "index.js",
+  "files": [
+    "dist"
+  ],
+  "main": "dist/index.js",
+  "bin": "dist/index.js",
   "scripts": {
-    "build": "tsup && cp ./package.json ./dist/package.json && cp README.md ./dist/README.md",
-    "release": "pnpm build && cd dist && pnpm publish",
+    "build": "tsup",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
     "check-types": "tsc --noEmit"
   },
   "devDependencies": {
-    "@manypkg/find-root": "^1.1.0",
     "@types/jest": "^27.4.0",
     "@types/node": "^16.11.12",
     "eslint": "^8.20.0",
@@ -32,6 +33,7 @@
     "ts-jest": "^27.1.1",
     "tsconfig": "workspace:*",
     "tsup": "^5.12.1",
+    "turbo-test-utils": "workspace:^0.0.0",
     "turbo-utils": "workspace:*",
     "typescript": "^4.7.4"
   }

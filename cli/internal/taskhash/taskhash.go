@@ -174,6 +174,8 @@ func (th *Tracker) CalculateFileHashes(allTasks []dag.Vertex, workerCount int, r
 			continue
 		}
 
+		// TODO(mehulkar): Once we start composing turbo.json, we need to change this
+		// to look in the graph for TaskDefinitions, rather than the root pipeline.
 		taskDefinition, ok := th.pipeline.GetTaskDefinition(taskID)
 		if !ok {
 			return fmt.Errorf("missing pipeline entry %v", taskID)

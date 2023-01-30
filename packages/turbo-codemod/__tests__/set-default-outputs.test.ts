@@ -1,8 +1,11 @@
 import { transformer } from "../src/transforms/set-default-outputs";
-import { setupTestFixtures } from "./test-utils";
+import { setupTestFixtures } from "turbo-test-utils";
 
 describe("set-default-outputs", () => {
-  const { useFixture } = setupTestFixtures({ test: "set-default-outputs" });
+  const { useFixture } = setupTestFixtures({
+    directory: __dirname,
+    test: "set-default-outputs",
+  });
   it("migrates turbo.json outputs - basic", async () => {
     // load the fixture for the test
     const { root, read } = useFixture({
