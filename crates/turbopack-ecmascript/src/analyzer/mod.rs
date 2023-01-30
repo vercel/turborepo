@@ -1436,16 +1436,14 @@ impl JsValue {
                 if let Some(item) = list.iter().next() {
                     if item.starts_with(str) == Some(true) {
                         Some(true)
-                    } else {
-                        if let Some(s) = item.as_str() {
-                            if str.starts_with(s) {
-                                None
-                            } else {
-                                Some(false)
-                            }
-                        } else {
+                    } else if let Some(s) = item.as_str() {
+                        if str.starts_with(s) {
                             None
+                        } else {
+                            Some(false)
                         }
+                    } else {
+                        None
                     }
                 } else {
                     Some(false)
@@ -1469,16 +1467,14 @@ impl JsValue {
                 if let Some(item) = list.last() {
                     if item.ends_with(str) == Some(true) {
                         Some(true)
-                    } else {
-                        if let Some(s) = item.as_str() {
-                            if str.ends_with(s) {
-                                None
-                            } else {
-                                Some(false)
-                            }
-                        } else {
+                    } else if let Some(s) = item.as_str() {
+                        if str.ends_with(s) {
                             None
+                        } else {
+                            Some(false)
                         }
+                    } else {
+                        None
                     }
                 } else {
                     Some(false)
@@ -2662,7 +2658,7 @@ mod tests {
                         let mut res = turbo_tasks_testing::VcStorage::with(link(
                             &var_graph,
                             val,
-                            &(|val| super::test_utils::early_visitor(val)),
+                            &super::test_utils::early_visitor,
                             &(|val| {
                                 super::test_utils::visitor(
                                     val,

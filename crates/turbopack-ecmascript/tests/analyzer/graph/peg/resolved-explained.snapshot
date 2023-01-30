@@ -25,8 +25,7 @@
 *anonymous function 12142* = (...) => "
 "
 
-*anonymous function 12268* = (...) => "
-"
+*anonymous function 12268* = (...) => ""
 
 *anonymous function 12394* = (...) => "	"
 
@@ -63,8 +62,8 @@
     (...) => {"type": "scalar_member_expression", "object": ???*1*, "property": ???*2*, "computed": ???*3*},
     arguments[0]
 )
-- *0* nested operationduce"]
-  ⚠️  Nested operation
+- *0* arguments[1]["reduce"]
+  ⚠️  nested operation
 - *1* object
   ⚠️  pattern without value
 - *2* property
@@ -87,8 +86,8 @@
     (...) => {"type": "scalar_binary_expression", "left": ???*1*, "operator": ???*2*, "right": ???*3*},
     arguments[0]
 )
-- *0* nested operationduce"]
-  ⚠️  Nested operation
+- *0* arguments[1]["reduce"]
+  ⚠️  nested operation
 - *1* left
   ⚠️  pattern without value
 - *2* operator
@@ -113,8 +112,8 @@
     (...) => {"type": "collection_member_expression", "object": ???*1*, "property": ???*2*, "computed": ???*3*},
     arguments[0]
 )
-- *0* nested operationduce"]
-  ⚠️  Nested operation
+- *0* arguments[1]["reduce"]
+  ⚠️  nested operation
 - *1* object
   ⚠️  pattern without value
 - *2* property
@@ -138,52 +137,52 @@
 *anonymous function 16925* = (...) => arguments[0]
 
 *anonymous function 1822* = (...) => `\x0${???*0*}`
-- *0* nested operation
-  ⚠️  Nested operation
-- *1* nested operationase"]
-  ⚠️  Nested operation
-- *2* nested operation
-  ⚠️  Nested operation
-- *3* nested operation"]
-  ⚠️  Nested operation
-- *4* nested operation
-  ⚠️  Nested operation
+- *0* ???*1*()
+  ⚠️  nested operation
+- *1* ???*2*["toUpperCase"]
+  ⚠️  nested operation
+- *2* ???*3*(16)
+  ⚠️  nested operation
+- *3* ???*4*["toString"]
+  ⚠️  nested operation
+- *4* ???(0)
+  ⚠️  nested operation
 
 *anonymous function 1920* = (...) => `\x${???*0*}`
-- *0* nested operation
-  ⚠️  Nested operation
-- *1* nested operationase"]
-  ⚠️  Nested operation
-- *2* nested operation
-  ⚠️  Nested operation
-- *3* nested operation"]
-  ⚠️  Nested operation
-- *4* nested operation
-  ⚠️  Nested operation
+- *0* ???*1*()
+  ⚠️  nested operation
+- *1* ???*2*["toUpperCase"]
+  ⚠️  nested operation
+- *2* ???*3*(16)
+  ⚠️  nested operation
+- *3* ???*4*["toString"]
+  ⚠️  nested operation
+- *4* ???(0)
+  ⚠️  nested operation
 
 *anonymous function 2287* = (...) => `\x0${???*0*}`
-- *0* nested operation
-  ⚠️  Nested operation
-- *1* nested operationase"]
-  ⚠️  Nested operation
-- *2* nested operation
-  ⚠️  Nested operation
-- *3* nested operation"]
-  ⚠️  Nested operation
-- *4* nested operation
-  ⚠️  Nested operation
+- *0* ???*1*()
+  ⚠️  nested operation
+- *1* ???*2*["toUpperCase"]
+  ⚠️  nested operation
+- *2* ???*3*(16)
+  ⚠️  nested operation
+- *3* ???*4*["toString"]
+  ⚠️  nested operation
+- *4* ???(0)
+  ⚠️  nested operation
 
 *anonymous function 2385* = (...) => `\x${???*0*}`
-- *0* nested operation
-  ⚠️  Nested operation
-- *1* nested operationase"]
-  ⚠️  Nested operation
-- *2* nested operation
-  ⚠️  Nested operation
-- *3* nested operation"]
-  ⚠️  Nested operation
-- *4* nested operation
-  ⚠️  Nested operation
+- *0* ???*1*()
+  ⚠️  nested operation
+- *1* ???*2*["toUpperCase"]
+  ⚠️  nested operation
+- *2* ???*3*(16)
+  ⚠️  nested operation
+- *3* ???*4*["toString"]
+  ⚠️  nested operation
+- *4* ???(0)
+  ⚠️  nested operation
 
 *anonymous function 3852* = (...) => {"type": "sql", "body": arguments[0]}
 
@@ -236,32 +235,32 @@
 - *0* ???*1*[0]
   ⚠️  unknown object
 - *1* unknown new expression
-- *2* nested operation???*5*}`
-  ⚠️  Nested operation
+- *2* `${???*3*} or ${???*5*}`
+  ⚠️  nested operation
 - *3* ???*4*[0]
   ⚠️  unknown object
 - *4* unknown new expression
 - *5* ???*6*[1]
   ⚠️  unknown object
 - *6* unknown new expression
-- *7* nested operation
-  ⚠️  Nested operation
-- *8* nested operation1F\x7F-\x9F]/g, (...) => ???*13*)
-  ⚠️  Nested operation
-- *9* nested operation"]
-  ⚠️  Nested operation
-- *10*nested operation\x0F]/g, (...) => ???*12*)
-  ⚠️  Nested operation
-- *11*nested operation
-  ⚠️  Nested operation
-- *12*nested operation
-  ⚠️  Nested operation
-- *13*nested operation
-  ⚠️  Nested operation
-- *14*nested operation
-  ⚠️  Nested operation
-- *15*nested operatione"]
-  ⚠️  Nested operation
+- *7* `"${???*8*}"`
+  ⚠️  nested operation
+- *8* ???*9*(/[\x10-\x1F\x7F-\x9F]/g, (...) => ???*13*)
+  ⚠️  nested operation
+- *9* ???*10*["replace"]
+  ⚠️  nested operation
+- *10* ???*11*(/[\x00-\x0F]/g, (...) => ???*12*)
+  ⚠️  nested operation
+- *11* ???["replace"]
+  ⚠️  nested operation
+- *12* `\x0${???}`
+  ⚠️  nested operation
+- *13* `\x${???*14*}`
+  ⚠️  nested operation
+- *14* ???*15*()
+  ⚠️  nested operation
+- *15* ???["toUpperCase"]
+  ⚠️  nested operation
 
 *anonymous function 6287* = (...) => {"type": "scalar_function_expression", "name": arguments[0], "arguments": arguments[1], "udf": true}
 
@@ -271,28 +270,28 @@
 - *0* spread is not supported
 
 *anonymous function 702* = (...) => `"${???*0*}"`
-- *0* nested operation1F\x7F-\x9F]/g, (...) => ???*7*)
-  ⚠️  Nested operation
-- *1* nested operation]
-  ⚠️  Nested operation
-- *2* nested operation0F]/g, (...) => ???*5*)
-  ⚠️  Nested operation
-- *3* nested operation]
-  ⚠️  Nested operation
-- *4* nested operation
-  ⚠️  Nested operation
-- *5* nested operation
-  ⚠️  Nested operation
-- *6* nested operation
-  ⚠️  Nested operation
-- *7* nested operation
-  ⚠️  Nested operation
-- *8* nested operation
-  ⚠️  Nested operation
-- *9* nested operationCase"]
-  ⚠️  Nested operation
-- *10*nested operation
-  ⚠️  Nested operation
+- *0* ???*1*(/[\x10-\x1F\x7F-\x9F]/g, (...) => ???*7*)
+  ⚠️  nested operation
+- *1* ???*2*["replace"]
+  ⚠️  nested operation
+- *2* ???*3*(/[\x00-\x0F]/g, (...) => ???*5*)
+  ⚠️  nested operation
+- *3* ???*4*["replace"]
+  ⚠️  nested operation
+- *4* ???(/\r/g, "\r")
+  ⚠️  nested operation
+- *5* `\x0${???*6*}`
+  ⚠️  nested operation
+- *6* ???()
+  ⚠️  nested operation
+- *7* `\x${???*8*}`
+  ⚠️  nested operation
+- *8* ???*9*()
+  ⚠️  nested operation
+- *9* ???*10*["toUpperCase"]
+  ⚠️  nested operation
+- *10* ???(16)
+  ⚠️  nested operation
 
 *anonymous function 7046* = (...) => {"type": "scalar_array_expression", "elements": arguments[0]}
 
@@ -313,8 +312,8 @@
 *anonymous function 804* = (...) => `[${("^" | "")}]`
 
 *anonymous function 8139* = (...) => {"type": "string_constant", "value": ???*0*("")}
-- *0* nested operationin"]
-  ⚠️  Nested operation
+- *0* arguments[0]["join"]
+  ⚠️  nested operation
 
 *anonymous function 8336* = (...) => {"type": "array_constant", "elements": ???*0*}
 - *0* spread is not supported
@@ -359,28 +358,28 @@ DESCRIBE_EXPECTATION_FNS = {
     "end": (...) => "end of input",
     "other": (...) => arguments[0]["description"]
 }
-- *0* nested operation1F\x7F-\x9F]/g, (...) => ???*7*)
-  ⚠️  Nested operation
-- *1* nested operation]
-  ⚠️  Nested operation
-- *2* nested operation0F]/g, (...) => ???*5*)
-  ⚠️  Nested operation
-- *3* nested operation]
-  ⚠️  Nested operation
-- *4* nested operation
-  ⚠️  Nested operation
-- *5* nested operation
-  ⚠️  Nested operation
-- *6* nested operation
-  ⚠️  Nested operation
-- *7* nested operation
-  ⚠️  Nested operation
-- *8* nested operation
-  ⚠️  Nested operation
-- *9* nested operationCase"]
-  ⚠️  Nested operation
-- *10*nested operation
-  ⚠️  Nested operation
+- *0* ???*1*(/[\x10-\x1F\x7F-\x9F]/g, (...) => ???*7*)
+  ⚠️  nested operation
+- *1* ???*2*["replace"]
+  ⚠️  nested operation
+- *2* ???*3*(/[\x00-\x0F]/g, (...) => ???*5*)
+  ⚠️  nested operation
+- *3* ???*4*["replace"]
+  ⚠️  nested operation
+- *4* ???(/\r/g, "\r")
+  ⚠️  nested operation
+- *5* `\x0${???*6*}`
+  ⚠️  nested operation
+- *6* ???()
+  ⚠️  nested operation
+- *7* `\x${???*8*}`
+  ⚠️  nested operation
+- *8* ???*9*()
+  ⚠️  nested operation
+- *9* ???*10*["toUpperCase"]
+  ⚠️  nested operation
+- *10* ???(16)
+  ⚠️  nested operation
 
 alias#34 = arguments[0]
 
@@ -404,8 +403,8 @@ buildBinaryExpression = (...) => ???*0*(
     (...) => {"type": "scalar_binary_expression", "left": ???*1*, "operator": ???*2*, "right": ???*3*},
     arguments[0]
 )
-- *0* nested operationduce"]
-  ⚠️  Nested operation
+- *0* arguments[1]["reduce"]
+  ⚠️  nested operation
 - *1* left
   ⚠️  pattern without value
 - *2* operator
@@ -428,32 +427,32 @@ chars = arguments[0]
 child = arguments[0]
 
 classEscape = (...) => ???*0*(/[\x10-\x1F\x7F-\x9F]/g, (...) => ???*8*)
-- *0* nested operation]
-  ⚠️  Nested operation
-- *1* nested operation0F]/g, (...) => ???*5*)
-  ⚠️  Nested operation
-- *2* nested operation]
-  ⚠️  Nested operation
-- *3* nested operationr")
-  ⚠️  Nested operation
-- *4* nested operation
-  ⚠️  Nested operation
-- *5* nested operation
-  ⚠️  Nested operation
-- *6* nested operation
-  ⚠️  Nested operation
-- *7* nested operation"]
-  ⚠️  Nested operation
-- *8* nested operation
-  ⚠️  Nested operation
-- *9* nested operation
-  ⚠️  Nested operation
-- *10*nested operationrCase"]
-  ⚠️  Nested operation
-- *11*nested operation
-  ⚠️  Nested operation
-- *12*nested operation
-  ⚠️  Nested operation
+- *0* ???*1*["replace"]
+  ⚠️  nested operation
+- *1* ???*2*(/[\x00-\x0F]/g, (...) => ???*5*)
+  ⚠️  nested operation
+- *2* ???*3*["replace"]
+  ⚠️  nested operation
+- *3* ???*4*(/\r/g, "\r")
+  ⚠️  nested operation
+- *4* ???["replace"]
+  ⚠️  nested operation
+- *5* `\x0${???*6*}`
+  ⚠️  nested operation
+- *6* ???*7*()
+  ⚠️  nested operation
+- *7* ???["toUpperCase"]
+  ⚠️  nested operation
+- *8* `\x${???*9*}`
+  ⚠️  nested operation
+- *9* ???*10*()
+  ⚠️  nested operation
+- *10* ???*11*["toUpperCase"]
+  ⚠️  nested operation
+- *11* ???*12*(16)
+  ⚠️  nested operation
+- *12* ???["toString"]
+  ⚠️  nested operation
 
 condition = arguments[0]
 
@@ -471,28 +470,28 @@ describeExpectation = (...) => (
   | arguments[0]["description"]
   | ???*11*(arguments[0])
 )
-- *0* nested operation1F\x7F-\x9F]/g, (...) => ???*7*)
-  ⚠️  Nested operation
-- *1* nested operation]
-  ⚠️  Nested operation
-- *2* nested operation0F]/g, (...) => ???*5*)
-  ⚠️  Nested operation
-- *3* nested operation]
-  ⚠️  Nested operation
-- *4* nested operation
-  ⚠️  Nested operation
-- *5* nested operation
-  ⚠️  Nested operation
-- *6* nested operation
-  ⚠️  Nested operation
-- *7* nested operation
-  ⚠️  Nested operation
-- *8* nested operation
-  ⚠️  Nested operation
-- *9* nested operationCase"]
-  ⚠️  Nested operation
-- *10*nested operation
-  ⚠️  Nested operation
+- *0* ???*1*(/[\x10-\x1F\x7F-\x9F]/g, (...) => ???*7*)
+  ⚠️  nested operation
+- *1* ???*2*["replace"]
+  ⚠️  nested operation
+- *2* ???*3*(/[\x00-\x0F]/g, (...) => ???*5*)
+  ⚠️  nested operation
+- *3* ???*4*["replace"]
+  ⚠️  nested operation
+- *4* ???(/\r/g, "\r")
+  ⚠️  nested operation
+- *5* `\x0${???*6*}`
+  ⚠️  nested operation
+- *6* ???()
+  ⚠️  nested operation
+- *7* `\x${???*8*}`
+  ⚠️  nested operation
+- *8* ???*9*()
+  ⚠️  nested operation
+- *9* ???*10*["toUpperCase"]
+  ⚠️  nested operation
+- *10* ???(16)
+  ⚠️  nested operation
 - *11* {}[arguments[0]["type"]]
   ⚠️  unknown object prototype methods or values
 
@@ -518,28 +517,28 @@ describeExpected = (...) => (???*0* | `${???*2*} or ${???*4*}` | `${???*6*}, or 
 - *12* unsupported expression
 
 describeFound = (...) => (`"${???*0*}"` | "end of input")
-- *0* nested operation1F\x7F-\x9F]/g, (...) => ???*7*)
-  ⚠️  Nested operation
-- *1* nested operation]
-  ⚠️  Nested operation
-- *2* nested operation0F]/g, (...) => ???*5*)
-  ⚠️  Nested operation
-- *3* nested operation]
-  ⚠️  Nested operation
-- *4* nested operation
-  ⚠️  Nested operation
-- *5* nested operation
-  ⚠️  Nested operation
-- *6* nested operation
-  ⚠️  Nested operation
-- *7* nested operation
-  ⚠️  Nested operation
-- *8* nested operation
-  ⚠️  Nested operation
-- *9* nested operationCase"]
-  ⚠️  Nested operation
-- *10*nested operation
-  ⚠️  Nested operation
+- *0* ???*1*(/[\x10-\x1F\x7F-\x9F]/g, (...) => ???*7*)
+  ⚠️  nested operation
+- *1* ???*2*["replace"]
+  ⚠️  nested operation
+- *2* ???*3*(/[\x00-\x0F]/g, (...) => ???*5*)
+  ⚠️  nested operation
+- *3* ???*4*["replace"]
+  ⚠️  nested operation
+- *4* ???(/\r/g, "\r")
+  ⚠️  nested operation
+- *5* `\x0${???*6*}`
+  ⚠️  nested operation
+- *6* ???()
+  ⚠️  nested operation
+- *7* `\x${???*8*}`
+  ⚠️  nested operation
+- *8* ???*9*()
+  ⚠️  nested operation
+- *9* ???*10*["toUpperCase"]
+  ⚠️  nested operation
+- *10* ???(16)
+  ⚠️  nested operation
 
 description#75 = arguments[0]
 
@@ -685,16 +684,16 @@ head#73 = arguments[0]
 hex#44 = arguments[0]
 
 hex#5 = (...) => ???*0*()
-- *0* nested operationase"]
-  ⚠️  Nested operation
-- *1* nested operation
-  ⚠️  Nested operation
-- *2* nested operation"]
-  ⚠️  Nested operation
-- *3* nested operation
-  ⚠️  Nested operation
-- *4* nested operationarCodeAt"]
-  ⚠️  Nested operation
+- *0* ???*1*["toUpperCase"]
+  ⚠️  nested operation
+- *1* ???*2*(16)
+  ⚠️  nested operation
+- *2* ???*3*["toString"]
+  ⚠️  nested operation
+- *3* ???*4*(0)
+  ⚠️  nested operation
+- *4* arguments[0]["charCodeAt"]
+  ⚠️  nested operation
 
 i#19 = (???*0* | 0 | 1)
 - *0* i
@@ -727,32 +726,32 @@ left = ???*0*
 list = arguments[1]
 
 literalEscape = (...) => ???*0*(/[\x10-\x1F\x7F-\x9F]/g, (...) => ???*8*)
-- *0* nested operation]
-  ⚠️  Nested operation
-- *1* nested operation0F]/g, (...) => ???*5*)
-  ⚠️  Nested operation
-- *2* nested operation]
-  ⚠️  Nested operation
-- *3* nested operationr")
-  ⚠️  Nested operation
-- *4* nested operation
-  ⚠️  Nested operation
-- *5* nested operation
-  ⚠️  Nested operation
-- *6* nested operation
-  ⚠️  Nested operation
-- *7* nested operation"]
-  ⚠️  Nested operation
-- *8* nested operation
-  ⚠️  Nested operation
-- *9* nested operation
-  ⚠️  Nested operation
-- *10*nested operationrCase"]
-  ⚠️  Nested operation
-- *11*nested operation
-  ⚠️  Nested operation
-- *12*nested operation
-  ⚠️  Nested operation
+- *0* ???*1*["replace"]
+  ⚠️  nested operation
+- *1* ???*2*(/[\x00-\x0F]/g, (...) => ???*5*)
+  ⚠️  nested operation
+- *2* ???*3*["replace"]
+  ⚠️  nested operation
+- *3* ???*4*(/\r/g, "\r")
+  ⚠️  nested operation
+- *4* ???["replace"]
+  ⚠️  nested operation
+- *5* `\x0${???*6*}`
+  ⚠️  nested operation
+- *6* ???*7*()
+  ⚠️  nested operation
+- *7* ???["toUpperCase"]
+  ⚠️  nested operation
+- *8* `\x${???*9*}`
+  ⚠️  nested operation
+- *9* ???*10*()
+  ⚠️  nested operation
+- *10* ???*11*["toUpperCase"]
+  ⚠️  nested operation
+- *11* ???*12*(16)
+  ⚠️  nested operation
+- *12* ???["toString"]
+  ⚠️  nested operation
 
 location#21 = ???*0*
 - *0* max number of linking steps reached
@@ -884,10 +883,10 @@ peg$c120 = {
 }
 
 peg$c121 = (...) => (arguments[0] + ???*0*)
-- *0* nested operation
-  ⚠️  Nested operation
-- *1* nested operationin"]
-  ⚠️  Nested operation
+- *0* ???*1*("")
+  ⚠️  nested operation
+- *1* arguments[1]["join"]
+  ⚠️  nested operation
 
 peg$c122 = "@"
 
@@ -943,8 +942,7 @@ peg$c143 = "r"
 
 peg$c144 = {"type": "literal", "text": "r", "ignoreCase": false}
 
-peg$c145 = (...) => "
-"
+peg$c145 = (...) => ""
 
 peg$c146 = "t"
 
@@ -992,9 +990,9 @@ peg$c162 = (...) => {"property": arguments[1], "computed": true}
 peg$c163 = (...) => ???*0*(
     (...) => {"type": "scalar_member_expression", "object": ???*1*, "property": ???*2*, "computed": ???*3*},
     arguments[0]
-)nested operation
+)
 - *0* arguments[1]["reduce"]
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *1* object
   ⚠️  pattern without value
 - *2* property
@@ -1028,9 +1026,9 @@ peg$c171 = {"type": "literal", "text": "??", "ignoreCase": false}
 peg$c172 = (...) => ???*0*(
     (...) => {"type": "scalar_binary_expression", "left": ???*1*, "operator": ???*2*, "right": ???*3*},
     arguments[0]
-)nested operation
+)
 - *0* arguments[1]["reduce"]
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *1* left
   ⚠️  pattern without value
 - *2* operator
@@ -1126,9 +1124,9 @@ peg$c208 = (...) => {"type": "collection_expression", "expression": arguments[0]
 peg$c209 = (...) => ???*0*(
     (...) => {"type": "collection_member_expression", "object": ???*1*, "property": ???*2*, "computed": ???*3*},
     arguments[0]
-)nested operation
+)
 - *0* arguments[1]["reduce"]
-  ⚠️  Nested operation
+  ⚠️  nested operation
 - *1* object
   ⚠️  pattern without value
 - *2* property
@@ -1240,9 +1238,9 @@ peg$c54 = """
 
 peg$c55 = {"type": "literal", "text": """, "ignoreCase": false}
 
-peg$c5nested operationype": "string_constant", "value": ???*0*("")}
+peg$c56 = (...) => {"type": "string_constant", "value": ???*0*("")}
 - *0* arguments[0]["join"]
-  ⚠️  Nested operation
+  ⚠️  nested operation
 
 peg$c57 = "'"
 
@@ -1265,8 +1263,7 @@ peg$c62 = {
         "	",
         "
 ",
-        "
-"
+        ""
     ],
     "inverted": false,
     "ignoreCase": false
@@ -1283,8 +1280,7 @@ peg$c66 = {
     "parts": [
         "
 ",
-        "
-"
+        ""
     ],
     "inverted": false,
     "ignoreCase": false
@@ -2042,11 +2038,11 @@ s1#102 = (???*0* | "-" | {} | null | {"type": "number_constant", "value": ???*1*
 - *2* FreeVar(parseInt)
   ⚠️  unknown global
 
-s1#103nested operation | {} | {"type": "string_constant", "value": ???*1*("")} | "'")
+s1#103 = (???*0* | """ | {} | {"type": "string_constant", "value": ???*1*("")} | "'")
 - *0* s1
   ⚠️  pattern without value
 - *1* arguments[0]["join"]
-  ⚠️  Nested operation
+  ⚠️  nested operation
 
 s1#104 = ???*0*
 - *0* max number of linking steps reached
@@ -2166,8 +2162,7 @@ s1#142 = (
   | "
 "
   | "r"
-  | "
-"
+  | ""
   | "t"
   | "	"
 )

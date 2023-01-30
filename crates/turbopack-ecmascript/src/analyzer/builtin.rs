@@ -39,13 +39,10 @@ pub fn early_replace_builtin(value: &mut JsValue) -> bool {
                 _ => false,
             },
         },
-        JsValue::Member(_, box ref mut obj, _) => match obj {
-            JsValue::Unknown(_, _) => {
-                value.make_unknown("unknown object");
-                true
-            }
-            _ => false,
-        },
+        JsValue::Member(_, box JsValue::Unknown(_, _), _) => {
+            value.make_unknown("unknown object");
+            true
+        }
         _ => false,
     }
 }

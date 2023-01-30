@@ -264,12 +264,10 @@ where
                 });
                 val.update_total_nodes();
                 total_nodes -= val.total_nodes();
-                if modified {
-                    if val.total_nodes() > LIMIT_NODE_SIZE {
-                        total_nodes += 1;
-                        done.push((JsValue::Unknown(None, "node limit reached"), true));
-                        continue;
-                    }
+                if modified && val.total_nodes() > LIMIT_NODE_SIZE {
+                    total_nodes += 1;
+                    done.push((JsValue::Unknown(None, "node limit reached"), true));
+                    continue;
                 }
 
                 let (mut val, visit_modified) =

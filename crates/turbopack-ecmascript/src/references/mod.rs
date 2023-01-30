@@ -1076,10 +1076,9 @@ pub(crate) async fn analyze_ecmascript_module(
             }
 
             let cache = Mutex::new(LinkCache::new());
-            let early_linker = |value| early_value_visitor(value);
             let linker = |value| value_visitor(source, origin, value, environment);
             let effects = take(&mut var_graph.effects);
-            let link_value = |value| link(&var_graph, value, &early_linker, &linker, &cache);
+            let link_value = |value| link(&var_graph, value, &early_value_visitor, &linker, &cache);
             // There can be many references to import.meta, but only the first should hoist
             // the object allocation.
             let mut first_import_meta = true;
