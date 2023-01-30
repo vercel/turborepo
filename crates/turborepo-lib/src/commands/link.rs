@@ -100,7 +100,8 @@ pub async fn link(mut base: CommandBase, modify_gitignore: bool) -> Result<()> {
 
     fs::create_dir_all(base.repo_root.join(".turbo"))
         .context("could not create .turbo directory")?;
-    base.repo_config()?.set_team_id(Some(team_id.to_string()))?;
+    base.repo_config_mut()?
+        .set_team_id(Some(team_id.to_string()))?;
 
     let chosen_team_name = match selected_team {
         SelectedTeam::User => user_display_name,

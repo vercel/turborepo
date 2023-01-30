@@ -41,9 +41,9 @@ pub async fn login(mut base: CommandBase) -> Result<()> {
         .get()
         .ok_or_else(|| anyhow!("Failed to get token"))?;
 
-    base.user_config()?.set_token(Some(token.to_string()))?;
+    base.user_config_mut()?.set_token(Some(token.to_string()))?;
 
-    let client = APIClient::new(token, repo_config.api_url())?;
+    let client = APIClient::new(token, base.repo_config()?.api_url())?;
     let user_response = client.get_user().await?;
 
     let ui = base.ui;
