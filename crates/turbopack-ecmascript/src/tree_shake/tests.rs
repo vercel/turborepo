@@ -111,22 +111,42 @@ fn run(input: PathBuf) {
         let eventual_ids = analyzer.hoist_vars_and_bindings(&module);
 
         writeln!(s, "# Phase 1").unwrap();
-        writeln!(s, "```mermaid\n{}```", render_graph(&mut analyzer)).unwrap();
+        writeln!(
+            s,
+            "```mermaid\n{}```",
+            render_graph(&item_ids, &mut analyzer.g)
+        )
+        .unwrap();
 
         analyzer.evaluate_immediate(&module, &eventual_ids);
 
         writeln!(s, "# Phase 2").unwrap();
-        writeln!(s, "```mermaid\n{}```", render_graph(&mut analyzer)).unwrap();
+        writeln!(
+            s,
+            "```mermaid\n{}```",
+            render_graph(&item_ids, &mut analyzer.g)
+        )
+        .unwrap();
 
         analyzer.evaluate_eventual(&module);
 
         writeln!(s, "# Phase 3").unwrap();
-        writeln!(s, "```mermaid\n{}```", render_graph(&mut analyzer)).unwrap();
+        writeln!(
+            s,
+            "```mermaid\n{}```",
+            render_graph(&item_ids, &mut analyzer.g)
+        )
+        .unwrap();
 
         analyzer.handle_exports(&module);
 
         writeln!(s, "# Phase 4").unwrap();
-        writeln!(s, "```mermaid\n{}```", render_graph(&mut analyzer)).unwrap();
+        writeln!(
+            s,
+            "```mermaid\n{}```",
+            render_graph(&item_ids, &mut analyzer.g)
+        )
+        .unwrap();
 
         let graph = analyzer.g.inner.clone().into_graph();
 
@@ -170,11 +190,11 @@ fn print<N: swc_core::ecma::codegen::Node>(cm: &Arc<SourceMap>, nodes: &[&N]) ->
     String::from_utf8(buf).unwrap()
 }
 
-fn render_graph(analyzer: &mut Analyzer) -> String {
+fn render_graph(item_ids: &[ItemId], g: &mut Graph) -> String {
     let mut mermaid = String::from("graph TD\n");
 
-    for (i, id) in analyzer.item_ids.iter().enumerate() {
-        let i = analyzer.g.node(id);
+    for (i, id) in item_ids.iter().enumerate() {
+        let i = g.node(id);
 
         writeln!(mermaid, "    Item{};", i + 1).unwrap();
 
@@ -183,7 +203,7 @@ fn render_graph(analyzer: &mut Analyzer) -> String {
         }
     }
 
-    for (from, to, strong) in analyzer.g.inner.all_edges() {
+    for (from, to, strong) in g.inner.all_edges() {
         writeln!(
             mermaid,
             "    Item{} -{}-> Item{};",
