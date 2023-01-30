@@ -162,6 +162,7 @@ impl ResolveResult {
                     list.extend(list2.iter().cloned());
                 }
                 _ => {
+                    list.extend(other.get_references().iter().cloned());
                     *self = ResolveResult::Unresolveable(take(list));
                 }
             },

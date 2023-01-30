@@ -39,9 +39,16 @@ impl ResolvePlugin for ExternalCjsModulesResolvePlugin {
         fs_path: FileSystemPathVc,
         _request: RequestVc,
     ) -> Result<ResolveResultOptionVc> {
+        let raw_fs_path = &*fs_path.await?;
+
         // always bundle transpiled modules
         let transpiled_glob = packages_glob(self.transpiled_packages).await?;
-        if transpiled_glob.execute(&fs_path.await?.path) {
+        if transpiled_glob.execute(&raw_fs_path.path) {
+            return Ok(ResolveResultOptionVc::none());
+        }
+
+        // mjs -> esm module
+        if Some("mjs") == raw_fs_path.extension() {
             return Ok(ResolveResultOptionVc::none());
         }
 
