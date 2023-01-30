@@ -363,9 +363,9 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 
 			envVarDependencies.Add(value)
 		}
-
-		c.EnvVarDependencies = envVarDependencies.UnsafeListOfStrings()
 	}
+
+	c.EnvVarDependencies = envVarDependencies.UnsafeListOfStrings()
 
 	sort.Strings(c.EnvVarDependencies)
 

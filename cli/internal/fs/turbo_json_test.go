@@ -37,6 +37,11 @@ func Test_ReadTurboConfig(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
+			FieldsMeta: map[string]bool{
+				"HasOutputs":                 true,
+				"HasOutputMode":              true,
+				"HasTopologicalDependencies": true,
+			},
 			Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 			TopologicalDependencies: []string{"build"},
 			EnvVarDependencies:      []string{},
@@ -45,6 +50,10 @@ func Test_ReadTurboConfig(t *testing.T) {
 			OutputMode:              util.NewTaskOutput,
 		},
 		"lint": {
+			FieldsMeta: map[string]bool{
+				"HasOutputs":    true,
+				"HasOutputMode": true,
+			},
 			Outputs:                 TaskOutputs{},
 			TopologicalDependencies: []string{},
 			EnvVarDependencies:      []string{"MY_VAR"},
@@ -53,6 +62,9 @@ func Test_ReadTurboConfig(t *testing.T) {
 			OutputMode:              util.NewTaskOutput,
 		},
 		"dev": {
+			FieldsMeta: map[string]bool{
+				"HasOutputMode": true,
+			},
 			Outputs:                 TaskOutputs{},
 			TopologicalDependencies: []string{},
 			EnvVarDependencies:      []string{},
@@ -61,6 +73,12 @@ func Test_ReadTurboConfig(t *testing.T) {
 			OutputMode:              util.FullTaskOutput,
 		},
 		"publish": {
+			FieldsMeta: map[string]bool{
+				"HasInputs":                  true,
+				"HasOutputs":                 true,
+				"HasTaskDependencies":        true,
+				"HasTopologicalDependencies": true,
+			},
 			Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
 			TopologicalDependencies: []string{"build", "publish"},
 			EnvVarDependencies:      []string{},
@@ -79,7 +97,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 func Test_LoadTurboConfig_Legacy(t *testing.T) {
 	testDir := getTestDir(t, "legacy-only")
 	packageJSONPath := testDir.UntypedJoin("package.json")
-	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(testDir, packageJSONPath)
 
 	if pkgJSONReadErr != nil {
 		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
@@ -94,7 +112,7 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 	testDir := getTestDir(t, "both")
 
 	packageJSONPath := testDir.UntypedJoin("package.json")
-	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(testDir, packageJSONPath)
 
 	if pkgJSONReadErr != nil {
 		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
@@ -108,6 +126,11 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
+			FieldsMeta: map[string]bool{
+				"HasOutputs":                 true,
+				"HasOutputMode":              true,
+				"HasTopologicalDependencies": true,
+			},
 			Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 			TopologicalDependencies: []string{"build"},
 			EnvVarDependencies:      []string{},
@@ -217,7 +240,6 @@ func validatePipeline(t *testing.T, actual Pipeline, expected map[string]TaskDef
 		assertIsSorted(t, actualTaskDefinition.TaskDependencies, "Task deps")
 		assert.EqualValuesf(t, expectedTaskDefinition, actualTaskDefinition, "task definition mismatch for %v", taskName)
 	}
-
 }
 
 func getTestDir(t *testing.T, testName string) turbopath.AbsoluteSystemPath {
