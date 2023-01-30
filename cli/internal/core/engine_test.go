@@ -27,17 +27,30 @@ func TestEngineDefault(t *testing.T) {
 	workspaceGraph.Connect(dag.BasicEdge("c", "a"))
 
 	buildTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTopologicalDependencies": true,
+			"HasTaskDependencies":        true,
+		},
 		TopologicalDependencies: []string{"build"},
 		TaskDependencies:        []string{"prepare"},
 	}
 
 	testTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTopologicalDependencies": true,
+			"HasTaskDependencies":        true,
+		},
 		TopologicalDependencies: []string{"build"},
 		TaskDependencies:        []string{"prepare"},
 	}
 
 	prepareTask := fs.TaskDefinition{}
-	sideQuestTask := fs.TaskDefinition{TaskDependencies: []string{"prepare"}}
+	sideQuestTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTaskDependencies": true,
+		},
+		TaskDependencies: []string{"prepare"},
+	}
 
 	pipeline := map[string]fs.TaskDefinition{
 		"build":      buildTask,
@@ -135,8 +148,18 @@ func TestDependenciesOnUnspecifiedPackages(t *testing.T) {
 	workspaceGraph.Connect(dag.BasicEdge("app2", "libB"))
 	workspaceGraph.Connect(dag.BasicEdge("app2", "libC"))
 
-	buildTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
-	testTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
+	buildTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTopologicalDependencies": true,
+		},
+		TopologicalDependencies: []string{"build"},
+	}
+	testTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTopologicalDependencies": true,
+		},
+		TopologicalDependencies: []string{"build"},
+	}
 
 	pipeline := fs.Pipeline{"build": buildTask, "test": testTask}
 
@@ -199,8 +222,18 @@ func TestRunPackageTask(t *testing.T) {
 	workspaceGraph.Add("libA")
 	workspaceGraph.Connect(dag.BasicEdge("app1", "libA"))
 
-	buildTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
-	specialTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
+	buildTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTopologicalDependencies": true,
+		},
+		TopologicalDependencies: []string{"build"},
+	}
+	specialTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTopologicalDependencies": true,
+		},
+		TopologicalDependencies: []string{"build"},
+	}
 	pipeline := fs.Pipeline{
 		"build":        buildTask,
 		"app1#special": specialTask,
@@ -269,8 +302,18 @@ func TestIncludeRootTasks(t *testing.T) {
 	workspaceGraph.Add("libA")
 	workspaceGraph.Connect(dag.BasicEdge("app1", "libA"))
 
-	buildTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
-	testTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
+	buildTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTopologicalDependencies": true,
+		},
+		TopologicalDependencies: []string{"build"},
+	}
+	testTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTopologicalDependencies": true,
+		},
+		TopologicalDependencies: []string{"build"},
+	}
 	rootTestTask := fs.TaskDefinition{}
 	pipeline := fs.Pipeline{
 		"build":   buildTask,
@@ -331,7 +374,12 @@ func TestDependOnRootTask(t *testing.T) {
 	workspaceGraph.Add("libA")
 	workspaceGraph.Connect(dag.BasicEdge("app1", "libA"))
 
-	buildTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
+	buildTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTopologicalDependencies": true,
+		},
+		TopologicalDependencies: []string{"build"},
+	}
 	rootTask := fs.TaskDefinition{}
 
 	pipeline := fs.Pipeline{
@@ -407,8 +455,18 @@ func TestDependOnMultiplePackageTasks(t *testing.T) {
 	workspaceGraph.Add("libA")
 	workspaceGraph.Connect(dag.BasicEdge("app1", "libA"))
 
-	buildTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
-	compileTask := fs.TaskDefinition{TopologicalDependencies: []string{"build"}}
+	buildTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTopologicalDependencies": true,
+		},
+		TopologicalDependencies: []string{"build"},
+	}
+	compileTask := fs.TaskDefinition{
+		FieldsMeta: map[string]bool{
+			"HasTopologicalDependencies": true,
+		},
+		TopologicalDependencies: []string{"build"},
+	}
 
 	pipeline := fs.Pipeline{
 		"build":   buildTask,
