@@ -7,7 +7,7 @@ use serde::Deserialize;
 use tokio::sync::OnceCell;
 
 use crate::{
-    client::{APIClient, UserClient},
+    client::UserClient,
     commands::CommandBase,
     get_version,
     ui::{start_spinner, BOLD, CYAN},
@@ -16,7 +16,7 @@ use crate::{
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 
-pub async fn login(base: CommandBase) -> Result<()> {
+pub async fn login(mut base: CommandBase) -> Result<()> {
     let repo_config = base.repo_config()?;
     let login_url_base = repo_config.login_url();
     debug!("turbo v{}", get_version());
@@ -41,9 +41,9 @@ pub async fn login(base: CommandBase) -> Result<()> {
         .get()
         .ok_or_else(|| anyhow!("Failed to get token"))?;
 
-    base.user_config()?.set_token(Some(token.to_string()))?;
+    base.user_config_mut()?.set_token(Some(token.to_string()))?;
 
-    let client = APIClient::new(token, repo_config.api_url())?;
+    let client = base.api_client()?.unwrap();
     let user_response = client.get_user().await?;
 
     let ui = base.ui;
