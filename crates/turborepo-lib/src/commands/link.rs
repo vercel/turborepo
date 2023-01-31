@@ -34,7 +34,9 @@ pub async fn link(mut base: CommandBase, modify_gitignore: bool) -> Result<()> {
   This results in faster build times and deployments for your team.
   For more info, see {}
 ",
-        base.ui.apply(UNDERLINE.apply_to("https://turbo.build/repo/docs/core-concepts/remote-caching"))
+        base.ui.apply(
+            UNDERLINE.apply_to("https://turbo.build/repo/docs/core-concepts/remote-caching")
+        )
     );
 
     let repo_root_with_tilde = base.repo_root.to_string_lossy().replacen(&*homedir, "~", 1);
