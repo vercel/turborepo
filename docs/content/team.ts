@@ -63,6 +63,11 @@ const TURBO_TEAM: Record<string, AuthorDetails> = {
     name: "Chris Olszewski",
     picture: "/images/people/chrisolszewski.jpg",
   },
+  alexanderlyon: {
+    name: "Alexander Lyon",
+    twitterUsername: "_arlyon",
+    picture: "/images/people/alexanderlyon.jpg",
+  },
 };
 
 export type Author = keyof typeof TURBO_TEAM;
