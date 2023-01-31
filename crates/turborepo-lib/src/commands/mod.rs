@@ -114,7 +114,10 @@ mod test {
     use tokio::sync::OnceCell;
 
     use crate::{
-        client::{Membership, Role, Team, TeamsResponse, User, UserResponse},
+        client::{
+            CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse, User,
+            UserResponse,
+        },
         commands::{link, CommandBase},
         config::{RepoConfigLoader, UserConfigLoader},
         ui::UI,
@@ -184,6 +187,14 @@ mod test {
                             name: None,
                             created_at: 0,
                         },
+                    })
+                }),
+            )
+            .route(
+                "/v8/artifacts/status",
+                get(|| async {
+                    Json(CachingStatusResponse {
+                        status: CachingStatus::Enabled,
                     })
                 }),
             );

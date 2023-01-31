@@ -8,14 +8,20 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+#[cfg(not(test))]
 use console::Style;
-use dialoguer::{theme::ColorfulTheme, Confirm, Select};
+#[cfg(not(test))]
+use dialoguer::Select;
+use dialoguer::{theme::ColorfulTheme, Confirm};
 use dirs_next::home_dir;
+use rand::Rng;
 
+#[cfg(not(test))]
+use crate::ui::CYAN;
 use crate::{
     client::{CachingStatus, Team, UserClient},
     commands::CommandBase,
-    ui::{BOLD, CYAN, GREY, UNDERLINE},
+    ui::{BOLD, GREY, UNDERLINE},
 };
 
 enum SelectedTeam<'a> {
@@ -139,8 +145,14 @@ fn should_enable_caching() -> Result<bool> {
 }
 
 #[cfg(test)]
-fn select_team<'a>(teams: &'a [Team], user_display_name: &'a str) -> Result<SelectedTeam<'a>> {
-    Ok(SelectedTeam::User)
+fn select_team<'a>(teams: &'a [Team], _: &'a str) -> Result<SelectedTeam<'a>> {
+    let mut rng = rand::thread_rng();
+    let idx = rng.gen_range(0..=(teams.len()));
+    if idx == teams.len() {
+        Ok(SelectedTeam::User)
+    } else {
+        Ok(SelectedTeam::Team(&teams[idx]))
+    }
 }
 
 #[cfg(not(test))]
