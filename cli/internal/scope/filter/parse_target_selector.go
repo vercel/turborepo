@@ -37,7 +37,7 @@ func (ts *TargetSelector) getToRef() string {
 
 var errCantMatchDependencies = errors.New("cannot use match dependencies without specifying either a directory or package")
 
-var targetSelectorRegex = regexp.MustCompile(`^([^.](?:[^{}[\]]*[^{}[\].])?)?(\{[^}]+\})?((?:\.{3})?\[[^\]]+\])?$`)
+var targetSelectorRegex = regexp.MustCompile(`^([^.](?:[^{}[\]]*[^{}[\].])?)?(\{[^}]*\})?((?:\.{3})?\[[^\]]+\])?$`)
 
 // ParseTargetSelector is a function that returns pnpm compatible --filter command line flags
 func ParseTargetSelector(rawSelector string) (*TargetSelector, error) {
@@ -101,7 +101,9 @@ func ParseTargetSelector(rawSelector string) (*TargetSelector, error) {
 			rawParentDir := matches[0][2]
 			// trim {}
 			rawParentDir = rawParentDir[1 : len(rawParentDir)-1]
-			if relPath, err := turbopath.CheckedToRelativeSystemPath(rawParentDir); err == nil {
+			if rawParentDir == "" {
+				return nil, errors.New("empty path specification")
+			} else if relPath, err := turbopath.CheckedToRelativeSystemPath(rawParentDir); err == nil {
 				parentDir = relPath
 			} else {
 				return nil, errors.Wrapf(err, "invalid path specification: %v", rawParentDir)
