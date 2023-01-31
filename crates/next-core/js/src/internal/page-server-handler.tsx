@@ -206,7 +206,7 @@ export default function startHandler({
       if (isDataReq) {
         return {
           type: "response",
-          statusCode,
+          statusCode: 404,
           body: '{"notFound":true}',
           headers: [["Content-Type", MIME_APPLICATION_JAVASCRIPT]],
         };
