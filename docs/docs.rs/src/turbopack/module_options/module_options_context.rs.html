@@ -73,12 +73,16 @@
 <span id="73">73</span>
 <span id="74">74</span>
 <span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>turbo_tasks::{primitives::StringsVc, trace::TraceRawVcs};
+<span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
 <span class="kw">use </span>turbopack_core::{environment::EnvironmentVc, resolve::options::ImportMappingVc};
 <span class="kw">use </span>turbopack_ecmascript::EcmascriptInputTransform;
-<span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
+<span class="kw">use </span>turbopack_node::{
+    execution_context::ExecutionContextVc, transforms::webpack::WebpackLoaderConfigsVc,
+};
 
 <span class="kw">use </span><span class="kw">super</span>::ModuleRule;
 <span class="kw">use </span><span class="kw">crate</span>::condition::ContextCondition;
@@ -92,7 +96,7 @@
 <span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Default, Clone, Debug)]
 </span><span class="kw">pub struct </span>WebpackLoadersOptions {
-    <span class="kw">pub </span>extension_to_loaders: IndexMap&lt;String, StringsVc&gt;,
+    <span class="kw">pub </span>extension_to_loaders: IndexMap&lt;String, WebpackLoaderConfigsVc&gt;,
     <span class="kw">pub </span>placeholder_for_future_extensions: (),
 }
 

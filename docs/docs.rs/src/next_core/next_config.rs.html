@@ -494,6 +494,7 @@
 <span id="494">494</span>
 <span id="495">495</span>
 <span id="496">496</span>
+<span id="497">497</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -525,6 +526,7 @@
 <span class="kw">use </span>turbopack_node::{
     evaluate::{evaluate, JavaScriptValue},
     execution_context::{ExecutionContext, ExecutionContextVc},
+    transforms::webpack::{WebpackLoaderConfigs, WebpackLoaderConfigsVc},
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::embed_js::next_asset;
@@ -741,7 +743,7 @@
     <span class="kw">pub </span>app_dir: <span class="prelude-ty">Option</span>&lt;bool&gt;,
     <span class="kw">pub </span>resolve_alias: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, JsonValue&gt;&gt;,
     <span class="kw">pub </span>server_components_external_packages: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
-    <span class="kw">pub </span>turbopack_loaders: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, Vec&lt;String&gt;&gt;&gt;,
+    <span class="kw">pub </span>turbopack_loaders: <span class="prelude-ty">Option</span>&lt;IndexMap&lt;String, WebpackLoaderConfigs&gt;&gt;,
 
     <span class="comment">// unsupported
     </span>adjust_font_fallbacks: <span class="prelude-ty">Option</span>&lt;bool&gt;,
@@ -897,7 +899,7 @@
         };
         <span class="kw">let </span><span class="kw-2">mut </span>extension_to_loaders = IndexMap::new();
         <span class="kw">for </span>(ext, loaders) <span class="kw">in </span>turbopack_loaders {
-            extension_to_loaders.insert(ext.clone(), StringsVc::cell(loaders.clone()));
+            extension_to_loaders.insert(ext.clone(), WebpackLoaderConfigsVc::cell(loaders.clone()));
         }
         <span class="prelude-val">Ok</span>(WebpackLoadersOptions {
             extension_to_loaders,
