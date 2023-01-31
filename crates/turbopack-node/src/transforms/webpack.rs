@@ -37,6 +37,7 @@ pub enum WebpackLoaderConfig {
     LoaderName(String),
     LoaderNameWithOptions {
         loader: String,
+        #[turbo_tasks(trace_ignore)]
         options: serde_json::Map<String, serde_json::Value>,
     },
 }

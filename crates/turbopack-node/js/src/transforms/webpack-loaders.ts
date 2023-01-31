@@ -41,16 +41,10 @@ const transform = (
     const resource = pathResolve(contextDir, name);
     const resourceDir = dirname(resource);
 
-    function resolveLoader(specifier: string) {
-      return require.resolve(specifier, { paths: [resourceDir] });
-    }
-
-    // TODO this should be handled in turbopack instead to ensure it's watched
-    loaders = loaders.map((loader: any) =>
-      typeof loader === "string"
-        ? resolveLoader(loader)
-        : { loader: resolveLoader(loader.loader), options: loader.options }
+    const loadersWithOptions = loaders.map((loader) =>
+      typeof loader === "string" ? { loader, options: {} } : loader
     );
+
     runLoaders(
       {
         resource,
@@ -63,7 +57,10 @@ const transform = (
               : {};
           },
         },
-        loaders,
+        loaders: loadersWithOptions.map((loader) => ({
+          loader: require.resolve(loader.loader, { paths: [resourceDir] }),
+          options: loader.options,
+        })),
         readResource: (_filename, callback) => {
           // TODO assuming the filename === resource, but loaders might change that
           callback(null, Buffer.from(content, "utf-8"));
