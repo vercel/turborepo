@@ -22,6 +22,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/scope"
 	"github.com/vercel/turbo/cli/internal/signals"
 	"github.com/vercel/turbo/cli/internal/taskhash"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/ui"
 	"github.com/vercel/turbo/cli/internal/util"
@@ -254,7 +255,10 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	// TODO: consolidate some of these arguments
 	g := &graph.CompleteGraph{
-		WorkspaceGraph:  pkgDepGraph.WorkspaceGraph,
+		WorkspaceGraph: pkgDepGraph.WorkspaceGraph,
+		// TODO(mehulkar): We can remove pipeline from here eventually
+		// It is only used by the taskhash tracker to look up taskDefinitions
+		// but we will eventually replace that
 		Pipeline:        pipeline,
 		WorkspaceInfos:  pkgDepGraph.WorkspaceInfos,
 		GlobalHash:      globalHash,
@@ -273,7 +277,12 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		vertexSet.Add(v)
 	}
 
-	engine, err := buildTaskGraphEngine(g, rs)
+	engine, err := buildTaskGraphEngine(
+		g,
+		rs,
+		r.base.RepoRoot,
+		r.opts.runOpts.singlePackage,
+	)
 
 	if err != nil {
 		return errors.Wrap(err, "error preparing engine")
@@ -299,7 +308,12 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 				g.WorkspaceGraph.RemoveEdge(edge)
 			}
 		}
-		engine, err = buildTaskGraphEngine(g, rs)
+		engine, err = buildTaskGraphEngine(
+			g,
+			rs,
+			r.base.RepoRoot,
+			r.opts.runOpts.singlePackage,
+		)
 		if err != nil {
 			return errors.Wrap(err, "error preparing engine")
 		}
@@ -394,14 +408,23 @@ func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient anal
 	})
 }
 
-func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, error) {
-	engine := core.NewEngine(g)
+func buildTaskGraphEngine(
+	g *graph.CompleteGraph,
+	rs *runSpec,
+	repoRoot turbopath.AbsoluteSystemPath,
+	isSinglePackage bool,
+) (*core.Engine, error) {
+	engine := core.NewEngine(g, repoRoot, isSinglePackage)
 
-	for taskName, taskDefinition := range g.Pipeline {
-		engine.AddTask(&core.Task{
-			Name:           taskName,
-			TaskDefinition: taskDefinition,
-		})
+	// If a root task is added, mark the task name as eligible for
+	// root execution. Otherwise, it will be skipped.
+	for taskName, _ := range g.Pipeline {
+		if util.IsPackageTask(taskName) {
+			pkg, taskName := util.GetPackageTaskFromId(taskName)
+			if pkg == util.RootPkgName {
+				engine.AddRootEnabledTask(taskName)
+			}
+		}
 	}
 
 	if err := engine.Prepare(&core.EngineBuildingOptions{

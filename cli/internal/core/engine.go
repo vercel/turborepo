@@ -6,6 +6,7 @@ import (
 
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/pyr-sh/dag"
@@ -34,16 +35,33 @@ type Engine struct {
 
 	// completeGraph is the CompleteGraph. We need this to look up the Pipeline, etc.
 	completeGraph *graph.CompleteGraph
+
+	// repoRoot is a path to the root of the repo. We need it to lazily find tasks
+	repoRoot turbopath.AbsoluteSystemPath
+
+	// Map of packageName to pipeline. We resolve task definitions from here
+	// but we don't want to read from the filesystem every time
+	pipelines map[string]*fs.Pipeline
+
+	// isSinglePackage is used to load turbo.json correctly
+	isSinglePackage bool
 }
 
 // NewEngine creates a new engine given a topologic graph of workspace package names
-func NewEngine(completeGraph *graph.CompleteGraph) *Engine {
+func NewEngine(
+	completeGraph *graph.CompleteGraph,
+	repoRoot turbopath.AbsoluteSystemPath,
+	isSinglePackage bool,
+) *Engine {
 	return &Engine{
 		completeGraph:    completeGraph,
 		Tasks:            make(map[string]*Task),
 		TaskGraph:        &dag.AcyclicGraph{},
 		PackageTaskDeps:  map[string][]string{},
 		rootEnabledTasks: make(util.Set),
+		repoRoot:         repoRoot,
+		pipelines:        map[string]*fs.Pipeline{},
+		isSinglePackage:  isSinglePackage,
 	}
 }
 
@@ -99,12 +117,63 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 	})
 }
 
-func (e *Engine) getTaskDefinition(taskName string, taskID string) (*Task, error) {
-	if task, ok := e.Tasks[taskID]; ok {
-		return task, nil
+func (e *Engine) getPipelineFromWorkspace(workspaceName string) (*fs.Pipeline, error) {
+	cachedPipeline, ok := e.pipelines[workspaceName]
+	if ok {
+		return cachedPipeline, nil
 	}
-	if task, ok := e.Tasks[taskName]; ok {
-		return task, nil
+
+	dir := e.completeGraph.WorkspaceInfos[workspaceName].Dir
+
+	var pkgJSON *fs.PackageJSON
+
+	// TODO(mehulkar): Can we remove this entirely?
+	if workspaceName == util.RootPkgName {
+		var err error
+		rootPkgJSONPath := turbopath.AbsoluteSystemPath(dir).Join("package.json")
+		pkgJSON, err = fs.ReadPackageJSON(rootPkgJSONPath)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Init a blank package json, since we must pass one into LoadTurboConfig
+		pkgJSON = &fs.PackageJSON{}
+	}
+
+	turboConfig, err := fs.LoadTurboConfig(e.repoRoot, pkgJSON, e.isSinglePackage)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add to internal cache so we don't have to read file system for every task
+	e.pipelines[workspaceName] = &turboConfig.Pipeline
+
+	// Assign the thing we'll use outside of this block
+	pipeline := e.pipelines[workspaceName]
+
+	return pipeline, nil
+}
+
+func (e *Engine) getTaskDefinition(taskName string, taskID string) (*Task, error) {
+	pipeline, err := e.getPipelineFromWorkspace("//")
+	if err != nil {
+		return nil, err
+	}
+
+	p := *pipeline
+
+	if task, ok := p[taskID]; ok {
+		return &Task{
+			Name:           taskName,
+			TaskDefinition: task,
+		}, nil
+	}
+
+	if task, ok := p[taskName]; ok {
+		return &Task{
+			Name:           taskName,
+			TaskDefinition: task,
+		}, nil
 	}
 
 	return nil, fmt.Errorf("Missing task definition, configure \"%s\" or \"%s\" in turbo.json", taskName, taskID)
@@ -117,14 +186,18 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		isRootPkg := pkg == util.RootPkgName
 
 		for _, taskName := range taskNames {
+			// If it's not a task from the root workspace (i.e. tasks from every other workspace)
+			// or if it's a task that we know is rootEnabled task, add it to the traversal queue.
 			if !isRootPkg || e.rootEnabledTasks.Includes(taskName) {
 				taskID := util.GetTaskId(pkg, taskName)
+				// Skip tasks that don't have a definition
 				if _, err := e.getTaskDefinition(taskName, taskID); err != nil {
-					// Initial, non-package tasks are not required to exist, as long as some
+					// Initially, non-package tasks are not required to exist, as long as some
 					// package in the list packages defines it as a package-task. Dependencies
 					// *are* required to have a definition.
 					continue
 				}
+
 				traversalQueue = append(traversalQueue, taskID)
 			}
 		}
@@ -266,18 +339,8 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 }
 
 // AddTask adds a task to the Engine so it can be looked up later.
-func (e *Engine) AddTask(task *Task) *Engine {
-	// If a root task is added, mark the task name as eligible for
-	// root execution. Otherwise, it will be skipped.
-	if util.IsPackageTask(task.Name) {
-		pkg, taskName := util.GetPackageTaskFromId(task.Name)
-		if pkg == util.RootPkgName {
-			e.rootEnabledTasks.Add(taskName)
-		}
-	}
-
-	e.Tasks[task.Name] = task
-	return e
+func (e *Engine) AddRootEnabledTask(taskName string) {
+	e.rootEnabledTasks.Add(taskName)
 }
 
 // AddDep adds tuples from+to task ID combos in tuple format so they can be looked up later.

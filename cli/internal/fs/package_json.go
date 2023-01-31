@@ -64,7 +64,13 @@ func ReadPackageJSON(path turbopath.AbsoluteSystemPath) (*PackageJSON, error) {
 	if err != nil {
 		return nil, err
 	}
-	return UnmarshalPackageJSON(b)
+	pkg, err := UnmarshalPackageJSON(b)
+
+	if err != nil {
+		return nil, err
+	}
+	pkg.Dir = turbopath.AnchoredSystemPath(path.Dir())
+	return pkg, nil
 }
 
 // UnmarshalPackageJSON decodes a byte slice into a PackageJSON struct
