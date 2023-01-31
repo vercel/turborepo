@@ -96,16 +96,16 @@ This means that users of your `dev` task _don't need to worry about codegen or m
 ## Running `dev` only in certain workspaces
 
 Let's assume you want to run the `dev` task in the `docs` workspace, located at `<root>/apps/docs`.
-With a global install of `turbo`, e.g. via `npm install --global turbo`, you can do
+`turbo` can infer the workspace from your directory, so if you run:
 
-```bash
-cd <root>/apps/docs
-turbo run dev
-```
+    ```bash
+    cd <root>/apps/docs
+    turbo run dev
+    ```
 
-`turbo` will automatically pick up which directory you're running from and filter to the correct workspace.
+`turbo` will automatically pick up that you're in the `docs` workspace and run the `dev` task.
 
-To run the same task from any other location, use [`--filter` syntax](/repo/docs/core-concepts/monorepos/filtering).
+To run the same task from any other location in the repository, use [`--filter` syntax](/repo/docs/core-concepts/monorepos/filtering).
 For example:
 
 ```bash
