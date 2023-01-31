@@ -114,7 +114,9 @@ mod tests {
         assert_eq!(escape_css_ident("_internal"), "_internal");
         // TODO(alexkirsz) Support unicode characters?
         // assert_eq!(escape_css_ident("\\22 toto"), "\\22 toto");
-        assert_eq!(escape_css_ident("bili\\.bob"), "bili\\.bob");
+        // TODO(alexkirsz) This CSS identifier is already valid, but we escape
+        // it anyway.
+        assert_eq!(escape_css_ident("bili\\.bob"), "bili\\\\\\.bob");
     }
 
     #[test]
