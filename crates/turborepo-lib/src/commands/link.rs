@@ -1,9 +1,10 @@
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::{
     fs,
     fs::{File, OpenOptions},
     io,
     io::{BufRead, Write},
-    os::unix::fs::PermissionsExt,
 };
 
 use anyhow::{anyhow, Context, Result};
