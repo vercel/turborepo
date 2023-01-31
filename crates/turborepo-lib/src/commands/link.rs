@@ -29,7 +29,7 @@ enum SelectedTeam<'a> {
     Team(&'a Team),
 }
 
-pub async fn link(mut base: CommandBase, modify_gitignore: bool) -> Result<()> {
+pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> {
     let homedir_path = home_dir().ok_or_else(|| anyhow!("could not find home directory."))?;
     let homedir = homedir_path.to_string_lossy();
     println!(
@@ -252,6 +252,9 @@ mod test {
         Args,
     };
 
+    const TEAM_ID: &str = "vercel";
+    const USER_ID: &str = "my-user-id";
+
     #[tokio::test]
     async fn test_link() {
         let user_config_file = NamedTempFile::new().unwrap();
@@ -264,7 +267,7 @@ mod test {
         .unwrap();
 
         tokio::spawn(start_test_server());
-        let base = CommandBase {
+        let mut base = CommandBase {
             repo_root: Default::default(),
             ui: UI::new(false),
             user_config: OnceCell::from(
@@ -283,7 +286,10 @@ mod test {
             args: Args::default(),
         };
 
-        link::link(base, false).await.unwrap();
+        link::link(&mut base, false).await.unwrap();
+
+        let team_id = base.repo_config().unwrap().team_id();
+        assert!(team_id == Some(TEAM_ID) || team_id == Some(USER_ID))
     }
 
     async fn start_test_server() -> Result<()> {
@@ -294,7 +300,7 @@ mod test {
                 get(|| async move {
                     Json(TeamsResponse {
                         teams: vec![Team {
-                            id: "vercel".to_string(),
+                            id: TEAM_ID.to_string(),
                             slug: "vercel".to_string(),
                             name: "vercel".to_string(),
                             created_at: 0,
@@ -309,7 +315,7 @@ mod test {
                 get(|| async move {
                     Json(UserResponse {
                         user: User {
-                            id: "my_user_id".to_string(),
+                            id: USER_ID.to_string(),
                             username: "my_username".to_string(),
                             email: "my_email".to_string(),
                             name: None,
