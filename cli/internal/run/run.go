@@ -394,7 +394,7 @@ func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient anal
 func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, error) {
 	engine := core.NewEngine(g)
 
-	// TODO(mehulkar): Can we recogize root enabled task later downstream?
+	// TODO(mehulkar): Can we recognize root enabled task later downstream?
 	for taskName, _ := range g.Pipeline {
 		engine.AddRootEnabledTask(taskName)
 	}

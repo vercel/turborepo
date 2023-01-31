@@ -133,19 +133,20 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	pkgs := options.Packages
 	taskNames := options.TaskNames
 	tasksOnly := options.TasksOnly
-	taskTraversalQueue := []string{}
+	taskIDsTraversalQueue := []string{}
 
+	// Get a list of entry points into our TaskGraph.
+	// We do this by taking the input taskNames, and pkgs
+	// and creating a queue of taskIDs that we can traverse and gather dependencies from.
 	for _, pkg := range pkgs {
 		isRootPkg := pkg == util.RootPkgName
+		// We can skip the root package, because we don't need to add in tasks for it
+		// unless it's a rootEnabled task name, in which case we'll add it in later.
+		if isRootPkg {
+			continue
+		}
+
 		for _, taskName := range taskNames {
-			fmt.Printf("[debug] TaskName %#v\n", taskName)
-
-			// TODO(mehulkar): why do we skip this?
-			if isRootPkg {
-				continue
-			}
-
-			// TODO(mehulkar): why do we skip this?
 			if e.rootEnabledTasks.Includes(taskName) {
 				continue
 			}
@@ -164,17 +165,17 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 			}
 
 			fmt.Printf("[debug] Appending taskID to queue: %#v\n", taskID)
-			taskTraversalQueue = append(taskTraversalQueue, taskID)
+			taskIDsTraversalQueue = append(taskIDsTraversalQueue, taskID)
 		}
 	}
 
 	visited := make(util.Set)
 
 	// Things get appended to traversalQueue inside this loop, so we use the len() check instead of range.
-	for len(taskTraversalQueue) > 0 {
-		// pop off the first item from the taskTraversalQueue
-		taskID := taskTraversalQueue[0]
-		taskTraversalQueue = taskTraversalQueue[1:]
+	for len(taskIDsTraversalQueue) > 0 {
+		// pop off the first item from the taskIDsTraversalQueue
+		taskID := taskIDsTraversalQueue[0]
+		taskIDsTraversalQueue = taskIDsTraversalQueue[1:]
 
 		pkg, taskName := util.GetPackageTaskFromId(taskID)
 		// This for lopo adds in the Root Node as a taskID (i.e. __ROOT__#build)
@@ -284,7 +285,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 					e.TaskGraph.Add(fromTaskID)
 					e.TaskGraph.Add(toTaskID)
 					e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
-					taskTraversalQueue = append(taskTraversalQueue, fromTaskID)
+					taskIDsTraversalQueue = append(taskIDsTraversalQueue, fromTaskID)
 				}
 			}
 		}
@@ -295,7 +296,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 				e.TaskGraph.Add(fromTaskID)
 				e.TaskGraph.Add(toTaskID)
 				e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
-				taskTraversalQueue = append(taskTraversalQueue, fromTaskID)
+				taskIDsTraversalQueue = append(taskIDsTraversalQueue, fromTaskID)
 			}
 		}
 
@@ -305,7 +306,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 					e.TaskGraph.Add(fromTaskID)
 					e.TaskGraph.Add(toTaskID)
 					e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
-					taskTraversalQueue = append(taskTraversalQueue, fromTaskID)
+					taskIDsTraversalQueue = append(taskIDsTraversalQueue, fromTaskID)
 				}
 			}
 		}
@@ -321,14 +322,18 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	return nil
 }
 
+// AddRootEnabledTask keeps track of tasks configured for the root pkg
+// from the root turbo.json pipeline. e.g. `//#build`.
 func (e *Engine) AddRootEnabledTask(taskName string) {
 	// If a root task is added, mark the task name as eligible for
 	// root execution. Otherwise, it will be skipped.
-	if util.IsPackageTask(taskName) {
-		pkg, taskName := util.GetPackageTaskFromId(taskName)
-		if pkg == util.RootPkgName {
-			e.rootEnabledTasks.Add(taskName)
-		}
+	if !util.IsPackageTask(taskName) {
+		return
+	}
+
+	pkg, taskName := util.GetPackageTaskFromId(taskName)
+	if pkg == util.RootPkgName {
+		e.rootEnabledTasks.Add(taskName)
 	}
 }
 
