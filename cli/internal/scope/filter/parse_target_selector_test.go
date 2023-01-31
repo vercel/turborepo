@@ -14,6 +14,11 @@ func TestParseTargetSelector(t *testing.T) {
 		wantErr     bool
 	}{
 		{
+			"{}",
+			&TargetSelector{},
+			true,
+		},
+		{
 			"foo",
 			&TargetSelector{
 				fromRef:             "",
