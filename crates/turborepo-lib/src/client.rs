@@ -38,6 +38,7 @@ pub struct Membership {
 }
 
 impl Membership {
+    #[allow(dead_code)]
     pub fn new(role: Role) -> Self {
         Self { role }
     }

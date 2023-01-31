@@ -14,6 +14,7 @@ use console::Style;
 use dialoguer::Select;
 use dialoguer::{theme::ColorfulTheme, Confirm};
 use dirs_next::home_dir;
+#[cfg(test)]
 use rand::Rng;
 
 #[cfg(not(test))]
@@ -47,7 +48,7 @@ pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> 
 
     let repo_root_with_tilde = base.repo_root.to_string_lossy().replacen(&*homedir, "~", 1);
 
-    if !should_link(&base, &repo_root_with_tilde)? {
+    if !should_link(base, &repo_root_with_tilde)? {
         return Err(anyhow!("canceled"));
     }
 
@@ -117,7 +118,7 @@ pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> 
     };
 
     if modify_gitignore {
-        add_turbo_to_gitignore(&base)?;
+        add_turbo_to_gitignore(base)?;
     }
 
     println!(
