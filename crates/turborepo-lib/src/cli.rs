@@ -445,6 +445,10 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Login { sso_team } => {
+            if clap_args.test_run {
+                println!("Login test run successful");
+                return Ok(Payload::Rust(Ok(0)));
+            }
             // We haven't implemented sso_team yet so we delegate to Go
             if sso_team.is_some() {
                 return Ok(Payload::Go(Box::new(clap_args)));
