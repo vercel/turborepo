@@ -58,24 +58,6 @@ type EngineBuildingOptions struct {
 	TasksOnly bool
 }
 
-// Prepare constructs the Task Graph for a list of packages and tasks
-func (e *Engine) Prepare(options *EngineBuildingOptions) error {
-	pkgs := options.Packages
-	tasks := options.TaskNames
-	if len(tasks) == 0 {
-		// TODO(gsoltis): Is this behavior used?
-		for key := range e.Tasks {
-			tasks = append(tasks, key)
-		}
-	}
-
-	if err := e.generateTaskGraph(pkgs, tasks, options.TasksOnly); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // EngineExecutionOptions controls a single walk of the task graph
 type EngineExecutionOptions struct {
 	// Parallel is whether to run tasks in parallel
@@ -106,7 +88,36 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 	})
 }
 
-func (e *Engine) getTaskDefinition(taskName string, taskID string) (*Task, error) {
+func (e *Engine) getTaskDefinitionFromWorkspace(workspaceDir turbopath.AnchoredSystemPath, taskName string) (*Task, error) {
+	workspaceConfigPath := turbopath.AbsoluteSystemPath(workspaceDir.Join("turbo.json"))
+	workspaceConfig, err := fs.ReadTurboConfig(workspaceConfigPath)
+
+	if err != nil {
+		return nil, fmt.Errorf("Missing turbo.json in workspace %s", workspaceDir.ToString())
+	}
+
+	taskDef, ok := workspaceConfig.Pipeline[taskName]
+
+	if !ok {
+		return nil, fmt.Errorf("Missing task definition for %s in workspace", taskName)
+	}
+
+	fmt.Printf("[debug] Found task %s in %#v\n", taskName, workspaceConfigPath.ToString())
+	task := &Task{
+		Name:           taskName,
+		TaskDefinition: taskDef,
+	}
+	return task, nil
+}
+
+func (e *Engine) getTaskDefinition(workspaceDir turbopath.AnchoredSystemPath, taskName string, taskID string) (*Task, error) {
+	// Look in the workspace first. We do not look up with taskID,
+	// becuase workspace configs should not use package#task syntax.
+	if task, err := e.getTaskDefinitionFromWorkspace(workspaceDir, taskName); err == nil {
+		return task, nil
+	}
+
+	// If there was no task found in the workspace, resolve from root instead.
 	if task, ok := e.Tasks[taskID]; ok {
 		return task, nil
 	}
@@ -117,33 +128,53 @@ func (e *Engine) getTaskDefinition(taskName string, taskID string) (*Task, error
 	return nil, fmt.Errorf("Missing task definition, configure \"%s\" or \"%s\" in turbo.json", taskName, taskID)
 }
 
-func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly bool) error {
-	traversalQueue := []string{}
+// Prepare constructs the Task Graph for a list of packages and tasks
+func (e *Engine) Prepare(options *EngineBuildingOptions) error {
+	pkgs := options.Packages
+	taskNames := options.TaskNames
+	tasksOnly := options.TasksOnly
+	taskTraversalQueue := []string{}
 
 	for _, pkg := range pkgs {
 		isRootPkg := pkg == util.RootPkgName
-
 		for _, taskName := range taskNames {
-			if !isRootPkg || e.rootEnabledTasks.Includes(taskName) {
-				taskID := util.GetTaskId(pkg, taskName)
-				if _, err := e.getTaskDefinition(taskName, taskID); err != nil {
-					// Initial, non-package tasks are not required to exist, as long as some
-					// package in the list packages defines it as a package-task. Dependencies
-					// *are* required to have a definition.
-					continue
-				}
-				traversalQueue = append(traversalQueue, taskID)
+			fmt.Printf("[debug] TaskName %#v\n", taskName)
+
+			// TODO(mehulkar): why do we skip this?
+			if isRootPkg {
+				continue
 			}
+
+			// TODO(mehulkar): why do we skip this?
+			if e.rootEnabledTasks.Includes(taskName) {
+				continue
+			}
+
+			taskID := util.GetTaskId(pkg, taskName)
+			workspaceInfo, ok := e.completeGraph.WorkspaceInfos[pkg]
+			if !ok {
+				return fmt.Errorf("Could not find workspace information for %s", pkg)
+			}
+
+			if _, err := e.getTaskDefinition(workspaceInfo.Dir, taskName, taskID); err != nil {
+				// Initial, non-package tasks are not required to exist, as long as some
+				// package in the list packages defines it as a package-task. Dependencies
+				// *are* required to have a definition.
+				continue
+			}
+
+			fmt.Printf("[debug] Appending taskID to queue: %#v\n", taskID)
+			taskTraversalQueue = append(taskTraversalQueue, taskID)
 		}
 	}
 
 	visited := make(util.Set)
 
 	// Things get appended to traversalQueue inside this loop, so we use the len() check instead of range.
-	for len(traversalQueue) > 0 {
-		// pop off the first item from the traversalQueue
-		taskID := traversalQueue[0]
-		traversalQueue = traversalQueue[1:]
+	for len(taskTraversalQueue) > 0 {
+		// pop off the first item from the taskTraversalQueue
+		taskID := taskTraversalQueue[0]
+		taskTraversalQueue = taskTraversalQueue[1:]
 
 		pkg, taskName := util.GetPackageTaskFromId(taskID)
 		// This for lopo adds in the Root Node as a taskID (i.e. __ROOT__#build)
@@ -253,7 +284,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 					e.TaskGraph.Add(fromTaskID)
 					e.TaskGraph.Add(toTaskID)
 					e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
-					traversalQueue = append(traversalQueue, fromTaskID)
+					taskTraversalQueue = append(taskTraversalQueue, fromTaskID)
 				}
 			}
 		}
@@ -264,7 +295,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 				e.TaskGraph.Add(fromTaskID)
 				e.TaskGraph.Add(toTaskID)
 				e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
-				traversalQueue = append(traversalQueue, fromTaskID)
+				taskTraversalQueue = append(taskTraversalQueue, fromTaskID)
 			}
 		}
 
@@ -274,7 +305,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 					e.TaskGraph.Add(fromTaskID)
 					e.TaskGraph.Add(toTaskID)
 					e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
-					traversalQueue = append(traversalQueue, fromTaskID)
+					taskTraversalQueue = append(taskTraversalQueue, fromTaskID)
 				}
 			}
 		}
@@ -290,22 +321,15 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 	return nil
 }
 
-// AddTask adds a task to the Engine so it can be looked up later.
-func (e *Engine) AddTask(task *Task) *Engine {
+func (e *Engine) AddRootEnabledTask(taskName string) {
 	// If a root task is added, mark the task name as eligible for
 	// root execution. Otherwise, it will be skipped.
-	if util.IsPackageTask(task.Name) {
-		pkg, taskName := util.GetPackageTaskFromId(task.Name)
+	if util.IsPackageTask(taskName) {
+		pkg, taskName := util.GetPackageTaskFromId(taskName)
 		if pkg == util.RootPkgName {
 			e.rootEnabledTasks.Add(taskName)
 		}
 	}
-
-	// TODO(mehulkar): Now that we're composing taskDefinition
-	// do we even need to store these in the engine? Should we instead store the resolved
-	// TaskDefinition here?
-	e.Tasks[task.Name] = task
-	return e
 }
 
 // AddDep adds tuples from+to task ID combos in tuple format so they can be looked up later.
@@ -364,7 +388,6 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 
 			// Get the Task Definition so we can check if it is Persistent
 			depTaskDefinition, taskExists := e.completeGraph.TaskDefinitions[depTaskID]
-			// depTaskDefinition, taskExists := e.getTaskDefinition(taskName, depTaskID)
 
 			if !taskExists {
 				return fmt.Errorf("Cannot find task definition for %v in package %v", depTaskID, packageName)

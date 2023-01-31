@@ -140,6 +140,7 @@ func (p Pipeline) GetTask(taskID string, taskName string) (*TaskDefinition, erro
 	taskDefinition, ok := p[taskID]
 	if !ok {
 		// then check for regular tasks
+		fmt.Printf("[debug] COuld not find %s, FALLBACK to %#v\n", taskID, taskName)
 		fallbackTaskDefinition, notcool := p[taskName]
 		// if neither, then bail
 		if !notcool {
@@ -151,6 +152,7 @@ func (p Pipeline) GetTask(taskID string, taskName string) (*TaskDefinition, erro
 		taskDefinition = fallbackTaskDefinition
 	}
 
+	fmt.Printf("[debug] Returning legit %#v\n", taskDefinition)
 	return &taskDefinition, nil
 }
 
