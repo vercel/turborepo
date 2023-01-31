@@ -12,7 +12,8 @@
   "license": "MIT",
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch"
+    "dev": "tsup --watch",
+    "check-types": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/react": "^18.0.26",
