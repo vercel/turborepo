@@ -102,12 +102,23 @@ func (e *Engine) getTaskDefinitionFromWorkspace(workspaceDir turbopath.AnchoredS
 		return nil, fmt.Errorf("Missing task definition for %s in workspace", taskName)
 	}
 
-	fmt.Printf("[debug] Found task %s in %#v\n", taskName, workspaceConfigPath.ToString())
 	task := &Task{
 		Name:           taskName,
 		TaskDefinition: taskDef,
 	}
 	return task, nil
+}
+
+func (e *Engine) getTaskDefinitionFromRoot(taskName string, taskID string) (*Task, error) {
+	// If there was no task found in the workspace, resolve from root instead.
+	if task, ok := e.Tasks[taskID]; ok {
+		return task, nil
+	}
+	if task, ok := e.Tasks[taskName]; ok {
+		return task, nil
+	}
+
+	return nil, fmt.Errorf("Could not find \"%s\" or \"%s\" in root config", taskName, taskID)
 }
 
 func (e *Engine) getTaskDefinition(workspaceDir turbopath.AnchoredSystemPath, taskName string, taskID string) (*Task, error) {
@@ -117,11 +128,8 @@ func (e *Engine) getTaskDefinition(workspaceDir turbopath.AnchoredSystemPath, ta
 		return task, nil
 	}
 
-	// If there was no task found in the workspace, resolve from root instead.
-	if task, ok := e.Tasks[taskID]; ok {
-		return task, nil
-	}
-	if task, ok := e.Tasks[taskName]; ok {
+	// Fallback to root workspace.
+	if task, err := e.getTaskDefinitionFromRoot(taskName, taskID); err == nil {
 		return task, nil
 	}
 
