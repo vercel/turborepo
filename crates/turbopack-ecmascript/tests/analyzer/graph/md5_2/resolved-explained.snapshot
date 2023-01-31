@@ -1,43 +1,53 @@
-*anonymous function 181* = ???*0*
-- *0* max number of linking steps reached
+*anonymous function 181* = (...) => crypt["endian"]([a, b, c, d])
 
-*anonymous function 5013* = (...) => (???*0* + arguments[1])
+*anonymous function 5013* = (...) => (???*0* + b)
 - *0* unsupported expression
 
-*anonymous function 5163* = (...) => (???*0* + arguments[1])
+*anonymous function 5163* = (...) => (???*0* + b)
 - *0* unsupported expression
 
-*anonymous function 5313* = (...) => (???*0* + arguments[1])
+*anonymous function 5313* = (...) => (???*0* + b)
 - *0* unsupported expression
 
-*anonymous function 5454* = (...) => (???*0* + arguments[1])
+*anonymous function 5454* = (...) => (???*0* + b)
 - *0* unsupported expression
 
-*anonymous function 5685* = ???*0*
-- *0* max number of linking steps reached
+*anonymous function 5685* = (...) => (digestbytes | bin["bytesToString"](digestbytes) | crypt["bytesToHex"](digestbytes))
 
-FF = ???*0*
-- *0* max number of linking steps reached
+FF = (...) => ???*0*["_ff"]
+- *0* crypt["endian"]([a, b, c, d])
+  ⚠️  nested operation
 
-GG = ???*0*
-- *0* max number of linking steps reached
+GG = (...) => ???*0*["_gg"]
+- *0* crypt["endian"]([a, b, c, d])
+  ⚠️  nested operation
 
-HH = ???*0*
-- *0* max number of linking steps reached
+HH = (...) => ???*0*["_hh"]
+- *0* crypt["endian"]([a, b, c, d])
+  ⚠️  nested operation
 
-II = ???*0*
-- *0* max number of linking steps reached
+II = (...) => ???*0*["_ii"]
+- *0* crypt["endian"]([a, b, c, d])
+  ⚠️  nested operation
 
 a#3 = ???*0*
 - *0* max number of linking steps reached
 
-a#4 = arguments[0]
+a#4 = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 
-a#5 = arguments[0]
+a#5 = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 
-a#6 = arguments[0]
+a#6 = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 
-a#7 = arguments[0]
+a#7 = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 
 aa = ???*0*
 - *0* max number of linking steps reached
@@ -45,13 +55,21 @@ aa = ???*0*
 b#3 = ???*0*
 - *0* max number of linking steps reached
 
-b#4 = arguments[1]
+b#4 = ???*0*
+- *0* arguments[1]
+  ⚠️  function calls are not analysed yet
 
-b#5 = arguments[1]
+b#5 = ???*0*
+- *0* arguments[1]
+  ⚠️  function calls are not analysed yet
 
-b#6 = arguments[1]
+b#6 = ???*0*
+- *0* arguments[1]
+  ⚠️  function calls are not analysed yet
 
-b#7 = arguments[1]
+b#7 = ???*0*
+- *0* arguments[1]
+  ⚠️  function calls are not analysed yet
 
 bb = ???*0*
 - *0* max number of linking steps reached
@@ -61,13 +79,21 @@ bin = module<charenc, {}>["bin"]
 c#3 = ???*0*
 - *0* max number of linking steps reached
 
-c#4 = arguments[2]
+c#4 = ???*0*
+- *0* arguments[2]
+  ⚠️  function calls are not analysed yet
 
-c#5 = arguments[2]
+c#5 = ???*0*
+- *0* arguments[2]
+  ⚠️  function calls are not analysed yet
 
-c#6 = arguments[2]
+c#6 = ???*0*
+- *0* arguments[2]
+  ⚠️  function calls are not analysed yet
 
-c#7 = arguments[2]
+c#7 = ???*0*
+- *0* arguments[2]
+  ⚠️  function calls are not analysed yet
 
 cc = ???*0*
 - *0* max number of linking steps reached
@@ -77,13 +103,21 @@ crypt = module<crypt, {}>
 d#3 = ???*0*
 - *0* max number of linking steps reached
 
-d#4 = arguments[3]
+d#4 = ???*0*
+- *0* arguments[3]
+  ⚠️  function calls are not analysed yet
 
-d#5 = arguments[3]
+d#5 = ???*0*
+- *0* arguments[3]
+  ⚠️  function calls are not analysed yet
 
-d#6 = arguments[3]
+d#6 = ???*0*
+- *0* arguments[3]
+  ⚠️  function calls are not analysed yet
 
-d#7 = arguments[3]
+d#7 = ???*0*
+- *0* arguments[3]
+  ⚠️  function calls are not analysed yet
 
 dd = ???*0*
 - *0* max number of linking steps reached
@@ -98,105 +132,172 @@ isBuffer = module<is-buffer, {}>
 l = ???*0*
 - *0* unsupported expression
 
-m = ???*0*((arguments[0] | ???*1* | ???*5*))
-- *0* module<crypt, {}>["bytesToWords"]
+m = ???*0*
+- *0* ???*1*((???*2* | ???*3* | ???*7* | ???*11*))
+  ⚠️  unknown callee
+- *1* module<crypt, {}>["bytesToWords"]
   ⚠️  nested operation
-- *1* ???*2*(???*4*)
+- *2* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *3* ???*4*(???*6*)
+  ⚠️  unknown callee
+- *4* ???*5*["stringToBytes"]
+  ⚠️  unknown object
+- *5* module<charenc, {}>["bin"]
   ⚠️  nested operation
+- *6* message
+  ⚠️  circular variable reference
+- *7* ???*8*["call"](message, 0)
+  ⚠️  unknown callee object
+- *8* ???*9*["slice"]
+  ⚠️  unknown object
+- *9* ???*10*["prototype"]
+  ⚠️  unknown object
+- *10* FreeVar(Array)
+  ⚠️  unknown global
+- *11* ???*12*()
+  ⚠️  nested operation
+- *12* ???*13*["toString"]
+  ⚠️  unknown object
+- *13* message
+  ⚠️  circular variable reference
+
+md5 = (...) => crypt["endian"]([a, b, c, d])
+
+message#3 = (???*0* | ???*1* | ???*15* | ???*19*())
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *1* ???*2*((???*4* | ???*5* | ???*9* | ???*13*()))
+  ⚠️  unknown callee
 - *2* ???*3*["stringToBytes"]
-  ⚠️  nested operation
+  ⚠️  unknown object
 - *3* module<charenc, {}>["bin"]
   ⚠️  nested operation
-- *4* message
+- *4* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *5* ???*6*(???*8*)
+  ⚠️  unknown callee
+- *6* ???*7*["stringToBytes"]
+  ⚠️  unknown object
+- *7* module<charenc, {}>["bin"]
+  ⚠️  nested operation
+- *8* message
   ⚠️  circular variable reference
-- *5* ???*6*["call"](message, 0)
+- *9* ???*10*["call"](message, 0)
   ⚠️  unknown callee object
-- *6* ???*7*["slice"]
+- *10* ???*11*["slice"]
   ⚠️  unknown object
-- *7* ???*8*["prototype"]
+- *11* ???*12*["prototype"]
   ⚠️  unknown object
-- *8* FreeVar(Array)
+- *12* FreeVar(Array)
   ⚠️  unknown global
-
-md5 = ???*0*
-- *0* max number of linking steps reached
-
-message#3 = (arguments[0] | ???*0*((arguments[0] | ???*2* | ???*6*)) | ???*10* | ???*14*())
-- *0* ???*1*["stringToBytes"]
-  ⚠️  nested operation
-- *1* module<charenc, {}>["bin"]
-  ⚠️  nested operation
-- *2* ???*3*(???*5*)
-  ⚠️  nested operation
-- *3* ???*4*["stringToBytes"]
-  ⚠️  nested operation
-- *4* module<charenc, {}>["bin"]
-  ⚠️  nested operation
-- *5* message
+- *13* ???*14*["toString"]
+  ⚠️  unknown object
+- *14* message
   ⚠️  circular variable reference
-- *6* ???*7*["call"](message, 0)
+- *15* ???*16*["call"](message, 0)
   ⚠️  unknown callee object
-- *7* ???*8*["slice"]
+- *16* ???*17*["slice"]
   ⚠️  unknown object
-- *8* ???*9*["prototype"]
+- *17* ???*18*["prototype"]
   ⚠️  unknown object
-- *9* FreeVar(Array)
+- *18* FreeVar(Array)
   ⚠️  unknown global
-- *10* ???*11*["call"](message, 0)
-  ⚠️  unknown callee object
-- *11* ???*12*["slice"]
+- *19* ???*20*["toString"]
   ⚠️  unknown object
-- *12* ???*13*["prototype"]
-  ⚠️  unknown object
-- *13* FreeVar(Array)
-  ⚠️  unknown global
-- *14* arguments[0]["toString"]
-  ⚠️  nested operation
+- *20* arguments[0]
+  ⚠️  function calls are not analysed yet
 
-message#8 = arguments[0]
+message#8 = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 
-n#4 = (arguments[0] + ???*0* + ???*1* + arguments[6])
-- *0* unsupported expression
+n#4 = (???*0* + ???*1* + ???*2* + ???*3*)
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 - *1* unsupported expression
+- *2* unsupported expression
+- *3* arguments[6]
+  ⚠️  function calls are not analysed yet
 
-n#5 = (arguments[0] + ???*0* + ???*1* + arguments[6])
-- *0* unsupported expression
+n#5 = (???*0* + ???*1* + ???*2* + ???*3*)
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 - *1* unsupported expression
+- *2* unsupported expression
+- *3* arguments[6]
+  ⚠️  function calls are not analysed yet
 
-n#6 = (arguments[0] + ???*0* + ???*1* + arguments[6])
-- *0* unsupported expression
+n#6 = (???*0* + ???*1* + ???*2* + ???*3*)
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 - *1* unsupported expression
+- *2* unsupported expression
+- *3* arguments[6]
+  ⚠️  function calls are not analysed yet
 
-n#7 = (arguments[0] + ???*0* + ???*1* + arguments[6])
-- *0* unsupported expression
+n#7 = (???*0* + ???*1* + ???*2* + ???*3*)
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 - *1* unsupported expression
+- *2* unsupported expression
+- *3* arguments[6]
+  ⚠️  function calls are not analysed yet
 
-options#3 = arguments[1]
+options#3 = ???*0*
+- *0* arguments[1]
+  ⚠️  function calls are not analysed yet
 
-options#8 = arguments[1]
+options#8 = ???*0*
+- *0* arguments[1]
+  ⚠️  function calls are not analysed yet
 
-s#4 = arguments[5]
+s#4 = ???*0*
+- *0* arguments[5]
+  ⚠️  function calls are not analysed yet
 
-s#5 = arguments[5]
+s#5 = ???*0*
+- *0* arguments[5]
+  ⚠️  function calls are not analysed yet
 
-s#6 = arguments[5]
+s#6 = ???*0*
+- *0* arguments[5]
+  ⚠️  function calls are not analysed yet
 
-s#7 = arguments[5]
+s#7 = ???*0*
+- *0* arguments[5]
+  ⚠️  function calls are not analysed yet
 
-t#4 = arguments[6]
+t#4 = ???*0*
+- *0* arguments[6]
+  ⚠️  function calls are not analysed yet
 
-t#5 = arguments[6]
+t#5 = ???*0*
+- *0* arguments[6]
+  ⚠️  function calls are not analysed yet
 
-t#6 = arguments[6]
+t#6 = ???*0*
+- *0* arguments[6]
+  ⚠️  function calls are not analysed yet
 
-t#7 = arguments[6]
+t#7 = ???*0*
+- *0* arguments[6]
+  ⚠️  function calls are not analysed yet
 
 utf8 = module<charenc, {}>["utf8"]
 
-x#4 = arguments[4]
+x#4 = ???*0*
+- *0* arguments[4]
+  ⚠️  function calls are not analysed yet
 
-x#5 = arguments[4]
+x#5 = ???*0*
+- *0* arguments[4]
+  ⚠️  function calls are not analysed yet
 
-x#6 = arguments[4]
+x#6 = ???*0*
+- *0* arguments[4]
+  ⚠️  function calls are not analysed yet
 
-x#7 = arguments[4]
+x#7 = ???*0*
+- *0* arguments[4]
+  ⚠️  function calls are not analysed yet

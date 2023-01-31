@@ -1,14 +1,8 @@
-a = (...) => ???*0*
-- *0* FreeVar(undefined)
-  ⚠️  unknown global
+a = (...) => FreeVar(undefined)
 
-b = (...) => ???*0*
-- *0* FreeVar(undefined)
-  ⚠️  unknown global
+b = (...) => FreeVar(undefined)
 
-c = (...) => ???*0*
-- *0* FreeVar(undefined)
-  ⚠️  unknown global
+c = (...) => FreeVar(undefined)
 
 x = (1 | `${("hello" | "world")}.js`)
 

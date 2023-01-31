@@ -1,0 +1,39 @@
+a#2 = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
+
+a#5 = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
+
+a#6 = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
+
+b#4 = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
+
+b#7 = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
+
+inner = (...) => (a + b)
+
+outer = (...) => inner("b")
+
+r = (...) => (a | (r((a + 1)) + 1))
+
+v1 = (???*0* + 2)
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
+
+v2 = (2 | (???*0* + 1))
+- *0* (...) => (a | (r((a + 1)) + 1))((2 + 1))
+  ⚠️  recursive function call
+
+v3 = "ab"
+
+x = (...) => y
+
+y = (...) => (a + b)

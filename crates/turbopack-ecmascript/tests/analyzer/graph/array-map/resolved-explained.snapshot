@@ -1,11 +1,8 @@
-*anonymous function 170* = (...) => [arguments[0]]
+*anonymous function 170* = (...) => [file]
 
-*anonymous function 254* = (...) => ???*0*
-- *0* require.resolve*1*(arguments[0])
-  ⚠️  resolve.resolve non constant
-- *1* require.resolve: The require.resolve method from CommonJS
+*anonymous function 254* = (...) => FreeVar(Require)["resolve"](file)
 
-*anonymous function 88* = (...) => arguments[0]
+*anonymous function 88* = (...) => file
 
 a = ["../lib/a.js", "../lib/b.js"]
 
@@ -13,23 +10,22 @@ b = ["../lib/a.js", "../lib/b.js"]
 
 c = [["../lib/a.js"], ["../lib/b.js"]]
 
-d = [???*0*, ???*2*]
-- *0* require.resolve*1*(arguments[0])
-  ⚠️  resolve.resolve non constant
-- *1* require.resolve: The require.resolve method from CommonJS
-- *2* require.resolve*3*(arguments[0])
-  ⚠️  resolve.resolve non constant
-- *3* require.resolve: The require.resolve method from CommonJS
+d = [""../lib/a.js"/resolved/lib/index.js", ""../lib/b.js"/resolved/lib/index.js"]
 
-file#2 = arguments[0]
+file#2 = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 
-file#3 = arguments[0]
+file#3 = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 
-file#4 = arguments[0]
+file#4 = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 
-file#6 = arguments[0]
+file#6 = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 
-func = (...) => ???*0*
-- *0* require.resolve*1*(arguments[0])
-  ⚠️  resolve.resolve non constant
-- *1* require.resolve: The require.resolve method from CommonJS
+func = (...) => FreeVar(Require)["resolve"](file)

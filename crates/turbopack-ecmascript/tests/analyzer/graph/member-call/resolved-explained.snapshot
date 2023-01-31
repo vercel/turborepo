@@ -14,8 +14,10 @@ pick_array1 = [1, 2, 3, 4, 5, 6, ???*0*]
 - *0* FreeVar(unknown)
   ⚠️  unknown global
 
-pick_array2 = ???*0*(4, 5, 6, ???*1*)
-- *0* [1, 2, 3]["concat"]
+pick_array2 = ???*0*
+- *0* ???*1*(4, 5, 6, ???*2*)
+  ⚠️  unknown callee
+- *1* [1, 2, 3]["concat"]
   ⚠️  non-num constant property on array
-- *1* FreeVar(unknown)
+- *2* FreeVar(unknown)
   ⚠️  unknown global

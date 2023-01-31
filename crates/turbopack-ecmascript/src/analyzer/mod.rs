@@ -267,8 +267,8 @@ pub enum JsValue {
     Alternatives(usize, Vec<JsValue>),
     /// A function reference. The return value might contain [JsValue::Argument]
     /// placeholders that need to be replaced when calling this function.
-    /// `(total_node_count, return_value)`
-    Function(usize, Box<JsValue>),
+    /// `(total_node_count, func_ident, return_value)`
+    Function(usize, u32, Box<JsValue>),
 
     // OPERATIONS
     // ----------------------------
@@ -298,7 +298,8 @@ pub enum JsValue {
     /// A reference to a variable.
     Variable(Id),
     /// A reference to an function argument.
-    Argument(usize),
+    /// (func_ident, arg_index)
+    Argument(u32, usize),
     // TODO no predefined kinds, only JsWord
     /// A reference to a free variable.
     FreeVar(FreeVarKind),
@@ -458,10 +459,12 @@ impl Display for JsValue {
             JsValue::Unknown(..) => write!(f, "???"),
             JsValue::WellKnownObject(obj) => write!(f, "WellKnownObject({:?})", obj),
             JsValue::WellKnownFunction(func) => write!(f, "WellKnownFunction({:?})", func),
-            JsValue::Function(_, return_value) => {
-                write!(f, "Function(return = {:?})", return_value)
+            JsValue::Function(_, func_ident, return_value) => {
+                write!(f, "Function#{}(return = {:?})", func_ident, return_value)
             }
-            JsValue::Argument(index) => write!(f, "arguments[{}]", index),
+            JsValue::Argument(func_ident, index) => {
+                write!(f, "arguments[{}#{}]", index, func_ident)
+            }
         }
     }
 }
@@ -576,8 +579,8 @@ impl JsValue {
         Self::Array(1 + total_nodes(&list), list)
     }
 
-    pub fn function(return_value: Box<JsValue>) -> Self {
-        Self::Function(1 + return_value.total_nodes(), return_value)
+    pub fn function(func_ident: u32, return_value: Box<JsValue>) -> Self {
+        Self::Function(1 + return_value.total_nodes(), func_ident, return_value)
     }
 
     pub fn object(list: Vec<ObjectPart>) -> Self {
@@ -622,7 +625,7 @@ impl JsValue {
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_)
             | JsValue::Unknown(_, _)
-            | JsValue::Argument(_) => 1,
+            | JsValue::Argument(..) => 1,
 
             JsValue::Array(c, _)
             | JsValue::Object(c, _)
@@ -634,7 +637,7 @@ impl JsValue {
             | JsValue::Call(c, _, _)
             | JsValue::MemberCall(c, _, _, _)
             | JsValue::Member(c, _, _)
-            | JsValue::Function(c, _) => *c,
+            | JsValue::Function(c, _, _) => *c,
         }
     }
 
@@ -648,7 +651,7 @@ impl JsValue {
             | JsValue::WellKnownObject(_)
             | JsValue::WellKnownFunction(_)
             | JsValue::Unknown(_, _)
-            | JsValue::Argument(_) => {}
+            | JsValue::Argument(..) => {}
 
             JsValue::Array(c, list)
             | JsValue::Alternatives(c, list)
@@ -680,7 +683,7 @@ impl JsValue {
             JsValue::Member(c, o, p) => {
                 *c = 1 + o.total_nodes() + p.total_nodes();
             }
-            JsValue::Function(c, r) => {
+            JsValue::Function(c, _, r) => {
                 *c = 1 + r.total_nodes();
             }
         }
@@ -705,7 +708,7 @@ impl JsValue {
                 | JsValue::WellKnownObject(_)
                 | JsValue::WellKnownFunction(_)
                 | JsValue::Unknown(_, _)
-                | JsValue::Argument(_) => self.make_unknown_without_content("node limit reached"),
+                | JsValue::Argument(..) => self.make_unknown_without_content("node limit reached"),
 
                 JsValue::Array(_, list)
                 | JsValue::Alternatives(_, list)
@@ -738,7 +741,7 @@ impl JsValue {
                     make_max_unknown([&mut **o, &mut **p].into_iter());
                     self.update_total_nodes();
                 }
-                JsValue::Function(_, r) => {
+                JsValue::Function(_, _, r) => {
                     r.make_unknown_without_content("node limit reached");
                 }
             }
@@ -890,7 +893,7 @@ impl JsValue {
             JsValue::Variable(name) => {
                 format!("{}", name.0)
             }
-            JsValue::Argument(index) => {
+            JsValue::Argument(_, index) => {
                 format!("arguments[{}]", index)
             }
             JsValue::Concat(_, list) => format!(
@@ -1183,7 +1186,7 @@ impl JsValue {
                     name
                 }
             }
-            JsValue::Function(_, return_value) => {
+            JsValue::Function(_, _, return_value) => {
                 if depth > 0 {
                     format!(
                         "(...) => {}",
@@ -1640,7 +1643,7 @@ macro_rules! for_each_children_async {
                 ($value, modified)
             }
 
-            JsValue::Function(_, box return_value) => {
+            JsValue::Function(_, _, box return_value) => {
                 let (new_return_value, modified) = $visit_fn(take(return_value), $($args),+).await?;
                 *return_value = new_return_value;
 
@@ -1895,7 +1898,7 @@ impl JsValue {
                 }
                 modified
             }
-            JsValue::Function(_, return_value) => {
+            JsValue::Function(_, _, return_value) => {
                 let modified = visitor(return_value);
 
                 if modified {
@@ -2046,7 +2049,7 @@ impl JsValue {
                     visitor(item);
                 }
             }
-            JsValue::Function(_, return_value) => {
+            JsValue::Function(_, _, return_value) => {
                 visitor(return_value);
             }
             JsValue::Member(_, obj, prop) => {
@@ -2295,10 +2298,10 @@ impl JsValue {
             (JsValue::WellKnownObject(l), JsValue::WellKnownObject(r)) => l == r,
             (JsValue::WellKnownFunction(l), JsValue::WellKnownFunction(r)) => l == r,
             (JsValue::Unknown(_, l), JsValue::Unknown(_, r)) => l == r,
-            (JsValue::Function(lc, l), JsValue::Function(rc, r)) => {
+            (JsValue::Function(lc, _, l), JsValue::Function(rc, _, r)) => {
                 lc == rc && l.similar(r, depth - 1)
             }
-            (JsValue::Argument(l), JsValue::Argument(r)) => l == r,
+            (JsValue::Argument(li, l), JsValue::Argument(ri, r)) => li == ri && l == r,
             _ => false,
         }
     }
@@ -2368,8 +2371,11 @@ impl JsValue {
             JsValue::WellKnownObject(v) => Hash::hash(v, state),
             JsValue::WellKnownFunction(v) => Hash::hash(v, state),
             JsValue::Unknown(_, v) => Hash::hash(v, state),
-            JsValue::Function(_, v) => v.similar_hash(state, depth - 1),
-            JsValue::Argument(v) => Hash::hash(v, state),
+            JsValue::Function(_, _, v) => v.similar_hash(state, depth - 1),
+            JsValue::Argument(i, v) => {
+                Hash::hash(i, state);
+                Hash::hash(v, state);
+            }
         }
     }
 }
@@ -2542,7 +2548,7 @@ pub mod test_utils {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, sync::Mutex, time::Instant};
+    use std::{path::PathBuf, time::Instant};
 
     use swc_core::{
         common::Mark,
@@ -2562,7 +2568,7 @@ mod tests {
 
     use super::{
         graph::{create_graph, EvalContext},
-        linker::{link, LinkCache},
+        linker::link,
         JsValue,
     };
 
@@ -2649,7 +2655,6 @@ mod tests {
                     // Dump snapshot of resolved
 
                     let start = Instant::now();
-                    let cache = Mutex::new(LinkCache::new());
                     let mut resolved = Vec::new();
                     for (id, val) in named_values.iter() {
                         let val = val.clone();
@@ -2680,7 +2685,6 @@ mod tests {
                                     ),
                                 )
                             }),
-                            &cache,
                         ))
                         .await
                         .unwrap();

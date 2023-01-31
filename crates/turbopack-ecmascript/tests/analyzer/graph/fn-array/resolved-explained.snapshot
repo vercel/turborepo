@@ -1,8 +1,12 @@
-a = arguments[0]
+a = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 
-b = arguments[1]
+b = ???*0*
+- *0* arguments[1]
+  ⚠️  function calls are not analysed yet
 
-c = (...) => [`${arguments[0]}${arguments[1]}`, arguments[0]]
+c = (...) => [`${a}${b}`, a]
 
 d = ["12", "1"]
 

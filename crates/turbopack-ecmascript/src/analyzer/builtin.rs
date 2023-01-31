@@ -261,27 +261,6 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
         }
         // Handle calls when the callee is a function
         JsValue::Call(_, box ref mut callee, ref mut args) => match callee {
-            JsValue::Function(_, box ref mut return_value) => {
-                let mut return_value = take(return_value);
-                return_value.visit_mut_conditional(
-                    |value| !matches!(value, JsValue::Function(..)),
-                    &mut |value| match value {
-                        JsValue::Argument(index) => {
-                            if let Some(arg) = args.get(*index).cloned() {
-                                *value = arg;
-                            } else {
-                                *value = JsValue::FreeVar(FreeVarKind::Other("undefined".into()))
-                            }
-                            true
-                        }
-
-                        _ => false,
-                    },
-                );
-
-                *value = return_value;
-                true
-            }
             JsValue::Alternatives(_, alts) => {
                 *value = JsValue::alternatives(
                     take(alts)
@@ -294,7 +273,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
             _ => false,
         },
         // Handle spread in object literals
-        JsValue::Object(_, parts) => {
+        JsValue::Object(ref mut total_nodes, parts) => {
             if parts
                 .iter()
                 .any(|part| matches!(part, ObjectPart::Spread(JsValue::Object(..))))
@@ -302,6 +281,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 let old_parts = take(parts);
                 for part in old_parts {
                     if let ObjectPart::Spread(JsValue::Object(_, inner_parts)) = part {
+                        *total_nodes -= 1;
                         parts.extend(inner_parts);
                     } else {
                         parts.push(part);

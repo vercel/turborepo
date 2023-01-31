@@ -1,9 +1,4 @@
-use std::{
-    fs,
-    path::PathBuf,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use criterion::{Bencher, BenchmarkId, Criterion};
 use swc_core::{
@@ -23,7 +18,7 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::analyzer::{
     graph::{create_graph, EvalContext, VarGraph},
-    linker::{link, LinkCache},
+    linker::link,
     test_utils::{early_visitor, visitor},
 };
 
@@ -95,7 +90,6 @@ fn bench_link(b: &mut Bencher, input: &BenchInput) {
         .unwrap();
 
     b.to_async(rt).iter(|| async {
-        let cache = Mutex::new(LinkCache::new());
         for val in input.var_graph.values.values() {
             VcStorage::with(async {
                 let env = EnvironmentVc::new(
@@ -113,7 +107,6 @@ fn bench_link(b: &mut Bencher, input: &BenchInput) {
                     val.clone(),
                     &(|val| early_visitor(val)),
                     &(|val| visitor(val, env)),
-                    &cache,
                 )
                 .await
             })

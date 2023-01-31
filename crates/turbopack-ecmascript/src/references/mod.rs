@@ -14,7 +14,7 @@ use std::{
     future::Future,
     mem::take,
     pin::Pin,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use anyhow::Result;
@@ -68,7 +68,7 @@ use super::{
     analyzer::{
         builtin::replace_builtin,
         graph::{create_graph, Effect},
-        linker::{link, LinkCache},
+        linker::link,
         well_known::replace_well_known,
         ConstantValue, FreeVarKind, JsValue, ObjectPart, WellKnownFunctionKind,
         WellKnownObjectKind,
@@ -1075,10 +1075,9 @@ pub(crate) async fn analyze_ecmascript_module(
                 Ok(())
             }
 
-            let cache = Mutex::new(LinkCache::new());
             let linker = |value| value_visitor(source, origin, value, environment);
             let effects = take(&mut var_graph.effects);
-            let link_value = |value| link(&var_graph, value, &early_value_visitor, &linker, &cache);
+            let link_value = |value| link(&var_graph, value, &early_value_visitor, &linker);
             // There can be many references to import.meta, but only the first should hoist
             // the object allocation.
             let mut first_import_meta = true;
@@ -1614,7 +1613,7 @@ async fn value_visitor_inner(
                     "cross module analyzing is not yet supported",
                 ),
             },
-            JsValue::Argument(_) => JsValue::Unknown(
+            JsValue::Argument(..) => JsValue::Unknown(
                 Some(Arc::new(v)),
                 "cross function analyzing is not yet supported",
             ),

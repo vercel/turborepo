@@ -239,6 +239,7 @@ pub fn create_graph(m: &Program, eval_context: &EvalContext) -> VarGraph {
             var_decl_kind: Default::default(),
             current_value: Default::default(),
             cur_fn_return_values: Default::default(),
+            cur_fn_ident: Default::default(),
         },
         &mut Default::default(),
     );
@@ -565,6 +566,8 @@ struct Analyzer<'a> {
     /// This is configured to [Some] by function handlers and filled by the
     /// return statement handler.
     cur_fn_return_values: Option<Vec<JsValue>>,
+
+    cur_fn_ident: u32,
 }
 
 pub fn as_parent_path(ast_path: &AstNodePath<AstParentNodeRef<'_>>) -> Vec<AstParentKind> {
@@ -1017,7 +1020,7 @@ impl VisitAstPath for Analyzer<'_> {
     ) {
         let value = self.current_value.take();
         for (index, p) in n.iter().enumerate() {
-            self.current_value = Some(JsValue::Argument(index));
+            self.current_value = Some(JsValue::Argument(self.cur_fn_ident, index));
             ast_path.with_index(index, |ast_path| p.visit_children_with_path(self, ast_path));
         }
         self.current_value = value;
@@ -1056,11 +1059,17 @@ impl VisitAstPath for Analyzer<'_> {
         ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
     ) {
         let old = replace(&mut self.cur_fn_return_values, Some(vec![]));
+        let old_ident = self.cur_fn_ident;
+        self.cur_fn_ident = decl.function.span.lo.0;
         decl.visit_children_with_path(self, ast_path);
         let return_value = self.take_return_values();
 
-        self.add_value(decl.ident.to_id(), JsValue::function(return_value));
+        self.add_value(
+            decl.ident.to_id(),
+            JsValue::function(self.cur_fn_ident, return_value),
+        );
 
+        self.cur_fn_ident = old_ident;
         self.cur_fn_return_values = old;
     }
 
@@ -1070,21 +1079,27 @@ impl VisitAstPath for Analyzer<'_> {
         ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
     ) {
         let old = replace(&mut self.cur_fn_return_values, Some(vec![]));
+        let old_ident = self.cur_fn_ident;
+        self.cur_fn_ident = expr.function.span.lo.0;
         expr.visit_children_with_path(self, ast_path);
         let return_value = self.take_return_values();
 
         if let Some(ident) = &expr.ident {
-            self.add_value(ident.to_id(), JsValue::function(return_value));
+            self.add_value(
+                ident.to_id(),
+                JsValue::function(self.cur_fn_ident, return_value),
+            );
         } else {
             self.add_value(
                 (
                     format!("*anonymous function {}*", expr.function.span.lo.0).into(),
                     SyntaxContext::empty(),
                 ),
-                JsValue::function(return_value),
+                JsValue::function(self.cur_fn_ident, return_value),
             );
         }
 
+        self.cur_fn_ident = old_ident;
         self.cur_fn_return_values = old;
     }
 
@@ -1096,17 +1111,26 @@ impl VisitAstPath for Analyzer<'_> {
         let value = match &expr.body {
             BlockStmtOrExpr::BlockStmt(_block) => {
                 let old = replace(&mut self.cur_fn_return_values, Some(vec![]));
+                let old_ident = self.cur_fn_ident;
+                self.cur_fn_ident = expr.span.lo.0;
                 expr.visit_children_with_path(self, ast_path);
                 let return_value = self.take_return_values();
 
+                let fn_val = JsValue::function(self.cur_fn_ident, return_value);
+
+                self.cur_fn_ident = old_ident;
                 self.cur_fn_return_values = old;
-                JsValue::function(return_value)
+                fn_val
             }
             BlockStmtOrExpr::Expr(inner_expr) => {
+                let old_ident = self.cur_fn_ident;
+                self.cur_fn_ident = expr.span.lo.0;
                 expr.visit_children_with_path(self, ast_path);
                 let return_value = self.eval_context.eval(inner_expr);
 
-                JsValue::function(box return_value)
+                let fn_val = JsValue::function(self.cur_fn_ident, box return_value);
+                self.cur_fn_ident = old_ident;
+                fn_val
             }
         };
         self.add_value(
