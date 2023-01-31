@@ -61,12 +61,6 @@ type EngineBuildingOptions struct {
 func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	pkgs := options.Packages
 	tasks := options.TaskNames
-	if len(tasks) == 0 {
-		// TODO(gsoltis): Is this behavior used?
-		for key := range e.Tasks {
-			tasks = append(tasks, key)
-		}
-	}
 
 	if err := e.generateTaskGraph(pkgs, tasks, options.TasksOnly); err != nil {
 		return err
