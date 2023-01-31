@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::HashMap,
     mem::take,
     path::{Path, PathBuf},
     process::{ExitStatus, Stdio},
@@ -60,12 +60,14 @@ impl Drop for RunningNodeJsPoolProcess {
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
+type SharedOutputSet = Arc<Mutex<IndexSet<(Arc<[u8]>, u32)>>>;
+
 /// Pipes the `stream` from `final_stream`, but uses `shared` to deduplicate
 /// lines that has beem emitted by other `handle_output_stream` instances with
 /// the same `shared` before.
 async fn handle_output_stream(
     stream: impl AsyncRead + Unpin,
-    shared: Arc<Mutex<IndexSet<(Arc<[u8]>, u32)>>>,
+    shared: SharedOutputSet,
     mut final_stream: impl AsyncWrite + Unpin,
 ) {
     let mut buffered = BufReader::new(stream);
@@ -91,11 +93,9 @@ async fn handle_output_stream(
             let mut shared = shared.lock().unwrap();
             shared.insert((line.clone(), occurance_number))
         };
-        if new_line {
-            if final_stream.write(&*line).await.is_err() {
-                // Whatever happened with stdout/stderr, we can't write to it anymore.
-                break;
-            }
+        if new_line && final_stream.write(&line).await.is_err() {
+            // Whatever happened with stdout/stderr, we can't write to it anymore.
+            break;
         }
     }
 }
@@ -105,8 +105,8 @@ impl NodeJsPoolProcess {
         cwd: &Path,
         env: &HashMap<String, String>,
         entrypoint: &Path,
-        shared_stdout: Arc<Mutex<IndexSet<(Arc<[u8]>, u32)>>>,
-        shared_stderr: Arc<Mutex<IndexSet<(Arc<[u8]>, u32)>>>,
+        shared_stdout: SharedOutputSet,
+        shared_stderr: SharedOutputSet,
         debug: bool,
     ) -> Result<Self> {
         let listener = TcpListener::bind("127.0.0.1:0")
@@ -243,9 +243,9 @@ pub struct NodeJsPool {
     #[turbo_tasks(trace_ignore, debug_ignore)]
     semaphore: Arc<Semaphore>,
     #[turbo_tasks(trace_ignore, debug_ignore)]
-    shared_stdout: Arc<Mutex<IndexSet<(Arc<[u8]>, u32)>>>,
+    shared_stdout: SharedOutputSet,
     #[turbo_tasks(trace_ignore, debug_ignore)]
-    shared_stderr: Arc<Mutex<IndexSet<(Arc<[u8]>, u32)>>>,
+    shared_stderr: SharedOutputSet,
     debug: bool,
 }
 
