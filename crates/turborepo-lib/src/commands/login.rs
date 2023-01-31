@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use axum::{extract::Query, response::Redirect, routing::get, Router};
-use log::{debug, warn};
+use log::debug;
 use serde::Deserialize;
 use tokio::sync::OnceCell;
 
@@ -16,7 +16,7 @@ use crate::{
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 
-pub async fn login(mut base: CommandBase) -> Result<()> {
+pub async fn login(base: &mut CommandBase) -> Result<()> {
     let repo_config = base.repo_config()?;
     let login_url_base = repo_config.login_url();
     debug!("turbo v{}", get_version());
@@ -26,9 +26,8 @@ pub async fn login(mut base: CommandBase) -> Result<()> {
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
     let login_url = format!("{login_url_base}/turborepo/token?redirect_uri={redirect_url}");
     println!(">>> Opening browser to {login_url}");
+    direct_user_to_url(&login_url).await;
     let spinner = start_spinner("Waiting for your authorization...");
-    direct_user_to_url(&login_url);
-
     let token_cell = Arc::new(OnceCell::new());
     new_one_shot_server(
         DEFAULT_PORT,
@@ -36,6 +35,7 @@ pub async fn login(mut base: CommandBase) -> Result<()> {
         token_cell.clone(),
     )
     .await?;
+
     spinner.finish_and_clear();
     let token = token_cell
         .get()
@@ -46,7 +46,7 @@ pub async fn login(mut base: CommandBase) -> Result<()> {
     let client = base.api_client()?.unwrap();
     let user_response = client.get_user().await?;
 
-    let ui = base.ui;
+    let ui = &base.ui;
 
     println!(
         "
@@ -67,6 +67,9 @@ pub async fn login(mut base: CommandBase) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+async fn direct_user_to_url(url: &str) {}
+#[cfg(not(test))]
 fn direct_user_to_url(url: &str) {
     if webbrowser::open(url).is_err() {
         warn!("Failed to open browser. Please visit {url} in your browser.");
@@ -78,6 +81,13 @@ struct LoginPayload {
     token: String,
 }
 
+#[cfg(test)]
+async fn new_one_shot_server(_: u16, _: String, login_token: Arc<OnceCell<String>>) -> Result<()> {
+    login_token.set("test-token".to_string()).unwrap();
+    Ok(())
+}
+
+#[cfg(not(test))]
 async fn new_one_shot_server(
     port: u16,
     login_url_base: String,
@@ -101,4 +111,115 @@ async fn new_one_shot_server(
         .handle(handle)
         .serve(app.into_make_service())
         .await?)
+}
+
+#[cfg(test)]
+mod test {
+    use std::{fs, net::SocketAddr};
+
+    use anyhow::Result;
+    use axum::{extract::Query, routing::get, Json, Router};
+    use serde::Deserialize;
+    use tempfile::NamedTempFile;
+    use tokio::sync::OnceCell;
+
+    use crate::{
+        client::{
+            CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse, User,
+            UserResponse,
+        },
+        commands::{login, CommandBase},
+        config::{RepoConfigLoader, UserConfigLoader},
+        ui::UI,
+        Args,
+    };
+
+    #[tokio::test]
+    async fn test_login() {
+        let user_config_file = NamedTempFile::new().unwrap();
+        fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
+        let repo_config_file = NamedTempFile::new().unwrap();
+        fs::write(
+            repo_config_file.path(),
+            r#"{ "apiurl": "http://localhost:3000" }"#,
+        )
+        .unwrap();
+
+        tokio::spawn(start_test_server());
+        let mut base = CommandBase {
+            repo_root: Default::default(),
+            ui: UI::new(false),
+            user_config: OnceCell::from(
+                UserConfigLoader::new(user_config_file.path().to_path_buf())
+                    .load()
+                    .unwrap(),
+            ),
+            repo_config: OnceCell::from(
+                RepoConfigLoader::new(repo_config_file.path().to_path_buf())
+                    .with_api(Some("http://localhost:3000".to_string()))
+                    .with_login(Some("http://localhost:3000".to_string()))
+                    .load()
+                    .unwrap(),
+            ),
+            args: Args::default(),
+        };
+
+        login::login(&mut base).await.unwrap();
+
+        assert_eq!(base.user_config().unwrap().token().unwrap(), "test-token");
+    }
+
+    #[derive(Debug, Clone, Deserialize)]
+    struct TokenRequest {
+        redirect_uri: String,
+    }
+
+    const EXPECTED_TOKEN: &str = "expected_token";
+
+    async fn start_test_server() -> Result<()> {
+        let app = Router::new()
+            // `GET /` goes to `root`
+            .route(
+                "/v2/teams",
+                get(|| async move {
+                    Json(TeamsResponse {
+                        teams: vec![Team {
+                            id: "vercel".to_string(),
+                            slug: "vercel".to_string(),
+                            name: "vercel".to_string(),
+                            created_at: 0,
+                            created: Default::default(),
+                            membership: Membership::new(Role::Owner),
+                        }],
+                    })
+                }),
+            )
+            .route(
+                "/v2/user",
+                get(|| async move {
+                    Json(UserResponse {
+                        user: User {
+                            id: "my_user_id".to_string(),
+                            username: "my_username".to_string(),
+                            email: "my_email".to_string(),
+                            name: None,
+                            created_at: 0,
+                        },
+                    })
+                }),
+            )
+            .route(
+                "/v8/artifacts/status",
+                get(|| async {
+                    Json(CachingStatusResponse {
+                        status: CachingStatus::Enabled,
+                    })
+                }),
+            );
+        let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+
+        Ok(axum_server::bind(addr)
+            .serve(app.into_make_service())
+            .await?)
+    }
 }

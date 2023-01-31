@@ -454,9 +454,9 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
                 return Ok(Payload::Go(Box::new(clap_args)));
             }
 
-            let base = CommandBase::new(clap_args, repo_root)?;
+            let mut base = CommandBase::new(clap_args, repo_root)?;
 
-            login::login(base).await?;
+            login::login(&mut base).await?;
 
             Ok(Payload::Rust(Ok(0)))
         }
