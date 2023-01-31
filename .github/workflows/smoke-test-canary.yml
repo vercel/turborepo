@@ -9,13 +9,14 @@ on:
 jobs:
   test_matrix:
     name: "Test local turbo@${{ matrix.localVersion }} with global turbo@${{ matrix.globalVersion }} (${{ matrix.packageManager }}, ${{ matrix.test }})"
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         test: ["local", "global", "both"]
         packageManager: ["yarn", "pnpm", "npm"]
         localVersion: ["latest", "canary"]
         globalVersion: ["latest", "canary"]
+        os: ["windows-latest", "ubuntu-latest", "macos-latest", ]
     steps:
       - name: Install ts-node
         run: npm install ts-node --global
