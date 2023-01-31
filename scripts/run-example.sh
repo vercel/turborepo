@@ -229,7 +229,7 @@ fi
 
 if [[ ! -z $(git status -s) ]];then
   echo "Detected changes"
-  git status
+  git diff
   exit 1
 fi
 
