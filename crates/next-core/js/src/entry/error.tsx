@@ -1,3 +1,4 @@
+// TODO(alexkirsz) export * would be preferrable here once supported.
 export {
   default,
   getStaticProps,
