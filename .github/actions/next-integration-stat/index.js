@@ -16262,6 +16262,9 @@
             (_a = value.path) === null || _a === void 0
               ? void 0
               : _a.split("-")[0].match(/(....)(..)(..)(..)(..)/);
+          if (!dateStr || dateStr.length < 5) {
+            return acc;
+          }
           const date = new Date(
             dateStr[1],
             dateStr[2] - 1,
