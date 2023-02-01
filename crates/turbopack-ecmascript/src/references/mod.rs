@@ -1274,7 +1274,6 @@ pub(crate) async fn analyze_ecmascript_module(
 
                                 if let JsValue::Array(_, ref mut values) = obj {
                                     if matches!(prop.as_str(), Some("map" | "forEach" | "filter")) {
-                                        println!("{args:?}");
                                         if let [EffectArg::Closure(value, block)] = &mut args[..] {
                                             *value = link_value(take(value)).await?;
                                             if let JsValue::Function(_, func_ident, _) = value {
