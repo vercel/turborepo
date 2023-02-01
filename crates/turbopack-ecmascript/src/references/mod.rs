@@ -1050,7 +1050,13 @@ pub(crate) async fn analyze_ecmascript_module(
                             ),
                         )
                     }
-                    _ => {}
+                    _ => {
+                        for arg in args {
+                            if let EffectArg::Closure(_, block) = arg {
+                                add_effects(block.effects);
+                            }
+                        }
+                    }
                 }
                 Ok(())
             }
