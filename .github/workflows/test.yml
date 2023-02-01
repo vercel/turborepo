@@ -410,7 +410,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --workspace --all-targets --locked
+          args: --workspace --all-targets --locked --features rustls-tls
 
   rust_lint:
     needs: [determine_jobs, rust_prepare]
