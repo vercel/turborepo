@@ -1268,6 +1268,20 @@
 <span id="1268">1268</span>
 <span id="1269">1269</span>
 <span id="1270">1270</span>
+<span id="1271">1271</span>
+<span id="1272">1272</span>
+<span id="1273">1273</span>
+<span id="1274">1274</span>
+<span id="1275">1275</span>
+<span id="1276">1276</span>
+<span id="1277">1277</span>
+<span id="1278">1278</span>
+<span id="1279">1279</span>
+<span id="1280">1280</span>
+<span id="1281">1281</span>
+<span id="1282">1282</span>
+<span id="1283">1283</span>
+<span id="1284">1284</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>loader;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub mod </span>source_map;
@@ -1286,7 +1300,7 @@
 <span class="kw">use </span>turbo_tasks_fs::{
     embed_file, rope::Rope, File, FileContent, FileSystemPathOptionVc, FileSystemPathVc,
 };
-<span class="kw">use </span>turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, Xxh3Hash64Hasher};
+<span class="kw">use </span>turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, DeterministicHasher, Xxh3Hash64Hasher};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
@@ -2239,11 +2253,15 @@
         <span class="comment">// evalute only contributes to the hashed info
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(evaluate) = this.evaluate {
             <span class="kw">let </span>evaluate = evaluate.content(this.context, self_vc).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">for </span>path <span class="kw">in </span>evaluate.chunks_server_paths.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+            <span class="kw">let </span>chunks_server_paths = evaluate.chunks_server_paths.<span class="kw">await</span><span class="question-mark">?</span>;
+            hasher.write_usize(chunks_server_paths.len());
+            <span class="kw">for </span>path <span class="kw">in </span>chunks_server_paths.iter() {
                 hasher.write_ref(path);
                 need_hash = <span class="bool-val">true</span>;
             }
-            <span class="kw">for </span>id <span class="kw">in </span>evaluate.entry_modules_ids.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+            <span class="kw">let </span>entry_modules_ids = evaluate.entry_modules_ids.<span class="kw">await</span><span class="question-mark">?</span>;
+            hasher.write_usize(entry_modules_ids.len());
+            <span class="kw">for </span>id <span class="kw">in </span>entry_modules_ids.iter() {
                 hasher.write_value(id.<span class="kw">await</span><span class="question-mark">?</span>);
                 need_hash = <span class="bool-val">true</span>;
             }
@@ -2256,6 +2274,7 @@
             <span class="kw">let </span>main_entry = main_entries.iter().next().unwrap();
             main_entry.path()
         } <span class="kw">else </span>{
+            hasher.write_usize(main_entries.len());
             <span class="kw">for </span>entry <span class="kw">in </span><span class="kw-2">&amp;</span>main_entries {
                 <span class="kw">let </span>path = entry.path().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
                 hasher.write_value(path);
@@ -2271,6 +2290,15 @@
                 main_entry.path()
             }
         };
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(omit_entries) = this.omit_entries {
+            <span class="kw">let </span>omit_entries = omit_entries.<span class="kw">await</span><span class="question-mark">?</span>;
+            hasher.write_usize(omit_entries.len());
+            <span class="kw">for </span>omit_entry <span class="kw">in </span><span class="kw-2">&amp;</span>omit_entries {
+                <span class="kw">let </span>path = omit_entry.path().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
+                hasher.write_value(path);
+            }
+            need_hash = <span class="bool-val">true</span>;
+        }
 
         <span class="kw">if </span>need_hash {
             <span class="kw">let </span>hash = hasher.finish();
