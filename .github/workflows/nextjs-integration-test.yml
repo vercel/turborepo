@@ -206,7 +206,7 @@ jobs:
 
           SUMMARY_MD=$(cat test-summary.md)
 
-          jq --null-input --arg text "$SUMMARY_MD" --arg title="$SLACK_TITLE" \
+          jq --null-input --arg text "$SUMMARY_MD" --arg title "$SLACK_TITLE" \
             '{"text": $text, "title": $title, "sha": "${{ github.sha }}"}' > payload.json
 
           cat payload.json
