@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
+  actions: write
   contents: read
   pull-requests: read
 
@@ -987,7 +988,7 @@ jobs:
     steps:
       - name: Check cancellation
         id: cancelled
-        if: needs.rust_lint.result == 'cancelled' || needs.rust_check.result == 'cancelled' || needs.rust_test.result == 'cancelled' || needs.rust_test_bench.result == 'cancelled' || needs.rust_build_release.result == 'cancelled' || needs.format_lint.result == 'cancelled' || needs.rust_bench.result == 'cancelled'
+        if: needs.rust_lint.result == 'cancelled' || needs.rust_check.result == 'cancelled' || needs.turbopack_rust_test.result == 'cancelled' || needs.turborepo_rust_test.result == 'cancelled' || needs.turbopack_rust_test_bench.result == 'cancelled' || needs.rust_build_release.result == 'cancelled' || needs.format_lint.result == 'cancelled' || needs.rust_bench.result == 'cancelled'
         run: echo "cancelled=true" >> $GITHUB_OUTPUT
 
       - name: Start summary
@@ -1043,14 +1044,20 @@ jobs:
           echo "- Rust checks / clippy" >> failures.md
           exit 1
 
-      - name: Rust Testing failed
-        if: always() && needs.rust_test.result != 'success' && needs.rust_test.result != 'skipped'
+      - name: Turbopack Rust Testing failed
+        if: always() && needs.turbopack_rust_test.result != 'success' && needs.turbopack_rust_test.result != 'skipped'
         run: |
-          echo "- Rust tests" >> failures.md
+          echo "- Turbopack Rust tests" >> failures.md
+          exit 1
+
+      - name: Turborepo Rust Testing failed
+        if: always() && needs.turborepo_rust_test.result != 'success' && needs.turborepo_rust_test.result != 'skipped'
+        run: |
+          echo "- Turborepo Rust tests" >> failures.md
           exit 1
 
       - name: Rust Benchmark Testing failed
-        if: always() && needs.rust_test_bench.result != 'success' && needs.rust_test_bench.result != 'skipped'
+        if: always() && needs.turbopack_rust_test_bench.result != 'success' && needs.turbopack_rust_test_bench.result != 'skipped'
         run: |
           echo "- Rust benchmark tests" >> failures.md
           exit 1

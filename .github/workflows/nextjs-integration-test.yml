@@ -190,4 +190,6 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: test-results
-          path: nextjs-test-results.json
+          path: |
+            nextjs-test-results.json
+            test-summary.md
