@@ -10,7 +10,7 @@ Make sure that the internal util package is part of the prune output
    - Added util
 
 Make sure we prune tasks that reference a pruned workspace
-  $ bat out/turbo.json | jq
+  $ cat out/turbo.json | jq
   {
     "pipeline": {
       "build": {

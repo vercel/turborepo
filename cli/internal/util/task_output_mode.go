@@ -90,6 +90,7 @@ func (c *TaskOutputMode) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON converts a task output mode to its string representation
 func (c TaskOutputMode) MarshalJSON() ([]byte, error) {
 	outputModeString, err := ToTaskOutputModeString(c)
 	if err != nil {
