@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -382,4 +383,42 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 // we will compose the TaskDefinition from workspaces using the `extends` key.
 func (e *Engine) GetResolvedTaskDefinition(rootPipeline *fs.Pipeline, taskName string, taskID string) (*fs.TaskDefinition, error) {
 	return rootPipeline.GetTask(taskID, taskName)
+}
+
+// GetTaskGraphAncestors gets all the ancestors for a given task in the graph.
+// "Ancestors" are all tasks that the given task depends on.
+// This is only used by DryRun output right now.
+func (e *Engine) GetTaskGraphAncestors(taskID string) ([]string, error) {
+	ancestors, err := e.TaskGraph.Ancestors(taskID)
+	if err != nil {
+		return nil, err
+	}
+	stringAncestors := []string{}
+	for _, dep := range ancestors {
+		// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
+		if !strings.Contains(dep.(string), ROOT_NODE_NAME) {
+			stringAncestors = append(stringAncestors, dep.(string))
+		}
+	}
+	// TODO(mehulkar): Why are ancestors not sorted, but GetTaskGraphDescendants sorts?
+	return stringAncestors, nil
+}
+
+// GetTaskGraphDescendants gets all the descendants for a given task in the graph.
+// "Descendants" are all tasks that depend on the given taskID.
+// This is only used by DryRun output right now.
+func (e *Engine) GetTaskGraphDescendants(taskID string) ([]string, error) {
+	descendents, err := e.TaskGraph.Descendents(taskID)
+	if err != nil {
+		return nil, err
+	}
+	stringDescendents := []string{}
+	for _, dep := range descendents {
+		// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
+		if !strings.Contains(dep.(string), ROOT_NODE_NAME) {
+			stringDescendents = append(stringDescendents, dep.(string))
+		}
+	}
+	sort.Strings(stringDescendents)
+	return stringDescendents, nil
 }
