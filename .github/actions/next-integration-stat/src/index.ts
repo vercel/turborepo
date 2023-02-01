@@ -424,7 +424,8 @@ function getTestSummary(
   sha: string,
   shouldDiffWithMain: boolean,
   baseResults: TestResultManifest | null,
-  failedJobResults: TestResultManifest
+  failedJobResults: TestResultManifest,
+  shouldShareTestSummaryToSlack: boolean
 ) {
   // Read current tests summary
   const {
@@ -539,6 +540,44 @@ function getTestSummary(
       .join(" \n")}`;
   }
 
+  // Store plain textbased summary to share into Slack channel
+  // Note: Likely we'll need to polish this summary to make it more readable.
+  if (shouldShareTestSummaryToSlack) {
+    let textSummary = `*Next.js integration test status with Turbopack*
+
+    *Base: ${baseResults.ref} / ${shortBaseNextJsVersion}*
+    Failed suites: ${baseTestFailedSuiteCount}
+    Failed cases: ${baseTestFailedCaseCount}
+
+    *Current: ${sha} / ${shortCurrentNextJsVersion}*
+    Failed suites: ${currentTestFailedSuiteCount}
+    Failed cases: ${currentTestFailedCaseCount}
+
+    `;
+
+    if (suiteCountDiff === 0) {
+      textSummary += "No changes in suite count.";
+    } else if (suiteCountDiff > 0) {
+      textSummary += `↓ ${suiteCountDiff} suites are fixed`;
+    } else if (suiteCountDiff < 0) {
+      textSummary += `↑ ${suiteCountDiff} suites are newly failed`;
+    }
+
+    if (caseCountDiff === 0) {
+      textSummary += "No changes in test cases count.";
+    } else if (caseCountDiff > 0) {
+      textSummary += `↓ ${caseCountDiff} test cases are fixed`;
+    } else if (caseCountDiff < 0) {
+      textSummary += `↑ ${caseCountDiff} test cases are newly failed`;
+    }
+
+    console.log(
+      "Storing text summary to ./test-summary.md to report into Slack channel.",
+      textSummary
+    );
+    fs.writeFileSync("./test-summary.md", textSummary);
+  }
+
   return ret;
 }
 
@@ -546,6 +585,10 @@ function getTestSummary(
 async function run() {
   const { token, octokit, shouldDiffWithMain, prNumber, sha, existingComment } =
     await getInputs();
+
+  // determine if we want to report summary into slack channel.
+  // As a first step, we'll only report summary when the test is run against release-to-release. (no main branch regressions yet)
+  const shouldReportSlack = !prNumber && !shouldDiffWithMain;
 
   // Collect current PR's failed test results
   const failedJobResults = await getFailedJobResults(octokit, token, sha);
@@ -570,7 +613,8 @@ async function run() {
       sha,
       shouldDiffWithMain,
       baseResults,
-      failedJobResults
+      failedJobResults,
+      shouldReportSlack
     );
 
     // Append full test report to the comment body, with collapsed <details>

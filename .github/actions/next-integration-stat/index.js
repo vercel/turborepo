@@ -15864,6 +15864,39 @@
       /*#__PURE__*/ __nccwpck_require__.n(
         _actions_core__WEBPACK_IMPORTED_MODULE_1__
       );
+    var __awaiter =
+      (undefined && undefined.__awaiter) ||
+      function (thisArg, _arguments, P, generator) {
+        function adopt(value) {
+          return value instanceof P
+            ? value
+            : new P(function (resolve) {
+                resolve(value);
+              });
+        }
+        return new (P || (P = Promise))(function (resolve, reject) {
+          function fulfilled(value) {
+            try {
+              step(generator.next(value));
+            } catch (e) {
+              reject(e);
+            }
+          }
+          function rejected(value) {
+            try {
+              step(generator["throw"](value));
+            } catch (e) {
+              reject(e);
+            }
+          }
+          function step(result) {
+            result.done
+              ? resolve(result.value)
+              : adopt(result.value).then(fulfilled, rejected);
+          }
+          step((generator = generator.apply(thisArg, _arguments || [])).next());
+        });
+      };
 
     const { default: stripAnsi } = __nccwpck_require__(8770);
     const { default: nodeFetch } = __nccwpck_require__(467);
@@ -15874,39 +15907,51 @@
     // Header for the test report.
     const commentTitlePre = `## Failing next.js integration test suites`;
     // Download logs for a job in a workflow run by reading redirect url from workflow log response.
-    async function fetchJobLogsFromWorkflow(octokit, token, job) {
-      console.log("Checking test results for the job ", job.name);
-      // downloadJobLogsForWorkflowRun returns a redirect to the actual logs
-      const jobLogRedirectResponse =
-        await octokit.rest.actions.downloadJobLogsForWorkflowRun({
-          accept: "application/vnd.github+json",
-          ..._actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo,
-          job_id: job.id,
+    function fetchJobLogsFromWorkflow(octokit, token, job) {
+      var _a, _b;
+      return __awaiter(this, void 0, void 0, function* () {
+        console.log("Checking test results for the job ", job.name);
+        // downloadJobLogsForWorkflowRun returns a redirect to the actual logs
+        const jobLogRedirectResponse =
+          yield octokit.rest.actions.downloadJobLogsForWorkflowRun(
+            Object.assign(
+              Object.assign(
+                { accept: "application/vnd.github+json" },
+                _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo
+              ),
+              { job_id: job.id }
+            )
+          );
+        // fetch the actual logs
+        const jobLogsResponse = yield nodeFetch(jobLogRedirectResponse.url, {
+          headers: {
+            Authorization: `token ${token}`,
+          },
         });
-      // fetch the actual logs
-      const jobLogsResponse = await nodeFetch(jobLogRedirectResponse.url, {
-        headers: {
-          Authorization: `token ${token}`,
-        },
+        if (!jobLogsResponse.ok) {
+          throw new Error(
+            `Failed to get logsUrl, got status ${jobLogsResponse.status}`
+          );
+        }
+        // this should be the check_run's raw logs including each line
+        // prefixed with a timestamp in format 2020-03-02T18:42:30.8504261Z
+        const logText = yield jobLogsResponse.text();
+        const dateTimeStripped = logText
+          .split("\n")
+          .map((line) => line.substr("2020-03-02T19:39:16.8832288Z ".length));
+        const nextjsVersion =
+          (_b =
+            (_a = dateTimeStripped.find(
+              (x) => x.includes("RUNNING NEXTJS VERSION:") && !x.includes("$(")
+            )) === null || _a === void 0
+              ? void 0
+              : _a.split("RUNNING NEXTJS VERSION:").pop()) === null ||
+          _b === void 0
+            ? void 0
+            : _b.trim();
+        const logs = dateTimeStripped.join("\n");
+        return { nextjsVersion, logs, job };
       });
-      if (!jobLogsResponse.ok) {
-        throw new Error(
-          `Failed to get logsUrl, got status ${jobLogsResponse.status}`
-        );
-      }
-      // this should be the check_run's raw logs including each line
-      // prefixed with a timestamp in format 2020-03-02T18:42:30.8504261Z
-      const logText = await jobLogsResponse.text();
-      const dateTimeStripped = logText
-        .split("\n")
-        .map((line) => line.substr("2020-03-02T19:39:16.8832288Z ".length));
-      const nextjsVersion = dateTimeStripped
-        .find((x) => x.includes("RUNNING NEXTJS VERSION:") && !x.includes("$("))
-        ?.split("RUNNING NEXTJS VERSION:")
-        .pop()
-        ?.trim();
-      const logs = dateTimeStripped.join("\n");
-      return { nextjsVersion, logs, job };
     }
     // Filter out logs that does not contain failed tests, then parse test results into json
     function collectFailedTestResults(splittedLogs, job) {
@@ -15924,20 +15969,38 @@
           return true;
         })
         .map((logs) => {
+          var _a, _b, _c, _d;
           let failedTest = logs.split(`failed to pass within`).shift();
           // Look for the failed test file name
-          failedTest = failedTest?.includes("test/")
-            ? failedTest?.split("\n").pop()?.trim()
+          failedTest = (
+            failedTest === null || failedTest === void 0
+              ? void 0
+              : failedTest.includes("test/")
+          )
+            ? (_a =
+                failedTest === null || failedTest === void 0
+                  ? void 0
+                  : failedTest.split("\n").pop()) === null || _a === void 0
+              ? void 0
+              : _a.trim()
             : "";
           console.log("Failed test: ", { job: job.name, failedTest });
           // Parse JSON-stringified test output between marker
           try {
-            const testData = logs
-              ?.split("--test output start--")
-              .pop()
-              ?.split("--test output end--")
-              ?.shift()
-              ?.trim();
+            const testData =
+              (_d =
+                (_c =
+                  (_b =
+                    logs === null || logs === void 0
+                      ? void 0
+                      : logs.split("--test output start--").pop()) === null ||
+                  _b === void 0
+                    ? void 0
+                    : _b.split("--test output end--")) === null || _c === void 0
+                  ? void 0
+                  : _c.shift()) === null || _d === void 0
+                ? void 0
+                : _d.trim();
             return {
               job: job.name,
               name: failedTest,
@@ -15951,230 +16014,312 @@
         .filter(Boolean);
     }
     // Collect necessary inputs to run actions,
-    async function getInputs() {
-      const token = (0, _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput)(
-        "token"
-      );
-      const shouldDiffWithMain =
-        (0, _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput)(
-          "diff_base"
-        ) === "main";
-      if (
-        (0, _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput)(
-          "diff_base"
-        ) !== "main" &&
-        (0, _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput)(
-          "diff_base"
-        ) !== "release"
-      ) {
-        console.error('Invalid diff_base, must be "main" or "release"');
-        process.exit(1);
-      }
-      const octokit = (0,
-      _actions_github__WEBPACK_IMPORTED_MODULE_0__.getOctokit)(token);
-      const prNumber =
-        _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.payload
-          .pull_request.number;
-      const sha = _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.sha;
-      let comments = null;
-      let existingComment;
-      if (prNumber) {
-        console.log("Trying to collect integration stats for PR", {
+    function getInputs() {
+      var _a, _b;
+      return __awaiter(this, void 0, void 0, function* () {
+        const token = (0, _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput)(
+          "token"
+        );
+        const shouldDiffWithMain =
+          (0, _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput)(
+            "diff_base"
+          ) === "main";
+        if (
+          (0, _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput)(
+            "diff_base"
+          ) !== "main" &&
+          (0, _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput)(
+            "diff_base"
+          ) !== "release"
+        ) {
+          console.error('Invalid diff_base, must be "main" or "release"');
+          process.exit(1);
+        }
+        const octokit = (0,
+        _actions_github__WEBPACK_IMPORTED_MODULE_0__.getOctokit)(token);
+        const prNumber =
+          (_b =
+            (_a =
+              _actions_github__WEBPACK_IMPORTED_MODULE_0__.context === null ||
+              _actions_github__WEBPACK_IMPORTED_MODULE_0__.context === void 0
+                ? void 0
+                : _actions_github__WEBPACK_IMPORTED_MODULE_0__.context
+                    .payload) === null || _a === void 0
+              ? void 0
+              : _a.pull_request) === null || _b === void 0
+            ? void 0
+            : _b.number;
+        const sha =
+          _actions_github__WEBPACK_IMPORTED_MODULE_0__.context === null ||
+          _actions_github__WEBPACK_IMPORTED_MODULE_0__.context === void 0
+            ? void 0
+            : _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.sha;
+        let comments = null;
+        let existingComment;
+        if (prNumber) {
+          console.log("Trying to collect integration stats for PR", {
+            prNumber,
+            sha: sha,
+          });
+          comments = yield octokit.rest.issues.listComments(
+            Object.assign(
+              Object.assign(
+                {},
+                _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo
+              ),
+              { issue_number: prNumber }
+            )
+          );
+          // Get a comment from the bot if it exists
+          existingComment =
+            comments === null || comments === void 0
+              ? void 0
+              : comments.data.find((comment) => {
+                  var _a, _b;
+                  return (
+                    ((_a =
+                      comment === null || comment === void 0
+                        ? void 0
+                        : comment.user) === null || _a === void 0
+                      ? void 0
+                      : _a.login) === "github-actions[bot]" &&
+                    ((_b =
+                      comment === null || comment === void 0
+                        ? void 0
+                        : comment.body) === null || _b === void 0
+                      ? void 0
+                      : _b.includes(BOT_COMMENT_MARKER))
+                  );
+                });
+        } else {
+          (0, _actions_core__WEBPACK_IMPORTED_MODULE_1__.info)(
+            "No PR number found in context, will not try to post comment."
+          );
+        }
+        return {
+          token,
+          shouldDiffWithMain,
+          octokit,
           prNumber,
-          sha: sha,
-        });
-        comments = await octokit.rest.issues.listComments({
-          ..._actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo,
-          issue_number: prNumber,
-        });
-        // Get a comment from the bot if it exists
-        existingComment = comments?.data.find(
-          (comment) =>
-            comment?.user?.login === "github-actions[bot]" &&
-            comment?.body?.includes(BOT_COMMENT_MARKER)
-        );
-      } else {
-        (0, _actions_core__WEBPACK_IMPORTED_MODULE_1__.info)(
-          "No PR number found in context, will not try to post comment."
-        );
-      }
-      return {
-        token,
-        shouldDiffWithMain,
-        octokit,
-        prNumber,
-        sha,
-        existingComment,
-      };
+          sha,
+          existingComment,
+        };
+      });
     }
     // Iterate all the jobs in the current workflow run, collect & parse logs for failed jobs for the postprocessing.
-    async function getFailedJobResults(octokit, token, sha) {
-      console.log("Trying to collect next.js integration test logs");
-      const jobs = await octokit.paginate(
-        octokit.rest.actions.listJobsForWorkflowRun,
-        {
-          ..._actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo,
-          run_id: _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.runId,
-          per_page: 50,
-        }
-      );
-      // Filter out next.js integration test jobs
-      const integrationTestJobs = jobs?.filter((job) =>
-        /Next\.js integration test \([^)]*\)$/.test(job.name)
-      );
-      console.log(jobs?.map((j) => j.name));
-      console.log(
-        `Logs found for ${integrationTestJobs.length} jobs`,
-        integrationTestJobs.map((job) => job.name)
-      );
-      // Iterate over all of next.js integration test jobs, read logs and collect failed test results if exists.
-      const fullJobLogsFromWorkflow = await Promise.all(
-        integrationTestJobs.map((job) =>
-          fetchJobLogsFromWorkflow(octokit, token, job)
-        )
-      );
-      const testResultManifest = {
-        ref: sha,
-      };
-      const failedJobResults = fullJobLogsFromWorkflow
-        .filter(({ logs, job }) => {
-          if (
-            !logs.includes(`failed to pass within`) ||
-            !logs.includes("--test output start--")
-          ) {
-            console.log(
-              `Couldn't find failed tests in logs for job `,
-              job.name
+    function getFailedJobResults(octokit, token, sha) {
+      return __awaiter(this, void 0, void 0, function* () {
+        console.log("Trying to collect next.js integration test logs");
+        const jobs = yield octokit.paginate(
+          octokit.rest.actions.listJobsForWorkflowRun,
+          Object.assign(
+            Object.assign(
+              {},
+              _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo
+            ),
+            {
+              run_id:
+                _actions_github__WEBPACK_IMPORTED_MODULE_0__.context === null ||
+                _actions_github__WEBPACK_IMPORTED_MODULE_0__.context === void 0
+                  ? void 0
+                  : _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.runId,
+              per_page: 50,
+            }
+          )
+        );
+        // Filter out next.js integration test jobs
+        const integrationTestJobs =
+          jobs === null || jobs === void 0
+            ? void 0
+            : jobs.filter((job) =>
+                /Next\.js integration test \([^)]*\)$/.test(job.name)
+              );
+        console.log(
+          jobs === null || jobs === void 0 ? void 0 : jobs.map((j) => j.name)
+        );
+        console.log(
+          `Logs found for ${integrationTestJobs.length} jobs`,
+          integrationTestJobs.map((job) => job.name)
+        );
+        // Iterate over all of next.js integration test jobs, read logs and collect failed test results if exists.
+        const fullJobLogsFromWorkflow = yield Promise.all(
+          integrationTestJobs.map((job) =>
+            fetchJobLogsFromWorkflow(octokit, token, job)
+          )
+        );
+        const testResultManifest = {
+          ref: sha,
+        };
+        const failedJobResults = fullJobLogsFromWorkflow
+          .filter(({ logs, job }) => {
+            if (
+              !logs.includes(`failed to pass within`) ||
+              !logs.includes("--test output start--")
+            ) {
+              console.log(
+                `Couldn't find failed tests in logs for job `,
+                job.name
+              );
+              return false;
+            }
+            return true;
+          })
+          .reduce((acc, { logs, nextjsVersion, job }) => {
+            testResultManifest.nextjsVersion = nextjsVersion;
+            // Split logs per each test suites, exclude if it's arbitrary log does not contain test data
+            const splittedLogs = logs
+              .split("NEXT_INTEGRATION_TEST: true")
+              .filter((log) => log.includes("--test output start--"));
+            // Iterate each chunk of logs, find out test name and corresponding test data
+            const failedTestResultsData = collectFailedTestResults(
+              splittedLogs,
+              job
             );
-            return false;
-          }
-          return true;
-        })
-        .reduce((acc, { logs, nextjsVersion, job }) => {
-          testResultManifest.nextjsVersion = nextjsVersion;
-          // Split logs per each test suites, exclude if it's arbitrary log does not contain test data
-          const splittedLogs = logs
-            .split("NEXT_INTEGRATION_TEST: true")
-            .filter((log) => log.includes("--test output start--"));
-          // Iterate each chunk of logs, find out test name and corresponding test data
-          const failedTestResultsData = collectFailedTestResults(
-            splittedLogs,
-            job
-          );
-          return acc.concat(failedTestResultsData);
-        }, []);
-      testResultManifest.result = failedJobResults;
-      // Collect all test results into single manifest to store into file. This'll allow to upload / compare test results
-      // across different runs.
-      fs.writeFileSync(
-        "./nextjs-test-results.json",
-        JSON.stringify(testResultManifest, null, 2)
-      );
-      return testResultManifest;
+            return acc.concat(failedTestResultsData);
+          }, []);
+        testResultManifest.result = failedJobResults;
+        // Collect all test results into single manifest to store into file. This'll allow to upload / compare test results
+        // across different runs.
+        fs.writeFileSync(
+          "./nextjs-test-results.json",
+          JSON.stringify(testResultManifest, null, 2)
+        );
+        return testResultManifest;
+      });
     }
     // Get the latest base test results to diff against with current test results.
-    async function getTestResultDiffBase(octokit, shouldDiffWithMain) {
-      console.log("Trying to find latest test results to compare");
-      // First, get the tree of `test-results` from `nextjs-integration-test-data` branch
-      const branchTree = (
-        await octokit.rest.git.getTree({
-          ..._actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo,
-          tree_sha: "refs/heads/nextjs-integration-test-data",
-        })
-      ).data.tree.find((tree) => tree.path === "test-results");
-      if (!branchTree || !branchTree.sha) {
-        console.error("Couldn't find existing test results");
-        return null;
-      }
-      // Get the trees under `/test-results`
-      const testResultsTree = (
-        await octokit.rest.git.getTree({
-          ..._actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo,
-          tree_sha: branchTree.sha,
-        })
-      ).data.tree;
-      // If base is main, get the tree under `test-results/main`
-      // Otherwise iterate over all the trees under `test-results` then find latest next.js release
-      let baseTree;
-      if (shouldDiffWithMain) {
-        console.log("Trying to find latest test results from main branch");
-        baseTree = testResultsTree.find((tree) => tree.path === "main");
-      } else {
-        console.log("Trying to find latest test results from next.js release");
-        baseTree = testResultsTree
-          .filter((tree) => tree.path !== "main")
-          .reduce((acc, value) => {
-            if (!acc) {
-              return value;
-            }
-            return semver.gt(value.path, acc.path) ? value : acc;
-          }, null);
-      }
-      if (!baseTree || !baseTree.sha) {
-        console.log("There is no base to compare test results against");
-        return null;
-      }
-      console.log("Found base tree", baseTree);
-      // Now tree should point the list of .json for the actual test results
-      const testResultJsonTree = (
-        await octokit.rest.git.getTree({
-          ..._actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo,
-          tree_sha: baseTree.sha,
-        })
-      ).data.tree;
-      if (!testResultJsonTree) {
-        console.log("There is no test results stored in the base yet");
-        return null;
-      }
-      // Find the latest test result tree, iterate results file names to find out the latest one.
-      // Filename follow ${yyyyMMddHHmm}-${sha}.json format.
-      const actualTestResultTree = testResultJsonTree.reduce((acc, value) => {
-        const dateStr = value.path
-          ?.split("-")[0]
-          .match(/(....)(..)(..)(..)(..)/);
-        const date = new Date(
-          dateStr[1],
-          dateStr[2] - 1,
-          dateStr[3],
-          dateStr[4],
-          dateStr[5]
-        );
-        if (!acc) {
-          return {
-            date,
-            value,
-          };
+    function getTestResultDiffBase(octokit, shouldDiffWithMain) {
+      var _a;
+      return __awaiter(this, void 0, void 0, function* () {
+        console.log("Trying to find latest test results to compare");
+        // First, get the tree of `test-results` from `nextjs-integration-test-data` branch
+        const branchTree = (yield octokit.rest.git.getTree(
+          Object.assign(
+            Object.assign(
+              {},
+              _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo
+            ),
+            { tree_sha: "refs/heads/nextjs-integration-test-data" }
+          )
+        )).data.tree.find((tree) => tree.path === "test-results");
+        if (!branchTree || !branchTree.sha) {
+          console.error("Couldn't find existing test results");
+          return null;
         }
-        return acc.date >= date ? acc : { date, value };
-      }, null);
-      if (!actualTestResultTree || !actualTestResultTree?.value?.sha) {
-        console.log("There is no test results json stored in the base yet");
-        return null;
-      }
-      console.log(
-        "Found test results to compare against: ",
-        actualTestResultTree.value
-      );
-      // actualTestResultTree should point to the file that contains the test results
-      // we can try to read now.
-      const { data } = await octokit.rest.git.getBlob({
-        ..._actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo,
-        file_sha: actualTestResultTree.value.sha,
+        // Get the trees under `/test-results`
+        const testResultsTree = (yield octokit.rest.git.getTree(
+          Object.assign(
+            Object.assign(
+              {},
+              _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo
+            ),
+            { tree_sha: branchTree.sha }
+          )
+        )).data.tree;
+        // If base is main, get the tree under `test-results/main`
+        // Otherwise iterate over all the trees under `test-results` then find latest next.js release
+        let baseTree;
+        if (shouldDiffWithMain) {
+          console.log("Trying to find latest test results from main branch");
+          baseTree = testResultsTree.find((tree) => tree.path === "main");
+        } else {
+          console.log(
+            "Trying to find latest test results from next.js release"
+          );
+          baseTree = testResultsTree
+            .filter((tree) => tree.path !== "main")
+            .reduce((acc, value) => {
+              if (!acc) {
+                return value;
+              }
+              return semver.gt(value.path, acc.path) ? value : acc;
+            }, null);
+        }
+        if (!baseTree || !baseTree.sha) {
+          console.log("There is no base to compare test results against");
+          return null;
+        }
+        console.log("Found base tree", baseTree);
+        // Now tree should point the list of .json for the actual test results
+        const testResultJsonTree = (yield octokit.rest.git.getTree(
+          Object.assign(
+            Object.assign(
+              {},
+              _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo
+            ),
+            { tree_sha: baseTree.sha }
+          )
+        )).data.tree;
+        if (!testResultJsonTree) {
+          console.log("There is no test results stored in the base yet");
+          return null;
+        }
+        // Find the latest test result tree, iterate results file names to find out the latest one.
+        // Filename follow ${yyyyMMddHHmm}-${sha}.json format.
+        const actualTestResultTree = testResultJsonTree.reduce((acc, value) => {
+          var _a;
+          const dateStr =
+            (_a = value.path) === null || _a === void 0
+              ? void 0
+              : _a.split("-")[0].match(/(....)(..)(..)(..)(..)/);
+          const date = new Date(
+            dateStr[1],
+            dateStr[2] - 1,
+            dateStr[3],
+            dateStr[4],
+            dateStr[5]
+          );
+          if (!acc) {
+            return {
+              date,
+              value,
+            };
+          }
+          return acc.date >= date ? acc : { date, value };
+        }, null);
+        if (
+          !actualTestResultTree ||
+          !((_a =
+            actualTestResultTree === null || actualTestResultTree === void 0
+              ? void 0
+              : actualTestResultTree.value) === null || _a === void 0
+            ? void 0
+            : _a.sha)
+        ) {
+          console.log("There is no test results json stored in the base yet");
+          return null;
+        }
+        console.log(
+          "Found test results to compare against: ",
+          actualTestResultTree.value
+        );
+        // actualTestResultTree should point to the file that contains the test results
+        // we can try to read now.
+        const { data } = yield octokit.rest.git.getBlob(
+          Object.assign(
+            Object.assign(
+              {},
+              _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo
+            ),
+            { file_sha: actualTestResultTree.value.sha }
+          )
+        );
+        const { encoding, content } = data;
+        if (encoding === "base64") {
+          return JSON.parse(Buffer.from(content, "base64").toString());
+        } else if (encoding === "utf-8") {
+          return JSON.parse(content);
+        } else {
+          throw new Error("Unknown encoding: " + encoding);
+        }
       });
-      const { encoding, content } = data;
-      if (encoding === "base64") {
-        return JSON.parse(Buffer.from(content, "base64").toString());
-      } else if (encoding === "utf-8") {
-        return JSON.parse(content);
-      } else {
-        throw new Error("Unknown encoding: " + encoding);
-      }
     }
     function getTestSummary(
       sha,
       shouldDiffWithMain,
       baseResults,
-      failedJobResults
+      failedJobResults,
+      shouldShareTestSummaryToSlack
     ) {
       // Read current tests summary
       const {
@@ -16278,115 +16423,196 @@
           .map((t) => `\t- ${t}`)
           .join(" \n")}`;
       }
+      // Store plain textbased summary to share into Slack channel
+      // Note: Likely we'll need to polish this summary to make it more readable.
+      if (shouldShareTestSummaryToSlack) {
+        let textSummary = `*Next.js integration test status with Turbopack*
+
+    *Base: ${baseResults.ref} / ${shortBaseNextJsVersion}*
+    Failed suites: ${baseTestFailedSuiteCount}
+    Failed cases: ${baseTestFailedCaseCount}
+
+    *Current: ${sha} / ${shortCurrentNextJsVersion}*
+    Failed suites: ${currentTestFailedSuiteCount}
+    Failed cases: ${currentTestFailedCaseCount}
+
+    `;
+        if (suiteCountDiff === 0) {
+          textSummary += "No changes in suite count.";
+        } else if (suiteCountDiff > 0) {
+          textSummary += `↓ ${suiteCountDiff} suites are fixed`;
+        } else if (suiteCountDiff < 0) {
+          textSummary += `↑ ${suiteCountDiff} suites are newly failed`;
+        }
+        if (caseCountDiff === 0) {
+          textSummary += "No changes in test cases count.";
+        } else if (caseCountDiff > 0) {
+          textSummary += `↓ ${caseCountDiff} test cases are fixed`;
+        } else if (caseCountDiff < 0) {
+          textSummary += `↑ ${caseCountDiff} test cases are newly failed`;
+        }
+        console.log(
+          "Storing text summary to ./test-summary.md to report into Slack channel.",
+          textSummary
+        );
+        fs.writeFileSync("./test-summary.md", textSummary);
+      }
       return ret;
     }
     // An action report failed next.js integration test with --turbo
-    async function run() {
-      const {
-        token,
-        octokit,
-        shouldDiffWithMain,
-        prNumber,
-        sha,
-        existingComment,
-      } = await getInputs();
-      // Collect current PR's failed test results
-      const failedJobResults = await getFailedJobResults(octokit, token, sha);
-      // Get the base to compare against
-      const baseResults = await getTestResultDiffBase(
-        octokit,
-        shouldDiffWithMain
-      );
-      let fullCommentBody = "";
-      if (failedJobResults.result.length === 0) {
-        console.log("No failed test results found :tada:");
-        fullCommentBody =
-          `### Next.js test passes :green_circle: ${BOT_COMMENT_MARKER}` +
-          `\nCommit: ${sha}\n`;
-        return;
-      } else {
-        // Comment body to post test report with summary & full details.
-        fullCommentBody =
-          // Put the header title with marer comment to identify the comment for subsequent runs.
-          `${commentTitlePre} ${BOT_COMMENT_MARKER}` + `\nCommit: ${sha}\n`;
-        fullCommentBody += getTestSummary(
-          sha,
+    function run() {
+      return __awaiter(this, void 0, void 0, function* () {
+        const {
+          token,
+          octokit,
           shouldDiffWithMain,
-          baseResults,
-          failedJobResults
+          prNumber,
+          sha,
+          existingComment,
+        } = yield getInputs();
+        // determine if we want to report summary into slack channel.
+        // As a first step, we'll only report summary when the test is run against release-to-release. (no main branch regressions yet)
+        const shouldReportSlack = !prNumber && !shouldDiffWithMain;
+        // Collect current PR's failed test results
+        const failedJobResults = yield getFailedJobResults(octokit, token, sha);
+        // Get the base to compare against
+        const baseResults = yield getTestResultDiffBase(
+          octokit,
+          shouldDiffWithMain
         );
-        // Append full test report to the comment body, with collapsed <details>
-        fullCommentBody += `\n<details>\n<summary>Full test report</summary>\n`;
-        // Iterate over job results to construct full test report
-        failedJobResults.result.forEach(
-          ({ job, name: failedTest, data: testData }) => {
-            // each job have nested array of test results
-            // Fill in each individual test suite failures
-            const groupedFails = {};
-            const testResult = testData.testResults?.[0];
-            const resultMessage = stripAnsi(testResult?.message);
-            const failedAssertions = testResult?.assertionResults?.filter(
-              (res) => res.status === "failed"
-            );
-            for (const fail of failedAssertions ?? []) {
-              const ancestorKey = fail?.ancestorTitles?.join(" > ");
-              if (!groupedFails[ancestorKey]) {
-                groupedFails[ancestorKey] = [];
-              }
-              groupedFails[ancestorKey].push(fail);
-            }
-            if (existingComment?.body?.includes(sha)) {
-              if (failedTest && existingComment.body?.includes(failedTest)) {
-                console.log(
-                  `Suite is already included in current comment on ${prNumber}`
-                );
-                // the check_suite comment already says this test failed
-                return;
-              }
-              fullCommentBody = existingComment.body;
-            }
-            fullCommentBody += `\n\`${failedTest}\` `;
-            for (const group of Object.keys(groupedFails).sort()) {
-              const fails = groupedFails[group];
-              fullCommentBody +=
-                `\n- ` +
-                fails.map((fail) => `${group} > ${fail.title}`).join("\n- ");
-            }
-            fullCommentBody += `\n\n<details>`;
-            fullCommentBody += `\n<summary>Expand output</summary>`;
-            fullCommentBody += `\n\n${resultMessage}`;
-            fullCommentBody += `\n</details>\n`;
-          }
-        );
-        // Close </details>
-        fullCommentBody += `</details>\n`;
-      }
-      try {
-        if (!prNumber) {
+        let fullCommentBody = "";
+        if (failedJobResults.result.length === 0) {
+          console.log("No failed test results found :tada:");
+          fullCommentBody =
+            `### Next.js test passes :green_circle: ${BOT_COMMENT_MARKER}` +
+            `\nCommit: ${sha}\n`;
           return;
-        }
-        if (!existingComment) {
-          console.log("No existing comment found, creating a new one");
-          const result = await octokit.rest.issues.createComment({
-            ..._actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo,
-            issue_number: prNumber,
-            body: fullCommentBody,
-          });
-          console.log("Created a new comment", result.data.html_url);
         } else {
-          console.log("Existing comment found, updating it");
-          const result = await octokit.rest.issues.updateComment({
-            ..._actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo,
-            comment_id: existingComment.id,
-            body: fullCommentBody,
-          });
-          console.log("Updated existing comment", result.data.html_url);
+          // Comment body to post test report with summary & full details.
+          fullCommentBody =
+            // Put the header title with marer comment to identify the comment for subsequent runs.
+            `${commentTitlePre} ${BOT_COMMENT_MARKER}` + `\nCommit: ${sha}\n`;
+          fullCommentBody += getTestSummary(
+            sha,
+            shouldDiffWithMain,
+            baseResults,
+            failedJobResults,
+            shouldReportSlack
+          );
+          // Append full test report to the comment body, with collapsed <details>
+          fullCommentBody += `\n<details>\n<summary>Full test report</summary>\n`;
+          // Iterate over job results to construct full test report
+          failedJobResults.result.forEach(
+            ({ job, name: failedTest, data: testData }) => {
+              var _a, _b, _c, _d, _e;
+              // each job have nested array of test results
+              // Fill in each individual test suite failures
+              const groupedFails = {};
+              const testResult =
+                (_a = testData.testResults) === null || _a === void 0
+                  ? void 0
+                  : _a[0];
+              const resultMessage = stripAnsi(
+                testResult === null || testResult === void 0
+                  ? void 0
+                  : testResult.message
+              );
+              const failedAssertions =
+                (_b =
+                  testResult === null || testResult === void 0
+                    ? void 0
+                    : testResult.assertionResults) === null || _b === void 0
+                  ? void 0
+                  : _b.filter((res) => res.status === "failed");
+              for (const fail of failedAssertions !== null &&
+              failedAssertions !== void 0
+                ? failedAssertions
+                : []) {
+                const ancestorKey =
+                  (_c =
+                    fail === null || fail === void 0
+                      ? void 0
+                      : fail.ancestorTitles) === null || _c === void 0
+                    ? void 0
+                    : _c.join(" > ");
+                if (!groupedFails[ancestorKey]) {
+                  groupedFails[ancestorKey] = [];
+                }
+                groupedFails[ancestorKey].push(fail);
+              }
+              if (
+                (_d =
+                  existingComment === null || existingComment === void 0
+                    ? void 0
+                    : existingComment.body) === null || _d === void 0
+                  ? void 0
+                  : _d.includes(sha)
+              ) {
+                if (
+                  failedTest &&
+                  ((_e = existingComment.body) === null || _e === void 0
+                    ? void 0
+                    : _e.includes(failedTest))
+                ) {
+                  console.log(
+                    `Suite is already included in current comment on ${prNumber}`
+                  );
+                  // the check_suite comment already says this test failed
+                  return;
+                }
+                fullCommentBody = existingComment.body;
+              }
+              fullCommentBody += `\n\`${failedTest}\` `;
+              for (const group of Object.keys(groupedFails).sort()) {
+                const fails = groupedFails[group];
+                fullCommentBody +=
+                  `\n- ` +
+                  fails.map((fail) => `${group} > ${fail.title}`).join("\n- ");
+              }
+              fullCommentBody += `\n\n<details>`;
+              fullCommentBody += `\n<summary>Expand output</summary>`;
+              fullCommentBody += `\n\n${resultMessage}`;
+              fullCommentBody += `\n</details>\n`;
+            }
+          );
+          // Close </details>
+          fullCommentBody += `</details>\n`;
         }
-      } catch (error) {
-        console.error("Failed to post comment", error);
-        // Comment update should succeed, otherwise let CI fails
-        throw error;
-      }
+        try {
+          if (!prNumber) {
+            return;
+          }
+          if (!existingComment) {
+            console.log("No existing comment found, creating a new one");
+            const result = yield octokit.rest.issues.createComment(
+              Object.assign(
+                Object.assign(
+                  {},
+                  _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo
+                ),
+                { issue_number: prNumber, body: fullCommentBody }
+              )
+            );
+            console.log("Created a new comment", result.data.html_url);
+          } else {
+            console.log("Existing comment found, updating it");
+            const result = yield octokit.rest.issues.updateComment(
+              Object.assign(
+                Object.assign(
+                  {},
+                  _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo
+                ),
+                { comment_id: existingComment.id, body: fullCommentBody }
+              )
+            );
+            console.log("Updated existing comment", result.data.html_url);
+          }
+        } catch (error) {
+          console.error("Failed to post comment", error);
+          // Comment update should succeed, otherwise let CI fails
+          throw error;
+        }
+      });
     }
     run();
   })();
