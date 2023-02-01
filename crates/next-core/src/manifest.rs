@@ -1,7 +1,6 @@
 use anyhow::Result;
-use indexmap::IndexSet;
 use mime::APPLICATION_JSON;
-use turbo_tasks::primitives::StringsVc;
+use turbo_tasks::{primitives::StringsVc, TryFlatMapRecursiveJoinIterExt, TryJoinIterExt};
 use turbo_tasks_fs::File;
 use turbopack_core::asset::AssetContentVc;
 use turbopack_dev_server::source::{
@@ -24,31 +23,41 @@ impl DevManifestContentSourceVc {
     #[turbo_tasks::function]
     async fn find_routes(self) -> Result<StringsVc> {
         let this = &*self.await?;
-        let mut queue = this.page_roots.clone();
-        let mut routes = IndexSet::new();
 
-        while let Some(content_source) = queue.pop() {
-            queue.extend(content_source.get_children().await?.iter());
+        let mut routes = this
+            .page_roots
+            .iter()
+            .copied()
+            .try_flat_map_recursive_join(|content_source| async move {
+                Ok(content_source.get_children().await?.clone_value())
+            })
+            .await?
+            .into_iter()
+            .map(|content_source| async move {
+                // TODO This shouldn't use casts but an public api instead
+                if let Some(api_source) =
+                    NodeApiContentSourceVc::resolve_from(content_source).await?
+                {
+                    return Ok(Some(format!("/{}", api_source.get_pathname().await?)));
+                }
 
-            // TODO This shouldn't use casts but an public api instead
-            if let Some(api_source) = NodeApiContentSourceVc::resolve_from(content_source).await? {
-                routes.insert(format!("/{}", api_source.get_pathname().await?));
+                if let Some(page_source) =
+                    NodeRenderContentSourceVc::resolve_from(content_source).await?
+                {
+                    return Ok(Some(format!("/{}", page_source.get_pathname().await?)));
+                }
 
-                continue;
-            }
-
-            if let Some(page_source) =
-                NodeRenderContentSourceVc::resolve_from(content_source).await?
-            {
-                routes.insert(format!("/{}", page_source.get_pathname().await?));
-
-                continue;
-            }
-        }
+                Ok(None)
+            })
+            .try_join()
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
 
         routes.sort();
 
-        Ok(StringsVc::cell(routes.into_iter().collect()))
+        Ok(StringsVc::cell(routes))
     }
 }
 
