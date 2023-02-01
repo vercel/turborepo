@@ -1,0 +1,11 @@
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Workspace '{0}' not found in lockfile")]
+    MissingWorkspace(String),
+    #[error("Unable to convert from json")]
+    JsonError(#[from] serde_json::Error),
+    #[error("Turbo doesn't support npm lockfiles without a 'packages' field")]
+    UnsupportedNpmVersion,
+}
