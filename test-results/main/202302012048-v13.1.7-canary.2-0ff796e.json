@@ -1,0 +1,1368 @@
+{
+  "ref": "b8cbf28640035a6d1baf8875e067811a8f58dc87",
+  "nextjsVersion": "Next.js v13.1.7-canary.2",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675283995968,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefresh"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefresh.test.ts:20:5)"
+                ],
+                "fullName": "ReactRefresh can edit a component without losing state",
+                "location": null,
+                "status": "failed",
+                "title": "can edit a component without losing state"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefresh"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefresh.test.ts:157:5)"
+                ],
+                "fullName": "ReactRefresh cyclic dependencies",
+                "location": null,
+                "status": "failed",
+                "title": "cyclic dependencies"
+              }
+            ],
+            "endTime": 1675284089989,
+            "message": "  ● ReactRefresh › can edit a component without losing state\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefresh.test.ts:20:5)\n\n  ● ReactRefresh › cyclic dependencies\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefresh.test.ts:157:5)\n",
+            "name": "/work/test/development/acceptance/ReactRefresh.test.ts",
+            "startTime": 1675283996063,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/edge-configurable-runtime/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675284166334,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:39:28)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode runs with no warning API route on the edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "runs with no warning API route on the edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:54:28)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode warns about API route using experimental-edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about API route using experimental-edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:70:28)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode warns about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:87:28)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode errors about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "errors about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:39:28)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode runs with no warning API route on the edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "runs with no warning API route on the edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:54:28)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode warns about API route using experimental-edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about API route using experimental-edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:70:28)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode warns about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:87:28)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode errors about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "errors about page using edge runtime"
+              }
+            ],
+            "endTime": 1675284201385,
+            "message": "  ● Configurable runtime for src/pages and API routes › In dev mode › runs with no warning API route on the edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      37 |         await next.start()\n      38 |         const res = await fetchViaHTTP(next.url, `/api/edge`)\n    > 39 |         expect(res.status).toEqual(200)\n         |                            ^\n      40 |         expect(next.cliOutput).not.toInclude('error')\n      41 |         expect(next.cliOutput).not.toInclude('warn')\n      42 |       })\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:39:28)\n\n  ● Configurable runtime for src/pages and API routes › In dev mode › warns about API route using experimental-edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      52 |         await next.start()\n      53 |         const res = await fetchViaHTTP(next.url, `/api/edge`)\n    > 54 |         expect(res.status).toEqual(200)\n         |                            ^\n      55 |         expect(next.cliOutput).not.toInclude('error')\n      56 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      57 |           `warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.`\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:54:28)\n\n  ● Configurable runtime for src/pages and API routes › In dev mode › warns about page using edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      68 |         await next.start()\n      69 |         const res = await fetchViaHTTP(next.url, `/`)\n    > 70 |         expect(res.status).toEqual(200)\n         |                            ^\n      71 |         expect(next.cliOutput).not.toInclude('error')\n      72 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      73 |           `warn  - You are using an experimental edge runtime, the API might change.`\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:70:28)\n\n  ● Configurable runtime for src/pages and API routes › In dev mode › errors about page using edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      85 |         await next.start()\n      86 |         const res = await fetchViaHTTP(next.url, `/`)\n    > 87 |         expect(res.status).toEqual(200)\n         |                            ^\n      88 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      89 |           `error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.`\n      90 |         )\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:87:28)\n\n  ● Configurable runtime for pages and API routes › In dev mode › runs with no warning API route on the edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      37 |         await next.start()\n      38 |         const res = await fetchViaHTTP(next.url, `/api/edge`)\n    > 39 |         expect(res.status).toEqual(200)\n         |                            ^\n      40 |         expect(next.cliOutput).not.toInclude('error')\n      41 |         expect(next.cliOutput).not.toInclude('warn')\n      42 |       })\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:39:28)\n\n  ● Configurable runtime for pages and API routes › In dev mode › warns about API route using experimental-edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      52 |         await next.start()\n      53 |         const res = await fetchViaHTTP(next.url, `/api/edge`)\n    > 54 |         expect(res.status).toEqual(200)\n         |                            ^\n      55 |         expect(next.cliOutput).not.toInclude('error')\n      56 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      57 |           `warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.`\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:54:28)\n\n  ● Configurable runtime for pages and API routes › In dev mode › warns about page using edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      68 |         await next.start()\n      69 |         const res = await fetchViaHTTP(next.url, `/`)\n    > 70 |         expect(res.status).toEqual(200)\n         |                            ^\n      71 |         expect(next.cliOutput).not.toInclude('error')\n      72 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      73 |           `warn  - You are using an experimental edge runtime, the API might change.`\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:70:28)\n\n  ● Configurable runtime for pages and API routes › In dev mode › errors about page using edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      85 |         await next.start()\n      86 |         const res = await fetchViaHTTP(next.url, `/`)\n    > 87 |         expect(res.status).toEqual(200)\n         |                            ^\n      88 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      89 |           `error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.`\n      90 |         )\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:87:28)\n",
+            "name": "/work/test/e2e/edge-configurable-runtime/index.test.ts",
+            "startTime": 1675284166433,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/bigint/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675284230556,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "bigint API route support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/bigint/test/index.test.js:24:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "bigint API route support dev mode should return 200",
+                "location": null,
+                "status": "failed",
+                "title": "should return 200"
+              },
+              {
+                "ancestorTitles": [
+                  "bigint API route support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: \"3\"\nReceived: false\n    at Object.<anonymous> (/work/test/integration/bigint/test/index.test.js:31:21)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "bigint API route support dev mode should return the BigInt result text",
+                "location": null,
+                "status": "failed",
+                "title": "should return the BigInt result text"
+              },
+              {
+                "ancestorTitles": [
+                  "bigint API route support",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "bigint API route support server mode should return 200",
+                "location": null,
+                "status": "passed",
+                "title": "should return 200"
+              },
+              {
+                "ancestorTitles": [
+                  "bigint API route support",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "bigint API route support server mode should return the BigInt result text",
+                "location": null,
+                "status": "passed",
+                "title": "should return the BigInt result text"
+              }
+            ],
+            "endTime": 1675284240756,
+            "message": "  ● bigint API route support › dev mode › should return 200\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      22 |       method: 'GET',\n      23 |     })\n    > 24 |     expect(res.status).toEqual(200)\n         |                        ^\n      25 |   })\n      26 |\n      27 |   it('should return the BigInt result text', async () => {\n\n      at Object.<anonymous> (integration/bigint/test/index.test.js:24:24)\n\n  ● bigint API route support › dev mode › should return the BigInt result text\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: \"3\"\n    Received: false\n\n      29 |       method: 'GET',\n      30 |     }).then((res) => res.ok && res.text())\n    > 31 |     expect(resText).toEqual('3')\n         |                     ^\n      32 |   })\n      33 | }\n      34 |\n\n      at Object.<anonymous> (integration/bigint/test/index.test.js:31:21)\n",
+            "name": "/work/test/integration/bigint/test/index.test.js",
+            "startTime": 1675284230660,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 4,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675284170327,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default empty _app shows logbox",
+                "location": null,
+                "status": "pending",
+                "title": "empty _app shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default empty _document shows logbox",
+                "location": null,
+                "status": "pending",
+                "title": "empty _document shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default _app syntax error shows logbox",
+                "location": null,
+                "status": "pending",
+                "title": "_app syntax error shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default _document syntax error shows logbox",
+                "location": null,
+                "status": "pending",
+                "title": "_document syntax error shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts:30:45)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo empty _app shows logbox",
+                "location": null,
+                "status": "failed",
+                "title": "empty _app shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts:60:45)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo empty _document shows logbox",
+                "location": null,
+                "status": "failed",
+                "title": "empty _document shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts:111:45)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo _app syntax error shows logbox",
+                "location": null,
+                "status": "failed",
+                "title": "_app syntax error shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts:160:45)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo _document syntax error shows logbox",
+                "location": null,
+                "status": "failed",
+                "title": "_document syntax error shows logbox"
+              }
+            ],
+            "endTime": 1675284313321,
+            "message": "  ● ReactRefreshLogBox turbo › empty _app shows logbox\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      28 |         ])\n      29 |       )\n    > 30 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      31 |       expect(await session.getRedboxDescription()).toMatchInlineSnapshot(\n      32 |         `\"Error: The default export is not a React Component in page: \\\\\"/_app\\\\\"\"`\n      33 |       )\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-app-doc.test.ts:30:45)\n\n  ● ReactRefreshLogBox turbo › empty _document shows logbox\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      58 |         ])\n      59 |       )\n    > 60 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      61 |       expect(await session.getRedboxDescription()).toMatchInlineSnapshot(\n      62 |         `\"Error: The default export is not a React Component in page: \\\\\"/_document\\\\\"\"`\n      63 |       )\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-app-doc.test.ts:60:45)\n\n  ● ReactRefreshLogBox turbo › _app syntax error shows logbox\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      109 |         ])\n      110 |       )\n    > 111 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      112 |       expect(await session.getRedboxSource()).toMatchSnapshot()\n      113 |\n      114 |       await session.patch(\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-app-doc.test.ts:111:45)\n\n  ● ReactRefreshLogBox turbo › _document syntax error shows logbox\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      158 |         ])\n      159 |       )\n    > 160 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      161 |       expect(await session.getRedboxSource()).toMatchSnapshot()\n      162 |\n      163 |       await session.patch(\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-app-doc.test.ts:160:45)\n",
+            "name": "/work/test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts",
+            "startTime": 1675284170422,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675284385937,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"failed to canonicalize embedded file path·\nCaused by:\n    No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675284431026,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"failed to canonicalize embedded file path·\n    Caused by:\n        No such file or directory (os error 2)\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675284386032,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/404-page-custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 9,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675284458057,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should respond to 404 correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render error correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render index page normal",
+                "location": null,
+                "status": "passed",
+                "title": "should render index page normal"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should set pages404 in routes-manifest correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should set pages404 in routes-manifest correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should have output 404.html",
+                "location": null,
+                "status": "passed",
+                "title": "should have output 404.html"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:26:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should respond to 404 correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"oops\"\nReceived string:    \"failed to canonicalize embedded file path·\nCaused by:\n    No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:32:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from index\"\nReceived string:    \"failed to canonicalize embedded file path·\nCaused by:\n    No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:37:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render index page normal",
+                "location": null,
+                "status": "failed",
+                "title": "should render index page normal"
+              }
+            ],
+            "endTime": 1675284467493,
+            "message": "  ● Default 404 Page with custom _error › dev mode › should respond to 404 correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      24 |   it('should respond to 404 correctly', async () => {\n      25 |     const res = await fetchViaHTTP(appPort, '/404')\n    > 26 |     expect(res.status).toBe(404)\n         |                        ^\n      27 |     expect(await res.text()).toContain('This page could not be found')\n      28 |   })\n      29 |\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:26:24)\n\n  ● Default 404 Page with custom _error › dev mode › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"oops\"\n    Received string:    \"failed to canonicalize embedded file path·\n    Caused by:\n        No such file or directory (os error 2)\"\n\n      30 |   it('should render error correctly', async () => {\n      31 |     const text = await renderViaHTTP(appPort, '/err')\n    > 32 |     expect(text).toContain(isDev ? 'oops' : 'Internal Server Error')\n         |                  ^\n      33 |   })\n      34 |\n      35 |   it('should render index page normal', async () => {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:32:18)\n\n  ● Default 404 Page with custom _error › dev mode › should render index page normal\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from index\"\n    Received string:    \"failed to canonicalize embedded file path·\n    Caused by:\n        No such file or directory (os error 2)\"\n\n      35 |   it('should render index page normal', async () => {\n      36 |     const html = await renderViaHTTP(appPort, '/')\n    > 37 |     expect(html).toContain('hello from index')\n         |                  ^\n      38 |   })\n      39 |\n      40 |   if (!isDev) {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:37:18)\n",
+            "name": "/work/test/integration/404-page-custom-error/test/index.test.js",
+            "startTime": 1675284458150,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675284021119,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefresh"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefresh.test.ts:20:5)"
+                ],
+                "fullName": "ReactRefresh can edit a component without losing state",
+                "location": null,
+                "status": "failed",
+                "title": "can edit a component without losing state"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefresh"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefresh.test.ts:157:5)"
+                ],
+                "fullName": "ReactRefresh cyclic dependencies",
+                "location": null,
+                "status": "failed",
+                "title": "cyclic dependencies"
+              }
+            ],
+            "endTime": 1675284114162,
+            "message": "  ● ReactRefresh › can edit a component without losing state\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefresh.test.ts:20:5)\n\n  ● ReactRefresh › cyclic dependencies\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefresh.test.ts:157:5)\n",
+            "name": "/work/test/development/acceptance/ReactRefresh.test.ts",
+            "startTime": 1675284021210,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/edge-configurable-runtime/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675284189567,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:39:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode runs with no warning API route on the edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "runs with no warning API route on the edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:54:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode warns about API route using experimental-edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about API route using experimental-edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:70:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode warns about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:87:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode errors about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "errors about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:39:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode runs with no warning API route on the edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "runs with no warning API route on the edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:54:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode warns about API route using experimental-edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about API route using experimental-edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:70:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode warns about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:87:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode errors about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "errors about page using edge runtime"
+              }
+            ],
+            "endTime": 1675284223915,
+            "message": "  ● Configurable runtime for src/pages and API routes › In dev mode › runs with no warning API route on the edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      37 |         await next.start()\n      38 |         const res = await fetchViaHTTP(next.url, `/api/edge`)\n    > 39 |         expect(res.status).toEqual(200)\n         |                            ^\n      40 |         expect(next.cliOutput).not.toInclude('error')\n      41 |         expect(next.cliOutput).not.toInclude('warn')\n      42 |       })\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:39:28)\n\n  ● Configurable runtime for src/pages and API routes › In dev mode › warns about API route using experimental-edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      52 |         await next.start()\n      53 |         const res = await fetchViaHTTP(next.url, `/api/edge`)\n    > 54 |         expect(res.status).toEqual(200)\n         |                            ^\n      55 |         expect(next.cliOutput).not.toInclude('error')\n      56 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      57 |           `warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.`\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:54:28)\n\n  ● Configurable runtime for src/pages and API routes › In dev mode › warns about page using edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      68 |         await next.start()\n      69 |         const res = await fetchViaHTTP(next.url, `/`)\n    > 70 |         expect(res.status).toEqual(200)\n         |                            ^\n      71 |         expect(next.cliOutput).not.toInclude('error')\n      72 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      73 |           `warn  - You are using an experimental edge runtime, the API might change.`\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:70:28)\n\n  ● Configurable runtime for src/pages and API routes › In dev mode › errors about page using edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      85 |         await next.start()\n      86 |         const res = await fetchViaHTTP(next.url, `/`)\n    > 87 |         expect(res.status).toEqual(200)\n         |                            ^\n      88 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      89 |           `error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.`\n      90 |         )\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:87:28)\n\n  ● Configurable runtime for pages and API routes › In dev mode › runs with no warning API route on the edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      37 |         await next.start()\n      38 |         const res = await fetchViaHTTP(next.url, `/api/edge`)\n    > 39 |         expect(res.status).toEqual(200)\n         |                            ^\n      40 |         expect(next.cliOutput).not.toInclude('error')\n      41 |         expect(next.cliOutput).not.toInclude('warn')\n      42 |       })\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:39:28)\n\n  ● Configurable runtime for pages and API routes › In dev mode › warns about API route using experimental-edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      52 |         await next.start()\n      53 |         const res = await fetchViaHTTP(next.url, `/api/edge`)\n    > 54 |         expect(res.status).toEqual(200)\n         |                            ^\n      55 |         expect(next.cliOutput).not.toInclude('error')\n      56 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      57 |           `warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.`\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:54:28)\n\n  ● Configurable runtime for pages and API routes › In dev mode › warns about page using edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      68 |         await next.start()\n      69 |         const res = await fetchViaHTTP(next.url, `/`)\n    > 70 |         expect(res.status).toEqual(200)\n         |                            ^\n      71 |         expect(next.cliOutput).not.toInclude('error')\n      72 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      73 |           `warn  - You are using an experimental edge runtime, the API might change.`\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:70:28)\n\n  ● Configurable runtime for pages and API routes › In dev mode › errors about page using edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      85 |         await next.start()\n      86 |         const res = await fetchViaHTTP(next.url, `/`)\n    > 87 |         expect(res.status).toEqual(200)\n         |                            ^\n      88 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      89 |           `error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.`\n      90 |         )\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:87:28)\n",
+            "name": "/work/test/e2e/edge-configurable-runtime/index.test.ts",
+            "startTime": 1675284189661,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/bigint/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675284252950,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "bigint API route support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/bigint/test/index.test.js:24:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "bigint API route support dev mode should return 200",
+                "location": null,
+                "status": "failed",
+                "title": "should return 200"
+              },
+              {
+                "ancestorTitles": [
+                  "bigint API route support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: \"3\"\nReceived: false\n    at Object.<anonymous> (/work/test/integration/bigint/test/index.test.js:31:21)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "bigint API route support dev mode should return the BigInt result text",
+                "location": null,
+                "status": "failed",
+                "title": "should return the BigInt result text"
+              },
+              {
+                "ancestorTitles": [
+                  "bigint API route support",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "bigint API route support server mode should return 200",
+                "location": null,
+                "status": "passed",
+                "title": "should return 200"
+              },
+              {
+                "ancestorTitles": [
+                  "bigint API route support",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "bigint API route support server mode should return the BigInt result text",
+                "location": null,
+                "status": "passed",
+                "title": "should return the BigInt result text"
+              }
+            ],
+            "endTime": 1675284263048,
+            "message": "  ● bigint API route support › dev mode › should return 200\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      22 |       method: 'GET',\n      23 |     })\n    > 24 |     expect(res.status).toEqual(200)\n         |                        ^\n      25 |   })\n      26 |\n      27 |   it('should return the BigInt result text', async () => {\n\n      at Object.<anonymous> (integration/bigint/test/index.test.js:24:24)\n\n  ● bigint API route support › dev mode › should return the BigInt result text\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: \"3\"\n    Received: false\n\n      29 |       method: 'GET',\n      30 |     }).then((res) => res.ok && res.text())\n    > 31 |     expect(resText).toEqual('3')\n         |                     ^\n      32 |   })\n      33 | }\n      34 |\n\n      at Object.<anonymous> (integration/bigint/test/index.test.js:31:21)\n",
+            "name": "/work/test/integration/bigint/test/index.test.js",
+            "startTime": 1675284253068,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 4,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675284150624,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default empty _app shows logbox",
+                "location": null,
+                "status": "pending",
+                "title": "empty _app shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default empty _document shows logbox",
+                "location": null,
+                "status": "pending",
+                "title": "empty _document shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default _app syntax error shows logbox",
+                "location": null,
+                "status": "pending",
+                "title": "_app syntax error shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default _document syntax error shows logbox",
+                "location": null,
+                "status": "pending",
+                "title": "_document syntax error shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts:30:45)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo empty _app shows logbox",
+                "location": null,
+                "status": "failed",
+                "title": "empty _app shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts:60:45)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo empty _document shows logbox",
+                "location": null,
+                "status": "failed",
+                "title": "empty _document shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts:111:45)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo _app syntax error shows logbox",
+                "location": null,
+                "status": "failed",
+                "title": "_app syntax error shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts:160:45)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo _document syntax error shows logbox",
+                "location": null,
+                "status": "failed",
+                "title": "_document syntax error shows logbox"
+              }
+            ],
+            "endTime": 1675284293798,
+            "message": "  ● ReactRefreshLogBox turbo › empty _app shows logbox\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      28 |         ])\n      29 |       )\n    > 30 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      31 |       expect(await session.getRedboxDescription()).toMatchInlineSnapshot(\n      32 |         `\"Error: The default export is not a React Component in page: \\\\\"/_app\\\\\"\"`\n      33 |       )\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-app-doc.test.ts:30:45)\n\n  ● ReactRefreshLogBox turbo › empty _document shows logbox\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      58 |         ])\n      59 |       )\n    > 60 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      61 |       expect(await session.getRedboxDescription()).toMatchInlineSnapshot(\n      62 |         `\"Error: The default export is not a React Component in page: \\\\\"/_document\\\\\"\"`\n      63 |       )\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-app-doc.test.ts:60:45)\n\n  ● ReactRefreshLogBox turbo › _app syntax error shows logbox\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      109 |         ])\n      110 |       )\n    > 111 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      112 |       expect(await session.getRedboxSource()).toMatchSnapshot()\n      113 |\n      114 |       await session.patch(\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-app-doc.test.ts:111:45)\n\n  ● ReactRefreshLogBox turbo › _document syntax error shows logbox\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      158 |         ])\n      159 |       )\n    > 160 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      161 |       expect(await session.getRedboxSource()).toMatchSnapshot()\n      162 |\n      163 |       await session.patch(\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-app-doc.test.ts:160:45)\n",
+            "name": "/work/test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts",
+            "startTime": 1675284150718,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675284365849,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"failed to canonicalize embedded file path·\nCaused by:\n    No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675284411254,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"failed to canonicalize embedded file path·\n    Caused by:\n        No such file or directory (os error 2)\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675284365949,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/404-page-custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 9,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675284440572,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should respond to 404 correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render error correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render index page normal",
+                "location": null,
+                "status": "passed",
+                "title": "should render index page normal"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should set pages404 in routes-manifest correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should set pages404 in routes-manifest correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should have output 404.html",
+                "location": null,
+                "status": "passed",
+                "title": "should have output 404.html"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:26:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should respond to 404 correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"oops\"\nReceived string:    \"failed to canonicalize embedded file path·\nCaused by:\n    No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:32:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from index\"\nReceived string:    \"failed to canonicalize embedded file path·\nCaused by:\n    No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:37:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render index page normal",
+                "location": null,
+                "status": "failed",
+                "title": "should render index page normal"
+              }
+            ],
+            "endTime": 1675284450218,
+            "message": "  ● Default 404 Page with custom _error › dev mode › should respond to 404 correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      24 |   it('should respond to 404 correctly', async () => {\n      25 |     const res = await fetchViaHTTP(appPort, '/404')\n    > 26 |     expect(res.status).toBe(404)\n         |                        ^\n      27 |     expect(await res.text()).toContain('This page could not be found')\n      28 |   })\n      29 |\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:26:24)\n\n  ● Default 404 Page with custom _error › dev mode › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"oops\"\n    Received string:    \"failed to canonicalize embedded file path·\n    Caused by:\n        No such file or directory (os error 2)\"\n\n      30 |   it('should render error correctly', async () => {\n      31 |     const text = await renderViaHTTP(appPort, '/err')\n    > 32 |     expect(text).toContain(isDev ? 'oops' : 'Internal Server Error')\n         |                  ^\n      33 |   })\n      34 |\n      35 |   it('should render index page normal', async () => {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:32:18)\n\n  ● Default 404 Page with custom _error › dev mode › should render index page normal\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from index\"\n    Received string:    \"failed to canonicalize embedded file path·\n    Caused by:\n        No such file or directory (os error 2)\"\n\n      35 |   it('should render index page normal', async () => {\n      36 |     const html = await renderViaHTTP(appPort, '/')\n    > 37 |     expect(html).toContain('hello from index')\n         |                  ^\n      38 |   })\n      39 |\n      40 |   if (!isDev) {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:37:18)\n",
+            "name": "/work/test/integration/404-page-custom-error/test/index.test.js",
+            "startTime": 1675284440669,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
