@@ -377,8 +377,8 @@
 
 <span class="kw">static </span>DEFAULT_NODEJS_VERSION: <span class="kw-2">&amp;</span>str = <span class="string">&quot;16.0.0&quot;</span>;
 
-<span class="attr">#[derive(Default)]
-#[turbo_tasks::value(shared)]
+<span class="attr">#[turbo_tasks::value(shared)]
+#[derive(Default)]
 </span><span class="kw">pub struct </span>ServerAddr(<span class="attr">#[turbo_tasks(trace_ignore)] </span><span class="prelude-ty">Option</span>&lt;SocketAddr&gt;);
 
 <span class="kw">impl </span>ServerAddr {
@@ -409,8 +409,8 @@
     }
 }
 
-<span class="attr">#[derive(Default)]
-#[turbo_tasks::value]
+<span class="attr">#[turbo_tasks::value]
+#[derive(Default)]
 </span><span class="kw">pub enum </span>Rendering {
     <span class="attr">#[default]
     </span><span class="prelude-val">None</span>,
@@ -424,8 +424,8 @@
     }
 }
 
-<span class="attr">#[derive(Default)]
-#[turbo_tasks::value]
+<span class="attr">#[turbo_tasks::value]
+#[derive(Default)]
 </span><span class="kw">pub enum </span>ChunkLoading {
     <span class="attr">#[default]
     </span><span class="prelude-val">None</span>,

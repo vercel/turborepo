@@ -435,6 +435,7 @@
 <span id="435">435</span>
 <span id="436">436</span>
 <span id="437">437</span>
+<span id="438">438</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, future::Future, pin::Pin};
 
 <span class="kw">use </span>anyhow::Result;
@@ -449,7 +450,7 @@
     alias_map::{AliasMap, AliasTemplate},
     AliasPattern, ResolveResult, ResolveResultVc, SpecialType,
 };
-<span class="kw">use </span><span class="kw">crate</span>::resolve::parse::RequestVc;
+<span class="kw">use </span><span class="kw">crate</span>::resolve::{parse::RequestVc, plugin::ResolvePluginVc};
 
 <span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
@@ -811,6 +812,7 @@
     <span class="doccomment">/// An import map to use when a request is otherwise unresolveable.
     </span><span class="kw">pub </span>fallback_import_map: <span class="prelude-ty">Option</span>&lt;ImportMapVc&gt;,
     <span class="kw">pub </span>resolved_map: <span class="prelude-ty">Option</span>&lt;ResolvedMapVc&gt;,
+    <span class="kw">pub </span>plugins: Vec&lt;ResolvePluginVc&gt;,
     <span class="kw">pub </span>placeholder_for_future_extensions: (),
 }
 

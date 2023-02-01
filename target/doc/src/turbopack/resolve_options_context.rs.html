@@ -97,10 +97,19 @@
 <span id="97">97</span>
 <span id="98">98</span>
 <span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbopack_core::{
     environment::EnvironmentVc,
-    resolve::options::{ImportMapVc, ResolvedMapVc},
+    resolve::{
+        options::{ImportMapVc, ResolvedMapVc},
+        plugin::ResolvePluginVc,
+    },
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::condition::ContextCondition;
@@ -139,6 +148,9 @@
     <span class="doccomment">/// A list of rules to use a different resolve option context for certain
     /// context paths. The first matching is used.
     </span><span class="kw">pub </span>rules: Vec&lt;(ContextCondition, ResolveOptionsContextVc)&gt;,
+    <span class="doccomment">/// A list of plugins which get applied before (in the future) and after
+    /// resolving.
+    </span><span class="kw">pub </span>plugins: Vec&lt;ResolvePluginVc&gt;,
     <span class="kw">pub </span>placeholder_for_future_extensions: (),
 }
 

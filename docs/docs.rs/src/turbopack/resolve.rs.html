@@ -273,6 +273,7 @@
 <span id="273">273</span>
 <span id="274">274</span>
 <span id="275">275</span>
+<span id="276">276</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -496,6 +497,7 @@
         },
         import_map: <span class="prelude-val">Some</span>(import_map),
         resolved_map: opt.resolved_map,
+        plugins: opt.plugins.clone(),
         ..Default::default()
     }
     .into())

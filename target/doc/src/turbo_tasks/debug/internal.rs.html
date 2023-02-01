@@ -139,7 +139,7 @@
 }
 
 <span class="doccomment">/// Debug implementation that prints an unquoted, unescaped string.
-</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>PassthroughDebug&lt;<span class="lifetime">&#39;a</span>&gt;(Cow&lt;<span class="lifetime">&#39;a</span>, str&gt;);
+</span><span class="kw">pub struct </span>PassthroughDebug&lt;<span class="lifetime">&#39;a</span>&gt;(Cow&lt;<span class="lifetime">&#39;a</span>, str&gt;);
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; PassthroughDebug&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">pub fn </span>new_str(s: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str) -&gt; <span class="self">Self </span>{
