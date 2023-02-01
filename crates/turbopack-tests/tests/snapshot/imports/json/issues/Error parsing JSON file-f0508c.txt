@@ -3,7 +3,7 @@ PlainIssue {
     context: "[project]/crates/turbopack-tests/tests/snapshot/imports/json/input/invalid.json",
     category: "parse",
     title: "Error parsing JSON file",
-    description: "\"File is not valid JSON\"",
+    description: "Reading output from FileJsonContent::to_string failed\n\nCaused by:\n    0: Execution of FileJsonContent::to_string failed\n    1: File is not valid JSON",
     detail: "",
     documentation_link: "",
     source: None,

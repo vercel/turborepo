@@ -114,7 +114,7 @@ impl EcmascriptChunkItem for JsonChunkItem {
                 format!("__turbopack_export_value__(JSON.parse({js_str_content}));",)
             }
             Err(error) => {
-                let error_message = format!("{:?}", error.to_string());
+                let error_message = format!("{:?}", error);
                 let js_error_message = serde_json::to_string(&format!(
                     "An error occurred while importing a JSON module: {}",
                     &error_message
