@@ -9,6 +9,8 @@ jobs:
   # Trigger actual next.js integration tests.
   next_js_integration:
     name: Execute Next.js integration workflow
+    permissions:
+      pull-requests: write
     uses: ./.github/workflows/nextjs-integration-test.yml
 
   # Upload test results to branch.
