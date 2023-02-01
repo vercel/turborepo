@@ -2567,7 +2567,7 @@ mod tests {
     };
 
     use super::{
-        graph::{create_graph, EvalContext},
+        graph::{create_graph, Effect, EvalContext, VarGraph},
         linker::link,
         JsValue,
     };
@@ -2579,6 +2579,7 @@ mod tests {
         let graph_explained_snapshot_path = input.with_file_name("graph-explained.snapshot");
         let graph_effects_snapshot_path = input.with_file_name("graph-effects.snapshot");
         let resolved_explained_snapshot_path = input.with_file_name("resolved-explained.snapshot");
+        let resolved_effects_snapshot_path = input.with_file_name("resolved-effects.snapshot");
         let large_marker = input.with_file_name("large");
 
         run_test(false, |cm, handler| {
@@ -2658,36 +2659,9 @@ mod tests {
                     let mut resolved = Vec::new();
                     for (id, val) in named_values.iter() {
                         let val = val.clone();
-                        println!("linking {} {id}", input.display());
+                        // println!("linking {} {id}", input.display());
                         let start = Instant::now();
-                        let mut res = turbo_tasks_testing::VcStorage::with(link(
-                            &var_graph,
-                            val,
-                            &super::test_utils::early_visitor,
-                            &(|val| {
-                                super::test_utils::visitor(
-                                    val,
-                                    EnvironmentVc::new(
-                                        Value::new(ExecutionEnvironment::NodeJsLambda(
-                                            NodeJsEnvironment {
-                                                compile_target: CompileTarget {
-                                                    arch: Arch::X64,
-                                                    platform: Platform::Linux,
-                                                    endianness: Endianness::Little,
-                                                    libc: Libc::Glibc,
-                                                }
-                                                .into(),
-                                                ..Default::default()
-                                            }
-                                            .into(),
-                                        )),
-                                        Value::new(EnvironmentIntention::ServerRendering),
-                                    ),
-                                )
-                            }),
-                        ))
-                        .await
-                        .unwrap();
+                        let res = resolve(&var_graph, val).await;
                         let time = start.elapsed();
                         if time.as_millis() > 1 {
                             println!(
@@ -2696,7 +2670,6 @@ mod tests {
                                 FormatDuration(time)
                             );
                         }
-                        res.normalize();
 
                         resolved.push((id.clone(), res));
                     }
@@ -2706,8 +2679,8 @@ mod tests {
                     }
 
                     let start = Instant::now();
-                    let time = start.elapsed();
                     let explainer = explain_all(&resolved);
+                    let time = start.elapsed();
                     if time.as_millis() > 1 {
                         println!(
                             "explaining {} took {}",
@@ -2721,9 +2694,110 @@ mod tests {
                         .unwrap();
                 }
 
+                {
+                    // Dump snapshot of resolved effects
+
+                    let start = Instant::now();
+                    let mut resolved = Vec::new();
+                    let mut queue = var_graph.effects.clone();
+                    queue.reverse();
+                    while let Some(effect) = queue.pop() {
+                        let start = Instant::now();
+                        // println!("linking effect {}", input.display());
+                        match effect {
+                            Effect::Call { func, args, .. } => {
+                                let func = resolve(&var_graph, func).await;
+                                let mut new_args = Vec::new();
+                                for arg in args {
+                                    new_args.push(resolve(&var_graph, arg).await);
+                                }
+                                resolved
+                                    .push(("call".to_string(), JsValue::call(box func, new_args)));
+                            }
+                            Effect::MemberCall {
+                                obj, prop, args, ..
+                            } => {
+                                let obj = resolve(&var_graph, obj).await;
+                                let prop = resolve(&var_graph, prop).await;
+                                let mut new_args = Vec::new();
+                                for arg in args {
+                                    new_args.push(resolve(&var_graph, arg).await);
+                                }
+                                resolved.push((
+                                    "member call".to_string(),
+                                    JsValue::member_call(box obj, box prop, new_args),
+                                ));
+                            }
+                            _ => {}
+                        }
+                        let time = start.elapsed();
+                        if time.as_millis() > 1 {
+                            println!(
+                                "linking effect {} took {}",
+                                input.display(),
+                                FormatDuration(time)
+                            );
+                        }
+                    }
+                    let time = start.elapsed();
+                    if time.as_millis() > 1 {
+                        println!(
+                            "linking effects {} took {}",
+                            input.display(),
+                            FormatDuration(time)
+                        );
+                    }
+
+                    let start = Instant::now();
+                    let explainer = explain_all(&resolved);
+                    let time = start.elapsed();
+                    if time.as_millis() > 1 {
+                        println!(
+                            "explaining effects {} took {}",
+                            input.display(),
+                            FormatDuration(time)
+                        );
+                    }
+
+                    NormalizedOutput::from(explainer)
+                        .compare_to_file(&resolved_effects_snapshot_path)
+                        .unwrap();
+                }
+
                 Ok(())
             })
         })
         .unwrap();
+    }
+
+    async fn resolve(var_graph: &VarGraph, val: JsValue) -> JsValue {
+        turbo_tasks_testing::VcStorage::with(link(
+            var_graph,
+            val,
+            &super::test_utils::early_visitor,
+            &(|val| {
+                Box::pin(super::test_utils::visitor(
+                    val,
+                    EnvironmentVc::new(
+                        Value::new(ExecutionEnvironment::NodeJsLambda(
+                            NodeJsEnvironment {
+                                compile_target: CompileTarget {
+                                    arch: Arch::X64,
+                                    platform: Platform::Linux,
+                                    endianness: Endianness::Little,
+                                    libc: Libc::Glibc,
+                                }
+                                .into(),
+                                ..Default::default()
+                            }
+                            .into(),
+                        )),
+                        Value::new(EnvironmentIntention::ServerRendering),
+                    ),
+                ))
+            }),
+        ))
+        .await
+        .unwrap()
     }
 }
