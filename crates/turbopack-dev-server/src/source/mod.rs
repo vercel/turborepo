@@ -445,24 +445,44 @@ impl ContentSource for NoContentSource {
     }
 }
 
-/// A rewrite returned from a [ContentSource].
+/// A rewrite returned from a [ContentSource]. This tells the dev server to
+/// update its parsed url, path, and queries with this new information, and any
+/// later [NeededData] will receive data out of t these new values.
+#[derive(Debug)]
 #[turbo_tasks::value(shared)]
 pub struct Rewrite {
-    path: String,
-}
+    /// The new path and query used to lookup content. This _does not_ need to
+    /// be the original path or query.
+    pub path_and_query: String,
 
-impl Rewrite {
-    /// The path to rewrite to.
-    pub fn path(&self) -> &str {
-        &self.path
-    }
+    /// A [ContentSource] from which to restart the lookup process. This _does
+    /// not_ need to be the original content source. Having [None] source will
+    /// restart the lookup process from the original ContentSource.
+    pub source: Option<ContentSourceVc>,
 }
 
 #[turbo_tasks::value_impl]
 impl RewriteVc {
-    /// Creates a new [RewriteVc].
+    /// Creates a new [RewriteVc] and starts lookup from the provided
+    /// [ContentSource].
     #[turbo_tasks::function]
-    pub fn new(path: String) -> RewriteVc {
-        Rewrite { path }.cell()
+    pub fn new(path_query: String, source: ContentSourceVc) -> RewriteVc {
+        debug_assert!(path_query.starts_with('/'));
+        Rewrite {
+            path_and_query: path_query,
+            source: Some(source),
+        }
+        .cell()
+    }
+
+    /// Creates a new [RewriteVc] and restarts lookup from the root.
+    #[turbo_tasks::function]
+    pub fn new_path_query(path_query: String) -> RewriteVc {
+        debug_assert!(path_query.starts_with('/'));
+        Rewrite {
+            path_and_query: path_query,
+            source: None,
+        }
+        .cell()
     }
 }

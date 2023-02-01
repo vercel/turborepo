@@ -8,7 +8,6 @@ pub mod source;
 pub mod update;
 
 use std::{
-    borrow::Cow,
     collections::btree_map::Entry,
     future::Future,
     net::{SocketAddr, TcpListener},
@@ -26,12 +25,12 @@ use hyper::{
     header::HeaderName,
     server::{conn::AddrIncoming, Builder},
     service::{make_service_fn, service_fn},
-    Request, Response, Server,
+    Request, Response, Server, Uri,
 };
 use mime_guess::mime;
 use source::{
     headers::{HeaderValue, Headers},
-    Body, Bytes, RewriteReadRef,
+    Body, Bytes,
 };
 use turbo_tasks::{
     run_once, trace::TraceRawVcs, util::FormatDuration, RawVc, TransientValue, TurboTasksApi, Value,
@@ -100,53 +99,61 @@ async fn handle_issues<T: Into<RawVc>>(
     Ok(())
 }
 
-#[turbo_tasks::value(serialization = "none")]
-enum GetFromSourceResult {
+#[turbo_tasks::value]
+pub enum GetFromSourceResult {
     Static {
         content: FileContentReadRef,
         status_code: u16,
         headers: Vec<(String, String)>,
     },
-    Rewrite(RewriteReadRef),
     HttpProxy(ProxyResultReadRef),
-    NeedData {
-        source: ContentSourceVc,
-        path: String,
-        vary: ContentSourceDataVary,
-    },
     NotFound,
 }
 
-#[turbo_tasks::function]
-async fn get_from_source(
-    source: ContentSourceVc,
+pub async fn get_from_source(
     path: &str,
-    data: Value<ContentSourceData>,
-    vary: Value<ContentSourceDataVary>,
+    source: ContentSourceVc,
+    mut request: Request<hyper::Body>,
+    console_ui: ConsoleUiVc,
 ) -> Result<GetFromSourceResultVc> {
-    let result = source.get(path, data.clone()).await?;
-    Ok(match &*result {
-        ContentSourceResult::NotFound => GetFromSourceResult::NotFound,
-        ContentSourceResult::NeedData(data) => GetFromSourceResult::NeedData {
-            source: data.source.resolve().await?,
-            path: data.path.clone(),
-            vary: data.vary.clone(),
-        },
-        ContentSourceResult::Result { get_content, .. } => {
-            let content_vary = get_content.vary().await?;
-            if *vary != *content_vary {
-                GetFromSourceResult::NeedData {
-                    source: ContentSourceResultVc::exact(*get_content).into(),
-                    path: path.to_string(),
-                    vary: content_vary.clone_value(),
-                }
-            } else {
-                let content = get_content.get(data).await?;
+    let mut data = ContentSourceData::default();
+    let mut current_source = source;
+    // Remove leading slash.
+    let mut current_asset_path = urlencoding::decode(&path[1..])?.into_owned();
+    loop {
+        let result = current_source.get(&current_asset_path, Value::new(data));
+        handle_issues(result, path, "get content from source", console_ui).await?;
+
+        let get_result = match &*result.strongly_consistent().await? {
+            ContentSourceResult::NotFound => GetFromSourceResult::NotFound,
+            ContentSourceResult::NeedData(needed) => {
+                current_source = needed.source.resolve().await?;
+                current_asset_path = needed.path.clone();
+                data = request_to_data(&mut request, &needed.vary).await?;
+                continue;
+            }
+            ContentSourceResult::Result { get_content, .. } => {
+                let content_vary = get_content.vary().await?;
+                let content_data = request_to_data(&mut request, &content_vary).await?;
+                let content = get_content.get(Value::new(content_data)).await?;
                 match &*content {
                     ContentSourceContent::Rewrite(rewrite) => {
-                        GetFromSourceResult::Rewrite(rewrite.await?)
+                        let rewrite = rewrite.await?;
+                        // If a source isn't specified, we restart at the top.
+                        let new_source = rewrite.source.unwrap_or(source);
+                        let new_uri = Uri::try_from(&rewrite.path_and_query)?;
+                        if new_source == current_source && new_uri == *request.uri() {
+                            bail!("rewrite loop detected: {}", new_uri);
+                        }
+                        let new_asset_path =
+                            urlencoding::decode(&request.uri().path()[1..])?.into_owned();
+
+                        current_source = new_source;
+                        *request.uri_mut() = new_uri;
+                        current_asset_path = new_asset_path;
+                        data = ContentSourceData::default();
+                        continue;
                     }
-                    ContentSourceContent::NotFound => GetFromSourceResult::NotFound,
                     ContentSourceContent::Static {
                         content: content_vc,
                         status_code,
@@ -165,127 +172,93 @@ async fn get_from_source(
                     ContentSourceContent::HttpProxy(proxy) => {
                         GetFromSourceResult::HttpProxy(proxy.await?)
                     }
+                    ContentSourceContent::NotFound => GetFromSourceResult::NotFound,
                 }
             }
-        }
+        };
+
+        return Ok(get_result.cell());
     }
-    .cell())
 }
 
 async fn process_request_with_content_source(
     path: &str,
     source: ContentSourceVc,
-    asset_path: Cow<'_, str>,
-    mut request: Request<hyper::Body>,
+    request: Request<hyper::Body>,
     console_ui: ConsoleUiVc,
 ) -> Result<Response<hyper::Body>> {
-    let mut data = ContentSourceData::default();
-    let mut data_vary = ContentSourceDataVary::default();
-    let mut current_source = source;
-    let mut current_asset_path = asset_path.clone();
-    loop {
-        let content_source_result = get_from_source(
-            current_source,
-            &current_asset_path,
-            Value::new(data),
-            Value::new(data_vary),
-        );
-        handle_issues(
-            content_source_result,
-            path,
-            "get content from source",
-            console_ui,
-        )
+    let result = get_from_source(path, source, request, console_ui)
+        .await?
         .await?;
-        match &*content_source_result.strongly_consistent().await? {
-            GetFromSourceResult::Static {
-                content: file,
-                status_code,
-                headers,
-            } => {
-                if let FileContent::Content(content) = &**file {
-                    let mut response = Response::builder().status(*status_code);
+    match &*result {
+        GetFromSourceResult::Static {
+            content: file,
+            status_code,
+            headers,
+        } => {
+            if let FileContent::Content(content) = &**file {
+                let mut response = Response::builder().status(*status_code);
 
-                    let header_map = response.headers_mut().expect("headers must be defined");
+                let header_map = response.headers_mut().expect("headers must be defined");
 
-                    for (header_name, header_value) in headers {
-                        header_map.append(
-                            HeaderName::try_from(header_name.clone())?,
-                            hyper::header::HeaderValue::try_from(header_value.as_str())?,
-                        );
-                    }
-
-                    if let Some(content_type) = content.content_type() {
-                        header_map.append(
-                            "content-type",
-                            hyper::header::HeaderValue::try_from(content_type.to_string())?,
-                        );
-                    } else if let hyper::header::Entry::Vacant(entry) =
-                        header_map.entry("content-type")
-                    {
-                        let guess =
-                            mime_guess::from_path(asset_path.as_ref()).first_or_octet_stream();
-                        // If a text type, application/javascript, or application/json was
-                        // guessed, use a utf-8 charset as  we most likely generated it as
-                        // such.
-                        entry.insert(hyper::header::HeaderValue::try_from(
-                            if (guess.type_() == mime::TEXT
-                                || guess.subtype() == mime::JAVASCRIPT
-                                || guess.subtype() == mime::JSON)
-                                && guess.get_param("charset").is_none()
-                            {
-                                guess.to_string() + "; charset=utf-8"
-                            } else {
-                                guess.to_string()
-                            },
-                        )?);
-                    }
-
-                    let content = content.content();
-                    header_map.insert(
-                        "Content-Length",
-                        hyper::header::HeaderValue::try_from(content.len().to_string())?,
-                    );
-
-                    let bytes = content.read();
-                    return Ok(response.body(hyper::Body::wrap_stream(bytes))?);
-                }
-            }
-            GetFromSourceResult::HttpProxy(proxy_result) => {
-                let mut response = Response::builder().status(proxy_result.status);
-                let headers = response.headers_mut().expect("headers must be defined");
-
-                for [name, value] in proxy_result.headers.array_chunks() {
-                    headers.append(
-                        HeaderName::from_bytes(name.as_bytes())?,
-                        hyper::header::HeaderValue::from_str(value)?,
+                for (header_name, header_value) in headers {
+                    header_map.append(
+                        HeaderName::try_from(header_name.clone())?,
+                        hyper::header::HeaderValue::try_from(header_value.as_str())?,
                     );
                 }
 
-                return Ok(response.body(hyper::Body::wrap_stream(proxy_result.body.read()))?);
-            }
-            GetFromSourceResult::Rewrite(rewrite) => {
-                let new_asset_path = rewrite.path();
-                if asset_path == new_asset_path {
-                    bail!("rewrite loop detected: {}", asset_path);
+                if let Some(content_type) = content.content_type() {
+                    header_map.append(
+                        "content-type",
+                        hyper::header::HeaderValue::try_from(content_type.to_string())?,
+                    );
+                } else if let hyper::header::Entry::Vacant(entry) = header_map.entry("content-type")
+                {
+                    let guess = mime_guess::from_path(path).first_or_octet_stream();
+                    // If a text type, application/javascript, or application/json was
+                    // guessed, use a utf-8 charset as  we most likely generated it as
+                    // such.
+                    entry.insert(hyper::header::HeaderValue::try_from(
+                        if (guess.type_() == mime::TEXT
+                            || guess.subtype() == mime::JAVASCRIPT
+                            || guess.subtype() == mime::JSON)
+                            && guess.get_param("charset").is_none()
+                        {
+                            guess.to_string() + "; charset=utf-8"
+                        } else {
+                            guess.to_string()
+                        },
+                    )?);
                 }
-                current_source = source;
-                current_asset_path = Cow::Owned(new_asset_path.to_string());
-                data = ContentSourceData::default();
-                data_vary = ContentSourceDataVary::default();
-                continue;
+
+                let content = content.content();
+                header_map.insert(
+                    "Content-Length",
+                    hyper::header::HeaderValue::try_from(content.len().to_string())?,
+                );
+
+                let bytes = content.read();
+                return Ok(response.body(hyper::Body::wrap_stream(bytes))?);
             }
-            GetFromSourceResult::NeedData { source, path, vary } => {
-                current_source = *source;
-                current_asset_path = Cow::Owned(path.to_string());
-                data = request_to_data(&mut request, vary).await?;
-                data_vary = vary.clone();
-                continue;
-            }
-            GetFromSourceResult::NotFound => {}
         }
-        return Ok(Response::builder().status(404).body(hyper::Body::empty())?);
+        GetFromSourceResult::HttpProxy(proxy_result) => {
+            let mut response = Response::builder().status(proxy_result.status);
+            let headers = response.headers_mut().expect("headers must be defined");
+
+            for [name, value] in proxy_result.headers.array_chunks() {
+                headers.append(
+                    HeaderName::from_bytes(name.as_bytes())?,
+                    hyper::header::HeaderValue::from_str(value)?,
+                );
+            }
+
+            return Ok(response.body(hyper::Body::wrap_stream(proxy_result.body.read()))?);
+        }
+        _ => {}
     }
+
+    Ok(Response::builder().status(404).body(hyper::Body::empty())?)
 }
 
 impl DevServer {
@@ -356,17 +329,13 @@ impl DevServerBuilder {
                         run_once(tt, async move {
                             let console_ui = (*console_ui).clone().cell();
                             let uri = request.uri();
-                            let path = uri.path();
-                            // Remove leading slash.
-                            let path = &path[1..].to_string();
-                            let asset_path = urlencoding::decode(path)?;
+                            let path = uri.path().to_string();
                             let source = source_provider.get_source();
-                            handle_issues(source, path, "get source", console_ui).await?;
+                            handle_issues(source, &path, "get source", console_ui).await?;
                             let resolved_source = source.resolve_strongly_consistent().await?;
                             let response = process_request_with_content_source(
-                                path,
+                                &path,
                                 resolved_source,
-                                asset_path,
                                 request,
                                 console_ui,
                             )
@@ -380,7 +349,7 @@ impl DevServerBuilder {
                                     && elapsed > Duration::from_secs(1))
                             {
                                 println!(
-                                    "[{status}] /{path} ({duration})",
+                                    "[{status}] {path} ({duration})",
                                     duration = FormatDuration(elapsed)
                                 );
                             }

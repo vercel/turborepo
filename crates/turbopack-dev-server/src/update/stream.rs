@@ -42,6 +42,8 @@ async fn get_content_wrapper(
     get_content: TransientInstance<GetContentFn>,
 ) -> Result<ContentSourceContentVc> {
     let mut content = get_content().await?;
+    // TODO: Reuse new get_from_source to resolve the content. Need to pass in
+    // generic headers/query?
     loop {
         match &*content {
             ContentSourceResult::NeedData(data) => {
