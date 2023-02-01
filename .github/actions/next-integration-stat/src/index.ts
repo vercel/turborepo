@@ -375,6 +375,10 @@ async function getTestResultDiffBase(
   const actualTestResultTree = testResultJsonTree.reduce((acc, value) => {
     const dateStr = value.path?.split("-")[0].match(/(....)(..)(..)(..)(..)/);
 
+    if (!dateStr || dateStr.length < 5) {
+      return acc;
+    }
+
     const date = new Date(
       dateStr![1] as any,
       (dateStr![2] as any) - 1,
