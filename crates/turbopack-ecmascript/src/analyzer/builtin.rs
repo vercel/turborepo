@@ -260,18 +260,15 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
             true
         }
         // Handle calls when the callee is a function
-        JsValue::Call(_, box ref mut callee, ref mut args) => match callee {
-            JsValue::Alternatives(_, alts) => {
-                *value = JsValue::alternatives(
-                    take(alts)
-                        .into_iter()
-                        .map(|alt| JsValue::call(box alt, args.clone()))
-                        .collect(),
-                );
-                true
-            }
-            _ => false,
-        },
+        JsValue::Call(_, box JsValue::Alternatives(_, alts), ref mut args) => {
+            *value = JsValue::alternatives(
+                take(alts)
+                    .into_iter()
+                    .map(|alt| JsValue::call(box alt, args.clone()))
+                    .collect(),
+            );
+            true
+        }
         // Handle spread in object literals
         JsValue::Object(_, parts) => {
             if parts

@@ -476,27 +476,25 @@ pub(crate) async fn analyze_ecmascript_module(
                     JsValue::explain_args(args, 10, 2)
                 }
                 let linked_args = |args: Vec<EffectArg>| async move {
-                    Ok::<Vec<JsValue>, anyhow::Error>(
-                        args.into_iter()
-                            .map(|arg| {
-                                let add_effects = &add_effects;
-                                async move {
-                                    let value = match arg {
-                                        EffectArg::Value(value) => value,
-                                        EffectArg::Closure(value, block) => {
-                                            add_effects(block.effects);
-                                            value
-                                        }
-                                        EffectArg::Spread => {
-                                            JsValue::Unknown(None, "spread is not supported yet")
-                                        }
-                                    };
-                                    Ok(link_value(value).await?)
-                                }
-                            })
-                            .try_join()
-                            .await?,
-                    )
+                    args.into_iter()
+                        .map(|arg| {
+                            let add_effects = &add_effects;
+                            async move {
+                                let value = match arg {
+                                    EffectArg::Value(value) => value,
+                                    EffectArg::Closure(value, block) => {
+                                        add_effects(block.effects);
+                                        value
+                                    }
+                                    EffectArg::Spread => {
+                                        JsValue::Unknown(None, "spread is not supported yet")
+                                    }
+                                };
+                                link_value(value).await
+                            }
+                        })
+                        .try_join()
+                        .await
                 };
                 match func {
                     JsValue::Alternatives(_, alts) => {

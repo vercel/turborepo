@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     future::Future,
     mem::take,
     sync::Arc,
@@ -136,7 +136,15 @@ where
                 args,
             )) => {
                 total_nodes -= 2; // Call + Function
-                if fun_args_values.contains_key(&func_ident) {
+                if let Entry::Vacant(entry) = fun_args_values.entry(func_ident) {
+                    // Return value will stay in total_nodes
+                    for arg in args.iter() {
+                        total_nodes -= arg.total_nodes();
+                    }
+                    entry.insert(args);
+                    queue.push(Step::LeaveCall(func_ident));
+                    queue.push(Step::Enter(*return_value));
+                } else {
                     total_nodes -= return_value.total_nodes();
                     for arg in args.iter() {
                         total_nodes -= arg.total_nodes();
@@ -149,14 +157,6 @@ where
                         ))),
                         "recursive function call",
                     ));
-                } else {
-                    // Return value will stay in total_nodes
-                    for arg in args.iter() {
-                        total_nodes -= arg.total_nodes();
-                    }
-                    fun_args_values.insert(func_ident, args);
-                    queue.push(Step::LeaveCall(func_ident));
-                    queue.push(Step::Enter(*return_value));
                 }
             }
             // Leaving a function call evaluation
@@ -215,12 +215,10 @@ where
                 let (mut val, visit_modified) = early_visitor(val).await?;
                 #[cfg(debug_assertions)]
                 val.assert_total_nodes_up_to_date();
-                if visit_modified {
-                    if val.total_nodes() > LIMIT_NODE_SIZE {
-                        total_nodes += 1;
-                        done.push(JsValue::Unknown(None, "node limit reached"));
-                        continue;
-                    }
+                if visit_modified && val.total_nodes() > LIMIT_NODE_SIZE {
+                    total_nodes += 1;
+                    done.push(JsValue::Unknown(None, "node limit reached"));
+                    continue;
                 }
 
                 let count = val.total_nodes();
