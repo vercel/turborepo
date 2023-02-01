@@ -129,6 +129,8 @@ jobs:
           corepack disable
           pnpm install
           pnpm run build
+          # This is being used in github action to collect test results. Do not change it, or should update ./.github/actions/next-integration-test to match.
+          echo "RUNNING NEXTJS VERSION: $(packages/next/dist/bin/next --version)"
 
       - run: |
           docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-focal /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && /work/next-dev --display-version && __INTERNAL_CUSTOM_TURBOPACK_BINARY=${NEXT_DEV_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type development --timings -g ${{ matrix.group }}/4 >> /proc/1/fd/1"
@@ -168,3 +170,24 @@ jobs:
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.NEXT_TURBO_INTEGRATION_SLACK_WEBHOOK_URL }}
+
+  # Collect integration test results from execute_tests,
+  # Store it as github artifact for next step to consume.
+  collect_nextjs_integration_stat:
+    needs: [execute_tests]
+    name: Next.js integration test status report
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Collect integration test stat
+        uses: ./.github/actions/next-integration-stat
+
+      - name: Store artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: nextjs-test-results.json

@@ -12,6 +12,61 @@ use crate::{get_version, retry::retry_future};
 pub trait UserClient {
     fn set_token(&mut self, token: String);
     async fn get_user(&self) -> Result<UserResponse>;
+    async fn get_teams(&self) -> Result<TeamsResponse>;
+    async fn get_caching_status(&self, team_id: &str) -> Result<CachingStatusResponse>;
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CachingStatus {
+    Disabled,
+    Enabled,
+    OverLimit,
+    Paused,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CachingStatusResponse {
+    pub status: CachingStatus,
+}
+
+/// Membership is the relationship between the logged-in user and a particular
+/// team
+#[derive(Debug, Clone, Deserialize)]
+pub struct Membership {
+    role: Role,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum Role {
+    Member,
+    Owner,
+    Viewer,
+    Developer,
+    Billing,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Team {
+    pub id: String,
+    pub slug: String,
+    pub name: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: u64,
+    pub created: chrono::DateTime<chrono::Utc>,
+    pub membership: Membership,
+}
+
+impl Team {
+    pub fn is_owner(&self) -> bool {
+        matches!(self.membership.role, Role::Owner)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TeamsResponse {
+    pub teams: Vec<Team>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -19,7 +74,7 @@ pub struct User {
     pub id: String,
     pub username: String,
     pub email: String,
-    pub name: String,
+    pub name: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: u64,
 }
@@ -70,6 +125,57 @@ impl UserClient for APIClient {
                 Err(error)
             }
         }
+    }
+
+    async fn get_teams(&self) -> Result<TeamsResponse> {
+        let response = self
+            .make_retryable_request(|| {
+                let request_builder = self
+                    .client
+                    .get(self.make_url("/v2/teams?limit=100"))
+                    .header("User-Agent", USER_AGENT.clone())
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", format!("Bearer {}", self.token));
+
+                request_builder.send()
+            })
+            .await;
+
+        match response {
+            Ok(response) => {
+                let teams_response = response.json().await?;
+                Ok(teams_response)
+            }
+            Err(error) => {
+                if let Some(error) = error.downcast_ref::<reqwest::Error>() {
+                    if error.status() == Some(StatusCode::NOT_FOUND) {
+                        return Err(anyhow!("404 - Not found"));
+                    }
+                }
+
+                Err(error)
+            }
+        }
+    }
+
+    async fn get_caching_status(&self, team_id: &str) -> Result<CachingStatusResponse> {
+        let response = self
+            .make_retryable_request(|| {
+                let mut request_builder = self
+                    .client
+                    .get(self.make_url("/v8/artifacts/status"))
+                    .header("User-Agent", USER_AGENT.clone())
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", format!("Bearer {}", self.token));
+
+                if team_id.starts_with("team_") {
+                    request_builder = request_builder.query(&[("teamId", team_id)]);
+                }
+
+                request_builder.send()
+            })
+            .await?;
+        Ok(response.json().await?)
     }
 }
 

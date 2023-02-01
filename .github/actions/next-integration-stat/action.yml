@@ -3,8 +3,13 @@ author: Turbopack team
 description: "Display next.js integration test failure status"
 
 inputs:
+  # Github token to use to create test report comment. If not specified, the default token will be used with username 'github-actions'
   token:
     default: ${{ github.token }}
+
+  # The base of the test results to compare against. If not specified, will try to compare with latest main branch's test results.
+  diff_base:
+    default: "main"
 
 runs:
   using: node16
