@@ -442,8 +442,12 @@ impl Task {
 
     pub(crate) fn get_function_name(&self) -> Option<&'static str> {
         if let TaskType::Persistent(ty) = &self.ty {
-            if let PersistentTaskType::Native(native_fn, _) = &**ty {
-                return Some(&registry::get_function(*native_fn).name);
+            match &**ty {
+                PersistentTaskType::Native(native_fn, _)
+                | PersistentTaskType::ResolveNative(native_fn, _) => {
+                    return Some(&registry::get_function(*native_fn).name);
+                }
+                _ => {}
             }
         }
         None

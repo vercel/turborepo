@@ -357,14 +357,7 @@ impl Backend for MemoryBackend {
             turbo_tasks,
             |output| {
                 Task::add_dependency_to_current(TaskDependency::TaskOutput(task));
-                output.read(reader).map_err(|err| {
-                    self.with_task(task, |task| {
-                        if let Some(name) = task.get_function_name() {
-                            return err.context(format!("Reading output from {name} failed"));
-                        }
-                        err
-                    })
-                })
+                output.read(reader)
             },
         )
     }

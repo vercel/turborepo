@@ -491,7 +491,36 @@ impl EcmascriptChunkContentEntryVc {
     #[turbo_tasks::function]
     async fn new(chunk_item: EcmascriptChunkItemVc) -> Result<Self> {
         let content = chunk_item.content();
-        let factory = module_factory(content, chunk_item);
+        let factory = match module_factory(content).resolve().await {
+            Ok(factory) => factory,
+            Err(error) => {
+                let id = chunk_item.id().to_string().await;
+                let id = id.as_ref().map_or_else(|_| "unknown", |id| &**id);
+                let mut error_message =
+                    format!("An error occurred while generating the chunk item {}", id);
+                for err in error.chain() {
+                    write!(error_message, "\n  at {}", err)?;
+                }
+                let js_error_message = serde_json::to_string(&error_message)?;
+                let issue = CodeGenerationIssue {
+                    severity: IssueSeverity::Error.cell(),
+                    path: chunk_item.related_path(),
+                    title: StringVc::cell("Code generation for chunk item errored".to_string()),
+                    message: StringVc::cell(error_message),
+                }
+                .cell();
+                issue.as_issue().emit();
+                let mut code = CodeBuilder::default();
+                code += "(() => {{\n\n";
+                write!(
+                    code,
+                    "throw new Error({error});\n",
+                    error = &js_error_message
+                )?;
+                code += "\n}})";
+                code.build().cell()
+            }
+        };
         let id = chunk_item.id().await?;
         let code = factory.await?;
         let hash = hash_xxh3_hash64(code.source_code());
@@ -507,40 +536,8 @@ impl EcmascriptChunkContentEntryVc {
 }
 
 #[turbo_tasks::function]
-async fn module_factory(
-    content: EcmascriptChunkItemContentVc,
-    chunk_item: EcmascriptChunkItemVc,
-) -> Result<CodeVc> {
-    let content = match content.await {
-        Ok(content) => content,
-        Err(error) => {
-            let id = chunk_item.id().to_string().await;
-            let id = id.as_ref().map_or_else(|_| "unknown", |id| &**id);
-            let mut error_message =
-                format!("An error occurred while generating the chunk item {}", id);
-            for err in error.chain() {
-                write!(error_message, "\n  at {}", err)?;
-            }
-            let js_error_message = serde_json::to_string(&error_message)?;
-            let issue = CodeGenerationIssue {
-                severity: IssueSeverity::Error.cell(),
-                path: chunk_item.related_path(),
-                title: StringVc::cell("Code generation for chunk item errored".to_string()),
-                message: StringVc::cell(error_message),
-            }
-            .cell();
-            issue.as_issue().emit();
-            let mut code = CodeBuilder::default();
-            code += "(() => {{\n\n";
-            write!(
-                code,
-                "throw new Error({error});\n",
-                error = &js_error_message
-            )?;
-            code += "\n}})";
-            return Ok(code.build().cell());
-        }
-    };
+async fn module_factory(content: EcmascriptChunkItemContentVc) -> Result<CodeVc> {
+    let content = content.await?;
     let mut args = vec![
         "r: __turbopack_require__",
         "x: __turbopack_external_require__",

@@ -7,7 +7,7 @@
 
 #![feature(min_specialization)]
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
@@ -110,7 +110,13 @@ impl EcmascriptChunkItem for JsonChunkItem {
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         // We parse to JSON and then stringify again to ensure that the
         // JSON is valid.
-        let content = self.module.path().read_json().to_string().await?;
+        let content = self
+            .module
+            .path()
+            .read_json()
+            .to_string()
+            .await
+            .context("Unable to make a module from invalid JSON")?;
         let js_str_content = serde_json::to_string(content.as_str())?;
         let inner_code = format!("__turbopack_export_value__(JSON.parse({js_str_content}));");
         Ok(EcmascriptChunkItemContent {
