@@ -18,22 +18,22 @@ b#7 = ???*0*
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 
-inner = (...) => (a + b)
+inner = (...) => (undefined | (a + b))
 
-outer = (...) => inner("b")
+outer = (...) => (undefined | inner("b"))
 
-r = (...) => (a | (r((a + 1)) + 1))
+r = (...) => (undefined | a | (r((a + 1)) + 1))
 
-v1 = (???*0* + 2)
-- *0* arguments[0]
-  ⚠️  function calls are not analysed yet
+v1 = ???*0*
+- *0* (undefined | (...) => (undefined | (a + b)))(2)
+  ⚠️  non-function callee
 
-v2 = (2 | (???*0* + 1))
-- *0* (...) => (a | (r((a + 1)) + 1))((2 + 1))
+v2 = (undefined | 2 | (???*0* + 1))
+- *0* (...) => (undefined | a | (r((a + 1)) + 1))((2 + 1))
   ⚠️  recursive function call
 
-v3 = `ab`
+v3 = (undefined | `ab`)
 
-x = (...) => y
+x = (...) => (undefined | y)
 
-y = (...) => (a + b)
+y = (...) => (undefined | (a + b))

@@ -8,11 +8,11 @@ b#4 = arguments[0]
 
 b#7 = arguments[0]
 
-inner = (...) => (a + b)
+inner = (...) => (undefined | (a + b))
 
-outer = (...) => inner("b")
+outer = (...) => (undefined | inner("b"))
 
-r = (...) => (a | (r((a + 1)) + 1))
+r = (...) => (undefined | a | (r((a + 1)) + 1))
 
 v1 = x(1)(2)
 
@@ -20,6 +20,6 @@ v2 = r(2)
 
 v3 = outer("a")
 
-x = (...) => y
+x = (...) => (undefined | y)
 
-y = (...) => (a + b)
+y = (...) => (undefined | (a + b))

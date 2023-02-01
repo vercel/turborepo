@@ -2,16 +2,24 @@
     (
         "*anonymous function 170*",
         Function(
-            3,
+            5,
             170,
-            Array(
-                2,
+            Alternatives(
+                4,
                 [
-                    Variable(
-                        (
-                            Atom('file' type=static),
-                            #3,
-                        ),
+                    Constant(
+                        Undefined,
+                    ),
+                    Array(
+                        2,
+                        [
+                            Variable(
+                                (
+                                    Atom('file' type=static),
+                                    #3,
+                                ),
+                            ),
+                        ],
                     ),
                 ],
             ),
@@ -20,24 +28,32 @@
     (
         "*anonymous function 254*",
         Function(
-            5,
+            7,
             254,
-            MemberCall(
-                4,
-                FreeVar(
-                    Require,
-                ),
-                Constant(
-                    StrWord(
-                        Atom('resolve' type=inline),
-                    ),
-                ),
+            Alternatives(
+                6,
                 [
-                    Variable(
-                        (
-                            Atom('file' type=static),
-                            #4,
+                    Constant(
+                        Undefined,
+                    ),
+                    MemberCall(
+                        4,
+                        FreeVar(
+                            Require,
                         ),
+                        Constant(
+                            StrWord(
+                                Atom('resolve' type=inline),
+                            ),
+                        ),
+                        [
+                            Variable(
+                                (
+                                    Atom('file' type=static),
+                                    #4,
+                                ),
+                            ),
+                        ],
                     ),
                 ],
             ),
@@ -46,13 +62,21 @@
     (
         "*anonymous function 88*",
         Function(
-            2,
+            4,
             88,
-            Variable(
-                (
-                    Atom('file' type=static),
-                    #2,
-                ),
+            Alternatives(
+                3,
+                [
+                    Constant(
+                        Undefined,
+                    ),
+                    Variable(
+                        (
+                            Atom('file' type=static),
+                            #2,
+                        ),
+                    ),
+                ],
             ),
         ),
     ),
@@ -207,24 +231,32 @@
     (
         "func",
         Function(
-            5,
+            7,
             308,
-            MemberCall(
-                4,
-                FreeVar(
-                    Require,
-                ),
-                Constant(
-                    StrWord(
-                        Atom('resolve' type=inline),
-                    ),
-                ),
+            Alternatives(
+                6,
                 [
-                    Variable(
-                        (
-                            Atom('file' type=static),
-                            #6,
+                    Constant(
+                        Undefined,
+                    ),
+                    MemberCall(
+                        4,
+                        FreeVar(
+                            Require,
                         ),
+                        Constant(
+                            StrWord(
+                                Atom('resolve' type=inline),
+                            ),
+                        ),
+                        [
+                            Variable(
+                                (
+                                    Atom('file' type=static),
+                                    #6,
+                                ),
+                            ),
+                        ],
                     ),
                 ],
             ),

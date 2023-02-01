@@ -19,15 +19,15 @@
 - *1* FreeVar(unescape)
   ⚠️  unknown global
 
-0 -> 8 call = (...) => output((???*0* | ???*1*))
+0 -> 8 call = (...) => (undefined | output)((???*0* | ???*1*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* unknown new expression
 
-0 -> 10 call = (...) => [a, b, c, d]([], ???*0*)
+0 -> 10 call = (...) => (undefined | [a, b, c, d])((undefined | []), ???*0*)
 - *0* unsupported expression
 
-0 -> 11 call = (...) => output(???*0*)
+0 -> 11 call = (...) => (undefined | output)(???*0*)
 - *0* max number of linking steps reached
 
 0 -> 15 member call = "0123456789abcdef"["charAt"](???*0*)
@@ -63,7 +63,7 @@
 - *3* unsupported expression
 - *4* unsupported expression
 
-0 -> 25 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 7, ???*7*)
+0 -> 25 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 7, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -75,7 +75,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 27 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 12, ???*7*)
+0 -> 27 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 12, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -87,7 +87,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 29 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 17, 606105819)
+0 -> 29 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 17, 606105819)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -98,7 +98,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 31 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 22, ???*7*)
+0 -> 31 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 22, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -110,7 +110,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 33 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 7, ???*7*)
+0 -> 33 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 7, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -122,7 +122,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 35 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 12, 1200080426)
+0 -> 35 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 12, 1200080426)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -133,7 +133,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 37 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 17, ???*7*)
+0 -> 37 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 17, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -145,7 +145,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 39 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 22, ???*7*)
+0 -> 39 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 22, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -157,7 +157,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 41 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 7, 1770035416)
+0 -> 41 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 7, 1770035416)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -168,7 +168,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 43 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 12, ???*7*)
+0 -> 43 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 12, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -180,7 +180,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 45 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 17, ???*7*)
+0 -> 45 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 17, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -192,7 +192,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 47 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 22, ???*7*)
+0 -> 47 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 22, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -204,7 +204,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 49 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 7, 1804603682)
+0 -> 49 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 7, 1804603682)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -215,7 +215,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 51 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 12, ???*7*)
+0 -> 51 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 12, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -227,7 +227,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 53 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 17, ???*7*)
+0 -> 53 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 17, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -239,7 +239,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 55 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 22, 1236535329)
+0 -> 55 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 22, 1236535329)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -250,7 +250,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 57 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 5, ???*7*)
+0 -> 57 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 5, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -262,7 +262,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 59 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 9, ???*7*)
+0 -> 59 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 9, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -274,7 +274,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 61 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 14, 643717713)
+0 -> 61 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 14, 643717713)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -285,7 +285,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 63 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 20, ???*7*)
+0 -> 63 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 20, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -297,7 +297,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 65 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 5, ???*7*)
+0 -> 65 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 5, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -309,7 +309,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 67 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 9, 38016083)
+0 -> 67 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 9, 38016083)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -320,7 +320,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 69 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 14, ???*7*)
+0 -> 69 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 14, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -332,7 +332,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 71 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 20, ???*7*)
+0 -> 71 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 20, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -344,7 +344,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 73 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 5, 568446438)
+0 -> 73 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 5, 568446438)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -355,7 +355,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 75 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 9, ???*7*)
+0 -> 75 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 9, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -367,7 +367,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 77 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 14, ???*7*)
+0 -> 77 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 14, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -379,7 +379,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 79 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 20, 1163531501)
+0 -> 79 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 20, 1163531501)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -390,7 +390,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 81 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 5, ???*7*)
+0 -> 81 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 5, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -402,7 +402,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 83 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 9, ???*7*)
+0 -> 83 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 9, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -414,7 +414,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 85 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 14, 1735328473)
+0 -> 85 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 14, 1735328473)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -425,7 +425,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 87 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 20, ???*7*)
+0 -> 87 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 20, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -437,7 +437,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 89 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 4, ???*7*)
+0 -> 89 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 4, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -449,7 +449,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 91 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 11, ???*7*)
+0 -> 91 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 11, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -461,7 +461,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 93 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 16, 1839030562)
+0 -> 93 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 16, 1839030562)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -472,7 +472,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 95 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 23, ???*7*)
+0 -> 95 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 23, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -484,7 +484,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 97 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 4, ???*7*)
+0 -> 97 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 4, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -496,7 +496,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 99 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 11, 1272893353)
+0 -> 99 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 11, 1272893353)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -507,7 +507,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 101 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 16, ???*7*)
+0 -> 101 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 16, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -519,7 +519,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 103 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 23, ???*7*)
+0 -> 103 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 23, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -531,7 +531,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 105 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 4, 681279174)
+0 -> 105 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 4, 681279174)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -542,7 +542,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 107 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 11, ???*7*)
+0 -> 107 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 11, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -554,7 +554,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 109 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 16, ???*7*)
+0 -> 109 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 16, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -566,7 +566,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 111 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 23, 76029189)
+0 -> 111 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 23, 76029189)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -577,7 +577,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 113 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 4, ???*7*)
+0 -> 113 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 4, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -589,7 +589,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 115 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 11, ???*7*)
+0 -> 115 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 11, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -601,7 +601,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 117 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 16, 530742520)
+0 -> 117 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 16, 530742520)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -612,7 +612,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 119 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 23, ???*7*)
+0 -> 119 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 23, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -624,7 +624,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 121 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 6, ???*7*)
+0 -> 121 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 6, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -636,7 +636,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 123 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 10, 1126891415)
+0 -> 123 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 10, 1126891415)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -647,7 +647,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 125 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 15, ???*7*)
+0 -> 125 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 15, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -659,7 +659,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 127 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 21, ???*7*)
+0 -> 127 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 21, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -671,7 +671,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 129 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 6, 1700485571)
+0 -> 129 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 6, 1700485571)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -682,7 +682,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 131 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 10, ???*7*)
+0 -> 131 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 10, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -694,7 +694,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 133 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 15, ???*7*)
+0 -> 133 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 15, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -706,7 +706,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 135 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 21, ???*7*)
+0 -> 135 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 21, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -718,7 +718,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 137 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 6, 1873313359)
+0 -> 137 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 6, 1873313359)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -729,7 +729,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 139 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 10, ???*7*)
+0 -> 139 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 10, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -741,7 +741,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 141 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 15, ???*7*)
+0 -> 141 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 15, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -753,7 +753,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 143 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 21, 1309151649)
+0 -> 143 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 21, 1309151649)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -764,7 +764,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 145 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 6, ???*7*)
+0 -> 145 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 6, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -776,7 +776,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 147 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 10, ???*7*)
+0 -> 147 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 10, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -788,7 +788,7 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 149 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 15, 718787259)
+0 -> 149 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 15, 718787259)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -799,7 +799,7 @@
 - *6* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 151 call = (...) => md5cmn(???*0*, a, b, x, s, t)(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 21, ???*7*)
+0 -> 151 call = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))(???*1*, ???*2*, ???*3*, ???*4*, ???*5*, 21, ???*7*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
@@ -811,60 +811,63 @@
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
 
-0 -> 152 call = (...) => ???*0*(???*1*, ???*2*)
+0 -> 152 call = (...) => (undefined | ???*0*)(???*1*, ???*2*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
 
-0 -> 153 call = (...) => ???*0*(???*1*, ???*2*)
+0 -> 153 call = (...) => (undefined | ???*0*)(???*1*, ???*2*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
 
-0 -> 154 call = (...) => ???*0*(???*1*, ???*2*)
+0 -> 154 call = (...) => (undefined | ???*0*)(???*1*, ???*2*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
 
-0 -> 155 call = (...) => ???*0*(???*1*, ???*2*)
+0 -> 155 call = (...) => (undefined | ???*0*)(???*1*, ???*2*)
 - *0* unsupported expression
 - *1* max number of linking steps reached
 - *2* max number of linking steps reached
 
-0 -> 163 call = (...) => ???*0*(???*1*, ???*2*)
+0 -> 163 call = (...) => (undefined | ???*0*)(???*1*, ???*2*)
 - *0* unsupported expression
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 164 call = (...) => ???*0*(???*1*, ???*2*)
+0 -> 164 call = (...) => (undefined | ???*0*)(???*1*, ???*2*)
 - *0* unsupported expression
 - *1* arguments[3]
   ⚠️  function calls are not analysed yet
 - *2* arguments[5]
   ⚠️  function calls are not analysed yet
 
-0 -> 165 call = (...) => ???*0*(???*1*, ???*2*)
+0 -> 165 call = (...) => (undefined | ???*0*)((undefined | ???*1*), (undefined | ???*2*))
 - *0* unsupported expression
 - *1* unsupported expression
 - *2* unsupported expression
 
-0 -> 166 call = (...) => ???*0*(???*1*, ???*2*)
+0 -> 166 call = (...) => (undefined | ???*0*)((undefined | ???*1*), ???*2*)
 - *0* unsupported expression
 - *1* unsupported expression
 - *2* arguments[4]
   ⚠️  function calls are not analysed yet
 
-0 -> 167 call = (...) => ???*0*(???*1*, ???*2*)
+0 -> 167 call = (...) => (undefined | ???*0*)((undefined | ???*1*), ???*2*)
 - *0* unsupported expression
 - *1* unsupported expression
 - *2* arguments[2]
   ⚠️  function calls are not analysed yet
 
-0 -> 168 call = (...) => safeAdd(
-    bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s),
-    b
+0 -> 168 call = (...) => (
+  | undefined
+  | safeAdd(
+        bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s),
+        b
+    )
 )(???*0*, ???*1*, ???*2*, ???*3*, ???*4*, ???*5*)
 - *0* unsupported expression
 - *1* arguments[0]
@@ -878,9 +881,12 @@
 - *5* arguments[6]
   ⚠️  function calls are not analysed yet
 
-0 -> 169 call = (...) => safeAdd(
-    bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s),
-    b
+0 -> 169 call = (...) => (
+  | undefined
+  | safeAdd(
+        bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s),
+        b
+    )
 )(???*0*, ???*1*, ???*2*, ???*3*, ???*4*, ???*5*)
 - *0* unsupported expression
 - *1* arguments[0]
@@ -894,9 +900,12 @@
 - *5* arguments[6]
   ⚠️  function calls are not analysed yet
 
-0 -> 170 call = (...) => safeAdd(
-    bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s),
-    b
+0 -> 170 call = (...) => (
+  | undefined
+  | safeAdd(
+        bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s),
+        b
+    )
 )(???*0*, ???*1*, ???*2*, ???*3*, ???*4*, ???*5*)
 - *0* unsupported expression
 - *1* arguments[0]
@@ -910,9 +919,12 @@
 - *5* arguments[6]
   ⚠️  function calls are not analysed yet
 
-0 -> 171 call = (...) => safeAdd(
-    bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s),
-    b
+0 -> 171 call = (...) => (
+  | undefined
+  | safeAdd(
+        bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s),
+        b
+    )
 )(???*0*, ???*1*, ???*2*, ???*3*, ???*4*, ???*5*)
 - *0* unsupported expression
 - *1* arguments[0]

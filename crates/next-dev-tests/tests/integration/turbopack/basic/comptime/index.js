@@ -1,3 +1,9 @@
+function maybeReturn(x) {
+  if (x) {
+    return true;
+  }
+}
+
 function func() {
   if (false) {
     require("fail");
@@ -33,6 +39,14 @@ it("should allow replacements in IIFEs", () => {
       import("fail");
     }
   })();
+});
+
+it("should support functions that only sometimes return", () => {
+  let ok = false;
+  if (maybeReturn(true)) {
+    ok = true;
+  }
+  expect(ok).toBe(true);
 });
 
 it("should evaluate process.turbopack", () => {

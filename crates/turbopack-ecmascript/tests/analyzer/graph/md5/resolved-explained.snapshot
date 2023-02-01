@@ -44,7 +44,7 @@ b#9 = ???*0*
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 
-bitRotateLeft = (...) => ???*0*
+bitRotateLeft = (...) => (undefined | ???*0*)
 - *0* unsupported expression
 
 bytes = (???*0* | ???*1*)
@@ -52,7 +52,7 @@ bytes = (???*0* | ???*1*)
   ⚠️  function calls are not analysed yet
 - *1* unknown new expression
 
-bytesToWords = (...) => output
+bytesToWords = (...) => (undefined | output)
 
 c#10 = ???*0*
 - *0* arguments[2]
@@ -147,26 +147,32 @@ lsw = (???*0* + ???*1*)
 - *0* unsupported expression
 - *1* unsupported expression
 
-md5 = (...) => md5ToHexEncodedArray(wordsToMd5(bytesToWords(bytes), ???*0*))
+md5 = (...) => (
+  | undefined
+  | md5ToHexEncodedArray(wordsToMd5(bytesToWords(bytes), ???*0*))
+)
 - *0* unsupported expression
 
-md5ToHexEncodedArray = (...) => output
+md5ToHexEncodedArray = (...) => (undefined | output)
 
-md5cmn = (...) => safeAdd(
-    bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s),
-    b
+md5cmn = (...) => (
+  | undefined
+  | safeAdd(
+        bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s),
+        b
+    )
 )
 
-md5ff = (...) => md5cmn(???*0*, a, b, x, s, t)
+md5ff = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))
 - *0* unsupported expression
 
-md5gg = (...) => md5cmn(???*0*, a, b, x, s, t)
+md5gg = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))
 - *0* unsupported expression
 
-md5hh = (...) => md5cmn(???*0*, a, b, x, s, t)
+md5hh = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))
 - *0* unsupported expression
 
-md5ii = (...) => md5cmn(???*0*, a, b, x, s, t)
+md5ii = (...) => (undefined | md5cmn(???*0*, a, b, x, s, t))
 - *0* unsupported expression
 
 msg = ???*0*
@@ -224,7 +230,7 @@ s#9 = ???*0*
 - *0* arguments[4]
   ⚠️  function calls are not analysed yet
 
-safeAdd = (...) => ???*0*
+safeAdd = (...) => (undefined | ???*0*)
 - *0* unsupported expression
 
 t#10 = ???*0*
@@ -247,7 +253,7 @@ t#9 = ???*0*
 - *0* arguments[5]
   ⚠️  function calls are not analysed yet
 
-wordsToMd5 = (...) => [a, b, c, d]
+wordsToMd5 = (...) => (undefined | [a, b, c, d])
 
 x#10 = ???*0*
 - *0* arguments[4]

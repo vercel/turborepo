@@ -16,33 +16,41 @@
     (
         "c",
         Function(
-            6,
+            8,
             1,
-            Array(
-                5,
+            Alternatives(
+                7,
                 [
-                    Concat(
-                        3,
+                    Constant(
+                        Undefined,
+                    ),
+                    Array(
+                        5,
                         [
+                            Concat(
+                                3,
+                                [
+                                    Variable(
+                                        (
+                                            Atom('a' type=static),
+                                            #2,
+                                        ),
+                                    ),
+                                    Variable(
+                                        (
+                                            Atom('x' type=static),
+                                            #2,
+                                        ),
+                                    ),
+                                ],
+                            ),
                             Variable(
                                 (
                                     Atom('a' type=static),
                                     #2,
                                 ),
                             ),
-                            Variable(
-                                (
-                                    Atom('x' type=static),
-                                    #2,
-                                ),
-                            ),
                         ],
-                    ),
-                    Variable(
-                        (
-                            Atom('a' type=static),
-                            #2,
-                        ),
                     ),
                 ],
             ),

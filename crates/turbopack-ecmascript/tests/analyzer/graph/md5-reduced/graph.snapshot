@@ -1302,91 +1302,99 @@
     (
         "md5cmn",
         Function(
-            17,
+            19,
             1414,
-            Call(
-                16,
-                FreeVar(
-                    Other(
-                        Atom('safeAdd' type=inline),
-                    ),
-                ),
+            Alternatives(
+                18,
                 [
+                    Constant(
+                        Undefined,
+                    ),
                     Call(
-                        13,
+                        16,
                         FreeVar(
                             Other(
-                                Atom('bitRotateLeft' type=dynamic),
+                                Atom('safeAdd' type=inline),
                             ),
                         ),
                         [
                             Call(
-                                10,
+                                13,
                                 FreeVar(
                                     Other(
-                                        Atom('safeAdd' type=inline),
+                                        Atom('bitRotateLeft' type=dynamic),
                                     ),
                                 ),
                                 [
                                     Call(
-                                        4,
+                                        10,
                                         FreeVar(
                                             Other(
                                                 Atom('safeAdd' type=inline),
                                             ),
                                         ),
                                         [
-                                            Variable(
-                                                (
-                                                    Atom('a' type=static),
-                                                    #3,
+                                            Call(
+                                                4,
+                                                FreeVar(
+                                                    Other(
+                                                        Atom('safeAdd' type=inline),
+                                                    ),
                                                 ),
+                                                [
+                                                    Variable(
+                                                        (
+                                                            Atom('a' type=static),
+                                                            #3,
+                                                        ),
+                                                    ),
+                                                    Variable(
+                                                        (
+                                                            Atom('q' type=static),
+                                                            #3,
+                                                        ),
+                                                    ),
+                                                ],
                                             ),
-                                            Variable(
-                                                (
-                                                    Atom('q' type=static),
-                                                    #3,
+                                            Call(
+                                                4,
+                                                FreeVar(
+                                                    Other(
+                                                        Atom('safeAdd' type=inline),
+                                                    ),
                                                 ),
+                                                [
+                                                    Variable(
+                                                        (
+                                                            Atom('x' type=static),
+                                                            #3,
+                                                        ),
+                                                    ),
+                                                    Variable(
+                                                        (
+                                                            Atom('t' type=inline),
+                                                            #3,
+                                                        ),
+                                                    ),
+                                                ],
                                             ),
                                         ],
                                     ),
-                                    Call(
-                                        4,
-                                        FreeVar(
-                                            Other(
-                                                Atom('safeAdd' type=inline),
-                                            ),
+                                    Variable(
+                                        (
+                                            Atom('s' type=static),
+                                            #3,
                                         ),
-                                        [
-                                            Variable(
-                                                (
-                                                    Atom('x' type=static),
-                                                    #3,
-                                                ),
-                                            ),
-                                            Variable(
-                                                (
-                                                    Atom('t' type=inline),
-                                                    #3,
-                                                ),
-                                            ),
-                                        ],
                                     ),
                                 ],
                             ),
                             Variable(
                                 (
-                                    Atom('s' type=static),
+                                    Atom('b' type=static),
                                     #3,
                                 ),
                             ),
                         ],
-                    ),
-                    Variable(
-                        (
-                            Atom('b' type=static),
-                            #3,
-                        ),
                     ),
                 ],
             ),
@@ -1395,50 +1403,58 @@
     (
         "md5ff",
         Function(
-            9,
+            11,
             1530,
-            Call(
-                8,
-                Variable(
-                    (
-                        Atom('md5cmn' type=inline),
-                        #1,
-                    ),
-                ),
+            Alternatives(
+                10,
                 [
-                    Unknown(
-                        None,
-                        "unsupported expression",
+                    Constant(
+                        Undefined,
                     ),
-                    Variable(
-                        (
-                            Atom('a' type=static),
-                            #5,
+                    Call(
+                        8,
+                        Variable(
+                            (
+                                Atom('md5cmn' type=inline),
+                                #1,
+                            ),
                         ),
-                    ),
-                    Variable(
-                        (
-                            Atom('b' type=static),
-                            #5,
-                        ),
-                    ),
-                    Variable(
-                        (
-                            Atom('x' type=static),
-                            #5,
-                        ),
-                    ),
-                    Variable(
-                        (
-                            Atom('s' type=static),
-                            #5,
-                        ),
-                    ),
-                    Variable(
-                        (
-                            Atom('t' type=inline),
-                            #5,
-                        ),
+                        [
+                            Unknown(
+                                None,
+                                "unsupported expression",
+                            ),
+                            Variable(
+                                (
+                                    Atom('a' type=static),
+                                    #5,
+                                ),
+                            ),
+                            Variable(
+                                (
+                                    Atom('b' type=static),
+                                    #5,
+                                ),
+                            ),
+                            Variable(
+                                (
+                                    Atom('x' type=static),
+                                    #5,
+                                ),
+                            ),
+                            Variable(
+                                (
+                                    Atom('s' type=static),
+                                    #5,
+                                ),
+                            ),
+                            Variable(
+                                (
+                                    Atom('t' type=inline),
+                                    #5,
+                                ),
+                            ),
+                        ],
                     ),
                 ],
             ),
@@ -1582,34 +1598,42 @@
     (
         "wordsToMd5",
         Function(
-            6,
+            8,
             83,
-            Array(
-                5,
+            Alternatives(
+                7,
                 [
-                    Variable(
-                        (
-                            Atom('a' type=static),
-                            #2,
-                        ),
+                    Constant(
+                        Undefined,
                     ),
-                    Variable(
-                        (
-                            Atom('b' type=static),
-                            #2,
-                        ),
-                    ),
-                    Variable(
-                        (
-                            Atom('c' type=inline),
-                            #2,
-                        ),
-                    ),
-                    Variable(
-                        (
-                            Atom('d' type=static),
-                            #2,
-                        ),
+                    Array(
+                        5,
+                        [
+                            Variable(
+                                (
+                                    Atom('a' type=static),
+                                    #2,
+                                ),
+                            ),
+                            Variable(
+                                (
+                                    Atom('b' type=static),
+                                    #2,
+                                ),
+                            ),
+                            Variable(
+                                (
+                                    Atom('c' type=inline),
+                                    #2,
+                                ),
+                            ),
+                            Variable(
+                                (
+                                    Atom('d' type=static),
+                                    #2,
+                                ),
+                            ),
+                        ],
                     ),
                 ],
             ),

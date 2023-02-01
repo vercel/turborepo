@@ -1152,7 +1152,10 @@ impl VisitAstPath for Analyzer<'_> {
         decl: &'ast FnDecl,
         ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
     ) {
-        let old = replace(&mut self.cur_fn_return_values, Some(vec![]));
+        let old = replace(
+            &mut self.cur_fn_return_values,
+            Some(vec![JsValue::Constant(ConstantValue::Undefined)]),
+        );
         let old_ident = self.cur_fn_ident;
         self.cur_fn_ident = decl.function.span.lo.0;
         decl.visit_children_with_path(self, ast_path);
@@ -1172,7 +1175,10 @@ impl VisitAstPath for Analyzer<'_> {
         expr: &'ast FnExpr,
         ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
     ) {
-        let old = replace(&mut self.cur_fn_return_values, Some(vec![]));
+        let old = replace(
+            &mut self.cur_fn_return_values,
+            Some(vec![JsValue::Constant(ConstantValue::Undefined)]),
+        );
         let old_ident = self.cur_fn_ident;
         self.cur_fn_ident = expr.function.span.lo.0;
         expr.visit_children_with_path(self, ast_path);
@@ -1204,7 +1210,10 @@ impl VisitAstPath for Analyzer<'_> {
     ) {
         let value = match &expr.body {
             BlockStmtOrExpr::BlockStmt(_block) => {
-                let old = replace(&mut self.cur_fn_return_values, Some(vec![]));
+                let old = replace(
+                    &mut self.cur_fn_return_values,
+                    Some(vec![JsValue::Constant(ConstantValue::Undefined)]),
+                );
                 let old_ident = self.cur_fn_ident;
                 self.cur_fn_ident = expr.span.lo.0;
                 expr.visit_children_with_path(self, ast_path);

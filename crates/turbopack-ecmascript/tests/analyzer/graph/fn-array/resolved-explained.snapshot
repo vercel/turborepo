@@ -6,10 +6,10 @@ b = ???*0*
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 
-c = (...) => [`${a}${b}`, a]
+c = (...) => (undefined | [`${a}${b}`, a])
 
-d = ["12", "1"]
+d = (undefined | ["12", "1"])
 
-e = "12"
+e = (undefined[0] | "12")
 
-f = "1"
+f = (undefined[1] | "1")

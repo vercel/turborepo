@@ -37,22 +37,30 @@
     (
         "inner",
         Function(
-            4,
+            6,
             219,
-            Add(
-                3,
+            Alternatives(
+                5,
                 [
-                    Variable(
-                        (
-                            Atom('a' type=static),
-                            #6,
-                        ),
+                    Constant(
+                        Undefined,
                     ),
-                    Variable(
-                        (
-                            Atom('b' type=static),
-                            #7,
-                        ),
+                    Add(
+                        3,
+                        [
+                            Variable(
+                                (
+                                    Atom('a' type=static),
+                                    #6,
+                                ),
+                            ),
+                            Variable(
+                                (
+                                    Atom('b' type=static),
+                                    #7,
+                                ),
+                            ),
+                        ],
                     ),
                 ],
             ),
@@ -61,21 +69,29 @@
     (
         "outer",
         Function(
-            4,
+            6,
             197,
-            Call(
-                3,
-                Variable(
-                    (
-                        Atom('inner' type=inline),
-                        #6,
-                    ),
-                ),
+            Alternatives(
+                5,
                 [
                     Constant(
-                        StrWord(
-                            Atom('b' type=static),
+                        Undefined,
+                    ),
+                    Call(
+                        3,
+                        Variable(
+                            (
+                                Atom('inner' type=inline),
+                                #6,
+                            ),
                         ),
+                        [
+                            Constant(
+                                StrWord(
+                                    Atom('b' type=static),
+                                ),
+                            ),
+                        ],
                     ),
                 ],
             ),
@@ -84,11 +100,14 @@
     (
         "r",
         Function(
-            10,
+            11,
             87,
             Alternatives(
-                9,
+                10,
                 [
+                    Constant(
+                        Undefined,
+                    ),
                     Variable(
                         (
                             Atom('a' type=static),
@@ -216,35 +235,51 @@
     (
         "x",
         Function(
-            2,
+            4,
             1,
-            Variable(
-                (
-                    Atom('y' type=inline),
-                    #3,
-                ),
+            Alternatives(
+                3,
+                [
+                    Constant(
+                        Undefined,
+                    ),
+                    Variable(
+                        (
+                            Atom('y' type=inline),
+                            #3,
+                        ),
+                    ),
+                ],
             ),
         ),
     ),
     (
         "y",
         Function(
-            4,
+            6,
             26,
-            Add(
-                3,
+            Alternatives(
+                5,
                 [
-                    Variable(
-                        (
-                            Atom('a' type=static),
-                            #2,
-                        ),
+                    Constant(
+                        Undefined,
                     ),
-                    Variable(
-                        (
-                            Atom('b' type=static),
-                            #4,
-                        ),
+                    Add(
+                        3,
+                        [
+                            Variable(
+                                (
+                                    Atom('a' type=static),
+                                    #2,
+                                ),
+                            ),
+                            Variable(
+                                (
+                                    Atom('b' type=static),
+                                    #4,
+                                ),
+                            ),
+                        ],
                     ),
                 ],
             ),
