@@ -199,15 +199,17 @@ jobs:
       - name: Build payload
         run: |
           if [ "${{ steps.findPr.outputs.number }}" = "" ]; then
-            SLACK_TITLE="Result of run against PR https://github.com/vercel/turbo/pull/${{ steps.findPr.outputs.number }} - ${{ steps.findPr.outputs.title }}"
-          else
             SLACK_TITLE="Result of run against ${{ github.ref_name }}"
+          else
+            SLACK_TITLE="Result of run against PR https://github.com/vercel/turbo/pull/${{ steps.findPr.outputs.number }} - ${{ steps.findPr.outputs.title }}"
           fi
 
           SUMMARY_MD=$(cat test-summary.md)
 
           jq --null-input --arg text "$SUMMARY_MD" --arg title="$SLACK_TITLE" \
             '{"text": $text, "title": $title, "sha": "${{ github.sha }}"}' > payload.json
+
+          cat payload.json
 
       - name: Send test data to Slack workflow
         id: slack
