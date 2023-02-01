@@ -424,17 +424,6 @@ func (p *PnpmLockfile) GlobalChange(other Lockfile) bool {
 		!reflect.DeepEqual(p.PatchedDependencies, o.PatchedDependencies)
 }
 
-// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
-// the cache.
-func (p *PnpmLockfileV6) GlobalChange(other Lockfile) bool {
-	o, ok := other.(*PnpmLockfileV6)
-	return !ok ||
-		p.Version != o.Version ||
-		p.PackageExtensionsChecksum != o.PackageExtensionsChecksum ||
-		!reflect.DeepEqual(p.Overrides, o.Overrides) ||
-		!reflect.DeepEqual(p.PatchedDependencies, o.PatchedDependencies)
-}
-
 func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath, name string, specifier string) (string, bool, error) {
 	pnpmWorkspacePath := workspacePath.ToString()
 	if pnpmWorkspacePath == "" {
