@@ -1,4 +1,14 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "pipeline": {}
+  "pipeline": {
+    "build": {
+      "outputs": []
+    },
+    "web#gen": {
+      "outputs": ["gen.txt"]
+    },
+    "web#build": {
+      "dependsOn": ["web#gen"]
+    }
+  }
 }

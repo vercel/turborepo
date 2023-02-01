@@ -89,3 +89,11 @@ func (c *TaskOutputMode) UnmarshalJSON(data []byte) error {
 	*c = taskOutputMode
 	return nil
 }
+
+func (c TaskOutputMode) MarshalJSON() ([]byte, error) {
+	outputModeString, err := ToTaskOutputModeString(c)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(outputModeString)
+}
