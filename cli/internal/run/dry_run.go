@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -112,30 +111,15 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, command)
 		}
 
-		ancestors, err := engine.TaskGraph.Ancestors(packageTask.TaskID)
+		ancestors, err := engine.GetTaskGraphAncestors(packageTask.TaskID)
 		if err != nil {
 			return err
 		}
 
-		stringAncestors := []string{}
-		for _, dep := range ancestors {
-			// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
-			if !strings.Contains(dep.(string), core.ROOT_NODE_NAME) {
-				stringAncestors = append(stringAncestors, dep.(string))
-			}
-		}
-		descendents, err := engine.TaskGraph.Descendents(packageTask.TaskID)
+		descendents, err := engine.GetTaskGraphDescendants(packageTask.TaskID)
 		if err != nil {
 			return err
 		}
-		stringDescendents := []string{}
-		for _, dep := range descendents {
-			// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
-			if !strings.Contains(dep.(string), core.ROOT_NODE_NAME) {
-				stringDescendents = append(stringDescendents, dep.(string))
-			}
-		}
-		sort.Strings(stringDescendents)
 
 		itemStatus, err := turboCache.Exists(hash)
 		if err != nil {
@@ -153,8 +137,8 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			Outputs:                packageTask.TaskDefinition.Outputs.Inclusions,
 			ExcludedOutputs:        packageTask.TaskDefinition.Outputs.Exclusions,
 			LogFile:                packageTask.RepoRelativeLogFile(),
-			Dependencies:           stringAncestors,
-			Dependents:             stringDescendents,
+			Dependencies:           ancestors,
+			Dependents:             descendents,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
 		})
 		return nil
