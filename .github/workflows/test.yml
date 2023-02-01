@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
+  actions: write
   contents: read
   pull-requests: read
 
