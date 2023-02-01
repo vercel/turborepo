@@ -301,6 +301,7 @@ impl NodeJsPool {
             process: Some(process.run().await?),
             permit,
             processes: self.processes.clone(),
+            in_bad_state: false,
         })
     }
 }
@@ -311,6 +312,7 @@ pub struct NodeJsOperation {
     #[allow(dead_code)]
     permit: OwnedSemaphorePermit,
     processes: Arc<Mutex<Vec<NodeJsPoolProcess>>>,
+    in_bad_state: bool,
 }
 
 impl NodeJsOperation {
@@ -324,22 +326,28 @@ impl NodeJsOperation {
     where
         M: DeserializeOwned,
     {
+        self.in_bad_state = true;
         let message = self
             .process_mut()?
             .recv()
             .await
             .context("receiving message")?;
-        serde_json::from_slice(&message).context("deserializing message")
+        let message = serde_json::from_slice(&message).context("deserializing message")?;
+        self.in_bad_state = false;
+        Ok(message)
     }
 
     pub async fn send<M>(&mut self, message: M) -> Result<()>
     where
         M: Serialize,
     {
+        self.in_bad_state = true;
         self.process_mut()?
             .send(serde_json::to_vec(&message).context("serializing message")?)
             .await
-            .context("sending message")
+            .context("sending message")?;
+        self.in_bad_state = false;
+        Ok(())
     }
 
     pub async fn wait_or_kill(mut self) -> Result<ExitStatus> {
@@ -363,11 +371,17 @@ impl NodeJsOperation {
 
 impl Drop for NodeJsOperation {
     fn drop(&mut self) {
-        if let Some(process) = self.process.take() {
-            self.processes
-                .lock()
-                .unwrap()
-                .push(NodeJsPoolProcess::Running(process));
+        if let Some(mut process) = self.process.take() {
+            if self.in_bad_state {
+                if let Some(mut child) = process.child.take() {
+                    let _ = child.start_kill();
+                }
+            } else {
+                self.processes
+                    .lock()
+                    .unwrap()
+                    .push(NodeJsPoolProcess::Running(process));
+            }
         }
     }
 }
