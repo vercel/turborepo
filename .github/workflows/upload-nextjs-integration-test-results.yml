@@ -35,7 +35,7 @@ jobs:
         run: |
           ls -al ./test-results/main
           cat ./test-results/main/nextjs-test-results.json
-          echo "NEXTJS_VERSION=$(cat ./test-results/main/nextjs-test-results.json | jq .nextjsVersion | cut -d ' ' -f2)" >> $GITHUB_ENV
+          echo "NEXTJS_VERSION=$(cat ./test-results/main/nextjs-test-results.json | jq .nextjsVersion | tr -d '"' | cut -d ' ' -f2)" >> $GITHUB_ENV
           echo "SHA_SHORT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "RESULT_SUBPATH=$(if ${{ inputs.is_main_branch }}; then echo 'main'; else echo ${{ env.NEXTJS_VERSION }}; fi)" >> $GITHUB_ENV
 
