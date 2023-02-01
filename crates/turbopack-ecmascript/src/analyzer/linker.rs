@@ -9,13 +9,13 @@ use anyhow::Result;
 use swc_core::ecma::ast::Id;
 
 use super::{graph::VarGraph, JsValue};
-use crate::analyzer::ConstantValue;
 
 pub async fn link<'a, B, RB, F, RF>(
     graph: &VarGraph,
     mut val: JsValue,
     early_visitor: &B,
     visitor: &F,
+    fun_args_values: HashMap<u32, Vec<JsValue>>,
 ) -> Result<JsValue>
 where
     RB: 'a + Future<Output = Result<(JsValue, bool)>> + Send,
@@ -24,7 +24,7 @@ where
     F: 'a + Fn(JsValue) -> RF + Sync,
 {
     val.normalize();
-    let val = link_internal_iterative(graph, val, early_visitor, visitor).await?;
+    let val = link_internal_iterative(graph, val, early_visitor, visitor, fun_args_values).await?;
     Ok(val)
 }
 
@@ -37,6 +37,7 @@ pub(crate) async fn link_internal_iterative<'a, B, RB, F, RF>(
     val: JsValue,
     early_visitor: &'a B,
     visitor: &'a F,
+    mut fun_args_values: HashMap<u32, Vec<JsValue>>,
 ) -> Result<JsValue>
 where
     RB: 'a + Future<Output = Result<(JsValue, bool)>> + Send,
@@ -60,7 +61,6 @@ where
     // Tracks the number of nodes in the queue and done combined
     let mut total_nodes = 0;
     let mut cycle_stack: HashSet<Id> = HashSet::new();
-    let mut fun_args_values: HashMap<u32, Vec<JsValue>> = HashMap::new();
     // Tracks the number linking steps so far
     let mut steps = 0;
 
@@ -114,7 +114,10 @@ where
                         done.push(val.clone());
                     } else {
                         total_nodes += 1;
-                        done.push(JsValue::Constant(ConstantValue::Undefined));
+                        done.push(JsValue::Unknown(
+                            None,
+                            "unknown function argument (out of bounds)",
+                        ));
                     }
                 } else {
                     total_nodes += 1;

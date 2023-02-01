@@ -2114,8 +2114,9 @@ a#154 = (???*0* | null["contentWindow"] | ???*1*)
   ⚠️  unknown global
 - *1* ???*2*["contentWindow"]
   ⚠️  unknown object
-- *2* undefined["activeElement"]
-  ⚠️  nested operation
+- *2* ???*3*["activeElement"]
+  ⚠️  unknown object
+- *3* unknown function argument (out of bounds)
 
 a#156 = ???*0*
 - *0* arguments[0]
@@ -4648,11 +4649,10 @@ b#153 = ???*0*
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 
-b#154 = (null | undefined["activeElement"] | ???*0* | undefined["body"])
+b#154 = (null | ???*0*)
 - *0* ???*1*["activeElement"]
   ⚠️  unknown object
-- *1* a
-  ⚠️  circular variable reference
+- *1* unknown function argument (out of bounds)
 
 b#156 = (???*0* | ???*1* | ???*3*())
 - *0* arguments[0]
