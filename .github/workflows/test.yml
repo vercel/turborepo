@@ -935,24 +935,13 @@ jobs:
   next_js_integration:
     name: Execute Next.js integration workflow
     needs: [determine_jobs]
+    permissions:
+      pull-requests: write
     if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
     uses: ./.github/workflows/nextjs-integration-test.yml
     # Uncomment to test against a specific version of Next.js
     # with:
     # version: v13.1.6-canary.0
-
-  collect_nextjs_integration_stat:
-    needs: [next_js_integration]
-    name: Next.js integration test status report
-    permissions:
-      pull-requests: write
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Collect integration test stat
-        uses: ./.github/actions/next-integration-stat
 
   format_lint:
     name: Formatting
