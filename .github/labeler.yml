@@ -5,11 +5,11 @@
 
 "area: turborepo":
   - "cli/*"
-  - "cli/**/*"
+  - "crates/turborepo/*"
+  - "crates/turborepo-lib/**"
 
 "area: turbopack":
-  - "crates/*"
-  - "crates/**/*"
+  - any: ['crates/**/*', '!crates/turborepo/*', '!crates/turborepo-lib/*']
 
 "area: site":
   - any: ["docs/*"]
