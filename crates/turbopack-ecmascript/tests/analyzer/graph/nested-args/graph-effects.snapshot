@@ -1,70 +1,5 @@
 [
     Call {
-        func: Call(
-            3,
-            Variable(
-                (
-                    Atom('x' type=static),
-                    #1,
-                ),
-            ),
-            [
-                Constant(
-                    Num(
-                        ConstantNumber(
-                            1.0,
-                        ),
-                    ),
-                ),
-            ],
-        ),
-        args: [
-            Constant(
-                Num(
-                    ConstantNumber(
-                        2.0,
-                    ),
-                ),
-            ),
-        ],
-        ast_path: [
-            Program(
-                Script,
-            ),
-            Script(
-                Body(
-                    1,
-                ),
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Var,
-            ),
-            VarDecl(
-                Decls(
-                    0,
-                ),
-            ),
-            VarDeclarator(
-                Init,
-            ),
-            Expr(
-                Call,
-            ),
-        ],
-        span: Span {
-            lo: BytePos(
-                77,
-            ),
-            hi: BytePos(
-                84,
-            ),
-            ctxt: #0,
-        },
-    },
-    Call {
         func: Variable(
             (
                 Atom('x' type=static),
@@ -72,10 +7,12 @@
             ),
         ),
         args: [
-            Constant(
-                Num(
-                    ConstantNumber(
-                        1.0,
+            Value(
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            1.0,
+                        ),
                     ),
                 ),
             ),
@@ -127,6 +64,73 @@
         },
     },
     Call {
+        func: Call(
+            3,
+            Variable(
+                (
+                    Atom('x' type=static),
+                    #1,
+                ),
+            ),
+            [
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            1.0,
+                        ),
+                    ),
+                ),
+            ],
+        ),
+        args: [
+            Value(
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            2.0,
+                        ),
+                    ),
+                ),
+            ),
+        ],
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    1,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                77,
+            ),
+            hi: BytePos(
+                84,
+            ),
+            ctxt: #0,
+        },
+    },
+    Call {
         func: Variable(
             (
                 Atom('r' type=inline),
@@ -134,23 +138,25 @@
             ),
         ),
         args: [
-            Add(
-                3,
-                [
-                    Variable(
-                        (
-                            Atom('a' type=static),
-                            #5,
-                        ),
-                    ),
-                    Constant(
-                        Num(
-                            ConstantNumber(
-                                1.0,
+            Value(
+                Add(
+                    3,
+                    [
+                        Variable(
+                            (
+                                Atom('a' type=static),
+                                #5,
                             ),
                         ),
-                    ),
-                ],
+                        Constant(
+                            Num(
+                                ConstantNumber(
+                                    1.0,
+                                ),
+                            ),
+                        ),
+                    ],
+                ),
             ),
         ],
         ast_path: [
@@ -227,10 +233,12 @@
             ),
         ),
         args: [
-            Constant(
-                Num(
-                    ConstantNumber(
-                        2.0,
+            Value(
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            2.0,
+                        ),
                     ),
                 ),
             ),
@@ -280,9 +288,11 @@
             ),
         ),
         args: [
-            Constant(
-                StrWord(
-                    Atom('b' type=static),
+            Value(
+                Constant(
+                    StrWord(
+                        Atom('b' type=static),
+                    ),
                 ),
             ),
         ],
@@ -340,9 +350,11 @@
             ),
         ),
         args: [
-            Constant(
-                StrWord(
-                    Atom('a' type=static),
+            Value(
+                Constant(
+                    StrWord(
+                        Atom('a' type=static),
+                    ),
                 ),
             ),
         ],

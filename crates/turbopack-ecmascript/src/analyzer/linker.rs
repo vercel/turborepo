@@ -278,8 +278,9 @@ where
             Step::Visit(val) => {
                 total_nodes -= val.total_nodes();
 
-                let (val, visit_modified) = visitor(val).await?;
+                let (mut val, visit_modified) = visitor(val).await?;
                 if visit_modified {
+                    val.normalize_shallow();
                     if val.total_nodes() > LIMIT_NODE_SIZE {
                         total_nodes += 1;
                         done.push(JsValue::Unknown(None, "node limit reached"));

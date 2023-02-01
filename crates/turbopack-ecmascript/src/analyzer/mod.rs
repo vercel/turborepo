@@ -2548,7 +2548,7 @@ pub mod test_utils {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, time::Instant};
+    use std::{mem::take, path::PathBuf, time::Instant};
 
     use swc_core::{
         common::Mark,
@@ -2567,7 +2567,7 @@ mod tests {
     };
 
     use super::{
-        graph::{create_graph, Effect, EvalContext, VarGraph},
+        graph::{create_graph, ConditionalKind, Effect, EffectArg, EvalContext, VarGraph},
         linker::link,
         JsValue,
     };
@@ -2604,7 +2604,7 @@ mod tests {
 
                 let eval_context = EvalContext::new(&m, unresolved_mark);
 
-                let var_graph = create_graph(&m, &eval_context);
+                let mut var_graph = create_graph(&m, &eval_context);
 
                 let mut named_values = var_graph
                     .values
@@ -2699,32 +2699,84 @@ mod tests {
 
                     let start = Instant::now();
                     let mut resolved = Vec::new();
-                    let mut queue = var_graph.effects.clone();
-                    queue.reverse();
-                    while let Some(effect) = queue.pop() {
+                    let mut queue = take(&mut var_graph.effects)
+                        .into_iter()
+                        .map(|effect| (0, effect))
+                        .rev()
+                        .collect::<Vec<_>>();
+                    let mut i = 0;
+                    while let Some((parent, effect)) = queue.pop() {
+                        i += 1;
                         let start = Instant::now();
                         // println!("linking effect {}", input.display());
+                        async fn handle_args(
+                            args: Vec<EffectArg>,
+                            queue: &mut Vec<(usize, Effect)>,
+                            var_graph: &VarGraph,
+                            i: usize,
+                        ) -> Vec<JsValue> {
+                            let mut new_args = Vec::new();
+                            for arg in args {
+                                match arg {
+                                    EffectArg::Value(v) => {
+                                        new_args.push(resolve(&var_graph, v).await);
+                                    }
+                                    EffectArg::Closure(v, effects) => {
+                                        new_args.push(resolve(&var_graph, v).await);
+                                        queue.extend(
+                                            effects.effects.into_iter().rev().map(|e| (i, e)),
+                                        );
+                                    }
+                                    EffectArg::Spread => {
+                                        new_args.push(JsValue::Unknown(None, "spread"));
+                                    }
+                                }
+                            }
+                            new_args
+                        }
                         match effect {
+                            Effect::Conditional {
+                                condition, kind, ..
+                            } => {
+                                let condition = resolve(&var_graph, condition).await;
+                                resolved.push((format!("{parent} -> {i} conditional"), condition));
+                                match *kind {
+                                    ConditionalKind::If { then } => {
+                                        queue
+                                            .extend(then.effects.into_iter().rev().map(|e| (i, e)));
+                                    }
+                                    ConditionalKind::IfElse { then, r#else }
+                                    | ConditionalKind::Ternary { then, r#else } => {
+                                        queue.extend(
+                                            r#else.effects.into_iter().rev().map(|e| (i, e)),
+                                        );
+                                        queue
+                                            .extend(then.effects.into_iter().rev().map(|e| (i, e)));
+                                    }
+                                    ConditionalKind::And { expr }
+                                    | ConditionalKind::Or { expr }
+                                    | ConditionalKind::NullishCoalescing { expr } => {
+                                        queue
+                                            .extend(expr.effects.into_iter().rev().map(|e| (i, e)));
+                                    }
+                                };
+                            }
                             Effect::Call { func, args, .. } => {
                                 let func = resolve(&var_graph, func).await;
-                                let mut new_args = Vec::new();
-                                for arg in args {
-                                    new_args.push(resolve(&var_graph, arg).await);
-                                }
-                                resolved
-                                    .push(("call".to_string(), JsValue::call(box func, new_args)));
+                                let new_args = handle_args(args, &mut queue, &var_graph, i).await;
+                                resolved.push((
+                                    format!("{parent} -> {i} call"),
+                                    JsValue::call(box func, new_args),
+                                ));
                             }
                             Effect::MemberCall {
                                 obj, prop, args, ..
                             } => {
                                 let obj = resolve(&var_graph, obj).await;
                                 let prop = resolve(&var_graph, prop).await;
-                                let mut new_args = Vec::new();
-                                for arg in args {
-                                    new_args.push(resolve(&var_graph, arg).await);
-                                }
+                                let new_args = handle_args(args, &mut queue, &var_graph, i).await;
                                 resolved.push((
-                                    "member call".to_string(),
+                                    format!("{parent} -> {i} member call"),
                                     JsValue::member_call(box obj, box prop, new_args),
                                 ));
                             }

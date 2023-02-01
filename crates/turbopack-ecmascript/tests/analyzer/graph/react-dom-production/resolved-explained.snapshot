@@ -7416,8 +7416,8 @@ c#328 = (???*0* | ???*1* | ???*3*)
 c#329 = (
   | ???*0*
   | ???*1*
-  | (...) => ???*3*["compare"]
-  | ???*4*
+  | (...) => (???*3* | ???*4*)["compare"]
+  | ???*5*
   | (...) => (!(0) | !(1))
   | (...) => (!(0) | !(1))
 )
@@ -7429,7 +7429,9 @@ c#329 = (
   ⚠️  function calls are not analysed yet
 - *3* !(0)
   ⚠️  nested operation
-- *4* c
+- *4* !(1)
+  ⚠️  nested operation
+- *5* c
   ⚠️  circular variable reference
 
 c#330 = ???*0*
@@ -10457,12 +10459,14 @@ f#328 = ???*0*
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
 
-f#329 = (???*0* | (...) => ???*2*["type"] | null["child"])
+f#329 = (???*0* | (...) => (???*2* | ???*3*)["type"] | null["child"])
 - *0* ???*1*["type"]
   ⚠️  unknown object
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
 - *2* !(0)
+  ⚠️  nested operation
+- *3* !(1)
   ⚠️  nested operation
 
 f#330 = ???*0*
