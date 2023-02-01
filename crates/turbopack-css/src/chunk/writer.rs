@@ -44,6 +44,8 @@ pub async fn expand_imports(
                 // CSS chunk items can be duplicated across chunks. This can cause precedence
                 // issues (WEB-456). We use CSS layers to make sure that the first occurrence of
                 // a CSS chunk item determines its precedence.
+                // TODO(alexkirsz) This currently breaks users using @layer. We can fix that by
+                // moving our @layer into the user layer.
                 writeln!(code, "@layer {id} {{")?;
 
                 let content = chunk_item.content().await?;

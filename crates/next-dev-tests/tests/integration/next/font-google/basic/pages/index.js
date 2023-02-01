@@ -65,10 +65,6 @@ async function getRuleMatchingClassName(className) {
 
     const sheet = stylesheet.sheet;
 
-    if (sheet == null) {
-      continue;
-    }
-
     const res = getRuleMatchingClassNameRec(selector, sheet.cssRules);
     if (res != null) {
       return res;
