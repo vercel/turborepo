@@ -24,9 +24,10 @@ pub struct NpmLockfile {
     other: HashMap<String, Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct NpmPackage {
     version: Option<String>,
+    resolved: Option<String>,
     #[serde(default)]
     dependencies: HashMap<String, String>,
     #[serde(default)]
@@ -91,26 +92,69 @@ impl NpmLockfile {
             .filter_map(|key| {
                 self.packages.get(&key).map(|pkg| Package {
                     key,
-                    // only optional if it is a workspace package
-                    version: pkg.version.clone().unwrap(),
+                    version: pkg
+                        .version
+                        .clone()
+                        .expect("missing version from non-workspace package"),
                 })
             })
             .next())
     }
 
-    fn all_dependencies(&self, key: &str) -> Option<HashMap<String, &str>> {
+    pub fn all_dependencies(&self, key: &str) -> Option<HashMap<String, &str>> {
         self.packages.get(key).map(|pkg| {
             pkg.dep_keys()
                 .filter_map(|name| {
                     Self::possible_npm_deps(key, name)
                         .into_iter()
                         .find_map(|possible_key| {
-                            self.packages
-                                .get(&possible_key)
-                                .map(|entry| (possible_key, entry.version.as_deref().unwrap()))
+                            self.packages.get(&possible_key).map(|entry| {
+                                (
+                                    possible_key,
+                                    entry
+                                        .version
+                                        .as_deref()
+                                        .expect("missing version from non-workspace package"),
+                                )
+                            })
                         })
                 })
                 .collect()
+        })
+    }
+
+    fn get_package(&self, package: impl AsRef<str>) -> Result<&NpmPackage, Error> {
+        let pkg_str = package.as_ref();
+        self.packages
+            .get(pkg_str)
+            .ok_or_else(|| Error::MissingPackage(pkg_str.to_string()))
+    }
+
+    pub fn subgraph(&self, workspace_packages: &[&str], packages: &[&str]) -> Result<Self, Error> {
+        let mut pruned_packages = HashMap::with_capacity(packages.len());
+        for pkg_key in packages {
+            let pkg = self.get_package(pkg_key)?;
+            pruned_packages.insert(pkg_key.to_string(), pkg.clone());
+        }
+        if let Some(root) = self.packages.get("") {
+            pruned_packages.insert("".into(), root.clone());
+        }
+        for workspace in workspace_packages {
+            let pkg = self.get_package(workspace)?;
+            pruned_packages.insert(workspace.to_string(), pkg.clone());
+
+            for (key, entry) in &self.packages {
+                if entry.resolved.as_deref() == Some(workspace) {
+                    pruned_packages.insert(key.clone(), entry.clone());
+                    break;
+                }
+            }
+        }
+        Ok(Self {
+            lockfile_version: 3,
+            packages: pruned_packages,
+            dependencies: HashMap::default(),
+            other: self.other.clone(),
         })
     }
 
