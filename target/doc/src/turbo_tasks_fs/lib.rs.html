@@ -1628,6 +1628,16 @@
 <span id="1628">1628</span>
 <span id="1629">1629</span>
 <span id="1630">1630</span>
+<span id="1631">1631</span>
+<span id="1632">1632</span>
+<span id="1633">1633</span>
+<span id="1634">1634</span>
+<span id="1635">1635</span>
+<span id="1636">1636</span>
+<span id="1637">1637</span>
+<span id="1638">1638</span>
+<span id="1639">1639</span>
+<span id="1640">1640</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -3235,6 +3245,16 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>write(<span class="kw-2">&amp;</span><span class="self">self</span>, _fs_path: FileSystemPathVc, _content: FileContentVc) -&gt; CompletionVc {
         CompletionVc::new()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>write_link(<span class="kw-2">&amp;</span><span class="self">self</span>, _fs_path: FileSystemPathVc, _target: LinkContentVc) -&gt; CompletionVc {
+        CompletionVc::new()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>metadata(<span class="kw-2">&amp;</span><span class="self">self</span>, _fs_path: FileSystemPathVc) -&gt; FileMetaVc {
+        FileMeta::default().cell()
     }
 }
 
