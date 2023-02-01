@@ -61,8 +61,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [16, 18]
-        group: [1, 2]
+        node: [16]
+        group: [1]
 
     env:
       # Enabling backtrace will makes snapshot tests fail
@@ -160,17 +160,6 @@ jobs:
           RECORD_REPLAY_METADATA_TEST_RUN_TITLE: testIntegration / Group ${{ matrix.group }}
           NEXT_INTEGRATION_TEST: true
 
-      - name: Send test data to Slack workflow
-        id: slack
-        uses: slackapi/slack-github-action@v1.23.0
-        with:
-          payload: |
-            {
-              "text": "Hello from Next.js+Turbo integration tests!"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.NEXT_TURBO_INTEGRATION_SLACK_WEBHOOK_URL }}
-
   # Collect integration test results from execute_tests,
   # Store it as github artifact for next step to consume.
   collect_nextjs_integration_stat:
@@ -193,3 +182,42 @@ jobs:
           path: |
             nextjs-test-results.json
             test-summary.md
+
+  post_to_slack:
+    needs: [collect_nextjs_integration_stat]
+    name: Post results to Slack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1 # Required to identify the current PR
+      - name: Download summary.md artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: test-results
+          path: test-results
+      - name: Read summary.md into github env
+        run: |
+          NEXT_SUMMARY_MD=$(cat test-results/test-summary.md)
+          echo "NEXT_SUMMARY_MD=$NEXT_SUMMARY_MD" >> $GITHUB_ENV
+      - name: Get PR information if applicable
+        uses: jwalton/gh-find-current-pr@v1
+        id: findPr
+      - name: Build update title
+        run: |
+          if [ "${{ steps.findPr.outputs.number }}" = "" ]; then
+            SLACK_TITLE="Result of run against PR https://github.com/vercel/turbo/pull/${{ steps.findPr.outputs.number }} - ${{ steps.findPr.outputs.title }}"
+          else
+            SLACK_TITLE="Result of run against ${{ github.ref_name }}"
+          fi
+          echo "SLACK_TITLE=$SLACK_TILE" >> $GITHUB_ENV
+      - name: Send test data to Slack workflow
+        id: slack
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          payload: |
+            {
+              "title": "${{ env.SLACK_TITLE }}""
+              "sha": "${{ github.sha }}"
+              "text": "${{env.NEXT_SUMMARY_MD}}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.NEXT_TURBO_INTEGRATION_SLACK_WEBHOOK_URL }}
