@@ -268,11 +268,6 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	}
 	packageManager := pkgDepGraph.PackageManager
 
-	vertexSet := make(util.Set)
-	for _, v := range g.WorkspaceGraph.Vertices() {
-		vertexSet.Add(v)
-	}
-
 	engine, err := buildTaskGraphEngine(g, rs)
 
 	if err != nil {
