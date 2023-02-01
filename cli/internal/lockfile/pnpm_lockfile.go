@@ -238,6 +238,16 @@ func (p *PnpmLockfile) ResolvePackage(workspacePath turbopath.AnchoredUnixPath, 
 		return Package{Key: key, Version: version, Found: true}, nil
 	}
 
+	if entry, ok := p.Packages[resolvedVersion]; ok {
+		var version string
+		if entry.Version != "" {
+			version = entry.Version
+		} else {
+			version = resolvedVersion
+		}
+		return Package{Key: resolvedVersion, Version: version, Found: true}, nil
+	}
+
 	return Package{}, nil
 }
 
