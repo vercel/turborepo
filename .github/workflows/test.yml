@@ -1057,13 +1057,13 @@ jobs:
       - name: Turbopack Rust Testing failed
         if: always() && needs.turbopack_rust_test.result != 'success' && needs.turbopack_rust_test.result != 'skipped'
         run: |
-          echo "- Rust tests" >> failures.md
+          echo "- Turbopack Rust tests" >> failures.md
           exit 1
 
       - name: Turborepo Rust Testing failed
         if: always() && needs.turborepo_rust_test.result != 'success' && needs.turborepo_rust_test.result != 'skipped'
         run: |
-          echo "- Rust tests" >> failures.md
+          echo "- Turborepo Rust tests" >> failures.md
           exit 1
 
       - name: Rust Benchmark Testing failed
