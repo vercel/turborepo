@@ -172,9 +172,16 @@ export default function ReactDevOverlay({
   return (
     <React.Fragment>
       <ErrorBoundary
-        globalOverlay={globalOverlay}
-        isMounted={isMounted}
         onError={onComponentError}
+        fallback={
+          // When the overlay is global for the application and it wraps a component rendering `<html>`
+          // we have to render the html shell otherwise the shadow root will not be able to attach
+          globalOverlay ? (
+            <html>
+              <body></body>
+            </html>
+          ) : null
+        }
       >
         {children ?? null}
       </ErrorBoundary>
