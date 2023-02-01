@@ -16321,8 +16321,7 @@
       sha,
       shouldDiffWithMain,
       baseResults,
-      failedJobResults,
-      shouldShareTestSummaryToSlack
+      failedJobResults
     ) {
       // Read current tests summary
       const {
@@ -16452,8 +16451,7 @@
       }
       // Store plain textbased summary to share into Slack channel
       // Note: Likely we'll need to polish this summary to make it more readable.
-      if (shouldShareTestSummaryToSlack) {
-        let textSummary = `*Next.js integration test status with Turbopack*
+      let textSummary = `*Next.js integration test status with Turbopack*
 
     *Base: ${baseResults.ref} / ${shortBaseNextJsVersion}*
     Test suites: :red_circle: ${baseTestFailedSuiteCount} / :green_circle: ${baseTestPassedSuiteCount} (Total: ${baseTestTotalSuiteCount})
@@ -16464,26 +16462,25 @@
     Test cases : :red_circle: ${currentTestFailedCaseCount} / :green_circle: ${currentTestPassedCaseCount} (Total: ${currentTestTotalCaseCount})
 
     `;
-        if (suiteCountDiff === 0) {
-          textSummary += "No changes in suite count.";
-        } else if (suiteCountDiff > 0) {
-          textSummary += `↓ ${suiteCountDiff} suites are fixed`;
-        } else if (suiteCountDiff < 0) {
-          textSummary += `↑ ${suiteCountDiff} suites are newly failed`;
-        }
-        if (caseCountDiff === 0) {
-          textSummary += "No changes in test cases count.";
-        } else if (caseCountDiff > 0) {
-          textSummary += `↓ ${caseCountDiff} test cases are fixed`;
-        } else if (caseCountDiff < 0) {
-          textSummary += `↑ ${caseCountDiff} test cases are newly failed`;
-        }
-        console.log(
-          "Storing text summary to ./test-summary.md to report into Slack channel.",
-          textSummary
-        );
-        fs.writeFileSync("./test-summary.md", textSummary);
+      if (suiteCountDiff === 0) {
+        textSummary += "No changes in suite count.";
+      } else if (suiteCountDiff > 0) {
+        textSummary += `↓ ${suiteCountDiff} suites are fixed`;
+      } else if (suiteCountDiff < 0) {
+        textSummary += `↑ ${suiteCountDiff} suites are newly failed`;
       }
+      if (caseCountDiff === 0) {
+        textSummary += "No changes in test cases count.";
+      } else if (caseCountDiff > 0) {
+        textSummary += `↓ ${caseCountDiff} test cases are fixed`;
+      } else if (caseCountDiff < 0) {
+        textSummary += `↑ ${caseCountDiff} test cases are newly failed`;
+      }
+      console.log(
+        "Storing text summary to ./test-summary.md to report into Slack channel.",
+        textSummary
+      );
+      fs.writeFileSync("./test-summary.md", textSummary);
       return ret;
     }
     // An action report failed next.js integration test with --turbo
