@@ -203,7 +203,8 @@ where
                     *child = val;
                     true
                 });
-                val.update_total_nodes();
+                #[cfg(debug_assertions)]
+                val.assert_total_nodes_up_to_date();
                 total_nodes -= val.total_nodes();
                 if val.total_nodes() > LIMIT_NODE_SIZE {
                     total_nodes += 1;
@@ -212,6 +213,8 @@ where
                 }
 
                 let (mut val, visit_modified) = early_visitor(val).await?;
+                #[cfg(debug_assertions)]
+                val.assert_total_nodes_up_to_date();
                 if visit_modified {
                     if val.total_nodes() > LIMIT_NODE_SIZE {
                         total_nodes += 1;
@@ -245,6 +248,9 @@ where
                     *child = val;
                     true
                 });
+                #[cfg(debug_assertions)]
+                val.assert_total_nodes_up_to_date();
+
                 total_nodes -= val.total_nodes();
 
                 if val.total_nodes() > LIMIT_NODE_SIZE {
@@ -253,6 +259,9 @@ where
                     continue;
                 }
                 val.normalize_shallow();
+
+                #[cfg(debug_assertions)]
+                val.assert_total_nodes_up_to_date();
 
                 total_nodes += val.total_nodes();
                 queue.push(Step::Visit(val));
@@ -264,6 +273,9 @@ where
                     *child = val;
                     true
                 });
+                #[cfg(debug_assertions)]
+                val.assert_total_nodes_up_to_date();
+
                 total_nodes -= val.total_nodes();
 
                 if val.total_nodes() > LIMIT_NODE_SIZE {
@@ -272,6 +284,9 @@ where
                     continue;
                 }
                 val.normalize_shallow();
+
+                #[cfg(debug_assertions)]
+                val.assert_total_nodes_up_to_date();
 
                 total_nodes += val.total_nodes();
                 queue.push(Step::Visit(val));
@@ -284,6 +299,8 @@ where
                 let (mut val, visit_modified) = visitor(val).await?;
                 if visit_modified {
                     val.normalize_shallow();
+                    #[cfg(debug_assertions)]
+                    val.assert_total_nodes_up_to_date();
                     if val.total_nodes() > LIMIT_NODE_SIZE {
                         total_nodes += 1;
                         done.push(JsValue::Unknown(None, "node limit reached"));

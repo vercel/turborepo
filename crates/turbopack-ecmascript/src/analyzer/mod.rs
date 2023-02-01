@@ -689,6 +689,17 @@ impl JsValue {
         }
     }
 
+    pub fn assert_total_nodes_up_to_date(&mut self) {
+        let old = self.total_nodes();
+        self.update_total_nodes();
+        assert_eq!(
+            old,
+            self.total_nodes(),
+            "total nodes not up to date {:?}",
+            self
+        );
+    }
+
     pub fn ensure_node_limit(&mut self, limit: usize) {
         fn cmp_nodes(a: &JsValue, b: &JsValue) -> Ordering {
             a.total_nodes().cmp(&b.total_nodes())

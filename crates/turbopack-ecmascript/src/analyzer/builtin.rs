@@ -273,7 +273,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
             _ => false,
         },
         // Handle spread in object literals
-        JsValue::Object(ref mut total_nodes, parts) => {
+        JsValue::Object(_, parts) => {
             if parts
                 .iter()
                 .any(|part| matches!(part, ObjectPart::Spread(JsValue::Object(..))))
@@ -281,12 +281,12 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 let old_parts = take(parts);
                 for part in old_parts {
                     if let ObjectPart::Spread(JsValue::Object(_, inner_parts)) = part {
-                        *total_nodes -= 1;
                         parts.extend(inner_parts);
                     } else {
                         parts.push(part);
                     }
                 }
+                value.update_total_nodes();
                 true
             } else {
                 false

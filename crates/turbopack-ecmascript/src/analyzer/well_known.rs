@@ -108,7 +108,7 @@ pub async fn well_known_function_call(
 
 pub fn object_assign(args: Vec<JsValue>) -> JsValue {
     if args.iter().all(|arg| matches!(arg, JsValue::Object(..))) {
-        if let Some(merged_object) = args.into_iter().reduce(|mut acc, cur| {
+        if let Some(mut merged_object) = args.into_iter().reduce(|mut acc, cur| {
             if let JsValue::Object(_, parts) = &mut acc {
                 if let JsValue::Object(_, next_parts) = &cur {
                     parts.extend_from_slice(next_parts);
@@ -116,6 +116,7 @@ pub fn object_assign(args: Vec<JsValue>) -> JsValue {
             }
             acc
         }) {
+            merged_object.update_total_nodes();
             merged_object
         } else {
             JsValue::Unknown(
