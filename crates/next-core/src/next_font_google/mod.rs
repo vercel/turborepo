@@ -3,7 +3,6 @@ use indexmap::IndexMap;
 use indoc::formatdoc;
 use once_cell::sync::Lazy;
 use turbo_tasks::primitives::{OptionStringVc, OptionU16Vc, StringVc, U32Vc};
-use turbo_tasks_env::{CommandLineProcessEnvVc, ProcessEnv};
 use turbo_tasks_fetch::fetch;
 use turbo_tasks_fs::{FileContent, FileSystemPathVc};
 use turbo_tasks_hash::hash_xxh3_hash64;
@@ -87,7 +86,8 @@ impl ImportMappingReplacement for NextFontGoogleReplacer {
                                 style: {{
                                     fontFamily: "{}",
                                     {}{}
-                                }}
+                                }},
+                                variable: cssModule.variable
                             }};
                         "#,
                         // Pass along whichever options we received to the css handler
@@ -187,6 +187,7 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
         };
 
         let properties = get_font_css_properties(scoped_font_family, options).await?;
+        let font_family = properties.font_family.await?;
         let css_asset = VirtualAssetVc::new(
             css_virtual_path,
             FileContent::Content(
@@ -198,9 +199,11 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
                             font-family: {};
                             {}{}
                         }}
+
+                        {}
                         "#,
                     stylesheet.unwrap_or_else(|| "".to_owned()),
-                    properties.font_family.await?,
+                    font_family,
                     properties
                         .weight
                         .await?
@@ -212,6 +215,12 @@ impl ImportMappingReplacement for NextFontGoogleCssModuleReplacer {
                         .as_ref()
                         .map(|s| format!("font-style: {};\n", s))
                         .unwrap_or_else(|| "".to_owned()),
+                    properties
+                        .variable
+                        .await?
+                        .as_ref()
+                        .map(|v| { format!(".variable {{ {}: {}; }} ", v, *font_family) })
+                        .unwrap_or_else(|| "".to_owned())
                 )
                 .into(),
             )
@@ -281,6 +290,8 @@ async fn get_stylesheet_url_from_options(options: NextFontGoogleOptionsVc) -> Re
     let mut css_url: Option<String> = None;
     #[cfg(debug_assertions)]
     {
+        use turbo_tasks_env::{CommandLineProcessEnvVc, ProcessEnv};
+
         let env = CommandLineProcessEnvVc::new();
         if let Some(url) = &*env.read("TURBOPACK_TEST_ONLY_MOCK_SERVER").await? {
             css_url = Some(format!("{}/css2", url));
@@ -310,6 +321,7 @@ struct FontCssProperties {
     font_family: StringVc,
     weight: OptionU16Vc,
     style: OptionStringVc,
+    variable: OptionStringVc,
 }
 
 #[turbo_tasks::function]
@@ -338,6 +350,7 @@ async fn get_font_css_properties(
             FontWeights::Fixed(weights) => weights.first().cloned(),
         }),
         style: OptionStringVc::cell(options.styles.first().cloned()),
+        variable: OptionStringVc::cell(options.variable.clone()),
     }))
 }
 

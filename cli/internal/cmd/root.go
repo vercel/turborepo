@@ -66,9 +66,7 @@ func RunWithArgs(args turbostate.ParsedArgsFromRust, turboVersion string) int {
 	var execErr error
 	go func() {
 		command := args.Command
-		if command.Link != nil {
-			execErr = login.ExecuteLink(helper, &args)
-		} else if command.Login != nil {
+		if command.Login != nil {
 			execErr = login.ExecuteLogin(ctx, helper, &args)
 		} else if command.Unlink != nil {
 			execErr = auth.ExecuteUnlink(helper, &args)

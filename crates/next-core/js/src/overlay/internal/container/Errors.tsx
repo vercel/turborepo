@@ -203,8 +203,8 @@ export function Errors({ issues, errors }: ErrorsProps) {
 
   return (
     <ErrorsDialog
-      aria-labelledby="errors_label"
-      aria-describedby="errors_desc"
+      aria-labelledby="nextjs__container_errors_label"
+      aria-describedby="nextjs__container_errors_desc"
       onClose={isClosable ? minimize : undefined}
     >
       <Tabs
@@ -345,6 +345,7 @@ export const styles = css`
     margin-bottom: var(--size-gap);
     color: var(--color-error);
     white-space: pre-wrap;
+    overflow-wrap: break-word;
   }
 
   .errors-body > h2[data-severity="error"] {

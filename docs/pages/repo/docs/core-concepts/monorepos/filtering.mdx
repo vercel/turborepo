@@ -105,11 +105,11 @@ turbo run build --filter=my-app^...
 Useful for when you want to target a specific directory, not a workspace name. It supports:
 
 - Exact matches: `--filter=./apps/docs`
-- Globs: `--filter=./apps/*`
+- Globs: `--filter='./apps/*'`
 
 ```sh
 # Build all of the workspaces in the 'apps' directory
-turbo run build --filter=./apps/*
+turbo run build --filter='./apps/*'
 ```
 
 #### Combining with other syntaxes
