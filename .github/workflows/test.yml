@@ -1050,16 +1050,20 @@ jobs:
           echo "- Turbopack Rust tests" >> failures.md
           exit 1
 
+      - name: Rust Benchmark Testing failed
+        if: always() && needs.turbopack_rust_test_bench.result != 'success' && needs.turbopack_rust_test_bench.result != 'skipped'
+          exit 1
+
       - name: Turborepo Rust Testing failed
         if: always() && needs.turborepo_rust_test.result != 'success' && needs.turborepo_rust_test.result != 'skipped'
         run: |
           echo "- Turborepo Rust tests" >> failures.md
           exit 1
 
-      - name: Rust Benchmark Testing failed
+      - name: Turbopack Rust Benchmark Testing failed
         if: always() && needs.turbopack_rust_test_bench.result != 'success' && needs.turbopack_rust_test_bench.result != 'skipped'
         run: |
-          echo "- Rust benchmark tests" >> failures.md
+          echo "- Turbopack Rust benchmark tests" >> failures.md
           exit 1
 
       - name: Rust Release Build failed
