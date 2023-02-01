@@ -107,6 +107,7 @@ fn bench_link(b: &mut Bencher, input: &BenchInput) {
                     val.clone(),
                     &(|val| early_visitor(val)),
                     &(|val| visitor(val, env)),
+                    Default::default(),
                 )
                 .await
             })
