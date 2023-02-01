@@ -1,0 +1,1586 @@
+{
+  "ref": "93a0e540a62a2618eaf2ecccff2f95bd893d909f",
+  "nextjsVersion": "Next.js v13.1.7-canary.2",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675289243085,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675289289517,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675289243186,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/link-with-api-rewrite/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675289394427,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "link-with-api-rewrite"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#rewrite')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/e2e/link-with-api-rewrite/index.test.ts:29:7)"
+                ],
+                "fullName": "link-with-api-rewrite should perform hard navigation for rewritten urls",
+                "location": null,
+                "status": "failed",
+                "title": "should perform hard navigation for rewritten urls"
+              },
+              {
+                "ancestorTitles": [
+                  "link-with-api-rewrite"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#direct')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/e2e/link-with-api-rewrite/index.test.ts:56:7)"
+                ],
+                "fullName": "link-with-api-rewrite should perform hard navigation for direct urls",
+                "location": null,
+                "status": "failed",
+                "title": "should perform hard navigation for direct urls"
+              }
+            ],
+            "endTime": 1675289472838,
+            "message": "  ● link-with-api-rewrite › should perform hard navigation for rewritten urls\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#rewrite')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (e2e/link-with-api-rewrite/index.test.ts:29:7)\n\n  ● link-with-api-rewrite › should perform hard navigation for direct urls\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#direct')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (e2e/link-with-api-rewrite/index.test.ts:56:7)\n",
+            "name": "/work/test/e2e/link-with-api-rewrite/index.test.ts",
+            "startTime": 1675289394535,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/404-page-app/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675289505361,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should not output static 404 if _app has getInitialProps",
+                "location": null,
+                "status": "passed",
+                "title": "should not output static 404 if _app has getInitialProps"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode specify to use the 404 page still in the routes-manifest",
+                "location": null,
+                "status": "passed",
+                "title": "specify to use the 404 page still in the routes-manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should still use 404 page",
+                "location": null,
+                "status": "passed",
+                "title": "should still use 404 page"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-app/test/index.test.js:81:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 Page Support with _app dev mode should not show pages/404 GIP error if _app has GIP",
+                "location": null,
+                "status": "failed",
+                "title": "should not show pages/404 GIP error if _app has GIP"
+              }
+            ],
+            "endTime": 1675289515703,
+            "message": "  ● 404 Page Support with _app › dev mode › should not show pages/404 GIP error if _app has GIP\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      79 |     it('should not show pages/404 GIP error if _app has GIP', async () => {\n      80 |       const res = await fetchViaHTTP(appPort, '/abc')\n    > 81 |       expect(res.status).toBe(404)\n         |                          ^\n      82 |       const $ = cheerio.load(await res.text())\n      83 |       expect($('#404-title').text()).toBe('Hi There')\n      84 |       expect(stderr).not.toMatch(gip404Err)\n\n      at Object.<anonymous> (integration/404-page-app/test/index.test.js:81:26)\n",
+            "name": "/work/test/integration/404-page-app/test/index.test.js",
+            "startTime": 1675289505460,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance-app/error-recovery.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 9,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 9,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 18,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675289411900,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay can recover from a syntax error without losing state",
+                "location": null,
+                "status": "pending",
+                "title": "can recover from a syntax error without losing state"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay client component can recover from syntax error",
+                "location": null,
+                "status": "pending",
+                "title": "client component can recover from syntax error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay server component can recover from syntax error",
+                "location": null,
+                "status": "pending",
+                "title": "server component can recover from syntax error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay can recover from a event handler error",
+                "location": null,
+                "status": "pending",
+                "title": "can recover from a event handler error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay client component can recover from a component error",
+                "location": null,
+                "status": "pending",
+                "title": "client component can recover from a component error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay server component can recover from a component error",
+                "location": null,
+                "status": "pending",
+                "title": "server component can recover from a component error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay syntax > runtime error",
+                "location": null,
+                "status": "pending",
+                "title": "syntax > runtime error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay stuck error",
+                "location": null,
+                "status": "pending",
+                "title": "stuck error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay render error not shown right after syntax error",
+                "location": null,
+                "status": "pending",
+                "title": "render error not shown right after syntax error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/error-recovery.test.ts:25:11)"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay can recover from a syntax error without losing state",
+                "location": null,
+                "status": "failed",
+                "title": "can recover from a syntax error without losing state"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at /work/test/development/acceptance-app/error-recovery.test.ts:96:13"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay client component can recover from syntax error",
+                "location": null,
+                "status": "failed",
+                "title": "client component can recover from syntax error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at /work/test/development/acceptance-app/error-recovery.test.ts:96:13"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay server component can recover from syntax error",
+                "location": null,
+                "status": "failed",
+                "title": "server component can recover from syntax error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/error-recovery.test.ts:123:11)"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay can recover from a event handler error",
+                "location": null,
+                "status": "failed",
+                "title": "can recover from a event handler error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at /work/test/development/acceptance-app/error-recovery.test.ts:226:13"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay client component can recover from a component error",
+                "location": null,
+                "status": "failed",
+                "title": "client component can recover from a component error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at /work/test/development/acceptance-app/error-recovery.test.ts:226:13"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay server component can recover from a component error",
+                "location": null,
+                "status": "failed",
+                "title": "server component can recover from a component error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/error-recovery.test.ts:286:11)"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay syntax > runtime error",
+                "location": null,
+                "status": "failed",
+                "title": "syntax > runtime error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/error-recovery.test.ts:352:11)"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay stuck error",
+                "location": null,
+                "status": "failed",
+                "title": "stuck error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/error-recovery.test.ts:417:11)"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay render error not shown right after syntax error",
+                "location": null,
+                "status": "failed",
+                "title": "render error not shown right after syntax error"
+              }
+            ],
+            "endTime": 1675289705112,
+            "message": "  ● Error recovery app turbo › Error recovery with overlay › can recover from a syntax error without losing state\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/error-recovery.test.ts:25:11)\n\n  ● Error recovery app turbo › Error recovery with overlay › client component can recover from syntax error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at development/acceptance-app/error-recovery.test.ts:96:13\n\n  ● Error recovery app turbo › Error recovery with overlay › server component can recover from syntax error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at development/acceptance-app/error-recovery.test.ts:96:13\n\n  ● Error recovery app turbo › Error recovery with overlay › can recover from a event handler error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/error-recovery.test.ts:123:11)\n\n  ● Error recovery app turbo › Error recovery with overlay › client component can recover from a component error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at development/acceptance-app/error-recovery.test.ts:226:13\n\n  ● Error recovery app turbo › Error recovery with overlay › server component can recover from a component error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at development/acceptance-app/error-recovery.test.ts:226:13\n\n  ● Error recovery app turbo › Error recovery with overlay › syntax > runtime error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/error-recovery.test.ts:286:11)\n\n  ● Error recovery app turbo › Error recovery with overlay › stuck error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/error-recovery.test.ts:352:11)\n\n  ● Error recovery app turbo › Error recovery with overlay › render error not shown right after syntax error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/error-recovery.test.ts:417:11)\n",
+            "name": "/work/test/development/acceptance-app/error-recovery.test.ts",
+            "startTime": 1675289411992,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-rendering/rendering.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 6,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 1,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 7,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675289747916,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app dir rendering"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"app/page.server.js\"\nReceived string:    \"failed to canonicalize embedded file path·\nCaused by:\n    No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:14:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir rendering should serve app/page.server.js at /",
+                "location": null,
+                "status": "failed",
+                "title": "should serve app/page.server.js at /"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "SSR only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:20:45)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir rendering SSR only should run data in layout and page",
+                "location": null,
+                "status": "failed",
+                "title": "should run data in layout and page"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "SSR only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from slow layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:32:50)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir rendering SSR only should run data fetch in parallel",
+                "location": null,
+                "status": "failed",
+                "title": "should run data fetch in parallel"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "static only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:40:45)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir rendering static only should run data in layout and page",
+                "location": null,
+                "status": "failed",
+                "title": "should run data in layout and page"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "static only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from slow layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:56:50)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir rendering static only should run data in parallel during development",
+                "location": null,
+                "status": "failed",
+                "title": "should run data in parallel during development"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "ISR"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:73:45)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir rendering ISR should revalidate the page when revalidate is configured",
+                "location": null,
+                "status": "failed",
+                "title": "should revalidate the page when revalidate is configured"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "mixed static and dynamic"
+                ],
+                "failureMessages": [],
+                "fullName": "app dir rendering mixed static and dynamic should generate static data during build and use it",
+                "location": null,
+                "status": "pending",
+                "title": "should generate static data during build and use it"
+              }
+            ],
+            "endTime": 1675289762136,
+            "message": "  ● app dir rendering › should serve app/page.server.js at /\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"app/page.server.js\"\n    Received string:    \"failed to canonicalize embedded file path·\n    Caused by:\n        No such file or directory (os error 2)\"\n\n      12 |     it('should serve app/page.server.js at /', async () => {\n      13 |       const html = await next.render('/')\n    > 14 |       expect(html).toContain('app/page.server.js')\n         |                    ^\n      15 |     })\n      16 |\n      17 |     describe('SSR only', () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:14:20)\n\n  ● app dir rendering › SSR only › should run data in layout and page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from layout\"\n    Received: \"\"\n\n      18 |       it('should run data in layout and page', async () => {\n      19 |         const $ = await next.render$('/ssr-only/nested')\n    > 20 |         expect($('#layout-message').text()).toBe('hello from layout')\n         |                                             ^\n      21 |         expect($('#page-message').text()).toBe('hello from page')\n      22 |       })\n      23 |\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:20:45)\n\n  ● app dir rendering › SSR only › should run data fetch in parallel\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from slow layout\"\n    Received: \"\"\n\n      30 |         // Using 7 seconds to ensure external factors causing slight slowness don't fail the tests\n      31 |         expect(duration < 7000).toBe(true)\n    > 32 |         expect($('#slow-layout-message').text()).toBe('hello from slow layout')\n         |                                                  ^\n      33 |         expect($('#slow-page-message').text()).toBe('hello from slow page')\n      34 |       })\n      35 |     })\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:32:50)\n\n  ● app dir rendering › static only › should run data in layout and page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from layout\"\n    Received: \"\"\n\n      38 |       it('should run data in layout and page', async () => {\n      39 |         const $ = await next.render$('/static-only/nested')\n    > 40 |         expect($('#layout-message').text()).toBe('hello from layout')\n         |                                             ^\n      41 |         expect($('#page-message').text()).toBe('hello from page')\n      42 |       })\n      43 |\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:40:45)\n\n  ● app dir rendering › static only › should run data in parallel during development\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from slow layout\"\n    Received: \"\"\n\n      54 |         // expect(duration < (isDev ? 7000 : 2000)).toBe(true)\n      55 |         // expect(duration < 7000).toBe(true)\n    > 56 |         expect($('#slow-layout-message').text()).toBe('hello from slow layout')\n         |                                                  ^\n      57 |         expect($('#slow-page-message').text()).toBe('hello from slow page')\n      58 |       })\n      59 |     })\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:56:50)\n\n  ● app dir rendering › ISR › should revalidate the page when revalidate is configured\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from layout\"\n    Received: \"\"\n\n      71 |         }\n      72 |         const { $ } = await getPage()\n    > 73 |         expect($('#layout-message').text()).toBe('hello from layout')\n         |                                             ^\n      74 |         expect($('#page-message').text()).toBe('hello from page')\n      75 |\n      76 |         const layoutNow = $('#layout-now').text()\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:73:45)\n",
+            "name": "/work/test/e2e/app-dir/app-rendering/rendering.test.ts",
+            "startTime": 1675289748007,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/404-page-custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 9,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675289792987,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should respond to 404 correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render error correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render index page normal",
+                "location": null,
+                "status": "passed",
+                "title": "should render index page normal"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should set pages404 in routes-manifest correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should set pages404 in routes-manifest correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should have output 404.html",
+                "location": null,
+                "status": "passed",
+                "title": "should have output 404.html"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:26:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should respond to 404 correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"oops\"\nReceived string:    \"failed to canonicalize embedded file path·\nCaused by:\n    No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:32:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from index\"\nReceived string:    \"failed to canonicalize embedded file path·\nCaused by:\n    No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:37:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render index page normal",
+                "location": null,
+                "status": "failed",
+                "title": "should render index page normal"
+              }
+            ],
+            "endTime": 1675289803068,
+            "message": "  ● Default 404 Page with custom _error › dev mode › should respond to 404 correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      24 |   it('should respond to 404 correctly', async () => {\n      25 |     const res = await fetchViaHTTP(appPort, '/404')\n    > 26 |     expect(res.status).toBe(404)\n         |                        ^\n      27 |     expect(await res.text()).toContain('This page could not be found')\n      28 |   })\n      29 |\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:26:24)\n\n  ● Default 404 Page with custom _error › dev mode › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"oops\"\n    Received string:    \"failed to canonicalize embedded file path·\n    Caused by:\n        No such file or directory (os error 2)\"\n\n      30 |   it('should render error correctly', async () => {\n      31 |     const text = await renderViaHTTP(appPort, '/err')\n    > 32 |     expect(text).toContain(isDev ? 'oops' : 'Internal Server Error')\n         |                  ^\n      33 |   })\n      34 |\n      35 |   it('should render index page normal', async () => {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:32:18)\n\n  ● Default 404 Page with custom _error › dev mode › should render index page normal\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from index\"\n    Received string:    \"failed to canonicalize embedded file path·\n    Caused by:\n        No such file or directory (os error 2)\"\n\n      35 |   it('should render index page normal', async () => {\n      36 |     const html = await renderViaHTTP(appPort, '/')\n    > 37 |     expect(html).toContain('hello from index')\n         |                  ^\n      38 |   })\n      39 |\n      40 |   if (!isDev) {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:37:18)\n",
+            "name": "/work/test/integration/404-page-custom-error/test/index.test.js",
+            "startTime": 1675289793079,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675289191170,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675289236678,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675289191265,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/link-with-api-rewrite/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675289341936,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "link-with-api-rewrite"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#rewrite')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/e2e/link-with-api-rewrite/index.test.ts:29:7)"
+                ],
+                "fullName": "link-with-api-rewrite should perform hard navigation for rewritten urls",
+                "location": null,
+                "status": "failed",
+                "title": "should perform hard navigation for rewritten urls"
+              },
+              {
+                "ancestorTitles": [
+                  "link-with-api-rewrite"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#direct')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/e2e/link-with-api-rewrite/index.test.ts:56:7)"
+                ],
+                "fullName": "link-with-api-rewrite should perform hard navigation for direct urls",
+                "location": null,
+                "status": "failed",
+                "title": "should perform hard navigation for direct urls"
+              }
+            ],
+            "endTime": 1675289420006,
+            "message": "  ● link-with-api-rewrite › should perform hard navigation for rewritten urls\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#rewrite')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (e2e/link-with-api-rewrite/index.test.ts:29:7)\n\n  ● link-with-api-rewrite › should perform hard navigation for direct urls\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#direct')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (e2e/link-with-api-rewrite/index.test.ts:56:7)\n",
+            "name": "/work/test/e2e/link-with-api-rewrite/index.test.ts",
+            "startTime": 1675289342030,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/404-page-app/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675289450165,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should not output static 404 if _app has getInitialProps",
+                "location": null,
+                "status": "passed",
+                "title": "should not output static 404 if _app has getInitialProps"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode specify to use the 404 page still in the routes-manifest",
+                "location": null,
+                "status": "passed",
+                "title": "specify to use the 404 page still in the routes-manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should still use 404 page",
+                "location": null,
+                "status": "passed",
+                "title": "should still use 404 page"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-app/test/index.test.js:81:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 Page Support with _app dev mode should not show pages/404 GIP error if _app has GIP",
+                "location": null,
+                "status": "failed",
+                "title": "should not show pages/404 GIP error if _app has GIP"
+              }
+            ],
+            "endTime": 1675289460209,
+            "message": "  ● 404 Page Support with _app › dev mode › should not show pages/404 GIP error if _app has GIP\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      79 |     it('should not show pages/404 GIP error if _app has GIP', async () => {\n      80 |       const res = await fetchViaHTTP(appPort, '/abc')\n    > 81 |       expect(res.status).toBe(404)\n         |                          ^\n      82 |       const $ = cheerio.load(await res.text())\n      83 |       expect($('#404-title').text()).toBe('Hi There')\n      84 |       expect(stderr).not.toMatch(gip404Err)\n\n      at Object.<anonymous> (integration/404-page-app/test/index.test.js:81:26)\n",
+            "name": "/work/test/integration/404-page-app/test/index.test.js",
+            "startTime": 1675289450262,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/error-recovery.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 9,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 9,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 18,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675289533973,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay can recover from a syntax error without losing state",
+                "location": null,
+                "status": "pending",
+                "title": "can recover from a syntax error without losing state"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay client component can recover from syntax error",
+                "location": null,
+                "status": "pending",
+                "title": "client component can recover from syntax error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay server component can recover from syntax error",
+                "location": null,
+                "status": "pending",
+                "title": "server component can recover from syntax error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay can recover from a event handler error",
+                "location": null,
+                "status": "pending",
+                "title": "can recover from a event handler error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay client component can recover from a component error",
+                "location": null,
+                "status": "pending",
+                "title": "client component can recover from a component error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay server component can recover from a component error",
+                "location": null,
+                "status": "pending",
+                "title": "server component can recover from a component error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay syntax > runtime error",
+                "location": null,
+                "status": "pending",
+                "title": "syntax > runtime error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay stuck error",
+                "location": null,
+                "status": "pending",
+                "title": "stuck error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app default",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [],
+                "fullName": "Error recovery app default Error recovery with overlay render error not shown right after syntax error",
+                "location": null,
+                "status": "pending",
+                "title": "render error not shown right after syntax error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/error-recovery.test.ts:25:11)"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay can recover from a syntax error without losing state",
+                "location": null,
+                "status": "failed",
+                "title": "can recover from a syntax error without losing state"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at /work/test/development/acceptance-app/error-recovery.test.ts:96:13"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay client component can recover from syntax error",
+                "location": null,
+                "status": "failed",
+                "title": "client component can recover from syntax error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at /work/test/development/acceptance-app/error-recovery.test.ts:96:13"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay server component can recover from syntax error",
+                "location": null,
+                "status": "failed",
+                "title": "server component can recover from syntax error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/error-recovery.test.ts:123:11)"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay can recover from a event handler error",
+                "location": null,
+                "status": "failed",
+                "title": "can recover from a event handler error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at /work/test/development/acceptance-app/error-recovery.test.ts:226:13"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay client component can recover from a component error",
+                "location": null,
+                "status": "failed",
+                "title": "client component can recover from a component error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at /work/test/development/acceptance-app/error-recovery.test.ts:226:13"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay server component can recover from a component error",
+                "location": null,
+                "status": "failed",
+                "title": "server component can recover from a component error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/error-recovery.test.ts:286:11)"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay syntax > runtime error",
+                "location": null,
+                "status": "failed",
+                "title": "syntax > runtime error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/error-recovery.test.ts:352:11)"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay stuck error",
+                "location": null,
+                "status": "failed",
+                "title": "stuck error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error recovery app turbo",
+                  "Error recovery with overlay"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/error-recovery.test.ts:417:11)"
+                ],
+                "fullName": "Error recovery app turbo Error recovery with overlay render error not shown right after syntax error",
+                "location": null,
+                "status": "failed",
+                "title": "render error not shown right after syntax error"
+              }
+            ],
+            "endTime": 1675289828322,
+            "message": "  ● Error recovery app turbo › Error recovery with overlay › can recover from a syntax error without losing state\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/error-recovery.test.ts:25:11)\n\n  ● Error recovery app turbo › Error recovery with overlay › client component can recover from syntax error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at development/acceptance-app/error-recovery.test.ts:96:13\n\n  ● Error recovery app turbo › Error recovery with overlay › server component can recover from syntax error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at development/acceptance-app/error-recovery.test.ts:96:13\n\n  ● Error recovery app turbo › Error recovery with overlay › can recover from a event handler error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/error-recovery.test.ts:123:11)\n\n  ● Error recovery app turbo › Error recovery with overlay › client component can recover from a component error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at development/acceptance-app/error-recovery.test.ts:226:13\n\n  ● Error recovery app turbo › Error recovery with overlay › server component can recover from a component error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at development/acceptance-app/error-recovery.test.ts:226:13\n\n  ● Error recovery app turbo › Error recovery with overlay › syntax > runtime error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/error-recovery.test.ts:286:11)\n\n  ● Error recovery app turbo › Error recovery with overlay › stuck error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/error-recovery.test.ts:352:11)\n\n  ● Error recovery app turbo › Error recovery with overlay › render error not shown right after syntax error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/error-recovery.test.ts:417:11)\n",
+            "name": "/work/test/development/acceptance-app/error-recovery.test.ts",
+            "startTime": 1675289534069,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-rendering/rendering.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 6,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 1,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 7,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675289872286,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app dir rendering"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"app/page.server.js\"\nReceived string:    \"failed to canonicalize embedded file path·\nCaused by:\n    No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:14:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app dir rendering should serve app/page.server.js at /",
+                "location": null,
+                "status": "failed",
+                "title": "should serve app/page.server.js at /"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "SSR only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:20:45)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app dir rendering SSR only should run data in layout and page",
+                "location": null,
+                "status": "failed",
+                "title": "should run data in layout and page"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "SSR only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from slow layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:32:50)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app dir rendering SSR only should run data fetch in parallel",
+                "location": null,
+                "status": "failed",
+                "title": "should run data fetch in parallel"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "static only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:40:45)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app dir rendering static only should run data in layout and page",
+                "location": null,
+                "status": "failed",
+                "title": "should run data in layout and page"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "static only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from slow layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:56:50)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app dir rendering static only should run data in parallel during development",
+                "location": null,
+                "status": "failed",
+                "title": "should run data in parallel during development"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "ISR"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:73:45)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app dir rendering ISR should revalidate the page when revalidate is configured",
+                "location": null,
+                "status": "failed",
+                "title": "should revalidate the page when revalidate is configured"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "mixed static and dynamic"
+                ],
+                "failureMessages": [],
+                "fullName": "app dir rendering mixed static and dynamic should generate static data during build and use it",
+                "location": null,
+                "status": "pending",
+                "title": "should generate static data during build and use it"
+              }
+            ],
+            "endTime": 1675289887041,
+            "message": "  ● app dir rendering › should serve app/page.server.js at /\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"app/page.server.js\"\n    Received string:    \"failed to canonicalize embedded file path·\n    Caused by:\n        No such file or directory (os error 2)\"\n\n      12 |     it('should serve app/page.server.js at /', async () => {\n      13 |       const html = await next.render('/')\n    > 14 |       expect(html).toContain('app/page.server.js')\n         |                    ^\n      15 |     })\n      16 |\n      17 |     describe('SSR only', () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:14:20)\n\n  ● app dir rendering › SSR only › should run data in layout and page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from layout\"\n    Received: \"\"\n\n      18 |       it('should run data in layout and page', async () => {\n      19 |         const $ = await next.render$('/ssr-only/nested')\n    > 20 |         expect($('#layout-message').text()).toBe('hello from layout')\n         |                                             ^\n      21 |         expect($('#page-message').text()).toBe('hello from page')\n      22 |       })\n      23 |\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:20:45)\n\n  ● app dir rendering › SSR only › should run data fetch in parallel\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from slow layout\"\n    Received: \"\"\n\n      30 |         // Using 7 seconds to ensure external factors causing slight slowness don't fail the tests\n      31 |         expect(duration < 7000).toBe(true)\n    > 32 |         expect($('#slow-layout-message').text()).toBe('hello from slow layout')\n         |                                                  ^\n      33 |         expect($('#slow-page-message').text()).toBe('hello from slow page')\n      34 |       })\n      35 |     })\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:32:50)\n\n  ● app dir rendering › static only › should run data in layout and page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from layout\"\n    Received: \"\"\n\n      38 |       it('should run data in layout and page', async () => {\n      39 |         const $ = await next.render$('/static-only/nested')\n    > 40 |         expect($('#layout-message').text()).toBe('hello from layout')\n         |                                             ^\n      41 |         expect($('#page-message').text()).toBe('hello from page')\n      42 |       })\n      43 |\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:40:45)\n\n  ● app dir rendering › static only › should run data in parallel during development\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from slow layout\"\n    Received: \"\"\n\n      54 |         // expect(duration < (isDev ? 7000 : 2000)).toBe(true)\n      55 |         // expect(duration < 7000).toBe(true)\n    > 56 |         expect($('#slow-layout-message').text()).toBe('hello from slow layout')\n         |                                                  ^\n      57 |         expect($('#slow-page-message').text()).toBe('hello from slow page')\n      58 |       })\n      59 |     })\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:56:50)\n\n  ● app dir rendering › ISR › should revalidate the page when revalidate is configured\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from layout\"\n    Received: \"\"\n\n      71 |         }\n      72 |         const { $ } = await getPage()\n    > 73 |         expect($('#layout-message').text()).toBe('hello from layout')\n         |                                             ^\n      74 |         expect($('#page-message').text()).toBe('hello from page')\n      75 |\n      76 |         const layoutNow = $('#layout-now').text()\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:73:45)\n",
+            "name": "/work/test/e2e/app-dir/app-rendering/rendering.test.ts",
+            "startTime": 1675289872382,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/404-page-custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 9,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675289920192,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should respond to 404 correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render error correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render index page normal",
+                "location": null,
+                "status": "passed",
+                "title": "should render index page normal"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should set pages404 in routes-manifest correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should set pages404 in routes-manifest correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should have output 404.html",
+                "location": null,
+                "status": "passed",
+                "title": "should have output 404.html"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:26:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should respond to 404 correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"oops\"\nReceived string:    \"failed to canonicalize embedded file path·\nCaused by:\n    No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:32:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from index\"\nReceived string:    \"failed to canonicalize embedded file path·\nCaused by:\n    No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:37:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render index page normal",
+                "location": null,
+                "status": "failed",
+                "title": "should render index page normal"
+              }
+            ],
+            "endTime": 1675289930362,
+            "message": "  ● Default 404 Page with custom _error › dev mode › should respond to 404 correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      24 |   it('should respond to 404 correctly', async () => {\n      25 |     const res = await fetchViaHTTP(appPort, '/404')\n    > 26 |     expect(res.status).toBe(404)\n         |                        ^\n      27 |     expect(await res.text()).toContain('This page could not be found')\n      28 |   })\n      29 |\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:26:24)\n\n  ● Default 404 Page with custom _error › dev mode › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"oops\"\n    Received string:    \"failed to canonicalize embedded file path·\n    Caused by:\n        No such file or directory (os error 2)\"\n\n      30 |   it('should render error correctly', async () => {\n      31 |     const text = await renderViaHTTP(appPort, '/err')\n    > 32 |     expect(text).toContain(isDev ? 'oops' : 'Internal Server Error')\n         |                  ^\n      33 |   })\n      34 |\n      35 |   it('should render index page normal', async () => {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:32:18)\n\n  ● Default 404 Page with custom _error › dev mode › should render index page normal\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from index\"\n    Received string:    \"failed to canonicalize embedded file path·\n    Caused by:\n        No such file or directory (os error 2)\"\n\n      35 |   it('should render index page normal', async () => {\n      36 |     const html = await renderViaHTTP(appPort, '/')\n    > 37 |     expect(html).toContain('hello from index')\n         |                  ^\n      38 |   })\n      39 |\n      40 |   if (!isDev) {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:37:18)\n",
+            "name": "/work/test/integration/404-page-custom-error/test/index.test.js",
+            "startTime": 1675289920288,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
