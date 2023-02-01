@@ -73,6 +73,40 @@ jobs:
             !**.md
             !**.mdx
 
+      - name: Turbopack related changes
+        id: turbopack
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            pnpm-lock.yaml
+            package.json
+            crates/**
+            xtask/**
+            Cargo.*
+            .cargo/**
+            rust-toolchain
+            !crates/turborepo/**
+            !crates/turborepo-lib/**
+            !crates/turbo-updater/**
+            !**.md
+            !**.mdx
+
+      - name: Turborepo related changes
+        id: turborepo
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            pnpm-lock.yaml
+            package.json
+            crates/turborepo/**
+            crates/turborepo-lib/**
+            crates/turbo-updater/**
+            Cargo.*
+            .cargo/**
+            rust-toolchain
+            !**.md
+            !**.mdx
+
       - name: Rust Benchmark related changes
         id: rust_bench
         uses: technote-space/get-diff-action@v6
@@ -119,6 +153,8 @@ jobs:
 
     outputs:
       rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
+      turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
+      turborepo: ${{ steps.ci.outputs.diff != '' || steps.turborepo.outputs.diff != '' }}
       rust_bench: ${{ steps.ci.outputs.diff != '' || steps.rust_bench.outputs.diff != '' }}
       go: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' }}
       go_e2e: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' || steps.go_e2e.outputs.diff != '' }}
@@ -478,9 +514,9 @@ jobs:
             fi
           fi
 
-  rust_test:
+  turborepo_rust_test:
     needs: [determine_jobs, rust_prepare]
-    if: needs.determine_jobs.outputs.rust == 'true'
+    if: needs.determine_jobs.outputs.turborepo == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -495,7 +531,46 @@ jobs:
             runner: windows-latest
             nextest: windows-tar
     runs-on: ${{ matrix.os.runner }}
-    name: Rust testing on ${{ matrix.os.name }}
+    name: Turborepo Rust testing on ${{ matrix.os.name }}
+    steps:
+      - name: Set git to use LF line endings
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+        if: matrix.os.name == 'windows'
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          save-cache: true
+
+      - name: Run tests
+        timeout-minutes: 120
+        # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
+        run: |
+          cargo test -p turborepo-lib
+
+  turbopack_rust_test:
+    needs: [determine_jobs, rust_prepare]
+    if: needs.determine_jobs.outputs.turbopack == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest-16-core-oss
+            nextest: linux
+          - name: macos
+            runner: macos-latest
+            nextest: mac
+          - name: windows
+            runner: windows-latest
+            nextest: windows-tar
+    runs-on: ${{ matrix.os.runner }}
+    name: Turbopack Rust testing on ${{ matrix.os.name }}
     steps:
       - name: Set git to use LF line endings
         run: |
@@ -543,9 +618,9 @@ jobs:
         run: |
           cargo nextest run --workspace --release --no-fail-fast --exclude turbo
 
-  rust_test_bench:
+  turbopack_rust_test_bench:
     needs: [determine_jobs, rust_prepare]
-    if: needs.determine_jobs.outputs.rust == 'true'
+    if: needs.determine_jobs.outputs.turbopack == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -561,7 +636,7 @@ jobs:
           #   runner: windows-2019
           #   nextest: windows-tar
     runs-on: ${{ matrix.os.runner }}
-    name: Rust testing benchmarks on ${{ matrix.os.name }}
+    name: Turbopack Rust testing benchmarks on ${{ matrix.os.name }}
 
     steps:
       - name: Set git to use LF
@@ -687,7 +762,7 @@ jobs:
 
   rust_bench_pr:
     needs: [determine_jobs, rust_prepare]
-    if: needs.determine_jobs.outputs.rust == 'true' && github.event_name == 'pull_request'
+    if: needs.determine_jobs.outputs.turbopack == 'true' && github.event_name == 'pull_request'
     name: Benchmark and compare Turbopack performance
     runs-on: ubuntu-latest-16-core-oss
     permissions:
@@ -860,24 +935,13 @@ jobs:
   next_js_integration:
     name: Execute Next.js integration workflow
     needs: [determine_jobs]
+    permissions:
+      pull-requests: write
     if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
     uses: ./.github/workflows/nextjs-integration-test.yml
     # Uncomment to test against a specific version of Next.js
     # with:
     # version: v13.1.6-canary.0
-
-  collect_nextjs_integration_stat:
-    needs: [next_js_integration]
-    name: Next.js integration test status report
-    permissions:
-      pull-requests: write
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Collect integration test stat
-        uses: ./.github/actions/next-integration-stat
 
   format_lint:
     name: Formatting
@@ -904,10 +968,12 @@ jobs:
       - go_unit
       - go_examples
       - go_e2e
+      - go_integration
       - rust_lint
       - rust_check
-      - rust_test
-      - rust_test_bench
+      - turbopack_rust_test
+      - turborepo_rust_test
+      - turbopack_rust_test_bench
       - rust_build_release
       - rust_bench
       - format_lint
@@ -945,6 +1011,12 @@ jobs:
         if: always() && needs.go_unit.result != 'success' && needs.go_unit.result != 'skipped'
         run: |
           echo "- Go Unit Tests" >> failures.md
+          exit 1
+
+      - name: Go Integration Tests failed
+        if: always() && needs.go_integration.result != 'success' && needs.go_integration.result != 'skipped'
+        run: |
+          echo "- Go Integration Tests" >> failures.md
           exit 1
 
       - name: Go Examples failed

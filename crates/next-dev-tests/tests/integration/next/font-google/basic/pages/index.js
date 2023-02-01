@@ -18,8 +18,7 @@ export default function Home() {
 function runTests() {
   it("returns structured data about the font styles from the font function", () => {
     expect(interNoArgs).toEqual({
-      className:
-        "className◽[project-with-next]/crates/next-dev-tests/tests/integration/next/font-google/basic/[embedded_modules]/@vercel/turbopack-next/internal/font/google/inter_34ab8b4d.module.css",
+      className: "className__inter_34ab8b4d__77c0d301",
       style: {
         fontFamily: "'__Inter_34ab8b4d'",
         fontStyle: "normal",
@@ -27,26 +26,24 @@ function runTests() {
     });
   });
 
-  it("includes a rule styling the exported className", () => {
-    const matchingRule = getRuleMatchingClassName(interNoArgs.className);
+  it("includes a rule styling the exported className", async () => {
+    const matchingRule = await getRuleMatchingClassName(interNoArgs.className);
     expect(matchingRule).toBeTruthy();
     expect(matchingRule.style.fontFamily).toEqual("__Inter_34ab8b4d");
     expect(matchingRule.style.fontStyle).toEqual("normal");
   });
 
-  it("supports declaring a css custom property (css variable)", () => {
+  it("supports declaring a css custom property (css variable)", async () => {
     expect(interWithVariableName).toEqual({
-      className:
-        "className◽[project-with-next]/crates/next-dev-tests/tests/integration/next/font-google/basic/[embedded_modules]/@vercel/turbopack-next/internal/font/google/inter_c6e282f1.module.css",
+      className: "className__inter_c6e282f1__d812ce46",
       style: {
         fontFamily: "'__Inter_c6e282f1'",
         fontStyle: "normal",
       },
-      variable:
-        "variable◽[project-with-next]/crates/next-dev-tests/tests/integration/next/font-google/basic/[embedded_modules]/@vercel/turbopack-next/internal/font/google/inter_c6e282f1.module.css",
+      variable: "variable__inter_c6e282f1__d812ce46",
     });
 
-    const matchingRule = getRuleMatchingClassName(
+    const matchingRule = await getRuleMatchingClassName(
       interWithVariableName.variable
     );
     expect(matchingRule.styleMap.get("--my-font").toString().trim()).toBe(
@@ -55,23 +52,41 @@ function runTests() {
   });
 }
 
-function getRuleMatchingClassName(className) {
+async function getRuleMatchingClassName(className) {
   const selector = `.${CSS.escape(className)}`;
 
-  let matchingRule;
   for (const stylesheet of document.querySelectorAll("link[rel=stylesheet]")) {
-    const sheet = stylesheet.sheet;
-    if (sheet == null) {
-      continue;
+    if (stylesheet.sheet == null) {
+      // Wait for the stylesheet to load completely if it hasn't already
+      await new Promise((resolve) => {
+        stylesheet.addEventListener("load", resolve);
+      });
     }
 
-    for (const rule of sheet.cssRules) {
-      if (rule.selectorText === selector) {
-        matchingRule = rule;
-        break;
+    const sheet = stylesheet.sheet;
+
+    const res = getRuleMatchingClassNameRec(selector, sheet.cssRules);
+    if (res != null) {
+      return res;
+    }
+  }
+
+  return null;
+}
+
+function getRuleMatchingClassNameRec(selector, rules) {
+  for (const rule of rules) {
+    if (rule instanceof CSSStyleRule && rule.selectorText === selector) {
+      return rule;
+    }
+
+    if (rule instanceof CSSLayerBlockRule) {
+      const res = getRuleMatchingClassNameRec(selector, rule.cssRules);
+      if (res != null) {
+        return res;
       }
     }
   }
 
-  return matchingRule;
+  return null;
 }

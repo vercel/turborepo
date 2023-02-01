@@ -4,6 +4,12 @@ version = "0.1.0"
 edition = "2021"
 license = "MPL-2.0"
 
+[features]
+# Allows configuring a specific tls backend for reqwest.
+# See top level Cargo.toml for more details.
+native-tls = ["reqwest/native-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
 assert_cmd = "2.0.7"
@@ -16,11 +22,12 @@ anyhow = { version = "1.0.65", features = ["backtrace"] }
 atty = "0.2"
 axum = "0.6.2"
 axum-server = "0.4.4"
-chrono = "0.4.23"
+chrono = { version = "0.4.23", features = ["serde"] }
 clap = { version = "4.0.22", features = ["derive"] }
 clap_complete = "4.0.6"
 config = "0.13"
 console = "0.15.5"
+dialoguer = "0.10.3"
 dirs-next = "2.0.0"
 dunce = "1.0"
 env_logger = "0.10.0"
@@ -28,7 +35,7 @@ indicatif = "0.17.3"
 lazy_static = "1.4.0"
 log = "0.4.17"
 predicates = "2.1.1"
-reqwest = { version = "0.11.14", features = ["json"] }
+reqwest = { version = "0.11.14", default_features = false, features = ["json"] }
 rustc_version_runtime = "0.2.1"
 semver = "1.0"
 serde = { version = "1.0.145", features = ["derive"] }
