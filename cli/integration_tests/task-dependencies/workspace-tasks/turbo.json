@@ -3,12 +3,10 @@
     "build1": {},
     "//#build1": {},
 
-
     "build2": {
       "dependsOn": ["^build2", "//#exists"]
     },
     "//#exists": {},
-
 
     "build3": {
       "dependsOn": ["//#not-exists"]
