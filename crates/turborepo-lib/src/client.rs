@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use axum::async_trait;
 use lazy_static::lazy_static;
 use reqwest::StatusCode;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{get_version, retry::retry_future};
 
@@ -16,7 +16,7 @@ pub trait UserClient {
     async fn get_caching_status(&self, team_id: &str) -> Result<CachingStatusResponse>;
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CachingStatus {
     Disabled,
@@ -25,19 +25,26 @@ pub enum CachingStatus {
     Paused,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachingStatusResponse {
     pub status: CachingStatus,
 }
 
 /// Membership is the relationship between the logged-in user and a particular
 /// team
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Membership {
     role: Role,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+impl Membership {
+    #[allow(dead_code)]
+    pub fn new(role: Role) -> Self {
+        Self { role }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Role {
     Member,
@@ -47,7 +54,7 @@ pub enum Role {
     Billing,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Team {
     pub id: String,
     pub slug: String,
@@ -64,12 +71,12 @@ impl Team {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TeamsResponse {
     pub teams: Vec<Team>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     pub id: String,
     pub username: String,
@@ -79,7 +86,7 @@ pub struct User {
     pub created_at: u64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserResponse {
     pub user: User,
 }
