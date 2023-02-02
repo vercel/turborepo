@@ -37,7 +37,7 @@ func (ts *TargetSelector) getToRef() string {
 
 var errCantMatchDependencies = errors.New("cannot use match dependencies without specifying either a directory or package")
 
-var targetSelectorRegex = regexp.MustCompile(`^([^.](?:[^{}[\]]*[^{}[\].])?)?(\{[^}]+\})?((?:\.{3})?\[[^\]]+\])?$`)
+var targetSelectorRegex = regexp.MustCompile(`^(?P<name>[^.](?:[^{}[\]]*[^{}[\].])?)?(?P<directory>\{[^}]*\})?(?P<commits>(?:\.{3})?\[[^\]]+\])?$`)
 
 // ParseTargetSelector is a function that returns pnpm compatible --filter command line flags
 func ParseTargetSelector(rawSelector string) (*TargetSelector, error) {
@@ -94,21 +94,23 @@ func ParseTargetSelector(rawSelector string) (*TargetSelector, error) {
 	namePattern := ""
 	preAddDepdencies := false
 	if len(matches) > 0 && len(matches[0]) > 0 {
-		if len(matches[0][1]) > 0 {
-			namePattern = matches[0][1]
-		}
-		if len(matches[0][2]) > 0 {
-			rawParentDir := matches[0][2]
+		match := matches[0]
+		namePattern = match[targetSelectorRegex.SubexpIndex("name")]
+		rawParentDir := match[targetSelectorRegex.SubexpIndex("directory")]
+		if len(rawParentDir) > 0 {
 			// trim {}
 			rawParentDir = rawParentDir[1 : len(rawParentDir)-1]
-			if relPath, err := turbopath.CheckedToRelativeSystemPath(rawParentDir); err == nil {
+			if rawParentDir == "" {
+				return nil, errors.New("empty path specification")
+			} else if relPath, err := turbopath.CheckedToRelativeSystemPath(rawParentDir); err == nil {
 				parentDir = relPath
 			} else {
 				return nil, errors.Wrapf(err, "invalid path specification: %v", rawParentDir)
 			}
 		}
-		if len(matches[0][3]) > 0 {
-			fromRef = matches[0][3]
+		rawCommits := match[targetSelectorRegex.SubexpIndex("commits")]
+		if len(rawCommits) > 0 {
+			fromRef = rawCommits
 			if strings.HasPrefix(fromRef, "...") {
 				if parentDir == "" && namePattern == "" {
 					return &TargetSelector{}, errCantMatchDependencies

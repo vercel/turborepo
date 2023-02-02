@@ -33,7 +33,7 @@ Test help flag
         --token <TOKEN>             Set the auth token for API calls
         --trace <TRACE>             Specify a file to save a pprof trace
         --verbosity <COUNT>         Verbosity level
-    -h, --help                      Print help information
+    -h, --help                      Print help
   
   Run Arguments:
         --cache-dir <CACHE_DIR>          Override the filesystem cache directory
@@ -94,7 +94,7 @@ Test help flag
         --token <TOKEN>             Set the auth token for API calls
         --trace <TRACE>             Specify a file to save a pprof trace
         --verbosity <COUNT>         Verbosity level
-    -h, --help                      Print help information
+    -h, --help                      Print help
   
   Run Arguments:
         --cache-dir <CACHE_DIR>          Override the filesystem cache directory
@@ -141,7 +141,7 @@ Test help flag for link command
         --token <TOKEN>             Set the auth token for API calls
         --trace <TRACE>             Specify a file to save a pprof trace
         --verbosity <COUNT>         Verbosity level
-    -h, --help                      Print help information
+    -h, --help                      Print help
   
   Run Arguments:
         --single-package  Run turbo in single-package mode
@@ -167,7 +167,7 @@ Test help flag for unlink command
         --token <TOKEN>             Set the auth token for API calls
         --trace <TRACE>             Specify a file to save a pprof trace
         --verbosity <COUNT>         Verbosity level
-    -h, --help                      Print help information
+    -h, --help                      Print help
   
   Run Arguments:
         --single-package  Run turbo in single-package mode
@@ -194,7 +194,7 @@ Test help flag for login command
         --token <TOKEN>             Set the auth token for API calls
         --trace <TRACE>             Specify a file to save a pprof trace
         --verbosity <COUNT>         Verbosity level
-    -h, --help                      Print help information
+    -h, --help                      Print help
   
   Run Arguments:
         --single-package  Run turbo in single-package mode
@@ -220,7 +220,7 @@ Test help flag for logout command
         --token <TOKEN>             Set the auth token for API calls
         --trace <TRACE>             Specify a file to save a pprof trace
         --verbosity <COUNT>         Verbosity level
-    -h, --help                      Print help information
+    -h, --help                      Print help
   
   Run Arguments:
         --single-package  Run turbo in single-package mode

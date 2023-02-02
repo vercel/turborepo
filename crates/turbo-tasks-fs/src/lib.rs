@@ -1238,15 +1238,16 @@ impl File {
         }
     }
 
+    /// Returns the content type associated with this file.
     pub fn content_type(&self) -> Option<&Mime> {
         self.meta.content_type.as_ref()
     }
 
+    /// Sets the content type associated with this file.
     pub fn with_content_type(mut self, content_type: Mime) -> Self {
         self.meta.content_type = Some(content_type);
         self
     }
-
     /// Returns a Read/AsyncRead/Stream/Iterator to access the File's contents.
     pub fn read(&self) -> RopeReader {
         self.content.read()
@@ -1604,6 +1605,16 @@ impl FileSystem for NullFileSystem {
     #[turbo_tasks::function]
     fn write(&self, _fs_path: FileSystemPathVc, _content: FileContentVc) -> CompletionVc {
         CompletionVc::new()
+    }
+
+    #[turbo_tasks::function]
+    fn write_link(&self, _fs_path: FileSystemPathVc, _target: LinkContentVc) -> CompletionVc {
+        CompletionVc::new()
+    }
+
+    #[turbo_tasks::function]
+    fn metadata(&self, _fs_path: FileSystemPathVc) -> FileMetaVc {
+        FileMeta::default().cell()
     }
 }
 

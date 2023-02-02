@@ -41,6 +41,7 @@ Verbosity level 2
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .+node_modules/\.bin/turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "" (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\["VERCEL_ANALYTICS_ID"] (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=430b3790556340cb (re)
@@ -68,6 +69,7 @@ Verbosity level 2
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .+node_modules/\.bin/turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "" (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\["VERCEL_ANALYTICS_ID"] (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=430b3790556340cb (re)
@@ -96,10 +98,10 @@ Verbosity level 2
 
 Make sure users can only use one verbosity flag
   $ ${TURBO} build -v --verbosity=1
-  ERROR The argument '-v...' cannot be used with '--verbosity <COUNT>'
+  ERROR the argument '-v...' cannot be used with '--verbosity <COUNT>'
   
   Usage: turbo [OPTIONS] [COMMAND]
   
-  For more information try '--help'
+  For more information, try '--help'.
   
   [1]

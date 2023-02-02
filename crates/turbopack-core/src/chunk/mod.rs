@@ -1,7 +1,10 @@
 pub mod dev;
 pub mod optimize;
 
-use std::{collections::VecDeque, fmt::Debug};
+use std::{
+    collections::VecDeque,
+    fmt::{Debug, Display},
+};
 
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
@@ -32,6 +35,23 @@ pub enum ModuleId {
     String(String),
 }
 
+impl Display for ModuleId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModuleId::Number(i) => write!(f, "{}", i),
+            ModuleId::String(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ValueToString for ModuleId {
+    #[turbo_tasks::function]
+    fn to_string(&self) -> StringVc {
+        StringVc::cell(self.to_string())
+    }
+}
+
 impl ModuleId {
     pub fn parse(id: &str) -> Result<ModuleId> {
         Ok(match id.parse::<u32>() {
@@ -50,6 +70,8 @@ pub struct ModuleIds(Vec<ModuleIdVc>);
 pub trait ChunkingContext {
     fn output_root(&self) -> FileSystemPathVc;
 
+    // TODO remove this, a chunking context should not be bound to a specific
+    // environment since this can change due to transitions in the module graph
     fn environment(&self) -> EnvironmentVc;
 
     fn chunk_path(&self, path: FileSystemPathVc, extension: &str) -> FileSystemPathVc;
