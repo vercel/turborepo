@@ -11,7 +11,7 @@ on:
       version:
         description: Next.js version
         type: string
-      post_to_slack:
+      force_post_to_slack:
         description: Post test results to Slack
         type: boolean
 
@@ -31,7 +31,7 @@ jobs:
       pull-requests: write
     uses: ./.github/workflows/nextjs-integration-test.yml
     with:
-      post_to_slack: ${{ inputs.post_to_slack }}
+      force_post_to_slack: ${{ inputs.force_post_to_slack }}
       version: ${{ inputs.version || github.event.client_payload.version }}
 
   # Upload test results to branch.
