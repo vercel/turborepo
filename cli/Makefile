@@ -34,11 +34,11 @@ go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
 turborepo-ffi-install: turborepo-ffi turborepo-ffi-proto
 	cd ../crates/turborepo-ffi\
 	 && cp bindings.h ../../cli/internal/ffi\
-	 && cp ../../target/release/libturborepo_ffi.a ../../cli/internal/ffi\
+	 && cp ./target/release/libturborepo_ffi.a ../../cli/internal/ffi\
 	 && cp -r ffi/proto ../../cli/internal/ffi
 
 turborepo-ffi:
-	cd ../crates/turborepo-ffi && cargo build --release
+	cd ../crates/turborepo-ffi && CARGO_TARGET_DIR=./target cargo build --release
 
 turborepo-ffi-proto:
 	cd ../crates/turborepo-ffi && protoc --go_out=. messages.proto
