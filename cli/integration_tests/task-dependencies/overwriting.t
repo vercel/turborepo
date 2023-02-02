@@ -31,7 +31,7 @@ workspace-b#generate DID NOT run
   $ cat tmp.log | grep "workspace-b:generate"
   [1]
 
-workspace-a#build ran
+workspace-b#build ran
   $ cat tmp.log | grep "workspace-b:build"
   workspace-b:build: cache miss, executing 35d38d74bf7b33db
   workspace-b:build: 
