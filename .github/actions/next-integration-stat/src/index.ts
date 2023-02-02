@@ -570,7 +570,7 @@ function getTestSummary(
 
   // Store a json payload to share via slackapi/slack-github-action into Slack channel
   if (shouldShareTestSummaryToSlack) {
-    let resultsSummary;
+    let resultsSummary = "";
     if (suiteCountDiff === 0) {
       resultsSummary += "No changes in suite count.";
     } else if (suiteCountDiff > 0) {
