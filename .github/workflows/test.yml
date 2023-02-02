@@ -58,6 +58,14 @@ jobs:
             .github/actions/**
             .github/workflows/test.yml
 
+      - name: Root cargo related changes
+        id: cargo
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            Cargo.*
+            rust-toolchain
+
       - name: Rust related changes
         id: rust
         uses: technote-space/get-diff-action@v6
@@ -65,10 +73,10 @@ jobs:
           PATTERNS: |
             pnpm-lock.yaml
             package.json
+            Cargo.**
             crates/**
             shim/**
             xtask/**
-            Cargo.*
             .cargo/**
             rust-toolchain
             !**.md
@@ -83,7 +91,6 @@ jobs:
             package.json
             crates/**
             xtask/**
-            Cargo.*
             .cargo/**
             rust-toolchain
             !crates/turborepo/**
@@ -102,7 +109,6 @@ jobs:
             crates/turborepo/**
             crates/turborepo-lib/**
             crates/turbo-updater/**
-            Cargo.*
             .cargo/**
             rust-toolchain
             !**.md
@@ -154,6 +160,8 @@ jobs:
 
     outputs:
       rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
+      # We only test workspace dependency changes on main, not on PRs to speed up CI
+      cargo_on_main: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
       turborepo: ${{ steps.ci.outputs.diff != '' || steps.turborepo.outputs.diff != '' }}
       rust_bench: ${{ steps.ci.outputs.diff != '' || steps.rust_bench.outputs.diff != '' }}
@@ -517,7 +525,8 @@ jobs:
 
   turborepo_rust_test:
     needs: [determine_jobs, rust_prepare]
-    if: needs.determine_jobs.outputs.turborepo == 'true'
+    # We test dependency changes only on main
+    if: needs.determine_jobs.outputs.turborepo == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -556,7 +565,7 @@ jobs:
 
   turbopack_rust_test:
     needs: [determine_jobs, rust_prepare]
-    if: needs.determine_jobs.outputs.turbopack == 'true'
+    if: needs.determine_jobs.outputs.turbopack == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -621,7 +630,7 @@ jobs:
 
   turbopack_rust_test_bench:
     needs: [determine_jobs, rust_prepare]
-    if: needs.determine_jobs.outputs.turbopack == 'true'
+    if: needs.determine_jobs.outputs.turbopack == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
     strategy:
       fail-fast: false
       matrix:
