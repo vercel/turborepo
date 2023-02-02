@@ -1,0 +1,1068 @@
+{
+  "ref": "1d21d406c81fed0ebb6a13bf01ba479b2f65a7a9",
+  "nextjsVersion": "Next.js v13.1.7-canary.3",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675357043514,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675357090942,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675357043614,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/i18n-api-support/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675357132775,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/i18n-api-support/index.test.ts:47:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "i18n API support should respond to normal API request",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to normal API request"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/i18n-api-support/index.test.ts:53:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "i18n API support should respond to normal dynamic API request",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to normal dynamic API request"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/i18n-api-support/index.test.ts:69:28)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "i18n API support should fallback rewrite non-matching API request",
+                "location": null,
+                "status": "failed",
+                "title": "should fallback rewrite non-matching API request"
+              }
+            ],
+            "endTime": 1675357147786,
+            "message": "  ● i18n API support › should respond to normal API request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      45 |   it('should respond to normal API request', async () => {\n      46 |     const res = await fetchViaHTTP(next.url, '/api/hello')\n    > 47 |     expect(res.status).toBe(200)\n         |                        ^\n      48 |     expect(await res.text()).toBe('hello world')\n      49 |   })\n      50 |\n\n      at Object.<anonymous> (e2e/i18n-api-support/index.test.ts:47:24)\n\n  ● i18n API support › should respond to normal dynamic API request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      51 |   it('should respond to normal dynamic API request', async () => {\n      52 |     const res = await fetchViaHTTP(next.url, '/api/blog/first')\n    > 53 |     expect(res.status).toBe(200)\n         |                        ^\n      54 |     expect(await res.text()).toBe('blog/[slug]')\n      55 |   })\n      56 |\n\n      at Object.<anonymous> (e2e/i18n-api-support/index.test.ts:53:24)\n\n  ● i18n API support › should fallback rewrite non-matching API request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      67 |       for (const path of paths) {\n      68 |         const res = await fetchViaHTTP(next.url, path)\n    > 69 |         expect(res.status).toBe(200)\n         |                            ^\n      70 |         expect(await res.text()).toContain('Example Domain')\n      71 |       }\n      72 |     })\n\n      at Object.<anonymous> (e2e/i18n-api-support/index.test.ts:69:28)\n",
+            "name": "/work/test/e2e/i18n-api-support/index.test.ts",
+            "startTime": 1675357132873,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/404-page-app/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675357176732,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should not output static 404 if _app has getInitialProps",
+                "location": null,
+                "status": "passed",
+                "title": "should not output static 404 if _app has getInitialProps"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode specify to use the 404 page still in the routes-manifest",
+                "location": null,
+                "status": "passed",
+                "title": "specify to use the 404 page still in the routes-manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should still use 404 page",
+                "location": null,
+                "status": "passed",
+                "title": "should still use 404 page"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-app/test/index.test.js:81:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 Page Support with _app dev mode should not show pages/404 GIP error if _app has GIP",
+                "location": null,
+                "status": "failed",
+                "title": "should not show pages/404 GIP error if _app has GIP"
+              }
+            ],
+            "endTime": 1675357186861,
+            "message": "  ● 404 Page Support with _app › dev mode › should not show pages/404 GIP error if _app has GIP\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      79 |     it('should not show pages/404 GIP error if _app has GIP', async () => {\n      80 |       const res = await fetchViaHTTP(appPort, '/abc')\n    > 81 |       expect(res.status).toBe(404)\n         |                          ^\n      82 |       const $ = cheerio.load(await res.text())\n      83 |       expect($('#404-title').text()).toBe('Hi There')\n      84 |       expect(stderr).not.toMatch(gip404Err)\n\n      at Object.<anonymous> (integration/404-page-app/test/index.test.js:81:26)\n",
+            "name": "/work/test/integration/404-page-app/test/index.test.js",
+            "startTime": 1675357176831,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance/ReactRefresh.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675357071762,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefresh"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefresh.test.ts:20:5)"
+                ],
+                "fullName": "ReactRefresh can edit a component without losing state",
+                "location": null,
+                "status": "failed",
+                "title": "can edit a component without losing state"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefresh"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefresh.test.ts:157:5)"
+                ],
+                "fullName": "ReactRefresh cyclic dependencies",
+                "location": null,
+                "status": "failed",
+                "title": "cyclic dependencies"
+              }
+            ],
+            "endTime": 1675357148400,
+            "message": "  ● ReactRefresh › can edit a component without losing state\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefresh.test.ts:20:5)\n\n  ● ReactRefresh › cyclic dependencies\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefresh.test.ts:157:5)\n",
+            "name": "/work/test/development/acceptance/ReactRefresh.test.ts",
+            "startTime": 1675357071855,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675357219230,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675357264626,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675357219326,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675357278250,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675357283702,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675357278350,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 9,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 5,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 14,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675356980539,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "misc basic dev tests, basePath: \"\""
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#node-env')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "misc basic dev tests, basePath: \"\" should set process.env.NODE_ENV in development",
+                "location": null,
+                "status": "failed",
+                "title": "should set process.env.NODE_ENV in development"
+              },
+              {
+                "ancestorTitles": [
+                  "misc basic dev tests, basePath: \"\""
+                ],
+                "failureMessages": [],
+                "fullName": "misc basic dev tests, basePath: \"\" should allow access to public files",
+                "location": null,
+                "status": "passed",
+                "title": "should allow access to public files"
+              },
+              {
+                "ancestorTitles": [
+                  "misc basic dev tests, basePath: \"\"",
+                  "With Security Related Issues"
+                ],
+                "failureMessages": [
+                  "Error: Path /_next/static/../BUILD_ID accessible from the browser\n    at Object.<anonymous> (/work/test/development/basic/misc.test.ts:57:19)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "misc basic dev tests, basePath: \"\" With Security Related Issues should not allow accessing files outside .next/static and .next/server directory",
+                "location": null,
+                "status": "failed",
+                "title": "should not allow accessing files outside .next/static and .next/server directory"
+              },
+              {
+                "ancestorTitles": [
+                  "misc basic dev tests, basePath: \"\"",
+                  "With Security Related Issues"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 500\n    at Object.<anonymous> (/work/test/development/basic/misc.test.ts:75:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "misc basic dev tests, basePath: \"\" With Security Related Issues should handle encoded / value for trailing slash correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle encoded / value for trailing slash correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "misc basic dev tests, basePath: \"\"",
+                  "Development Logs"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/basic/misc.test.ts:105:26)"
+                ],
+                "fullName": "misc basic dev tests, basePath: \"\" Development Logs should warn when prefetch is true",
+                "location": null,
+                "status": "failed",
+                "title": "should warn when prefetch is true"
+              },
+              {
+                "ancestorTitles": [
+                  "misc basic dev tests, basePath: \"\"",
+                  "Development Logs"
+                ],
+                "failureMessages": [],
+                "fullName": "misc basic dev tests, basePath: \"\" Development Logs should not warn when prefetch is false",
+                "location": null,
+                "status": "passed",
+                "title": "should not warn when prefetch is false"
+              },
+              {
+                "ancestorTitles": [
+                  "misc basic dev tests, basePath: \"\"",
+                  "Development Logs"
+                ],
+                "failureMessages": [],
+                "fullName": "misc basic dev tests, basePath: \"\" Development Logs should not warn when prefetch is not specified",
+                "location": null,
+                "status": "passed",
+                "title": "should not warn when prefetch is not specified"
+              },
+              {
+                "ancestorTitles": [
+                  "misc basic dev tests, basePath: \"/docs\""
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#node-env')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "misc basic dev tests, basePath: \"/docs\" should set process.env.NODE_ENV in development",
+                "location": null,
+                "status": "failed",
+                "title": "should set process.env.NODE_ENV in development"
+              },
+              {
+                "ancestorTitles": [
+                  "misc basic dev tests, basePath: \"/docs\""
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\n- Expected  -  1\n+ Received  + 16\n\n- data\n+ Execution of get_from_source failed\n+\n+ Caused by:\n+     0: Execution of resolve_source_request failed\n+     1: Execution of CombinedContentSource::get failed\n+     2: Execution of create_app_source failed\n+     3: Execution of load_next_config failed\n+     4: Execution of evaluate failed\n+     5: Execution of get_evaluate_pool failed\n+     6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n+     7: Execution of turbopack_core::asset::AssetContentVc::write failed\n+     8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n+     9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n+    10: Execution of content_from_relative_path failed\n+    11: failed to canonicalize embedded file path\n+    12: No such file or directory (os error 2)\n    at Object.<anonymous> (/work/test/development/basic/misc.test.ts:35:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "misc basic dev tests, basePath: \"/docs\" should allow access to public files",
+                "location": null,
+                "status": "failed",
+                "title": "should allow access to public files"
+              },
+              {
+                "ancestorTitles": [
+                  "misc basic dev tests, basePath: \"/docs\"",
+                  "With Security Related Issues"
+                ],
+                "failureMessages": [
+                  "Error: Path /docs/_next/static/../BUILD_ID accessible from the browser\n    at Object.<anonymous> (/work/test/development/basic/misc.test.ts:57:19)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "misc basic dev tests, basePath: \"/docs\" With Security Related Issues should not allow accessing files outside .next/static and .next/server directory",
+                "location": null,
+                "status": "failed",
+                "title": "should not allow accessing files outside .next/static and .next/server directory"
+              },
+              {
+                "ancestorTitles": [
+                  "misc basic dev tests, basePath: \"/docs\"",
+                  "With Security Related Issues"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 500\n    at Object.<anonymous> (/work/test/development/basic/misc.test.ts:75:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "misc basic dev tests, basePath: \"/docs\" With Security Related Issues should handle encoded / value for trailing slash correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle encoded / value for trailing slash correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "misc basic dev tests, basePath: \"/docs\"",
+                  "Development Logs"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/basic/misc.test.ts:105:26)"
+                ],
+                "fullName": "misc basic dev tests, basePath: \"/docs\" Development Logs should warn when prefetch is true",
+                "location": null,
+                "status": "failed",
+                "title": "should warn when prefetch is true"
+              },
+              {
+                "ancestorTitles": [
+                  "misc basic dev tests, basePath: \"/docs\"",
+                  "Development Logs"
+                ],
+                "failureMessages": [],
+                "fullName": "misc basic dev tests, basePath: \"/docs\" Development Logs should not warn when prefetch is false",
+                "location": null,
+                "status": "passed",
+                "title": "should not warn when prefetch is false"
+              },
+              {
+                "ancestorTitles": [
+                  "misc basic dev tests, basePath: \"/docs\"",
+                  "Development Logs"
+                ],
+                "failureMessages": [],
+                "fullName": "misc basic dev tests, basePath: \"/docs\" Development Logs should not warn when prefetch is not specified",
+                "location": null,
+                "status": "passed",
+                "title": "should not warn when prefetch is not specified"
+              }
+            ],
+            "endTime": 1675357084605,
+            "message": "  ● misc basic dev tests, basePath: \"\" › should set process.env.NODE_ENV in development\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#node-env')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● misc basic dev tests, basePath: \"\" › With Security Related Issues › should not allow accessing files outside .next/static and .next/server directory\n\n    Path /_next/static/../BUILD_ID accessible from the browser\n\n      55 |             expect(text).toMatch(/This page could not be found/)\n      56 |           } catch (err) {\n    > 57 |             throw new Error(`Path ${path} accessible from the browser`)\n         |                   ^\n      58 |           }\n      59 |         }\n      60 |       })\n\n      at Object.<anonymous> (development/basic/misc.test.ts:57:19)\n\n  ● misc basic dev tests, basePath: \"\" › With Security Related Issues › should handle encoded / value for trailing slash correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 500\n\n      73 |           res.headers.get('location') || ''\n      74 |         )\n    > 75 |         expect(res.status).toBe(308)\n         |                            ^\n      76 |         expect(pathname).toBe(basePath + '/%2fexample.com')\n      77 |         expect(hostname).not.toBe('example.com')\n      78 |         const text = await res.text()\n\n      at Object.<anonymous> (development/basic/misc.test.ts:75:28)\n\n  ● misc basic dev tests, basePath: \"\" › Development Logs › should warn when prefetch is true\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      103 |       it('should warn when prefetch is true', async () => {\n      104 |         const foundLog = await getLogs$(basePath + '/development-logs')\n    > 105 |         expect(foundLog).toBe(true)\n          |                          ^\n      106 |       })\n      107 |       it('should not warn when prefetch is false', async () => {\n      108 |         const foundLog = await getLogs$(\n\n      at Object.<anonymous> (development/basic/misc.test.ts:105:26)\n\n  ● misc basic dev tests, basePath: \"/docs\" › should set process.env.NODE_ENV in development\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#node-env')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● misc basic dev tests, basePath: \"/docs\" › should allow access to public files\n\n    expect(received).toBe(expected) // Object.is equality\n\n    - Expected  -  1\n    + Received  + 16\n\n    - data\n    + Execution of get_from_source failed\n    +\n    + Caused by:\n    +     0: Execution of resolve_source_request failed\n    +     1: Execution of CombinedContentSource::get failed\n    +     2: Execution of create_app_source failed\n    +     3: Execution of load_next_config failed\n    +     4: Execution of evaluate failed\n    +     5: Execution of get_evaluate_pool failed\n    +     6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    +     7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    +     8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    +     9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n    +    10: Execution of content_from_relative_path failed\n    +    11: failed to canonicalize embedded file path\n    +    12: No such file or directory (os error 2)\n\n      33 |     it('should allow access to public files', async () => {\n      34 |       const data = await renderViaHTTP(next.url, basePath + '/data/data.txt')\n    > 35 |       expect(data).toBe('data')\n         |                    ^\n      36 |\n      37 |       const legacy = await renderViaHTTP(\n      38 |         next.url,\n\n      at Object.<anonymous> (development/basic/misc.test.ts:35:20)\n\n  ● misc basic dev tests, basePath: \"/docs\" › With Security Related Issues › should not allow accessing files outside .next/static and .next/server directory\n\n    Path /docs/_next/static/../BUILD_ID accessible from the browser\n\n      55 |             expect(text).toMatch(/This page could not be found/)\n      56 |           } catch (err) {\n    > 57 |             throw new Error(`Path ${path} accessible from the browser`)\n         |                   ^\n      58 |           }\n      59 |         }\n      60 |       })\n\n      at Object.<anonymous> (development/basic/misc.test.ts:57:19)\n\n  ● misc basic dev tests, basePath: \"/docs\" › With Security Related Issues › should handle encoded / value for trailing slash correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 500\n\n      73 |           res.headers.get('location') || ''\n      74 |         )\n    > 75 |         expect(res.status).toBe(308)\n         |                            ^\n      76 |         expect(pathname).toBe(basePath + '/%2fexample.com')\n      77 |         expect(hostname).not.toBe('example.com')\n      78 |         const text = await res.text()\n\n      at Object.<anonymous> (development/basic/misc.test.ts:75:28)\n\n  ● misc basic dev tests, basePath: \"/docs\" › Development Logs › should warn when prefetch is true\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      103 |       it('should warn when prefetch is true', async () => {\n      104 |         const foundLog = await getLogs$(basePath + '/development-logs')\n    > 105 |         expect(foundLog).toBe(true)\n          |                          ^\n      106 |       })\n      107 |       it('should not warn when prefetch is false', async () => {\n      108 |         const foundLog = await getLogs$(\n\n      at Object.<anonymous> (development/basic/misc.test.ts:105:26)\n",
+            "name": "/work/test/development/basic/misc.test.ts",
+            "startTime": 1675356980648,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/i18n-api-support/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675357125848,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/i18n-api-support/index.test.ts:47:24)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "i18n API support should respond to normal API request",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to normal API request"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/i18n-api-support/index.test.ts:53:24)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "i18n API support should respond to normal dynamic API request",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to normal dynamic API request"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/i18n-api-support/index.test.ts:69:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "i18n API support should fallback rewrite non-matching API request",
+                "location": null,
+                "status": "failed",
+                "title": "should fallback rewrite non-matching API request"
+              }
+            ],
+            "endTime": 1675357140429,
+            "message": "  ● i18n API support › should respond to normal API request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      45 |   it('should respond to normal API request', async () => {\n      46 |     const res = await fetchViaHTTP(next.url, '/api/hello')\n    > 47 |     expect(res.status).toBe(200)\n         |                        ^\n      48 |     expect(await res.text()).toBe('hello world')\n      49 |   })\n      50 |\n\n      at Object.<anonymous> (e2e/i18n-api-support/index.test.ts:47:24)\n\n  ● i18n API support › should respond to normal dynamic API request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      51 |   it('should respond to normal dynamic API request', async () => {\n      52 |     const res = await fetchViaHTTP(next.url, '/api/blog/first')\n    > 53 |     expect(res.status).toBe(200)\n         |                        ^\n      54 |     expect(await res.text()).toBe('blog/[slug]')\n      55 |   })\n      56 |\n\n      at Object.<anonymous> (e2e/i18n-api-support/index.test.ts:53:24)\n\n  ● i18n API support › should fallback rewrite non-matching API request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      67 |       for (const path of paths) {\n      68 |         const res = await fetchViaHTTP(next.url, path)\n    > 69 |         expect(res.status).toBe(200)\n         |                            ^\n      70 |         expect(await res.text()).toContain('Example Domain')\n      71 |       }\n      72 |     })\n\n      at Object.<anonymous> (e2e/i18n-api-support/index.test.ts:69:28)\n",
+            "name": "/work/test/e2e/i18n-api-support/index.test.ts",
+            "startTime": 1675357125939,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/404-page-app/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675357171424,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should not output static 404 if _app has getInitialProps",
+                "location": null,
+                "status": "passed",
+                "title": "should not output static 404 if _app has getInitialProps"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode specify to use the 404 page still in the routes-manifest",
+                "location": null,
+                "status": "passed",
+                "title": "specify to use the 404 page still in the routes-manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should still use 404 page",
+                "location": null,
+                "status": "passed",
+                "title": "should still use 404 page"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-app/test/index.test.js:81:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 Page Support with _app dev mode should not show pages/404 GIP error if _app has GIP",
+                "location": null,
+                "status": "failed",
+                "title": "should not show pages/404 GIP error if _app has GIP"
+              }
+            ],
+            "endTime": 1675357181194,
+            "message": "  ● 404 Page Support with _app › dev mode › should not show pages/404 GIP error if _app has GIP\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      79 |     it('should not show pages/404 GIP error if _app has GIP', async () => {\n      80 |       const res = await fetchViaHTTP(appPort, '/abc')\n    > 81 |       expect(res.status).toBe(404)\n         |                          ^\n      82 |       const $ = cheerio.load(await res.text())\n      83 |       expect($('#404-title').text()).toBe('Hi There')\n      84 |       expect(stderr).not.toMatch(gip404Err)\n\n      at Object.<anonymous> (integration/404-page-app/test/index.test.js:81:26)\n",
+            "name": "/work/test/integration/404-page-app/test/index.test.js",
+            "startTime": 1675357171521,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance/ReactRefresh.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675357091185,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefresh"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefresh.test.ts:20:5)"
+                ],
+                "fullName": "ReactRefresh can edit a component without losing state",
+                "location": null,
+                "status": "failed",
+                "title": "can edit a component without losing state"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefresh"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefresh.test.ts:157:5)"
+                ],
+                "fullName": "ReactRefresh cyclic dependencies",
+                "location": null,
+                "status": "failed",
+                "title": "cyclic dependencies"
+              }
+            ],
+            "endTime": 1675357167678,
+            "message": "  ● ReactRefresh › can edit a component without losing state\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefresh.test.ts:20:5)\n\n  ● ReactRefresh › cyclic dependencies\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefresh.test.ts:157:5)\n",
+            "name": "/work/test/development/acceptance/ReactRefresh.test.ts",
+            "startTime": 1675357091277,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675357239942,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675357285175,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675357240036,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675357298593,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675357304047,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675357298689,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
