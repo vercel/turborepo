@@ -18,7 +18,7 @@ var nodejsNpm = PackageManager{
 	ArgSeparator: []string{"--"},
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
-		pkg, err := fs.ReadPackageJSON(rootpath.UntypedJoin("package.json"))
+		pkg, err := fs.ReadPackageJSON(rootpath, rootpath.UntypedJoin("package.json"))
 		if err != nil {
 			return nil, fmt.Errorf("package.json: %w", err)
 		}

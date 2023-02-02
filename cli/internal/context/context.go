@@ -351,22 +351,17 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 	defer c.mutex.Unlock()
 
 	if pkgJSONPath.FileExists() {
-		pkg, err := fs.ReadPackageJSON(pkgJSONPath)
+		pkg, err := fs.ReadPackageJSON(repoRoot, pkgJSONPath)
 		if err != nil {
 			return fmt.Errorf("parsing %s: %w", pkgJSONPath, err)
 		}
 
-		relativePkgJSONPath, err := repoRoot.PathTo(pkgJSONPath)
-		if err != nil {
-			return err
-		}
-		c.WorkspaceGraph.Add(pkg.Name)
-		pkg.PackageJSONPath = turbopath.AnchoredSystemPathFromUpstream(relativePkgJSONPath)
-		pkg.Dir = turbopath.AnchoredSystemPathFromUpstream(filepath.Dir(relativePkgJSONPath))
 		if c.WorkspaceInfos[pkg.Name] != nil {
 			existing := c.WorkspaceInfos[pkg.Name]
 			return fmt.Errorf("Failed to add workspace \"%s\" from %s, it already exists at %s", pkg.Name, pkg.Dir, existing.Dir)
 		}
+
+		c.WorkspaceGraph.Add(pkg.Name)
 		c.WorkspaceInfos[pkg.Name] = pkg
 		c.WorkspaceNames = append(c.WorkspaceNames, pkg.Name)
 	}

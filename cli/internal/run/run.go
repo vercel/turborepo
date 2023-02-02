@@ -156,7 +156,7 @@ type run struct {
 func (r *run) run(ctx gocontext.Context, targets []string) error {
 	startAt := time.Now()
 	packageJSONPath := r.base.RepoRoot.UntypedJoin("package.json")
-	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath)
+	rootPackageJSON, err := fs.ReadPackageJSON(r.base.RepoRoot, packageJSONPath)
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
@@ -254,12 +254,16 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	// TODO: consolidate some of these arguments
 	g := &graph.CompleteGraph{
-		WorkspaceGraph:  pkgDepGraph.WorkspaceGraph,
+		WorkspaceGraph: pkgDepGraph.WorkspaceGraph,
+		// TODO(mehulkar): We can remove pipeline from here eventually
+		// It is only used by the taskhash tracker to look up taskDefinitions
+		// but we will eventually replace that
 		Pipeline:        pipeline,
 		WorkspaceInfos:  pkgDepGraph.WorkspaceInfos,
 		GlobalHash:      globalHash,
 		RootNode:        pkgDepGraph.RootNode,
 		TaskDefinitions: map[string]*fs.TaskDefinition{},
+		RepoRoot:        r.base.RepoRoot,
 	}
 	rs := &runSpec{
 		Targets:      targets,
@@ -268,7 +272,11 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	}
 	packageManager := pkgDepGraph.PackageManager
 
-	engine, err := buildTaskGraphEngine(g, rs)
+	engine, err := buildTaskGraphEngine(
+		g,
+		rs,
+		r.opts.runOpts.singlePackage,
+	)
 
 	if err != nil {
 		return errors.Wrap(err, "error preparing engine")
@@ -276,6 +284,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	tracker := taskhash.NewTracker(
 		g.RootNode,
 		g.GlobalHash,
+		// TODO(mehulkar): remove g,Pipeline, because we need to get task definitions from CompleteGaph instead
 		g.Pipeline,
 		g.WorkspaceInfos,
 	)
@@ -294,7 +303,11 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 				g.WorkspaceGraph.RemoveEdge(edge)
 			}
 		}
-		engine, err = buildTaskGraphEngine(g, rs)
+		engine, err = buildTaskGraphEngine(
+			g,
+			rs,
+			r.opts.runOpts.singlePackage,
+		)
 		if err != nil {
 			return errors.Wrap(err, "error preparing engine")
 		}
@@ -389,14 +402,15 @@ func (r *run) initCache(ctx gocontext.Context, rs *runSpec, analyticsClient anal
 	})
 }
 
-func buildTaskGraphEngine(g *graph.CompleteGraph, rs *runSpec) (*core.Engine, error) {
-	engine := core.NewEngine(g)
+func buildTaskGraphEngine(
+	g *graph.CompleteGraph,
+	rs *runSpec,
+	isSinglePackage bool,
+) (*core.Engine, error) {
+	engine := core.NewEngine(g, isSinglePackage)
 
-	for taskName, taskDefinition := range g.Pipeline {
-		engine.AddTask(&core.Task{
-			Name:           taskName,
-			TaskDefinition: taskDefinition,
-		})
+	for taskName, _ := range g.Pipeline {
+		engine.AddTask(taskName)
 	}
 
 	if err := engine.Prepare(&core.EngineBuildingOptions{

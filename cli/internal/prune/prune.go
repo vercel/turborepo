@@ -60,7 +60,7 @@ type prune struct {
 // Prune creates a smaller monorepo with only the required workspaces
 func (p *prune) prune(opts *turbostate.PrunePayload) error {
 	rootPackageJSONPath := p.base.RepoRoot.UntypedJoin("package.json")
-	rootPackageJSON, err := fs.ReadPackageJSON(rootPackageJSONPath)
+	rootPackageJSON, err := fs.ReadPackageJSON(p.base.RepoRoot, rootPackageJSONPath)
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
