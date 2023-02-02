@@ -3,7 +3,7 @@ Setup
   $ . ${TESTDIR}/../setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) workspace-tasks
 
-Test that root tasks are included in the graph. In this case, //#test should be there
+Test that root tasks are included in the graph. In this case, "//#build" task should be there
   $ ${TURBO} run build1 --graph
   
   digraph {
