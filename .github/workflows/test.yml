@@ -471,11 +471,11 @@ jobs:
 
       - name: Run cargo check release
         run: |
-          cargo check --workspace --all-targets --release
+          cargo check --workspace --all-targets --release --features rustls-tls
 
       - name: Run cargo clippy
         run: |
-          cargo clippy --workspace --all-targets
+          cargo clippy --workspace --all-targets --features rustls-tls
 
       - name: Count clippy warnings
         run: |
