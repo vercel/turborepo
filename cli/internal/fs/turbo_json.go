@@ -321,7 +321,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 }
 
 // MarshalJSON deserializes JSON into a TaskDefinition
-func (c *TaskDefinition) MarshalJSON() ([]byte, error) {
+func (c TaskDefinition) MarshalJSON() ([]byte, error) {
 	// Initialize with empty arrays, so we get empty arrays serialized into JSON
 	task := rawTask{
 		Outputs:   []string{},

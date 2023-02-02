@@ -177,6 +177,8 @@ jobs:
     needs: [execute_tests]
     name: Next.js integration test status report
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -188,4 +190,6 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: test-results
-          path: nextjs-test-results.json
+          path: |
+            nextjs-test-results.json
+            test-summary.md
