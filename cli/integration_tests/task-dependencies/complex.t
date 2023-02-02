@@ -100,3 +100,10 @@ Check that --only only runs leaf tasks
   \t} (esc)
   }
   
+Can't depend on itself
+  $ ${TURBO} run build4
+   ERROR  run failed: error preparing engine: Invalid task dependency graph:
+  .*#build4 depends on itself (re)
+  Turbo error: error preparing engine: Invalid task dependency graph:
+  .*#build4 depends on itself (re)
+  [1]
