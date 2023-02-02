@@ -11,6 +11,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/mattn/go-isatty"
 	"github.com/mitchellh/cli"
+	"github.com/vercel/turbo/cli/internal/ci"
 )
 
 const ansiEscapeStr = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
@@ -19,7 +20,7 @@ const ansiEscapeStr = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-
 var IsTTY = isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
 
 // IsCI is true when we appear to be running in a non-interactive context.
-var IsCI = !IsTTY || os.Getenv("CI") != "" || os.Getenv("BUILD_NUMBER") != "" || os.Getenv("TEAMCITY_VERSION") != ""
+var IsCI = !IsTTY || ci.IsCi()
 var gray = color.New(color.Faint)
 var bold = color.New(color.Bold)
 var ERROR_PREFIX = color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")

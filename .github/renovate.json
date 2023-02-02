@@ -18,6 +18,19 @@
     {
       "matchLanguages": ["golang"],
       "enabled": false
+    },
+    {
+      "matchLanguages": ["rust"],
+      "matchPackageNames": [
+        "swc_core",
+        "testing",
+        "swc_emotion",
+        "styled_jsx",
+        "styled_components",
+        "modularize_imports",
+        "mdxjs"
+      ],
+      "enabled": true
     }
   ],
   "ignorePaths": [
