@@ -61,8 +61,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [16]
-        group: [1]
+        node: [16, 18]
+        group: [1, 2]
 
     env:
       # Enabling backtrace will makes snapshot tests fail
