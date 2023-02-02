@@ -8,7 +8,7 @@ Check
   Tasks to Run
   build
     Task                   = build                                                                                                       
-    Hash                   = 8fc80cfff3b64237                                                                                            
+    Hash                   = 61926ed12c78792e                                                                                            
     Cached (Local)         = false                                                                                                       
     Cached (Remote)        = false                                                                                                       
     Command                = echo 'building' > foo                                                                                       
@@ -19,7 +19,7 @@ Check
     ResolvedTaskDefinition = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
   test
     Task                   = test                                                                                                          
-    Hash                   = c71366ccd6a86465                                                                                              
+    Hash                   = 4eb8669f473233ef                                                                                              
     Cached (Local)         = false                                                                                                         
     Cached (Remote)        = false                                                                                                         
     Command                = [[ ( -f foo ) && $(cat foo) == 'building' ]]                                                                  
@@ -34,7 +34,7 @@ Check
     "tasks": [
       {
         "task": "build",
-        "hash": "8fc80cfff3b64237",
+        "hash": "61926ed12c78792e",
         "cacheState": {
           "local": false,
           "remote": false
@@ -63,7 +63,7 @@ Check
       },
       {
         "task": "test",
-        "hash": "c71366ccd6a86465",
+        "hash": "4eb8669f473233ef",
         "cacheState": {
           "local": false,
           "remote": false
