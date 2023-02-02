@@ -16453,36 +16453,46 @@
       // Store plain textbased summary to share into Slack channel
       // Note: Likely we'll need to polish this summary to make it more readable.
       if (shouldShareTestSummaryToSlack) {
-        let textSummary = `*Next.js integration test status with Turbopack*
-
-    *Base: ${baseResults.ref} / ${shortBaseNextJsVersion}*
-    Test suites: :red_circle: ${baseTestFailedSuiteCount} / :green_circle: ${baseTestPassedSuiteCount} (Total: ${baseTestTotalSuiteCount})
-    Test cases : :red_circle: ${baseTestFailedCaseCount} / :green_circle: ${baseTestPassedCaseCount} (Total: ${baseTestTotalCaseCount})
-
-    *Current: ${sha} / ${shortCurrentNextJsVersion}*
-    Test suites: :red_circle: ${currentTestFailedSuiteCount} / :green_circle: ${currentTestPassedSuiteCount} (Total: ${currentTestTotalSuiteCount})
-    Test cases : :red_circle: ${currentTestFailedCaseCount} / :green_circle: ${currentTestPassedCaseCount} (Total: ${currentTestTotalCaseCount})
-
-    `;
+        let resultsSummary;
         if (suiteCountDiff === 0) {
-          textSummary += "No changes in suite count.";
+          resultsSummary += "No changes in suite count.";
         } else if (suiteCountDiff > 0) {
-          textSummary += `↓ ${suiteCountDiff} suites are fixed`;
+          resultsSummary += `↓ ${suiteCountDiff} suites are fixed`;
         } else if (suiteCountDiff < 0) {
-          textSummary += `↑ ${suiteCountDiff} suites are newly failed`;
+          resultsSummary += `↑ ${suiteCountDiff} suites are newly failed`;
         }
         if (caseCountDiff === 0) {
-          textSummary += "No changes in test cases count.";
+          resultsSummary += "No changes in test cases count.";
         } else if (caseCountDiff > 0) {
-          textSummary += `↓ ${caseCountDiff} test cases are fixed`;
+          resultsSummary += `↓ ${caseCountDiff} test cases are fixed`;
         } else if (caseCountDiff < 0) {
-          textSummary += `↑ ${caseCountDiff} test cases are newly failed`;
+          resultsSummary += `↑ ${caseCountDiff} test cases are newly failed`;
         }
-        console.log(
-          "Storing text summary to ./test-summary.md to report into Slack channel.",
-          textSummary
+        const slackPayloadJson = JSON.stringify(
+          {
+            title: "Next.js integration test status with Turbopack",
+            // Derived from https://github.com/orgs/community/discussions/25470#discussioncomment-4720013
+            actionUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            shaUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/commit/${sha}`,
+            baseResultsRef: baseResults.ref,
+            shortBaseNextJsVersion,
+            // We're limited to 20 variables in Slack workflows, so combine these as text.
+            baseTestSuiteText: `:red_circle: ${baseTestFailedSuiteCount} / :large_green_circle: ${baseTestPassedSuiteCount} (Total: ${baseTestTotalSuiteCount})`,
+            baseTestCaseText: `:red_circle: ${baseTestFailedCaseCount} / :large_green_circle: ${baseTestPassedCaseCount} (Total: ${baseTestTotalCaseCount})`,
+            sha,
+            shortCurrentNextJsVersion,
+            currentTestSuiteText: `:red_circle: ${currentTestFailedSuiteCount} / :large_green_circle: ${currentTestPassedSuiteCount} (Total: ${currentTestTotalSuiteCount})`,
+            currentTestCaseText: `:red_circle: ${currentTestFailedCaseCount} / :large_green_circle: ${currentTestPassedCaseCount} (Total: ${currentTestTotalCaseCount})`,
+            resultsSummary,
+          },
+          null,
+          2
         );
-        fs.writeFileSync("./test-summary.md", textSummary);
+        console.log(
+          "Storing slack payload to ./slack-paylod.json to report into Slack channel.",
+          slackPayloadJson
+        );
+        fs.writeFileSync("./slack-payload.json", slackPayloadJson);
       }
       return ret;
     }
