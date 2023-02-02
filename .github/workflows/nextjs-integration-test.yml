@@ -199,7 +199,7 @@ jobs:
         with:
           name: test-results
       - name: Check if summary file was generated
-        if: summary_check
+        id: summary_check
         run: |
           if stat test-summary.md; then
             echo "should_continue=true" >> GITHUB_OUTPUT
