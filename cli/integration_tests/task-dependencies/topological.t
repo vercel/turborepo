@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/setup.sh $(pwd) topological
 
 Check my-app#build output
   $ ${TURBO} run build
@@ -23,4 +23,20 @@ Check my-app#build output
    Tasks:    2 successful, 2 total
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
+  
+
+
+Graph
+  $ ${TURBO} run build --graph
+  
+  digraph {
+  \tcompound = "true" (esc)
+  \tnewrank = "true" (esc)
+  \tsubgraph "root" { (esc)
+  \t\t"[root] //#build" -> "[root] ___ROOT___" (esc)
+  \t\t"[root] ___ROOT___#build" -> "[root] ___ROOT___" (esc)
+  \t\t"[root] my-app#build" -> "[root] util#build" (esc)
+  \t\t"[root] util#build" -> "[root] ___ROOT___#build" (esc)
+  \t} (esc)
+  }
   
