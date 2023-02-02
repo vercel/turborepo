@@ -23,6 +23,12 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           commit_sha: ${{ steps.green_commit.outputs.result }}
           tag_prefix: "turbopack-"
+          # Override the default conventional commit messages
+          # so that we always generate patch releases.
+          # This would be easier if we could filter Turbopack
+          # commits from Turborepo, but that'd require a custom
+          # action.
+          custom_release_rules: ""
 
       - name: Create GitHub release
         uses: ncipollo/release-action@v1
