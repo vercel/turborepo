@@ -1,6 +1,6 @@
 use std::{
     collections::hash_map::RandomState,
-    fmt::{Debug, Display},
+    fmt::Debug,
     hash::{BuildHasher, Hash},
     marker::PhantomData,
 };
@@ -18,20 +18,6 @@ impl<K, H> Default for AutoSet<K, H> {
     fn default() -> Self {
         Self {
             map: Default::default(),
-        }
-    }
-}
-
-impl<K: Display, H> Display for AutoSet<K, H> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.is_empty() {
-            write!(f, "{{}}")
-        } else {
-            write!(f, "{{ ")?;
-            for i in self.iter() {
-                Display::fmt(i, f)?;
-            }
-            write!(f, " }}")
         }
     }
 }
