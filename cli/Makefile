@@ -37,9 +37,11 @@ turborepo-ffi-install: turborepo-ffi turborepo-ffi-proto
 	      ../crates/turborepo-ffi/target/release/libturborepo_ffi.a \
 	      ./internal/ffi
 
+.PHONY: turborepo-ffi
 turborepo-ffi:
 	cd ../crates/turborepo-ffi && CARGO_TARGET_DIR=./target cargo build --release
 
+.PHONY: turborepo-ffi-proto
 turborepo-ffi-proto:
 	cd ../crates/turborepo-ffi && protoc --go_out=. messages.proto
 
