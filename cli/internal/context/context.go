@@ -356,12 +356,13 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 			return fmt.Errorf("parsing %s: %w", pkgJSONPath, err)
 		}
 
+		// TODO(mehulkar): Figure out if adding duplicate names to the WorkspaceGraph is a problem.
+		c.WorkspaceGraph.Add(pkg.Name)
 		if c.WorkspaceInfos[pkg.Name] != nil {
 			existing := c.WorkspaceInfos[pkg.Name]
 			return fmt.Errorf("Failed to add workspace \"%s\" from %s, it already exists at %s", pkg.Name, pkg.Dir, existing.Dir)
 		}
 
-		c.WorkspaceGraph.Add(pkg.Name)
 		c.WorkspaceInfos[pkg.Name] = pkg
 		c.WorkspaceNames = append(c.WorkspaceNames, pkg.Name)
 	}
