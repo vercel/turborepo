@@ -17,7 +17,7 @@ Test that root tasks are included in the graph. In this case, //#test should be 
   }
   
 
-# Test that you can depend on root tasks
+Can depend on root tasks
   $ ${TURBO} run build2 --graph
   
   digraph {
@@ -33,7 +33,7 @@ Test that root tasks are included in the graph. In this case, //#test should be 
   \t} (esc)
   }
   
-# Test that you can't depend on a missing root task
+Can't depend on a missing root task
   $ ${TURBO} run build3 --graph
    ERROR  run failed: error preparing engine: //#not-exists needs an entry in turbo.json before it can be depended on because it is a task run from the root package
   Turbo error: error preparing engine: //#not-exists needs an entry in turbo.json before it can be depended on because it is a task run from the root package
