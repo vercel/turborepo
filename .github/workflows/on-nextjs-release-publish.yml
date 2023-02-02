@@ -7,6 +7,10 @@ on:
     # This is the event type defined by next.js upstream's `repository_dispatch` workflow dispatches.
     types: [nextjs-release-published]
   workflow_dispatch:
+    inputs:
+      post_to_slack:
+        description: Post test results to Slack
+        type: boolean
 
 jobs:
   # Debug purpose, write down release version.
@@ -25,6 +29,8 @@ jobs:
     uses: ./.github/workflows/nextjs-integration-test.yml
     with:
     version: ${{ github.event.client_payload.version }}
+    env:
+      NEXT_TURBO_FORCE_SLACK_UPDATE: "${{ inputs.post_to_slack }}"
 
   # Upload test results to branch.
   upload_test_results:
@@ -33,3 +39,34 @@ jobs:
     uses: ./.github/workflows/upload-nextjs-integration-test-results.yml
     with:
       is_main_branch: false
+
+  post_to_slack:
+    needs: [next_js_integration]
+    name: Post results to Slack
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download summary.md artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: test-results
+      - name: Check if summary file was generated
+        id: summary_check
+        run: |
+          if stat test-summary.md; then
+            echo "should_continue=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_continue=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Build payload
+        if: steps.summary_check.outputs.should_continue == 'true'
+        run: |
+          SUMMARY_MD=$(cat test-summary.md)
+
+          jq --null-input --arg text "$SUMMARY_MD" '{"text": $text}' > payload.json
+      - name: Send test data to Slack workflow
+        if: steps.summary_check.outputs.should_continue == 'true'
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          payload-file-path: "./payload.json"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.NEXT_TURBO_INTEGRATION_SLACK_WEBHOOK_URL }}
