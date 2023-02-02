@@ -98,9 +98,6 @@
 <span id="98">98</span>
 <span id="99">99</span>
 <span id="100">100</span>
-<span id="101">101</span>
-<span id="102">102</span>
-<span id="103">103</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Provider,
     fmt::{Debug, Display},
@@ -120,11 +117,8 @@
 
 <span class="kw">impl </span>SharedError {
     <span class="kw">pub fn </span>new(err: Error) -&gt; <span class="self">Self </span>{
-        <span class="kw">match </span>err.downcast::&lt;SharedError&gt;() {
-            <span class="prelude-val">Ok</span>(shared) =&gt; shared,
-            <span class="prelude-val">Err</span>(plain) =&gt; <span class="self">Self </span>{
-                inner: Arc::new(plain),
-            },
+        <span class="self">Self </span>{
+            inner: Arc::new(err),
         }
     }
 }

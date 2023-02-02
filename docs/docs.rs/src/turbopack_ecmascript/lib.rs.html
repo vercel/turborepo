@@ -392,6 +392,11 @@
 <span id="392">392</span>
 <span id="393">393</span>
 <span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+<span id="398">398</span>
+<span id="399">399</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -664,6 +669,11 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
         <span class="self">self</span>.context
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>related_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
+        <span class="self">self</span>.module.path()
     }
 
     <span class="attr">#[turbo_tasks::function]

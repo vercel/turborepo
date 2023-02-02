@@ -25,7 +25,7 @@ var sourcesIndex = JSON.parse('{\
 "turbopack_dev_server":["",[["introspect",[],["mod.rs"]],["source",[],["asset_graph.rs","combined.rs","conditional.rs","headers.rs","lazy_instatiated.rs","mod.rs","query.rs","router.rs","source_maps.rs","specificity.rs","static_assets.rs"]],["update",[],["mod.rs","protocol.rs","server.rs","stream.rs"]]],["html.rs","lib.rs"]],\
 "turbopack_ecmascript":["",[["analyzer",[],["builtin.rs","graph.rs","imports.rs","linker.rs","mod.rs","well_known.rs"]],["chunk",[],["loader.rs","mod.rs","optimize.rs","source_map.rs"]],["references",[["esm",[],["base.rs","binding.rs","dynamic.rs","export.rs","meta.rs","mod.rs","module_id.rs","module_item.rs","url.rs"]]],["amd.rs","cjs.rs","mod.rs","node.rs","pattern_mapping.rs","raw.rs","typescript.rs","util.rs"]],["resolve",[],["mod.rs","node_native_binding.rs"]],["transform",[],["mod.rs","server_to_client_proxy.rs"]],["typescript",[],["mod.rs","resolve.rs"]],["webpack",[],["mod.rs","parse.rs","references.rs"]]],["chunk_group_files_asset.rs","code_gen.rs","errors.rs","lib.rs","magic_identifier.rs","parse.rs","path_visitor.rs","special_cases.rs","utils.rs"]],\
 "turbopack_env":["",[],["asset.rs","embeddable.rs","issue.rs","lib.rs","try_env.rs"]],\
-"turbopack_json":["",[],["issue.rs","lib.rs"]],\
+"turbopack_json":["",[],["lib.rs"]],\
 "turbopack_static":["",[],["lib.rs"]],\
 "turbopack_swc_utils":["",[],["emitter.rs","lib.rs"]],\
 "xtask":["",[["summarize_bench",[],["data.rs","mod.rs"]]],["command.rs","main.rs","nft_bench.rs","publish.rs","visualize_bundler_bench.rs"]]\

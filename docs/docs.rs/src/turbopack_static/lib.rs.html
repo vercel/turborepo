@@ -223,6 +223,11 @@
 <span id="223">223</span>
 <span id="224">224</span>
 <span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Static asset support for turbopack.
 //!
 //! Static assets are copied directly to the output folder.
@@ -403,6 +408,11 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
         <span class="self">self</span>.context
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>related_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
+        <span class="self">self</span>.module.path()
     }
 
     <span class="attr">#[turbo_tasks::function]

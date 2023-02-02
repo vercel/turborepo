@@ -134,15 +134,6 @@
 <span id="134">134</span>
 <span id="135">135</span>
 <span id="136">136</span>
-<span id="137">137</span>
-<span id="138">138</span>
-<span id="139">139</span>
-<span id="140">140</span>
-<span id="141">141</span>
-<span id="142">142</span>
-<span id="143">143</span>
-<span id="144">144</span>
-<span id="145">145</span>
 </pre><pre class="rust"><code><span class="doccomment">//! JSON asset support for turbopack.
 //!
 //! JSON assets are parsed to ensure they contain valid JSON.
@@ -152,10 +143,7 @@
 
 </span><span class="attr">#![feature(min_specialization)]
 
-</span><span class="kw">pub mod </span>issue;
-
-<span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>issue::{JsonIssue, JsonIssueVc};
+</span><span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
@@ -250,29 +238,23 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>related_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
+        <span class="self">self</span>.module.path()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemContentVc&gt; {
         <span class="comment">// We parse to JSON and then stringify again to ensure that the
         // JSON is valid.
-        </span><span class="kw">let </span>inner_code = <span class="kw">match </span><span class="self">self</span>.module.path().read_json().to_string().<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(content) =&gt; {
-                <span class="kw">let </span>js_str_content = serde_json::to_string(content.as_str())<span class="question-mark">?</span>;
-                <span class="macro">format!</span>(<span class="string">&quot;__turbopack_export_value__(JSON.parse({js_str_content}));&quot;</span>,)
-            }
-            <span class="prelude-val">Err</span>(error) =&gt; {
-                <span class="kw">let </span>error_message = <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, error.to_string());
-                <span class="kw">let </span>js_error_message = serde_json::to_string(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                    <span class="string">&quot;An error occurred while importing a JSON module: {}&quot;</span>,
-                    <span class="kw-2">&amp;</span>error_message
-                ))<span class="question-mark">?</span>;
-                <span class="kw">let </span>issue: JsonIssueVc = JsonIssue {
-                    path: <span class="self">self</span>.module.path(),
-                    error_message: StringVc::cell(error_message),
-                }
-                .into();
-                issue.as_issue().emit();
-                <span class="macro">format!</span>(<span class="string">&quot;throw new Error({error})&quot;</span>, error = <span class="kw-2">&amp;</span>js_error_message,)
-            }
-        };
+        </span><span class="kw">let </span>content = <span class="self">self
+            </span>.module
+            .path()
+            .read_json()
+            .to_string()
+            .<span class="kw">await
+            </span>.context(<span class="string">&quot;Unable to make a module from invalid JSON&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>js_str_content = serde_json::to_string(content.as_str())<span class="question-mark">?</span>;
+        <span class="kw">let </span>inner_code = <span class="macro">format!</span>(<span class="string">&quot;__turbopack_export_value__(JSON.parse({js_str_content}));&quot;</span>);
         <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
             inner_code: inner_code.into(),
             ..Default::default()

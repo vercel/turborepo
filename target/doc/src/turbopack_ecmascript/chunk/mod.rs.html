@@ -1282,6 +1282,37 @@
 <span id="1282">1282</span>
 <span id="1283">1283</span>
 <span id="1284">1284</span>
+<span id="1285">1285</span>
+<span id="1286">1286</span>
+<span id="1287">1287</span>
+<span id="1288">1288</span>
+<span id="1289">1289</span>
+<span id="1290">1290</span>
+<span id="1291">1291</span>
+<span id="1292">1292</span>
+<span id="1293">1293</span>
+<span id="1294">1294</span>
+<span id="1295">1295</span>
+<span id="1296">1296</span>
+<span id="1297">1297</span>
+<span id="1298">1298</span>
+<span id="1299">1299</span>
+<span id="1300">1300</span>
+<span id="1301">1301</span>
+<span id="1302">1302</span>
+<span id="1303">1303</span>
+<span id="1304">1304</span>
+<span id="1305">1305</span>
+<span id="1306">1306</span>
+<span id="1307">1307</span>
+<span id="1308">1308</span>
+<span id="1309">1309</span>
+<span id="1310">1310</span>
+<span id="1311">1311</span>
+<span id="1312">1312</span>
+<span id="1313">1313</span>
+<span id="1314">1314</span>
+<span id="1315">1315</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>loader;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub mod </span>source_map;
@@ -1316,6 +1347,7 @@
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
+    issue::{code_gen::CodeGenerationIssue, IssueSeverity},
     reference::{AssetReferenceVc, AssetReferencesVc},
     source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapVc},
     version::{
@@ -1774,7 +1806,36 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>new(chunk_item: EcmascriptChunkItemVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>content = chunk_item.content();
-        <span class="kw">let </span>factory = module_factory(content);
+        <span class="kw">let </span>factory = <span class="kw">match </span>module_factory(content).resolve().<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(factory) =&gt; factory,
+            <span class="prelude-val">Err</span>(error) =&gt; {
+                <span class="kw">let </span>id = chunk_item.id().to_string().<span class="kw">await</span>;
+                <span class="kw">let </span>id = id.as_ref().map_or_else(|<span class="kw">_</span>| <span class="string">&quot;unknown&quot;</span>, |id| <span class="kw-2">&amp;**</span>id);
+                <span class="kw">let </span><span class="kw-2">mut </span>error_message =
+                    <span class="macro">format!</span>(<span class="string">&quot;An error occurred while generating the chunk item {}&quot;</span>, id);
+                <span class="kw">for </span>err <span class="kw">in </span>error.chain() {
+                    <span class="macro">write!</span>(error_message, <span class="string">&quot;\n  at {}&quot;</span>, err)<span class="question-mark">?</span>;
+                }
+                <span class="kw">let </span>js_error_message = serde_json::to_string(<span class="kw-2">&amp;</span>error_message)<span class="question-mark">?</span>;
+                <span class="kw">let </span>issue = CodeGenerationIssue {
+                    severity: IssueSeverity::Error.cell(),
+                    path: chunk_item.related_path(),
+                    title: StringVc::cell(<span class="string">&quot;Code generation for chunk item errored&quot;</span>.to_string()),
+                    message: StringVc::cell(error_message),
+                }
+                .cell();
+                issue.as_issue().emit();
+                <span class="kw">let </span><span class="kw-2">mut </span>code = CodeBuilder::default();
+                code += <span class="string">&quot;(() =&gt; {{\n\n&quot;</span>;
+                <span class="macro">write!</span>(
+                    code,
+                    <span class="string">&quot;throw new Error({error});\n&quot;</span>,
+                    error = <span class="kw-2">&amp;</span>js_error_message
+                )<span class="question-mark">?</span>;
+                code += <span class="string">&quot;\n}})&quot;</span>;
+                code.build().cell()
+            }
+        };
         <span class="kw">let </span>id = chunk_item.id().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>code = factory.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>hash = hash_xxh3_hash64(code.source_code());
@@ -2480,6 +2541,7 @@
 
 <span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>EcmascriptChunkItem: ChunkItem + ValueToString {
+    <span class="kw">fn </span>related_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc;
     <span class="kw">fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptChunkItemContentVc;
     <span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc;
     <span class="kw">fn </span>id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleIdVc {

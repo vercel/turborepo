@@ -308,9 +308,18 @@
 <span id="308">308</span>
 <span id="309">309</span>
 <span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, sync::Arc};
 
-<span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>swc_core::{
     base::SwcComments,
     common::{
@@ -329,7 +338,7 @@
         visit::VisitMutWith,
     },
 };
-<span class="kw">use </span>turbo_tasks::{primitives::U64Vc, Value};
+<span class="kw">use </span>turbo_tasks::{primitives::U64Vc, Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPath, FileSystemPathVc};
 <span class="kw">use </span>turbo_tasks_hash::{DeterministicHasher, Xxh3Hash64Hasher};
 <span class="kw">use </span>turbopack_core::{
@@ -451,7 +460,7 @@
             FileContent::Content(file) =&gt; <span class="kw">match </span>file.content().to_str() {
                 <span class="prelude-val">Ok</span>(string) =&gt; {
                     <span class="kw">let </span>transforms = <span class="kw-2">&amp;*</span>transforms.<span class="kw">await</span><span class="question-mark">?</span>;
-                    parse_content(
+                    <span class="kw">match </span>parse_content(
                         string.into_owned(),
                         fs_path,
                         file_path_hash,
@@ -459,8 +468,17 @@
                         ty,
                         transforms,
                     )
-                    .<span class="kw">await</span><span class="question-mark">?
-                </span>}
+                    .<span class="kw">await
+                    </span>{
+                        <span class="prelude-val">Ok</span>(result) =&gt; result,
+                        <span class="prelude-val">Err</span>(e) =&gt; {
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(e).context(<span class="macro">anyhow!</span>(
+                                <span class="string">&quot;Transforming and/or parsing of {} failed&quot;</span>,
+                                source.path().to_string().<span class="kw">await</span><span class="question-mark">?
+                            </span>));
+                        }
+                    }
+                }
                 <span class="comment">// FIXME: report error
                 </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; ParseResult::Unparseable.cell(),
             },

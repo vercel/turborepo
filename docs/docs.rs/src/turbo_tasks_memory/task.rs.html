@@ -2506,6 +2506,24 @@
 <span id="2506">2506</span>
 <span id="2507">2507</span>
 <span id="2508">2508</span>
+<span id="2509">2509</span>
+<span id="2510">2510</span>
+<span id="2511">2511</span>
+<span id="2512">2512</span>
+<span id="2513">2513</span>
+<span id="2514">2514</span>
+<span id="2515">2515</span>
+<span id="2516">2516</span>
+<span id="2517">2517</span>
+<span id="2518">2518</span>
+<span id="2519">2519</span>
+<span id="2520">2520</span>
+<span id="2521">2521</span>
+<span id="2522">2522</span>
+<span id="2523">2523</span>
+<span id="2524">2524</span>
+<span id="2525">2525</span>
+<span id="2526">2526</span>
 </pre><pre class="rust"><code><span class="kw">mod </span>meta_state;
 <span class="kw">mod </span>stats;
 
@@ -2948,6 +2966,19 @@
         }
     }
 
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_function_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str&gt; {
+        <span class="kw">if let </span>TaskType::Persistent(ty) = <span class="kw-2">&amp;</span><span class="self">self</span>.ty {
+            <span class="kw">match </span><span class="kw-2">&amp;**</span>ty {
+                PersistentTaskType::Native(native_fn, <span class="kw">_</span>)
+                | PersistentTaskType::ResolveNative(native_fn, <span class="kw">_</span>) =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>registry::get_function(<span class="kw-2">*</span>native_fn).name);
+                }
+                <span class="kw">_ </span>=&gt; {}
+            }
+        }
+        <span class="prelude-val">None
+    </span>}
+
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_description(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.ty {
             TaskType::Root(..) =&gt; <span class="macro">format!</span>(<span class="string">&quot;[{}] root&quot;</span>, <span class="self">self</span>.id),
@@ -3208,7 +3239,12 @@
         <span class="kw">match </span>state.state_type {
             InProgress { .. } =&gt; <span class="kw">match </span>result {
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(result)) =&gt; state.output.link(result, turbo_tasks),
-                <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(err)) =&gt; state.output.error(err, turbo_tasks),
+                <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(<span class="kw-2">mut </span>err)) =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(name) = <span class="self">self</span>.get_function_name() {
+                        err = err.context(<span class="macro">format!</span>(<span class="string">&quot;Execution of {} failed&quot;</span>, name));
+                    }
+                    state.output.error(err, turbo_tasks)
+                }
                 <span class="prelude-val">Err</span>(message) =&gt; state.output.panic(message, turbo_tasks),
             },
             InProgressDirty { .. } =&gt; {

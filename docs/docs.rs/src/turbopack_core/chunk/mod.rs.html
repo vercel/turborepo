@@ -512,10 +512,33 @@
 <span id="512">512</span>
 <span id="513">513</span>
 <span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>dev;
 <span class="kw">pub mod </span>optimize;
 
-<span class="kw">use </span>std::{collections::VecDeque, fmt::Debug};
+<span class="kw">use </span>std::{
+    collections::VecDeque,
+    fmt::{Debug, Display},
+};
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
@@ -544,6 +567,23 @@
 </span><span class="kw">pub enum </span>ModuleId {
     Number(u32),
     String(String),
+}
+
+<span class="kw">impl </span>Display <span class="kw">for </span>ModuleId {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="kw">match </span><span class="self">self </span>{
+            ModuleId::Number(i) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, i),
+            ModuleId::String(s) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, s),
+        }
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>ModuleId {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
+        StringVc::cell(<span class="self">self</span>.to_string())
+    }
 }
 
 <span class="kw">impl </span>ModuleId {

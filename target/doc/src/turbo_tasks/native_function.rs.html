@@ -112,6 +112,8 @@
 <span id="112">112</span>
 <span id="113">113</span>
 <span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt::Debug,
     future::Future,
@@ -120,7 +122,7 @@
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-<span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 
 <span class="kw">use crate</span>::{
     <span class="self">self </span><span class="kw">as </span>turbo_tasks, registry::register_function, task_input::TaskInput, util::SharedError,
@@ -170,7 +172,9 @@
 
     <span class="doccomment">/// Creates a functor for execution from a fixed set of inputs.
     </span><span class="kw">pub fn </span>bind(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span><span class="self">self</span>, inputs: <span class="kw-2">&amp;</span>Vec&lt;TaskInput&gt;) -&gt; NativeTaskFn {
-        <span class="kw">match </span>(<span class="self">self</span>.bind_fn)(inputs) {
+        <span class="kw">match </span>(<span class="self">self</span>.bind_fn)(inputs)
+            .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Error during argument binding of {}&quot;</span>, <span class="self">self</span>.name))
+        {
             <span class="prelude-val">Ok</span>(native_fn) =&gt; Box::new(<span class="kw">move </span>|| {
                 <span class="kw">let </span>r = native_fn();
                 <span class="kw">if </span><span class="macro">cfg!</span>(feature = <span class="string">&quot;log_function_stats&quot;</span>) {
