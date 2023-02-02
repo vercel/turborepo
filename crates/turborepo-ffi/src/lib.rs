@@ -21,6 +21,7 @@ impl<T: prost::Message> From<T> for Buffer {
 }
 
 impl Buffer {
+    #[allow(dead_code)]
     fn into_proto<T: prost::Message + Default>(self) -> Result<T, prost::DecodeError> {
         // SAFETY
         // protobuf has a fairly strict schema so overrunning or underrunning the byte
