@@ -125,7 +125,7 @@ async fn run_static_operation(
                 headers,
                 body,
             } => StaticResultVc::content(
-                FileContent::Content({ File::from(body) }.into()).into(),
+                FileContent::Content(File::from(body)).into(),
                 status_code,
                 HeaderListVc::cell(headers),
             ),
