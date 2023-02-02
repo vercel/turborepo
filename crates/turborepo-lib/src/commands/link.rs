@@ -52,7 +52,8 @@ pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> 
         return Err(anyhow!("canceled"));
     }
 
-    let api_client = base.api_client()?.ok_or_else(|| {
+    let api_client = base.api_client()?;
+    let token = base.user_config()?.token().ok_or_else(|| {
         anyhow!(
             "User not found. Please login to Turborepo first by running {}.",
             BOLD.apply_to("`npx turbo login`")
@@ -60,12 +61,12 @@ pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> 
     })?;
 
     let teams_response = api_client
-        .get_teams()
+        .get_teams(token)
         .await
         .context("could not get team information")?;
 
     let user_response = api_client
-        .get_user()
+        .get_user(token)
         .await
         .context("could not get user information")?;
 
@@ -81,7 +82,7 @@ pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> 
         SelectedTeam::User => user_response.user.id.as_str(),
         SelectedTeam::Team(team) => team.id.as_str(),
     };
-    let response = api_client.get_caching_status(team_id).await?;
+    let response = api_client.get_caching_status(token, team_id).await?;
     match response.status {
         CachingStatus::Disabled => {
             let should_enable = should_enable_caching()?;

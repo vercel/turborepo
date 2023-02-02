@@ -10,10 +10,25 @@ use crate::{get_version, retry::retry_future};
 
 #[async_trait]
 pub trait UserClient {
-    fn set_token(&mut self, token: String);
-    async fn get_user(&self) -> Result<UserResponse>;
-    async fn get_teams(&self) -> Result<TeamsResponse>;
-    async fn get_caching_status(&self, team_id: &str) -> Result<CachingStatusResponse>;
+    async fn get_user(&self, token: &str) -> Result<UserResponse>;
+    async fn get_teams(&self, token: &str) -> Result<TeamsResponse>;
+    async fn get_caching_status(&self, token: &str, team_id: &str)
+        -> Result<CachingStatusResponse>;
+    async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser>;
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct VerifiedSsoUser {
+    pub token: String,
+    pub team_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerificationResponse {
+    token: String,
+    email: String,
+    team_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,18 +107,13 @@ pub struct UserResponse {
 }
 
 pub struct APIClient {
-    token: String,
     client: reqwest::Client,
     base_url: String,
 }
 
 #[async_trait]
 impl UserClient for APIClient {
-    fn set_token(&mut self, token: String) {
-        self.token = token
-    }
-
-    async fn get_user(&self) -> Result<UserResponse> {
+    async fn get_user(&self, token: &str) -> Result<UserResponse> {
         let response = self
             .make_retryable_request(|| {
                 let url = self.make_url("/v2/user");
@@ -111,7 +121,7 @@ impl UserClient for APIClient {
                     .client
                     .get(url)
                     .header("User-Agent", USER_AGENT.clone())
-                    .header("Authorization", format!("Bearer {}", self.token))
+                    .header("Authorization", format!("Bearer {}", token))
                     .header("Content-Type", "application/json");
 
                 request_builder.send()
@@ -135,7 +145,7 @@ impl UserClient for APIClient {
         }
     }
 
-    async fn get_teams(&self) -> Result<TeamsResponse> {
+    async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
         let response = self
             .make_retryable_request(|| {
                 let request_builder = self
@@ -143,7 +153,7 @@ impl UserClient for APIClient {
                     .get(self.make_url("/v2/teams?limit=100"))
                     .header("User-Agent", USER_AGENT.clone())
                     .header("Content-Type", "application/json")
-                    .header("Authorization", format!("Bearer {}", self.token));
+                    .header("Authorization", format!("Bearer {}", token));
 
                 request_builder.send()
             })
@@ -166,7 +176,11 @@ impl UserClient for APIClient {
         }
     }
 
-    async fn get_caching_status(&self, team_id: &str) -> Result<CachingStatusResponse> {
+    async fn get_caching_status(
+        &self,
+        token: &str,
+        team_id: &str,
+    ) -> Result<CachingStatusResponse> {
         let response = self
             .make_retryable_request(|| {
                 let mut request_builder = self
@@ -174,7 +188,7 @@ impl UserClient for APIClient {
                     .get(self.make_url("/v8/artifacts/status"))
                     .header("User-Agent", USER_AGENT.clone())
                     .header("Content-Type", "application/json")
-                    .header("Authorization", format!("Bearer {}", self.token));
+                    .header("Authorization", format!("Bearer {}", token));
 
                 if team_id.starts_with("team_") {
                     request_builder = request_builder.query(&[("teamId", team_id)]);
@@ -184,6 +198,26 @@ impl UserClient for APIClient {
             })
             .await?;
         Ok(response.json().await?)
+    }
+
+    async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
+        let response = self
+            .make_retryable_request(|| {
+                let request_builder = self
+                    .client
+                    .get(self.make_url("/registration/verify"))
+                    .query(&[("token", token), ("tokenName", token_name)])
+                    .header("User-Agent", USER_AGENT.clone());
+
+                request_builder.send()
+            })
+            .await?;
+
+        let verification_response: VerificationResponse = response.json().await?;
+        Ok(VerifiedSsoUser {
+            token: verification_response.token,
+            team_id: verification_response.team_id,
+        })
     }
 }
 
@@ -213,13 +247,12 @@ impl APIClient {
         false
     }
 
-    pub fn new(token: impl AsRef<str>, base_url: impl AsRef<str>) -> Result<Self> {
+    pub fn new(base_url: impl AsRef<str>) -> Result<Self> {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(20))
             .build()?;
 
         Ok(APIClient {
-            token: token.as_ref().to_string(),
             client,
             base_url: base_url.as_ref().to_string(),
         })

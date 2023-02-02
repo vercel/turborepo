@@ -2,12 +2,13 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 #[cfg(not(test))]
 use axum::{extract::Query, response::Redirect, routing::get, Router};
 use log::debug;
 #[cfg(not(test))]
 use log::warn;
+use reqwest::Url;
 use serde::Deserialize;
 use tokio::sync::OnceCell;
 
@@ -23,6 +24,52 @@ pub const EXPECTED_TOKEN_TEST: &str = "expected_token";
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
+const DEFAULT_SSO_PROVIDER: &str = "SAML/OIDC Single Sign-On";
+
+pub async fn sso_login(base: &mut CommandBase) -> Result<()> {
+    let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
+    let login_url = format!("{}/api/auth/sso", base.repo_config()?.api_url());
+    println!(">>> Opening browser to {login_url}");
+    let spinner = start_spinner("Waiting for your authorization...");
+    direct_user_to_url(&login_url);
+
+    let verification_token = Arc::new(OnceCell::new());
+    run_sso_one_shot_server(DEFAULT_PORT, verification_token.clone()).await?;
+    spinner.finish_and_clear();
+
+    let token = verification_token
+        .get()
+        .ok_or_else(|| anyhow!("no token auth token found"))?;
+
+    let tokenName = make_token_name().context("failed to make sso token name")?;
+
+    let api_client = base.api_client()?;
+    let verified_user = api_client.verify_sso_token(token, &tokenName).await?;
+
+    base.user_config()?.set_token(Some(verified_user.token))?;
+    base.repo_config()?.set_team_id(verified_user.team_id)?;
+
+    let user_response = api_client.get_user(&verified_user.token).await?;
+
+    println!(
+        "
+{} Turborepo CLI authorized for {}
+",
+        base.ui.rainbow(">>> Success!"),
+        user_response.user.email
+    );
+
+    if let Some(team_id) = verified_user.team_id {}
+}
+
+fn make_token_name() -> Result<String> {
+    let host = hostname::get()?;
+
+    Ok(format!(
+        "Turbo CLI on {} via {DEFAULT_SSO_PROVIDER}",
+        host.to_string_lossy()
+    ))
+}
 
 pub async fn login(base: &mut CommandBase) -> Result<()> {
     let repo_config = base.repo_config()?;
@@ -37,7 +84,7 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
     direct_user_to_url(&login_url);
     let spinner = start_spinner("Waiting for your authorization...");
     let token_cell = Arc::new(OnceCell::new());
-    new_one_shot_server(
+    run_login_one_shot_server(
         DEFAULT_PORT,
         repo_config.login_url().to_string(),
         token_cell.clone(),
@@ -50,8 +97,10 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
         .ok_or_else(|| anyhow!("Failed to get token"))?;
 
     base.user_config_mut()?.set_token(Some(token.to_string()))?;
-    let client = base.api_client()?.unwrap();
-    let user_response = client.get_user().await?;
+
+    let client = base.api_client()?;
+    let user_response = client.get_user(token.as_str()).await?;
+
     let ui = &base.ui;
 
     println!(
@@ -89,13 +138,17 @@ struct LoginPayload {
 }
 
 #[cfg(test)]
-async fn new_one_shot_server(_: u16, _: String, login_token: Arc<OnceCell<String>>) -> Result<()> {
+async fn run_login_one_shot_server(
+    _: u16,
+    _: String,
+    login_token: Arc<OnceCell<String>>,
+) -> Result<()> {
     login_token.set(EXPECTED_TOKEN_TEST.to_string()).unwrap();
     Ok(())
 }
 
 #[cfg(not(test))]
-async fn new_one_shot_server(
+async fn run_login_one_shot_server(
     port: u16,
     login_url_base: String,
     login_token: Arc<OnceCell<String>>,
@@ -110,6 +163,76 @@ async fn new_one_shot_server(
                 let _ = login_token.set(login_payload.0.token);
                 route_handle.shutdown();
                 Redirect::to(&format!("{login_url_base}/turborepo/success"))
+            }),
+        );
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+
+    Ok(axum_server::bind(addr)
+        .handle(handle)
+        .serve(app.into_make_service())
+        .await?)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct SsoPayload {
+    login_error: Option<String>,
+    sso_email: Option<String>,
+    team_name: Option<String>,
+    sso_type: Option<String>,
+    token: Option<String>,
+    email: Option<String>,
+}
+
+fn get_token_and_redirect(payload: SsoPayload) -> Result<(Option<String>, Url)> {
+    let location_stub = "https://vercel.com/notifications/cli-login-";
+    if let Some(login_error) = payload.login_error {
+        let mut url = Url::parse(&format!("{}failed", location_stub))?;
+        url.query_pairs_mut()
+            .append_pair("loginError", login_error.as_str());
+        return Ok((None, url));
+    }
+
+    if let Some(sso_email) = payload.sso_email {
+        let mut url = Url::parse(&format!("{}incomplete", location_stub))?;
+        url.query_pairs_mut()
+            .append_pair("ssoEmail", sso_email.as_str());
+        if let Some(team_name) = payload.team_name {
+            url.query_pairs_mut()
+                .append_pair("teamName", team_name.as_str());
+        }
+        if let Some(sso_type) = payload.sso_type {
+            url.query_pairs_mut()
+                .append_pair("ssoType", sso_type.as_str());
+        }
+
+        return Ok((None, url));
+    }
+    let mut url = Url::parse(&format!("{}success", location_stub))?;
+    if let Some(email) = payload.email {
+        url.query_pairs_mut().append_pair("email", email.as_str());
+    }
+
+    Ok((payload.token, url))
+}
+
+async fn run_sso_one_shot_server(
+    port: u16,
+    verification_token: Arc<OnceCell<String>>,
+) -> Result<()> {
+    let handle = axum_server::Handle::new();
+    let route_handle = handle.clone();
+    let app = Router::new()
+        // `GET /` goes to `root`
+        .route(
+            "/",
+            get(|sso_payload: Query<SsoPayload>| async move {
+                let (token, location) = get_token_and_redirect(sso_payload.0).unwrap();
+                if let Some(token) = token {
+                    // If token is already set, it's not a big deal, so we ignore the error.
+                    let _ = verification_token.set(token);
+                }
+                route_handle.shutdown();
+                Redirect::to(location.as_str())
             }),
         );
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
