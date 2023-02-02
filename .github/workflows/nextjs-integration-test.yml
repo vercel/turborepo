@@ -14,6 +14,10 @@ on:
         required: false
         type: string
   workflow_dispatch:
+    inputs:
+      post_to_slack:
+        description: Whether to post test results to Slack
+        type: boolean
 
 jobs:
   # Build debug build of next-dev to use in integration test.
@@ -174,6 +178,8 @@ jobs:
 
       - name: Collect integration test stat
         uses: ./.github/actions/next-integration-stat
+        env:
+          NEXT_TURBO_FORCE_SLACK_UPDATE: "${{ inputs.should_post_to_slack }}"
 
       - name: Store artifacts
         uses: actions/upload-artifact@v3
@@ -188,21 +194,28 @@ jobs:
     name: Post results to Slack
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1 # Required to identify the current PR
       - name: Download summary.md artifact
         uses: actions/download-artifact@v3
         with:
           name: test-results
+      - name: Check if summary file was generated
+        if: summary_check
+        run: |
+          if stat test-summary.md; then
+            echo "should_continue=true" >> GITHUB_OUTPUT
+          else
+            echo "should_continue=false" >> GITHUB_OUTPUT
+          fi
       - name: Build payload
+        if: steps.summary_check.outputs.should_continue == 'true'
         run: |
           SUMMARY_MD=$(cat test-summary.md)
 
           jq --null-input --arg text "$SUMMARY_MD" '{"text": $text}' > payload.json
 
           cat payload.json
-
       - name: Send test data to Slack workflow
-        id: slack
+        if: steps.summary_check.outputs.should_continue == 'true'
         uses: slackapi/slack-github-action@v1.23.0
         with:
           payload-file-path: "./payload.json"
