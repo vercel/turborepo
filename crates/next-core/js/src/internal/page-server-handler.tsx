@@ -92,10 +92,13 @@ export default function startHandler({
         configFileName: "next.config.js",
       });
 
+      // We provide a dummy base URL to the URL constructor so that it doesn't
+      // throw when we pass a relative URL.
+      const resolvedPath = new URL(renderData.url, "next://").pathname;
       if (
         prerenderFallback === false &&
         // TODO(alexkirsz) Strip basePath.
-        !prerenderRoutes.includes(renderData.url)
+        !prerenderRoutes.includes(resolvedPath)
       ) {
         return createNotFoundResponse(isDataReq);
       }
