@@ -220,6 +220,40 @@
 <span id="220">220</span>
 <span id="221">221</span>
 <span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     pin::Pin,
     task::{Context, Poll},
@@ -227,29 +261,38 @@
 
 <span class="kw">use </span>anyhow::{Context <span class="kw">as _</span>, Error, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>futures::{prelude::<span class="kw-2">*</span>, ready, stream::FusedStream, SinkExt};
-<span class="kw">use </span>hyper::upgrade::Upgraded;
+<span class="kw">use </span>hyper::{upgrade::Upgraded, HeaderMap, Uri};
 <span class="kw">use </span>hyper_tungstenite::{tungstenite::Message, HyperWebsocket, WebSocketStream};
 <span class="kw">use </span>pin_project_lite::pin_project;
 <span class="kw">use </span>tokio::select;
 <span class="kw">use </span>tokio_stream::StreamMap;
-<span class="kw">use </span>turbo_tasks::{TransientInstance, TurboTasksApi, Value};
+<span class="kw">use </span>turbo_tasks::{TransientInstance, TurboTasksApi};
+<span class="kw">use </span>turbopack_cli_utils::issue::ConsoleUiVc;
 <span class="kw">use </span>turbopack_core::version::Update;
 
 <span class="kw">use super</span>::{
     protocol::{ClientMessage, ClientUpdateInstruction, Issue, ResourceIdentifier},
     stream::UpdateStream,
 };
-<span class="kw">use crate</span>::{update::stream::UpdateStreamItem, SourceProvider};
+<span class="kw">use crate</span>::{
+    source::{request::SourceRequest, resolve::resolve_source_request, Body},
+    update::stream::UpdateStreamItem,
+    SourceProvider,
+};
 
 <span class="doccomment">/// A server that listens for updates and sends them to connected clients.
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>UpdateServer&lt;P: SourceProvider&gt; {
     source_provider: P,
+    console_ui: ConsoleUiVc,
 }
 
 <span class="kw">impl</span>&lt;P: SourceProvider + Clone + Send + Sync&gt; UpdateServer&lt;P&gt; {
     <span class="doccomment">/// Create a new update server with the given websocket and content source.
-    </span><span class="kw">pub fn </span>new(source_provider: P) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{ source_provider }
+    </span><span class="kw">pub fn </span>new(source_provider: P, console_ui: ConsoleUiVc) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            source_provider,
+            console_ui,
+        }
     }
 
     <span class="doccomment">/// Run the update server loop.
@@ -274,13 +317,18 @@
                         <span class="prelude-val">Some</span>(ClientMessage::Subscribe { resource }) =&gt; {
                             <span class="kw">let </span>get_content = {
                                 <span class="kw">let </span>source_provider = <span class="self">self</span>.source_provider.clone();
-                                <span class="kw">let </span>resource = resource.clone();
+                                <span class="kw">let </span>request = resource_to_request(<span class="kw-2">&amp;</span>resource)<span class="question-mark">?</span>;
                                 <span class="kw">move </span>|| {
+                                    <span class="kw">let </span>request = request.clone();
                                     <span class="kw">let </span>source = source_provider.get_source();
-                                    source.get(<span class="kw-2">&amp;</span>resource.path, Value::new(Default::default()))
+                                    resolve_source_request(
+                                        source,
+                                        TransientInstance::new(request),
+                                        <span class="self">self</span>.console_ui
+                                    )
                                 }
                             };
-                            <span class="kw">let </span>stream = UpdateStream::new(resource.clone(), TransientInstance::new(Box::new(get_content))).<span class="kw">await</span><span class="question-mark">?</span>;
+                            <span class="kw">let </span>stream = UpdateStream::new(TransientInstance::new(Box::new(get_content))).<span class="kw">await</span><span class="question-mark">?</span>;
                             streams.insert(resource, stream);
                         }
                         <span class="prelude-val">Some</span>(ClientMessage::Unsubscribe { resource }) =&gt; {
@@ -338,6 +386,26 @@
 
         <span class="prelude-val">Ok</span>(())
     }
+}
+
+<span class="kw">fn </span>resource_to_request(resource: <span class="kw-2">&amp;</span>ResourceIdentifier) -&gt; <span class="prelude-ty">Result</span>&lt;SourceRequest&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>headers = HeaderMap::new();
+
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(res_headers) = <span class="kw-2">&amp;</span>resource.headers {
+        <span class="kw">for </span>(name, value) <span class="kw">in </span>res_headers {
+            headers.append(
+                hyper::header::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+                hyper::header::HeaderValue::from_bytes(value.as_bytes()).unwrap(),
+            );
+        }
+    }
+
+    <span class="prelude-val">Ok</span>(SourceRequest {
+        uri: Uri::try_from(<span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, resource.path))<span class="question-mark">?</span>,
+        headers,
+        method: <span class="string">&quot;GET&quot;</span>.to_string(),
+        body: Body::new(<span class="macro">vec!</span>[]),
+    })
 }
 
 <span class="macro">pin_project! </span>{

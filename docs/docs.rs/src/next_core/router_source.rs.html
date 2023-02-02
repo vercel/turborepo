@@ -133,6 +133,9 @@
 <span id="133">133</span>
 <span id="134">134</span>
 <span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>anyhow::Result;
@@ -141,6 +144,7 @@
 <span class="kw">use </span>turbopack_dev_server::source::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataFilter,
     ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc, NeededData, ProxyResult,
+    RewriteVc,
 };
 <span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
 
@@ -226,10 +230,12 @@
                     .get(path, Value::new(ContentSourceData::default()))
             }
             RouterResult::Rewrite(data) =&gt; {
-                <span class="kw">let </span>path = data.url.strip_prefix(<span class="string">&#39;/&#39;</span>).unwrap_or(<span class="kw-2">&amp;</span>data.url);
-                <span class="comment">// TODO: We can&#39;t set response headers and query for a source.
-                </span>this.inner
-                    .get(path, Value::new(ContentSourceData::default()))
+                <span class="comment">// TODO: We can&#39;t set response headers on the returned content.
+                </span>ContentSourceResultVc::exact(
+                    ContentSourceContent::Rewrite(RewriteVc::new(data.url.clone(), this.inner))
+                        .cell()
+                        .into(),
+                )
             }
             RouterResult::FullMiddleware(data) =&gt; ContentSourceResultVc::exact(
                 ContentSourceContent::HttpProxy(

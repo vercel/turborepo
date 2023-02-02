@@ -466,18 +466,52 @@
 <span id="466">466</span>
 <span id="467">467</span>
 <span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
+<span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset_graph;
 <span class="kw">pub mod </span>combined;
 <span class="kw">pub mod </span>conditional;
 <span class="kw">pub mod </span>headers;
 <span class="kw">pub mod </span>lazy_instatiated;
 <span class="kw">pub mod </span>query;
+<span class="kw">pub mod </span>request;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>resolve;
 <span class="kw">pub mod </span>router;
 <span class="kw">pub mod </span>source_maps;
 <span class="kw">pub mod </span>specificity;
 <span class="kw">pub mod </span>static_assets;
 
-<span class="kw">use </span>std::collections::BTreeSet;
+<span class="kw">use </span>std::{collections::BTreeSet, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize, Serializer};
@@ -561,17 +595,19 @@
     </span><span class="kw">fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, data: Value&lt;ContentSourceData&gt;) -&gt; ContentSourceContentVc;
 }
 
+<span class="attr">#[turbo_tasks::value]
+</span><span class="kw">pub struct </span>StaticContent {
+    <span class="kw">pub </span>content: VersionedContentVc,
+    <span class="kw">pub </span>status_code: u16,
+    <span class="kw">pub </span>headers: HeaderListVc,
+}
+
 <span class="attr">#[turbo_tasks::value(shared)]
-#[derive(Debug)]
 </span><span class="comment">// TODO add Dynamic variant in future to allow streaming and server responses
 </span><span class="doccomment">/// The content of a result that is returned by a content source.
 </span><span class="kw">pub enum </span>ContentSourceContent {
     NotFound,
-    Static {
-        content: VersionedContentVc,
-        status_code: u16,
-        headers: HeaderListVc,
-    },
+    Static(StaticContentVc),
     HttpProxy(ProxyResultVc),
     Rewrite(RewriteVc),
 }
@@ -591,11 +627,14 @@
 </span><span class="kw">impl </span>ContentSourceContentVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>static_content(content: VersionedContentVc) -&gt; ContentSourceContentVc {
-        ContentSourceContent::Static {
-            content,
-            status_code: <span class="number">200</span>,
-            headers: HeaderListVc::empty(),
-        }
+        ContentSourceContent::Static(
+            StaticContent {
+                content,
+                status_code: <span class="number">200</span>,
+                headers: HeaderListVc::empty(),
+            }
+            .cell(),
+        )
         .cell()
     }
 
@@ -605,11 +644,14 @@
         status_code: u16,
         headers: HeaderListVc,
     ) -&gt; ContentSourceContentVc {
-        ContentSourceContent::Static {
-            content,
-            status_code,
-            headers,
-        }
+        ContentSourceContent::Static(
+            StaticContent {
+                content,
+                status_code,
+                headers,
+            }
+            .cell(),
+        )
         .cell()
     }
 
@@ -682,16 +724,18 @@
 
 <span class="doccomment">/// A request body.
 </span><span class="attr">#[turbo_tasks::value(shared)]
-#[derive(Default)]
+#[derive(Default, Clone, Debug)]
 </span><span class="kw">pub struct </span>Body {
     <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
-    </span>chunks: Vec&lt;Bytes&gt;,
+    </span>chunks: Arc&lt;Vec&lt;Bytes&gt;&gt;,
 }
 
 <span class="kw">impl </span>Body {
     <span class="doccomment">/// Creates a new body from a list of chunks.
     </span><span class="kw">pub fn </span>new(chunks: Vec&lt;Bytes&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{ chunks }
+        <span class="self">Self </span>{
+            chunks: Arc::new(chunks),
+        }
     }
 
     <span class="doccomment">/// Returns an iterator over the body&#39;s chunks.
@@ -702,7 +746,7 @@
 
 <span class="doccomment">/// A wrapper around [hyper::body::Bytes] that implements [Serialize] and
 /// [Deserialize].
-</span><span class="attr">#[derive(Clone, Eq, PartialEq)]
+</span><span class="attr">#[derive(Clone, Eq, PartialEq, Debug)]
 </span><span class="kw">pub struct </span>Bytes(hyper::body::Bytes);
 
 <span class="kw">impl </span>Bytes {
@@ -913,25 +957,45 @@
     }
 }
 
-<span class="doccomment">/// A rewrite returned from a [ContentSource].
-</span><span class="attr">#[turbo_tasks::value(shared)]
+<span class="doccomment">/// A rewrite returned from a [ContentSource]. This tells the dev server to
+/// update its parsed url, path, and queries with this new information, and any
+/// later [NeededData] will receive data out of t these new values.
+</span><span class="attr">#[derive(Debug)]
+#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>Rewrite {
-    path: String,
-}
+    <span class="doccomment">/// The new path and query used to lookup content. This _does not_ need to
+    /// be the original path or query.
+    </span><span class="kw">pub </span>path_and_query: String,
 
-<span class="kw">impl </span>Rewrite {
-    <span class="doccomment">/// The path to rewrite to.
-    </span><span class="kw">pub fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.path
-    }
+    <span class="doccomment">/// A [ContentSource] from which to restart the lookup process. This _does
+    /// not_ need to be the original content source. Having [None] source will
+    /// restart the lookup process from the original ContentSource.
+    </span><span class="kw">pub </span>source: <span class="prelude-ty">Option</span>&lt;ContentSourceVc&gt;,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>RewriteVc {
-    <span class="doccomment">/// Creates a new [RewriteVc].
+    <span class="doccomment">/// Creates a new [RewriteVc] and starts lookup from the provided
+    /// [ContentSource].
     </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(path: String) -&gt; RewriteVc {
-        Rewrite { path }.cell()
+    </span><span class="kw">pub fn </span>new(path_query: String, source: ContentSourceVc) -&gt; RewriteVc {
+        <span class="macro">debug_assert!</span>(path_query.starts_with(<span class="string">&#39;/&#39;</span>));
+        Rewrite {
+            path_and_query: path_query,
+            source: <span class="prelude-val">Some</span>(source),
+        }
+        .cell()
+    }
+
+    <span class="doccomment">/// Creates a new [RewriteVc] and restarts lookup from the root.
+    </span><span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>new_path_query(path_query: String) -&gt; RewriteVc {
+        <span class="macro">debug_assert!</span>(path_query.starts_with(<span class="string">&#39;/&#39;</span>));
+        Rewrite {
+            path_and_query: path_query,
+            source: <span class="prelude-val">None</span>,
+        }
+        .cell()
     }
 }
 </code></pre></div>

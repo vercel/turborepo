@@ -197,7 +197,7 @@
             <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
         };
         <span class="kw">let </span>file = <span class="kw">match </span><span class="kw-2">&amp;*</span>content {
-            ContentSourceContent::Static { content: f, .. } =&gt; <span class="kw-2">*</span>f,
+            ContentSourceContent::Static(static_content) =&gt; static_content.<span class="kw">await</span><span class="question-mark">?</span>.content,
             <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
         };
 
