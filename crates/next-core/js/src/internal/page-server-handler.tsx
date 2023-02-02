@@ -10,6 +10,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { renderToHTML, RenderOpts } from "next/dist/server/render";
 import { getRedirectStatus } from "next/dist/lib/redirect-status";
 import { PERMANENT_REDIRECT_STATUS } from "next/dist/shared/lib/constants";
+import { buildStaticPaths } from "next/dist/build/utils";
 import type { BuildManifest } from "next/dist/server/get-page-files";
 import type { ReactLoadableManifest } from "next/dist/server/load-components";
 
@@ -79,6 +80,27 @@ export default function startHandler({
   async function runOperation(
     renderData: RenderData
   ): Promise<IpcOutgoingMessage> {
+    if ("getStaticPaths" in otherExports) {
+      const {
+        paths: prerenderRoutes,
+        fallback: prerenderFallback,
+        encodedPaths: _encodedPrerenderRoutes,
+      } = await buildStaticPaths({
+        page: renderData.path,
+        getStaticPaths: otherExports.getStaticPaths,
+        // TODO(alexkirsz) Provide the correct next.config.js path.
+        configFileName: "next.config.js",
+      });
+
+      if (
+        prerenderFallback === false &&
+        // TODO(alexkirsz) Strip basePath.
+        !prerenderRoutes.includes(renderData.url)
+      ) {
+        return createNotFoundResponse(isDataReq);
+      }
+    }
+
     // TODO(alexkirsz) This is missing *a lot* of data, but it's enough to get a
     // basic render working.
 
@@ -203,23 +225,7 @@ export default function startHandler({
     const isNotFound = (renderOpts as any).isNotFound;
 
     if (isNotFound) {
-      if (isDataReq) {
-        return {
-          type: "response",
-          // Returning a 404 status code is required for the client-side router
-          // to redirect to the error page.
-          statusCode: 404,
-          body: '{"notFound":true}',
-          headers: [["Content-Type", MIME_APPLICATION_JAVASCRIPT]],
-        };
-      }
-
-      return {
-        type: "rewrite",
-        // _next/404 is a Turbopack-internal route that will always redirect to
-        // the 404 page.
-        path: "/_next/404",
-      };
+      return createNotFoundResponse(isDataReq);
     }
 
     // Set when `getStaticProps` returns `redirect: { destination, permanent, statusCode }`.
@@ -288,6 +294,26 @@ export default function startHandler({
       body,
     };
   }
+}
+
+function createNotFoundResponse(isDataReq: boolean): IpcOutgoingMessage {
+  if (isDataReq) {
+    return {
+      type: "response",
+      // Returning a 404 status code is required for the client-side router
+      // to redirect to the error page.
+      statusCode: 404,
+      body: '{"notFound":true}',
+      headers: [["Content-Type", MIME_APPLICATION_JAVASCRIPT]],
+    };
+  }
+
+  return {
+    type: "rewrite",
+    // /_next/404 is a Turbopack-internal route that will always redirect to
+    // the 404 page.
+    path: "/_next/404",
+  };
 }
 
 type ManifestItem = {
