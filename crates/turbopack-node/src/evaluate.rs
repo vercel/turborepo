@@ -159,10 +159,16 @@ pub async fn evaluate(
                 .cell()
                 .as_issue()
                 .emit();
+                operation.wait_or_kill().await?;
                 break JavaScriptValue::Error;
             }
             EvalJavaScriptIncomingMessage::JsonValue { data } => {
-                break JavaScriptValue::Value(data.into())
+                if args.is_empty() {
+                    // Assume this is a one-off operation, so we can kill the process
+                    // TODO use a better way to decide that.
+                    operation.wait_or_kill().await?;
+                }
+                break JavaScriptValue::Value(data.into());
             }
             EvalJavaScriptIncomingMessage::FileDependency { path } => {
                 // TODO We might miss some changes that happened during execution
@@ -193,11 +199,6 @@ pub async fn evaluate(
     }
     for dep in dir_dependencies {
         dep.await?;
-    }
-    if args.is_empty() {
-        // Assume this is a one-off operation, so we can kill the process
-        // TODO use a better way to decide that.
-        operation.wait_or_kill().await?;
     }
     Ok(output.cell())
 }
