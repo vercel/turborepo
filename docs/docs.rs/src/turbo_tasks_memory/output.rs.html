@@ -115,21 +115,6 @@
 <span id="115">115</span>
 <span id="116">116</span>
 <span id="117">117</span>
-<span id="118">118</span>
-<span id="119">119</span>
-<span id="120">120</span>
-<span id="121">121</span>
-<span id="122">122</span>
-<span id="123">123</span>
-<span id="124">124</span>
-<span id="125">125</span>
-<span id="126">126</span>
-<span id="127">127</span>
-<span id="128">128</span>
-<span id="129">129</span>
-<span id="130">130</span>
-<span id="131">131</span>
-<span id="132">132</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     fmt::{Debug, Display},
@@ -192,32 +177,8 @@
     }
 
     <span class="kw">pub fn </span>link(<span class="kw-2">&amp;mut </span><span class="self">self</span>, target: RawVc, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
-        <span class="kw">let </span>change;
-        <span class="kw">let </span><span class="kw-2">mut </span>_type_change = <span class="bool-val">false</span>;
-        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.content {
-            OutputContent::Link(old_target) =&gt; {
-                <span class="kw">if match </span>(old_target, <span class="kw-2">&amp;</span>target) {
-                    (RawVc::TaskOutput(old_task), RawVc::TaskOutput(new_task)) =&gt; {
-                        old_task == new_task
-                    }
-                    (
-                        RawVc::TaskCell(old_task, old_index),
-                        RawVc::TaskCell(new_task, new_index),
-                    ) =&gt; old_task == new_task &amp;&amp; <span class="kw-2">*</span>old_index == <span class="kw-2">*</span>new_index,
-                    <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
-                } {
-                    change = <span class="prelude-val">None</span>;
-                } <span class="kw">else </span>{
-                    change = <span class="prelude-val">Some</span>(target);
-                }
-            }
-            OutputContent::Empty | OutputContent::Error(<span class="kw">_</span>) | OutputContent::Panic(<span class="kw">_</span>) =&gt; {
-                change = <span class="prelude-val">Some</span>(target);
-            }
-        };
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(target) = change {
-            <span class="self">self</span>.assign(OutputContent::Link(target), turbo_tasks)
-        }
+        <span class="macro">debug_assert!</span>(<span class="kw-2">*</span><span class="self">self </span>!= target);
+        <span class="self">self</span>.assign(OutputContent::Link(target), turbo_tasks)
     }
 
     <span class="kw">pub fn </span>error(<span class="kw-2">&amp;mut </span><span class="self">self</span>, error: Error, turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi) {
@@ -259,6 +220,15 @@
         <span class="comment">// notify
         </span><span class="kw">if </span>!<span class="self">self</span>.dependent_tasks.is_empty() {
             turbo_tasks.schedule_notify_tasks_set(<span class="kw-2">&amp;</span><span class="self">self</span>.dependent_tasks);
+        }
+    }
+}
+
+<span class="kw">impl </span>PartialEq&lt;RawVc&gt; <span class="kw">for </span>Output {
+    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, rhs: <span class="kw-2">&amp;</span>RawVc) -&gt; bool {
+        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.content {
+            OutputContent::Link(old_target) =&gt; old_target == rhs,
+            OutputContent::Empty | OutputContent::Error(<span class="kw">_</span>) | OutputContent::Panic(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
         }
     }
 }

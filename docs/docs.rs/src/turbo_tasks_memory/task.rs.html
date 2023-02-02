@@ -2524,6 +2524,39 @@
 <span id="2524">2524</span>
 <span id="2525">2525</span>
 <span id="2526">2526</span>
+<span id="2527">2527</span>
+<span id="2528">2528</span>
+<span id="2529">2529</span>
+<span id="2530">2530</span>
+<span id="2531">2531</span>
+<span id="2532">2532</span>
+<span id="2533">2533</span>
+<span id="2534">2534</span>
+<span id="2535">2535</span>
+<span id="2536">2536</span>
+<span id="2537">2537</span>
+<span id="2538">2538</span>
+<span id="2539">2539</span>
+<span id="2540">2540</span>
+<span id="2541">2541</span>
+<span id="2542">2542</span>
+<span id="2543">2543</span>
+<span id="2544">2544</span>
+<span id="2545">2545</span>
+<span id="2546">2546</span>
+<span id="2547">2547</span>
+<span id="2548">2548</span>
+<span id="2549">2549</span>
+<span id="2550">2550</span>
+<span id="2551">2551</span>
+<span id="2552">2552</span>
+<span id="2553">2553</span>
+<span id="2554">2554</span>
+<span id="2555">2555</span>
+<span id="2556">2556</span>
+<span id="2557">2557</span>
+<span id="2558">2558</span>
+<span id="2559">2559</span>
 </pre><pre class="rust"><code><span class="kw">mod </span>meta_state;
 <span class="kw">mod </span>stats;
 
@@ -2559,7 +2592,7 @@
     count_hash_set::CountHashSet,
     gc::{to_exp_u8, GcPriority, GcStats, GcTaskState},
     memory_backend::Job,
-    output::Output,
+    output::{Output, OutputContent},
     scope::{ScopeChildChangeEffect, TaskScopeId, TaskScopes},
     stats::{ReferenceType, StatsReferences, StatsTaskType},
     MemoryBackend,
@@ -2615,7 +2648,17 @@
         <span class="kw">match </span><span class="self">self </span>{
             <span class="self">Self</span>::Root(..) =&gt; f.debug_tuple(<span class="string">&quot;Root&quot;</span>).finish(),
             <span class="self">Self</span>::Once(..) =&gt; f.debug_tuple(<span class="string">&quot;Once&quot;</span>).finish(),
-            <span class="self">Self</span>::Persistent(ty) =&gt; ty.fmt(f),
+            <span class="self">Self</span>::Persistent(ty) =&gt; Debug::fmt(ty, f),
+        }
+    }
+}
+
+<span class="kw">impl </span>Display <span class="kw">for </span>TaskType {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
+        <span class="kw">match </span><span class="self">self </span>{
+            <span class="self">Self</span>::Root(..) =&gt; f.debug_tuple(<span class="string">&quot;Root&quot;</span>).finish(),
+            <span class="self">Self</span>::Once(..) =&gt; f.debug_tuple(<span class="string">&quot;Once&quot;</span>).finish(),
+            <span class="self">Self</span>::Persistent(ty) =&gt; Display::fmt(ty, f),
         }
     }
 }
@@ -2642,7 +2685,8 @@
 <span class="kw">impl </span>Debug <span class="kw">for </span>Task {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
         <span class="kw">let </span><span class="kw-2">mut </span>result = f.debug_struct(<span class="string">&quot;Task&quot;</span>);
-        result.field(<span class="string">&quot;type&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.ty);
+        result.field(<span class="string">&quot;id&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.id);
+        result.field(<span class="string">&quot;ty&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.ty);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(state) = <span class="self">self</span>.try_state() {
             <span class="kw">match </span>state {
                 TaskMetaStateReadGuard::Full(state) =&gt; {
@@ -3233,12 +3277,30 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>execution_result(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         result: <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;RawVc&gt;, <span class="prelude-ty">Option</span>&lt;Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;&gt;&gt;,
+        backend: <span class="kw-2">&amp;</span>MemoryBackend,
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.full_state_mut();
         <span class="kw">match </span>state.state_type {
             InProgress { .. } =&gt; <span class="kw">match </span>result {
-                <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(result)) =&gt; state.output.link(result, turbo_tasks),
+                <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(result)) =&gt; {
+                    <span class="kw">if </span>state.output != result {
+                        <span class="kw">if </span><span class="macro">cfg!</span>(feature = <span class="string">&quot;print_task_invalidation&quot;</span>)
+                            &amp;&amp; !<span class="macro">matches!</span>(state.output.content, OutputContent::Empty)
+                        {
+                            <span class="macro">println!</span>(
+                                <span class="string">&quot;Task {{ id: {}, name: {} }} invalidates:&quot;</span>,
+                                <span class="kw-2">*</span><span class="self">self</span>.id, <span class="self">self</span>.ty
+                            );
+                            <span class="kw">for </span>dep <span class="kw">in </span>state.output.dependent_tasks.iter() {
+                                backend.with_task(<span class="kw-2">*</span>dep, |task| {
+                                    <span class="macro">println!</span>(<span class="string">&quot;\tTask {{ id: {}, name: {} }}&quot;</span>, <span class="kw-2">*</span>task.id, task.ty);
+                                });
+                            }
+                        }
+                        state.output.link(result, turbo_tasks)
+                    }
+                }
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(<span class="kw-2">mut </span>err)) =&gt; {
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(name) = <span class="self">self</span>.get_function_name() {
                         err = err.context(<span class="macro">format!</span>(<span class="string">&quot;Execution of {} failed&quot;</span>, name));
@@ -3420,6 +3482,10 @@
                             }),
                         };
                         drop(state);
+
+                        <span class="kw">if </span><span class="macro">cfg!</span>(feature = <span class="string">&quot;print_task_invalidation&quot;</span>) {
+                            <span class="macro">println!</span>(<span class="string">&quot;invalidated Task {{ id: {}, name: {} }}&quot;</span>, <span class="kw-2">*</span><span class="self">self</span>.id, <span class="self">self</span>.ty);
+                        }
                         turbo_tasks.schedule(<span class="self">self</span>.id);
                     } <span class="kw">else </span>{
                         state.state_type = Dirty {

@@ -991,7 +991,7 @@
         turbo_tasks: <span class="kw-2">&amp;</span><span class="kw">dyn </span>TurboTasksBackendApi,
     ) {
         <span class="self">self</span>.with_task(task, |task| {
-            task.execution_result(result, turbo_tasks);
+            task.execution_result(result, <span class="self">self</span>, turbo_tasks);
         })
     }
 
