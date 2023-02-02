@@ -1,0 +1,1267 @@
+{
+  "ref": "afedff967270188847ebb1e0bb4672a0628db41e",
+  "nextjsVersion": "Next.js v13.1.7-canary.4",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675359198991,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "emotion SWC option"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#test-element')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "emotion SWC option should have styling from the css prop",
+                "location": null,
+                "status": "failed",
+                "title": "should have styling from the css prop"
+              }
+            ],
+            "endTime": 1675359262660,
+            "message": "  ● emotion SWC option › should have styling from the css prop\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#test-element')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/basic/emotion-swc.test.ts",
+            "startTime": 1675359199084,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/app-dir/next-font/next-font.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675359378295,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app dir next-font",
+                  "import values"
+                ],
+                "failureMessages": [
+                  "SyntaxError: Unexpected end of JSON input\n    at JSON.parse (<anonymous>)\n    at Object.<anonymous> (/work/test/e2e/app-dir/next-font/next-font.test.ts:21:21)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir next-font import values should have correct values at /",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct values at /"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir next-font",
+                  "import values"
+                ],
+                "failureMessages": [
+                  "SyntaxError: Unexpected end of JSON input\n    at JSON.parse (<anonymous>)\n    at Object.<anonymous> (/work/test/e2e/app-dir/next-font/next-font.test.ts:51:21)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir next-font import values should have correct values at /client",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct values at /client"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir next-font",
+                  "computed styles"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nMatcher error: received value must be a string\n\nReceived has value: null\n    at Object.<anonymous> (/work/test/e2e/app-dir/next-font/next-font.test.ts:94:11)"
+                ],
+                "fullName": "app dir next-font computed styles should have correct styles at /",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct styles at /"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir next-font",
+                  "computed styles"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nMatcher error: received value must be a string\n\nReceived has value: null\n    at Object.<anonymous> (/work/test/e2e/app-dir/next-font/next-font.test.ts:149:11)"
+                ],
+                "fullName": "app dir next-font computed styles should have correct styles at /client",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct styles at /client"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir next-font",
+                  "Dev errors"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBeTrue()\n\nExpected value to be true:\n  true\nReceived:\n  false\n    at Object.<anonymous> (/work/test/e2e/app-dir/next-font/next-font.test.ts:380:50)"
+                ],
+                "fullName": "app dir next-font Dev errors should recover on font loader error",
+                "location": null,
+                "status": "failed",
+                "title": "should recover on font loader error"
+              }
+            ],
+            "endTime": 1675359424848,
+            "message": "  ● app dir next-font › import values › should have correct values at /\n\n    SyntaxError: Unexpected end of JSON input\n        at JSON.parse (<anonymous>)\n\n      19 |\n      20 |         // layout\n    > 21 |         expect(JSON.parse($('#root-layout').text())).toEqual({\n         |                     ^\n      22 |           className: expect.stringMatching(/^__className_.{6}$/),\n      23 |           variable: expect.stringMatching(/^__variable_.{6}$/),\n      24 |           style: {\n\n      at Object.<anonymous> (e2e/app-dir/next-font/next-font.test.ts:21:21)\n\n  ● app dir next-font › import values › should have correct values at /client\n\n    SyntaxError: Unexpected end of JSON input\n        at JSON.parse (<anonymous>)\n\n      49 |\n      50 |         // root layout\n    > 51 |         expect(JSON.parse($('#root-layout').text())).toEqual({\n         |                     ^\n      52 |           className: expect.stringMatching(/^__className_.{6}$/),\n      53 |           variable: expect.stringMatching(/^__variable_.{6}$/),\n      54 |           style: {\n\n      at Object.<anonymous> (e2e/app-dir/next-font/next-font.test.ts:51:21)\n\n  ● app dir next-font › computed styles › should have correct styles at /\n\n    expect(received).toMatch(expected)\n\n    Matcher error: received value must be a string\n\n    Received has value: null\n\n      92 |             'getComputedStyle(document.querySelector(\"#root-layout\")).fontFamily'\n      93 |           )\n    > 94 |         ).toMatch(/^__font1_.{6}$/)\n         |           ^\n      95 |         expect(\n      96 |           await browser.eval(\n      97 |             'getComputedStyle(document.querySelector(\"#root-layout\")).fontWeight'\n\n      at Object.<anonymous> (e2e/app-dir/next-font/next-font.test.ts:94:11)\n\n  ● app dir next-font › computed styles › should have correct styles at /client\n\n    expect(received).toMatch(expected)\n\n    Matcher error: received value must be a string\n\n    Received has value: null\n\n      147 |             'getComputedStyle(document.querySelector(\"#root-layout\")).fontFamily'\n      148 |           )\n    > 149 |         ).toMatch(/^__font1_.{6}$/)\n          |           ^\n      150 |         expect(\n      151 |           await browser.eval(\n      152 |             'getComputedStyle(document.querySelector(\"#root-layout\")).fontWeight'\n\n      at Object.<anonymous> (e2e/app-dir/next-font/next-font.test.ts:149:11)\n\n  ● app dir next-font › Dev errors › should recover on font loader error\n\n    expect(received).toBeTrue()\n\n    Expected value to be true:\n      true\n    Received:\n      false\n\n      378 |             font1Content.replace('./font1.woff2', './does-not-exist.woff2')\n      379 |           )\n    > 380 |           expect(await hasRedbox(browser, true)).toBeTrue()\n          |                                                  ^\n      381 |           expect(await getRedboxSource(browser)).toInclude(\n      382 |             \"Can't resolve './does-not-exist.woff2'\"\n      383 |           )\n\n      at Object.<anonymous> (e2e/app-dir/next-font/next-font.test.ts:380:50)\n",
+            "name": "/work/test/e2e/app-dir/next-font/next-font.test.ts",
+            "startTime": 1675359378386,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/404-page-app/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675359454266,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should not output static 404 if _app has getInitialProps",
+                "location": null,
+                "status": "passed",
+                "title": "should not output static 404 if _app has getInitialProps"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode specify to use the 404 page still in the routes-manifest",
+                "location": null,
+                "status": "passed",
+                "title": "specify to use the 404 page still in the routes-manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should still use 404 page",
+                "location": null,
+                "status": "passed",
+                "title": "should still use 404 page"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-app/test/index.test.js:81:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 Page Support with _app dev mode should not show pages/404 GIP error if _app has GIP",
+                "location": null,
+                "status": "failed",
+                "title": "should not show pages/404 GIP error if _app has GIP"
+              }
+            ],
+            "endTime": 1675359464568,
+            "message": "  ● 404 Page Support with _app › dev mode › should not show pages/404 GIP error if _app has GIP\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      79 |     it('should not show pages/404 GIP error if _app has GIP', async () => {\n      80 |       const res = await fetchViaHTTP(appPort, '/abc')\n    > 81 |       expect(res.status).toBe(404)\n         |                          ^\n      82 |       const $ = cheerio.load(await res.text())\n      83 |       expect($('#404-title').text()).toBe('Hi There')\n      84 |       expect(stderr).not.toMatch(gip404Err)\n\n      at Object.<anonymous> (integration/404-page-app/test/index.test.js:81:26)\n",
+            "name": "/work/test/integration/404-page-app/test/index.test.js",
+            "startTime": 1675359454367,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance/ReactRefreshLogBox-builtins.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 4,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675359476016,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Node.js builtins",
+                "location": null,
+                "status": "pending",
+                "title": "Node.js builtins"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Module not found",
+                "location": null,
+                "status": "pending",
+                "title": "Module not found"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Module not found (empty import trace)",
+                "location": null,
+                "status": "pending",
+                "title": "Module not found (empty import trace)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Module not found (missing global CSS)",
+                "location": null,
+                "status": "pending",
+                "title": "Module not found (missing global CSS)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts:42:7)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo Node.js builtins",
+                "location": null,
+                "status": "failed",
+                "title": "Node.js builtins"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts:61:7)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo Module not found",
+                "location": null,
+                "status": "failed",
+                "title": "Module not found"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts:85:7)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo Module not found (empty import trace)",
+                "location": null,
+                "status": "failed",
+                "title": "Module not found (empty import trace)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts:130:45)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo Module not found (missing global CSS)",
+                "location": null,
+                "status": "failed",
+                "title": "Module not found (missing global CSS)"
+              }
+            ],
+            "endTime": 1675359617693,
+            "message": "  ● ReactRefreshLogBox turbo › Node.js builtins\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-builtins.test.ts:42:7)\n\n  ● ReactRefreshLogBox turbo › Module not found\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-builtins.test.ts:61:7)\n\n  ● ReactRefreshLogBox turbo › Module not found (empty import trace)\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-builtins.test.ts:85:7)\n\n  ● ReactRefreshLogBox turbo › Module not found (missing global CSS)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      128 |         ])\n      129 |       )\n    > 130 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      131 |\n      132 |       const source = await session.getRedboxSource()\n      133 |       expect(source).toMatchSnapshot()\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-builtins.test.ts:130:45)\n",
+            "name": "/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts",
+            "startTime": 1675359476138,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675359696774,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675359743302,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675359696881,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/404-page-custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 9,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675359775064,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should respond to 404 correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render error correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render index page normal",
+                "location": null,
+                "status": "passed",
+                "title": "should render index page normal"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should set pages404 in routes-manifest correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should set pages404 in routes-manifest correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should have output 404.html",
+                "location": null,
+                "status": "passed",
+                "title": "should have output 404.html"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:26:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should respond to 404 correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"oops\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:32:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from index\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:37:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render index page normal",
+                "location": null,
+                "status": "failed",
+                "title": "should render index page normal"
+              }
+            ],
+            "endTime": 1675359785211,
+            "message": "  ● Default 404 Page with custom _error › dev mode › should respond to 404 correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      24 |   it('should respond to 404 correctly', async () => {\n      25 |     const res = await fetchViaHTTP(appPort, '/404')\n    > 26 |     expect(res.status).toBe(404)\n         |                        ^\n      27 |     expect(await res.text()).toContain('This page could not be found')\n      28 |   })\n      29 |\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:26:24)\n\n  ● Default 404 Page with custom _error › dev mode › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"oops\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      30 |   it('should render error correctly', async () => {\n      31 |     const text = await renderViaHTTP(appPort, '/err')\n    > 32 |     expect(text).toContain(isDev ? 'oops' : 'Internal Server Error')\n         |                  ^\n      33 |   })\n      34 |\n      35 |   it('should render index page normal', async () => {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:32:18)\n\n  ● Default 404 Page with custom _error › dev mode › should render index page normal\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from index\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      35 |   it('should render index page normal', async () => {\n      36 |     const html = await renderViaHTTP(appPort, '/')\n    > 37 |     expect(html).toContain('hello from index')\n         |                  ^\n      38 |   })\n      39 |\n      40 |   if (!isDev) {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:37:18)\n",
+            "name": "/work/test/integration/404-page-custom-error/test/index.test.js",
+            "startTime": 1675359775168,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675359312204,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "emotion SWC option"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#test-element')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "emotion SWC option should have styling from the css prop",
+                "location": null,
+                "status": "failed",
+                "title": "should have styling from the css prop"
+              }
+            ],
+            "endTime": 1675359373762,
+            "message": "  ● emotion SWC option › should have styling from the css prop\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#test-element')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/basic/emotion-swc.test.ts",
+            "startTime": 1675359312322,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/app-dir/test-template/{{ toFileName name }}/{{ toFileName name }}.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675359510073,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "{{name}}"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello world\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/test-template/{{ toFileName name }}/{{ toFileName name }}.test.ts:12:29)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "{{name}} should work using cheerio",
+                "location": null,
+                "status": "failed",
+                "title": "should work using cheerio"
+              },
+              {
+                "ancestorTitles": [
+                  "{{name}}"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('p')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "{{name}} should work using browser",
+                "location": null,
+                "status": "failed",
+                "title": "should work using browser"
+              },
+              {
+                "ancestorTitles": [
+                  "{{name}}"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello world\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/test-template/{{ toFileName name }}/{{ toFileName name }}.test.ts:24:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "{{name}} should work with html",
+                "location": null,
+                "status": "failed",
+                "title": "should work with html"
+              },
+              {
+                "ancestorTitles": [
+                  "{{name}}"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello world\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/test-template/{{ toFileName name }}/{{ toFileName name }}.test.ts:31:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "{{name}} should work with fetch",
+                "location": null,
+                "status": "failed",
+                "title": "should work with fetch"
+              }
+            ],
+            "endTime": 1675359555427,
+            "message": "  ● {{name}} › should work using cheerio\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello world\"\n    Received: \"\"\n\n      10 |     it('should work using cheerio', async () => {\n      11 |       const $ = await next.render$('/')\n    > 12 |       expect($('p').text()).toBe('hello world')\n         |                             ^\n      13 |     })\n      14 |\n      15 |     // Recommended for tests that need a full browser\n\n      at Object.<anonymous> (e2e/app-dir/test-template/{{ toFileName name }}/{{ toFileName name }}.test.ts:12:29)\n\n  ● {{name}} › should work using browser\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('p')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● {{name}} › should work with html\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello world\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      22 |     it('should work with html', async () => {\n      23 |       const html = await next.render('/')\n    > 24 |       expect(html).toContain('hello world')\n         |                    ^\n      25 |     })\n      26 |\n      27 |     // In case you need to test the response object\n\n      at Object.<anonymous> (e2e/app-dir/test-template/{{ toFileName name }}/{{ toFileName name }}.test.ts:24:20)\n\n  ● {{name}} › should work with fetch\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello world\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      29 |       const res = await next.fetch('/')\n      30 |       const html = await res.text()\n    > 31 |       expect(html).toContain('hello world')\n         |                    ^\n      32 |     })\n      33 |   }\n      34 | )\n\n      at Object.<anonymous> (e2e/app-dir/test-template/{{ toFileName name }}/{{ toFileName name }}.test.ts:31:20)\n",
+            "name": "/work/test/e2e/app-dir/test-template/{{ toFileName name }}/{{ toFileName name }}.test.ts",
+            "startTime": 1675359510178,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/404-page-app/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675359588353,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should not output static 404 if _app has getInitialProps",
+                "location": null,
+                "status": "passed",
+                "title": "should not output static 404 if _app has getInitialProps"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode specify to use the 404 page still in the routes-manifest",
+                "location": null,
+                "status": "passed",
+                "title": "specify to use the 404 page still in the routes-manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should still use 404 page",
+                "location": null,
+                "status": "passed",
+                "title": "should still use 404 page"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-app/test/index.test.js:81:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 Page Support with _app dev mode should not show pages/404 GIP error if _app has GIP",
+                "location": null,
+                "status": "failed",
+                "title": "should not show pages/404 GIP error if _app has GIP"
+              }
+            ],
+            "endTime": 1675359599109,
+            "message": "  ● 404 Page Support with _app › dev mode › should not show pages/404 GIP error if _app has GIP\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      79 |     it('should not show pages/404 GIP error if _app has GIP', async () => {\n      80 |       const res = await fetchViaHTTP(appPort, '/abc')\n    > 81 |       expect(res.status).toBe(404)\n         |                          ^\n      82 |       const $ = cheerio.load(await res.text())\n      83 |       expect($('#404-title').text()).toBe('Hi There')\n      84 |       expect(stderr).not.toMatch(gip404Err)\n\n      at Object.<anonymous> (integration/404-page-app/test/index.test.js:81:26)\n",
+            "name": "/work/test/integration/404-page-app/test/index.test.js",
+            "startTime": 1675359588452,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance/ReactRefreshLogBox-builtins.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 4,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675359507205,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Node.js builtins",
+                "location": null,
+                "status": "pending",
+                "title": "Node.js builtins"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Module not found",
+                "location": null,
+                "status": "pending",
+                "title": "Module not found"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Module not found (empty import trace)",
+                "location": null,
+                "status": "pending",
+                "title": "Module not found (empty import trace)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Module not found (missing global CSS)",
+                "location": null,
+                "status": "pending",
+                "title": "Module not found (missing global CSS)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts:42:7)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo Node.js builtins",
+                "location": null,
+                "status": "failed",
+                "title": "Node.js builtins"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts:61:7)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo Module not found",
+                "location": null,
+                "status": "failed",
+                "title": "Module not found"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts:85:7)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo Module not found (empty import trace)",
+                "location": null,
+                "status": "failed",
+                "title": "Module not found (empty import trace)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts:130:45)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo Module not found (missing global CSS)",
+                "location": null,
+                "status": "failed",
+                "title": "Module not found (missing global CSS)"
+              }
+            ],
+            "endTime": 1675359648168,
+            "message": "  ● ReactRefreshLogBox turbo › Node.js builtins\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-builtins.test.ts:42:7)\n\n  ● ReactRefreshLogBox turbo › Module not found\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-builtins.test.ts:61:7)\n\n  ● ReactRefreshLogBox turbo › Module not found (empty import trace)\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-builtins.test.ts:85:7)\n\n  ● ReactRefreshLogBox turbo › Module not found (missing global CSS)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      128 |         ])\n      129 |       )\n    > 130 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      131 |\n      132 |       const source = await session.getRedboxSource()\n      133 |       expect(source).toMatchSnapshot()\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-builtins.test.ts:130:45)\n",
+            "name": "/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts",
+            "startTime": 1675359507318,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675359722621,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675359768931,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675359722735,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/404-page-custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 9,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675359799730,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should respond to 404 correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render error correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render index page normal",
+                "location": null,
+                "status": "passed",
+                "title": "should render index page normal"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should set pages404 in routes-manifest correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should set pages404 in routes-manifest correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should have output 404.html",
+                "location": null,
+                "status": "passed",
+                "title": "should have output 404.html"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:26:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should respond to 404 correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"oops\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:32:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from index\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:37:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render index page normal",
+                "location": null,
+                "status": "failed",
+                "title": "should render index page normal"
+              }
+            ],
+            "endTime": 1675359809676,
+            "message": "  ● Default 404 Page with custom _error › dev mode › should respond to 404 correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      24 |   it('should respond to 404 correctly', async () => {\n      25 |     const res = await fetchViaHTTP(appPort, '/404')\n    > 26 |     expect(res.status).toBe(404)\n         |                        ^\n      27 |     expect(await res.text()).toContain('This page could not be found')\n      28 |   })\n      29 |\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:26:24)\n\n  ● Default 404 Page with custom _error › dev mode › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"oops\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      30 |   it('should render error correctly', async () => {\n      31 |     const text = await renderViaHTTP(appPort, '/err')\n    > 32 |     expect(text).toContain(isDev ? 'oops' : 'Internal Server Error')\n         |                  ^\n      33 |   })\n      34 |\n      35 |   it('should render index page normal', async () => {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:32:18)\n\n  ● Default 404 Page with custom _error › dev mode › should render index page normal\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from index\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      35 |   it('should render index page normal', async () => {\n      36 |     const html = await renderViaHTTP(appPort, '/')\n    > 37 |     expect(html).toContain('hello from index')\n         |                  ^\n      38 |   })\n      39 |\n      40 |   if (!isDev) {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:37:18)\n",
+            "name": "/work/test/integration/404-page-custom-error/test/index.test.js",
+            "startTime": 1675359799834,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
