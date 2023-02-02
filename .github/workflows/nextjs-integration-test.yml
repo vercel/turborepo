@@ -202,9 +202,9 @@ jobs:
         id: summary_check
         run: |
           if stat test-summary.md; then
-            echo "should_continue=true" >> GITHUB_OUTPUT
+            echo "should_continue=true" >> $GITHUB_OUTPUT
           else
-            echo "should_continue=false" >> GITHUB_OUTPUT
+            echo "should_continue=false" >> $GITHUB_OUTPUT
           fi
       - name: Build payload
         if: steps.summary_check.outputs.should_continue == 'true'
