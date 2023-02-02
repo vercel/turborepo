@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       post_to_slack:
-        description: Whether to post test results to Slack
+        description: Post test results to Slack
         type: boolean
 
 jobs:
