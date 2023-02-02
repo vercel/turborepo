@@ -440,8 +440,6 @@
 <span id="440">440</span>
 <span id="441">441</span>
 <span id="442">442</span>
-<span id="443">443</span>
-<span id="444">444</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::Result;
@@ -680,9 +678,7 @@
         <span class="comment">// Temporary hack to replace the hot reloader until this is passable by props in next.js
         </span>(
             context,
-            GlobVc::new(
-                <span class="string">&quot;**/*/next/dist/client/components/react-dev-overlay/hot-reloader-client.js&quot;</span>,
-            ),
+            GlobVc::new(<span class="string">&quot;**/next/dist/client/components/react-dev-overlay/hot-reloader-client.js&quot;</span>),
             ImportMapping::PrimaryAlternative(
                 <span class="string">&quot;@vercel/turbopack-next/dev/hot-reloader.tsx&quot;</span>.to_string(),
                 <span class="prelude-val">Some</span>(root),

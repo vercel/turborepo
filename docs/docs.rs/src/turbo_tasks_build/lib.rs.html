@@ -458,12 +458,14 @@
 <span id="458">458</span>
 <span id="459">459</span>
 <span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{HashMap, HashSet},
     env::{<span class="self">self</span>, current_dir},
     fmt::{Display, Write},
     fs::read_dir,
-    path::PathBuf,
+    path::{PathBuf, MAIN_SEPARATOR <span class="kw">as </span>PATH_SEP},
 };
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
@@ -620,8 +622,10 @@
 
 <span class="kw">pub fn </span>rerun_if_glob(globs: <span class="kw-2">&amp;</span>str, root: <span class="kw-2">&amp;</span>str) {
     <span class="kw">let </span>cwd = env::current_dir().unwrap();
-    <span class="kw">let </span>globs = cwd.join(globs);
-    <span class="kw">let </span><span class="kw-2">mut </span>seen = HashSet::from([cwd.join(root)]);
+    <span class="kw">let </span>globs = cwd.join(globs.replace(<span class="string">&#39;/&#39;</span>, PATH_SEP.to_string().as_str()));
+    <span class="kw">let </span>root = cwd.join(root.replace(<span class="string">&#39;/&#39;</span>, PATH_SEP.to_string().as_str()));
+    <span class="macro">println!</span>(<span class="string">&quot;cargo:rerun-if-changed={}&quot;</span>, root.display());
+    <span class="kw">let </span><span class="kw-2">mut </span>seen = HashSet::from([root]);
     <span class="kw">for </span>entry <span class="kw">in </span>glob(globs.to_str().unwrap()).unwrap() {
         <span class="kw">let </span>path = entry.unwrap();
         <span class="kw">for </span>ancestor <span class="kw">in </span>path.ancestors() {
