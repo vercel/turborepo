@@ -52,7 +52,7 @@ let resolveRouteMemo: Promise<
 async function getResolveRoute(dir: string) {
   // Deferring the import allows us to not error while we wait for Next.js to implement.
   const { makeResolver } = (await import("next/dist/server/router.js")) as any;
-  const nextConfig = await loadNextConfig();
+  const nextConfig = await loadNextConfig(true);
   return await makeResolver(dir, nextConfig);
 }
 
