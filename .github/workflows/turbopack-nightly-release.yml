@@ -29,6 +29,10 @@ jobs:
           # commits from Turborepo, but that'd require a custom
           # action.
           custom_release_rules: ""
+          # Ensure we generate prerelease versions, not stables.
+          release_branches: ""
+          pre_release_branches: "main"
+          append_to_pre_release_tag: "alpha"
 
       - name: Create GitHub release
         uses: ncipollo/release-action@v1
