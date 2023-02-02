@@ -11,8 +11,9 @@ on:
       # Allow to specify Next.js version to run integration test against.
       # If not specified, will use latest release version including canary.
       version:
-        required: false
         type: string
+      force_post_to_slack:
+        type: boolean
 
 jobs:
   # Build debug build of next-dev to use in integration test.
@@ -173,6 +174,8 @@ jobs:
 
       - name: Collect integration test stat
         uses: ./.github/actions/next-integration-stat
+        env:
+          NEXT_TURBO_FORCE_SLACK_UPDATE: "${{ inputs.force_post_to_slack }}"
 
       - name: Store artifacts
         uses: actions/upload-artifact@v3
