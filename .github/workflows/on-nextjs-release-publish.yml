@@ -8,6 +8,10 @@ on:
     types: [nextjs-release-published]
   workflow_dispatch:
     inputs:
+      version:
+        description: Next.js version
+        type: string
+        required: true
       post_to_slack:
         description: Post test results to Slack
         type: boolean
@@ -19,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Print release tag
-        run: echo "Found a new release ${{ github.event.client_payload.version }}"
+        run: echo "Found a new release ${{ inputs.version || github.event.client_payload.version }}"
 
   # Trigger actual next.js integration tests.
   next_js_integration:
@@ -28,7 +32,7 @@ jobs:
       pull-requests: write
     uses: ./.github/workflows/nextjs-integration-test.yml
     with:
-    version: ${{ github.event.client_payload.version }}
+    version: ${{ inputs.version || github.event.client_payload.version }}
     env:
       NEXT_TURBO_FORCE_SLACK_UPDATE: "${{ inputs.post_to_slack }}"
 
