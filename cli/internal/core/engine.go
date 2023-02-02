@@ -73,113 +73,9 @@ type EngineBuildingOptions struct {
 // Prepare constructs the Task Graph for a list of packages and tasks
 func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	pkgs := options.Packages
-	tasks := options.TaskNames
+	taskNames := options.TaskNames
+	tasksOnly := options.TasksOnly
 
-	if err := e.generateTaskGraph(pkgs, tasks, options.TasksOnly); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// EngineExecutionOptions controls a single walk of the task graph
-type EngineExecutionOptions struct {
-	// Parallel is whether to run tasks in parallel
-	Parallel bool
-	// Concurrency is the number of concurrent tasks that can be executed
-	Concurrency int
-}
-
-// Execute executes the pipeline, constructing an internal task graph and walking it accordingly.
-func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
-	var sema = util.NewSemaphore(opts.Concurrency)
-	return e.TaskGraph.Walk(func(v dag.Vertex) error {
-		// Each vertex in the graph is a taskID (package#task format)
-		taskID := dag.VertexName(v)
-
-		// Always return if it is the root node
-		if strings.Contains(taskID, ROOT_NODE_NAME) {
-			return nil
-		}
-
-		// Acquire the semaphore unless parallel
-		if !opts.Parallel {
-			sema.Acquire()
-			defer sema.Release()
-		}
-
-		return visitor(taskID)
-	})
-}
-
-func (e *Engine) getPipelineFromWorkspace(workspaceName string) (*fs.Pipeline, error) {
-	cachedPipeline, ok := e.pipelines[workspaceName]
-	if ok {
-		return cachedPipeline, nil
-	}
-
-	// TODO(mehulkar) what is this value when it's a non-root workspace?
-	dir := e.completeGraph.WorkspaceInfos[workspaceName].Dir
-
-	var pkgJSON *fs.PackageJSON
-	repoRoot := e.completeGraph.RepoRoot
-
-	// dirAbsolute := turbopath.AbsoluteSystemPath(dir)
-	dirAbsolutePath := repoRoot.UntypedJoin(dir.ToString())
-
-	// We need to get a package.json, because turbo.json can "synthesize" tasks from it
-	// for single-package repos.
-	if workspaceName == util.RootPkgName {
-		var err error
-
-		rootPkgJSONPath := dirAbsolutePath.Join("package.json")
-		pkgJSON, err = fs.ReadPackageJSON(repoRoot, rootPkgJSONPath)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// Init a blank package json, since we must pass one into LoadTurboConfig
-		pkgJSON = &fs.PackageJSON{}
-	}
-
-	turboConfig, err := fs.LoadTurboConfig(repoRoot, pkgJSON, e.isSinglePackage)
-	if err != nil {
-		return nil, err
-	}
-
-	// Add to internal cache so we don't have to read file system for every task
-	e.pipelines[workspaceName] = &turboConfig.Pipeline
-
-	// Return the config from the workspace.
-	return e.pipelines[workspaceName], nil
-}
-
-func (e *Engine) getTaskDefinition(taskName string, taskID string) (*Task, error) {
-	pipeline, err := e.getPipelineFromWorkspace(util.RootPkgName)
-	if err != nil {
-		return nil, err
-	}
-
-	p := *pipeline
-
-	if task, ok := p[taskID]; ok {
-		return &Task{
-			Name:           taskName,
-			TaskDefinition: task,
-		}, nil
-	}
-
-	if task, ok := p[taskName]; ok {
-		return &Task{
-			Name:           taskName,
-			TaskDefinition: task,
-		}, nil
-	}
-
-	return nil, fmt.Errorf("Missing task definition, configure \"%s\" or \"%s\" in turbo.json", taskName, taskID)
-}
-
-func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly bool) error {
 	traversalQueue := []string{}
 
 	for _, pkg := range pkgs {
@@ -336,6 +232,103 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 	}
 
 	return nil
+}
+
+// EngineExecutionOptions controls a single walk of the task graph
+type EngineExecutionOptions struct {
+	// Parallel is whether to run tasks in parallel
+	Parallel bool
+	// Concurrency is the number of concurrent tasks that can be executed
+	Concurrency int
+}
+
+// Execute executes the pipeline, constructing an internal task graph and walking it accordingly.
+func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
+	var sema = util.NewSemaphore(opts.Concurrency)
+	return e.TaskGraph.Walk(func(v dag.Vertex) error {
+		// Each vertex in the graph is a taskID (package#task format)
+		taskID := dag.VertexName(v)
+
+		// Always return if it is the root node
+		if strings.Contains(taskID, ROOT_NODE_NAME) {
+			return nil
+		}
+
+		// Acquire the semaphore unless parallel
+		if !opts.Parallel {
+			sema.Acquire()
+			defer sema.Release()
+		}
+
+		return visitor(taskID)
+	})
+}
+
+func (e *Engine) getPipelineFromWorkspace(workspaceName string) (*fs.Pipeline, error) {
+	cachedPipeline, ok := e.pipelines[workspaceName]
+	if ok {
+		return cachedPipeline, nil
+	}
+
+	// TODO(mehulkar) what is this value when it's a non-root workspace?
+	dir := e.completeGraph.WorkspaceInfos[workspaceName].Dir
+
+	var pkgJSON *fs.PackageJSON
+	repoRoot := e.completeGraph.RepoRoot
+
+	// dirAbsolute := turbopath.AbsoluteSystemPath(dir)
+	dirAbsolutePath := repoRoot.UntypedJoin(dir.ToString())
+
+	// We need to get a package.json, because turbo.json can "synthesize" tasks from it
+	// for single-package repos.
+	if workspaceName == util.RootPkgName {
+		var err error
+
+		rootPkgJSONPath := dirAbsolutePath.Join("package.json")
+		pkgJSON, err = fs.ReadPackageJSON(repoRoot, rootPkgJSONPath)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Init a blank package json, since we must pass one into LoadTurboConfig
+		pkgJSON = &fs.PackageJSON{}
+	}
+
+	turboConfig, err := fs.LoadTurboConfig(repoRoot, pkgJSON, e.isSinglePackage)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add to internal cache so we don't have to read file system for every task
+	e.pipelines[workspaceName] = &turboConfig.Pipeline
+
+	// Return the config from the workspace.
+	return e.pipelines[workspaceName], nil
+}
+
+func (e *Engine) getTaskDefinition(taskName string, taskID string) (*Task, error) {
+	pipeline, err := e.getPipelineFromWorkspace(util.RootPkgName)
+	if err != nil {
+		return nil, err
+	}
+
+	p := *pipeline
+
+	if task, ok := p[taskID]; ok {
+		return &Task{
+			Name:           taskName,
+			TaskDefinition: task,
+		}, nil
+	}
+
+	if task, ok := p[taskName]; ok {
+		return &Task{
+			Name:           taskName,
+			TaskDefinition: task,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("Missing task definition, configure \"%s\" or \"%s\" in turbo.json", taskName, taskID)
 }
 
 // AddTask adds root tasks to the engine so they can be looked up later.
