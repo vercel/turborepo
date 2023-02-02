@@ -187,8 +187,9 @@ fn should_link(_: &CommandBase, _: &str) -> Result<bool> {
 fn should_link(base: &CommandBase, location: &str) -> Result<bool> {
     let prompt = format!(
         "{}{} {}",
-        BOLD.apply_to(GREY.apply_to("? ")),
-        BOLD.apply_to("Would you like to enable Remote Caching for"),
+        base.ui.apply(BOLD.apply_to(GREY.apply_to("? "))),
+        base.ui
+            .apply(BOLD.apply_to("Would you like to enable Remote Caching for")),
         base.ui.apply(BOLD.apply_to(CYAN.apply_to(location)))
     );
 
