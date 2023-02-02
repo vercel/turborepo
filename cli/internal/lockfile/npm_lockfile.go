@@ -103,7 +103,18 @@ var _ Lockfile = (*NpmLockfile)(nil)
 
 // ResolvePackage Given a workspace, a package it imports and version returns the key, resolved version, and if it was found
 func (l *NpmLockfile) ResolvePackage(workspacePath turbopath.AnchoredUnixPath, name string, version string) (Package, error) {
-	_, ok := l.Packages[workspacePath.ToString()]
+	// workspacePath comes from Turbo's understanding of the directory a workspace lives in.
+	// This is the relative path from the root of the repo.
+	// The root package directory's path is ".", but the NpmLockfile (i.e. package-lock.json)
+	// stores this "package" as an empty string (""). So when we want to look up this package
+	// we need to correct the uncoming workspacePath from "." to "".
+	workspacePathCorrected := workspacePath.ToString()
+	if workspacePathCorrected == "." {
+		workspacePathCorrected = ""
+	}
+
+	// check if the package is known to the lockfile.
+	_, ok := l.Packages[workspacePathCorrected]
 	if !ok {
 		return Package{}, fmt.Errorf("No package found in lockfile for '%s'", workspacePath)
 	}
