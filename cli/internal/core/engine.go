@@ -27,9 +27,7 @@ type Visitor = func(taskID string) error
 // Engine contains both the DAG for the packages and the tasks and implements the methods to execute tasks in them
 type Engine struct {
 	// TaskGraph is a graph of package-tasks
-	TaskGraph *dag.AcyclicGraph
-	// Tasks are a map of tasks in the engine
-	Tasks            map[string]*Task
+	TaskGraph        *dag.AcyclicGraph
 	PackageTaskDeps  map[string][]string
 	rootEnabledTasks util.Set
 
@@ -51,7 +49,6 @@ func NewEngine(
 ) *Engine {
 	return &Engine{
 		completeGraph:    completeGraph,
-		Tasks:            make(map[string]*Task),
 		TaskGraph:        &dag.AcyclicGraph{},
 		PackageTaskDeps:  map[string][]string{},
 		rootEnabledTasks: make(util.Set),
