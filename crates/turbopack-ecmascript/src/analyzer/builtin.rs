@@ -199,14 +199,11 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                     // 2}["a"]`
                     JsValue::Constant(ConstantValue::StrAtom(_) | ConstantValue::StrWord(_)) => {
                         let prop_str = prop.as_str().unwrap();
-                        println!("prop_str = {prop_str}");
                         let mut potential_values = Vec::new();
                         for (i, part) in parts.iter_mut().enumerate().rev() {
                             match part {
                                 ObjectPart::KeyValue(key, val) => {
-                                    println!("key = {key}");
                                     if let Some(key) = key.as_str() {
-                                        println!("key_str = {key}");
                                         if key == prop_str {
                                             if potential_values.is_empty() {
                                                 *value = take(val);
