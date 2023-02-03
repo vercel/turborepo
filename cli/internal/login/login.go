@@ -162,7 +162,6 @@ func (l *login) loginSSO(ctx context.Context, ssoTeam string) error {
 		l.base.UI.Info("")
 		l.base.UI.Info(util.Sprintf("${GREY}To disable Remote Caching, run `npx turbo unlink`${RESET}"))
 	} else {
-
 		l.base.UI.Info(util.Sprintf("${CYAN}To connect to your Remote Cache. Run the following in the${RESET}"))
 		l.base.UI.Info(util.Sprintf("${CYAN}root of any turborepo:${RESET}"))
 		l.base.UI.Info("")

@@ -14,9 +14,12 @@ use tokio::sync::OnceCell;
 
 use crate::{
     client::UserClient,
-    commands::CommandBase,
+    commands::{
+        link::{verify_caching_enabled, SelectedTeam, REMOTE_CACHING_INFO, REMOTE_CACHING_URL},
+        CommandBase,
+    },
     get_version,
-    ui::{start_spinner, BOLD, CYAN},
+    ui::{start_spinner, BOLD, CYAN, GREY, UNDERLINE},
 };
 
 #[cfg(test)]
@@ -26,12 +29,18 @@ const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 const DEFAULT_SSO_PROVIDER: &str = "SAML/OIDC Single Sign-On";
 
-pub async fn sso_login(base: &mut CommandBase) -> Result<()> {
+pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
-    let login_url = format!("{}/api/auth/sso", base.repo_config()?.api_url());
+    let mut login_url = Url::parse(&format!("{}/api/auth/sso", base.repo_config()?.login_url()))?;
+    login_url
+        .query_pairs_mut()
+        .append_pair("teamId", sso_team)
+        .append_pair("mode", "login")
+        .append_pair("next", &redirect_url);
+
     println!(">>> Opening browser to {login_url}");
     let spinner = start_spinner("Waiting for your authorization...");
-    direct_user_to_url(&login_url);
+    direct_user_to_url(login_url.as_str());
 
     let verification_token = Arc::new(OnceCell::new());
     run_sso_one_shot_server(DEFAULT_PORT, verification_token.clone()).await?;
@@ -41,15 +50,14 @@ pub async fn sso_login(base: &mut CommandBase) -> Result<()> {
         .get()
         .ok_or_else(|| anyhow!("no token auth token found"))?;
 
-    let tokenName = make_token_name().context("failed to make sso token name")?;
+    let token_name = make_token_name().context("failed to make sso token name")?;
 
     let api_client = base.api_client()?;
-    let verified_user = api_client.verify_sso_token(token, &tokenName).await?;
-
-    base.user_config()?.set_token(Some(verified_user.token))?;
-    base.repo_config()?.set_team_id(verified_user.team_id)?;
-
+    let verified_user = api_client.verify_sso_token(token, &token_name).await?;
     let user_response = api_client.get_user(&verified_user.token).await?;
+
+    base.user_config_mut()?
+        .set_token(Some(verified_user.token))?;
 
     println!(
         "
@@ -59,7 +67,46 @@ pub async fn sso_login(base: &mut CommandBase) -> Result<()> {
         user_response.user.email
     );
 
-    if let Some(team_id) = verified_user.team_id {}
+    if let Some(team_id) = verified_user.team_id {
+        let team = api_client
+            .get_team(token, &team_id)
+            .await?
+            .ok_or_else(|| anyhow!("unable to find team {}", team_id))?;
+
+        println!("1");
+        verify_caching_enabled(&api_client, &team_id, token, SelectedTeam::Team(&team)).await?;
+        println!("2");
+        base.repo_config_mut()?.set_team_id(Some(team_id))?;
+        println!("3");
+        println!(
+            "{}
+
+{}
+  For more info, see {}
+
+{}
+",
+            base.ui
+                .apply(CYAN.apply_to(format!("Remote caching enabled for {}", sso_team))),
+            REMOTE_CACHING_INFO,
+            base.ui.apply(UNDERLINE.apply_to(REMOTE_CACHING_URL)),
+            base.ui
+                .apply(GREY.apply_to("To disable remote caching, run `npx turbo unlink`"))
+        )
+    } else {
+        println!(
+            "{}
+{}
+",
+            base.ui.apply(
+                CYAN.apply_to(
+                    "To connect to your Remote Cache, run the following in any turborepo:"
+                )
+            ),
+            base.ui.apply(BOLD.apply_to("`npx turbo link`"))
+        );
+    }
+    Ok(())
 }
 
 fn make_token_name() -> Result<String> {

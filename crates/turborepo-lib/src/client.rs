@@ -12,6 +12,7 @@ use crate::{get_version, retry::retry_future};
 pub trait UserClient {
     async fn get_user(&self, token: &str) -> Result<UserResponse>;
     async fn get_teams(&self, token: &str) -> Result<TeamsResponse>;
+    async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>>;
     async fn get_caching_status(&self, token: &str, team_id: &str)
         -> Result<CachingStatusResponse>;
     async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser>;
@@ -27,7 +28,6 @@ pub struct VerifiedSsoUser {
 #[serde(rename_all = "camelCase")]
 pub struct VerificationResponse {
     token: String,
-    email: String,
     team_id: Option<String>,
 }
 
@@ -98,7 +98,7 @@ pub struct User {
     pub email: String,
     pub name: Option<String>,
     #[serde(rename = "createdAt")]
-    pub created_at: u64,
+    pub created_at: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,7 +130,7 @@ impl UserClient for APIClient {
 
         match response {
             Ok(response) => {
-                let user_response = response.json::<UserResponse>().await?;
+                let user_response = response.json().await?;
                 Ok(user_response)
             }
             Err(error) => {
@@ -174,6 +174,22 @@ impl UserClient for APIClient {
                 Err(error)
             }
         }
+    }
+
+    async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
+        let response = {
+            let request_builder = self
+                .client
+                .get(self.make_url("/v2/team"))
+                .query(&[("teamId", team_id)])
+                .header("User-Agent", USER_AGENT.clone())
+                .header("Content-Type", "application/json")
+                .header("Authorization", format!("Bearer {}", token));
+            request_builder.send()
+        }
+        .await?;
+        println!("{:?}", response.status());
+        Ok(response.json().await?)
     }
 
     async fn get_caching_status(
