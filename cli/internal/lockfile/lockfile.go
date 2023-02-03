@@ -3,6 +3,8 @@ package lockfile
 
 import (
 	"io"
+	"reflect"
+	"sort"
 
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
@@ -19,6 +21,14 @@ type Lockfile interface {
 	Encode(w io.Writer) error
 	// Patches return a list of patches used in the lockfile
 	Patches() []turbopath.AnchoredUnixPath
+	// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
+	// the cache.
+	GlobalChange(other Lockfile) bool
+}
+
+// IsNil checks if lockfile is nil
+func IsNil(l Lockfile) bool {
+	return l == nil || reflect.ValueOf(l).IsNil()
 }
 
 // Package Structure representing a possible Pack
@@ -30,3 +40,20 @@ type Package struct {
 	// Set to true iff Key and Version are set
 	Found bool
 }
+
+// ByKey sort package structures by key
+type ByKey []Package
+
+func (p ByKey) Len() int {
+	return len(p)
+}
+
+func (p ByKey) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
+
+func (p ByKey) Less(i, j int) bool {
+	return p[i].Key < p[j].Key
+}
+
+var _ (sort.Interface) = (*ByKey)(nil)

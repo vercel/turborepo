@@ -3,6 +3,7 @@ package lockfile
 import (
 	"fmt"
 	"io"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -410,6 +411,17 @@ func (p *PnpmLockfile) Patches() []turbopath.AnchoredUnixPath {
 		patchPaths[i] = turbopath.AnchoredUnixPath(patch)
 	}
 	return patchPaths
+}
+
+// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
+// the cache.
+func (p *PnpmLockfile) GlobalChange(other Lockfile) bool {
+	o, ok := other.(*PnpmLockfile)
+	return !ok ||
+		p.Version != o.Version ||
+		p.PackageExtensionsChecksum != o.PackageExtensionsChecksum ||
+		!reflect.DeepEqual(p.Overrides, o.Overrides) ||
+		!reflect.DeepEqual(p.PatchedDependencies, o.PatchedDependencies)
 }
 
 func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath, name string, specifier string) (string, bool, error) {
