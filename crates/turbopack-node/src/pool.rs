@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    future::Future,
     mem::take,
     path::{Path, PathBuf},
     process::{ExitStatus, Stdio},
@@ -36,26 +37,6 @@ struct SpawnedNodeJsPoolProcess {
 struct RunningNodeJsPoolProcess {
     child: Option<Child>,
     connection: TcpStream,
-}
-
-impl Drop for SpawnedNodeJsPoolProcess {
-    fn drop(&mut self) {
-        if let Some(mut child) = self.child.take() {
-            tokio::spawn(async move {
-                let _ = child.kill().await;
-            });
-        }
-    }
-}
-
-impl Drop for RunningNodeJsPoolProcess {
-    fn drop(&mut self) {
-        if let Some(mut child) = self.child.take() {
-            tokio::spawn(async move {
-                let _ = child.kill().await;
-            });
-        }
-    }
 }
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -317,44 +298,44 @@ pub struct NodeJsOperation {
 }
 
 impl NodeJsOperation {
-    fn process_mut(&mut self) -> Result<&mut RunningNodeJsPoolProcess> {
-        self.process
+    async fn with_process<'a, F: Future<Output = Result<T>> + Send + 'a, T>(
+        &'a mut self,
+        f: impl FnOnce(&'a mut RunningNodeJsPoolProcess) -> F,
+    ) -> Result<T> {
+        let process = self
+            .process
             .as_mut()
-            .context("Node.js operation already finished")
+            .context("Node.js operation already finished")?;
+
+        let result = f(process).await;
+        if result.is_err() {
+            self.allow_process_reuse = false;
+        }
+        result
     }
 
     pub async fn recv<M>(&mut self) -> Result<M>
     where
         M: DeserializeOwned,
     {
-        // We temporary set kill_on_drop to true to make sure the process is killed when
-        // this operation fail
-        let old = self.allow_process_reuse;
-        self.allow_process_reuse = false;
         let message = self
-            .process_mut()?
-            .recv()
-            .await
-            .context("receiving message")?;
-        let message = serde_json::from_slice(&message).context("deserializing message")?;
-        self.allow_process_reuse = old;
-        Ok(message)
+            .with_process(
+                |process| async move { process.recv().await.context("receiving message") },
+            )
+            .await?;
+        serde_json::from_slice(&message).context("deserializing message")
     }
 
     pub async fn send<M>(&mut self, message: M) -> Result<()>
     where
         M: Serialize,
     {
-        // We temporary set kill_on_drop to true to make sure the process is killed when
-        // this operation fail
-        let old = self.allow_process_reuse;
-        self.allow_process_reuse = false;
-        self.process_mut()?
-            .send(serde_json::to_vec(&message).context("serializing message")?)
-            .await
-            .context("sending message")?;
-        self.allow_process_reuse = old;
-        Ok(())
+        let message = serde_json::to_vec(&message).context("serializing message")?;
+        self.with_process(|process| async move {
+            process.send(message).await.context("sending message")?;
+            Ok(())
+        })
+        .await
     }
 
     pub async fn wait_or_kill(mut self) -> Result<ExitStatus> {
@@ -382,8 +363,8 @@ impl NodeJsOperation {
 
 impl Drop for NodeJsOperation {
     fn drop(&mut self) {
-        if let Some(process) = self.process.take() {
-            if self.allow_process_reuse {
+        if self.allow_process_reuse {
+            if let Some(process) = self.process.take() {
                 self.processes
                     .lock()
                     .unwrap()
