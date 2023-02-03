@@ -16450,10 +16450,9 @@
           .map((t) => `\t- ${t}`)
           .join(" \n")}`;
       }
-      // Store plain textbased summary to share into Slack channel
-      // Note: Likely we'll need to polish this summary to make it more readable.
+      // Store a json payload to share via slackapi/slack-github-action into Slack channel
       if (shouldShareTestSummaryToSlack) {
-        let resultsSummary;
+        let resultsSummary = "";
         if (suiteCountDiff === 0) {
           resultsSummary += "No changes in suite count.";
         } else if (suiteCountDiff > 0) {
