@@ -6,6 +6,8 @@ pub enum Error {
     MissingWorkspace(String),
     #[error("No lockfile entry found for '{0}'")]
     MissingPackage(String),
+    #[error("Missing version from non-workspace package workspace: '{0}', key: '{1}'")]
+    MissingVersion(String, String),
     #[error("Unable to convert from json")]
     JsonError(#[from] serde_json::Error),
     #[error("Turbo doesn't support npm lockfiles without a 'packages' field")]

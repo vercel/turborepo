@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::Error;
+use super::{Error, Package};
 
 // we change graph traversal now
 // resolve_package should only be used now for converting initial contents
@@ -40,12 +40,6 @@ struct NpmPackage {
     // we keep them as raw values to avoid describing the correct schema.
     #[serde(flatten)]
     other: HashMap<String, Value>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord)]
-pub struct Package {
-    pub key: String,
-    pub version: String,
 }
 
 impl NpmLockfile {
@@ -86,41 +80,42 @@ impl NpmLockfile {
             // Next we check for a top level version of the package
             format!("node_modules/{}", name),
         ];
-
-        Ok(possible_keys
+        possible_keys
             .into_iter()
             .filter_map(|key| {
-                self.packages.get(&key).map(|pkg| Package {
-                    key,
-                    version: pkg
-                        .version
-                        .clone()
-                        .expect("missing version from non-workspace package"),
+                self.packages.get(&key).map(|pkg| {
+                    let version = pkg.version.clone().unwrap_or_default();
+                    /*
+                    .ok_or_else(|| {
+                        Error::MissingVersion(workspace_path.to_string(), key.clone())
+                    })?; */
+                    Ok(Package { key, version })
                 })
             })
-            .next())
+            .next()
+            .transpose()
     }
 
-    pub fn all_dependencies(&self, key: &str) -> Option<HashMap<String, &str>> {
-        self.packages.get(key).map(|pkg| {
-            pkg.dep_keys()
-                .filter_map(|name| {
-                    Self::possible_npm_deps(key, name)
-                        .into_iter()
-                        .find_map(|possible_key| {
-                            self.packages.get(&possible_key).map(|entry| {
-                                (
-                                    possible_key,
-                                    entry
-                                        .version
-                                        .as_deref()
-                                        .expect("missing version from non-workspace package"),
-                                )
+    pub fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, &str>>, Error> {
+        self.packages
+            .get(key)
+            .map(|pkg| {
+                pkg.dep_keys()
+                    .filter_map(|name| {
+                        Self::possible_npm_deps(key, name)
+                            .into_iter()
+                            .find_map(|possible_key| {
+                                self.packages.get(&possible_key).map(|entry| {
+                                    let version = entry.version.as_deref().ok_or_else(|| {
+                                        Error::MissingVersion("".into(), possible_key.clone())
+                                    })?;
+                                    Ok((possible_key, version))
+                                })
                             })
-                        })
-                })
-                .collect()
-        })
+                    })
+                    .collect()
+            })
+            .transpose()
     }
 
     fn get_package(&self, package: impl AsRef<str>) -> Result<&NpmPackage, Error> {
@@ -130,7 +125,11 @@ impl NpmLockfile {
             .ok_or_else(|| Error::MissingPackage(pkg_str.to_string()))
     }
 
-    pub fn subgraph(&self, workspace_packages: &[&str], packages: &[&str]) -> Result<Self, Error> {
+    pub fn subgraph(
+        &self,
+        workspace_packages: &[String],
+        packages: &[String],
+    ) -> Result<Self, Error> {
         let mut pruned_packages = HashMap::with_capacity(packages.len());
         for pkg_key in packages {
             let pkg = self.get_package(pkg_key)?;
@@ -192,6 +191,18 @@ impl NpmPackage {
             .chain(self.optional_dependencies.keys())
             .chain(self.peer_dependencies.keys())
     }
+}
+
+pub fn npm_subgraph(
+    contents: &[u8],
+    workspace_packages: &[String],
+    packages: &[String],
+) -> Result<Vec<u8>, Error> {
+    let lockfile = NpmLockfile::load(contents)?;
+    let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
+    let new_contents = serde_json::to_vec_pretty(&pruned_lockfile)?;
+
+    Ok(new_contents)
 }
 
 #[cfg(test)]
@@ -318,7 +329,7 @@ mod test {
         ];
 
         for (key, expected) in &tests {
-            let deps = lockfile.all_dependencies(key);
+            let deps = lockfile.all_dependencies(key)?;
             assert!(deps.is_some());
             let deps = deps.unwrap();
             let mut actual_keys: Vec<_> = deps.keys().collect();

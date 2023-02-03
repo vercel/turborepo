@@ -22,3 +22,39 @@ message GlobResp {
 message GlobRespList {
   repeated string files = 1;
 }
+
+message TransitiveDepsRequest {
+  bytes contents = 1;
+  string workspace_dir = 2;
+  map<string, string> unresolved_deps = 3;
+}
+
+message TransitiveDepsResponse {
+  oneof response {
+    LockfilePackageList packages = 1;
+    string error = 2;
+  }
+}
+
+message LockfilePackage {
+  string key = 1;
+  string version = 2;
+  bool found = 3;
+}
+
+message LockfilePackageList {
+  repeated LockfilePackage list = 1;
+}
+
+message SubgraphRequest {
+  bytes contents = 1;
+  repeated string workspaces = 2;
+  repeated string packages = 3;
+}
+
+message SubgraphResponse {
+  oneof response {
+    bytes contents = 1;
+    string error = 2;
+  }
+}

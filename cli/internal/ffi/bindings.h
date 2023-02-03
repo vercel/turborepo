@@ -9,3 +9,7 @@ typedef struct Buffer {
 } Buffer;
 
 struct Buffer get_turbo_data_dir(void);
+
+struct Buffer npm_transitive_closure(struct Buffer buf);
+
+struct Buffer npm_subgraph(struct Buffer buf);

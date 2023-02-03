@@ -63,7 +63,23 @@ func (p ByKey) Less(i, j int) bool {
 var _ (sort.Interface) = (*ByKey)(nil)
 
 // TransitiveClosure the set of all lockfile keys that pkg depends on
-func TransitiveClosure(workspaceDir turbopath.AnchoredUnixPath, unresolvedDeps map[string]string, lockFile Lockfile) (mapset.Set, error) {
+func TransitiveClosure(
+	workspaceDir turbopath.AnchoredUnixPath,
+	unresolvedDeps map[string]string,
+	lockFile Lockfile,
+) (mapset.Set, error) {
+	if lf, ok := lockFile.(*NpmLockfileRust); ok {
+		// We special case as Rust implementations have their own dep crawl
+		return NpmTransitiveDeps(lf, workspaceDir, unresolvedDeps)
+	}
+	return transitiveClosure(workspaceDir, unresolvedDeps, lockFile)
+}
+
+func transitiveClosure(
+	workspaceDir turbopath.AnchoredUnixPath,
+	unresolvedDeps map[string]string,
+	lockFile Lockfile,
+) (mapset.Set, error) {
 	if IsNil(lockFile) {
 		return nil, fmt.Errorf("No lockfile available to do analysis on")
 	}
@@ -80,7 +96,13 @@ func TransitiveClosure(workspaceDir turbopath.AnchoredUnixPath, unresolvedDeps m
 	return resolvedPkgs, nil
 }
 
-func transitiveClosureHelper(wg *errgroup.Group, workspacePath turbopath.AnchoredUnixPath, lockfile Lockfile, unresolvedDirectDeps map[string]string, resolvedDeps mapset.Set) {
+func transitiveClosureHelper(
+	wg *errgroup.Group,
+	workspacePath turbopath.AnchoredUnixPath,
+	lockfile Lockfile,
+	unresolvedDirectDeps map[string]string,
+	resolvedDeps mapset.Set,
+) {
 	for directDepName, unresolvedVersion := range unresolvedDirectDeps {
 		directDepName := directDepName
 		unresolvedVersion := unresolvedVersion

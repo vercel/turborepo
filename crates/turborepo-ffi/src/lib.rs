@@ -1,5 +1,7 @@
 use std::mem::ManuallyDrop;
 
+use turborepo_lockfiles::{npm_subgraph as real_npm_subgraph, transitive_closure, NpmLockfile};
+
 mod proto {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
 }
@@ -42,4 +44,68 @@ pub extern "C" fn get_turbo_data_dir() -> Buffer {
 
     let dir = dirs.data_dir().to_string_lossy().to_string();
     proto::TurboDataDirResp { dir }.into()
+}
+
+#[no_mangle]
+pub extern "C" fn npm_transitive_closure(buf: Buffer) -> Buffer {
+    let request: proto::TransitiveDepsRequest = match buf.into_proto() {
+        Ok(r) => r,
+        Err(err) => return make_lockfile_error(err),
+    };
+    let lockfile = match NpmLockfile::load(request.contents.as_slice()) {
+        Ok(l) => l,
+        Err(err) => return make_lockfile_error(err),
+    };
+    let transitive_deps =
+        match transitive_closure(&lockfile, request.workspace_dir, request.unresolved_deps) {
+            Ok(l) => l,
+            Err(err) => return make_lockfile_error(err),
+        };
+
+    let list: Vec<_> = transitive_deps
+        .into_iter()
+        .map(|package| proto::LockfilePackage {
+            found: true,
+            key: package.key,
+            version: package.version,
+        })
+        .collect();
+
+    proto::TransitiveDepsResponse {
+        response: Some(proto::transitive_deps_response::Response::Packages(
+            proto::LockfilePackageList { list },
+        )),
+    }
+    .into()
+}
+
+fn make_lockfile_error(err: impl ToString) -> Buffer {
+    proto::TransitiveDepsResponse {
+        response: Some(proto::transitive_deps_response::Response::Error(
+            err.to_string(),
+        )),
+    }
+    .into()
+}
+
+#[no_mangle]
+pub extern "C" fn npm_subgraph(buf: Buffer) -> Buffer {
+    let request: proto::SubgraphRequest = match buf.into_proto() {
+        Ok(r) => r,
+        Err(err) => return make_subgraph_error(err),
+    };
+    match real_npm_subgraph(&request.contents, &request.workspaces, &request.packages) {
+        Ok(new_contents) => proto::SubgraphResponse {
+            response: Some(proto::subgraph_response::Response::Contents(new_contents)),
+        }
+        .into(),
+        Err(err) => make_subgraph_error(err),
+    }
+}
+
+fn make_subgraph_error(err: impl ToString) -> Buffer {
+    proto::SubgraphResponse {
+        response: Some(proto::subgraph_response::Response::Error(err.to_string())),
+    }
+    .into()
 }
