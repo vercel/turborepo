@@ -153,7 +153,7 @@ pub async fn evaluate(
                 args: args.iter().map(|v| &**v).collect(),
             })
             .await;
-        if let Ok(_) = result {
+        if result.is_ok() {
             break operation;
         } else if i == 10 {
             result?;
