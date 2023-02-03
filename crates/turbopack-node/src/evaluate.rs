@@ -140,13 +140,28 @@ pub async fn evaluate(
         debug,
     )
     .await?;
-    let mut operation = pool.operation().await?;
+
     let args = args.into_iter().try_join().await?;
-    operation
-        .send(EvalJavaScriptOutgoingMessage::Evaluate {
-            args: args.iter().map(|v| &**v).collect(),
-        })
-        .await?;
+
+    // Sending to workers can fail if reused workers are in a bad state.
+    // To we retry picking workers from the pools until we succeed.
+    let mut i = 1;
+    let mut operation = loop {
+        let mut operation = pool.operation().await?;
+        let result = operation
+            .send(EvalJavaScriptOutgoingMessage::Evaluate {
+                args: args.iter().map(|v| &**v).collect(),
+            })
+            .await;
+        if let Ok(_) = result {
+            break operation;
+        } else if i == 10 {
+            result?;
+            break operation;
+        }
+        i += 1;
+    };
+
     let mut file_dependencies = Vec::new();
     let mut dir_dependencies = Vec::new();
     let output = loop {
@@ -159,7 +174,9 @@ pub async fn evaluate(
                 .cell()
                 .as_issue()
                 .emit();
-                operation.wait_or_kill().await?;
+                // We don't care when the process has problems killing since it's already in
+                // error state.
+                let _ = operation.wait_or_kill().await;
                 break JavaScriptValue::Error;
             }
             EvalJavaScriptIncomingMessage::JsonValue { data } => {
