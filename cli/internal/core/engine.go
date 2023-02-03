@@ -439,25 +439,23 @@ func (e *Engine) getPipelineFromWorkspace(workspaceName string) (fs.Pipeline, er
 	// Note: dir for the root workspace will be an empty string, and for
 	// other workspaces, it will be a relative path.
 	dir := e.completeGraph.WorkspaceInfos[workspaceName].Dir
-
-	var pkgJSON *fs.PackageJSON
 	repoRoot := e.completeGraph.RepoRoot
-
 	dirAbsolutePath := dir.RestoreAnchor(repoRoot)
 
-	// We need to get a package.json, because turbo.json can "synthesize" tasks from it
-	// for single-package repos.
-	if workspaceName == util.RootPkgName {
-		var err error
+	// We need to a PackageJSON, because LoadTurboConfig requires it as an argument
+	// so it can synthesize tasks for single-package repos.
+	// In the root workspace, actually get and use the root package.json.
+	// For all other workspaces, we don't need the synthesis feature, so we can proceed
+	// with a default/blank PackageJSON
+	pkgJSON := &fs.PackageJSON{}
 
+	if workspaceName == util.RootPkgName {
 		rootPkgJSONPath := dirAbsolutePath.Join("package.json")
-		pkgJSON, err = fs.ReadPackageJSON(rootPkgJSONPath)
+		rootPkgJSON, err := fs.ReadPackageJSON(rootPkgJSONPath)
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		// Init a blank package json, since we must pass one into LoadTurboConfig
-		pkgJSON = &fs.PackageJSON{}
+		pkgJSON = rootPkgJSON
 	}
 
 	turboConfig, err := fs.LoadTurboConfig(repoRoot, pkgJSON, e.isSinglePackage)
