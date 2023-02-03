@@ -102,10 +102,11 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			return err
 		}
 
-		command, ok := packageTask.Command()
-		if !ok {
-			command = "<NONEXISTENT>"
+		command := "<NONEXISTENT>"
+		if packageTask.Command != "" {
+			command = packageTask.Command
 		}
+
 		isRootTask := packageTask.PackageName == util.RootPkgName
 		if isRootTask && commandLooksLikeTurbo(command) {
 			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, command)
@@ -130,17 +131,19 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			TaskID:                 packageTask.TaskID,
 			Task:                   packageTask.Task,
 			Package:                packageTask.PackageName,
-			Hash:                   hash,
-			CacheState:             itemStatus,
-			Command:                command,
-			Dir:                    packageTask.Pkg.Dir.ToString(),
-			Outputs:                packageTask.TaskDefinition.Outputs.Inclusions,
-			ExcludedOutputs:        packageTask.TaskDefinition.Outputs.Exclusions,
-			LogFile:                packageTask.RepoRelativeLogFile(),
-			Dependencies:           ancestors,
-			Dependents:             descendents,
+			Dir:                    packageTask.Dir,
+			Outputs:                packageTask.Outputs,
+			ExcludedOutputs:        packageTask.ExcludedOutputs,
+			LogFile:                packageTask.LogFile,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
+			Command:                command,
+
+			Hash:         hash,        // TODO(mehulkar): Move this to PackageTask
+			CacheState:   itemStatus,  // TODO(mehulkar): Move this to PackageTask
+			Dependencies: ancestors,   // TODO(mehulkar): Move this to PackageTask
+			Dependents:   descendents, // TODO(mehulkar): Move this to PackageTask
 		})
+
 		return nil
 	}
 
