@@ -154,41 +154,6 @@ impl NpmLockfile {
         })
     }
 
-    fn get_package(&self, package: impl AsRef<str>) -> Result<&NpmPackage, Error> {
-        let pkg_str = package.as_ref();
-        self.packages
-            .get(pkg_str)
-            .ok_or_else(|| Error::MissingPackage(pkg_str.to_string()))
-    }
-
-    pub fn subgraph(&self, workspace_packages: &[&str], packages: &[&str]) -> Result<Self, Error> {
-        let mut pruned_packages = HashMap::with_capacity(packages.len());
-        for pkg_key in packages {
-            let pkg = self.get_package(pkg_key)?;
-            pruned_packages.insert(pkg_key.to_string(), pkg.clone());
-        }
-        if let Some(root) = self.packages.get("") {
-            pruned_packages.insert("".into(), root.clone());
-        }
-        for workspace in workspace_packages {
-            let pkg = self.get_package(workspace)?;
-            pruned_packages.insert(workspace.to_string(), pkg.clone());
-
-            for (key, entry) in &self.packages {
-                if entry.resolved.as_deref() == Some(workspace) {
-                    pruned_packages.insert(key.clone(), entry.clone());
-                    break;
-                }
-            }
-        }
-        Ok(Self {
-            lockfile_version: 3,
-            packages: pruned_packages,
-            dependencies: HashMap::default(),
-            other: self.other.clone(),
-        })
-    }
-
     fn possible_npm_deps(key: &str, dep: &str) -> Vec<String> {
         let mut possible_deps = vec![format!("{key}/node_modules/{dep}")];
 
