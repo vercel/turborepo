@@ -21,6 +21,8 @@ var ErrFallback = errors.New("cannot find a .git folder. Falling back to manual 
 type SCM interface {
 	// ChangedFiles returns a list of modified files since the given commit, optionally including untracked files.*/
 	ChangedFiles(fromCommit string, toCommit string, includeUntracked bool, relativeTo string) ([]string, error)
+	// PreviousContent Returns the content of the file at fromCommit
+	PreviousContent(fromCommit string, filePath string) ([]byte, error)
 }
 
 // newGitSCM returns a new SCM instance for this repo root.

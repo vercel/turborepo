@@ -20,7 +20,7 @@ const ansiEscapeStr = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-
 var IsTTY = isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
 
 // IsCI is true when we appear to be running in a non-interactive context.
-var IsCI = ci.IsCi()
+var IsCI = !IsTTY || ci.IsCi()
 var gray = color.New(color.Faint)
 var bold = color.New(color.Bold)
 var ERROR_PREFIX = color.New(color.Bold, color.FgRed, color.ReverseVideo).Sprint(" ERROR ")
