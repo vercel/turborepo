@@ -708,7 +708,7 @@ impl JsValue {
     }
 
     #[cfg(not(debug_assertions))]
-    pub fn assert_total_nodes_up_to_date(&mut self) {}
+    pub fn debug_assert_total_nodes_up_to_date(&mut self) {}
 
     pub fn ensure_node_limit(&mut self, limit: usize) {
         fn cmp_nodes(a: &JsValue, b: &JsValue) -> Ordering {
