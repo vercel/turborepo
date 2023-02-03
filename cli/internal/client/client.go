@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/spf13/pflag"
+	"github.com/vercel/turbo/cli/internal/ci"
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
@@ -281,6 +282,9 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 	req.Header.Set("User-Agent", c.UserAgent())
+	if ci.IsCi() {
+		req.Header.Set("x-artifact-client-ci", ci.Name())
+	}
 	if tag != "" {
 		req.Header.Set("x-artifact-tag", tag)
 	}
@@ -398,6 +402,9 @@ func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 	req.Header.Set("User-Agent", c.UserAgent())
+	if ci.IsCi() {
+		req.Header.Set("x-artifact-client-ci", ci.Name())
+	}
 	resp, err := c.HttpClient.Do(req)
 	if resp != nil && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		b, _ := ioutil.ReadAll(resp.Body)
