@@ -444,8 +444,7 @@ func (e *Engine) getPipelineFromWorkspace(workspaceName string) (*fs.Pipeline, e
 	var pkgJSON *fs.PackageJSON
 	repoRoot := e.completeGraph.RepoRoot
 
-	// dirAbsolute := turbopath.AbsoluteSystemPath(dir)
-	dirAbsolutePath := repoRoot.UntypedJoin(dir.ToString())
+	dirAbsolutePath := dir.RestoreAnchor(repoRoot)
 
 	// We need to get a package.json, because turbo.json can "synthesize" tasks from it
 	// for single-package repos.
