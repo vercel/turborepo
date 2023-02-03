@@ -25,6 +25,11 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
+// missingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
+// E.g. if `turbo run build --dry` is run, and package-a doesn't define a `build` script in package.json,
+// the DryRunSummary will print this, instead of the script (e.g. `next build`).
+const missingTaskLabel = "<NONEXISTENT>"
+
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed
 type dryRunSummary struct {
@@ -102,7 +107,7 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			return err
 		}
 
-		command := "<NONEXISTENT>"
+		command := missingTaskLabel
 		if packageTask.Command != "" {
 			command = packageTask.Command
 		}
