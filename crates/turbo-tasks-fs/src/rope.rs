@@ -4,6 +4,7 @@ use std::{
     fmt::Debug,
     io::{self, BufRead, Read, Result as IoResult, Write},
     mem, ops,
+    ops::Deref,
     pin::Pin,
     sync::Arc,
     task::{Context as TaskContext, Poll},
@@ -31,14 +32,14 @@ pub struct Rope {
     length: usize,
 
     /// A shareable container holding the rope's bytes.
+    #[turbo_tasks(debug_ignore, trace_ignore)]
     data: InnerRope,
 }
 
 /// An Arc container for ropes. This indirection allows for easily sharing the
 /// contents between Ropes (and also RopeBuilders/RopeReaders).
-#[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 #[derive(Clone, Debug, Default)]
-struct InnerRope(#[turbo_tasks(debug_ignore, trace_ignore)] Arc<Vec<RopeElem>>);
+struct InnerRope(Arc<Vec<RopeElem>>);
 
 /// Differentiates the types of stored bytes in a rope.
 #[derive(Clone, Debug)]
@@ -166,6 +167,10 @@ impl RopeBuilder {
     /// This is much more efficient than pushing actual bytes, since we can
     /// share the other Rope's references without copying the underlying data.
     pub fn concat(&mut self, other: &Rope) {
+        if other.len() == 0 {
+            return;
+        }
+
         // We may have pending bytes from a prior push.
         self.finish();
 
@@ -393,9 +398,10 @@ impl PartialEq for InnerRope {
         }
     }
 }
+
 impl Eq for InnerRope {}
 
-impl ops::Deref for InnerRope {
+impl Deref for InnerRope {
     type Target = Arc<Vec<RopeElem>>;
 
     fn deref(&self) -> &Self::Target {
@@ -416,6 +422,7 @@ impl DeterministicHash for RopeElem {
 }
 
 /// Implements the Read/AsyncRead/Stream/Iterator trait over a Rope.
+#[derive(Debug)]
 pub struct RopeReader {
     /// The Rope's tree is kept as a cloned stack, allowing us to accomplish
     /// incremental yielding.
@@ -425,6 +432,7 @@ pub struct RopeReader {
 /// A StackElem holds the current index into either a Bytes or a shared Rope.
 /// When the index reaches the end of the associated data, it is removed and we
 /// continue onto the next item in the stack.
+#[derive(Debug)]
 enum StackElem {
     Local(Bytes),
     Shared(InnerRope, usize),
@@ -466,13 +474,14 @@ impl RopeReader {
 impl Iterator for RopeReader {
     type Item = Bytes;
 
-    /// Iterates the rope's elements recursively until we find the next Local
-    /// section, returning its Bytes.
     fn next(&mut self) -> Option<Self::Item> {
+        // Iterates the rope's elements recursively until we find the next Local
+        // section, returning its Bytes.
         loop {
             let (inner, mut index) = match self.stack.pop() {
                 None => return None,
-                Some(StackElem::Local(b)) => return Some(b),
+                Some(StackElem::Local(b)) if !b.is_empty() => return Some(b),
+                Some(StackElem::Local(_)) => continue,
                 Some(StackElem::Shared(r, i)) => (r, i),
             };
 
@@ -488,14 +497,12 @@ impl Iterator for RopeReader {
 }
 
 impl Read for RopeReader {
-    /// Reads the Rope into the provided buffer.
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         Ok(self.read_internal(buf.len(), &mut ReadBuf::new(buf)))
     }
 }
 
 impl AsyncRead for RopeReader {
-    /// Reads the Rope into the provided buffer, asynchronously.
     fn poll_read(
         self: Pin<&mut Self>,
         _cx: &mut TaskContext<'_>,
@@ -508,12 +515,9 @@ impl AsyncRead for RopeReader {
 }
 
 impl BufRead for RopeReader {
-    /// Returns the full buffer without coping any data. The same bytes will
-    /// continue to be returned until [consume] is called to either consume a
-    /// partial amount of bytes (in which case the Bytes will advance beyond
-    /// them) or the full amount of bytes (in which case the next Bytes will be
-    /// returned).
     fn fill_buf(&mut self) -> IoResult<&[u8]> {
+        // Returns the full buffer without coping any data. The same bytes will
+        // continue to be returned until [consume] is called.
         let bytes = match self.next() {
             None => return Ok(EMPTY_BUF),
             Some(b) => b,
@@ -524,18 +528,21 @@ impl BufRead for RopeReader {
         // slice reference.
         self.stack.push(StackElem::Local(bytes));
         let Some(StackElem::Local(bytes)) = self.stack.last() else {
-             unreachable!()
+            unreachable!()
         };
+
+        debug_assert!(!bytes.is_empty());
+
         Ok(bytes)
     }
 
-    /// Consumes some amount of bytes from the current Bytes instance, ensuring
-    /// those bytes are not returned on the next call to [fill_buf].
     fn consume(&mut self, amt: usize) {
         if let Some(StackElem::Local(b)) = self.stack.last_mut() {
             if amt == b.len() {
                 self.stack.pop();
             } else {
+                // Consume some amount of bytes from the current Bytes instance, ensuring
+                // those bytes are not returned on the next call to [fill_buf].
                 b.advance(amt);
             }
         }
@@ -543,12 +550,12 @@ impl BufRead for RopeReader {
 }
 
 impl Stream for RopeReader {
-    /// The Result<Bytes> item type is required for this to be streamable into a
-    /// [Hyper::Body].
+    // The Result<Bytes> item type is required for this to be streamable into a
+    // [Hyper::Body].
     type Item = Result<Bytes>;
 
-    /// Returns a "result" of reading the next shared bytes reference. This
-    /// differs from [Read::read] by not copying any memory.
+    // Returns a "result" of reading the next shared bytes reference. This
+    // differs from [Read::read] by not copying any memory.
     fn poll_next(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
         Poll::Ready(this.next().map(Ok))
