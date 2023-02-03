@@ -171,6 +171,10 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                     JsValue::alternatives(values)
                 }
 
+                /// Convert a list of potential values into
+                /// JsValue::Alternatives Optionally add a
+                /// unknown value to the alternatives for object prototype
+                /// methods
                 fn potential_values_to_alternatives(
                     mut potential_values: Vec<usize>,
                     parts: &mut Vec<ObjectPart>,
