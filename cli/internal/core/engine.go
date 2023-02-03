@@ -36,7 +36,7 @@ type Engine struct {
 
 	// Map of packageName to pipeline. We resolve task definitions from here
 	// but we don't want to read from the filesystem every time
-	pipelines map[string]*fs.Pipeline
+	pipelines map[string]fs.Pipeline
 
 	// isSinglePackage is used to load turbo.json correctly
 	isSinglePackage bool
@@ -52,7 +52,7 @@ func NewEngine(
 		TaskGraph:        &dag.AcyclicGraph{},
 		PackageTaskDeps:  map[string][]string{},
 		rootEnabledTasks: make(util.Set),
-		pipelines:        map[string]*fs.Pipeline{},
+		pipelines:        map[string]fs.Pipeline{},
 		isSinglePackage:  isSinglePackage,
 	}
 }
@@ -103,16 +103,14 @@ func (e *Engine) getTaskDefinition(taskName string, taskID string) (*Task, error
 		return nil, err
 	}
 
-	p := *pipeline
-
-	if task, ok := p[taskID]; ok {
+	if task, ok := pipeline[taskID]; ok {
 		return &Task{
 			Name:           taskName,
 			TaskDefinition: task,
 		}, nil
 	}
 
-	if task, ok := p[taskName]; ok {
+	if task, ok := pipeline[taskName]; ok {
 		return &Task{
 			Name:           taskName,
 			TaskDefinition: task,
@@ -432,7 +430,7 @@ func (e *Engine) GetTaskGraphDescendants(taskID string) ([]string, error) {
 	return stringDescendents, nil
 }
 
-func (e *Engine) getPipelineFromWorkspace(workspaceName string) (*fs.Pipeline, error) {
+func (e *Engine) getPipelineFromWorkspace(workspaceName string) (fs.Pipeline, error) {
 	cachedPipeline, ok := e.pipelines[workspaceName]
 	if ok {
 		return cachedPipeline, nil
@@ -468,7 +466,7 @@ func (e *Engine) getPipelineFromWorkspace(workspaceName string) (*fs.Pipeline, e
 	}
 
 	// Add to internal cache so we don't have to read file system for every task
-	e.pipelines[workspaceName] = &turboConfig.Pipeline
+	e.pipelines[workspaceName] = turboConfig.Pipeline
 
 	// Return the config from the workspace.
 	return e.pipelines[workspaceName], nil
