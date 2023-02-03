@@ -242,7 +242,11 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON, warn
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
 	if c.Lockfile != nil {
-		depSet, err := TransitiveClosure(pkg, c.Lockfile)
+		depSet, err := lockfile.TransitiveClosure(
+			pkg.Dir.ToUnixPath(),
+			pkg.UnresolvedExternalDeps,
+			c.Lockfile,
+		)
 		if err != nil {
 			warnings.append(err)
 			// Return early to skip using results of incomplete dep graph resolution
@@ -316,7 +320,11 @@ func (c *Context) populateWorkspaceGraphForPackageJSON(pkg *fs.PackageJSON, root
 		}
 	}
 
-	externalDeps, err := TransitiveClosure(pkg, c.Lockfile)
+	externalDeps, err := lockfile.TransitiveClosure(
+		pkg.Dir.ToUnixPath(),
+		pkg.UnresolvedExternalDeps,
+		c.Lockfile,
+	)
 	if err != nil {
 		warnings.append(err)
 		// reset external deps to original state
@@ -373,57 +381,6 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 	return nil
 }
 
-// TransitiveClosure the set of all lockfile keys that pkg depends on
-func TransitiveClosure(pkg *fs.PackageJSON, lockFile lockfile.Lockfile) (mapset.Set, error) {
-	if lockfile.IsNil(lockFile) {
-		return nil, fmt.Errorf("No lockfile available to do analysis on")
-	}
-
-	resolvedPkgs := mapset.NewSet()
-	lockfileEg := &errgroup.Group{}
-
-	transitiveClosureHelper(lockfileEg, pkg, lockFile, pkg.UnresolvedExternalDeps, resolvedPkgs)
-
-	if err := lockfileEg.Wait(); err != nil {
-		return nil, err
-	}
-
-	return resolvedPkgs, nil
-}
-
-func transitiveClosureHelper(wg *errgroup.Group, pkg *fs.PackageJSON, lockfile lockfile.Lockfile, unresolvedDirectDeps map[string]string, resolvedDeps mapset.Set) {
-	for directDepName, unresolvedVersion := range unresolvedDirectDeps {
-		directDepName := directDepName
-		unresolvedVersion := unresolvedVersion
-		wg.Go(func() error {
-
-			lockfilePkg, err := lockfile.ResolvePackage(pkg.Dir.ToUnixPath(), directDepName, unresolvedVersion)
-
-			if err != nil {
-				return err
-			}
-
-			if !lockfilePkg.Found || resolvedDeps.Contains(lockfilePkg) {
-				return nil
-			}
-
-			resolvedDeps.Add(lockfilePkg)
-
-			allDeps, ok := lockfile.AllDependencies(lockfilePkg.Key)
-
-			if !ok {
-				panic(fmt.Sprintf("Unable to find entry for %s", lockfilePkg.Key))
-			}
-
-			if len(allDeps) > 0 {
-				transitiveClosureHelper(wg, pkg, lockfile, allDeps, resolvedDeps)
-			}
-
-			return nil
-		})
-	}
-}
-
 // InternalDependencies finds all dependencies required by the slice of starting
 // packages, as well as the starting packages themselves.
 func (c *Context) InternalDependencies(start []string) ([]string, error) {
@@ -462,7 +419,11 @@ func (c *Context) ChangedPackages(previousLockfile lockfile.Lockfile) ([]string,
 	}
 
 	didPackageChange := func(pkgName string, pkg *fs.PackageJSON) bool {
-		previousDeps, err := TransitiveClosure(pkg, previousLockfile)
+		previousDeps, err := lockfile.TransitiveClosure(
+			pkg.Dir.ToUnixPath(),
+			pkg.UnresolvedExternalDeps,
+			previousLockfile,
+		)
 		if err != nil || previousDeps.Cardinality() != len(pkg.TransitiveDeps) {
 			return true
 		}

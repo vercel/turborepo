@@ -2,9 +2,13 @@
 package lockfile
 
 import (
+	"fmt"
 	"io"
 	"reflect"
 	"sort"
+
+	mapset "github.com/deckarep/golang-set"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
@@ -57,3 +61,54 @@ func (p ByKey) Less(i, j int) bool {
 }
 
 var _ (sort.Interface) = (*ByKey)(nil)
+
+// TransitiveClosure the set of all lockfile keys that pkg depends on
+func TransitiveClosure(workspaceDir turbopath.AnchoredUnixPath, unresolvedDeps map[string]string, lockFile Lockfile) (mapset.Set, error) {
+	if IsNil(lockFile) {
+		return nil, fmt.Errorf("No lockfile available to do analysis on")
+	}
+
+	resolvedPkgs := mapset.NewSet()
+	lockfileEg := &errgroup.Group{}
+
+	transitiveClosureHelper(lockfileEg, workspaceDir, lockFile, unresolvedDeps, resolvedPkgs)
+
+	if err := lockfileEg.Wait(); err != nil {
+		return nil, err
+	}
+
+	return resolvedPkgs, nil
+}
+
+func transitiveClosureHelper(wg *errgroup.Group, workspacePath turbopath.AnchoredUnixPath, lockfile Lockfile, unresolvedDirectDeps map[string]string, resolvedDeps mapset.Set) {
+	for directDepName, unresolvedVersion := range unresolvedDirectDeps {
+		directDepName := directDepName
+		unresolvedVersion := unresolvedVersion
+		wg.Go(func() error {
+
+			lockfilePkg, err := lockfile.ResolvePackage(workspacePath, directDepName, unresolvedVersion)
+
+			if err != nil {
+				return err
+			}
+
+			if !lockfilePkg.Found || resolvedDeps.Contains(lockfilePkg) {
+				return nil
+			}
+
+			resolvedDeps.Add(lockfilePkg)
+
+			allDeps, ok := lockfile.AllDependencies(lockfilePkg.Key)
+
+			if !ok {
+				panic(fmt.Sprintf("Unable to find entry for %s", lockfilePkg.Key))
+			}
+
+			if len(allDeps) > 0 {
+				transitiveClosureHelper(wg, workspacePath, lockfile, allDeps, resolvedDeps)
+			}
+
+			return nil
+		})
+	}
+}
