@@ -2730,10 +2730,10 @@ mod tests {
                             for arg in args {
                                 match arg {
                                     EffectArg::Value(v) => {
-                                        new_args.push(resolve(&var_graph, v).await);
+                                        new_args.push(resolve(var_graph, v).await);
                                     }
                                     EffectArg::Closure(v, effects) => {
-                                        new_args.push(resolve(&var_graph, v).await);
+                                        new_args.push(resolve(var_graph, v).await);
                                         queue.extend(
                                             effects.effects.into_iter().rev().map(|e| (i, e)),
                                         );
