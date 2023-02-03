@@ -1311,7 +1311,384 @@
 <span id="1311">1311</span>
 <span id="1312">1312</span>
 <span id="1313">1313</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, iter, mem::replace, sync::Arc};
+<span id="1314">1314</span>
+<span id="1315">1315</span>
+<span id="1316">1316</span>
+<span id="1317">1317</span>
+<span id="1318">1318</span>
+<span id="1319">1319</span>
+<span id="1320">1320</span>
+<span id="1321">1321</span>
+<span id="1322">1322</span>
+<span id="1323">1323</span>
+<span id="1324">1324</span>
+<span id="1325">1325</span>
+<span id="1326">1326</span>
+<span id="1327">1327</span>
+<span id="1328">1328</span>
+<span id="1329">1329</span>
+<span id="1330">1330</span>
+<span id="1331">1331</span>
+<span id="1332">1332</span>
+<span id="1333">1333</span>
+<span id="1334">1334</span>
+<span id="1335">1335</span>
+<span id="1336">1336</span>
+<span id="1337">1337</span>
+<span id="1338">1338</span>
+<span id="1339">1339</span>
+<span id="1340">1340</span>
+<span id="1341">1341</span>
+<span id="1342">1342</span>
+<span id="1343">1343</span>
+<span id="1344">1344</span>
+<span id="1345">1345</span>
+<span id="1346">1346</span>
+<span id="1347">1347</span>
+<span id="1348">1348</span>
+<span id="1349">1349</span>
+<span id="1350">1350</span>
+<span id="1351">1351</span>
+<span id="1352">1352</span>
+<span id="1353">1353</span>
+<span id="1354">1354</span>
+<span id="1355">1355</span>
+<span id="1356">1356</span>
+<span id="1357">1357</span>
+<span id="1358">1358</span>
+<span id="1359">1359</span>
+<span id="1360">1360</span>
+<span id="1361">1361</span>
+<span id="1362">1362</span>
+<span id="1363">1363</span>
+<span id="1364">1364</span>
+<span id="1365">1365</span>
+<span id="1366">1366</span>
+<span id="1367">1367</span>
+<span id="1368">1368</span>
+<span id="1369">1369</span>
+<span id="1370">1370</span>
+<span id="1371">1371</span>
+<span id="1372">1372</span>
+<span id="1373">1373</span>
+<span id="1374">1374</span>
+<span id="1375">1375</span>
+<span id="1376">1376</span>
+<span id="1377">1377</span>
+<span id="1378">1378</span>
+<span id="1379">1379</span>
+<span id="1380">1380</span>
+<span id="1381">1381</span>
+<span id="1382">1382</span>
+<span id="1383">1383</span>
+<span id="1384">1384</span>
+<span id="1385">1385</span>
+<span id="1386">1386</span>
+<span id="1387">1387</span>
+<span id="1388">1388</span>
+<span id="1389">1389</span>
+<span id="1390">1390</span>
+<span id="1391">1391</span>
+<span id="1392">1392</span>
+<span id="1393">1393</span>
+<span id="1394">1394</span>
+<span id="1395">1395</span>
+<span id="1396">1396</span>
+<span id="1397">1397</span>
+<span id="1398">1398</span>
+<span id="1399">1399</span>
+<span id="1400">1400</span>
+<span id="1401">1401</span>
+<span id="1402">1402</span>
+<span id="1403">1403</span>
+<span id="1404">1404</span>
+<span id="1405">1405</span>
+<span id="1406">1406</span>
+<span id="1407">1407</span>
+<span id="1408">1408</span>
+<span id="1409">1409</span>
+<span id="1410">1410</span>
+<span id="1411">1411</span>
+<span id="1412">1412</span>
+<span id="1413">1413</span>
+<span id="1414">1414</span>
+<span id="1415">1415</span>
+<span id="1416">1416</span>
+<span id="1417">1417</span>
+<span id="1418">1418</span>
+<span id="1419">1419</span>
+<span id="1420">1420</span>
+<span id="1421">1421</span>
+<span id="1422">1422</span>
+<span id="1423">1423</span>
+<span id="1424">1424</span>
+<span id="1425">1425</span>
+<span id="1426">1426</span>
+<span id="1427">1427</span>
+<span id="1428">1428</span>
+<span id="1429">1429</span>
+<span id="1430">1430</span>
+<span id="1431">1431</span>
+<span id="1432">1432</span>
+<span id="1433">1433</span>
+<span id="1434">1434</span>
+<span id="1435">1435</span>
+<span id="1436">1436</span>
+<span id="1437">1437</span>
+<span id="1438">1438</span>
+<span id="1439">1439</span>
+<span id="1440">1440</span>
+<span id="1441">1441</span>
+<span id="1442">1442</span>
+<span id="1443">1443</span>
+<span id="1444">1444</span>
+<span id="1445">1445</span>
+<span id="1446">1446</span>
+<span id="1447">1447</span>
+<span id="1448">1448</span>
+<span id="1449">1449</span>
+<span id="1450">1450</span>
+<span id="1451">1451</span>
+<span id="1452">1452</span>
+<span id="1453">1453</span>
+<span id="1454">1454</span>
+<span id="1455">1455</span>
+<span id="1456">1456</span>
+<span id="1457">1457</span>
+<span id="1458">1458</span>
+<span id="1459">1459</span>
+<span id="1460">1460</span>
+<span id="1461">1461</span>
+<span id="1462">1462</span>
+<span id="1463">1463</span>
+<span id="1464">1464</span>
+<span id="1465">1465</span>
+<span id="1466">1466</span>
+<span id="1467">1467</span>
+<span id="1468">1468</span>
+<span id="1469">1469</span>
+<span id="1470">1470</span>
+<span id="1471">1471</span>
+<span id="1472">1472</span>
+<span id="1473">1473</span>
+<span id="1474">1474</span>
+<span id="1475">1475</span>
+<span id="1476">1476</span>
+<span id="1477">1477</span>
+<span id="1478">1478</span>
+<span id="1479">1479</span>
+<span id="1480">1480</span>
+<span id="1481">1481</span>
+<span id="1482">1482</span>
+<span id="1483">1483</span>
+<span id="1484">1484</span>
+<span id="1485">1485</span>
+<span id="1486">1486</span>
+<span id="1487">1487</span>
+<span id="1488">1488</span>
+<span id="1489">1489</span>
+<span id="1490">1490</span>
+<span id="1491">1491</span>
+<span id="1492">1492</span>
+<span id="1493">1493</span>
+<span id="1494">1494</span>
+<span id="1495">1495</span>
+<span id="1496">1496</span>
+<span id="1497">1497</span>
+<span id="1498">1498</span>
+<span id="1499">1499</span>
+<span id="1500">1500</span>
+<span id="1501">1501</span>
+<span id="1502">1502</span>
+<span id="1503">1503</span>
+<span id="1504">1504</span>
+<span id="1505">1505</span>
+<span id="1506">1506</span>
+<span id="1507">1507</span>
+<span id="1508">1508</span>
+<span id="1509">1509</span>
+<span id="1510">1510</span>
+<span id="1511">1511</span>
+<span id="1512">1512</span>
+<span id="1513">1513</span>
+<span id="1514">1514</span>
+<span id="1515">1515</span>
+<span id="1516">1516</span>
+<span id="1517">1517</span>
+<span id="1518">1518</span>
+<span id="1519">1519</span>
+<span id="1520">1520</span>
+<span id="1521">1521</span>
+<span id="1522">1522</span>
+<span id="1523">1523</span>
+<span id="1524">1524</span>
+<span id="1525">1525</span>
+<span id="1526">1526</span>
+<span id="1527">1527</span>
+<span id="1528">1528</span>
+<span id="1529">1529</span>
+<span id="1530">1530</span>
+<span id="1531">1531</span>
+<span id="1532">1532</span>
+<span id="1533">1533</span>
+<span id="1534">1534</span>
+<span id="1535">1535</span>
+<span id="1536">1536</span>
+<span id="1537">1537</span>
+<span id="1538">1538</span>
+<span id="1539">1539</span>
+<span id="1540">1540</span>
+<span id="1541">1541</span>
+<span id="1542">1542</span>
+<span id="1543">1543</span>
+<span id="1544">1544</span>
+<span id="1545">1545</span>
+<span id="1546">1546</span>
+<span id="1547">1547</span>
+<span id="1548">1548</span>
+<span id="1549">1549</span>
+<span id="1550">1550</span>
+<span id="1551">1551</span>
+<span id="1552">1552</span>
+<span id="1553">1553</span>
+<span id="1554">1554</span>
+<span id="1555">1555</span>
+<span id="1556">1556</span>
+<span id="1557">1557</span>
+<span id="1558">1558</span>
+<span id="1559">1559</span>
+<span id="1560">1560</span>
+<span id="1561">1561</span>
+<span id="1562">1562</span>
+<span id="1563">1563</span>
+<span id="1564">1564</span>
+<span id="1565">1565</span>
+<span id="1566">1566</span>
+<span id="1567">1567</span>
+<span id="1568">1568</span>
+<span id="1569">1569</span>
+<span id="1570">1570</span>
+<span id="1571">1571</span>
+<span id="1572">1572</span>
+<span id="1573">1573</span>
+<span id="1574">1574</span>
+<span id="1575">1575</span>
+<span id="1576">1576</span>
+<span id="1577">1577</span>
+<span id="1578">1578</span>
+<span id="1579">1579</span>
+<span id="1580">1580</span>
+<span id="1581">1581</span>
+<span id="1582">1582</span>
+<span id="1583">1583</span>
+<span id="1584">1584</span>
+<span id="1585">1585</span>
+<span id="1586">1586</span>
+<span id="1587">1587</span>
+<span id="1588">1588</span>
+<span id="1589">1589</span>
+<span id="1590">1590</span>
+<span id="1591">1591</span>
+<span id="1592">1592</span>
+<span id="1593">1593</span>
+<span id="1594">1594</span>
+<span id="1595">1595</span>
+<span id="1596">1596</span>
+<span id="1597">1597</span>
+<span id="1598">1598</span>
+<span id="1599">1599</span>
+<span id="1600">1600</span>
+<span id="1601">1601</span>
+<span id="1602">1602</span>
+<span id="1603">1603</span>
+<span id="1604">1604</span>
+<span id="1605">1605</span>
+<span id="1606">1606</span>
+<span id="1607">1607</span>
+<span id="1608">1608</span>
+<span id="1609">1609</span>
+<span id="1610">1610</span>
+<span id="1611">1611</span>
+<span id="1612">1612</span>
+<span id="1613">1613</span>
+<span id="1614">1614</span>
+<span id="1615">1615</span>
+<span id="1616">1616</span>
+<span id="1617">1617</span>
+<span id="1618">1618</span>
+<span id="1619">1619</span>
+<span id="1620">1620</span>
+<span id="1621">1621</span>
+<span id="1622">1622</span>
+<span id="1623">1623</span>
+<span id="1624">1624</span>
+<span id="1625">1625</span>
+<span id="1626">1626</span>
+<span id="1627">1627</span>
+<span id="1628">1628</span>
+<span id="1629">1629</span>
+<span id="1630">1630</span>
+<span id="1631">1631</span>
+<span id="1632">1632</span>
+<span id="1633">1633</span>
+<span id="1634">1634</span>
+<span id="1635">1635</span>
+<span id="1636">1636</span>
+<span id="1637">1637</span>
+<span id="1638">1638</span>
+<span id="1639">1639</span>
+<span id="1640">1640</span>
+<span id="1641">1641</span>
+<span id="1642">1642</span>
+<span id="1643">1643</span>
+<span id="1644">1644</span>
+<span id="1645">1645</span>
+<span id="1646">1646</span>
+<span id="1647">1647</span>
+<span id="1648">1648</span>
+<span id="1649">1649</span>
+<span id="1650">1650</span>
+<span id="1651">1651</span>
+<span id="1652">1652</span>
+<span id="1653">1653</span>
+<span id="1654">1654</span>
+<span id="1655">1655</span>
+<span id="1656">1656</span>
+<span id="1657">1657</span>
+<span id="1658">1658</span>
+<span id="1659">1659</span>
+<span id="1660">1660</span>
+<span id="1661">1661</span>
+<span id="1662">1662</span>
+<span id="1663">1663</span>
+<span id="1664">1664</span>
+<span id="1665">1665</span>
+<span id="1666">1666</span>
+<span id="1667">1667</span>
+<span id="1668">1668</span>
+<span id="1669">1669</span>
+<span id="1670">1670</span>
+<span id="1671">1671</span>
+<span id="1672">1672</span>
+<span id="1673">1673</span>
+<span id="1674">1674</span>
+<span id="1675">1675</span>
+<span id="1676">1676</span>
+<span id="1677">1677</span>
+<span id="1678">1678</span>
+<span id="1679">1679</span>
+<span id="1680">1680</span>
+<span id="1681">1681</span>
+<span id="1682">1682</span>
+<span id="1683">1683</span>
+<span id="1684">1684</span>
+<span id="1685">1685</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{
+    collections::HashMap,
+    iter,
+    mem::{replace, take},
+    sync::Arc,
+};
 
 <span class="kw">use </span>swc_core::{
     common::{pass::AstNodePath, Mark, Span, Spanned, SyntaxContext},
@@ -1328,38 +1705,141 @@
     utils::unparen,
 };
 
+<span class="attr">#[derive(Debug, Clone, Default)]
+</span><span class="kw">pub struct </span>EffectsBlock {
+    <span class="kw">pub </span>effects: Vec&lt;Effect&gt;,
+    <span class="doccomment">/// The ast path to the block or expression.
+    </span><span class="kw">pub </span>ast_path: Vec&lt;AstParentKind&gt;,
+}
+
+<span class="kw">impl </span>EffectsBlock {
+    <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.effects.is_empty()
+    }
+}
+
+<span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">pub enum </span>ConditionalKind {
+    <span class="doccomment">/// The blocks of an `if` statement without an `else` block.
+    </span>If { then: EffectsBlock },
+    <span class="doccomment">/// The blocks of an `if ... else` statement.
+    </span>IfElse {
+        then: EffectsBlock,
+        r#else: EffectsBlock,
+    },
+    <span class="doccomment">/// The expressions on the right side of the `?:` operator.
+    </span>Ternary {
+        then: EffectsBlock,
+        r#else: EffectsBlock,
+    },
+    <span class="doccomment">/// The expression on the right side of the `&amp;&amp;` operator.
+    </span>And { expr: EffectsBlock },
+    <span class="doccomment">/// The expression on the right side of the `||` operator.
+    </span>Or { expr: EffectsBlock },
+    <span class="doccomment">/// The expression on the right side of the `??` operator.
+    </span>NullishCoalescing { expr: EffectsBlock },
+}
+
+<span class="kw">impl </span>ConditionalKind {
+    <span class="doccomment">/// Normalizes all contained values.
+    </span><span class="kw">pub fn </span>normalize(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">match </span><span class="self">self </span>{
+            ConditionalKind::If { then, .. } =&gt; {
+                <span class="kw">for </span>effect <span class="kw">in </span><span class="kw-2">&amp;mut </span>then.effects {
+                    effect.normalize();
+                }
+            }
+            ConditionalKind::IfElse { then, r#else, .. }
+            | ConditionalKind::Ternary { then, r#else, .. } =&gt; {
+                <span class="kw">for </span>effect <span class="kw">in </span><span class="kw-2">&amp;mut </span>then.effects {
+                    effect.normalize();
+                }
+                <span class="kw">for </span>effect <span class="kw">in </span><span class="kw-2">&amp;mut </span>r#else.effects {
+                    effect.normalize();
+                }
+            }
+            ConditionalKind::And { expr, .. }
+            | ConditionalKind::Or { expr, .. }
+            | ConditionalKind::NullishCoalescing { expr, .. } =&gt; {
+                <span class="kw">for </span>effect <span class="kw">in </span><span class="kw-2">&amp;mut </span>expr.effects {
+                    effect.normalize();
+                }
+            }
+        }
+    }
+}
+
+<span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">pub enum </span>EffectArg {
+    Value(JsValue),
+    Closure(JsValue, EffectsBlock),
+    Spread,
+}
+
+<span class="kw">impl </span>EffectArg {
+    <span class="doccomment">/// Normalizes all contained values.
+    </span><span class="kw">pub fn </span>normalize(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">match </span><span class="self">self </span>{
+            EffectArg::Value(value) =&gt; value.normalize(),
+            EffectArg::Closure(value, effects) =&gt; {
+                value.normalize();
+                <span class="kw">for </span>effect <span class="kw">in </span><span class="kw-2">&amp;mut </span>effects.effects {
+                    effect.normalize();
+                }
+            }
+            EffectArg::Spread =&gt; {}
+        }
+    }
+}
+
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub enum </span>Effect {
-    Call {
+    <span class="doccomment">/// Some condition which affects which effects might be executed. If the
+    /// condition evaluates to some compile-time constant, we can use that
+    /// to determine which effects are executed and remove the others.
+    </span>Conditional {
+        condition: JsValue,
+        kind: Box&lt;ConditionalKind&gt;,
+        <span class="doccomment">/// The ast path to the condition.
+        </span>ast_path: Vec&lt;AstParentKind&gt;,
+        span: Span,
+    },
+    <span class="doccomment">/// A function call.
+    </span>Call {
         func: JsValue,
-        args: Vec&lt;JsValue&gt;,
+        args: Vec&lt;EffectArg&gt;,
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
     },
-    MemberCall {
+    <span class="doccomment">/// A function call of a property of an object.
+    </span>MemberCall {
         obj: JsValue,
         prop: JsValue,
-        args: Vec&lt;JsValue&gt;,
+        args: Vec&lt;EffectArg&gt;,
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
     },
-    Member {
+    <span class="doccomment">/// A property access.
+    </span>Member {
         obj: JsValue,
         prop: JsValue,
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
     },
-    ImportedBinding {
+    <span class="doccomment">/// A reference to an imported binding.
+    </span>ImportedBinding {
         esm_reference_index: usize,
         export: <span class="prelude-ty">Option</span>&lt;String&gt;,
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
     },
-    ImportMeta {
+    <span class="doccomment">/// A reference to `import.meta`.
+    </span>ImportMeta {
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
     },
-    Url {
+    <span class="doccomment">/// A reference to `new URL(..., import.meta.url)`.
+    </span>Url {
         input: JsValue,
         ast_path: Vec&lt;AstParentKind&gt;,
         span: Span,
@@ -1367,8 +1847,18 @@
 }
 
 <span class="kw">impl </span>Effect {
-    <span class="kw">pub fn </span>normalize(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+    <span class="doccomment">/// Normalizes all contained values.
+    </span><span class="kw">pub fn </span>normalize(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">match </span><span class="self">self </span>{
+            Effect::Conditional {
+                condition,
+                kind,
+                ast_path: <span class="kw">_</span>,
+                span: <span class="kw">_</span>,
+            } =&gt; {
+                condition.normalize();
+                kind.normalize();
+            }
             Effect::Call {
                 func,
                 args,
@@ -1453,9 +1943,11 @@
         <span class="kw-2">&amp;mut </span>Analyzer {
             data: <span class="kw-2">&amp;mut </span>graph,
             eval_context,
+            effects: Default::default(),
             var_decl_kind: Default::default(),
             current_value: Default::default(),
             cur_fn_return_values: Default::default(),
+            cur_fn_ident: Default::default(),
         },
         <span class="kw-2">&amp;mut </span>Default::default(),
     );
@@ -1530,6 +2022,7 @@
 
     <span class="kw">pub fn </span>eval(<span class="kw-2">&amp;</span><span class="self">self</span>, e: <span class="kw-2">&amp;</span>Expr) -&gt; JsValue {
         <span class="kw">match </span>e {
+            Expr::Paren(e) =&gt; <span class="self">self</span>.eval(<span class="kw-2">&amp;</span>e.expr),
             Expr::Lit(e) =&gt; JsValue::Constant(e.clone().into()),
             Expr::Ident(i) =&gt; {
                 <span class="kw">let </span>id = i.to_id();
@@ -1551,6 +2044,14 @@
                 }
             }
 
+            Expr::Unary(UnaryExpr {
+                op: <span class="macro">op!</span>(<span class="string">&quot;!&quot;</span>), arg, ..
+            }) =&gt; {
+                <span class="kw">let </span>arg = <span class="self">self</span>.eval(arg);
+
+                JsValue::logical_not(<span class="kw">box </span>arg)
+            }
+
             Expr::Bin(BinExpr {
                 op: <span class="macro">op!</span>(bin, <span class="string">&quot;+&quot;</span>),
                 left,
@@ -1570,11 +2071,25 @@
             }
 
             Expr::Bin(BinExpr {
-                op: <span class="macro">op!</span>(<span class="string">&quot;||&quot;</span>) | <span class="macro">op!</span>(<span class="string">&quot;??&quot;</span>),
+                op: <span class="macro">op!</span>(<span class="string">&quot;&amp;&amp;&quot;</span>),
                 left,
                 right,
                 ..
-            }) =&gt; JsValue::alternatives(<span class="macro">vec!</span>[<span class="self">self</span>.eval(left), <span class="self">self</span>.eval(right)]),
+            }) =&gt; JsValue::logical_and(<span class="macro">vec!</span>[<span class="self">self</span>.eval(left), <span class="self">self</span>.eval(right)]),
+
+            Expr::Bin(BinExpr {
+                op: <span class="macro">op!</span>(<span class="string">&quot;||&quot;</span>),
+                left,
+                right,
+                ..
+            }) =&gt; JsValue::logical_or(<span class="macro">vec!</span>[<span class="self">self</span>.eval(left), <span class="self">self</span>.eval(right)]),
+
+            Expr::Bin(BinExpr {
+                op: <span class="macro">op!</span>(<span class="string">&quot;??&quot;</span>),
+                left,
+                right,
+                ..
+            }) =&gt; JsValue::nullish_coalescing(<span class="macro">vec!</span>[<span class="self">self</span>.eval(left), <span class="self">self</span>.eval(right)]),
 
             <span class="kw-2">&amp;</span>Expr::Cond(CondExpr {
                 <span class="kw">box </span><span class="kw-2">ref </span>cons,
@@ -1745,6 +2260,8 @@
 <span class="kw">struct </span>Analyzer&lt;<span class="lifetime">&#39;a</span>&gt; {
     data: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>VarGraph,
 
+    effects: Vec&lt;Effect&gt;,
+
     eval_context: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>EvalContext,
 
     var_decl_kind: <span class="prelude-ty">Option</span>&lt;VarDeclKind&gt;,
@@ -1757,10 +2274,22 @@
     /// This is configured to [Some] by function handlers and filled by the
     /// return statement handler.
     </span>cur_fn_return_values: <span class="prelude-ty">Option</span>&lt;Vec&lt;JsValue&gt;&gt;,
+
+    cur_fn_ident: u32,
 }
 
 <span class="kw">pub fn </span>as_parent_path(ast_path: <span class="kw-2">&amp;</span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;_</span>&gt;&gt;) -&gt; Vec&lt;AstParentKind&gt; {
     ast_path.iter().map(|n| n.kind()).collect()
+}
+<span class="kw">pub fn </span>as_parent_path_with(
+    ast_path: <span class="kw-2">&amp;</span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;_</span>&gt;&gt;,
+    additional: AstParentKind,
+) -&gt; Vec&lt;AstParentKind&gt; {
+    ast_path
+        .iter()
+        .map(|n| n.kind())
+        .chain([additional].into_iter())
+        .collect()
 }
 
 <span class="kw">impl </span>Analyzer&lt;<span class="lifetime">&#39;_</span>&gt; {
@@ -1779,6 +2308,10 @@
         <span class="kw">let </span>value = <span class="self">self</span>.eval_context.eval(value);
 
         <span class="self">self</span>.add_value(id, value);
+    }
+
+    <span class="kw">fn </span>add_effect(<span class="kw-2">&amp;mut </span><span class="self">self</span>, effect: Effect) {
+        <span class="self">self</span>.effects.push(effect);
     }
 
     <span class="kw">fn </span>check_iife&lt;<span class="lifetime">&#39;ast</span>: <span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;r</span>&gt;(
@@ -1983,22 +2516,12 @@
     <span class="kw">fn </span>check_call_expr_for_effects&lt;<span class="lifetime">&#39;ast</span>: <span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;r</span>&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         n: <span class="kw-2">&amp;</span><span class="lifetime">&#39;ast </span>CallExpr,
+        args: Vec&lt;EffectArg&gt;,
         ast_path: <span class="kw-2">&amp;</span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;r</span>&gt;&gt;,
     ) {
-        <span class="kw">let </span>args = <span class="kw">if </span>n.args.iter().any(|arg| arg.spread.is_some()) {
-            <span class="macro">vec!</span>[JsValue::Unknown(
-                <span class="prelude-val">None</span>,
-                <span class="string">&quot;spread in calls is not supported yet&quot;</span>,
-            )]
-        } <span class="kw">else </span>{
-            n.args
-                .iter()
-                .map(|arg| <span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>arg.expr))
-                .collect()
-        };
         <span class="kw">match </span><span class="kw-2">&amp;</span>n.callee {
             Callee::Import(<span class="kw">_</span>) =&gt; {
-                <span class="self">self</span>.data.effects.push(Effect::Call {
+                <span class="self">self</span>.add_effect(Effect::Call {
                     func: JsValue::FreeVar(FreeVarKind::Import),
                     args,
                     ast_path: as_parent_path(ast_path),
@@ -2018,7 +2541,7 @@
                             <span class="self">self</span>.eval_context.eval(expr)
                         }
                     };
-                    <span class="self">self</span>.data.effects.push(Effect::MemberCall {
+                    <span class="self">self</span>.add_effect(Effect::MemberCall {
                         obj: obj_value,
                         prop: prop_value,
                         args,
@@ -2027,7 +2550,7 @@
                     });
                 } <span class="kw">else </span>{
                     <span class="kw">let </span>fn_value = <span class="self">self</span>.eval_context.eval(expr);
-                    <span class="self">self</span>.data.effects.push(Effect::Call {
+                    <span class="self">self</span>.add_effect(Effect::Call {
                         func: fn_value,
                         args,
                         ast_path: as_parent_path(ast_path),
@@ -2053,7 +2576,7 @@
             }
             MemberProp::Computed(ComputedPropName { expr, .. }) =&gt; <span class="self">self</span>.eval_context.eval(expr),
         };
-        <span class="self">self</span>.data.effects.push(Effect::Member {
+        <span class="self">self</span>.add_effect(Effect::Member {
             obj: obj_value,
             prop: prop_value,
             ast_path: as_parent_path(ast_path),
@@ -2128,8 +2651,90 @@
 
         <span class="comment">// special behavior of IIFEs
         </span><span class="kw">if </span>!<span class="self">self</span>.check_iife(n, ast_path) {
-            <span class="self">self</span>.check_call_expr_for_effects(n, ast_path);
-            n.visit_children_with_path(<span class="self">self</span>, ast_path);
+            ast_path.with(
+                AstParentNodeRef::CallExpr(n, CallExprField::Callee),
+                |ast_path| {
+                    n.callee.visit_with_path(<span class="self">self</span>, ast_path);
+                },
+            );
+            <span class="kw">let </span>args = n
+                .args
+                .iter()
+                .enumerate()
+                .map(|(i, arg)| {
+                    ast_path.with(
+                        AstParentNodeRef::CallExpr(n, CallExprField::Args(i)),
+                        |ast_path| {
+                            <span class="kw">if </span>arg.spread.is_none() {
+                                <span class="kw">let </span>value = <span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>arg.expr);
+
+                                <span class="kw">let </span>block_path = <span class="kw">match </span><span class="kw-2">&amp;*</span>arg.expr {
+                                    Expr::Fn(FnExpr { .. }) =&gt; {
+                                        <span class="kw">let </span><span class="kw-2">mut </span>path = as_parent_path(ast_path);
+                                        path.push(AstParentKind::ExprOrSpread(
+                                            ExprOrSpreadField::Expr,
+                                        ));
+                                        path.push(AstParentKind::Expr(ExprField::Fn));
+                                        path.push(AstParentKind::FnExpr(FnExprField::Function));
+                                        path.push(AstParentKind::Function(FunctionField::Body));
+                                        <span class="prelude-val">Some</span>(path)
+                                    }
+                                    Expr::Arrow(ArrowExpr {
+                                        body: BlockStmtOrExpr::BlockStmt(<span class="kw">_</span>),
+                                        ..
+                                    }) =&gt; {
+                                        <span class="kw">let </span><span class="kw-2">mut </span>path = as_parent_path(ast_path);
+                                        path.push(AstParentKind::ExprOrSpread(
+                                            ExprOrSpreadField::Expr,
+                                        ));
+                                        path.push(AstParentKind::Expr(ExprField::Arrow));
+                                        path.push(AstParentKind::ArrowExpr(ArrowExprField::Body));
+                                        path.push(AstParentKind::BlockStmtOrExpr(
+                                            BlockStmtOrExprField::BlockStmt,
+                                        ));
+                                        <span class="prelude-val">Some</span>(path)
+                                    }
+                                    Expr::Arrow(ArrowExpr {
+                                        body: BlockStmtOrExpr::Expr(<span class="kw">_</span>),
+                                        ..
+                                    }) =&gt; {
+                                        <span class="kw">let </span><span class="kw-2">mut </span>path = as_parent_path(ast_path);
+                                        path.push(AstParentKind::ExprOrSpread(
+                                            ExprOrSpreadField::Expr,
+                                        ));
+                                        path.push(AstParentKind::Expr(ExprField::Arrow));
+                                        path.push(AstParentKind::ArrowExpr(ArrowExprField::Body));
+                                        path.push(AstParentKind::BlockStmtOrExpr(
+                                            BlockStmtOrExprField::Expr,
+                                        ));
+                                        <span class="prelude-val">Some</span>(path)
+                                    }
+                                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+                                };
+                                <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = block_path {
+                                    <span class="kw">let </span>old_effects = take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects);
+                                    arg.visit_with_path(<span class="self">self</span>, ast_path);
+                                    <span class="kw">let </span>effects = replace(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects, old_effects);
+                                    EffectArg::Closure(
+                                        value,
+                                        EffectsBlock {
+                                            effects,
+                                            ast_path: path,
+                                        },
+                                    )
+                                } <span class="kw">else </span>{
+                                    arg.visit_with_path(<span class="self">self</span>, ast_path);
+                                    EffectArg::Value(value)
+                                }
+                            } <span class="kw">else </span>{
+                                arg.visit_with_path(<span class="self">self</span>, ast_path);
+                                EffectArg::Spread
+                            }
+                        },
+                    )
+                })
+                .collect();
+            <span class="self">self</span>.check_call_expr_for_effects(n, args, ast_path);
         }
     }
 
@@ -2154,7 +2759,7 @@
                         }) = <span class="kw-2">&amp;*</span>args[<span class="number">1</span>].expr
                         {
                             <span class="kw">if </span><span class="kw-2">&amp;*</span>prop.sym == <span class="string">&quot;url&quot; </span>{
-                                <span class="self">self</span>.data.effects.push(Effect::Url {
+                                <span class="self">self</span>.add_effect(Effect::Url {
                                     input: <span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>args[<span class="number">0</span>].expr),
                                     ast_path: as_parent_path(ast_path),
                                     span: new_expr.span(),
@@ -2195,7 +2800,7 @@
     ) {
         <span class="kw">let </span>value = <span class="self">self</span>.current_value.take();
         <span class="kw">for </span>(index, p) <span class="kw">in </span>n.iter().enumerate() {
-            <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(JsValue::Argument(index));
+            <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(JsValue::Argument(<span class="self">self</span>.cur_fn_ident, index));
             ast_path.with_index(index, |ast_path| p.visit_children_with_path(<span class="self">self</span>, ast_path));
         }
         <span class="self">self</span>.current_value = value;
@@ -2233,12 +2838,21 @@
         decl: <span class="kw-2">&amp;</span><span class="lifetime">&#39;ast </span>FnDecl,
         ast_path: <span class="kw-2">&amp;mut </span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;r</span>&gt;&gt;,
     ) {
-        <span class="kw">let </span>old = replace(<span class="kw-2">&amp;mut </span><span class="self">self</span>.cur_fn_return_values, <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[]));
+        <span class="kw">let </span>old = replace(
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>.cur_fn_return_values,
+            <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[JsValue::Constant(ConstantValue::Undefined)]),
+        );
+        <span class="kw">let </span>old_ident = <span class="self">self</span>.cur_fn_ident;
+        <span class="self">self</span>.cur_fn_ident = decl.function.span.lo.<span class="number">0</span>;
         decl.visit_children_with_path(<span class="self">self</span>, ast_path);
         <span class="kw">let </span>return_value = <span class="self">self</span>.take_return_values();
 
-        <span class="self">self</span>.add_value(decl.ident.to_id(), JsValue::function(return_value));
+        <span class="self">self</span>.add_value(
+            decl.ident.to_id(),
+            JsValue::function(<span class="self">self</span>.cur_fn_ident, return_value),
+        );
 
+        <span class="self">self</span>.cur_fn_ident = old_ident;
         <span class="self">self</span>.cur_fn_return_values = old;
     }
 
@@ -2247,22 +2861,31 @@
         expr: <span class="kw-2">&amp;</span><span class="lifetime">&#39;ast </span>FnExpr,
         ast_path: <span class="kw-2">&amp;mut </span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;r</span>&gt;&gt;,
     ) {
-        <span class="kw">let </span>old = replace(<span class="kw-2">&amp;mut </span><span class="self">self</span>.cur_fn_return_values, <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[]));
+        <span class="kw">let </span>old = replace(
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>.cur_fn_return_values,
+            <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[JsValue::Constant(ConstantValue::Undefined)]),
+        );
+        <span class="kw">let </span>old_ident = <span class="self">self</span>.cur_fn_ident;
+        <span class="self">self</span>.cur_fn_ident = expr.function.span.lo.<span class="number">0</span>;
         expr.visit_children_with_path(<span class="self">self</span>, ast_path);
         <span class="kw">let </span>return_value = <span class="self">self</span>.take_return_values();
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(ident) = <span class="kw-2">&amp;</span>expr.ident {
-            <span class="self">self</span>.add_value(ident.to_id(), JsValue::function(return_value));
+            <span class="self">self</span>.add_value(
+                ident.to_id(),
+                JsValue::function(<span class="self">self</span>.cur_fn_ident, return_value),
+            );
         } <span class="kw">else </span>{
             <span class="self">self</span>.add_value(
                 (
                     <span class="macro">format!</span>(<span class="string">&quot;*anonymous function {}*&quot;</span>, expr.function.span.lo.<span class="number">0</span>).into(),
                     SyntaxContext::empty(),
                 ),
-                JsValue::function(return_value),
+                JsValue::function(<span class="self">self</span>.cur_fn_ident, return_value),
             );
         }
 
+        <span class="self">self</span>.cur_fn_ident = old_ident;
         <span class="self">self</span>.cur_fn_return_values = old;
     }
 
@@ -2273,18 +2896,30 @@
     ) {
         <span class="kw">let </span>value = <span class="kw">match </span><span class="kw-2">&amp;</span>expr.body {
             BlockStmtOrExpr::BlockStmt(_block) =&gt; {
-                <span class="kw">let </span>old = replace(<span class="kw-2">&amp;mut </span><span class="self">self</span>.cur_fn_return_values, <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[]));
+                <span class="kw">let </span>old = replace(
+                    <span class="kw-2">&amp;mut </span><span class="self">self</span>.cur_fn_return_values,
+                    <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[JsValue::Constant(ConstantValue::Undefined)]),
+                );
+                <span class="kw">let </span>old_ident = <span class="self">self</span>.cur_fn_ident;
+                <span class="self">self</span>.cur_fn_ident = expr.span.lo.<span class="number">0</span>;
                 expr.visit_children_with_path(<span class="self">self</span>, ast_path);
                 <span class="kw">let </span>return_value = <span class="self">self</span>.take_return_values();
 
+                <span class="kw">let </span>fn_val = JsValue::function(<span class="self">self</span>.cur_fn_ident, return_value);
+
+                <span class="self">self</span>.cur_fn_ident = old_ident;
                 <span class="self">self</span>.cur_fn_return_values = old;
-                JsValue::function(return_value)
+                fn_val
             }
             BlockStmtOrExpr::Expr(inner_expr) =&gt; {
+                <span class="kw">let </span>old_ident = <span class="self">self</span>.cur_fn_ident;
+                <span class="self">self</span>.cur_fn_ident = expr.span.lo.<span class="number">0</span>;
                 expr.visit_children_with_path(<span class="self">self</span>, ast_path);
                 <span class="kw">let </span>return_value = <span class="self">self</span>.eval_context.eval(inner_expr);
 
-                JsValue::function(<span class="kw">box </span>return_value)
+                <span class="kw">let </span>fn_val = JsValue::function(<span class="self">self</span>.cur_fn_ident, <span class="kw">box </span>return_value);
+                <span class="self">self</span>.cur_fn_ident = old_ident;
+                fn_val
             }
         };
         <span class="self">self</span>.add_value(
@@ -2455,7 +3090,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>((esm_reference_index, export)) =
             <span class="self">self</span>.eval_context.imports.get_binding(<span class="kw-2">&amp;</span>ident.to_id())
         {
-            <span class="self">self</span>.data.effects.push(Effect::ImportedBinding {
+            <span class="self">self</span>.add_effect(Effect::ImportedBinding {
                 esm_reference_index,
                 export,
                 ast_path: as_parent_path(ast_path),
@@ -2472,15 +3107,124 @@
         <span class="kw">if </span>expr.kind == MetaPropKind::ImportMeta {
             <span class="comment">// MetaPropExpr also covers `new.target`. Only consider `import.meta`
             // an effect.
-            </span><span class="self">self</span>.data.effects.push(Effect::ImportMeta {
+            </span><span class="self">self</span>.add_effect(Effect::ImportMeta {
                 span: expr.span,
                 ast_path: as_parent_path(ast_path),
             })
         }
     }
+
+    <span class="kw">fn </span>visit_program&lt;<span class="lifetime">&#39;ast</span>: <span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;r</span>&gt;(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        program: <span class="kw-2">&amp;</span><span class="lifetime">&#39;ast </span>Program,
+        ast_path: <span class="kw-2">&amp;mut </span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;r</span>&gt;&gt;,
+    ) {
+        <span class="self">self</span>.effects = take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.data.effects);
+        program.visit_children_with_path(<span class="self">self</span>, ast_path);
+        <span class="self">self</span>.data.effects = take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects);
+    }
+
+    <span class="kw">fn </span>visit_if_stmt&lt;<span class="lifetime">&#39;ast</span>: <span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;r</span>&gt;(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        stmt: <span class="kw-2">&amp;</span><span class="lifetime">&#39;ast </span>IfStmt,
+        ast_path: <span class="kw-2">&amp;mut </span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;r</span>&gt;&gt;,
+    ) {
+        ast_path.with(
+            AstParentNodeRef::IfStmt(stmt, IfStmtField::Test),
+            |ast_path| {
+                stmt.test.visit_with_path(<span class="self">self</span>, ast_path);
+            },
+        );
+        <span class="kw">let </span>prev_effects = take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects);
+        <span class="kw">let </span>then = ast_path.with(
+            AstParentNodeRef::IfStmt(stmt, IfStmtField::Cons),
+            |ast_path| {
+                stmt.cons.visit_with_path(<span class="self">self</span>, ast_path);
+                EffectsBlock {
+                    effects: take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects),
+                    ast_path: as_parent_path(ast_path),
+                }
+            },
+        );
+        <span class="kw">let </span>r#else = stmt
+            .alt
+            .as_ref()
+            .map(|alt| {
+                ast_path.with(
+                    AstParentNodeRef::IfStmt(stmt, IfStmtField::Alt),
+                    |ast_path| {
+                        alt.visit_with_path(<span class="self">self</span>, ast_path);
+                        EffectsBlock {
+                            effects: take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects),
+                            ast_path: as_parent_path(ast_path),
+                        }
+                    },
+                )
+            })
+            .unwrap_or_default();
+        <span class="self">self</span>.effects = prev_effects;
+        <span class="kw">match </span>(!then.is_empty(), !r#else.is_empty()) {
+            (<span class="bool-val">true</span>, <span class="bool-val">false</span>) =&gt; {
+                <span class="self">self</span>.add_conditional_effect(
+                    <span class="kw-2">&amp;</span>stmt.test,
+                    ast_path,
+                    AstParentKind::IfStmt(IfStmtField::Test),
+                    stmt.span(),
+                    ConditionalKind::If { then },
+                );
+            }
+            (<span class="kw">_</span>, <span class="bool-val">true</span>) =&gt; {
+                <span class="self">self</span>.add_conditional_effect(
+                    <span class="kw-2">&amp;</span>stmt.test,
+                    ast_path,
+                    AstParentKind::IfStmt(IfStmtField::Test),
+                    stmt.span(),
+                    ConditionalKind::IfElse { then, r#else },
+                );
+            }
+            (<span class="bool-val">false</span>, <span class="bool-val">false</span>) =&gt; {
+                <span class="comment">// no effects, can be ignored
+            </span>}
+        }
+    }
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; Analyzer&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="kw">fn </span>add_conditional_effect&lt;<span class="lifetime">&#39;r</span>&gt;(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        test: <span class="kw-2">&amp;</span>Expr,
+        ast_path: <span class="kw-2">&amp;mut </span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;r</span>&gt;&gt;,
+        ast_kind: AstParentKind,
+        span: Span,
+        <span class="kw-2">mut </span>cond_kind: ConditionalKind,
+    ) {
+        <span class="kw">let </span>condition = <span class="self">self</span>.eval_context.eval(test);
+        <span class="kw">if </span>condition.is_unknown() {
+            <span class="kw">match </span><span class="kw-2">&amp;mut </span>cond_kind {
+                ConditionalKind::If { then } =&gt; {
+                    <span class="self">self</span>.effects.append(<span class="kw-2">&amp;mut </span>then.effects);
+                }
+                ConditionalKind::IfElse { then, r#else }
+                | ConditionalKind::Ternary { then, r#else } =&gt; {
+                    <span class="self">self</span>.effects.append(<span class="kw-2">&amp;mut </span>then.effects);
+                    <span class="self">self</span>.effects.append(<span class="kw-2">&amp;mut </span>r#else.effects);
+                }
+                ConditionalKind::And { expr }
+                | ConditionalKind::Or { expr }
+                | ConditionalKind::NullishCoalescing { expr } =&gt; {
+                    <span class="self">self</span>.effects.append(<span class="kw-2">&amp;mut </span>expr.effects);
+                }
+            }
+        } <span class="kw">else </span>{
+            <span class="self">self</span>.add_effect(Effect::Conditional {
+                condition,
+                kind: <span class="kw">box </span>cond_kind,
+                ast_path: as_parent_path_with(ast_path, ast_kind),
+                span,
+            });
+        }
+    }
+
     <span class="kw">fn </span>visit_pat_with_value&lt;<span class="lifetime">&#39;ast</span>: <span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;r</span>&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         pat: <span class="kw-2">&amp;</span><span class="lifetime">&#39;ast </span>Pat,

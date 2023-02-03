@@ -593,6 +593,8 @@
 <span id="593">593</span>
 <span id="594">594</span>
 <span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{mem::take, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -621,6 +623,7 @@
         ),
         JsValue::Call(usize, callee, args) =&gt; {
             <span class="comment">// var fs = require(&#39;fs&#39;), fs = __importStar(fs);
+            // TODO(WEB-552) this is not correct and has many false positives!
             </span><span class="kw">if </span>args.len() == <span class="number">1 </span>{
                 <span class="kw">if let </span>JsValue::WellKnownObject(<span class="kw">_</span>) = <span class="kw-2">&amp;</span>args[<span class="number">0</span>] {
                     <span class="kw">return </span><span class="prelude-val">Ok</span>((args[<span class="number">0</span>].clone(), <span class="bool-val">true</span>));
@@ -702,7 +705,7 @@
 
 <span class="kw">pub fn </span>object_assign(args: Vec&lt;JsValue&gt;) -&gt; JsValue {
     <span class="kw">if </span>args.iter().all(|arg| <span class="macro">matches!</span>(arg, JsValue::Object(..))) {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(merged_object) = args.into_iter().reduce(|<span class="kw-2">mut </span>acc, cur| {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>merged_object) = args.into_iter().reduce(|<span class="kw-2">mut </span>acc, cur| {
             <span class="kw">if let </span>JsValue::Object(<span class="kw">_</span>, parts) = <span class="kw-2">&amp;mut </span>acc {
                 <span class="kw">if let </span>JsValue::Object(<span class="kw">_</span>, next_parts) = <span class="kw-2">&amp;</span>cur {
                     parts.extend_from_slice(next_parts);
@@ -710,6 +713,7 @@
             }
             acc
         }) {
+            merged_object.update_total_nodes();
             merged_object
         } <span class="kw">else </span>{
             JsValue::Unknown(
@@ -836,7 +840,7 @@
     <span class="kw">let </span>first = iter.next().unwrap();
 
     <span class="kw">let </span>is_already_absolute =
-        first.as_str().map_or(<span class="bool-val">false</span>, |s| s.is_empty()) || first.starts_with(<span class="string">&quot;/&quot;</span>);
+        first.is_empty_string() == <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) || first.starts_with(<span class="string">&quot;/&quot;</span>) == <span class="prelude-val">Some</span>(<span class="bool-val">true</span>);
 
     <span class="kw">let </span><span class="kw-2">mut </span>last_was_str = first.as_str().is_some();
 

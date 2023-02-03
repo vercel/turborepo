@@ -451,7 +451,7 @@
                     <span class="kw">for </span>condition <span class="kw">in </span>opt.custom_conditions.iter() {
                         conditions.insert(condition.to_string(), ConditionValue::Set);
                     }
-                    <span class="comment">// Infer some well known conditions
+                    <span class="comment">// Infer some well-known conditions
                     </span><span class="kw">let </span>dev = conditions.get(<span class="string">&quot;development&quot;</span>).cloned();
                     <span class="kw">let </span>prod = conditions.get(<span class="string">&quot;production&quot;</span>).cloned();
                     <span class="kw">if </span>prod.is_none() {

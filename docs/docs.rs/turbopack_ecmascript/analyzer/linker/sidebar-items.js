@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["link",""]],"struct":[["LinkCache",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["link",""]]};

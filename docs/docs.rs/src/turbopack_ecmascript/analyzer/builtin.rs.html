@@ -451,98 +451,104 @@
 <span id="451">451</span>
 <span id="452">452</span>
 <span id="453">453</span>
-<span id="454">454</span>
-<span id="455">455</span>
-<span id="456">456</span>
-<span id="457">457</span>
-<span id="458">458</span>
-<span id="459">459</span>
-<span id="460">460</span>
-<span id="461">461</span>
-<span id="462">462</span>
-<span id="463">463</span>
-<span id="464">464</span>
-<span id="465">465</span>
-<span id="466">466</span>
-<span id="467">467</span>
-<span id="468">468</span>
-<span id="469">469</span>
-<span id="470">470</span>
-<span id="471">471</span>
-<span id="472">472</span>
-<span id="473">473</span>
-<span id="474">474</span>
-<span id="475">475</span>
-<span id="476">476</span>
-<span id="477">477</span>
-<span id="478">478</span>
-<span id="479">479</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{mem::take, sync::Arc};
 
-<span class="kw">use super</span>::{ConstantNumber, ConstantValue, JsValue, ObjectPart};
+<span class="kw">use super</span>::{ConstantNumber, ConstantValue, JsValue, LogicalOperator, ObjectPart};
 <span class="kw">use </span><span class="kw">crate</span>::analyzer::FreeVarKind;
 
-<span class="kw">const </span>ARRAY_METHODS: [<span class="kw-2">&amp;</span>str; <span class="number">2</span>] = [<span class="string">&quot;concat&quot;</span>, <span class="string">&quot;map&quot;</span>];
-
-<span class="kw">pub fn </span>replace_builtin(value: <span class="kw-2">&amp;mut </span>JsValue) -&gt; bool {
+<span class="doccomment">/// Replaces some builtin values with their resulting values. Called early
+/// without lazy nested values. This allows to skip a lot of work to process the
+/// arguments.
+</span><span class="kw">pub fn </span>early_replace_builtin(value: <span class="kw-2">&amp;mut </span>JsValue) -&gt; bool {
     <span class="kw">match </span>value {
-        JsValue::Member(<span class="kw">_</span>, <span class="kw">box </span><span class="kw-2">ref mut </span>obj, <span class="kw-2">ref mut </span>prop) =&gt; {
-            <span class="kw">match </span>obj {
-                JsValue::Constant(<span class="kw">_</span>) =&gt; {
-                    value.make_unknown(<span class="string">&quot;property on constant&quot;</span>);
+        <span class="comment">// matching calls like `callee(arg1, arg2, ...)`
+        </span>JsValue::Call(<span class="kw">_</span>, <span class="kw">box </span><span class="kw-2">ref mut </span>callee, <span class="kw">_</span>) =&gt; <span class="kw">match </span>callee {
+            <span class="comment">// We don&#39;t know what the callee is, so we can early return
+            </span>JsValue::Unknown(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; {
+                value.make_unknown(<span class="string">&quot;unknown callee&quot;</span>);
+                <span class="bool-val">true
+            </span>}
+            <span class="comment">// We known that these callee will lead to an error at runtime, so we can skip
+            // processing them
+            </span>JsValue::Constant(<span class="kw">_</span>)
+            | JsValue::Url(<span class="kw">_</span>)
+            | JsValue::WellKnownObject(<span class="kw">_</span>)
+            | JsValue::Array(<span class="kw">_</span>, <span class="kw">_</span>)
+            | JsValue::Object(<span class="kw">_</span>, <span class="kw">_</span>)
+            | JsValue::Alternatives(<span class="kw">_</span>, <span class="kw">_</span>)
+            | JsValue::Concat(<span class="kw">_</span>, <span class="kw">_</span>)
+            | JsValue::Add(<span class="kw">_</span>, <span class="kw">_</span>)
+            | JsValue::Not(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; {
+                value.make_unknown(<span class="string">&quot;non-function callee&quot;</span>);
+                <span class="bool-val">true
+            </span>}
+            <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+        },
+        <span class="comment">// matching calls with this context like `obj.prop(arg1, arg2, ...)`
+        </span>JsValue::MemberCall(<span class="kw">_</span>, <span class="kw">box </span><span class="kw-2">ref mut </span>obj, <span class="kw">box </span><span class="kw-2">ref mut </span>prop, <span class="kw">_</span>) =&gt; <span class="kw">match </span>obj {
+            <span class="comment">// We don&#39;t know what the callee is, so we can early return
+            </span>JsValue::Unknown(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; {
+                value.make_unknown(<span class="string">&quot;unknown callee object&quot;</span>);
+                <span class="bool-val">true
+            </span>}
+            <span class="comment">// otherwise we need to look at the property
+            </span><span class="kw">_ </span>=&gt; <span class="kw">match </span>prop {
+                <span class="comment">// We don&#39;t know what the property is, so we can early return
+                </span>JsValue::Unknown(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; {
+                    value.make_unknown(<span class="string">&quot;unknown callee property&quot;</span>);
                     <span class="bool-val">true
                 </span>}
-                JsValue::Url(<span class="kw">_</span>) =&gt; {
-                    value.make_unknown(<span class="string">&quot;property on url&quot;</span>);
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Concat(..) =&gt; {
-                    value.make_unknown(<span class="string">&quot;property on string&quot;</span>);
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Add(..) =&gt; {
-                    value.make_unknown(<span class="string">&quot;property on number or string&quot;</span>);
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Unknown(..) =&gt; {
-                    value.make_unknown(<span class="string">&quot;property on unknown&quot;</span>);
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Function(..) =&gt; {
-                    value.make_unknown(<span class="string">&quot;property on function&quot;</span>);
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Alternatives(<span class="kw">_</span>, alts) =&gt; {
-                    <span class="kw-2">*</span>value = JsValue::alternatives(
-                        take(alts)
-                            .into_iter()
-                            .map(|alt| JsValue::member(<span class="kw">box </span>alt, prop.clone()))
-                            .collect(),
-                    );
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Array(<span class="kw">_</span>, array) =&gt; {
-                    <span class="kw">fn </span>items_to_alternatives(
-                        items: <span class="kw-2">&amp;mut </span>Vec&lt;JsValue&gt;,
-                        prop: <span class="kw-2">&amp;mut </span>JsValue,
-                    ) -&gt; JsValue {
-                        items.push(JsValue::Unknown(
-                            <span class="prelude-val">Some</span>(Arc::new(JsValue::member(
-                                <span class="kw">box </span>JsValue::array(Vec::new()),
-                                <span class="kw">box </span>take(prop),
-                            ))),
-                            <span class="string">&quot;unknown array prototype methods or values&quot;</span>,
-                        ));
-                        JsValue::alternatives(take(items))
-                    }
-                    <span class="kw">match </span><span class="kw-2">&amp;mut **</span>prop {
-                        JsValue::Unknown(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; {
-                            <span class="kw-2">*</span>value = items_to_alternatives(array, prop);
-                            <span class="bool-val">true
-                        </span>}
-                        JsValue::Constant(ConstantValue::Num(ConstantNumber(num))) =&gt; {
-                            <span class="kw">let </span>index: usize = <span class="kw-2">*</span>num <span class="kw">as </span>usize;
-                            <span class="kw">if </span>index <span class="kw">as </span>f64 == <span class="kw-2">*</span>num &amp;&amp; index &lt; array.len() {
+                <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+            },
+        },
+        <span class="comment">// matching property access like `obj.prop` when we don&#39;t know what the obj is.
+        // We can early return here
+        </span>JsValue::Member(<span class="kw">_</span>, <span class="kw">box </span>JsValue::Unknown(<span class="kw">_</span>, <span class="kw">_</span>), <span class="kw">_</span>) =&gt; {
+            value.make_unknown(<span class="string">&quot;unknown object&quot;</span>);
+            <span class="bool-val">true
+        </span>}
+        <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+    }
+}
+
+<span class="doccomment">/// Replaces some builtin functions and values with their resulting values. In
+/// contrast to early_replace_builtin this has all inner values already
+/// processed.
+</span><span class="kw">pub fn </span>replace_builtin(value: <span class="kw-2">&amp;mut </span>JsValue) -&gt; bool {
+    <span class="kw">match </span>value {
+        <span class="comment">// matching property access like `obj.prop`
+        // Accessing a property on something can be handled in some cases
+        </span>JsValue::Member(<span class="kw">_</span>, <span class="kw">box </span><span class="kw-2">ref mut </span>obj, <span class="kw-2">ref mut </span>prop) =&gt; <span class="kw">match </span>obj {
+            <span class="comment">// matching property access when obj is a bunch of alternatives
+            // like `(obj1 | obj2 | obj3).prop`
+            // We expand these to `obj1.prop | obj2.prop | obj3.prop`
+            </span>JsValue::Alternatives(<span class="kw">_</span>, alts) =&gt; {
+                <span class="kw-2">*</span>value = JsValue::alternatives(
+                    take(alts)
+                        .into_iter()
+                        .map(|alt| JsValue::member(<span class="kw">box </span>alt, prop.clone()))
+                        .collect(),
+                );
+                <span class="bool-val">true
+            </span>}
+            <span class="comment">// matching property access on an array like `[1,2,3].prop` or `[1,2,3][1]`
+            </span>JsValue::Array(<span class="kw">_</span>, array) =&gt; {
+                <span class="kw">fn </span>items_to_alternatives(items: <span class="kw-2">&amp;mut </span>Vec&lt;JsValue&gt;, prop: <span class="kw-2">&amp;mut </span>JsValue) -&gt; JsValue {
+                    items.push(JsValue::Unknown(
+                        <span class="prelude-val">Some</span>(Arc::new(JsValue::member(
+                            <span class="kw">box </span>JsValue::array(Vec::new()),
+                            <span class="kw">box </span>take(prop),
+                        ))),
+                        <span class="string">&quot;unknown array prototype methods or values&quot;</span>,
+                    ));
+                    JsValue::alternatives(take(items))
+                }
+                <span class="kw">match </span><span class="kw-2">&amp;mut **</span>prop {
+                    <span class="comment">// accessing a numeric property on an array like `[1,2,3][1]`
+                    // We can replace this with the value at the index
+                    </span>JsValue::Constant(ConstantValue::Num(num @ ConstantNumber(<span class="kw">_</span>))) =&gt; {
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(index) = num.as_u32_index() {
+                            <span class="kw">if </span>index &lt; array.len() {
                                 <span class="kw-2">*</span>value = array.swap_remove(index);
                                 <span class="bool-val">true
                             </span>} <span class="kw">else </span>{
@@ -552,87 +558,61 @@
                                 );
                                 <span class="bool-val">true
                             </span>}
-                        }
-                        JsValue::Constant(c) =&gt; {
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>(s) = c.as_str() {
-                                <span class="kw">if </span>ARRAY_METHODS.iter().any(|method| <span class="kw-2">*</span>method == s) {
-                                    <span class="kw">return </span><span class="bool-val">false</span>;
-                                }
-                            }
+                        } <span class="kw">else </span>{
                             value.make_unknown(<span class="string">&quot;non-num constant property on array&quot;</span>);
                             <span class="bool-val">true
                         </span>}
-                        JsValue::Array(..) =&gt; {
-                            value.make_unknown(<span class="string">&quot;array property on array&quot;</span>);
-                            <span class="bool-val">true
-                        </span>}
-                        JsValue::Object(..) =&gt; {
-                            value.make_unknown(<span class="string">&quot;object property on array&quot;</span>);
-                            <span class="bool-val">true
-                        </span>}
-                        JsValue::Url(<span class="kw">_</span>) =&gt; {
-                            value.make_unknown(<span class="string">&quot;url property on array&quot;</span>);
-                            <span class="bool-val">true
-                        </span>}
-                        JsValue::Function(..) =&gt; {
-                            value.make_unknown(<span class="string">&quot;function property on array&quot;</span>);
-                            <span class="bool-val">true
-                        </span>}
-                        JsValue::Alternatives(<span class="kw">_</span>, alts) =&gt; {
-                            <span class="kw-2">*</span>value = JsValue::alternatives(
-                                take(alts)
-                                    .into_iter()
-                                    .map(|alt| JsValue::member(<span class="kw">box </span>obj.clone(), <span class="kw">box </span>alt))
-                                    .collect(),
-                            );
-                            <span class="bool-val">true
-                        </span>}
-                        JsValue::Concat(..) | JsValue::Add(..) =&gt; {
-                            <span class="kw">if </span>prop.has_placeholder() {
-                                <span class="comment">// keep the member infact since it might be handled later
-                                </span><span class="bool-val">false
-                            </span>} <span class="kw">else </span>{
-                                <span class="kw-2">*</span>value = items_to_alternatives(array, prop);
-                                <span class="bool-val">true
-                            </span>}
-                        }
-                        JsValue::FreeVar(<span class="kw">_</span>)
-                        | JsValue::Variable(<span class="kw">_</span>)
-                        | JsValue::Call(..)
-                        | JsValue::MemberCall(..)
-                        | JsValue::Member(..)
-                        | JsValue::WellKnownObject(<span class="kw">_</span>)
-                        | JsValue::Argument(<span class="kw">_</span>)
-                        | JsValue::WellKnownFunction(<span class="kw">_</span>)
-                        | JsValue::Module(..) =&gt; {
-                            <span class="comment">// keep the member infact since it might be handled later
-                            </span><span class="kw">return </span><span class="bool-val">false</span>;
-                        }
-                    };
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Object(<span class="kw">_</span>, parts) =&gt; {
-                    <span class="kw">fn </span>parts_to_alternatives(
-                        parts: <span class="kw-2">&amp;mut </span>Vec&lt;ObjectPart&gt;,
-                        prop: <span class="kw-2">&amp;mut </span>Box&lt;JsValue&gt;,
-                    ) -&gt; JsValue {
-                        <span class="kw">let </span><span class="kw-2">mut </span>values = Vec::new();
-                        <span class="kw">for </span>part <span class="kw">in </span>parts {
-                            <span class="kw">match </span>part {
-                                ObjectPart::KeyValue(<span class="kw">_</span>, value) =&gt; {
-                                    values.push(take(value));
-                                }
-                                ObjectPart::Spread(<span class="kw">_</span>) =&gt; {
-                                    values.push(JsValue::Unknown(
-                                        <span class="prelude-val">Some</span>(Arc::new(JsValue::member(
-                                            <span class="kw">box </span>JsValue::object(<span class="macro">vec!</span>[take(part)]),
-                                            prop.clone(),
-                                        ))),
-                                        <span class="string">&quot;spreaded object&quot;</span>,
-                                    ));
-                                }
+                    }
+                    <span class="comment">// accessing a non-numeric property on an array like `[1,2,3].length`
+                    // We don&#39;t know what happens here
+                    </span>JsValue::Constant(<span class="kw">_</span>) =&gt; {
+                        value.make_unknown(<span class="string">&quot;non-num constant property on array&quot;</span>);
+                        <span class="bool-val">true
+                    </span>}
+                    <span class="comment">// accessing multiple alternative properties on an array like `[1,2,3][(1 | 2 |
+                    // prop3)]`
+                    </span>JsValue::Alternatives(<span class="kw">_</span>, alts) =&gt; {
+                        <span class="kw-2">*</span>value = JsValue::alternatives(
+                            take(alts)
+                                .into_iter()
+                                .map(|alt| JsValue::member(<span class="kw">box </span>obj.clone(), <span class="kw">box </span>alt))
+                                .collect(),
+                        );
+                        <span class="bool-val">true
+                    </span>}
+                    <span class="comment">// otherwise we can say that this might gives an item of the array
+                    // but we also add an unknown value to the alternatives for other properties
+                    </span><span class="kw">_ </span>=&gt; {
+                        <span class="kw-2">*</span>value = items_to_alternatives(array, prop);
+                        <span class="bool-val">true
+                    </span>}
+                }
+            }
+            <span class="comment">// matching property access on an object like `{a: 1, b: 2}.a`
+            </span>JsValue::Object(<span class="kw">_</span>, parts) =&gt; {
+                <span class="kw">fn </span>parts_to_alternatives(
+                    parts: <span class="kw-2">&amp;mut </span>Vec&lt;ObjectPart&gt;,
+                    prop: <span class="kw-2">&amp;mut </span>Box&lt;JsValue&gt;,
+                    include_unknown: bool,
+                ) -&gt; JsValue {
+                    <span class="kw">let </span><span class="kw-2">mut </span>values = Vec::new();
+                    <span class="kw">for </span>part <span class="kw">in </span>parts {
+                        <span class="kw">match </span>part {
+                            ObjectPart::KeyValue(<span class="kw">_</span>, value) =&gt; {
+                                values.push(take(value));
+                            }
+                            ObjectPart::Spread(<span class="kw">_</span>) =&gt; {
+                                values.push(JsValue::Unknown(
+                                    <span class="prelude-val">Some</span>(Arc::new(JsValue::member(
+                                        <span class="kw">box </span>JsValue::object(<span class="macro">vec!</span>[take(part)]),
+                                        prop.clone(),
+                                    ))),
+                                    <span class="string">&quot;spreaded object&quot;</span>,
+                                ));
                             }
                         }
+                    }
+                    <span class="kw">if </span>include_unknown {
                         values.push(JsValue::Unknown(
                             <span class="prelude-val">Some</span>(Arc::new(JsValue::member(
                                 <span class="kw">box </span>JsValue::object(Vec::new()),
@@ -640,101 +620,112 @@
                             ))),
                             <span class="string">&quot;unknown object prototype methods or values&quot;</span>,
                         ));
-                        JsValue::alternatives(values)
                     }
-                    <span class="kw">match </span><span class="kw-2">&amp;mut **</span>prop {
-                        JsValue::Unknown(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; {
-                            <span class="kw-2">*</span>value = parts_to_alternatives(parts, prop);
-                            <span class="bool-val">true
-                        </span>}
-                        JsValue::Constant(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">for </span>part <span class="kw">in </span>parts.iter_mut().rev() {
-                                <span class="kw">match </span>part {
-                                    ObjectPart::KeyValue(key, val) =&gt; {
-                                        <span class="kw">if </span>key == <span class="kw-2">&amp;**</span>prop {
-                                            <span class="kw-2">*</span>value = take(val);
+                    JsValue::alternatives(values)
+                }
+
+                <span class="doccomment">/// Convert a list of potential values into
+                /// JsValue::Alternatives Optionally add a
+                /// unknown value to the alternatives for object prototype
+                /// methods
+                </span><span class="kw">fn </span>potential_values_to_alternatives(
+                    <span class="kw-2">mut </span>potential_values: Vec&lt;usize&gt;,
+                    parts: <span class="kw-2">&amp;mut </span>Vec&lt;ObjectPart&gt;,
+                    prop: <span class="kw-2">&amp;mut </span>Box&lt;JsValue&gt;,
+                    include_unknown: bool,
+                ) -&gt; JsValue {
+                    <span class="comment">// Note: potential_values are already in reverse order
+                    </span><span class="kw">let </span><span class="kw-2">mut </span>potential_values = take(parts)
+                        .into_iter()
+                        .enumerate()
+                        .filter(|(i, <span class="kw">_</span>)| {
+                            <span class="kw">if </span>potential_values.last() == <span class="prelude-val">Some</span>(i) {
+                                potential_values.pop();
+                                <span class="bool-val">true
+                            </span>} <span class="kw">else </span>{
+                                <span class="bool-val">false
+                            </span>}
+                        })
+                        .map(|(<span class="kw">_</span>, part)| part)
+                        .collect();
+                    parts_to_alternatives(<span class="kw-2">&amp;mut </span>potential_values, prop, include_unknown)
+                }
+
+                <span class="kw">match </span><span class="kw-2">&amp;mut **</span>prop {
+                    <span class="comment">// matching constant string property access on an object like `{a: 1, b:
+                    // 2}[&quot;a&quot;]`
+                    </span>JsValue::Constant(ConstantValue::StrAtom(<span class="kw">_</span>) | ConstantValue::StrWord(<span class="kw">_</span>)) =&gt; {
+                        <span class="kw">let </span>prop_str = prop.as_str().unwrap();
+                        <span class="kw">let </span><span class="kw-2">mut </span>potential_values = Vec::new();
+                        <span class="kw">for </span>(i, part) <span class="kw">in </span>parts.iter_mut().enumerate().rev() {
+                            <span class="kw">match </span>part {
+                                ObjectPart::KeyValue(key, val) =&gt; {
+                                    <span class="kw">if let </span><span class="prelude-val">Some</span>(key) = key.as_str() {
+                                        <span class="kw">if </span>key == prop_str {
+                                            <span class="kw">if </span>potential_values.is_empty() {
+                                                <span class="kw-2">*</span>value = take(val);
+                                            } <span class="kw">else </span>{
+                                                potential_values.push(i);
+                                                <span class="kw-2">*</span>value = potential_values_to_alternatives(
+                                                    potential_values,
+                                                    parts,
+                                                    prop,
+                                                    <span class="bool-val">false</span>,
+                                                );
+                                            }
                                             <span class="kw">return </span><span class="bool-val">true</span>;
                                         }
-                                    }
-                                    ObjectPart::Spread(<span class="kw">_</span>) =&gt; {
-                                        value.make_unknown(<span class="string">&quot;spreaded object&quot;</span>);
-                                        <span class="kw">return </span><span class="bool-val">true</span>;
+                                    } <span class="kw">else </span>{
+                                        potential_values.push(i);
                                     }
                                 }
+                                ObjectPart::Spread(<span class="kw">_</span>) =&gt; {
+                                    value.make_unknown(<span class="string">&quot;spread object&quot;</span>);
+                                    <span class="kw">return </span><span class="bool-val">true</span>;
+                                }
                             }
-                            <span class="kw-2">*</span>value = JsValue::FreeVar(FreeVarKind::Other(<span class="string">&quot;undefined&quot;</span>.into()));
-                            <span class="bool-val">true
-                        </span>}
-                        JsValue::Array(..) =&gt; {
-                            value.make_unknown(<span class="string">&quot;array property on object&quot;</span>);
-                            <span class="bool-val">true
-                        </span>}
-                        JsValue::Object(..) =&gt; {
-                            value.make_unknown(<span class="string">&quot;object property on object&quot;</span>);
-                            <span class="bool-val">true
-                        </span>}
-                        JsValue::Url(<span class="kw">_</span>) =&gt; {
-                            value.make_unknown(<span class="string">&quot;url property on object&quot;</span>);
-                            <span class="bool-val">true
-                        </span>}
-                        JsValue::Function(..) =&gt; {
-                            value.make_unknown(<span class="string">&quot;function property on object&quot;</span>);
-                            <span class="bool-val">true
-                        </span>}
-                        JsValue::Alternatives(<span class="kw">_</span>, alts) =&gt; {
-                            <span class="kw-2">*</span>value = JsValue::alternatives(
-                                take(alts)
-                                    .into_iter()
-                                    .map(|alt| JsValue::member(<span class="kw">box </span>obj.clone(), <span class="kw">box </span>alt))
-                                    .collect(),
-                            );
-                            <span class="bool-val">true
-                        </span>}
-                        JsValue::Concat(..) | JsValue::Add(..) =&gt; {
-                            <span class="kw">if </span>prop.has_placeholder() {
-                                <span class="comment">// keep the member intact since it might be handled later
-                                </span><span class="bool-val">false
-                            </span>} <span class="kw">else </span>{
-                                <span class="kw-2">*</span>value = parts_to_alternatives(parts, prop);
-                                <span class="bool-val">true
-                            </span>}
                         }
-                        JsValue::FreeVar(<span class="kw">_</span>)
-                        | JsValue::Variable(<span class="kw">_</span>)
-                        | JsValue::Call(..)
-                        | JsValue::MemberCall(..)
-                        | JsValue::Member(..)
-                        | JsValue::WellKnownObject(<span class="kw">_</span>)
-                        | JsValue::Argument(<span class="kw">_</span>)
-                        | JsValue::WellKnownFunction(<span class="kw">_</span>)
-                        | JsValue::Module(..) =&gt; {
-                            <span class="comment">// keep the member intact since it might be handled later
-                            </span><span class="macro">debug_assert!</span>(prop.has_placeholder());
-                            <span class="bool-val">false
-                        </span>}
-                    }
+                        <span class="kw">if </span>potential_values.is_empty() {
+                            <span class="kw-2">*</span>value = JsValue::FreeVar(FreeVarKind::Other(<span class="string">&quot;undefined&quot;</span>.into()));
+                        } <span class="kw">else </span>{
+                            <span class="kw-2">*</span>value = potential_values_to_alternatives(
+                                potential_values,
+                                parts,
+                                prop,
+                                <span class="bool-val">true</span>,
+                            );
+                        }
+                        <span class="bool-val">true
+                    </span>}
+                    <span class="comment">// matching mutliple alternative properties on an object like `{a: 1, b: 2}[(a |
+                    // b)]`
+                    </span>JsValue::Alternatives(<span class="kw">_</span>, alts) =&gt; {
+                        <span class="kw-2">*</span>value = JsValue::alternatives(
+                            take(alts)
+                                .into_iter()
+                                .map(|alt| JsValue::member(<span class="kw">box </span>obj.clone(), <span class="kw">box </span>alt))
+                                .collect(),
+                        );
+                        <span class="bool-val">true
+                    </span>}
+                    <span class="kw">_ </span>=&gt; {
+                        <span class="kw-2">*</span>value = parts_to_alternatives(parts, prop, <span class="bool-val">true</span>);
+                        <span class="bool-val">true
+                    </span>}
                 }
-                JsValue::FreeVar(<span class="kw">_</span>)
-                | JsValue::Variable(<span class="kw">_</span>)
-                | JsValue::Call(..)
-                | JsValue::MemberCall(..)
-                | JsValue::Member(..)
-                | JsValue::WellKnownObject(<span class="kw">_</span>)
-                | JsValue::Argument(<span class="kw">_</span>)
-                | JsValue::WellKnownFunction(<span class="kw">_</span>)
-                | JsValue::Module(..) =&gt; {
-                    <span class="comment">// keep the member intact since it might be handled later
-                    </span><span class="macro">debug_assert!</span>(obj.has_placeholder());
-                    <span class="bool-val">false
-                </span>}
             }
-        }
-        JsValue::MemberCall(<span class="kw">_</span>, <span class="kw">box </span><span class="kw-2">ref mut </span>obj, <span class="kw">box </span><span class="kw-2">ref mut </span>prop, <span class="kw-2">ref mut </span>args) =&gt; {
+            <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+        },
+        <span class="comment">// matching calls with this context like `obj.prop(arg1, arg2, ...)`
+        </span>JsValue::MemberCall(<span class="kw">_</span>, <span class="kw">box </span><span class="kw-2">ref mut </span>obj, <span class="kw">box </span><span class="kw-2">ref mut </span>prop, <span class="kw-2">ref mut </span>args) =&gt; {
             <span class="kw">match </span>obj {
-                JsValue::Array(<span class="kw">_</span>, items) =&gt; {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(str) = prop.as_str() {
+                <span class="comment">// matching calls on an array like `[1,2,3].concat([4,5,6])`
+                </span>JsValue::Array(<span class="kw">_</span>, items) =&gt; {
+                    <span class="comment">// matching cases where the property is a const string
+                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(str) = prop.as_str() {
                         <span class="kw">match </span>str {
-                            <span class="string">&quot;concat&quot; </span>=&gt; {
+                            <span class="comment">// The Array.prototype.concat method
+                            </span><span class="string">&quot;concat&quot; </span>=&gt; {
                                 <span class="kw">if </span>args.iter().all(|arg| {
                                     <span class="macro">matches!</span>(
                                         arg,
@@ -772,69 +763,36 @@
                                     <span class="kw">return </span><span class="bool-val">true</span>;
                                 }
                             }
-                            <span class="comment">// TODO This breaks the Function &lt;-&gt; Argument relationship
-                            // We need to refactor that once we expand function calls
+                            <span class="comment">// The Array.prototype.map method
                             </span><span class="string">&quot;map&quot; </span>=&gt; {
-                                <span class="kw">if let </span><span class="prelude-val">Some</span>(JsValue::Function(<span class="kw">_</span>, <span class="kw">box </span>return_value)) =
-                                    args.get_mut(<span class="number">0</span>)
-                                {
-                                    <span class="kw">match </span>return_value {
-                                        <span class="comment">// [&#39;a&#39;, &#39;b&#39;, &#39;c&#39;].map((i) =&gt; require.resolve(i)))
-                                        </span>JsValue::Unknown(<span class="prelude-val">Some</span>(call), <span class="kw">_</span>) =&gt; {
-                                            <span class="kw">if let </span>JsValue::Call(len, callee, call_args) = <span class="kw-2">&amp;**</span>call {
-                                                <span class="kw-2">*</span>value =
-                                                    JsValue::array(
-                                                        items
-                                                            .iter()
-                                                            .map(|item| {
-                                                                <span class="kw">let </span>new_args = call_args
-                                                            .iter()
-                                                            .map(|arg| {
-                                                                <span class="kw">if let </span>JsValue::Argument(<span class="number">0</span>) = arg {
-                                                                    <span class="kw">return </span>item.clone();
-                                                                } <span class="kw">else if let </span>JsValue::Unknown(
-                                                                    <span class="prelude-val">Some</span>(arg),
-                                                                    <span class="kw">_</span>,
-                                                                ) = arg
-                                                                {
-                                                                    <span class="kw">if let </span>JsValue::Argument(<span class="number">0</span>) =
-                                                                    <span class="kw-2">&amp;**</span>arg
-                                                                    {
-                                                                        <span class="kw">return </span>item.clone();
-                                                                    }
-                                                                }
-                                                                arg.clone()
-                                                            })
-                                                            .collect();
-                                                                JsValue::Call(
-                                                                    <span class="kw-2">*</span>len,
-                                                                    callee.clone(),
-                                                                    new_args,
-                                                                )
-                                                            })
-                                                            .collect(),
-                                                    );
-                                            }
-                                        }
-                                        <span class="kw">_ </span>=&gt; {
-                                            <span class="kw-2">*</span>value = JsValue::array(
-                                                items
-                                                    .iter()
-                                                    .map(|<span class="kw">_</span>| return_value.clone())
-                                                    .collect(),
-                                            );
-                                        }
-                                    }
-                                    <span class="comment">// stop the iteration, let the `handle_call` to continue
-                                    // processing the new mapped array
-                                    </span><span class="kw">return </span><span class="bool-val">false</span>;
+                                <span class="kw">if let </span><span class="prelude-val">Some</span>(func) = args.get(<span class="number">0</span>) {
+                                    <span class="kw-2">*</span>value = JsValue::array(
+                                        take(items)
+                                            .into_iter()
+                                            .enumerate()
+                                            .map(|(i, item)| {
+                                                JsValue::call(
+                                                    <span class="kw">box </span>func.clone(),
+                                                    <span class="macro">vec!</span>[
+                                                        item,
+                                                        JsValue::Constant(ConstantValue::Num(
+                                                            ConstantNumber(i <span class="kw">as </span>f64),
+                                                        )),
+                                                    ],
+                                                )
+                                            })
+                                            .collect(),
+                                    );
+                                    <span class="kw">return </span><span class="bool-val">true</span>;
                                 }
                             }
                             <span class="kw">_ </span>=&gt; {}
                         }
                     }
                 }
-                JsValue::Alternatives(<span class="kw">_</span>, alts) =&gt; {
+                <span class="comment">// matching calls on multiple alternative objects like `(obj1 | obj2).prop(arg1,
+                // arg2, ...)`
+                </span>JsValue::Alternatives(<span class="kw">_</span>, alts) =&gt; {
                     <span class="kw-2">*</span>value = JsValue::alternatives(
                         take(alts)
                             .into_iter()
@@ -847,96 +805,29 @@
                 }
                 <span class="kw">_ </span>=&gt; {}
             }
-            <span class="kw-2">*</span>value = JsValue::call(
+            <span class="comment">// without special handling, we convert it into a normal call like
+            // `(obj.prop)(arg1, arg2, ...)`
+            </span><span class="kw-2">*</span>value = JsValue::call(
                 <span class="kw">box </span>JsValue::member(<span class="kw">box </span>take(obj), <span class="kw">box </span>take(prop)),
                 take(args),
             );
             <span class="bool-val">true
         </span>}
-        JsValue::Call(<span class="kw">_</span>, <span class="kw">box </span><span class="kw-2">ref mut </span>callee, <span class="kw-2">ref mut </span>args) =&gt; {
-            <span class="kw">match </span>callee {
-                JsValue::Unknown(..) =&gt; {
-                    value.make_unknown(<span class="string">&quot;call of unknown function&quot;</span>);
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Array(..) =&gt; {
-                    value.make_unknown(<span class="string">&quot;call of array&quot;</span>);
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Object(..) =&gt; {
-                    value.make_unknown(<span class="string">&quot;call of object&quot;</span>);
-                    <span class="bool-val">true
-                </span>}
-                JsValue::WellKnownObject(..) =&gt; {
-                    value.make_unknown(<span class="string">&quot;call of well known object&quot;</span>);
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Constant(<span class="kw">_</span>) =&gt; {
-                    value.make_unknown(<span class="string">&quot;call of constant&quot;</span>);
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Url(<span class="kw">_</span>) =&gt; {
-                    value.make_unknown(<span class="string">&quot;call of url&quot;</span>);
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Concat(..) =&gt; {
-                    value.make_unknown(<span class="string">&quot;call of string&quot;</span>);
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Add(..) =&gt; {
-                    value.make_unknown(<span class="string">&quot;call of number or string&quot;</span>);
-                    <span class="bool-val">true
-                </span>}
-                JsValue::WellKnownFunction(..) =&gt; {
-                    value.make_unknown(<span class="string">&quot;unknown call of well known function&quot;</span>);
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Function(<span class="kw">_</span>, <span class="kw">box </span><span class="kw-2">ref mut </span>return_value) =&gt; {
-                    <span class="kw">let </span><span class="kw-2">mut </span>return_value = take(return_value);
-                    return_value.visit_mut_conditional(
-                        |value| !<span class="macro">matches!</span>(value, JsValue::Function(..)),
-                        <span class="kw-2">&amp;mut </span>|value| <span class="kw">match </span>value {
-                            JsValue::Argument(index) =&gt; {
-                                <span class="kw">if let </span><span class="prelude-val">Some</span>(arg) = args.get(<span class="kw-2">*</span>index).cloned() {
-                                    <span class="kw-2">*</span>value = arg;
-                                } <span class="kw">else </span>{
-                                    <span class="kw-2">*</span>value =
-                                        JsValue::FreeVar(FreeVarKind::Other(<span class="string">&quot;undefined&quot;</span>.into()))
-                                }
-                                <span class="bool-val">true
-                            </span>}
-
-                            <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
-                        },
-                    );
-
-                    <span class="kw-2">*</span>value = return_value;
-                    <span class="bool-val">true
-                </span>}
-                JsValue::Alternatives(<span class="kw">_</span>, alts) =&gt; {
-                    <span class="kw-2">*</span>value = JsValue::alternatives(
-                        take(alts)
-                            .into_iter()
-                            .map(|alt| JsValue::call(<span class="kw">box </span>alt, args.clone()))
-                            .collect(),
-                    );
-                    <span class="bool-val">true
-                </span>}
-                JsValue::FreeVar(<span class="kw">_</span>)
-                | JsValue::Variable(<span class="kw">_</span>)
-                | JsValue::Call(..)
-                | JsValue::MemberCall(..)
-                | JsValue::Member(..)
-                | JsValue::Argument(<span class="kw">_</span>)
-                | JsValue::Module(..) =&gt; {
-                    <span class="comment">// keep the call intact since it might be handled later
-                    </span><span class="macro">debug_assert!</span>(callee.has_placeholder());
-                    <span class="bool-val">false
-                </span>}
-            }
-        }
-        JsValue::Object(<span class="kw">_</span>, parts) =&gt; {
-            <span class="kw">if </span>parts
+        <span class="comment">// match calls when the callee are multiple alternative functions like `(func1 |
+        // func2)(arg1, arg2, ...)`
+        </span>JsValue::Call(<span class="kw">_</span>, <span class="kw">box </span>JsValue::Alternatives(<span class="kw">_</span>, alts), <span class="kw-2">ref mut </span>args) =&gt; {
+            <span class="kw-2">*</span>value = JsValue::alternatives(
+                take(alts)
+                    .into_iter()
+                    .map(|alt| JsValue::call(<span class="kw">box </span>alt, args.clone()))
+                    .collect(),
+            );
+            <span class="bool-val">true
+        </span>}
+        <span class="comment">// match object literals
+        </span>JsValue::Object(<span class="kw">_</span>, parts) =&gt; {
+            <span class="comment">// If the object contains any spread, we might be able to flatten that
+            </span><span class="kw">if </span>parts
                 .iter()
                 .any(|part| <span class="macro">matches!</span>(part, ObjectPart::Spread(JsValue::Object(..))))
             {
@@ -948,11 +839,68 @@
                         parts.push(part);
                     }
                 }
+                value.update_total_nodes();
                 <span class="bool-val">true
             </span>} <span class="kw">else </span>{
                 <span class="bool-val">false
             </span>}
         }
+        <span class="comment">// match logical expressions like `a &amp;&amp; b` or `a || b || c` or `a ?? b`
+        // Reduce logical expressions to their final value(s)
+        </span>JsValue::Logical(<span class="kw">_</span>, op, <span class="kw-2">ref mut </span>parts) =&gt; {
+            <span class="kw">let </span>len = parts.len();
+            <span class="kw">for </span>(i, part) <span class="kw">in </span>take(parts).into_iter().enumerate() {
+                <span class="comment">// The last part is never skipped.
+                </span><span class="kw">if </span>i == len - <span class="number">1 </span>{
+                    parts.push(part);
+                    <span class="kw">break</span>;
+                }
+                <span class="comment">// We might know at compile-time if a part is skipped or the final value.
+                </span><span class="kw">let </span>skip_part = <span class="kw">match </span>op {
+                    LogicalOperator::And =&gt; part.is_truthy(),
+                    LogicalOperator::Or =&gt; part.is_falsy(),
+                    LogicalOperator::NullishCoalescing =&gt; part.is_nullish(),
+                };
+                <span class="kw">match </span>skip_part {
+                    <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) =&gt; {
+                        <span class="comment">// We known this part is skipped, so we can remove it.
+                        </span><span class="kw">continue</span>;
+                    }
+                    <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) =&gt; {
+                        <span class="comment">// We known this part is the final value, so we can remove the rest.
+                        </span>parts.push(part);
+                        <span class="kw">break</span>;
+                    }
+                    <span class="prelude-val">None </span>=&gt; {
+                        <span class="comment">// We don&#39;t know if this part is skipped or the final value, so we keep it.
+                        </span>parts.push(part);
+                        <span class="kw">continue</span>;
+                    }
+                }
+            }
+            <span class="comment">// If we reduced the expression to a single value, we can replace it.
+            </span><span class="kw">if </span>parts.len() == <span class="number">1 </span>{
+                <span class="kw-2">*</span>value = parts.pop().unwrap();
+                <span class="bool-val">true
+            </span>} <span class="kw">else </span>{
+                <span class="comment">// If not, we know that it will be one of the remaining values.
+                </span><span class="kw-2">*</span>value = JsValue::alternatives(take(parts));
+                <span class="bool-val">true
+            </span>}
+        }
+        <span class="comment">// match the not operator like `!a`
+        // Evaluate not when the inner value is truthy or falsy
+        </span>JsValue::Not(<span class="kw">_</span>, <span class="kw-2">ref </span>inner) =&gt; <span class="kw">match </span>inner.is_truthy() {
+            <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) =&gt; {
+                <span class="kw-2">*</span>value = JsValue::Constant(ConstantValue::False);
+                <span class="bool-val">true
+            </span>}
+            <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) =&gt; {
+                <span class="kw-2">*</span>value = JsValue::Constant(ConstantValue::True);
+                <span class="bool-val">true
+            </span>}
+            <span class="prelude-val">None </span>=&gt; <span class="bool-val">false</span>,
+        },
         <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
     }
 }

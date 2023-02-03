@@ -208,11 +208,11 @@
             ContentSourceResult::NeedData(needed) =&gt; {
                 current_source = needed.source.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
                 current_asset_path = needed.path.clone();
-                data = request_to_data(<span class="kw-2">&amp;mut </span>request_overwrites, <span class="kw-2">&amp;</span>needed.vary).<span class="kw">await</span><span class="question-mark">?</span>;
+                data = request_to_data(<span class="kw-2">&amp;</span>request_overwrites, <span class="kw-2">&amp;</span>needed.vary).<span class="kw">await</span><span class="question-mark">?</span>;
             }
             ContentSourceResult::Result { get_content, .. } =&gt; {
                 <span class="kw">let </span>content_vary = get_content.vary().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>content_data = request_to_data(<span class="kw-2">&amp;mut </span>request_overwrites, <span class="kw-2">&amp;</span>content_vary).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>content_data = request_to_data(<span class="kw-2">&amp;</span>request_overwrites, <span class="kw-2">&amp;</span>content_vary).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>content = get_content.get(Value::new(content_data));
                 <span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
                     ContentSourceContent::Rewrite(rewrite) =&gt; {

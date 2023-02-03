@@ -310,12 +310,36 @@
 <span id="310">310</span>
 <span id="311">311</span>
 <span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
-    cmp::min,
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     future::Future,
-    mem::{swap, take},
-    sync::{Arc, Mutex},
+    mem::take,
+    sync::Arc,
 };
 
 <span class="kw">use </span>anyhow::Result;
@@ -323,302 +347,328 @@
 
 <span class="kw">use super</span>::{graph::VarGraph, JsValue};
 
-<span class="kw">type </span>LinkCacheValue = (
-    <span class="prelude-ty">Option</span>&lt;JsValue&gt;,
-    Vec&lt;Vec&lt;(HashSet&lt;Id&gt;, Vec&lt;(HashSet&lt;Id&gt;, JsValue)&gt;)&gt;&gt;,
-);
-
-<span class="kw">struct </span>LinkCacheItem(bool, JsValue, (HashSet&lt;Id&gt;, HashSet&lt;Id&gt;));
-
-<span class="attr">#[derive(Default)]
-</span><span class="kw">pub struct </span>LinkCache {
-    data: HashMap&lt;Id, LinkCacheValue&gt;,
-}
-
-<span class="kw">const </span>LIMIT_CACHE_COMBINATIONS: usize = <span class="number">100</span>;
-
-<span class="kw">impl </span>LinkCache {
-    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            data: HashMap::new(),
-        }
-    }
-
-    <span class="kw">fn </span>store(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        id: Id,
-        bailing: bool,
-        value: <span class="kw-2">&amp;</span>JsValue,
-        replaced_references: <span class="kw-2">&amp;</span>(HashSet&lt;Id&gt;, HashSet&lt;Id&gt;),
-    ) {
-        <span class="kw">let </span>(replaced_circular, replaced_non_circular) = replaced_references;
-        <span class="kw">let </span>i = replaced_circular.len();
-        <span class="kw">let </span>(bailed_value, data) = <span class="self">self</span>.data.entry(id).or_default();
-        <span class="kw">if </span>bailing {
-            <span class="kw-2">*</span>bailed_value = <span class="prelude-val">Some</span>(value.clone());
-        } <span class="kw">else </span>{
-            <span class="kw">if </span>data.len() &lt;= i {
-                data.resize(i + <span class="number">1</span>, Vec::new());
-            }
-            <span class="kw">let </span>list = <span class="kw-2">&amp;mut </span>data[i];
-            <span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, list)) = list.iter_mut().find(|(key, <span class="kw">_</span>)| key == replaced_circular) {
-                <span class="kw">if </span>list.len() &gt; LIMIT_CACHE_COMBINATIONS {
-                    <span class="kw">return</span>;
-                }
-                list.push((replaced_non_circular.clone(), value.clone()));
-            } <span class="kw">else </span>{
-                <span class="kw">if </span>list.len() &gt; LIMIT_CACHE_COMBINATIONS {
-                    <span class="kw">return</span>;
-                }
-                list.push((
-                    replaced_circular.clone(),
-                    <span class="macro">vec!</span>[(replaced_non_circular.clone(), value.clone())],
-                ));
-            }
-        }
-    }
-
-    <span class="kw">fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, id: <span class="kw-2">&amp;</span>Id, cycle_stack: <span class="kw-2">&amp;</span>HashSet&lt;Id&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;LinkCacheItem&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>((bailing, data)) = <span class="self">self</span>.data.get(id) {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(bailing) = bailing {
-                <span class="kw">return </span><span class="prelude-val">Some</span>(LinkCacheItem(
-                    <span class="bool-val">true</span>,
-                    bailing.clone(),
-                    (HashSet::new(), HashSet::new()),
-                ));
-            }
-            <span class="kw">for </span>list <span class="kw">in </span>data[<span class="number">0</span>..min(cycle_stack.len() + <span class="number">1</span>, data.len())].iter() {
-                <span class="kw">for </span>(key, list) <span class="kw">in </span>list.iter() {
-                    <span class="kw">if </span>key.iter().all(|id| cycle_stack.contains(id)) {
-                        <span class="kw">for </span>(non_circular, value) <span class="kw">in </span>list.iter() {
-                            <span class="kw">if </span>non_circular.iter().all(|id| !cycle_stack.contains(id)) {
-                                <span class="kw">return </span><span class="prelude-val">Some</span>(LinkCacheItem(
-                                    <span class="bool-val">false</span>,
-                                    value.clone(),
-                                    (key.clone(), non_circular.clone()),
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        <span class="prelude-val">None
-    </span>}
-}
-
-<span class="comment">// pub async fn link&lt;&#39;a, F, R&gt;(
-//     graph: &amp;VarGraph,
-//     mut val: JsValue,
-//     visitor: &amp;F,
-//     cache: &amp;Mutex&lt;LinkCache&gt;,
-// ) -&gt; Result&lt;JsValue&gt;
-// where
-//     R: &#39;a + Future&lt;Output = Result&lt;(JsValue, bool)&gt;&gt; + Send,
-//     F: &#39;a + Fn(JsValue) -&gt; R + Sync,
-// {
-//     val.normalize();
-//     let (val, _) = link_internal(graph, val, visitor, cache, &amp;mut
-// HashSet::new()).await?;     Ok(val)
-// }
-
-</span><span class="kw">pub async fn </span>link&lt;<span class="lifetime">&#39;a</span>, F, R&gt;(
+<span class="kw">pub async fn </span>link&lt;<span class="lifetime">&#39;a</span>, B, RB, F, RF&gt;(
     graph: <span class="kw-2">&amp;</span>VarGraph,
     <span class="kw-2">mut </span>val: JsValue,
+    early_visitor: <span class="kw-2">&amp;</span>B,
     visitor: <span class="kw-2">&amp;</span>F,
-    cache: <span class="kw-2">&amp;</span>Mutex&lt;LinkCache&gt;,
+    fun_args_values: HashMap&lt;u32, Vec&lt;JsValue&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue&gt;
 <span class="kw">where
-    </span>R: <span class="lifetime">&#39;a </span>+ Future&lt;Output = <span class="prelude-ty">Result</span>&lt;(JsValue, bool)&gt;&gt; + Send,
-    F: <span class="lifetime">&#39;a </span>+ Fn(JsValue) -&gt; R + Sync,
+    </span>RB: <span class="lifetime">&#39;a </span>+ Future&lt;Output = <span class="prelude-ty">Result</span>&lt;(JsValue, bool)&gt;&gt; + Send,
+    B: <span class="lifetime">&#39;a </span>+ Fn(JsValue) -&gt; RB + Sync,
+    RF: <span class="lifetime">&#39;a </span>+ Future&lt;Output = <span class="prelude-ty">Result</span>&lt;(JsValue, bool)&gt;&gt; + Send,
+    F: <span class="lifetime">&#39;a </span>+ Fn(JsValue) -&gt; RF + Sync,
 {
     val.normalize();
-    <span class="kw">let </span><span class="kw-2">mut </span>c = take(<span class="kw-2">&amp;mut *</span>cache.lock().unwrap());
-    <span class="kw">let </span>val = link_internal_iterative(graph, val, visitor, <span class="kw-2">&amp;mut </span>c).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw-2">*</span>cache.lock().unwrap() = c;
+    <span class="kw">let </span>val = link_internal_iterative(graph, val, early_visitor, visitor, fun_args_values).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(val)
 }
 
-<span class="kw">const </span>LIMIT_NODE_SIZE: usize = <span class="number">1000</span>;
-<span class="kw">const </span>LIMIT_IN_PROGRESS_NODES: usize = <span class="number">2000</span>;
-<span class="kw">const </span>LIMIT_LINK_STEPS: usize = <span class="number">10000</span>;
+<span class="kw">const </span>LIMIT_NODE_SIZE: usize = <span class="number">300</span>;
+<span class="kw">const </span>LIMIT_IN_PROGRESS_NODES: usize = <span class="number">1000</span>;
+<span class="kw">const </span>LIMIT_LINK_STEPS: usize = <span class="number">1500</span>;
 
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>link_internal_iterative&lt;<span class="lifetime">&#39;a</span>, F, R&gt;(
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>link_internal_iterative&lt;<span class="lifetime">&#39;a</span>, B, RB, F, RF&gt;(
     graph: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>VarGraph,
     val: JsValue,
-    <span class="kw-2">mut </span>visitor: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>F,
-    cache: <span class="kw-2">&amp;mut </span>LinkCache,
+    early_visitor: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>B,
+    visitor: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>F,
+    <span class="kw-2">mut </span>fun_args_values: HashMap&lt;u32, Vec&lt;JsValue&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue&gt;
 <span class="kw">where
-    </span>R: <span class="lifetime">&#39;a </span>+ Future&lt;Output = <span class="prelude-ty">Result</span>&lt;(JsValue, bool)&gt;&gt; + Send,
-    F: <span class="lifetime">&#39;a </span>+ Fn(JsValue) -&gt; R + Sync,
+    </span>RB: <span class="lifetime">&#39;a </span>+ Future&lt;Output = <span class="prelude-ty">Result</span>&lt;(JsValue, bool)&gt;&gt; + Send,
+    B: <span class="lifetime">&#39;a </span>+ Fn(JsValue) -&gt; RB + Sync,
+    RF: <span class="lifetime">&#39;a </span>+ Future&lt;Output = <span class="prelude-ty">Result</span>&lt;(JsValue, bool)&gt;&gt; + Send,
+    F: <span class="lifetime">&#39;a </span>+ Fn(JsValue) -&gt; RF + Sync,
 {
-    <span class="kw">fn </span>swap_extend(
-        replaced_references: <span class="kw-2">&amp;mut </span>(HashSet&lt;Id&gt;, HashSet&lt;Id&gt;),
-        <span class="kw-2">mut </span>prev_replaced_references: (HashSet&lt;Id&gt;, HashSet&lt;Id&gt;),
-    ) {
-        <span class="kw">if </span>replaced_references.<span class="number">0</span>.len() &lt; prev_replaced_references.<span class="number">0</span>.len() {
-            swap(<span class="kw-2">&amp;mut </span>replaced_references.<span class="number">0</span>, <span class="kw-2">&amp;mut </span>prev_replaced_references.<span class="number">0</span>);
-        }
-        <span class="kw">if </span>replaced_references.<span class="number">1</span>.len() &lt; prev_replaced_references.<span class="number">1</span>.len() {
-            swap(<span class="kw-2">&amp;mut </span>replaced_references.<span class="number">1</span>, <span class="kw-2">&amp;mut </span>prev_replaced_references.<span class="number">1</span>);
-        }
-        replaced_references.<span class="number">0</span>.extend(prev_replaced_references.<span class="number">0</span>);
-        replaced_references.<span class="number">1</span>.extend(prev_replaced_references.<span class="number">1</span>);
+    <span class="attr">#[derive(Debug)]
+    </span><span class="kw">enum </span>Step {
+        Enter(JsValue),
+        EarlyVisit(JsValue),
+        Leave(JsValue),
+        LeaveVar(Id),
+        LeaveLate(JsValue),
+        Visit(JsValue),
+        LeaveCall(u32),
     }
 
-    <span class="kw">let </span><span class="kw-2">mut </span>queue: Vec&lt;(bool, JsValue)&gt; = Vec::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>done: Vec&lt;(JsValue, bool)&gt; = Vec::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>total_nodes = <span class="number">0</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>work_queue_stack: Vec&lt;Step&gt; = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>done: Vec&lt;JsValue&gt; = Vec::new();
+    <span class="comment">// Tracks the number of nodes in the queue and done combined
+    </span><span class="kw">let </span><span class="kw-2">mut </span>total_nodes = <span class="number">0</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>cycle_stack: HashSet&lt;Id&gt; = HashSet::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>replaced_references: (HashSet&lt;Id&gt;, HashSet&lt;Id&gt;) = (HashSet::new(), HashSet::new());
-    <span class="kw">let </span><span class="kw-2">mut </span>replaced_references_stack: Vec&lt;(HashSet&lt;Id&gt;, HashSet&lt;Id&gt;)&gt; = Vec::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>steps = <span class="number">0</span>;
+    <span class="comment">// Tracks the number linking steps so far
+    </span><span class="kw">let </span><span class="kw-2">mut </span>steps = <span class="number">0</span>;
 
     total_nodes += val.total_nodes();
-    queue.push((<span class="bool-val">true</span>, val));
+    work_queue_stack.push(Step::Enter(val));
 
-    <span class="kw">while let </span><span class="prelude-val">Some</span>((enter, val)) = queue.pop() {
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(step) = work_queue_stack.pop() {
         steps += <span class="number">1</span>;
-        <span class="kw">match </span>(enter, val) {
+
+        <span class="kw">match </span>step {
             <span class="comment">// Enter a variable
             // - replace it with value from graph
             // - process value
             // - on leave: cache value
-            </span>(<span class="bool-val">true</span>, JsValue::Variable(var)) =&gt; {
+            </span>Step::Enter(JsValue::Variable(var)) =&gt; {
                 <span class="comment">// Replace with unknown for now
                 </span><span class="kw">if </span>cycle_stack.contains(<span class="kw-2">&amp;</span>var) {
-                    replaced_references.<span class="number">0</span>.insert(var.clone());
-                    done.push((
-                        JsValue::Unknown(
-                            <span class="prelude-val">Some</span>(Arc::new(JsValue::Variable(var.clone()))),
-                            <span class="string">&quot;circular variable reference&quot;</span>,
-                        ),
-                        <span class="bool-val">true</span>,
+                    done.push(JsValue::Unknown(
+                        <span class="prelude-val">Some</span>(Arc::new(JsValue::Variable(var.clone()))),
+                        <span class="string">&quot;circular variable reference&quot;</span>,
                     ));
                 } <span class="kw">else </span>{
                     total_nodes -= <span class="number">1</span>;
-                    {
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>(LinkCacheItem(bailing, value, refs)) =
-                            cache.get(<span class="kw-2">&amp;</span>var, <span class="kw-2">&amp;</span>cycle_stack)
-                        {
-                            replaced_references.<span class="number">0</span>.extend(refs.<span class="number">0</span>);
-                            replaced_references.<span class="number">1</span>.extend(refs.<span class="number">1</span>);
-                            total_nodes += value.total_nodes();
-                            done.push((value, <span class="bool-val">true</span>));
-                            <span class="kw">if </span>bailing {
-                                <span class="kw">break</span>;
-                            } <span class="kw">else </span>{
-                                <span class="kw">continue</span>;
-                            }
-                        }
-                    }
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(val) = graph.values.get(<span class="kw-2">&amp;</span>var) {
                         cycle_stack.insert(var.clone());
-                        replaced_references_stack.push(take(<span class="kw-2">&amp;mut </span>replaced_references));
-                        queue.push((<span class="bool-val">false</span>, JsValue::Variable(var)));
+                        work_queue_stack.push(Step::LeaveVar(var));
                         total_nodes += val.total_nodes();
-                        queue.push((<span class="bool-val">true</span>, val.clone()));
+                        work_queue_stack.push(Step::Enter(val.clone()));
                     } <span class="kw">else </span>{
-                        replaced_references.<span class="number">1</span>.insert(var.clone());
                         total_nodes += <span class="number">1</span>;
-                        done.push((
-                            JsValue::Unknown(
-                                <span class="prelude-val">Some</span>(Arc::new(JsValue::Variable(var.clone()))),
-                                <span class="string">&quot;no value of this variable analysed&quot;</span>,
-                            ),
-                            <span class="bool-val">true</span>,
+                        done.push(JsValue::Unknown(
+                            <span class="prelude-val">Some</span>(Arc::new(JsValue::Variable(var.clone()))),
+                            <span class="string">&quot;no value of this variable analysed&quot;</span>,
                         ));
                     };
                 }
             }
             <span class="comment">// Leave a variable
-            </span>(<span class="bool-val">false</span>, JsValue::Variable(var)) =&gt; {
-                <span class="kw">let </span>(val, <span class="kw">_</span>) = done.pop().unwrap();
-                cache.store(var.clone(), <span class="bool-val">false</span>, <span class="kw-2">&amp;</span>val, <span class="kw-2">&amp;</span>replaced_references);
-                swap_extend(
-                    <span class="kw-2">&amp;mut </span>replaced_references,
-                    replaced_references_stack.pop().unwrap(),
-                );
-                replaced_references.<span class="number">0</span>.remove(<span class="kw-2">&amp;</span>var);
-                replaced_references.<span class="number">1</span>.insert(var.clone());
+            </span>Step::LeaveVar(var) =&gt; {
                 cycle_stack.remove(<span class="kw-2">&amp;</span>var);
-                done.push((val, <span class="bool-val">true</span>));
+            }
+            <span class="comment">// Enter a function argument
+            // We want to replace the argument with the value from the function call
+            </span>Step::Enter(JsValue::Argument(func_ident, index)) =&gt; {
+                total_nodes -= <span class="number">1</span>;
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(args) = fun_args_values.get(<span class="kw-2">&amp;</span>func_ident) {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(val) = args.get(index) {
+                        total_nodes += val.total_nodes();
+                        done.push(val.clone());
+                    } <span class="kw">else </span>{
+                        total_nodes += <span class="number">1</span>;
+                        done.push(JsValue::Unknown(
+                            <span class="prelude-val">None</span>,
+                            <span class="string">&quot;unknown function argument (out of bounds)&quot;</span>,
+                        ));
+                    }
+                } <span class="kw">else </span>{
+                    total_nodes += <span class="number">1</span>;
+                    done.push(JsValue::Unknown(
+                        <span class="prelude-val">Some</span>(Arc::new(JsValue::Argument(func_ident, index))),
+                        <span class="string">&quot;function calls are not analysed yet&quot;</span>,
+                    ));
+                }
+            }
+            <span class="comment">// Visit a function call
+            // This need special handling, since we want to replace the function call and process
+            // the function return value after that.
+            </span>Step::Visit(JsValue::Call(
+                <span class="kw">_</span>,
+                <span class="kw">box </span>JsValue::Function(<span class="kw">_</span>, func_ident, return_value),
+                args,
+            )) =&gt; {
+                total_nodes -= <span class="number">2</span>; <span class="comment">// Call + Function
+                </span><span class="kw">if let </span>Entry::Vacant(entry) = fun_args_values.entry(func_ident) {
+                    <span class="comment">// Return value will stay in total_nodes
+                    </span><span class="kw">for </span>arg <span class="kw">in </span>args.iter() {
+                        total_nodes -= arg.total_nodes();
+                    }
+                    entry.insert(args);
+                    work_queue_stack.push(Step::LeaveCall(func_ident));
+                    work_queue_stack.push(Step::Enter(<span class="kw-2">*</span>return_value));
+                } <span class="kw">else </span>{
+                    total_nodes -= return_value.total_nodes();
+                    <span class="kw">for </span>arg <span class="kw">in </span>args.iter() {
+                        total_nodes -= arg.total_nodes();
+                    }
+                    total_nodes += <span class="number">1</span>;
+                    done.push(JsValue::Unknown(
+                        <span class="prelude-val">Some</span>(Arc::new(JsValue::call(
+                            <span class="kw">box </span>JsValue::function(func_ident, return_value),
+                            args,
+                        ))),
+                        <span class="string">&quot;recursive function call&quot;</span>,
+                    ));
+                }
+            }
+            <span class="comment">// Leaving a function call evaluation
+            // - remove function arguments from the map
+            </span>Step::LeaveCall(func_ident) =&gt; {
+                fun_args_values.remove(<span class="kw-2">&amp;</span>func_ident);
+            }
+            <span class="comment">// Enter a function
+            // We don&#39;t want to process the function return value yet, this will happen after
+            // function calls
+            // - just put it into done
+            </span>Step::Enter(func @ JsValue::Function(..)) =&gt; {
+                done.push(func);
             }
             <span class="comment">// Enter a value
             // - take and queue children for processing
             // - on leave: insert children again and optimize
-            </span>(<span class="bool-val">true</span>, <span class="kw-2">mut </span>val) =&gt; {
-                <span class="kw">let </span>i = queue.len();
-                queue.push((<span class="bool-val">false</span>, JsValue::default()));
-                val.for_each_children_mut(<span class="kw-2">&amp;mut </span>|child| {
-                    queue.push((<span class="bool-val">true</span>, take(child)));
+            </span>Step::Enter(<span class="kw-2">mut </span>val) =&gt; {
+                <span class="kw">let </span>i = work_queue_stack.len();
+                work_queue_stack.push(Step::Leave(JsValue::default()));
+                <span class="kw">let </span><span class="kw-2">mut </span>has_early_children = <span class="bool-val">false</span>;
+                val.for_each_early_children_mut(<span class="kw-2">&amp;mut </span>|child| {
+                    has_early_children = <span class="bool-val">true</span>;
+                    work_queue_stack.push(Step::Enter(take(child)));
                     <span class="bool-val">false
                 </span>});
-                queue[i].<span class="number">1 </span>= val;
+                <span class="kw">if </span>has_early_children {
+                    work_queue_stack[i] = Step::EarlyVisit(val);
+                } <span class="kw">else </span>{
+                    val.for_each_children_mut(<span class="kw-2">&amp;mut </span>|child| {
+                        work_queue_stack.push(Step::Enter(take(child)));
+                        <span class="bool-val">false
+                    </span>});
+                    work_queue_stack[i] = Step::Leave(val);
+                }
+            }
+            <span class="comment">// Early visit a value
+            // - reconstruct the value from early children
+            // - visit the value
+            // - insert late children and process for Leave
+            </span>Step::EarlyVisit(<span class="kw-2">mut </span>val) =&gt; {
+                val.for_each_early_children_mut(<span class="kw-2">&amp;mut </span>|child| {
+                    <span class="kw">let </span>val = done.pop().unwrap();
+                    <span class="kw-2">*</span>child = val;
+                    <span class="bool-val">true
+                </span>});
+                val.debug_assert_total_nodes_up_to_date();
+                total_nodes -= val.total_nodes();
+                <span class="kw">if </span>val.total_nodes() &gt; LIMIT_NODE_SIZE {
+                    total_nodes += <span class="number">1</span>;
+                    done.push(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;node limit reached&quot;</span>));
+                    <span class="kw">continue</span>;
+                }
+
+                <span class="kw">let </span>(<span class="kw-2">mut </span>val, visit_modified) = early_visitor(val).<span class="kw">await</span><span class="question-mark">?</span>;
+                val.debug_assert_total_nodes_up_to_date();
+                <span class="kw">if </span>visit_modified &amp;&amp; val.total_nodes() &gt; LIMIT_NODE_SIZE {
+                    total_nodes += <span class="number">1</span>;
+                    done.push(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;node limit reached&quot;</span>));
+                    <span class="kw">continue</span>;
+                }
+
+                <span class="kw">let </span>count = val.total_nodes();
+                <span class="kw">if </span>total_nodes + count &gt; LIMIT_IN_PROGRESS_NODES {
+                    <span class="comment">// There is always space for one more node since we just popped at least one
+                    // count
+                    </span>total_nodes += <span class="number">1</span>;
+                    done.push(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;in progress nodes limit reached&quot;</span>));
+                    <span class="kw">continue</span>;
+                }
+                total_nodes += count;
+
+                <span class="kw">if </span>visit_modified {
+                    <span class="comment">// When the early visitor has changed the value, we need to enter it again
+                    </span>work_queue_stack.push(Step::Enter(val));
+                } <span class="kw">else </span>{
+                    <span class="comment">// Otherwise we can just process the late children
+                    </span><span class="kw">let </span>i = work_queue_stack.len();
+                    work_queue_stack.push(Step::LeaveLate(JsValue::default()));
+                    val.for_each_late_children_mut(<span class="kw-2">&amp;mut </span>|child| {
+                        work_queue_stack.push(Step::Enter(take(child)));
+                        <span class="bool-val">false
+                    </span>});
+                    work_queue_stack[i] = Step::LeaveLate(val);
+                }
             }
             <span class="comment">// Leave a value
-            </span>(<span class="bool-val">false</span>, <span class="kw-2">mut </span>val) =&gt; {
-                <span class="kw">let </span><span class="kw-2">mut </span>modified = val.for_each_children_mut(<span class="kw-2">&amp;mut </span>|child| {
-                    <span class="kw">let </span>(val, modified) = done.pop().unwrap();
+            </span>Step::Leave(<span class="kw-2">mut </span>val) =&gt; {
+                val.for_each_children_mut(<span class="kw-2">&amp;mut </span>|child| {
+                    <span class="kw">let </span>val = done.pop().unwrap();
                     <span class="kw-2">*</span>child = val;
-                    modified
-                });
+                    <span class="bool-val">true
+                </span>});
+                val.debug_assert_total_nodes_up_to_date();
+
                 total_nodes -= val.total_nodes();
 
-                <span class="kw">if </span>modified {
-                    <span class="kw">if </span>val.total_nodes() &gt; LIMIT_NODE_SIZE {
-                        done.push((JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;node limit reached&quot;</span>), <span class="bool-val">true</span>));
-                        <span class="kw">break</span>;
-                    }
-                    val.normalize_shallow();
+                <span class="kw">if </span>val.total_nodes() &gt; LIMIT_NODE_SIZE {
+                    total_nodes += <span class="number">1</span>;
+                    done.push(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;node limit reached&quot;</span>));
+                    <span class="kw">continue</span>;
                 }
+                val.normalize_shallow();
 
-                <span class="kw">let </span>(val, visit_modified) = val.visit_async_until_settled(<span class="kw-2">&amp;mut </span>visitor).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">if </span>visit_modified {
-                    <span class="kw">if </span>val.total_nodes() &gt; LIMIT_NODE_SIZE {
-                        done.push((JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;node limit reached&quot;</span>), <span class="bool-val">true</span>));
-                        <span class="kw">break</span>;
-                    }
-                    modified = <span class="bool-val">true</span>;
-                }
+                val.debug_assert_total_nodes_up_to_date();
 
                 total_nodes += val.total_nodes();
-                done.push((val, modified));
-                <span class="kw">if </span>total_nodes &gt; LIMIT_IN_PROGRESS_NODES {
-                    done.push((
-                        JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;in progress nodes limit reached&quot;</span>),
-                        <span class="bool-val">true</span>,
-                    ));
-                    <span class="kw">break</span>;
+                work_queue_stack.push(Step::Visit(val));
+            }
+            <span class="comment">// Leave a value from EarlyVisit
+            </span>Step::LeaveLate(<span class="kw-2">mut </span>val) =&gt; {
+                val.for_each_late_children_mut(<span class="kw-2">&amp;mut </span>|child| {
+                    <span class="kw">let </span>val = done.pop().unwrap();
+                    <span class="kw-2">*</span>child = val;
+                    <span class="bool-val">true
+                </span>});
+                val.debug_assert_total_nodes_up_to_date();
+
+                total_nodes -= val.total_nodes();
+
+                <span class="kw">if </span>val.total_nodes() &gt; LIMIT_NODE_SIZE {
+                    total_nodes += <span class="number">1</span>;
+                    done.push(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;node limit reached&quot;</span>));
+                    <span class="kw">continue</span>;
+                }
+                val.normalize_shallow();
+
+                val.debug_assert_total_nodes_up_to_date();
+
+                total_nodes += val.total_nodes();
+                work_queue_stack.push(Step::Visit(val));
+            }
+            <span class="comment">// Visit a value with the visitor
+            // - visited value is put into done
+            </span>Step::Visit(val) =&gt; {
+                total_nodes -= val.total_nodes();
+
+                <span class="kw">let </span>(<span class="kw-2">mut </span>val, visit_modified) = visitor(val).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">if </span>visit_modified {
+                    val.normalize_shallow();
+                    <span class="attr">#[cfg(debug_assertions)]
+                    </span>val.debug_assert_total_nodes_up_to_date();
+                    <span class="kw">if </span>val.total_nodes() &gt; LIMIT_NODE_SIZE {
+                        total_nodes += <span class="number">1</span>;
+                        done.push(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;node limit reached&quot;</span>));
+                        <span class="kw">continue</span>;
+                    }
+                }
+
+                <span class="kw">let </span>count = val.total_nodes();
+                <span class="kw">if </span>total_nodes + count &gt; LIMIT_IN_PROGRESS_NODES {
+                    <span class="comment">// There is always space for one more node since we just popped at least one
+                    // count
+                    </span>total_nodes += <span class="number">1</span>;
+                    done.push(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;in progress nodes limit reached&quot;</span>));
+                    <span class="kw">continue</span>;
+                }
+                total_nodes += count;
+                <span class="kw">if </span>visit_modified {
+                    work_queue_stack.push(Step::Enter(val));
+                } <span class="kw">else </span>{
+                    done.push(val);
                 }
             }
         }
         <span class="kw">if </span>steps &gt; LIMIT_LINK_STEPS {
-            done.push((
-                JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;max number of linking steps reached&quot;</span>),
-                <span class="bool-val">true</span>,
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(JsValue::Unknown(
+                <span class="prelude-val">None</span>,
+                <span class="string">&quot;max number of linking steps reached&quot;</span>,
             ));
-            <span class="kw">break</span>;
         }
     }
 
-    <span class="kw">let </span>final_value = done.pop().unwrap().<span class="number">0</span>;
+    <span class="kw">let </span>final_value = done.pop().unwrap();
 
-    <span class="comment">// When there is still something on the queue
-    // we reached the node limit and want to store
-    // each open variable as &quot;reached node limit&quot;
-    </span><span class="kw">while let </span><span class="prelude-val">Some</span>((enter, val)) = queue.pop() {
-        <span class="kw">if let </span>(<span class="bool-val">false</span>, JsValue::Variable(var)) = (enter, val) {
-            cache.store(var.clone(), <span class="bool-val">true</span>, <span class="kw-2">&amp;</span>final_value, <span class="kw-2">&amp;</span>replaced_references);
-            swap_extend(
-                <span class="kw-2">&amp;mut </span>replaced_references,
-                replaced_references_stack.pop().unwrap(),
-            );
-            replaced_references.<span class="number">0</span>.remove(<span class="kw-2">&amp;</span>var);
-            replaced_references.<span class="number">1</span>.insert(var.clone());
-        }
-    }
+    <span class="macro">debug_assert!</span>(work_queue_stack.is_empty());
+    <span class="macro">debug_assert_eq!</span>(total_nodes, final_value.total_nodes());
 
     <span class="prelude-val">Ok</span>(final_value)
 }

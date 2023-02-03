@@ -229,7 +229,7 @@
 
                 <span class="kw">let </span>header_map = response.headers_mut().expect(<span class="string">&quot;headers must be defined&quot;</span>);
 
-                <span class="kw">for </span>(header_name, header_value) <span class="kw">in </span><span class="kw-2">&amp;*</span>headers {
+                <span class="kw">for </span>(header_name, header_value) <span class="kw">in </span>headers {
                     header_map.append(
                         HeaderName::try_from(header_name.clone())<span class="question-mark">?</span>,
                         hyper::header::HeaderValue::try_from(header_value.as_str())<span class="question-mark">?</span>,
