@@ -1,0 +1,261 @@
+[
+    (
+        "*arrow function 1013*",
+        Function(
+            2,
+            Unknown(
+                None,
+                "unsupported expression",
+            ),
+        ),
+    ),
+    (
+        "*arrow function 121*",
+        Function(
+            2,
+            FreeVar(
+                Other(
+                    Atom('undefined' type=static),
+                ),
+            ),
+        ),
+    ),
+    (
+        "*arrow function 328*",
+        Function(
+            2,
+            Unknown(
+                None,
+                "unsupported expression",
+            ),
+        ),
+    ),
+    (
+        "__unused_webpack_module",
+        Unknown(
+            Some(
+                Variable(
+                    (
+                        Atom('__unused_webpack_module' type=dynamic),
+                        #2,
+                    ),
+                ),
+            ),
+            "pattern without value",
+        ),
+    ),
+    (
+        "__webpack_exec__",
+        Variable(
+            (
+                Atom('*arrow function 1013*' type=dynamic),
+                #0,
+            ),
+        ),
+    ),
+    (
+        "__webpack_exports__#1",
+        Unknown(
+            None,
+            "unsupported expression",
+        ),
+    ),
+    (
+        "__webpack_exports__#2",
+        Unknown(
+            Some(
+                Variable(
+                    (
+                        Atom('__webpack_exports__' type=dynamic),
+                        #2,
+                    ),
+                ),
+            ),
+            "pattern without value",
+        ),
+    ),
+    (
+        "__webpack_require__#1",
+        Call(
+            3,
+            FreeVar(
+                Require,
+            ),
+            [
+                Constant(
+                    StrWord(
+                        Atom('../../webpack-api-runtime.js' type=dynamic),
+                    ),
+                ),
+            ],
+        ),
+    ),
+    (
+        "__webpack_require__#2",
+        Unknown(
+            Some(
+                Variable(
+                    (
+                        Atom('__webpack_require__' type=dynamic),
+                        #2,
+                    ),
+                ),
+            ),
+            "pattern without value",
+        ),
+    ),
+    (
+        "_req",
+        Argument(
+            0,
+        ),
+    ),
+    (
+        "exports",
+        Object(
+            1,
+            [],
+        ),
+    ),
+    (
+        "handler",
+        Function(
+            2,
+            FreeVar(
+                Other(
+                    Atom('undefined' type=static),
+                ),
+            ),
+        ),
+    ),
+    (
+        "hello",
+        MemberCall(
+            5,
+            Variable(
+                (
+                    Atom('promises_namespaceObject' type=dynamic),
+                    #2,
+                ),
+            ),
+            Constant(
+                StrWord(
+                    Atom('readFile' type=dynamic),
+                ),
+            ),
+            [
+                Constant(
+                    StrWord(
+                        Atom('./hello.txt' type=dynamic),
+                    ),
+                ),
+                Constant(
+                    StrWord(
+                        Atom('utf-8' type=inline),
+                    ),
+                ),
+            ],
+        ),
+    ),
+    (
+        "moduleId",
+        Unknown(
+            Some(
+                Variable(
+                    (
+                        Atom('moduleId' type=dynamic),
+                        #5,
+                    ),
+                ),
+            ),
+            "pattern without value",
+        ),
+    ),
+    (
+        "promises_namespaceObject",
+        Call(
+            3,
+            FreeVar(
+                Require,
+            ),
+            [
+                Constant(
+                    StrWord(
+                        Atom('fs/promises' type=dynamic),
+                    ),
+                ),
+            ],
+        ),
+    ),
+    (
+        "res",
+        Argument(
+            1,
+        ),
+    ),
+    (
+        "users",
+        Array(
+            10,
+            [
+                Object(
+                    3,
+                    [
+                        KeyValue(
+                            Constant(
+                                StrWord(
+                                    Atom('id' type=static),
+                                ),
+                            ),
+                            Constant(
+                                Num(
+                                    ConstantNumber(
+                                        1.0,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ],
+                ),
+                Object(
+                    3,
+                    [
+                        KeyValue(
+                            Constant(
+                                StrWord(
+                                    Atom('id' type=static),
+                                ),
+                            ),
+                            Constant(
+                                Num(
+                                    ConstantNumber(
+                                        2.0,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ],
+                ),
+                Object(
+                    3,
+                    [
+                        KeyValue(
+                            Constant(
+                                StrWord(
+                                    Atom('id' type=static),
+                                ),
+                            ),
+                            Constant(
+                                Num(
+                                    ConstantNumber(
+                                        3.0,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ],
+                ),
+            ],
+        ),
+    ),
+]
