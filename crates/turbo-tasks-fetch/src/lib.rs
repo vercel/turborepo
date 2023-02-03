@@ -59,7 +59,7 @@ pub async fn fetch(url: StringVc, user_agent: OptionStringVc) -> Result<FetchRes
             .cell())))
         }
         Err(err) => Ok(FetchResultVc::cell(Err(FetchError::from_reqwest_error(
-            &err, &url,
+            &err, url,
         )
         .cell()))),
     }
