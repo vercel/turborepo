@@ -409,11 +409,6 @@ func buildTaskGraphEngine(
 ) (*core.Engine, error) {
 	engine := core.NewEngine(g, isSinglePackage)
 
-	// Note: g.Pipeline is a map, but this for loop only cares about the keys
-	for taskName := range g.Pipeline {
-		engine.AddTask(taskName)
-	}
-
 	if err := engine.Prepare(&core.EngineBuildingOptions{
 		Packages:  rs.FilteredPkgs.UnsafeListOfStrings(),
 		TaskNames: rs.Targets,

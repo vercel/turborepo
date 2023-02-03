@@ -27,9 +27,8 @@ type Visitor = func(taskID string) error
 // Engine contains both the DAG for the packages and the tasks and implements the methods to execute tasks in them
 type Engine struct {
 	// TaskGraph is a graph of package-tasks
-	TaskGraph        *dag.AcyclicGraph
-	PackageTaskDeps  map[string][]string
-	rootEnabledTasks util.Set
+	TaskGraph       *dag.AcyclicGraph
+	PackageTaskDeps map[string][]string
 
 	// completeGraph is the CompleteGraph. We need this to look up the Pipeline, etc.
 	completeGraph *graph.CompleteGraph
@@ -48,12 +47,11 @@ func NewEngine(
 	isSinglePackage bool,
 ) *Engine {
 	return &Engine{
-		completeGraph:    completeGraph,
-		TaskGraph:        &dag.AcyclicGraph{},
-		PackageTaskDeps:  map[string][]string{},
-		rootEnabledTasks: make(util.Set),
-		pipelines:        map[string]fs.Pipeline{},
-		isSinglePackage:  isSinglePackage,
+		completeGraph:   completeGraph,
+		TaskGraph:       &dag.AcyclicGraph{},
+		PackageTaskDeps: map[string][]string{},
+		pipelines:       map[string]fs.Pipeline{},
+		isSinglePackage: isSinglePackage,
 	}
 }
 
@@ -134,7 +132,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 		for _, taskName := range taskNames {
 			// If it's not a task from the root workspace (i.e. tasks from every other workspace)
 			// or if it's a task that we know is rootEnabled task, add it to the traversal queue.
-			if !isRootPkg || e.rootEnabledTasks.Includes(taskName) {
+			if !isRootPkg || isRootEnabled(taskName) {
 				taskID := util.GetTaskId(pkg, taskName)
 				// Skip tasks that don't have a definition
 				if _, err := e.getTaskDefinition(taskName, taskID); err != nil {
@@ -159,7 +157,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 
 		pkg, taskName := util.GetPackageTaskFromId(taskID)
 
-		if pkg == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
+		if pkg == util.RootPkgName && !isRootEnabled(taskName) {
 			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
 
@@ -284,14 +282,17 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	return nil
 }
 
-// AddTask adds root tasks to the engine so they can be looked up later.
-func (e *Engine) AddTask(taskName string) {
-	if util.IsPackageTask(taskName) {
-		pkg, taskName := util.GetPackageTaskFromId(taskName)
+// Check whether a given task is for the root package. E.g. if it's `//#build`
+// The given `task` here could be in the form of a package#task or just a taskName.
+func isRootEnabled(task string) bool {
+	if util.IsPackageTask(task) {
+		pkg, _ := util.GetPackageTaskFromId(task)
 		if pkg == util.RootPkgName {
-			e.rootEnabledTasks.Add(taskName)
+			return true
 		}
 	}
+
+	return false
 }
 
 // AddDep adds tuples from+to task ID combos in tuple format so they can be looked up later.
