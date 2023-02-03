@@ -277,3 +277,19 @@ func Test_LockfilePeer(t *testing.T) {
 	assert.DeepEqual(t, pkg.Version, "13.0.4(react-dom@18.2.0)(react@18.2.0)")
 	assert.DeepEqual(t, pkg.Key, "/next@13.0.4(react-dom@18.2.0)(react@18.2.0)")
 }
+
+func Test_LockfileTopLevelOverride(t *testing.T) {
+	contents, err := getFixture(t, "pnpm-top-level-dupe.yaml")
+	if err != nil {
+		t.Error(err)
+	}
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err, "decode lockfile")
+
+	pkg, err := lockfile.ResolvePackage(turbopath.AnchoredUnixPath("packages/a"), "ci-info", "3.7.1")
+	assert.NilError(t, err, "resolve package")
+
+	assert.Assert(t, pkg.Found)
+	assert.DeepEqual(t, pkg.Key, "/ci-info/3.7.1")
+	assert.DeepEqual(t, pkg.Version, "3.7.1")
+}

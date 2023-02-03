@@ -426,15 +426,13 @@ func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath
 	if err != nil {
 		return "", false, err
 	}
-	if !ok {
+	// Verify that the specifier in the importer matches the one given
+	if !ok || resolution.Specifier != specifier {
 		// Check if the specifier is already a resolved version
 		if _, ok := p.Packages[p.formatKey(name, specifier)]; ok {
 			return specifier, true, nil
 		}
 		return "", false, fmt.Errorf("Unable to find resolved version for %s@%s in %s", name, specifier, workspacePath)
-	}
-	if resolution.Specifier != specifier {
-		return "", false, nil
 	}
 	return resolution.Version, true, nil
 }

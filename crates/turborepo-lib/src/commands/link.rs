@@ -8,14 +8,21 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+#[cfg(not(test))]
 use console::Style;
-use dialoguer::{theme::ColorfulTheme, Confirm, Select};
+#[cfg(not(test))]
+use dialoguer::Select;
+use dialoguer::{theme::ColorfulTheme, Confirm};
 use dirs_next::home_dir;
+#[cfg(test)]
+use rand::Rng;
 
+#[cfg(not(test))]
+use crate::ui::CYAN;
 use crate::{
     client::{CachingStatus, Team, UserClient},
     commands::CommandBase,
-    ui::{BOLD, CYAN, GREY, UNDERLINE},
+    ui::{BOLD, GREY, UNDERLINE},
 };
 
 enum SelectedTeam<'a> {
@@ -23,7 +30,7 @@ enum SelectedTeam<'a> {
     Team(&'a Team),
 }
 
-pub async fn link(mut base: CommandBase, modify_gitignore: bool) -> Result<()> {
+pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> {
     let homedir_path = home_dir().ok_or_else(|| anyhow!("could not find home directory."))?;
     let homedir = homedir_path.to_string_lossy();
     println!(
@@ -41,7 +48,7 @@ pub async fn link(mut base: CommandBase, modify_gitignore: bool) -> Result<()> {
 
     let repo_root_with_tilde = base.repo_root.to_string_lossy().replacen(&*homedir, "~", 1);
 
-    if !should_link(&base, &repo_root_with_tilde)? {
+    if !should_link(base, &repo_root_with_tilde)? {
         return Err(anyhow!("canceled"));
     }
 
@@ -111,7 +118,7 @@ pub async fn link(mut base: CommandBase, modify_gitignore: bool) -> Result<()> {
     };
 
     if modify_gitignore {
-        add_turbo_to_gitignore(&base)?;
+        add_turbo_to_gitignore(base)?;
     }
 
     println!(
@@ -138,6 +145,18 @@ fn should_enable_caching() -> Result<bool> {
         .interact()?)
 }
 
+#[cfg(test)]
+fn select_team<'a>(teams: &'a [Team], _: &'a str) -> Result<SelectedTeam<'a>> {
+    let mut rng = rand::thread_rng();
+    let idx = rng.gen_range(0..=(teams.len()));
+    if idx == teams.len() {
+        Ok(SelectedTeam::User)
+    } else {
+        Ok(SelectedTeam::Team(&teams[idx]))
+    }
+}
+
+#[cfg(not(test))]
 fn select_team<'a>(teams: &'a [Team], user_display_name: &'a str) -> Result<SelectedTeam<'a>> {
     let mut team_names = vec![user_display_name];
     team_names.extend(teams.iter().map(|team| team.name.as_str()));
@@ -159,11 +178,18 @@ fn select_team<'a>(teams: &'a [Team], user_display_name: &'a str) -> Result<Sele
     }
 }
 
+#[cfg(test)]
+fn should_link(_: &CommandBase, _: &str) -> Result<bool> {
+    Ok(true)
+}
+
+#[cfg(not(test))]
 fn should_link(base: &CommandBase, location: &str) -> Result<bool> {
     let prompt = format!(
         "{}{} {}",
-        BOLD.apply_to(GREY.apply_to("? ")),
-        BOLD.apply_to("Would you like to enable Remote Caching for"),
+        base.ui.apply(BOLD.apply_to(GREY.apply_to("? "))),
+        base.ui
+            .apply(BOLD.apply_to("Would you like to enable Remote Caching for")),
         base.ui.apply(BOLD.apply_to(CYAN.apply_to(location)))
     );
 
@@ -206,4 +232,112 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use std::{fs, net::SocketAddr};
+
+    use anyhow::Result;
+    use axum::{routing::get, Json, Router};
+    use tempfile::NamedTempFile;
+    use tokio::sync::OnceCell;
+
+    use crate::{
+        client::{
+            CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse, User,
+            UserResponse,
+        },
+        commands::{link, CommandBase},
+        config::{RepoConfigLoader, UserConfigLoader},
+        ui::UI,
+        Args,
+    };
+
+    const TEAM_ID: &str = "vercel";
+    const USER_ID: &str = "my-user-id";
+
+    #[tokio::test]
+    async fn test_link() {
+        let user_config_file = NamedTempFile::new().unwrap();
+        fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
+        let repo_config_file = NamedTempFile::new().unwrap();
+        fs::write(
+            repo_config_file.path(),
+            r#"{ "apiurl": "http://localhost:3000" }"#,
+        )
+        .unwrap();
+
+        tokio::spawn(start_test_server());
+        let mut base = CommandBase {
+            repo_root: Default::default(),
+            ui: UI::new(false),
+            user_config: OnceCell::from(
+                UserConfigLoader::new(user_config_file.path().to_path_buf())
+                    .with_token(Some("token".to_string()))
+                    .load()
+                    .unwrap(),
+            ),
+            repo_config: OnceCell::from(
+                RepoConfigLoader::new(repo_config_file.path().to_path_buf())
+                    .with_api(Some("http://localhost:3000".to_string()))
+                    .with_login(Some("http://localhost:3000".to_string()))
+                    .load()
+                    .unwrap(),
+            ),
+            args: Args::default(),
+        };
+
+        link::link(&mut base, false).await.unwrap();
+
+        let team_id = base.repo_config().unwrap().team_id();
+        assert!(team_id == Some(TEAM_ID) || team_id == Some(USER_ID))
+    }
+
+    async fn start_test_server() -> Result<()> {
+        let app = Router::new()
+            // `GET /` goes to `root`
+            .route(
+                "/v2/teams",
+                get(|| async move {
+                    Json(TeamsResponse {
+                        teams: vec![Team {
+                            id: TEAM_ID.to_string(),
+                            slug: "vercel".to_string(),
+                            name: "vercel".to_string(),
+                            created_at: 0,
+                            created: Default::default(),
+                            membership: Membership::new(Role::Owner),
+                        }],
+                    })
+                }),
+            )
+            .route(
+                "/v2/user",
+                get(|| async move {
+                    Json(UserResponse {
+                        user: User {
+                            id: USER_ID.to_string(),
+                            username: "my_username".to_string(),
+                            email: "my_email".to_string(),
+                            name: None,
+                            created_at: 0,
+                        },
+                    })
+                }),
+            )
+            .route(
+                "/v8/artifacts/status",
+                get(|| async {
+                    Json(CachingStatusResponse {
+                        status: CachingStatus::Enabled,
+                    })
+                }),
+            );
+        let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+
+        Ok(axum_server::bind(addr)
+            .serve(app.into_make_service())
+            .await?)
+    }
 }

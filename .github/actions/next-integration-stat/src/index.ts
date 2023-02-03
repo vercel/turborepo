@@ -434,20 +434,32 @@ function getTestSummary(
   // Read current tests summary
   const {
     currentTestFailedSuiteCount,
+    currentTestPassedSuiteCount,
+    currentTestTotalSuiteCount,
     currentTestFailedCaseCount,
+    currentTestPassedCaseCount,
+    currentTestTotalCaseCount,
     currentTestFailedNames,
   } = failedJobResults.result.reduce(
     (acc, value) => {
       const { data, name } = value;
       acc.currentTestFailedSuiteCount += data.numFailedTestSuites;
+      acc.currentTestPassedCaseCount += data.numPassedTestSuites;
+      acc.currentTestTotalSuiteCount += data.numTotalTestSuites;
       acc.currentTestFailedCaseCount += data.numFailedTests;
+      acc.currentTestPassedCaseCount += data.numPassedTests;
+      acc.currentTestTotalCaseCount += data.numTotalTests;
       acc.currentTestFailedNames.push(name);
 
       return acc;
     },
     {
       currentTestFailedSuiteCount: 0,
+      currentTestPassedSuiteCount: 0,
+      currentTestTotalSuiteCount: 0,
       currentTestFailedCaseCount: 0,
+      currentTestPassedCaseCount: 0,
+      currentTestTotalCaseCount: 0,
       currentTestFailedNames: [] as Array<string>,
     }
   );
@@ -470,19 +482,31 @@ function getTestSummary(
 
   const {
     baseTestFailedSuiteCount,
+    baseTestPassedSuiteCount,
+    baseTestTotalSuiteCount,
     baseTestFailedCaseCount,
+    baseTestPassedCaseCount,
+    baseTestTotalCaseCount,
     baseTestFailedNames,
   } = baseResults.result.reduce(
     (acc, value) => {
       const { data, name } = value;
       acc.baseTestFailedSuiteCount += data.numFailedTestSuites;
+      acc.baseTestPassedSuiteCount += data.numPassedTestSuites;
+      acc.baseTestTotalSuiteCount += data.numTotalTestSuites;
       acc.baseTestFailedCaseCount += data.numFailedTests;
+      acc.baseTestPassedCaseCount += data.numPassedTests;
+      acc.baseTestTotalCaseCount += data.numTotalTests;
       acc.baseTestFailedNames.push(name);
       return acc;
     },
     {
       baseTestFailedSuiteCount: 0,
+      baseTestPassedSuiteCount: 0,
+      baseTestTotalSuiteCount: 0,
       baseTestFailedCaseCount: 0,
+      baseTestPassedCaseCount: 0,
+      baseTestTotalCaseCount: 0,
       baseTestFailedNames: [] as Array<string>,
     }
   );
@@ -518,10 +542,10 @@ function getTestSummary(
     shouldDiffWithMain
       ? `main (${baseResults.ref} / ${shortBaseNextJsVersion})`
       : `release (${baseResults.ref} / ${shortBaseNextJsVersion})`
-  } | Current (${sha} / ${shortCurrentNextJsVersion}) | Diff |
+  } | Current (${sha} / ${shortCurrentNextJsVersion}) | Diff (Failed) |
 |---|---|---|---|
-| Failed Suites | ${baseTestFailedSuiteCount} | ${currentTestFailedSuiteCount} | ${testSuiteDiff} |
-| Failed Cases | ${baseTestFailedCaseCount} | ${currentTestFailedCaseCount} | ${testCaseDiff} |
+| Test suites | :red_circle: ${baseTestFailedSuiteCount} / :green_circle: ${baseTestPassedSuiteCount} (Total: ${baseTestTotalSuiteCount}) | :red_circle: ${currentTestFailedSuiteCount} / :green_circle: ${currentTestPassedSuiteCount} (Total: ${currentTestTotalSuiteCount}) | ${testSuiteDiff} |
+| Test cases | :red_circle: ${baseTestFailedCaseCount} / :green_circle: ${baseTestPassedCaseCount} (Total: ${baseTestTotalCaseCount}) | :red_circle: ${currentTestFailedCaseCount} / :green_circle: ${currentTestPassedCaseCount} (Total: ${currentTestTotalCaseCount}) | ${testCaseDiff} |
 
 `;
 
@@ -533,13 +557,13 @@ function getTestSummary(
   );
 
   if (fixedTests.length > 0) {
-    ret += `\n:white_check_mark: **Fixed tests:**\n${fixedTests
+    ret += `\n:white_check_mark: **Fixed tests:**\n\n${fixedTests
       .map((t) => `\t- ${t}`)
       .join(" \n")}`;
   }
 
   if (newFailedTests.length > 0) {
-    ret += `\n:x: **Newly failed tests:**\n${newFailedTests
+    ret += `\n:x: **Newly failed tests:**\n\n${newFailedTests
       .map((t) => `\t- ${t}`)
       .join(" \n")}`;
   }
@@ -550,12 +574,12 @@ function getTestSummary(
     let textSummary = `*Next.js integration test status with Turbopack*
 
     *Base: ${baseResults.ref} / ${shortBaseNextJsVersion}*
-    Failed suites: ${baseTestFailedSuiteCount}
-    Failed cases: ${baseTestFailedCaseCount}
+    Test suites: :red_circle: ${baseTestFailedSuiteCount} / :green_circle: ${baseTestPassedSuiteCount} (Total: ${baseTestTotalSuiteCount})
+    Test cases : :red_circle: ${baseTestFailedCaseCount} / :green_circle: ${baseTestPassedCaseCount} (Total: ${baseTestTotalCaseCount})
 
     *Current: ${sha} / ${shortCurrentNextJsVersion}*
-    Failed suites: ${currentTestFailedSuiteCount}
-    Failed cases: ${currentTestFailedCaseCount}
+    Test suites: :red_circle: ${currentTestFailedSuiteCount} / :green_circle: ${currentTestPassedSuiteCount} (Total: ${currentTestTotalSuiteCount})
+    Test cases : :red_circle: ${currentTestFailedCaseCount} / :green_circle: ${currentTestPassedCaseCount} (Total: ${currentTestTotalCaseCount})
 
     `;
 

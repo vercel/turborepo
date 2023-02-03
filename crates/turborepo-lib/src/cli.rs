@@ -449,7 +449,6 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
                 println!("Login test run successful");
                 return Ok(Payload::Rust(Ok(0)));
             }
-
             // We haven't implemented sso_team yet so we delegate to Go
             if sso_team.is_some() {
                 return Ok(Payload::Go(Box::new(clap_args)));
@@ -468,9 +467,9 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             }
 
             let modify_gitignore = !*no_gitignore;
-            let base = CommandBase::new(clap_args, repo_root)?;
+            let mut base = CommandBase::new(clap_args, repo_root)?;
 
-            if let Err(err) = link::link(base, modify_gitignore).await {
+            if let Err(err) = link::link(&mut base, modify_gitignore).await {
                 error!("error: {}", err.to_string())
             };
 
