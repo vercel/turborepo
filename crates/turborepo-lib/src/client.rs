@@ -1,22 +1,11 @@
 use std::{env, future::Future};
 
 use anyhow::{anyhow, Result};
-use axum::async_trait;
 use lazy_static::lazy_static;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::{get_version, retry::retry_future};
-
-#[async_trait]
-pub trait UserClient {
-    async fn get_user(&self, token: &str) -> Result<UserResponse>;
-    async fn get_teams(&self, token: &str) -> Result<TeamsResponse>;
-    async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>>;
-    async fn get_caching_status(&self, token: &str, team_id: &str)
-        -> Result<CachingStatusResponse>;
-    async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser>;
-}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct VerifiedSsoUser {
@@ -111,9 +100,8 @@ pub struct APIClient {
     base_url: String,
 }
 
-#[async_trait]
-impl UserClient for APIClient {
-    async fn get_user(&self, token: &str) -> Result<UserResponse> {
+impl APIClient {
+    pub async fn get_user(&self, token: &str) -> Result<UserResponse> {
         let response = self
             .make_retryable_request(|| {
                 let url = self.make_url("/v2/user");
@@ -145,7 +133,7 @@ impl UserClient for APIClient {
         }
     }
 
-    async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
+    pub async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
         let response = self
             .make_retryable_request(|| {
                 let request_builder = self
@@ -176,7 +164,7 @@ impl UserClient for APIClient {
         }
     }
 
-    async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
+    pub async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
         let response = {
             let request_builder = self
                 .client
@@ -188,14 +176,14 @@ impl UserClient for APIClient {
             request_builder.send()
         }
         .await?;
-        println!("{:?}", response.status());
         Ok(response.json().await?)
     }
 
-    async fn get_caching_status(
+    pub async fn get_caching_status(
         &self,
         token: &str,
         team_id: &str,
+        team_slug: Option<&str>,
     ) -> Result<CachingStatusResponse> {
         let response = self
             .make_retryable_request(|| {
@@ -206,6 +194,9 @@ impl UserClient for APIClient {
                     .header("Content-Type", "application/json")
                     .header("Authorization", format!("Bearer {}", token));
 
+                if let Some(slug) = team_slug {
+                    request_builder = request_builder.query(&[("teamSlug", slug)]);
+                }
                 if team_id.starts_with("team_") {
                     request_builder = request_builder.query(&[("teamId", team_id)]);
                 }
@@ -213,10 +204,11 @@ impl UserClient for APIClient {
                 request_builder.send()
             })
             .await?;
+
         Ok(response.json().await?)
     }
 
-    async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
+    pub async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
         let response = self
             .make_retryable_request(|| {
                 let request_builder = self
@@ -235,18 +227,16 @@ impl UserClient for APIClient {
             team_id: verification_response.team_id,
         })
     }
-}
 
-const RETRY_MAX: u32 = 2;
+    const RETRY_MAX: u32 = 2;
 
-impl APIClient {
     async fn make_retryable_request<
         F: Future<Output = Result<reqwest::Response, reqwest::Error>>,
     >(
         &self,
         request_builder: impl Fn() -> F,
     ) -> Result<reqwest::Response> {
-        retry_future(RETRY_MAX, request_builder, Self::should_retry_request).await
+        retry_future(Self::RETRY_MAX, request_builder, Self::should_retry_request).await
     }
 
     fn should_retry_request(error: &reqwest::Error) -> bool {

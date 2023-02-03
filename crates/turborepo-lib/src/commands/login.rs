@@ -13,9 +13,8 @@ use serde::Deserialize;
 use tokio::sync::OnceCell;
 
 use crate::{
-    client::UserClient,
     commands::{
-        link::{verify_caching_enabled, SelectedTeam, REMOTE_CACHING_INFO, REMOTE_CACHING_URL},
+        link::{verify_caching_enabled, REMOTE_CACHING_INFO, REMOTE_CACHING_URL},
         CommandBase,
     },
     get_version,
@@ -57,27 +56,22 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
     let user_response = api_client.get_user(&verified_user.token).await?;
 
     base.user_config_mut()?
-        .set_token(Some(verified_user.token))?;
+        .set_token(Some(verified_user.token.clone()))?;
 
     println!(
         "
-{} Turborepo CLI authorized for {}
+{} {}
 ",
         base.ui.rainbow(">>> Success!"),
-        user_response.user.email
+        base.ui.apply(BOLD.apply_to(format!(
+            "Turborepo CLI authorized for {}",
+            user_response.user.email
+        )))
     );
 
     if let Some(team_id) = verified_user.team_id {
-        let team = api_client
-            .get_team(token, &team_id)
-            .await?
-            .ok_or_else(|| anyhow!("unable to find team {}", team_id))?;
-
-        println!("1");
-        verify_caching_enabled(&api_client, &team_id, token, SelectedTeam::Team(&team)).await?;
-        println!("2");
+        verify_caching_enabled(&api_client, &team_id, &verified_user.token, None).await?;
         base.repo_config_mut()?.set_team_id(Some(team_id))?;
-        println!("3");
         println!(
             "{}
 
@@ -87,11 +81,11 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
 {}
 ",
             base.ui
-                .apply(CYAN.apply_to(format!("Remote caching enabled for {}", sso_team))),
+                .apply(CYAN.apply_to(format!("Remote Caching enabled for {}", sso_team))),
             REMOTE_CACHING_INFO,
             base.ui.apply(UNDERLINE.apply_to(REMOTE_CACHING_URL)),
             base.ui
-                .apply(GREY.apply_to("To disable remote caching, run `npx turbo unlink`"))
+                .apply(GREY.apply_to("To disable Remote Caching, run `npx turbo unlink`"))
         )
     } else {
         println!(

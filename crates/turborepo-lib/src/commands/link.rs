@@ -20,7 +20,7 @@ use rand::Rng;
 #[cfg(not(test))]
 use crate::ui::CYAN;
 use crate::{
-    client::{APIClient, CachingStatus, Team, UserClient},
+    client::{APIClient, CachingStatus, Team},
     commands::CommandBase,
     ui::{BOLD, GREY, UNDERLINE},
 };
@@ -53,24 +53,40 @@ pub(crate) async fn verify_caching_enabled<'a>(
     api_client: &APIClient,
     team_id: &str,
     token: &str,
-    selected_team: SelectedTeam<'a>,
+    selected_team: Option<SelectedTeam<'a>>,
 ) -> Result<()> {
-    let response = api_client.get_caching_status(token, team_id).await?;
+    let team_slug = selected_team.as_ref().and_then(|team| match team {
+        SelectedTeam::Team(team) => Some(team.slug.as_str()),
+        SelectedTeam::User => None,
+    });
+    let response = api_client
+        .get_caching_status(token, team_id, team_slug)
+        .await?;
     match response.status {
         CachingStatus::Disabled => {
             let should_enable = should_enable_caching()?;
             if should_enable {
                 match selected_team {
-                    SelectedTeam::Team(team) if team.is_owner() => {
+                    Some(SelectedTeam::Team(team)) if team.is_owner() => {
                         let url =
                             format!("https://vercel.com/teams/{}/settings/billing", team.slug);
 
                         enable_caching(&url)?;
                     }
-                    SelectedTeam::User => {
+                    Some(SelectedTeam::User) => {
                         let url = "https://vercel.com/account/billing";
 
                         enable_caching(url)?;
+                    }
+                    None => {
+                        let team = api_client
+                            .get_team(token, team_id)
+                            .await?
+                            .ok_or_else(|| anyhow!("unable to find team {}", team_id))?;
+                        let url =
+                            format!("https://vercel.com/teams/{}/settings/billing", team.slug);
+
+                        enable_caching(&url)?;
                     }
                     _ => {}
                 }
@@ -132,7 +148,7 @@ pub async fn link(base: &mut CommandBase, modify_gitignore: bool) -> Result<()> 
         SelectedTeam::Team(team) => team.id.as_str(),
     };
 
-    verify_caching_enabled(&api_client, team_id, token, selected_team.clone()).await?;
+    verify_caching_enabled(&api_client, team_id, token, Some(selected_team.clone())).await?;
 
     fs::create_dir_all(base.repo_root.join(".turbo"))
         .context("could not create .turbo directory")?;
