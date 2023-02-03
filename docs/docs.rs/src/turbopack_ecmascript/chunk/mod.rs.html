@@ -1309,10 +1309,6 @@
 <span id="1309">1309</span>
 <span id="1310">1310</span>
 <span id="1311">1311</span>
-<span id="1312">1312</span>
-<span id="1313">1313</span>
-<span id="1314">1314</span>
-<span id="1315">1315</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>loader;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub mod </span>source_map;
@@ -1827,11 +1823,7 @@
                 issue.as_issue().emit();
                 <span class="kw">let </span><span class="kw-2">mut </span>code = CodeBuilder::default();
                 code += <span class="string">&quot;(() =&gt; {{\n\n&quot;</span>;
-                <span class="macro">write!</span>(
-                    code,
-                    <span class="string">&quot;throw new Error({error});\n&quot;</span>,
-                    error = <span class="kw-2">&amp;</span>js_error_message
-                )<span class="question-mark">?</span>;
+                <span class="macro">writeln!</span>(code, <span class="string">&quot;throw new Error({error});&quot;</span>, error = <span class="kw-2">&amp;</span>js_error_message)<span class="question-mark">?</span>;
                 code += <span class="string">&quot;\n}})&quot;</span>;
                 code.build().cell()
             }
