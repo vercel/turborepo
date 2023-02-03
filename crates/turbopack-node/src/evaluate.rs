@@ -153,13 +153,17 @@ pub async fn evaluate(
                 args: args.iter().map(|v| &**v).collect(),
             })
             .await;
-        if result.is_ok() {
-            break operation;
-        } else if i == 10 {
-            result?;
-            break operation;
+        match result {
+            Ok(_) => break operation,
+            Err(err) if i == 10 => {
+                return Err(err);
+            }
+            Err(_) => {
+                // retry
+                i += 1;
+                continue;
+            }
         }
-        i += 1;
     };
 
     let mut file_dependencies = Vec::new();
@@ -174,9 +178,8 @@ pub async fn evaluate(
                 .cell()
                 .as_issue()
                 .emit();
-                // We don't care when the process has problems killing since it's already in
-                // error state.
-                let _ = operation.wait_or_kill().await;
+                // Do not reuse the process in case of error
+                operation.kill_on_drop();
                 break JavaScriptValue::Error;
             }
             EvalJavaScriptIncomingMessage::JsonValue { data } => {

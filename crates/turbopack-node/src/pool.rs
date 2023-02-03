@@ -301,7 +301,7 @@ impl NodeJsPool {
             process: Some(process.run().await?),
             permit,
             processes: self.processes.clone(),
-            in_bad_state: false,
+            kill_on_drop: false,
         })
     }
 }
@@ -312,7 +312,7 @@ pub struct NodeJsOperation {
     #[allow(dead_code)]
     permit: OwnedSemaphorePermit,
     processes: Arc<Mutex<Vec<NodeJsPoolProcess>>>,
-    in_bad_state: bool,
+    kill_on_drop: bool,
 }
 
 impl NodeJsOperation {
@@ -326,14 +326,17 @@ impl NodeJsOperation {
     where
         M: DeserializeOwned,
     {
-        self.in_bad_state = true;
+        // We temporary set kill_on_drop to true to make sure the process is killed when
+        // this operation fail
+        let old = self.kill_on_drop;
+        self.kill_on_drop = true;
         let message = self
             .process_mut()?
             .recv()
             .await
             .context("receiving message")?;
         let message = serde_json::from_slice(&message).context("deserializing message")?;
-        self.in_bad_state = false;
+        self.kill_on_drop = old;
         Ok(message)
     }
 
@@ -341,12 +344,15 @@ impl NodeJsOperation {
     where
         M: Serialize,
     {
-        self.in_bad_state = true;
+        // We temporary set kill_on_drop to true to make sure the process is killed when
+        // this operation fail
+        let old = self.kill_on_drop;
+        self.kill_on_drop = true;
         self.process_mut()?
             .send(serde_json::to_vec(&message).context("serializing message")?)
             .await
             .context("sending message")?;
-        self.in_bad_state = false;
+        self.kill_on_drop = old;
         Ok(())
     }
 
@@ -367,14 +373,23 @@ impl NodeJsOperation {
 
         Ok(status)
     }
+
+    pub fn kill_on_drop(&mut self) {
+        self.kill_on_drop = true;
+    }
 }
 
 impl Drop for NodeJsOperation {
     fn drop(&mut self) {
         if let Some(mut process) = self.process.take() {
-            if self.in_bad_state {
+            if self.kill_on_drop {
                 if let Some(mut child) = process.child.take() {
                     let _ = child.start_kill();
+                    tokio::spawn(async {
+                        // To avoid a zombie process, we need to wait for the process to end
+                        let _ = child.wait().await;
+                        // We can't handle any error here...
+                    });
                 }
             } else {
                 self.processes
