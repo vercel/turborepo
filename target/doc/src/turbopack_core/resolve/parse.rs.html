@@ -324,8 +324,6 @@
 <span id="324">324</span>
 <span id="325">325</span>
 <span id="326">326</span>
-<span id="327">327</span>
-<span id="328">328</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>lazy_static::lazy_static;
@@ -642,15 +640,13 @@
             } =&gt; <span class="macro">format!</span>(<span class="string">&quot;uri \&quot;{protocol}\&quot; \&quot;{remainder}\&quot;&quot;</span>),
             Request::Unknown { path } =&gt; <span class="macro">format!</span>(<span class="string">&quot;unknown {path}&quot;</span>),
             Request::Dynamic =&gt; <span class="string">&quot;dynamic&quot;</span>.to_string(),
-            Request::Alternatives { requests } =&gt; requests
-                .iter()
-                .map(|i| i.to_string())
-                .try_join()
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.into_iter()
-                .map(|r| r.clone())
-                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-                .join(<span class="string">&quot; or &quot;</span>),
+            Request::Alternatives { requests } =&gt; {
+                <span class="kw">let </span>vec = requests.iter().map(|i| i.to_string()).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
+                vec.iter()
+                    .map(|r| r.as_str())
+                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                    .join(<span class="string">&quot; or &quot;</span>)
+            }
         }))
     }
 }

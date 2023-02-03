@@ -366,7 +366,7 @@
 
         <span class="kw">let </span>path = <span class="kw-2">&amp;</span><span class="self">self</span>.path.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if let </span>PatternMapping::Invalid = <span class="kw-2">&amp;*</span>pm {
-            <span class="kw">let </span>request_string = <span class="self">self</span>.request.to_string().<span class="kw">await</span><span class="question-mark">?</span>.clone();
+            <span class="kw">let </span>request_string = <span class="self">self</span>.request.to_string().<span class="kw">await</span><span class="question-mark">?</span>;
             visitors.push(<span class="macro">create_visitor!</span>(path, visit_mut_expr(expr: <span class="kw-2">&amp;mut </span>Expr) {
                 <span class="comment">// In Node.js, a require call that cannot be resolved will throw an error.
                 </span><span class="kw-2">*</span>expr = throw_module_not_found_expr(<span class="kw-2">&amp;</span>request_string);
@@ -455,7 +455,7 @@
 
         <span class="kw">let </span>path = <span class="kw-2">&amp;</span><span class="self">self</span>.path.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if let </span>PatternMapping::Invalid = <span class="kw-2">&amp;*</span>pm {
-            <span class="kw">let </span>request_string = <span class="self">self</span>.request.to_string().<span class="kw">await</span><span class="question-mark">?</span>.clone();
+            <span class="kw">let </span>request_string = <span class="self">self</span>.request.to_string().<span class="kw">await</span><span class="question-mark">?</span>;
             visitors.push(<span class="macro">create_visitor!</span>(path, visit_mut_expr(expr: <span class="kw-2">&amp;mut </span>Expr) {
                 <span class="comment">// In Node.js, a require.resolve call that cannot be resolved will throw an error.
                 </span><span class="kw-2">*</span>expr = throw_module_not_found_expr(<span class="kw-2">&amp;</span>request_string);

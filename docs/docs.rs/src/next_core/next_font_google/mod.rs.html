@@ -544,7 +544,7 @@
             <span class="prelude-val">Ok</span>(r) =&gt; <span class="prelude-val">Some</span>(
                 update_stylesheet(r.<span class="kw">await</span><span class="question-mark">?</span>.body.to_string(), options, scoped_font_family)
                     .<span class="kw">await</span><span class="question-mark">?
-                    </span>.clone(),
+                    </span>.clone_value(),
             ),
             <span class="prelude-val">Err</span>(err) =&gt; {
                 <span class="comment">// Inform the user of the failure to retreive the stylesheet, but don&#39;t

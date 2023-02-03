@@ -160,6 +160,14 @@
 <span id="160">160</span>
 <span id="161">161</span>
 <span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Borrow,
     cmp::Ordering,
@@ -184,8 +192,13 @@
 /// Internally it stores a reference counted reference to a value on the heap.
 ///
 /// Invariant: T and U are binary identical (#[repr(transparent)])
-</span><span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>ReadRef&lt;T, U = T&gt;(Arc&lt;T&gt;, PhantomData&lt;Arc&lt;U&gt;&gt;);
+
+<span class="kw">impl</span>&lt;T, U&gt; Clone <span class="kw">for </span>ReadRef&lt;T, U&gt; {
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(<span class="self">self</span>.<span class="number">0</span>.clone(), PhantomData)
+    }
+}
 
 <span class="kw">impl</span>&lt;T, U&gt; std::ops::Deref <span class="kw">for </span>ReadRef&lt;T, U&gt; {
     <span class="kw">type </span>Target = U;
@@ -195,6 +208,9 @@
         <span class="kw">unsafe </span>{ std::mem::transmute(inner) }
     }
 }
+
+<span class="kw">unsafe impl</span>&lt;T, U&gt; stable_deref_trait::StableDeref <span class="kw">for </span>ReadRef&lt;T, U&gt; {}
+<span class="kw">unsafe impl</span>&lt;T, U&gt; stable_deref_trait::CloneStableDeref <span class="kw">for </span>ReadRef&lt;T, U&gt; {}
 
 <span class="kw">impl</span>&lt;T, U: Display&gt; Display <span class="kw">for </span>ReadRef&lt;T, U&gt; {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
