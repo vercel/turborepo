@@ -385,7 +385,7 @@ impl Drop for NodeJsOperation {
             if self.kill_on_drop {
                 if let Some(mut child) = process.child.take() {
                     let _ = child.start_kill();
-                    tokio::spawn(async {
+                    tokio::spawn(async move {
                         // To avoid a zombie process, we need to wait for the process to end
                         let _ = child.wait().await;
                         // We can't handle any error here...
