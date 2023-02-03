@@ -36,8 +36,8 @@ func ExecuteLogin(ctx context.Context, helper *cmdutil.Helper, args *turbostate.
 		return nil
 	}
 
-	if args.Command.Login.SsoTeam != "" {
-		return errors.New("internal error: SSO login should be handled by Rust")
+	if args.Command.Login.SsoTeam == "" {
+		return errors.New("internal error: non-SSO login should be handled by Rust")
 	}
 
 	login := login{
