@@ -360,8 +360,6 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 		if err != nil {
 			return err
 		}
-
-		// TODO(mehulkar): Figure out if adding duplicate names to the WorkspaceGraph is a problem.
 		c.WorkspaceGraph.Add(pkg.Name)
 		pkg.PackageJSONPath = turbopath.AnchoredSystemPathFromUpstream(relativePkgJSONPath)
 		pkg.Dir = turbopath.AnchoredSystemPathFromUpstream(filepath.Dir(relativePkgJSONPath))

@@ -103,7 +103,6 @@ var _ Lockfile = (*NpmLockfile)(nil)
 
 // ResolvePackage Given a workspace, a package it imports and version returns the key, resolved version, and if it was found
 func (l *NpmLockfile) ResolvePackage(workspacePath turbopath.AnchoredUnixPath, name string, version string) (Package, error) {
-	// check if the package is known to the lockfile.
 	_, ok := l.Packages[workspacePath.ToString()]
 	if !ok {
 		return Package{}, fmt.Errorf("No package found in lockfile for '%s'", workspacePath)

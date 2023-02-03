@@ -83,7 +83,7 @@ func Test_SpecifierResolution(t *testing.T) {
 		{workspacePath: "apps/web", pkg: "lodash", specifier: "bad-tag", version: "", found: false},
 		{workspacePath: "apps/web", pkg: "lodash", specifier: "^4.17.21", version: "4.17.21_ehchni3mpmovsvjxesffg2i5a4", found: true},
 		{workspacePath: "apps/docs", pkg: "dashboard-icons", specifier: "github:peerigon/dashboard-icons", version: "github.com/peerigon/dashboard-icons/ce27ef933144e09cef3911025f3649040a8571b6", found: true},
-		{workspacePath: ".", pkg: "turbo", specifier: "latest", version: "1.4.6", found: true},
+		{workspacePath: "", pkg: "turbo", specifier: "latest", version: "1.4.6", found: true},
 		{workspacePath: "apps/bad_workspace", pkg: "turbo", specifier: "latest", version: "1.4.6", err: "no workspace 'apps/bad_workspace' found in lockfile"},
 	}
 
