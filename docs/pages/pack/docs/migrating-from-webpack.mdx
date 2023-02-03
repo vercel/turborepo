@@ -27,8 +27,7 @@ If you need loader support beyond what's built in, some Webpack loaders, includi
 At the moment, configuring Webpack loaders is possible for Next.js apps through an experimental option in `next.config.js`. `turbopackLoaders` can be set to a mapping of file extensions to a list of package names or `{loader, options}` pairs:
 
 ```js filename="next.config.js"
-const nextConfig = {
-  reactStrictMode: true,
+module.exports = {
   experimental: {
     turbopackLoaders: {
       ".md": [{
@@ -41,8 +40,6 @@ const nextConfig = {
     }
   }
 }
-
-module.exports = nextConfig
 ```
 
 ## Resolve aliases
@@ -50,8 +47,7 @@ module.exports = nextConfig
 Turbopack can be configured to modify module resolution through aliases, similar to Webpack's [`resolve.alias`](https://Webpack.js.org/configuration/resolve/#resolvealias) configuration:
 
 ```js filename="next.config.js"
-const nextConfig = {
-  reactStrictMode: true,
+module.exports = {
   experimental: {
     resolveAlias: {
       foo: "bar",
@@ -59,8 +55,6 @@ const nextConfig = {
     },
   }
 }
-
-module.exports = nextConfig;
 ```
 
 The above aliases imports of the `foo` package to the `bar` package.
