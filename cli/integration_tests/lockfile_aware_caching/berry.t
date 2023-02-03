@@ -53,6 +53,14 @@ Only b should have a cache miss
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+Add lockfile changes to a commit
+  $ git add . && git commit -m "bump lockfile" --quiet
+Only root and b should be rebuilt since only the deps for b had a version bump
+  $ ${TURBO} build --filter="[HEAD^1]" --dry=json | jq ".packages"
+  [
+    "//",
+    "b"
+  ]
  
 Bump of root workspace invalidates all packages
   $ patch yarn.lock turbo-bump.patch
@@ -79,3 +87,12 @@ Bump of root workspace invalidates all packages
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+Add lockfile changes to a commit
+  $ git add . && git commit -m "global lockfile change" --quiet
+Everything should be rebuilt as a dependency of the root package got bumped
+  $ ${TURBO} build --filter="[HEAD^1]" --dry=json | jq ".packages | sort"
+  [
+    "//",
+    "a",
+    "b"
+  ]

@@ -113,7 +113,7 @@ var nodejsBerry = PackageManager{
 		return true, nil
 	},
 
-	readLockfile: func(contents []byte) (lockfile.Lockfile, error) {
+	UnmarshalLockfile: func(contents []byte) (lockfile.Lockfile, error) {
 		return lockfile.DecodeBerryLockfile(contents)
 	},
 

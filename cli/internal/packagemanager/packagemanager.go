@@ -61,7 +61,7 @@ type PackageManager struct {
 	detect func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error)
 
 	// Read a lockfile for a given package manager
-	readLockfile func(contents []byte) (lockfile.Lockfile, error)
+	UnmarshalLockfile func(contents []byte) (lockfile.Lockfile, error)
 
 	// Prune the given pkgJSON to only include references to the given patches
 	prunePatches func(pkgJSON *fs.PackageJSON, patches []turbopath.AnchoredUnixPath) error
@@ -174,15 +174,14 @@ func (pm PackageManager) CanPrune(projectDirectory turbopath.AbsoluteSystemPath)
 
 // ReadLockfile will read the applicable lockfile into memory
 func (pm PackageManager) ReadLockfile(projectDirectory turbopath.AbsoluteSystemPath) (lockfile.Lockfile, error) {
-	if pm.readLockfile == nil {
+	if pm.UnmarshalLockfile == nil {
 		return nil, nil
 	}
 	contents, err := projectDirectory.UntypedJoin(pm.Lockfile).ReadFile()
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", pm.Lockfile, err)
 	}
-
-	return pm.readLockfile(contents)
+	return pm.UnmarshalLockfile(contents)
 }
 
 // PrunePatchedPackages will alter the provided pkgJSON to only reference the provided patches

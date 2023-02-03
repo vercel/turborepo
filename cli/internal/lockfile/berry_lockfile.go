@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -398,6 +399,17 @@ func DecodeBerryLockfile(contents []byte) (*BerryLockfile, error) {
 		hasCRLF:           hasCRLF,
 	}
 	return &lockfile, nil
+}
+
+// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
+// the cache.
+func (l *BerryLockfile) GlobalChange(other Lockfile) bool {
+	otherBerry, ok := other.(*BerryLockfile)
+	return !ok ||
+		l.cacheKey != otherBerry.cacheKey ||
+		l.version != otherBerry.version ||
+		// This is probably overly cautious, but getting it correct will be hard
+		!reflect.DeepEqual(l.patches, otherBerry.patches)
 }
 
 // Fields shared between _Locator and _Descriptor
