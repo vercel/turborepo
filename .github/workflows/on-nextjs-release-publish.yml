@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Print release tag
-        run: echo "Found a new release ${{ github.event_name }} ${{ inputs.version || github.event.client_payload.version }}"
+        run: echo "Found a new release via ${{ github.event_name }} -- ${{ inputs.version || github.event.client_payload.version }}"
 
   # Trigger actual next.js integration tests.
   next_js_integration:
