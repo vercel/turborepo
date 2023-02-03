@@ -444,7 +444,7 @@ function getTestSummary(
     (acc, value) => {
       const { data, name } = value;
       acc.currentTestFailedSuiteCount += data.numFailedTestSuites;
-      acc.currentTestPassedCaseCount += data.numPassedTestSuites;
+      acc.currentTestPassedSuiteCount += data.numPassedTestSuites;
       acc.currentTestTotalSuiteCount += data.numTotalTestSuites;
       acc.currentTestFailedCaseCount += data.numFailedTests;
       acc.currentTestPassedCaseCount += data.numPassedTests;
