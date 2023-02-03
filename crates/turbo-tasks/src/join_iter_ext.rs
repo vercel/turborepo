@@ -142,6 +142,14 @@ where
     F: Future<Output = Result<CI>>,
     CI: IntoIterator<Item = T>,
 {
+    /// Applies the `get_children` function on each item in the iterator, and on
+    /// each item that is returned by `get_children`. Collects all items from
+    /// the iterator and all items returns by `get_children` into an index set.
+    /// The order of items is equal to a breadth-first traversal of the tree,
+    /// but `get_children` will execute concurrently. It will handle circular
+    /// references gracefully. Returns a future that resolve to a
+    /// [Result<IndexSet>]. It will resolve to the first error that occur in
+    /// breadth-first order.
     fn try_flat_map_recursive_join(self, get_children: C) -> TryFlatMapRecursiveJoin<T, C, F, CI>;
 }
 

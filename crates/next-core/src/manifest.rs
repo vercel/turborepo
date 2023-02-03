@@ -24,31 +24,37 @@ impl DevManifestContentSourceVc {
     async fn find_routes(self) -> Result<StringsVc> {
         let this = &*self.await?;
 
+        async fn content_source_to_pathname(
+            content_source: ContentSourceVc,
+        ) -> Result<Option<String>> {
+            // TODO This shouldn't use casts but an public api instead
+            if let Some(api_source) = NodeApiContentSourceVc::resolve_from(content_source).await? {
+                return Ok(Some(format!("/{}", api_source.get_pathname().await?)));
+            }
+
+            if let Some(page_source) =
+                NodeRenderContentSourceVc::resolve_from(content_source).await?
+            {
+                return Ok(Some(format!("/{}", page_source.get_pathname().await?)));
+            }
+
+            Ok(None)
+        }
+
+        async fn get_content_source_children(
+            content_source: ContentSourceVc,
+        ) -> Result<Vec<ContentSourceVc>> {
+            Ok(content_source.get_children().await?.clone_value())
+        }
+
         let mut routes = this
             .page_roots
             .iter()
             .copied()
-            .try_flat_map_recursive_join(|content_source| async move {
-                Ok(content_source.get_children().await?.clone_value())
-            })
+            .try_flat_map_recursive_join(get_content_source_children)
             .await?
             .into_iter()
-            .map(|content_source| async move {
-                // TODO This shouldn't use casts but an public api instead
-                if let Some(api_source) =
-                    NodeApiContentSourceVc::resolve_from(content_source).await?
-                {
-                    return Ok(Some(format!("/{}", api_source.get_pathname().await?)));
-                }
-
-                if let Some(page_source) =
-                    NodeRenderContentSourceVc::resolve_from(content_source).await?
-                {
-                    return Ok(Some(format!("/{}", page_source.get_pathname().await?)));
-                }
-
-                Ok(None)
-            })
+            .map(content_source_to_pathname)
             .try_join()
             .await?
             .into_iter()

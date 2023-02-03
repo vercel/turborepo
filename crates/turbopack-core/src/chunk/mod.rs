@@ -124,40 +124,46 @@ impl ChunkGroupVc {
     /// All chunks should be loaded in parallel.
     #[turbo_tasks::function]
     pub async fn chunks(self) -> Result<ChunksVc> {
+        async fn reference_to_chunks(
+            r: AssetReferenceVc,
+        ) -> Result<impl Iterator<Item = ChunkVc> + Send> {
+            let mut result = Vec::new();
+            if let Some(pc) = ParallelChunkReferenceVc::resolve_from(r).await? {
+                if *pc.is_loaded_in_parallel().await? {
+                    result = r
+                        .resolve_reference()
+                        .primary_assets()
+                        .await?
+                        .iter()
+                        .map(|r| async move { Ok(ChunkVc::resolve_from(r).await?) })
+                        .try_join()
+                        .await?;
+                }
+            }
+            Ok(result.into_iter().flatten())
+        }
+
+        // async fn get_chunk_children(
+        //     chunk: ChunkVc,
+        // ) -> Result<Flatten<IntoIter<Flatten<IntoIter<Option<ChunkVc>>>>>> {
+        async fn get_chunk_children(
+            chunk: ChunkVc,
+        ) -> Result<impl Iterator<Item = ChunkVc> + Send> {
+            Ok(chunk
+                .references()
+                .await?
+                .iter()
+                .copied()
+                .map(reference_to_chunks)
+                .try_join()
+                .await?
+                .into_iter()
+                .flatten())
+        }
+
         let chunks = [self.await?.entry]
             .into_iter()
-            .try_flat_map_recursive_join(|chunk| async move {
-                Ok(chunk
-                    .references()
-                    .await?
-                    .iter()
-                    .map(|r| async move {
-                        let mut result = Vec::new();
-                        if let Some(pc) = ParallelChunkReferenceVc::resolve_from(r).await? {
-                            if *pc.is_loaded_in_parallel().await? {
-                                result = r
-                                    .resolve_reference()
-                                    .primary_assets()
-                                    .await?
-                                    .iter()
-                                    .map(|a| async move {
-                                        Ok(if let Some(chunk) = ChunkVc::resolve_from(a).await? {
-                                            Some(chunk)
-                                        } else {
-                                            None
-                                        })
-                                    })
-                                    .try_join()
-                                    .await?;
-                            }
-                        }
-                        Ok(result.into_iter().flatten())
-                    })
-                    .try_join()
-                    .await?
-                    .into_iter()
-                    .flatten())
-            })
+            .try_flat_map_recursive_join(get_chunk_children)
             .await?;
 
         let chunks = ChunksVc::cell(chunks.into_iter().collect());
