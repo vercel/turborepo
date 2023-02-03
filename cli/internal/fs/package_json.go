@@ -59,8 +59,8 @@ func (r *Workspaces) UnmarshalJSON(data []byte) error {
 }
 
 // ReadPackageJSON returns a struct of package.json
-func ReadPackageJSON(pkgJSONFilePath turbopath.AbsoluteSystemPath) (*PackageJSON, error) {
-	b, err := pkgJSONFilePath.ReadFile()
+func ReadPackageJSON(path turbopath.AbsoluteSystemPath) (*PackageJSON, error) {
+	b, err := path.ReadFile()
 	if err != nil {
 		return nil, err
 	}
