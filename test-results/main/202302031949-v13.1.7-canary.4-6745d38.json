@@ -1,0 +1,1184 @@
+{
+  "ref": "2626223541b53e6511e23cc177e0f5f8f6ac8cf5",
+  "nextjsVersion": "Next.js v13.1.7-canary.4",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675453597295,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675453642292,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675453597390,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/edge-compiler-can-import-blob-assets/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 6,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 6,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675453684313,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Example Domain\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:29:35)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to fetch a remote URL",
+                "location": null,
+                "status": "failed",
+                "title": "allows to fetch a remote URL"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Example Domain\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:43:35)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to fetch a remote URL with a path and basename",
+                "location": null,
+                "status": "failed",
+                "title": "allows to fetch a remote URL with a path and basename"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Hello, from text-file.txt!\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:50:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to fetch text assets",
+                "location": null,
+                "status": "failed",
+                "title": "allows to fetch text assets"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBeTrue()\n\nExpected value to be true:\n  true\nReceived:\n  false\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:61:34)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to fetch image assets",
+                "location": null,
+                "status": "failed",
+                "title": "allows to fetch image assets"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "FetchError: invalid json response body at http://localhost:35841/api/edge?handler=from-node-module reason: Unexpected token E in JSON at position 0\n    at /work/node_modules/.pnpm/node-fetch@2.6.7/node_modules/node-fetch/lib/index.js:273:32\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:68:18)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to assets from node_modules",
+                "location": null,
+                "status": "failed",
+                "title": "allows to assets from node_modules"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/tmp/next-install-aecca3c3ca88eacdd619ea788950fb546b155bc354b3e95668c8b864187b285f/.next/server/middleware-manifest.json'"
+                ],
+                "fullName": "Edge Compiler can import asset assets extracts all the assets from the bundle",
+                "location": null,
+                "status": "failed",
+                "title": "extracts all the assets from the bundle"
+              }
+            ],
+            "endTime": 1675453698808,
+            "message": "  ● Edge Compiler can import asset assets › allows to fetch a remote URL\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Example Domain\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      27 |       handler: 'remote-full',\n      28 |     })\n    > 29 |     expect(await response.text()).toContain('Example Domain')\n         |                                   ^\n      30 |   })\n      31 |\n      32 |   it('allows to fetch a remote URL with a path and basename', async () => {\n\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:29:35)\n\n  ● Edge Compiler can import asset assets › allows to fetch a remote URL with a path and basename\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Example Domain\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      41 |       }\n      42 |     )\n    > 43 |     expect(await response.text()).toContain('Example Domain')\n         |                                   ^\n      44 |   })\n      45 |\n      46 |   it('allows to fetch text assets', async () => {\n\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:43:35)\n\n  ● Edge Compiler can import asset assets › allows to fetch text assets\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Hello, from text-file.txt!\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      48 |       handler: 'text-file',\n      49 |     })\n    > 50 |     expect(html).toContain('Hello, from text-file.txt!')\n         |                  ^\n      51 |   })\n      52 |\n      53 |   it('allows to fetch image assets', async () => {\n\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:50:18)\n\n  ● Edge Compiler can import asset assets › allows to fetch image assets\n\n    expect(received).toBeTrue()\n\n    Expected value to be true:\n      true\n    Received:\n      false\n\n      59 |       path.join(__dirname, './app/src/vercel.png')\n      60 |     )\n    > 61 |     expect(buffer.equals(image)).toBeTrue()\n         |                                  ^\n      62 |   })\n      63 |\n      64 |   it('allows to assets from node_modules', async () => {\n\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:61:34)\n\n  ● Edge Compiler can import asset assets › allows to assets from node_modules\n\n    FetchError: invalid json response body at http://localhost:35841/api/edge?handler=from-node-module reason: Unexpected token E in JSON at position 0\n\n      66 |       handler: 'from-node-module',\n      67 |     })\n    > 68 |     const json = await response.json()\n         |                  ^\n      69 |     expect(json).toEqual({\n      70 |       'i am': 'a node dependency',\n      71 |     })\n\n      at ../node_modules/.pnpm/node-fetch@2.6.7/node_modules/node-fetch/lib/index.js:273:32\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:68:18)\n\n  ● Edge Compiler can import asset assets › extracts all the assets from the bundle\n\n    ENOENT: no such file or directory, open '/tmp/next-install-aecca3c3ca88eacdd619ea788950fb546b155bc354b3e95668c8b864187b285f/.next/server/middleware-manifest.json'\n\n\n",
+            "name": "/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts",
+            "startTime": 1675453684407,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675453712384,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675453717820,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675453712480,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/api-cors-with-rewrite/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675453586079,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Rewritten API Requests should pass OPTIONS requests to the api function"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"successfully hit some-endpoint!\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/development/api-cors-with-rewrite/index.test.ts:43:30)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Rewritten API Requests should pass OPTIONS requests to the api function should pass OPTIONS requests to the api function",
+                "location": null,
+                "status": "failed",
+                "title": "should pass OPTIONS requests to the api function"
+              }
+            ],
+            "endTime": 1675453609452,
+            "message": "  ● Rewritten API Requests should pass OPTIONS requests to the api function › should pass OPTIONS requests to the api function\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"successfully hit some-endpoint!\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      41 |       },\n      42 |     })\n    > 43 |     expect(await res.text()).toContain('successfully hit some-endpoint!')\n         |                              ^\n      44 |   })\n      45 | })\n      46 |\n\n      at Object.<anonymous> (development/api-cors-with-rewrite/index.test.ts:43:30)\n",
+            "name": "/work/test/development/api-cors-with-rewrite/index.test.ts",
+            "startTime": 1675453586174,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-rendering/rendering.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 6,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 1,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 7,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675453651761,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app dir rendering"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"app/page.server.js\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:14:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir rendering should serve app/page.server.js at /",
+                "location": null,
+                "status": "failed",
+                "title": "should serve app/page.server.js at /"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "SSR only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:20:45)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir rendering SSR only should run data in layout and page",
+                "location": null,
+                "status": "failed",
+                "title": "should run data in layout and page"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "SSR only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from slow layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:32:50)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir rendering SSR only should run data fetch in parallel",
+                "location": null,
+                "status": "failed",
+                "title": "should run data fetch in parallel"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "static only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:40:45)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir rendering static only should run data in layout and page",
+                "location": null,
+                "status": "failed",
+                "title": "should run data in layout and page"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "static only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from slow layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:56:50)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir rendering static only should run data in parallel during development",
+                "location": null,
+                "status": "failed",
+                "title": "should run data in parallel during development"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "ISR"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:73:45)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir rendering ISR should revalidate the page when revalidate is configured",
+                "location": null,
+                "status": "failed",
+                "title": "should revalidate the page when revalidate is configured"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "mixed static and dynamic"
+                ],
+                "failureMessages": [],
+                "fullName": "app dir rendering mixed static and dynamic should generate static data during build and use it",
+                "location": null,
+                "status": "pending",
+                "title": "should generate static data during build and use it"
+              }
+            ],
+            "endTime": 1675453666464,
+            "message": "  ● app dir rendering › should serve app/page.server.js at /\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"app/page.server.js\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      12 |     it('should serve app/page.server.js at /', async () => {\n      13 |       const html = await next.render('/')\n    > 14 |       expect(html).toContain('app/page.server.js')\n         |                    ^\n      15 |     })\n      16 |\n      17 |     describe('SSR only', () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:14:20)\n\n  ● app dir rendering › SSR only › should run data in layout and page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from layout\"\n    Received: \"\"\n\n      18 |       it('should run data in layout and page', async () => {\n      19 |         const $ = await next.render$('/ssr-only/nested')\n    > 20 |         expect($('#layout-message').text()).toBe('hello from layout')\n         |                                             ^\n      21 |         expect($('#page-message').text()).toBe('hello from page')\n      22 |       })\n      23 |\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:20:45)\n\n  ● app dir rendering › SSR only › should run data fetch in parallel\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from slow layout\"\n    Received: \"\"\n\n      30 |         // Using 7 seconds to ensure external factors causing slight slowness don't fail the tests\n      31 |         expect(duration < 7000).toBe(true)\n    > 32 |         expect($('#slow-layout-message').text()).toBe('hello from slow layout')\n         |                                                  ^\n      33 |         expect($('#slow-page-message').text()).toBe('hello from slow page')\n      34 |       })\n      35 |     })\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:32:50)\n\n  ● app dir rendering › static only › should run data in layout and page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from layout\"\n    Received: \"\"\n\n      38 |       it('should run data in layout and page', async () => {\n      39 |         const $ = await next.render$('/static-only/nested')\n    > 40 |         expect($('#layout-message').text()).toBe('hello from layout')\n         |                                             ^\n      41 |         expect($('#page-message').text()).toBe('hello from page')\n      42 |       })\n      43 |\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:40:45)\n\n  ● app dir rendering › static only › should run data in parallel during development\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from slow layout\"\n    Received: \"\"\n\n      54 |         // expect(duration < (isDev ? 7000 : 2000)).toBe(true)\n      55 |         // expect(duration < 7000).toBe(true)\n    > 56 |         expect($('#slow-layout-message').text()).toBe('hello from slow layout')\n         |                                                  ^\n      57 |         expect($('#slow-page-message').text()).toBe('hello from slow page')\n      58 |       })\n      59 |     })\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:56:50)\n\n  ● app dir rendering › ISR › should revalidate the page when revalidate is configured\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from layout\"\n    Received: \"\"\n\n      71 |         }\n      72 |         const { $ } = await getPage()\n    > 73 |         expect($('#layout-message').text()).toBe('hello from layout')\n         |                                             ^\n      74 |         expect($('#page-message').text()).toBe('hello from page')\n      75 |\n      76 |         const layoutNow = $('#layout-now').text()\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:73:45)\n",
+            "name": "/work/test/e2e/app-dir/app-rendering/rendering.test.ts",
+            "startTime": 1675453651856,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/404-page-custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 9,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675453698924,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should respond to 404 correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render error correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render index page normal",
+                "location": null,
+                "status": "passed",
+                "title": "should render index page normal"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should set pages404 in routes-manifest correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should set pages404 in routes-manifest correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should have output 404.html",
+                "location": null,
+                "status": "passed",
+                "title": "should have output 404.html"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:26:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should respond to 404 correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"oops\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:32:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from index\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:37:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render index page normal",
+                "location": null,
+                "status": "failed",
+                "title": "should render index page normal"
+              }
+            ],
+            "endTime": 1675453708493,
+            "message": "  ● Default 404 Page with custom _error › dev mode › should respond to 404 correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      24 |   it('should respond to 404 correctly', async () => {\n      25 |     const res = await fetchViaHTTP(appPort, '/404')\n    > 26 |     expect(res.status).toBe(404)\n         |                        ^\n      27 |     expect(await res.text()).toContain('This page could not be found')\n      28 |   })\n      29 |\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:26:24)\n\n  ● Default 404 Page with custom _error › dev mode › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"oops\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      30 |   it('should render error correctly', async () => {\n      31 |     const text = await renderViaHTTP(appPort, '/err')\n    > 32 |     expect(text).toContain(isDev ? 'oops' : 'Internal Server Error')\n         |                  ^\n      33 |   })\n      34 |\n      35 |   it('should render index page normal', async () => {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:32:18)\n\n  ● Default 404 Page with custom _error › dev mode › should render index page normal\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from index\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      35 |   it('should render index page normal', async () => {\n      36 |     const html = await renderViaHTTP(appPort, '/')\n    > 37 |     expect(html).toContain('hello from index')\n         |                  ^\n      38 |   })\n      39 |\n      40 |   if (!isDev) {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:37:18)\n",
+            "name": "/work/test/integration/404-page-custom-error/test/index.test.js",
+            "startTime": 1675453699018,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675453562077,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675453607525,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675453562171,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/edge-compiler-can-import-blob-assets/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 6,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 6,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675453648929,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Example Domain\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:29:35)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to fetch a remote URL",
+                "location": null,
+                "status": "failed",
+                "title": "allows to fetch a remote URL"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Example Domain\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:43:35)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to fetch a remote URL with a path and basename",
+                "location": null,
+                "status": "failed",
+                "title": "allows to fetch a remote URL with a path and basename"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Hello, from text-file.txt!\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:50:18)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to fetch text assets",
+                "location": null,
+                "status": "failed",
+                "title": "allows to fetch text assets"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBeTrue()\n\nExpected value to be true:\n  true\nReceived:\n  false\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:61:34)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to fetch image assets",
+                "location": null,
+                "status": "failed",
+                "title": "allows to fetch image assets"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "FetchError: invalid json response body at http://localhost:38789/api/edge?handler=from-node-module reason: Unexpected token E in JSON at position 0\n    at /work/node_modules/.pnpm/node-fetch@2.6.7/node_modules/node-fetch/lib/index.js:273:32\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:68:18)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to assets from node_modules",
+                "location": null,
+                "status": "failed",
+                "title": "allows to assets from node_modules"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/tmp/next-install-1aafdb08f2ef3646ae176b6f9f222d56e702603845da724fc2bb3c2cf57798ae/.next/server/middleware-manifest.json'"
+                ],
+                "fullName": "Edge Compiler can import asset assets extracts all the assets from the bundle",
+                "location": null,
+                "status": "failed",
+                "title": "extracts all the assets from the bundle"
+              }
+            ],
+            "endTime": 1675453663639,
+            "message": "  ● Edge Compiler can import asset assets › allows to fetch a remote URL\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Example Domain\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      27 |       handler: 'remote-full',\n      28 |     })\n    > 29 |     expect(await response.text()).toContain('Example Domain')\n         |                                   ^\n      30 |   })\n      31 |\n      32 |   it('allows to fetch a remote URL with a path and basename', async () => {\n\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:29:35)\n\n  ● Edge Compiler can import asset assets › allows to fetch a remote URL with a path and basename\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Example Domain\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      41 |       }\n      42 |     )\n    > 43 |     expect(await response.text()).toContain('Example Domain')\n         |                                   ^\n      44 |   })\n      45 |\n      46 |   it('allows to fetch text assets', async () => {\n\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:43:35)\n\n  ● Edge Compiler can import asset assets › allows to fetch text assets\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Hello, from text-file.txt!\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      48 |       handler: 'text-file',\n      49 |     })\n    > 50 |     expect(html).toContain('Hello, from text-file.txt!')\n         |                  ^\n      51 |   })\n      52 |\n      53 |   it('allows to fetch image assets', async () => {\n\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:50:18)\n\n  ● Edge Compiler can import asset assets › allows to fetch image assets\n\n    expect(received).toBeTrue()\n\n    Expected value to be true:\n      true\n    Received:\n      false\n\n      59 |       path.join(__dirname, './app/src/vercel.png')\n      60 |     )\n    > 61 |     expect(buffer.equals(image)).toBeTrue()\n         |                                  ^\n      62 |   })\n      63 |\n      64 |   it('allows to assets from node_modules', async () => {\n\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:61:34)\n\n  ● Edge Compiler can import asset assets › allows to assets from node_modules\n\n    FetchError: invalid json response body at http://localhost:38789/api/edge?handler=from-node-module reason: Unexpected token E in JSON at position 0\n\n      66 |       handler: 'from-node-module',\n      67 |     })\n    > 68 |     const json = await response.json()\n         |                  ^\n      69 |     expect(json).toEqual({\n      70 |       'i am': 'a node dependency',\n      71 |     })\n\n      at ../node_modules/.pnpm/node-fetch@2.6.7/node_modules/node-fetch/lib/index.js:273:32\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:68:18)\n\n  ● Edge Compiler can import asset assets › extracts all the assets from the bundle\n\n    ENOENT: no such file or directory, open '/tmp/next-install-1aafdb08f2ef3646ae176b6f9f222d56e702603845da724fc2bb3c2cf57798ae/.next/server/middleware-manifest.json'\n\n\n",
+            "name": "/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts",
+            "startTime": 1675453649028,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675453675898,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675453681394,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675453675997,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/api-cors-with-rewrite/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675453598561,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Rewritten API Requests should pass OPTIONS requests to the api function"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"successfully hit some-endpoint!\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/development/api-cors-with-rewrite/index.test.ts:43:30)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Rewritten API Requests should pass OPTIONS requests to the api function should pass OPTIONS requests to the api function",
+                "location": null,
+                "status": "failed",
+                "title": "should pass OPTIONS requests to the api function"
+              }
+            ],
+            "endTime": 1675453613479,
+            "message": "  ● Rewritten API Requests should pass OPTIONS requests to the api function › should pass OPTIONS requests to the api function\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"successfully hit some-endpoint!\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      41 |       },\n      42 |     })\n    > 43 |     expect(await res.text()).toContain('successfully hit some-endpoint!')\n         |                              ^\n      44 |   })\n      45 | })\n      46 |\n\n      at Object.<anonymous> (development/api-cors-with-rewrite/index.test.ts:43:30)\n",
+            "name": "/work/test/development/api-cors-with-rewrite/index.test.ts",
+            "startTime": 1675453598655,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-rendering/rendering.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 6,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 1,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 7,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675453653864,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app dir rendering"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"app/page.server.js\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:14:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app dir rendering should serve app/page.server.js at /",
+                "location": null,
+                "status": "failed",
+                "title": "should serve app/page.server.js at /"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "SSR only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:20:45)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app dir rendering SSR only should run data in layout and page",
+                "location": null,
+                "status": "failed",
+                "title": "should run data in layout and page"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "SSR only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from slow layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:32:50)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app dir rendering SSR only should run data fetch in parallel",
+                "location": null,
+                "status": "failed",
+                "title": "should run data fetch in parallel"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "static only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:40:45)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app dir rendering static only should run data in layout and page",
+                "location": null,
+                "status": "failed",
+                "title": "should run data in layout and page"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "static only"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from slow layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:56:50)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app dir rendering static only should run data in parallel during development",
+                "location": null,
+                "status": "failed",
+                "title": "should run data in parallel during development"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "ISR"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"hello from layout\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-rendering/rendering.test.ts:73:45)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app dir rendering ISR should revalidate the page when revalidate is configured",
+                "location": null,
+                "status": "failed",
+                "title": "should revalidate the page when revalidate is configured"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir rendering",
+                  "mixed static and dynamic"
+                ],
+                "failureMessages": [],
+                "fullName": "app dir rendering mixed static and dynamic should generate static data during build and use it",
+                "location": null,
+                "status": "pending",
+                "title": "should generate static data during build and use it"
+              }
+            ],
+            "endTime": 1675453668649,
+            "message": "  ● app dir rendering › should serve app/page.server.js at /\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"app/page.server.js\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      12 |     it('should serve app/page.server.js at /', async () => {\n      13 |       const html = await next.render('/')\n    > 14 |       expect(html).toContain('app/page.server.js')\n         |                    ^\n      15 |     })\n      16 |\n      17 |     describe('SSR only', () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:14:20)\n\n  ● app dir rendering › SSR only › should run data in layout and page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from layout\"\n    Received: \"\"\n\n      18 |       it('should run data in layout and page', async () => {\n      19 |         const $ = await next.render$('/ssr-only/nested')\n    > 20 |         expect($('#layout-message').text()).toBe('hello from layout')\n         |                                             ^\n      21 |         expect($('#page-message').text()).toBe('hello from page')\n      22 |       })\n      23 |\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:20:45)\n\n  ● app dir rendering › SSR only › should run data fetch in parallel\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from slow layout\"\n    Received: \"\"\n\n      30 |         // Using 7 seconds to ensure external factors causing slight slowness don't fail the tests\n      31 |         expect(duration < 7000).toBe(true)\n    > 32 |         expect($('#slow-layout-message').text()).toBe('hello from slow layout')\n         |                                                  ^\n      33 |         expect($('#slow-page-message').text()).toBe('hello from slow page')\n      34 |       })\n      35 |     })\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:32:50)\n\n  ● app dir rendering › static only › should run data in layout and page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from layout\"\n    Received: \"\"\n\n      38 |       it('should run data in layout and page', async () => {\n      39 |         const $ = await next.render$('/static-only/nested')\n    > 40 |         expect($('#layout-message').text()).toBe('hello from layout')\n         |                                             ^\n      41 |         expect($('#page-message').text()).toBe('hello from page')\n      42 |       })\n      43 |\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:40:45)\n\n  ● app dir rendering › static only › should run data in parallel during development\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from slow layout\"\n    Received: \"\"\n\n      54 |         // expect(duration < (isDev ? 7000 : 2000)).toBe(true)\n      55 |         // expect(duration < 7000).toBe(true)\n    > 56 |         expect($('#slow-layout-message').text()).toBe('hello from slow layout')\n         |                                                  ^\n      57 |         expect($('#slow-page-message').text()).toBe('hello from slow page')\n      58 |       })\n      59 |     })\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:56:50)\n\n  ● app dir rendering › ISR › should revalidate the page when revalidate is configured\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"hello from layout\"\n    Received: \"\"\n\n      71 |         }\n      72 |         const { $ } = await getPage()\n    > 73 |         expect($('#layout-message').text()).toBe('hello from layout')\n         |                                             ^\n      74 |         expect($('#page-message').text()).toBe('hello from page')\n      75 |\n      76 |         const layoutNow = $('#layout-now').text()\n\n      at Object.<anonymous> (e2e/app-dir/app-rendering/rendering.test.ts:73:45)\n",
+            "name": "/work/test/e2e/app-dir/app-rendering/rendering.test.ts",
+            "startTime": 1675453653958,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/404-page-custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 9,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675453700156,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should respond to 404 correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render error correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render index page normal",
+                "location": null,
+                "status": "passed",
+                "title": "should render index page normal"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should set pages404 in routes-manifest correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should set pages404 in routes-manifest correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should have output 404.html",
+                "location": null,
+                "status": "passed",
+                "title": "should have output 404.html"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:26:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should respond to 404 correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"oops\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:32:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from index\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:37:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render index page normal",
+                "location": null,
+                "status": "failed",
+                "title": "should render index page normal"
+              }
+            ],
+            "endTime": 1675453709658,
+            "message": "  ● Default 404 Page with custom _error › dev mode › should respond to 404 correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      24 |   it('should respond to 404 correctly', async () => {\n      25 |     const res = await fetchViaHTTP(appPort, '/404')\n    > 26 |     expect(res.status).toBe(404)\n         |                        ^\n      27 |     expect(await res.text()).toContain('This page could not be found')\n      28 |   })\n      29 |\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:26:24)\n\n  ● Default 404 Page with custom _error › dev mode › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"oops\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      30 |   it('should render error correctly', async () => {\n      31 |     const text = await renderViaHTTP(appPort, '/err')\n    > 32 |     expect(text).toContain(isDev ? 'oops' : 'Internal Server Error')\n         |                  ^\n      33 |   })\n      34 |\n      35 |   it('should render index page normal', async () => {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:32:18)\n\n  ● Default 404 Page with custom _error › dev mode › should render index page normal\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from index\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      35 |   it('should render index page normal', async () => {\n      36 |     const html = await renderViaHTTP(appPort, '/')\n    > 37 |     expect(html).toContain('hello from index')\n         |                  ^\n      38 |   })\n      39 |\n      40 |   if (!isDev) {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:37:18)\n",
+            "name": "/work/test/integration/404-page-custom-error/test/index.test.js",
+            "startTime": 1675453700254,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
