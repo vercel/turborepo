@@ -74,32 +74,32 @@ The `build` task inside `shared` completes first, then `web` and `docs` build af
 
 The `pipeline` configuration declares which tasks depend on each other in your monorepo. Here's a kitchen sink example:
 
-```diff
+```jsonc filename="turbo.json"
 {
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
-+      // A workspace's `build` task depends on that workspace's
-+      // topological dependencies' and devDependencies'
-+      // `build` tasks  being completed first. The `^` symbol
-+      // indicates an upstream dependency.
+      // A workspace's `build` task depends on that workspace's
+      // topological dependencies' and devDependencies'
+      // `build` tasks  being completed first. The `^` symbol
+      // indicates an upstream dependency.
       "dependsOn": ["^build"]
     },
     "test": {
-+      // A workspace's `test` task depends on that workspace's
-+      // own `build` task being completed first.
+      // A workspace's `test` task depends on that workspace's
+      // own `build` task being completed first.
       "dependsOn": ["build"],
-+      // A workspace's `test` task should only be rerun when
-+      // either a `.tsx` or `.ts` file has changed.
+      // A workspace's `test` task should only be rerun when
+      // either a `.tsx` or `.ts` file has changed.
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts", "test/**/*.tsx"]
     },
-+    // A workspace's `lint` task has no dependencies and
-+    // can be run whenever.
+    // A workspace's `lint` task has no dependencies and
+    // can be run whenever.
     "lint": {},
     "deploy": {
-+      // A workspace's `deploy` task depends on the `build`,
-+      // `test`, and `lint` tasks of the same workspace
-+      // being completed.
+      // A workspace's `deploy` task depends on the `build`,
+      // `test`, and `lint` tasks of the same workspace
+      // being completed.
       "dependsOn": ["build", "test", "lint"]
     }
   }
@@ -116,7 +116,7 @@ There might be tasks which need to run _before_ other tasks. For instance, `buil
 
 If both tasks are in the same workspace, you can specify the relationship like this:
 
-```json filename="turbo.json"
+```jsonc filename="turbo.json"
 {
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
@@ -155,7 +155,7 @@ The `^` symbol explicitly declares that the task has a dependency on a task in a
 
 An empty dependency list (`dependsOn` is either undefined or `[]`) means that nothing needs to run before this task! After all, it has NO dependencies.
 
-```jsonc
+```jsonc filename="turbo.json"
 {
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
@@ -173,7 +173,7 @@ Sometimes, you may want to create a workspace-task dependency on another workspa
 For these cases, you can express these relationships in your `pipeline` configuration using the `<workspace>#<task>` syntax.
 The example below describes the `deploy` script of a `frontend` application that depends on the `deploy` and `health-check` scripts of `backend`, as well as the `test` script of a `ui` workspace:
 
-```jsonc
+```jsonc filename="turbo.json"
 {
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
@@ -219,7 +219,7 @@ Conversely, you _do not_ need to define a generic `"my-task": {...}` entry if al
 
 A sample pipeline that defines the root task `format` and opts the root into `test` might look like:
 
-```jsonc
+```jsonc filename="turbo.json"
 {
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
@@ -267,7 +267,7 @@ You've written tests in all three of these workspaces and it's time to run them.
 
 To accomplish this, we can set up a pipeline like so:
 
-```jsonc
+```jsonc filename="turbo.json"
 {
    "$schema": "https://turbo.build/schema.json",
    "pipeline": {

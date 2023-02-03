@@ -16,6 +16,11 @@ func Name() string {
 	return Info().Name
 }
 
+// Constant returns the name of the CI vendor as a constant
+func Constant() string {
+	return Info().Constant
+}
+
 // Info returns information about a CI vendor
 func Info() Vendor {
 	// check both the env var key and value
