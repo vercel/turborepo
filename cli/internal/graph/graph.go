@@ -4,6 +4,7 @@ package graph
 import (
 	gocontext "context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -62,13 +63,18 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 			ExcludedOutputs: taskDefinition.Outputs.Exclusions,
 		}
 
-		cmd, ok := pkg.Scripts[taskName]
-		if ok {
+		if cmd, ok := pkg.Scripts[taskName]; ok {
 			packageTask.Command = cmd
 		}
 
-		packageTask.LogFile = packageTask.RepoRelativeLogFile()
+		packageTask.LogFile = repoRelativeLogFile(packageTask)
 
 		return visitor(ctx, packageTask)
 	}
+}
+
+// repoRelativeLogFile returns the path to the log file for this task execution as a
+// relative path from the root of the monorepo.
+func repoRelativeLogFile(pt *nodes.PackageTask) string {
+	return filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), ".turbo", fmt.Sprintf("turbo-%v.log", pt.Task))
 }

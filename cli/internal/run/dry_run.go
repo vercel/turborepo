@@ -29,6 +29,11 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
+// missingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
+// E.g. if `turbo run build --dry` is run, and package-a doesn't define a `build` script in package.json,
+// the DryRunSummary will print this, instead of the script (e.g. `next build`).
+const missingTaskLabel = "<NONEXISTENT>"
+
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed
 type dryRunSummary struct {
@@ -119,7 +124,7 @@ func executeDryRun(
 			return err
 		}
 
-		command := "<NONEXISTENT>"
+		command := missingTaskLabel
 		if packageTask.Command != "" {
 			command = packageTask.Command
 		}
@@ -147,16 +152,17 @@ func executeDryRun(
 			TaskID:                 packageTask.TaskID,
 			Task:                   packageTask.Task,
 			Package:                packageTask.PackageName,
-			Hash:                   hash,
-			CacheState:             itemStatus,
-			Command:                command,
 			Dir:                    packageTask.Dir,
-			Outputs:                packageTask.TaskDefinition.Outputs.Inclusions,
-			ExcludedOutputs:        packageTask.TaskDefinition.Outputs.Exclusions,
+			Outputs:                packageTask.Outputs,
+			ExcludedOutputs:        packageTask.ExcludedOutputs,
 			LogFile:                packageTask.LogFile,
-			Dependencies:           ancestors,
-			Dependents:             descendents,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
+			Command:                command,
+
+			Hash:         hash,        // TODO(mehulkar): Move this to PackageTask
+			CacheState:   itemStatus,  // TODO(mehulkar): Move this to PackageTask
+			Dependencies: ancestors,   // TODO(mehulkar): Move this to PackageTask
+			Dependents:   descendents, // TODO(mehulkar): Move this to PackageTask
 		}
 		return nil
 	}

@@ -3,6 +3,7 @@ package lockfile
 import (
 	"fmt"
 	"io"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -412,6 +413,17 @@ func (p *PnpmLockfile) Patches() []turbopath.AnchoredUnixPath {
 	return patchPaths
 }
 
+// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
+// the cache.
+func (p *PnpmLockfile) GlobalChange(other Lockfile) bool {
+	o, ok := other.(*PnpmLockfile)
+	return !ok ||
+		p.Version != o.Version ||
+		p.PackageExtensionsChecksum != o.PackageExtensionsChecksum ||
+		!reflect.DeepEqual(p.Overrides, o.Overrides) ||
+		!reflect.DeepEqual(p.PatchedDependencies, o.PatchedDependencies)
+}
+
 func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath, name string, specifier string) (string, bool, error) {
 	pnpmWorkspacePath := workspacePath.ToString()
 	if pnpmWorkspacePath == "" {
@@ -426,15 +438,13 @@ func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath
 	if err != nil {
 		return "", false, err
 	}
-	if !ok {
+	// Verify that the specifier in the importer matches the one given
+	if !ok || resolution.Specifier != specifier {
 		// Check if the specifier is already a resolved version
 		if _, ok := p.Packages[p.formatKey(name, specifier)]; ok {
 			return specifier, true, nil
 		}
 		return "", false, fmt.Errorf("Unable to find resolved version for %s@%s in %s", name, specifier, workspacePath)
-	}
-	if resolution.Specifier != specifier {
-		return "", false, nil
 	}
 	return resolution.Version, true, nil
 }

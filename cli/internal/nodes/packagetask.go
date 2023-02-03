@@ -3,7 +3,6 @@ package nodes
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/vercel/turbo/cli/internal/fs"
 )
@@ -28,12 +27,6 @@ func (pt *PackageTask) OutputPrefix(isSinglePackage bool) string {
 		return pt.Task
 	}
 	return fmt.Sprintf("%v:%v", pt.PackageName, pt.Task)
-}
-
-// RepoRelativeLogFile returns the path to the log file for this task execution as a
-// relative path from the root of the monorepo.
-func (pt *PackageTask) RepoRelativeLogFile() string {
-	return filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), ".turbo", fmt.Sprintf("turbo-%v.log", pt.Task))
 }
 
 // HashableOutputs returns the package-relative globs for files to be considered outputs

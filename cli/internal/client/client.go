@@ -283,7 +283,7 @@ func (c *ApiClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 	}
 	req.Header.Set("User-Agent", c.UserAgent())
 	if ci.IsCi() {
-		req.Header.Set("x-artifact-client-ci", ci.Name())
+		req.Header.Set("x-artifact-client-ci", ci.Constant())
 	}
 	if tag != "" {
 		req.Header.Set("x-artifact-tag", tag)
@@ -403,7 +403,7 @@ func (c *ApiClient) RecordAnalyticsEvents(events []map[string]interface{}) error
 	}
 	req.Header.Set("User-Agent", c.UserAgent())
 	if ci.IsCi() {
-		req.Header.Set("x-artifact-client-ci", ci.Name())
+		req.Header.Set("x-artifact-client-ci", ci.Constant())
 	}
 	resp, err := c.HttpClient.Do(req)
 	if resp != nil && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
