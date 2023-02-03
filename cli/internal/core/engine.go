@@ -438,7 +438,6 @@ func (e *Engine) getPipelineFromWorkspace(workspaceName string) (*fs.Pipeline, e
 		return cachedPipeline, nil
 	}
 
-	// TODO(mehulkar) what is this value when it's a non-root workspace?
 	dir := e.completeGraph.WorkspaceInfos[workspaceName].Dir
 
 	var pkgJSON *fs.PackageJSON
