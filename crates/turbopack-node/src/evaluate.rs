@@ -179,7 +179,7 @@ pub async fn evaluate(
                 .as_issue()
                 .emit();
                 // Do not reuse the process in case of error
-                operation.kill_on_drop();
+                operation.disallow_reuse();
                 break JavaScriptValue::Error;
             }
             EvalJavaScriptIncomingMessage::JsonValue { data } => {

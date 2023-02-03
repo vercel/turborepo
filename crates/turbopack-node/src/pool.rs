@@ -134,6 +134,7 @@ impl NodeJsPoolProcess {
         cmd.envs(env);
         cmd.stderr(Stdio::piped());
         cmd.stdout(Stdio::piped());
+        cmd.kill_on_drop(true);
 
         let mut child = cmd.spawn().context("spawning node pooled process")?;
 
@@ -301,7 +302,7 @@ impl NodeJsPool {
             process: Some(process.run().await?),
             permit,
             processes: self.processes.clone(),
-            kill_on_drop: false,
+            allow_process_reuse: true,
         })
     }
 }
@@ -312,7 +313,7 @@ pub struct NodeJsOperation {
     #[allow(dead_code)]
     permit: OwnedSemaphorePermit,
     processes: Arc<Mutex<Vec<NodeJsPoolProcess>>>,
-    kill_on_drop: bool,
+    allow_process_reuse: bool,
 }
 
 impl NodeJsOperation {
@@ -328,15 +329,15 @@ impl NodeJsOperation {
     {
         // We temporary set kill_on_drop to true to make sure the process is killed when
         // this operation fail
-        let old = self.kill_on_drop;
-        self.kill_on_drop = true;
+        let old = self.allow_process_reuse;
+        self.allow_process_reuse = false;
         let message = self
             .process_mut()?
             .recv()
             .await
             .context("receiving message")?;
         let message = serde_json::from_slice(&message).context("deserializing message")?;
-        self.kill_on_drop = old;
+        self.allow_process_reuse = old;
         Ok(message)
     }
 
@@ -346,13 +347,13 @@ impl NodeJsOperation {
     {
         // We temporary set kill_on_drop to true to make sure the process is killed when
         // this operation fail
-        let old = self.kill_on_drop;
-        self.kill_on_drop = true;
+        let old = self.allow_process_reuse;
+        self.allow_process_reuse = false;
         self.process_mut()?
             .send(serde_json::to_vec(&message).context("serializing message")?)
             .await
             .context("sending message")?;
-        self.kill_on_drop = old;
+        self.allow_process_reuse = old;
         Ok(())
     }
 
@@ -374,24 +375,15 @@ impl NodeJsOperation {
         Ok(status)
     }
 
-    pub fn kill_on_drop(&mut self) {
-        self.kill_on_drop = true;
+    pub fn disallow_reuse(&mut self) {
+        self.allow_process_reuse = false;
     }
 }
 
 impl Drop for NodeJsOperation {
     fn drop(&mut self) {
-        if let Some(mut process) = self.process.take() {
-            if self.kill_on_drop {
-                if let Some(mut child) = process.child.take() {
-                    let _ = child.start_kill();
-                    tokio::spawn(async move {
-                        // To avoid a zombie process, we need to wait for the process to end
-                        let _ = child.wait().await;
-                        // We can't handle any error here...
-                    });
-                }
-            } else {
+        if let Some(process) = self.process.take() {
+            if self.allow_process_reuse {
                 self.processes
                     .lock()
                     .unwrap()
