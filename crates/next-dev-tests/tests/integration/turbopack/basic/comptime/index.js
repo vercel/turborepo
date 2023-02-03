@@ -1,3 +1,10 @@
+it("importing a not existing file should throw", () => {
+  // This is a check to make sure that the following tests would fail if they require("fail")
+  expect(() => {
+    require("./not-existing-file");
+  }).toThrow();
+});
+
 function maybeReturn(x) {
   if (x) {
     return true;

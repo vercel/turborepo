@@ -63,6 +63,13 @@ fn integer_decode(val: f64) -> (u64, i16, i8) {
     (mantissa, exponent, sign)
 }
 
+impl ConstantNumber {
+    pub fn as_u32_index(&self) -> Option<usize> {
+        let index: u32 = self.0 as u32;
+        (index as f64 == self.0).then_some(index as usize)
+    }
+}
+
 impl Hash for ConstantNumber {
     fn hash<H: Hasher>(&self, state: &mut H) {
         integer_decode(self.0).hash(state);
@@ -204,14 +211,14 @@ impl LogicalOperator {
     }
 }
 
-/// The three categories of [JsValue]s.
+/// The four categories of [JsValue]s.
 enum JsValueMetaKind {
     /// Doesn't contain nested values.
     Leaf,
-    /// Contain nested values. Nested values represent some structure and can't
+    /// Contains nested values. Nested values represent some structure and can't
     /// be replaced during linking. They might contain placeholders.
     Nested,
-    /// Contain nested values. Operations are replaced during linking. They
+    /// Contains nested values. Operations are replaced during linking. They
     /// might contain placeholders.
     Operation,
     /// These values are replaced during linking.
@@ -219,25 +226,24 @@ enum JsValueMetaKind {
 }
 
 /// TODO: Use `Arc`
-/// There are 4 kinds of values: Leafs, Nested, Operations, and Placeholders
+/// There are 4 kinds of values: Leaves, Nested, Operations, and Placeholders
 /// (see [JsValueMetaKind] for details). Values are processed in two phases:
-/// - Analyse phase: We convert AST into [JsValue]s. We don't have contextual
+/// - Analyze phase: We convert AST into [JsValue]s. We don't have contextual
 ///   information so we need to insert placeholders to represent that.
-/// - Link phase: We try to reduce a value to a constant value.
-/// The link phase as 5 substeps that are executed on each node in the graph
-/// depth-first. When a value was modified, we need to visit the new children
-/// again.
+/// - Link phase: We try to reduce a value to a constant value. The link phase
+///   has 5 substeps that are executed on each node in the graph depth-first.
+///   When a value is modified, we need to visit the new children again.
 /// - Replace variables with their values. This replaces [JsValue::Variable]. No
-///   variables should be remaining after that.
+///   variable should be remaining after that.
 /// - Replace placeholders with contextual information. This usually replaces
-///   [JsValue::FreeVar] and [JsValue::Module]. Some [JsValue::Call] on well
+///   [JsValue::FreeVar] and [JsValue::Module]. Some [JsValue::Call] on well-
 ///   known functions might also be replaced. No free vars or modules should be
 ///   remaining after that.
-/// - Replace operations on well-known objects and functions. THis handles
+/// - Replace operations on well-known objects and functions. This handles
 ///   [JsValue::Call] and [JsValue::Member] on well-known objects and functions.
 /// - Replace all built-in functions with their values when they are
 ///   compile-time constant.
-/// - For optimization any nested operations are replaced with
+/// - For optimization, any nested operations are replaced with
 ///   [JsValue::Unknown]. So only one layer of operation remains.
 /// Any remaining operation or placeholder can be treated as unknown.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -248,18 +254,18 @@ pub enum JsValue {
     Constant(ConstantValue),
     /// An constant URL object.
     Url(Url),
-    /// Some kind of well known object
-    /// (must not be an array, otherwise Array.concat need to be changed)
+    /// Some kind of well-known object
+    /// (must not be an array, otherwise Array.concat needs to be changed)
     WellKnownObject(WellKnownObjectKind),
-    /// Some kind of well known function
+    /// Some kind of well-known function
     WellKnownFunction(WellKnownFunctionKind),
-    /// Not analyzable value. Might contain the original value for additional
+    /// Not-analyzable value. Might contain the original value for additional
     /// info. Has a reason string for explanation.
     Unknown(Option<Arc<JsValue>>, &'static str),
 
     // NESTED VALUES
     // ----------------------------
-    /// An arrow of nested values
+    /// An array of nested values
     Array(usize, Vec<JsValue>),
     /// An object of nested values
     Object(usize, Vec<ObjectPart>),
@@ -689,7 +695,8 @@ impl JsValue {
         }
     }
 
-    pub fn assert_total_nodes_up_to_date(&mut self) {
+    #[cfg(debug_assertions)]
+    pub fn debug_assert_total_nodes_up_to_date(&mut self) {
         let old = self.total_nodes();
         self.update_total_nodes();
         assert_eq!(
@@ -699,6 +706,9 @@ impl JsValue {
             self
         );
     }
+
+    #[cfg(not(debug_assertions))]
+    pub fn assert_total_nodes_up_to_date(&mut self) {}
 
     pub fn ensure_node_limit(&mut self, limit: usize) {
         fn cmp_nodes(a: &JsValue, b: &JsValue) -> Ordering {
@@ -1247,24 +1257,6 @@ impl JsValue {
     }
 }
 
-// Placeholder management
-impl JsValue {
-    /// Returns true if the value contains or is a placeholder.
-    pub fn has_placeholder(&self) -> bool {
-        match self.meta_type() {
-            JsValueMetaKind::Placeholder => true,
-            JsValueMetaKind::Leaf => false,
-            JsValueMetaKind::Nested | JsValueMetaKind::Operation => {
-                let mut result = false;
-                self.for_each_children(&mut |child| {
-                    result = result || child.has_placeholder();
-                });
-                result
-            }
-        }
-    }
-}
-
 // Compile-time information gathering
 impl JsValue {
     /// Returns the constant string if the value represents a constant string.
@@ -1333,14 +1325,14 @@ impl JsValue {
         }
     }
 
-    /// Checks if we known that the value is not nullish. Returns None if we
+    /// Checks if we know that the value is not nullish. Returns None if we
     /// don't know. Returns Some if we know if or if not the value is not
     /// nullish.
     pub fn is_not_nullish(&self) -> Option<bool> {
         self.is_nullish().map(|x| !x)
     }
 
-    /// Checks if we known that the value is an empty string. Returns None if we
+    /// Checks if we know that the value is an empty string. Returns None if we
     /// don't know. Returns Some if we know if or if not the value is an empty
     /// string.
     pub fn is_empty_string(&self) -> Option<bool> {
@@ -1379,7 +1371,7 @@ impl JsValue {
         }
     }
 
-    /// Checks if we known that the value is a string. Returns None if we
+    /// Checks if we know that the value is a string. Returns None if we
     /// don't know. Returns Some if we know if or if not the value is a string.
     pub fn is_string(&self) -> Option<bool> {
         match self {
@@ -1437,7 +1429,7 @@ impl JsValue {
         }
     }
 
-    /// Checks if we known that the value starts with a given string. Returns
+    /// Checks if we know that the value starts with a given string. Returns
     /// None if we don't know. Returns Some if we know if or if not the
     /// value starts with the given string.
     pub fn starts_with(&self, str: &str) -> Option<bool> {
@@ -1468,7 +1460,7 @@ impl JsValue {
         }
     }
 
-    /// Checks if we known that the value ends with a given string. Returns
+    /// Checks if we know that the value ends with a given string. Returns
     /// None if we don't know. Returns Some if we know if or if not the
     /// value ends with the given string.
     pub fn ends_with(&self, str: &str) -> Option<bool> {
@@ -1938,78 +1930,79 @@ impl JsValue {
         }
     }
 
-    /// Calls a function for only early or lazy children. Allows mutating the
+    /// Calls a function for only early children. Allows mutating the
     /// node. Updates the total nodes count after mutation.
     pub fn for_each_early_children_mut(
         &mut self,
-        early: bool,
         visitor: &mut impl FnMut(&mut JsValue) -> bool,
     ) -> bool {
         match self {
             JsValue::Call(_, callee, list) if !list.is_empty() => {
-                if early {
-                    let m = visitor(callee);
-                    if m {
-                        self.update_total_nodes();
-                    }
-                    m
-                } else {
-                    let mut modified = false;
-                    for item in list.iter_mut() {
-                        if visitor(item) {
-                            modified = true
-                        }
-                    }
-                    if modified {
-                        self.update_total_nodes();
-                    }
-                    modified
+                let m = visitor(callee);
+                if m {
+                    self.update_total_nodes();
                 }
+                m
             }
             JsValue::MemberCall(_, obj, prop, list) if !list.is_empty() => {
-                if early {
-                    let m1 = visitor(obj);
-                    let m2 = visitor(prop);
-                    let modified = m1 || m2;
-                    if modified {
-                        self.update_total_nodes();
-                    }
-                    modified
-                } else {
-                    let mut modified = false;
-                    for item in list.iter_mut() {
-                        if visitor(item) {
-                            modified = true
-                        }
-                    }
-                    if modified {
-                        self.update_total_nodes();
-                    }
-                    modified
+                let m1 = visitor(obj);
+                let m2 = visitor(prop);
+                let modified = m1 || m2;
+                if modified {
+                    self.update_total_nodes();
                 }
+                modified
             }
-            JsValue::Member(_, obj, prop) => {
-                if early {
-                    let m = visitor(obj);
-                    if m {
-                        self.update_total_nodes();
-                    }
-                    m
-                } else {
-                    let m = visitor(prop);
-                    if m {
-                        self.update_total_nodes();
-                    }
-                    m
+            JsValue::Member(_, obj, _) => {
+                let m = visitor(obj);
+                if m {
+                    self.update_total_nodes();
                 }
+                m
             }
-            _ => {
-                if early {
-                    false
-                } else {
-                    self.for_each_children_mut(visitor)
+            _ => false,
+        }
+    }
+
+    /// Calls a function for only late children. Allows mutating the
+    /// node. Updates the total nodes count after mutation.
+    pub fn for_each_late_children_mut(
+        &mut self,
+        visitor: &mut impl FnMut(&mut JsValue) -> bool,
+    ) -> bool {
+        match self {
+            JsValue::Call(_, _, list) if !list.is_empty() => {
+                let mut modified = false;
+                for item in list.iter_mut() {
+                    if visitor(item) {
+                        modified = true
+                    }
                 }
+                if modified {
+                    self.update_total_nodes();
+                }
+                modified
             }
+            JsValue::MemberCall(_, _, _, list) if !list.is_empty() => {
+                let mut modified = false;
+                for item in list.iter_mut() {
+                    if visitor(item) {
+                        modified = true
+                    }
+                }
+                if modified {
+                    self.update_total_nodes();
+                }
+                modified
+            }
+            JsValue::Member(_, _, prop) => {
+                let m = visitor(prop);
+                if m {
+                    self.update_total_nodes();
+                }
+                m
+            }
+            _ => self.for_each_children_mut(visitor),
         }
     }
 
@@ -2083,7 +2076,7 @@ impl JsValue {
 // Alternatives management
 impl JsValue {
     /// Add an alternative to the current value. Might be a no-op if the value
-    /// already contains such alternative. Potentially expensive operation
+    /// already contains this alternative. Potentially expensive operation
     /// as it has to compare the value with all existing alternatives.
     fn add_alt(&mut self, v: Self) {
         if self == &v {
@@ -2391,13 +2384,19 @@ impl JsValue {
     }
 }
 
+/// The depth to use when comparing values for similarity.
+const SIMILAR_EQ_DEPTH: usize = 3;
+/// The depth to use when hashing values for similarity.
+const SIMILAR_HASH_DEPTH: usize = 2;
+
 /// A wrapper around `JsValue` that implements `PartialEq` and `Hash` by
-/// comparing the values with a depth of 3.
+/// comparing the values with a depth of [SIMILAR_EQ_DEPTH] and hashing values
+/// with a depth of [SIMILAR_HASH_DEPTH].
 struct SimilarJsValue(JsValue);
 
 impl PartialEq for SimilarJsValue {
     fn eq(&self, other: &Self) -> bool {
-        self.0.similar(&other.0, 3)
+        self.0.similar(&other.0, SIMILAR_EQ_DEPTH)
     }
 }
 
@@ -2405,7 +2404,7 @@ impl Eq for SimilarJsValue {}
 
 impl Hash for SimilarJsValue {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.similar_hash(state, 2)
+        self.0.similar_hash(state, SIMILAR_HASH_DEPTH)
     }
 }
 
@@ -2670,7 +2669,6 @@ mod tests {
                     let mut resolved = Vec::new();
                     for (id, val) in named_values.iter() {
                         let val = val.clone();
-                        // println!("linking {} {id}", input.display());
                         let start = Instant::now();
                         let res = resolve(&var_graph, val).await;
                         let time = start.elapsed();
@@ -2719,7 +2717,6 @@ mod tests {
                     while let Some((parent, effect)) = queue.pop() {
                         i += 1;
                         let start = Instant::now();
-                        // println!("linking effect {}", input.display());
                         async fn handle_args(
                             args: Vec<EffectArg>,
                             queue: &mut Vec<(usize, Effect)>,

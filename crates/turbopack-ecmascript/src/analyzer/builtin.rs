@@ -4,14 +4,19 @@ use super::{ConstantNumber, ConstantValue, JsValue, LogicalOperator, ObjectPart}
 use crate::analyzer::FreeVarKind;
 
 /// Replaces some builtin values with their resulting values. Called early
-/// without lazy nested values.
+/// without lazy nested values. This allows to skip a lot of work to process the
+/// arguments.
 pub fn early_replace_builtin(value: &mut JsValue) -> bool {
     match value {
+        // matching calls like `callee(arg1, arg2, ...)`
         JsValue::Call(_, box ref mut callee, _) => match callee {
+            // We don't know what the callee is, so we can early return
             JsValue::Unknown(_, _) => {
                 value.make_unknown("unknown callee");
                 true
             }
+            // We known that these callee will lead to an error at runtime, so we can skip
+            // processing them
             JsValue::Constant(_)
             | JsValue::Url(_)
             | JsValue::WellKnownObject(_)
@@ -26,19 +31,25 @@ pub fn early_replace_builtin(value: &mut JsValue) -> bool {
             }
             _ => false,
         },
+        // matching calls with this context like `obj.prop(arg1, arg2, ...)`
         JsValue::MemberCall(_, box ref mut obj, box ref mut prop, _) => match obj {
+            // We don't know what the callee is, so we can early return
             JsValue::Unknown(_, _) => {
                 value.make_unknown("unknown callee object");
                 true
             }
+            // otherwise we need to look at the property
             _ => match prop {
+                // We don't know what the property is, so we can early return
                 JsValue::Unknown(_, _) => {
-                    value.make_unknown("unknown calee property");
+                    value.make_unknown("unknown callee property");
                     true
                 }
                 _ => false,
             },
         },
+        // matching property access like `obj.prop` when we don't know what the obj is.
+        // We can early return here
         JsValue::Member(_, box JsValue::Unknown(_, _), _) => {
             value.make_unknown("unknown object");
             true
@@ -47,10 +58,17 @@ pub fn early_replace_builtin(value: &mut JsValue) -> bool {
     }
 }
 
+/// Replaces some builtin functions and values with their resulting values. In
+/// contrast to early_replace_builtin this has all inner values already
+/// processed.
 pub fn replace_builtin(value: &mut JsValue) -> bool {
     match value {
+        // matching property access like `obj.prop`
         // Accessing a property on something can be handled in some cases
         JsValue::Member(_, box ref mut obj, ref mut prop) => match obj {
+            // matching property access when obj is a bunch of alternatives
+            // like `(obj1 | obj2 | obj3).prop`
+            // We expand these to `obj1.prop | obj2.prop | obj3.prop`
             JsValue::Alternatives(_, alts) => {
                 *value = JsValue::alternatives(
                     take(alts)
@@ -60,6 +78,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 );
                 true
             }
+            // matching property access on an array like `[1,2,3].prop` or `[1,2,3][1]`
             JsValue::Array(_, array) => {
                 fn items_to_alternatives(items: &mut Vec<JsValue>, prop: &mut JsValue) -> JsValue {
                     items.push(JsValue::Unknown(
@@ -72,23 +91,33 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                     JsValue::alternatives(take(items))
                 }
                 match &mut **prop {
-                    JsValue::Constant(ConstantValue::Num(ConstantNumber(num))) => {
-                        let index: usize = *num as usize;
-                        if index as f64 == *num && index < array.len() {
-                            *value = array.swap_remove(index);
-                            true
+                    // accessing a numeric property on an array like `[1,2,3][1]`
+                    // We can replace this with the value at the index
+                    JsValue::Constant(ConstantValue::Num(num @ ConstantNumber(_))) => {
+                        if let Some(index) = num.as_u32_index() {
+                            if index < array.len() {
+                                *value = array.swap_remove(index);
+                                true
+                            } else {
+                                *value = JsValue::Unknown(
+                                    Some(Arc::new(JsValue::member(box take(obj), box take(prop)))),
+                                    "invalid index",
+                                );
+                                true
+                            }
                         } else {
-                            *value = JsValue::Unknown(
-                                Some(Arc::new(JsValue::member(box take(obj), box take(prop)))),
-                                "invalid index",
-                            );
+                            value.make_unknown("non-num constant property on array");
                             true
                         }
                     }
+                    // accessing a non-numeric property on an array like `[1,2,3].length`
+                    // We don't know what happens here
                     JsValue::Constant(_) => {
                         value.make_unknown("non-num constant property on array");
                         true
                     }
+                    // accessing multiple alternative properties on an array like `[1,2,3][(1 | 2 |
+                    // prop3)]`
                     JsValue::Alternatives(_, alts) => {
                         *value = JsValue::alternatives(
                             take(alts)
@@ -98,16 +127,20 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                         );
                         true
                     }
+                    // otherwise we can say that this might gives an item of the array
+                    // but we also add an unknown value to the alternatives for other properties
                     _ => {
                         *value = items_to_alternatives(array, prop);
                         true
                     }
                 }
             }
+            // matching property access on an object like `{a: 1, b: 2}.a`
             JsValue::Object(_, parts) => {
                 fn parts_to_alternatives(
                     parts: &mut Vec<ObjectPart>,
                     prop: &mut Box<JsValue>,
+                    include_unknown: bool,
                 ) -> JsValue {
                     let mut values = Vec::new();
                     for part in parts {
@@ -126,34 +159,92 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                             }
                         }
                     }
-                    values.push(JsValue::Unknown(
-                        Some(Arc::new(JsValue::member(
-                            box JsValue::object(Vec::new()),
-                            box take(prop),
-                        ))),
-                        "unknown object prototype methods or values",
-                    ));
+                    if include_unknown {
+                        values.push(JsValue::Unknown(
+                            Some(Arc::new(JsValue::member(
+                                box JsValue::object(Vec::new()),
+                                box take(prop),
+                            ))),
+                            "unknown object prototype methods or values",
+                        ));
+                    }
                     JsValue::alternatives(values)
                 }
+
+                fn potential_values_to_alternatives(
+                    mut potential_values: Vec<usize>,
+                    parts: &mut Vec<ObjectPart>,
+                    prop: &mut Box<JsValue>,
+                    include_unknown: bool,
+                ) -> JsValue {
+                    // Note: potential_values are already in reverse order
+                    let mut potential_values = take(parts)
+                        .into_iter()
+                        .enumerate()
+                        .filter(|(i, _)| {
+                            if potential_values.last() == Some(i) {
+                                potential_values.pop();
+                                true
+                            } else {
+                                false
+                            }
+                        })
+                        .map(|(_, part)| part)
+                        .collect();
+                    parts_to_alternatives(&mut potential_values, prop, include_unknown)
+                }
+
                 match &mut **prop {
-                    JsValue::Constant(_) => {
-                        for part in parts.iter_mut().rev() {
+                    // matching constant string property access on an object like `{a: 1, b:
+                    // 2}["a"]`
+                    JsValue::Constant(ConstantValue::StrAtom(_) | ConstantValue::StrWord(_)) => {
+                        let prop_str = prop.as_str().unwrap();
+                        println!("prop_str = {prop_str}");
+                        let mut potential_values = Vec::new();
+                        for (i, part) in parts.iter_mut().enumerate().rev() {
                             match part {
                                 ObjectPart::KeyValue(key, val) => {
-                                    if key == &**prop {
-                                        *value = take(val);
-                                        return true;
+                                    println!("key = {key}");
+                                    if let Some(key) = key.as_str() {
+                                        println!("key_str = {key}");
+                                        if key == prop_str {
+                                            if potential_values.is_empty() {
+                                                *value = take(val);
+                                            } else {
+                                                potential_values.push(i);
+                                                *value = potential_values_to_alternatives(
+                                                    potential_values,
+                                                    parts,
+                                                    prop,
+                                                    false,
+                                                );
+                                            }
+                                            return true;
+                                        }
+                                    } else {
+                                        potential_values.push(i);
                                     }
                                 }
                                 ObjectPart::Spread(_) => {
-                                    value.make_unknown("spreaded object");
+                                    value.make_unknown("spread object");
                                     return true;
                                 }
                             }
                         }
-                        *value = JsValue::FreeVar(FreeVarKind::Other("undefined".into()));
+                        if potential_values.is_empty() {
+                            *value = JsValue::FreeVar(FreeVarKind::Other("undefined".into()));
+                        } else {
+                            *value = potential_values_to_alternatives(
+                                potential_values,
+                                parts,
+                                prop,
+                                true,
+                            );
+                        }
                         true
                     }
+                    // matching mutliple alternative properties on an object like `{a: 1, b: 2}[(a |
+                    // b)]`
                     JsValue::Alternatives(_, alts) => {
                         *value = JsValue::alternatives(
                             take(alts)
@@ -164,18 +255,22 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                         true
                     }
                     _ => {
-                        *value = parts_to_alternatives(parts, prop);
+                        *value = parts_to_alternatives(parts, prop, true);
                         true
                     }
                 }
             }
             _ => false,
         },
+        // matching calls with this context like `obj.prop(arg1, arg2, ...)`
         JsValue::MemberCall(_, box ref mut obj, box ref mut prop, ref mut args) => {
             match obj {
+                // matching calls on an array like `[1,2,3].concat([4,5,6])`
                 JsValue::Array(_, items) => {
+                    // matching cases where the property is a const string
                     if let Some(str) = prop.as_str() {
                         match str {
+                            // The Array.prototype.concat method
                             "concat" => {
                                 if args.iter().all(|arg| {
                                     matches!(
@@ -214,6 +309,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                                     return true;
                                 }
                             }
+                            // The Array.prototype.map method
                             "map" => {
                                 if let Some(func) = args.get(0) {
                                     *value = JsValue::array(
@@ -240,6 +336,8 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                         }
                     }
                 }
+                // matching calls on multiple alternative objects like `(obj1 | obj2).prop(arg1,
+                // arg2, ...)`
                 JsValue::Alternatives(_, alts) => {
                     *value = JsValue::alternatives(
                         take(alts)
@@ -253,13 +351,16 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 }
                 _ => {}
             }
+            // without special handling, we convert it into a normal call like
+            // `(obj.prop)(arg1, arg2, ...)`
             *value = JsValue::call(
                 box JsValue::member(box take(obj), box take(prop)),
                 take(args),
             );
             true
         }
-        // Handle calls when the callee is a function
+        // match calls when the callee are multiple alternative functions like `(func1 |
+        // func2)(arg1, arg2, ...)`
         JsValue::Call(_, box JsValue::Alternatives(_, alts), ref mut args) => {
             *value = JsValue::alternatives(
                 take(alts)
@@ -269,8 +370,9 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
             );
             true
         }
-        // Handle spread in object literals
+        // match object literals
         JsValue::Object(_, parts) => {
+            // If the object contains any spread, we might be able to flatten that
             if parts
                 .iter()
                 .any(|part| matches!(part, ObjectPart::Spread(JsValue::Object(..))))
@@ -289,6 +391,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 false
             }
         }
+        // match logical expressions like `a && b` or `a || b || c` or `a ?? b`
         // Reduce logical expressions to their final value(s)
         JsValue::Logical(_, op, ref mut parts) => {
             let len = parts.len();
@@ -326,11 +429,12 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 *value = parts.pop().unwrap();
                 true
             } else {
-                // If not, we known that it will be one of the remaining values.
+                // If not, we know that it will be one of the remaining values.
                 *value = JsValue::alternatives(take(parts));
                 true
             }
         }
+        // match the not operator like `!a`
         // Evaluate not when the inner value is truthy or falsy
         JsValue::Not(_, ref inner) => match inner.is_truthy() {
             Some(true) => {

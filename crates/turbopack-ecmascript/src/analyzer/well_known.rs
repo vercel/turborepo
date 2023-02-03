@@ -26,7 +26,7 @@ pub async fn replace_well_known(
         ),
         JsValue::Call(usize, callee, args) => {
             // var fs = require('fs'), fs = __importStar(fs);
-            // TODO this is not correct and has many false positives!
+            // TODO(WEB-552) this is not correct and has many false positives!
             if args.len() == 1 {
                 if let JsValue::WellKnownObject(_) = &args[0] {
                     return Ok((args[0].clone(), true));

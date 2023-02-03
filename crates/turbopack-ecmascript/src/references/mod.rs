@@ -1196,7 +1196,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                             active!(expr);
                                         }
                                         Some(false) => {
-                                            // The condition value need to stay since it's used
+                                            // The condition value needs to stay since it's used
                                             inactive!(expr);
                                         }
                                         None => {
@@ -1205,7 +1205,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                     },
                                     ConditionalKind::Or { expr } => match condition.is_truthy() {
                                         Some(true) => {
-                                            // The condition value need to stay since it's used
+                                            // The condition value needs to stay since it's used
                                             inactive!(expr);
                                         }
                                         Some(false) => {

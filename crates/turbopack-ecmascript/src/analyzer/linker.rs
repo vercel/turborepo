@@ -56,7 +56,7 @@ where
         LeaveCall(u32),
     }
 
-    let mut queue: Vec<Step> = Vec::new();
+    let mut work_queue_stack: Vec<Step> = Vec::new();
     let mut done: Vec<JsValue> = Vec::new();
     // Tracks the number of nodes in the queue and done combined
     let mut total_nodes = 0;
@@ -65,9 +65,9 @@ where
     let mut steps = 0;
 
     total_nodes += val.total_nodes();
-    queue.push(Step::Enter(val));
+    work_queue_stack.push(Step::Enter(val));
 
-    while let Some(step) = queue.pop() {
+    while let Some(step) = work_queue_stack.pop() {
         steps += 1;
 
         match step {
@@ -86,9 +86,9 @@ where
                     total_nodes -= 1;
                     if let Some(val) = graph.values.get(&var) {
                         cycle_stack.insert(var.clone());
-                        queue.push(Step::LeaveVar(var));
+                        work_queue_stack.push(Step::LeaveVar(var));
                         total_nodes += val.total_nodes();
-                        queue.push(Step::Enter(val.clone()));
+                        work_queue_stack.push(Step::Enter(val.clone()));
                     } else {
                         total_nodes += 1;
                         done.push(JsValue::Unknown(
@@ -100,9 +100,7 @@ where
             }
             // Leave a variable
             Step::LeaveVar(var) => {
-                let val = done.pop().unwrap();
                 cycle_stack.remove(&var);
-                done.push(val);
             }
             // Enter a function argument
             // We want to replace the argument with the value from the function call
@@ -142,8 +140,8 @@ where
                         total_nodes -= arg.total_nodes();
                     }
                     entry.insert(args);
-                    queue.push(Step::LeaveCall(func_ident));
-                    queue.push(Step::Enter(*return_value));
+                    work_queue_stack.push(Step::LeaveCall(func_ident));
+                    work_queue_stack.push(Step::Enter(*return_value));
                 } else {
                     total_nodes -= return_value.total_nodes();
                     for arg in args.iter() {
@@ -175,22 +173,22 @@ where
             // - take and queue children for processing
             // - on leave: insert children again and optimize
             Step::Enter(mut val) => {
-                let i = queue.len();
-                queue.push(Step::Leave(JsValue::default()));
+                let i = work_queue_stack.len();
+                work_queue_stack.push(Step::Leave(JsValue::default()));
                 let mut has_early_children = false;
-                val.for_each_early_children_mut(true, &mut |child| {
+                val.for_each_early_children_mut(&mut |child| {
                     has_early_children = true;
-                    queue.push(Step::Enter(take(child)));
+                    work_queue_stack.push(Step::Enter(take(child)));
                     false
                 });
                 if has_early_children {
-                    queue[i] = Step::EarlyVisit(val);
+                    work_queue_stack[i] = Step::EarlyVisit(val);
                 } else {
                     val.for_each_children_mut(&mut |child| {
-                        queue.push(Step::Enter(take(child)));
+                        work_queue_stack.push(Step::Enter(take(child)));
                         false
                     });
-                    queue[i] = Step::Leave(val);
+                    work_queue_stack[i] = Step::Leave(val);
                 }
             }
             // Early visit a value
@@ -198,13 +196,12 @@ where
             // - visit the value
             // - insert late children and process for Leave
             Step::EarlyVisit(mut val) => {
-                val.for_each_early_children_mut(true, &mut |child| {
+                val.for_each_early_children_mut(&mut |child| {
                     let val = done.pop().unwrap();
                     *child = val;
                     true
                 });
-                #[cfg(debug_assertions)]
-                val.assert_total_nodes_up_to_date();
+                val.debug_assert_total_nodes_up_to_date();
                 total_nodes -= val.total_nodes();
                 if val.total_nodes() > LIMIT_NODE_SIZE {
                     total_nodes += 1;
@@ -213,8 +210,7 @@ where
                 }
 
                 let (mut val, visit_modified) = early_visitor(val).await?;
-                #[cfg(debug_assertions)]
-                val.assert_total_nodes_up_to_date();
+                val.debug_assert_total_nodes_up_to_date();
                 if visit_modified && val.total_nodes() > LIMIT_NODE_SIZE {
                     total_nodes += 1;
                     done.push(JsValue::Unknown(None, "node limit reached"));
@@ -231,13 +227,19 @@ where
                 }
                 total_nodes += count;
 
-                let i = queue.len();
-                queue.push(Step::LeaveLate(JsValue::default()));
-                val.for_each_early_children_mut(false, &mut |child| {
-                    queue.push(Step::Enter(take(child)));
-                    false
-                });
-                queue[i] = Step::LeaveLate(val);
+                if visit_modified {
+                    // When the early visitor has changed the value, we need to enter it again
+                    work_queue_stack.push(Step::Enter(val));
+                } else {
+                    // Otherwise we can just process the late children
+                    let i = work_queue_stack.len();
+                    work_queue_stack.push(Step::LeaveLate(JsValue::default()));
+                    val.for_each_late_children_mut(&mut |child| {
+                        work_queue_stack.push(Step::Enter(take(child)));
+                        false
+                    });
+                    work_queue_stack[i] = Step::LeaveLate(val);
+                }
             }
             // Leave a value
             Step::Leave(mut val) => {
@@ -246,8 +248,7 @@ where
                     *child = val;
                     true
                 });
-                #[cfg(debug_assertions)]
-                val.assert_total_nodes_up_to_date();
+                val.debug_assert_total_nodes_up_to_date();
 
                 total_nodes -= val.total_nodes();
 
@@ -258,21 +259,19 @@ where
                 }
                 val.normalize_shallow();
 
-                #[cfg(debug_assertions)]
-                val.assert_total_nodes_up_to_date();
+                val.debug_assert_total_nodes_up_to_date();
 
                 total_nodes += val.total_nodes();
-                queue.push(Step::Visit(val));
+                work_queue_stack.push(Step::Visit(val));
             }
             // Leave a value from EarlyVisit
             Step::LeaveLate(mut val) => {
-                val.for_each_early_children_mut(false, &mut |child| {
+                val.for_each_late_children_mut(&mut |child| {
                     let val = done.pop().unwrap();
                     *child = val;
                     true
                 });
-                #[cfg(debug_assertions)]
-                val.assert_total_nodes_up_to_date();
+                val.debug_assert_total_nodes_up_to_date();
 
                 total_nodes -= val.total_nodes();
 
@@ -283,11 +282,10 @@ where
                 }
                 val.normalize_shallow();
 
-                #[cfg(debug_assertions)]
-                val.assert_total_nodes_up_to_date();
+                val.debug_assert_total_nodes_up_to_date();
 
                 total_nodes += val.total_nodes();
-                queue.push(Step::Visit(val));
+                work_queue_stack.push(Step::Visit(val));
             }
             // Visit a value with the visitor
             // - visited value is put into done
@@ -298,7 +296,7 @@ where
                 if visit_modified {
                     val.normalize_shallow();
                     #[cfg(debug_assertions)]
-                    val.assert_total_nodes_up_to_date();
+                    val.debug_assert_total_nodes_up_to_date();
                     if val.total_nodes() > LIMIT_NODE_SIZE {
                         total_nodes += 1;
                         done.push(JsValue::Unknown(None, "node limit reached"));
@@ -316,7 +314,7 @@ where
                 }
                 total_nodes += count;
                 if visit_modified {
-                    queue.push(Step::Enter(val));
+                    work_queue_stack.push(Step::Enter(val));
                 } else {
                     done.push(val);
                 }
@@ -332,7 +330,7 @@ where
 
     let final_value = done.pop().unwrap();
 
-    debug_assert!(queue.is_empty());
+    debug_assert!(work_queue_stack.is_empty());
     debug_assert_eq!(total_nodes, final_value.total_nodes());
 
     Ok(final_value)

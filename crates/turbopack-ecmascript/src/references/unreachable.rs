@@ -32,7 +32,7 @@ impl CodeGenerateable for Unreachable {
                 *expr = quote!("(\"TURBOPACK unreachable\", undefined)" as Expr);
             }),
             create_visitor!(exact path, visit_mut_stmt(stmt: &mut Stmt) {
-                // TODO walk ast to find all `var` declarations and keep them
+                // TODO(WEB-553) walk ast to find all `var` declarations and keep them
                 // since they hoist out of the scope
                 *stmt = quote!("{\"TURBOPACK unreachable\";}" as Stmt);
             }),

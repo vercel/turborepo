@@ -983,7 +983,7 @@ impl VisitAstPath for Analyzer<'_> {
                             if arg.spread.is_none() {
                                 let value = self.eval_context.eval(&arg.expr);
 
-                                if let Some(path) = match &*arg.expr {
+                                let block_path = match &*arg.expr {
                                     Expr::Fn(FnExpr { .. }) => {
                                         let mut path = as_parent_path(ast_path);
                                         path.push(AstParentKind::ExprOrSpread(
@@ -1025,7 +1025,8 @@ impl VisitAstPath for Analyzer<'_> {
                                         Some(path)
                                     }
                                     _ => None,
-                                } {
+                                };
+                                if let Some(path) = block_path {
                                     let old_effects = take(&mut self.effects);
                                     arg.visit_with_path(self, ast_path);
                                     let effects = replace(&mut self.effects, old_effects);
