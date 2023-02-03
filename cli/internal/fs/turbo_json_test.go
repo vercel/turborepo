@@ -79,7 +79,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 func Test_LoadTurboConfig_Legacy(t *testing.T) {
 	testDir := getTestDir(t, "legacy-only")
 	packageJSONPath := testDir.UntypedJoin("package.json")
-	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(turbopath.AbsoluteSystemPath(testDir), packageJSONPath)
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
 		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)
@@ -94,7 +94,7 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 	testDir := getTestDir(t, "both")
 
 	packageJSONPath := testDir.UntypedJoin("package.json")
-	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(turbopath.AbsoluteSystemPath(testDir), packageJSONPath)
+	rootPackageJSON, pkgJSONReadErr := ReadPackageJSON(packageJSONPath)
 
 	if pkgJSONReadErr != nil {
 		t.Fatalf("invalid parse: %#v", pkgJSONReadErr)

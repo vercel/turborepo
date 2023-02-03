@@ -426,6 +426,10 @@ func (p *PnpmLockfile) GlobalChange(other Lockfile) bool {
 
 func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath, name string, specifier string) (string, bool, error) {
 	pnpmWorkspacePath := workspacePath.ToString()
+	if pnpmWorkspacePath == "" {
+		// For pnpm, the root is named "."
+		pnpmWorkspacePath = "."
+	}
 	importer, ok := p.Importers[pnpmWorkspacePath]
 	if !ok {
 		return "", false, fmt.Errorf("no workspace '%v' found in lockfile", workspacePath)

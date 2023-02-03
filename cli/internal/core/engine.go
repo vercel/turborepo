@@ -438,6 +438,8 @@ func (e *Engine) getPipelineFromWorkspace(workspaceName string) (*fs.Pipeline, e
 		return cachedPipeline, nil
 	}
 
+	// Note: dir for the root workspace will be an empty string, and for
+	// other workspaces, it will be a relative path.
 	dir := e.completeGraph.WorkspaceInfos[workspaceName].Dir
 
 	var pkgJSON *fs.PackageJSON
@@ -451,7 +453,7 @@ func (e *Engine) getPipelineFromWorkspace(workspaceName string) (*fs.Pipeline, e
 		var err error
 
 		rootPkgJSONPath := dirAbsolutePath.Join("package.json")
-		pkgJSON, err = fs.ReadPackageJSON(repoRoot, rootPkgJSONPath)
+		pkgJSON, err = fs.ReadPackageJSON(rootPkgJSONPath)
 		if err != nil {
 			return nil, err
 		}

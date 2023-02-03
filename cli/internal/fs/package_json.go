@@ -3,7 +3,6 @@ package fs
 import (
 	"bytes"
 	"encoding/json"
-	"path/filepath"
 	"sync"
 
 	"github.com/vercel/turbo/cli/internal/lockfile"
@@ -60,30 +59,12 @@ func (r *Workspaces) UnmarshalJSON(data []byte) error {
 }
 
 // ReadPackageJSON returns a struct of package.json
-func ReadPackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSONFilePath turbopath.AbsoluteSystemPath) (*PackageJSON, error) {
+func ReadPackageJSON(pkgJSONFilePath turbopath.AbsoluteSystemPath) (*PackageJSON, error) {
 	b, err := pkgJSONFilePath.ReadFile()
 	if err != nil {
 		return nil, err
 	}
-	pkg, err := UnmarshalPackageJSON(b)
-
-	if err != nil {
-		return nil, err
-	}
-
-	// get relative path for package.json
-	relativePkgJSONPath, err := repoRoot.PathTo(pkgJSONFilePath)
-	if err != nil {
-		return nil, err
-	}
-
-	// assign PackageJSONPath and Dir
-	// TODO(mehulkar) These could go into WorkspaceInfos or some other Workspace construct
-	// rather than onto the fs.PackageJSON itself (which should just be the unmarshaled contents of package.json)
-	pkg.PackageJSONPath = turbopath.AnchoredSystemPathFromUpstream(relativePkgJSONPath)
-	pkg.Dir = turbopath.AnchoredSystemPathFromUpstream(filepath.Dir(relativePkgJSONPath))
-
-	return pkg, nil
+	return UnmarshalPackageJSON(b)
 }
 
 // UnmarshalPackageJSON decodes a byte slice into a PackageJSON struct
