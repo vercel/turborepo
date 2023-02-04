@@ -39,7 +39,7 @@ pub struct Rope {
 /// An Arc container for ropes. This indirection allows for easily sharing the
 /// contents between Ropes (and also RopeBuilders/RopeReaders).
 #[derive(Clone, Debug, Default)]
-struct InnerRope(Arc<Vec<RopeElem>>);
+struct InnerRope(Arc<Box<[RopeElem]>>);
 
 /// Differentiates the types of stored bytes in a rope.
 #[derive(Clone, Debug)]
@@ -133,7 +133,7 @@ impl<T: Into<Bytes>> From<T> for Rope {
         } else {
             Rope {
                 length: bytes.len(),
-                data: InnerRope::from(vec![Local(bytes)]),
+                data: InnerRope::from(Box::from([Local(bytes)])),
             }
         }
     }
@@ -215,7 +215,7 @@ impl RopeBuilder {
         self.finish();
         Rope {
             length: self.length,
-            data: InnerRope::from(self.committed),
+            data: InnerRope::from(self.committed.into_boxed_slice()),
         }
     }
 }
@@ -369,8 +369,8 @@ impl DeterministicHash for InnerRope {
     }
 }
 
-impl From<Vec<RopeElem>> for InnerRope {
-    fn from(mut els: Vec<RopeElem>) -> Self {
+impl From<Box<[RopeElem]>> for InnerRope {
+    fn from(els: Box<[RopeElem]>) -> Self {
         if cfg!(debug_assertions) {
             // It's important that an InnerRope never contain an empty Bytes section.
             for el in els.iter() {
@@ -386,11 +386,6 @@ impl From<Vec<RopeElem>> for InnerRope {
                 }
             }
         }
-        // The RopeBuilder likely over-allocated the vec so we could insert more
-        // RopeElems into it. But we're constructing a immutable Rope which may
-        // stay alive forever, so we need to trim any excess capacity to save
-        // memory.
-        els.shrink_to_fit();
         InnerRope(Arc::new(els))
     }
 }
@@ -432,7 +427,7 @@ impl PartialEq for InnerRope {
 impl Eq for InnerRope {}
 
 impl Deref for InnerRope {
-    type Target = Arc<Vec<RopeElem>>;
+    type Target = Arc<Box<[RopeElem]>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
