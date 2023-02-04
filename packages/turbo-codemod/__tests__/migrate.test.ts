@@ -1,6 +1,6 @@
 import { MigrateCommandArgument } from "../src/commands";
 import migrate from "../src/commands/migrate";
-import { setupTestFixtures, spyExit } from "./test-utils";
+import { setupTestFixtures, spyExit } from "turbo-test-utils";
 import childProcess from "child_process";
 import * as checkGitStatus from "../src/utils/checkGitStatus";
 import * as getCurrentVersion from "../src/commands/migrate/steps/getCurrentVersion";
@@ -11,7 +11,10 @@ import * as getPackageManagerVersion from "../src/utils/getPackageManagerVersion
 
 describe("migrate", () => {
   const mockExit = spyExit();
-  const { useFixture } = setupTestFixtures({ test: "migrate" });
+  const { useFixture } = setupTestFixtures({
+    directory: __dirname,
+    test: "migrate",
+  });
 
   it("migrates from 1.0.0 to 1.7.0", async () => {
     const { root, readJson } = useFixture({

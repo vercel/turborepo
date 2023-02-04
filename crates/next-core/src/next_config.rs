@@ -29,6 +29,7 @@ use turbopack_ecmascript::{
 use turbopack_node::{
     evaluate::{evaluate, JavaScriptValue},
     execution_context::{ExecutionContext, ExecutionContextVc},
+    transforms::webpack::{WebpackLoaderConfigs, WebpackLoaderConfigsVc},
 };
 
 use crate::embed_js::next_asset;
@@ -37,18 +38,19 @@ use crate::embed_js::next_asset;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NextConfig {
-    pub cross_origin: Option<String>,
     pub config_file: Option<String>,
     pub config_file_name: String,
 
-    pub react_strict_mode: Option<bool>,
-    pub experimental: ExperimentalConfig,
     pub env: IndexMap<String, String>,
-    pub compiler: Option<CompilerConfig>,
+    pub experimental: ExperimentalConfig,
     pub images: ImageConfig,
+    pub page_extensions: Vec<String>,
+    pub react_strict_mode: Option<bool>,
     pub transpile_packages: Option<Vec<String>>,
 
     // unsupported
+    cross_origin: Option<String>,
+    compiler: Option<CompilerConfig>,
     amp: AmpConfig,
     analytics_id: String,
     asset_prefix: String,
@@ -72,7 +74,6 @@ pub struct NextConfig {
     optimize_fonts: bool,
     output: Option<OutputType>,
     output_file_tracing: bool,
-    page_extensions: Vec<String>,
     powered_by_header: bool,
     production_browser_source_maps: bool,
     public_runtime_config: IndexMap<String, serde_json::Value>,
@@ -245,7 +246,7 @@ pub struct ExperimentalConfig {
     pub app_dir: Option<bool>,
     pub resolve_alias: Option<IndexMap<String, JsonValue>>,
     pub server_components_external_packages: Option<Vec<String>>,
-    pub turbopack_loaders: Option<IndexMap<String, Vec<String>>>,
+    pub turbopack_loaders: Option<IndexMap<String, WebpackLoaderConfigs>>,
 
     // unsupported
     adjust_font_fallbacks: Option<bool>,
@@ -383,6 +384,11 @@ impl NextConfigVc {
     }
 
     #[turbo_tasks::function]
+    pub async fn page_extensions(self) -> Result<StringsVc> {
+        Ok(StringsVc::cell(self.await?.page_extensions.clone()))
+    }
+
+    #[turbo_tasks::function]
     pub async fn transpile_packages(self) -> Result<StringsVc> {
         Ok(StringsVc::cell(
             self.await?.transpile_packages.clone().unwrap_or_default(),
@@ -396,7 +402,7 @@ impl NextConfigVc {
         };
         let mut extension_to_loaders = IndexMap::new();
         for (ext, loaders) in turbopack_loaders {
-            extension_to_loaders.insert(ext.clone(), StringsVc::cell(loaders.clone()));
+            extension_to_loaders.insert(ext.clone(), WebpackLoaderConfigsVc::cell(loaders.clone()));
         }
         Ok(WebpackLoadersOptions {
             extension_to_loaders,

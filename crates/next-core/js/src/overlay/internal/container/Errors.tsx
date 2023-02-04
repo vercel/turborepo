@@ -124,34 +124,54 @@ function useResolvedErrors(
   return [readyErrors, isLoading];
 }
 
+const enum DisplayState {
+  Fullscreen,
+  Minimized,
+  Hidden,
+}
+
+type DisplayStateAction = (e?: MouseEvent | TouchEvent) => void;
+
+type DisplayStateActions = {
+  fullscreen: DisplayStateAction;
+  minimize: DisplayStateAction;
+  hide: DisplayStateAction;
+};
+
+function useDisplayState(
+  initialState: DisplayState
+): [DisplayState, DisplayStateActions] {
+  const [displayState, setDisplayState] =
+    React.useState<DisplayState>(initialState);
+
+  const actions = React.useMemo<DisplayStateActions>(
+    () => ({
+      fullscreen: (e) => {
+        e?.preventDefault();
+        setDisplayState(DisplayState.Fullscreen);
+      },
+      minimize: (e) => {
+        e?.preventDefault();
+        setDisplayState(DisplayState.Minimized);
+      },
+      hide: (e) => {
+        e?.preventDefault();
+        setDisplayState(DisplayState.Hidden);
+      },
+    }),
+    []
+  );
+
+  return [displayState, actions];
+}
+
 const enum TabId {
   TurbopackIssues = "turbopack-issues",
   RuntimeErrors = "runtime-errors",
 }
 
 export function Errors({ issues, errors }: ErrorsProps) {
-  // eslint-disable-next-line prefer-const
-  let [displayState, setDisplayState] = React.useState<
-    "minimized" | "fullscreen" | "hidden"
-  >("fullscreen");
-
   const [readyErrors, isLoading] = useResolvedErrors(errors);
-
-  const minimize = React.useCallback((e?: MouseEvent | TouchEvent) => {
-    e?.preventDefault();
-    setDisplayState("minimized");
-  }, []);
-  const hide = React.useCallback((e?: MouseEvent | TouchEvent) => {
-    e?.preventDefault();
-    setDisplayState("hidden");
-  }, []);
-  const fullscreen = React.useCallback(
-    (e?: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
-      e?.preventDefault();
-      setDisplayState("fullscreen");
-    },
-    []
-  );
 
   const hasIssues = issues.length !== 0;
   const hasIssueWithError = issues.some((issue) =>
@@ -162,7 +182,10 @@ export function Errors({ issues, errors }: ErrorsProps) {
   const hasServerError = readyErrors.some((err) =>
     ["server", "edge-server"].includes(getErrorSource(err.error) || "")
   );
-  const isClosable = !isLoading && !hasIssueWithError && !hasServerError;
+
+  // TODO for now it's already closable, but in future we might want to block users from using a broken app
+  // const isClosable = !isLoading && !hasIssueWithError && !hasServerError;
+  const isClosable = true;
 
   const defaultTab =
     hasIssueWithError || !hasErrors
@@ -177,8 +200,15 @@ export function Errors({ issues, errors }: ErrorsProps) {
     }
   }, [defaultTab]);
 
+  const onlyHasWarnings = !hasErrors && !hasIssueWithError;
+
+  const [stateDisplayState, { fullscreen, minimize, hide }] = useDisplayState(
+    onlyHasWarnings ? DisplayState.Minimized : DisplayState.Fullscreen
+  );
+  let displayState = stateDisplayState;
+
   if (!isClosable) {
-    displayState = "fullscreen";
+    displayState = DisplayState.Fullscreen;
   }
 
   // This component shouldn't be rendered with no errors, but if it is, let's
@@ -187,14 +217,15 @@ export function Errors({ issues, errors }: ErrorsProps) {
     return null;
   }
 
-  if (displayState === "hidden") {
+  if (displayState === DisplayState.Hidden) {
     return null;
   }
 
-  if (displayState === "minimized") {
+  if (displayState === DisplayState.Minimized) {
     return (
       <ErrorsToast
         errorCount={readyErrors.length + issues.length}
+        severity={onlyHasWarnings ? "warning" : "error"}
         onClick={fullscreen}
         onClose={hide}
       />
@@ -203,8 +234,8 @@ export function Errors({ issues, errors }: ErrorsProps) {
 
   return (
     <ErrorsDialog
-      aria-labelledby="errors_label"
-      aria-describedby="errors_desc"
+      aria-labelledby="nextjs__container_errors_label"
+      aria-describedby="nextjs__container_errors_desc"
       onClose={isClosable ? minimize : undefined}
     >
       <Tabs
@@ -345,6 +376,7 @@ export const styles = css`
     margin-bottom: var(--size-gap);
     color: var(--color-error);
     white-space: pre-wrap;
+    overflow-wrap: break-word;
   }
 
   .errors-body > h2[data-severity="error"] {

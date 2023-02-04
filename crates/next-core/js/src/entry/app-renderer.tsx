@@ -51,9 +51,13 @@ type IpcIncomingMessage = {
 };
 
 type IpcOutgoingMessage = {
-  type: "result";
-  result: string | { body: string; contentType?: string };
+  type: "response";
+  statusCode: number;
+  headers: Array<[string, string]>;
+  body: string;
 };
+
+const MIME_TEXT_HTML_UTF8 = "text/html; charset=utf-8";
 
 (async () => {
   while (true) {
@@ -71,15 +75,16 @@ type IpcOutgoingMessage = {
       }
     }
 
-    const html = await runOperation(renderData);
+    const result = await runOperation(renderData);
 
-    if (html == null) {
+    if (result == null) {
       throw new Error("no html returned");
     }
 
     ipc.send({
-      type: "result",
-      result: html,
+      type: "response",
+      statusCode: 200,
+      ...result,
     });
   }
 })().catch((err) => {
@@ -111,8 +116,7 @@ async function runOperation(renderData: RenderData) {
   const layoutInfoChunks: Record<string, string[]> = {};
   const pageItem = LAYOUT_INFO[LAYOUT_INFO.length - 1];
   const pageModule = pageItem.page!.module;
-  const Page = pageModule.default;
-  let tree: LoaderTree = ["", {}, { page: [() => Page, "page.js"] }];
+  let tree: LoaderTree = ["", {}, { page: [() => pageModule, "page.js"] }];
   layoutInfoChunks["page"] = pageItem.page!.chunks;
   for (let i = LAYOUT_INFO.length - 2; i >= 0; i--) {
     const info = LAYOUT_INFO[i];
@@ -122,7 +126,7 @@ async function runOperation(renderData: RenderData) {
         continue;
       }
       const k = key as FileType;
-      components[k] = [() => info[k]!.module.default, `${k}${i}.js`];
+      components[k] = [() => info[k]!.module, `${k}${i}.js`];
       layoutInfoChunks[`${k}${i}`] = info[k]!.chunks;
     }
     tree = [info.segment, { children: tree }, components];
@@ -234,7 +238,7 @@ async function runOperation(renderData: RenderData) {
     body = result.toUnchunkedString();
   }
   return {
-    contentType: result.contentType(),
+    headers: [["Content-Type", result.contentType() ?? MIME_TEXT_HTML_UTF8]],
     body,
   };
 }

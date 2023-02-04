@@ -1,19 +1,14 @@
 use anyhow::Result;
 use log::error;
 
-use crate::{
-    config::{default_user_config_path, UserConfig},
-    ui::{GREY, UI},
-};
+use crate::{commands::CommandBase, ui::GREY};
 
-pub fn logout(ui: UI) -> Result<()> {
-    let mut config = UserConfig::load(&default_user_config_path()?, None)?;
-
-    if let Err(err) = config.set_token(None) {
+pub fn logout(base: &mut CommandBase) -> Result<()> {
+    if let Err(err) = base.user_config_mut()?.set_token(None) {
         error!("could not logout. Something went wrong: {}", err);
         return Err(err);
     }
 
-    println!("{}", ui.apply(GREY.apply_to(">>> Logged out")));
+    println!("{}", base.ui.apply(GREY.apply_to(">>> Logged out")));
     Ok(())
 }

@@ -13,7 +13,8 @@ use turbopack_core::{
 };
 
 use super::{
-    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
+    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceResultVc,
+    ContentSourceVc,
 };
 
 #[turbo_tasks::value(transparent)]
@@ -149,7 +150,7 @@ impl ContentSource for AssetGraphContentSource {
                 }
             }
             return Ok(ContentSourceResultVc::exact(
-                ContentSourceContent::Static(asset.versioned_content()).cell(),
+                ContentSourceContentVc::static_content(asset.versioned_content()).into(),
             ));
         }
         Ok(ContentSourceResultVc::not_found())

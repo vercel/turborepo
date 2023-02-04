@@ -1,18 +1,17 @@
 pub mod asset_graph;
 pub mod combined;
 pub mod conditional;
-pub mod lazy_instatiated;
+pub mod headers;
+pub mod lazy_instantiated;
 pub mod query;
+pub mod request;
+pub(crate) mod resolve;
 pub mod router;
 pub mod source_maps;
 pub mod specificity;
 pub mod static_assets;
 
-use std::{
-    collections::{BTreeMap, HashSet},
-    hash::Hash,
-    mem::replace,
-};
+use std::{collections::BTreeSet, sync::Arc};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize, Serializer};
@@ -20,7 +19,7 @@ use turbo_tasks::{trace::TraceRawVcs, Value};
 use turbo_tasks_fs::rope::Rope;
 use turbopack_core::version::VersionedContentVc;
 
-use self::{query::Query, specificity::SpecificityVc};
+use self::{headers::Headers, query::Query, specificity::SpecificityVc};
 
 /// The result of proxying a request to another HTTP server.
 #[turbo_tasks::value(shared)]
@@ -37,51 +36,149 @@ pub struct ProxyResult {
 /// attached and when combining results this specificity should be used to order
 /// results.
 #[turbo_tasks::value(shared)]
-pub struct ContentSourceResult {
-    pub specificity: SpecificityVc,
-    pub content: ContentSourceContentVc,
+pub enum ContentSourceResult {
+    NotFound,
+    NeedData(NeededData),
+    Result {
+        specificity: SpecificityVc,
+        get_content: GetContentSourceContentVc,
+    },
+}
+
+#[turbo_tasks::value_impl]
+impl ContentSource for ContentSourceResult {
+    #[turbo_tasks::function]
+    fn get(
+        self_vc: ContentSourceResultVc,
+        _path: &str,
+        _data: Value<ContentSourceData>,
+    ) -> ContentSourceResultVc {
+        self_vc
+    }
 }
 
 #[turbo_tasks::value_impl]
 impl ContentSourceResultVc {
     /// Wraps some content source content with exact match specificity.
     #[turbo_tasks::function]
-    pub fn exact(content: ContentSourceContentVc) -> ContentSourceResultVc {
-        ContentSourceResult {
+    pub fn exact(get_content: GetContentSourceContentVc) -> ContentSourceResultVc {
+        ContentSourceResult::Result {
             specificity: SpecificityVc::exact(),
-            content,
+            get_content,
         }
         .cell()
+    }
+
+    /// Wraps some content source content with exact match specificity.
+    #[turbo_tasks::function]
+    pub fn need_data(data: Value<NeededData>) -> ContentSourceResultVc {
+        ContentSourceResult::NeedData(data.into_value()).cell()
     }
 
     /// Result when no match was found with the lowest specificity.
     #[turbo_tasks::function]
     pub fn not_found() -> ContentSourceResultVc {
-        ContentSourceResult {
-            specificity: SpecificityVc::not_found(),
-            content: ContentSourceContent::NotFound.cell(),
-        }
-        .cell()
+        ContentSourceResult::NotFound.cell()
     }
 }
 
+/// A functor to receive the actual content of a content source result.
+#[turbo_tasks::value_trait]
+pub trait GetContentSourceContent {
+    /// Specifies data requirements for the get function. Restricting data
+    /// passed allows to cache the get method.
+    fn vary(&self) -> ContentSourceDataVaryVc {
+        ContentSourceDataVary::default().cell()
+    }
+
+    /// Get the content
+    fn get(&self, data: Value<ContentSourceData>) -> ContentSourceContentVc;
+}
+
+#[turbo_tasks::value]
+pub struct StaticContent {
+    pub content: VersionedContentVc,
+    pub status_code: u16,
+    pub headers: HeaderListVc,
+}
+
 #[turbo_tasks::value(shared)]
-#[derive(Debug)]
 // TODO add Dynamic variant in future to allow streaming and server responses
 /// The content of a result that is returned by a content source.
 pub enum ContentSourceContent {
     NotFound,
-    Static(VersionedContentVc),
+    Static(StaticContentVc),
     HttpProxy(ProxyResultVc),
-    NeedData(NeededData),
+    Rewrite(RewriteVc),
+}
+
+#[turbo_tasks::value_impl]
+impl GetContentSourceContent for ContentSourceContent {
+    #[turbo_tasks::function]
+    fn get(
+        self_vc: ContentSourceContentVc,
+        _data: Value<ContentSourceData>,
+    ) -> ContentSourceContentVc {
+        self_vc
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ContentSourceContentVc {
+    #[turbo_tasks::function]
+    pub fn static_content(content: VersionedContentVc) -> ContentSourceContentVc {
+        ContentSourceContent::Static(
+            StaticContent {
+                content,
+                status_code: 200,
+                headers: HeaderListVc::empty(),
+            }
+            .cell(),
+        )
+        .cell()
+    }
+
+    #[turbo_tasks::function]
+    pub fn static_with_headers(
+        content: VersionedContentVc,
+        status_code: u16,
+        headers: HeaderListVc,
+    ) -> ContentSourceContentVc {
+        ContentSourceContent::Static(
+            StaticContent {
+                content,
+                status_code,
+                headers,
+            }
+            .cell(),
+        )
+        .cell()
+    }
+
+    #[turbo_tasks::function]
+    pub fn not_found() -> ContentSourceContentVc {
+        ContentSourceContent::NotFound.cell()
+    }
+}
+
+/// A list of headers arranged as contiguous (name, value) pairs.
+#[turbo_tasks::value(transparent)]
+pub struct HeaderList(Vec<(String, String)>);
+
+#[turbo_tasks::value_impl]
+impl HeaderListVc {
+    #[turbo_tasks::function]
+    pub fn empty() -> HeaderListVc {
+        HeaderList(vec![]).cell()
+    }
 }
 
 /// Needed data content signals that the content source requires more
 /// information in order to serve the request. The held data allows us to
 /// partially compute some data, and resume computation after the needed vary
 /// data is supplied by the dev server.
-#[turbo_tasks::value(shared)]
-#[derive(Debug, Clone)]
+#[turbo_tasks::value(shared, serialization = "auto_for_input")]
+#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 pub struct NeededData {
     /// A [ContentSource] to query once the data has been extracted from the
     /// server. This _does not_ need to be the original content source.
@@ -97,64 +194,7 @@ pub struct NeededData {
 
 impl From<VersionedContentVc> for ContentSourceContentVc {
     fn from(content: VersionedContentVc) -> Self {
-        ContentSourceContent::Static(content).cell()
-    }
-}
-
-/// The value of an http header. HTTP headers might contain non-utf-8 bytes. An
-/// header might also occur multiple times.
-#[derive(
-    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, TraceRawVcs, Serialize, Deserialize,
-)]
-#[serde(untagged)]
-pub enum HeaderValue {
-    SingleString(String),
-    SingleBytes(Vec<u8>),
-    MultiStrings(Vec<String>),
-    MultiBytes(Vec<Vec<u8>>),
-}
-
-impl HeaderValue {
-    /// Extends the current value with another occurrence of that header which
-    /// is a string
-    pub fn extend_with_string(&mut self, new: String) {
-        *self = match replace(self, HeaderValue::SingleBytes(Vec::new())) {
-            HeaderValue::SingleString(s) => HeaderValue::MultiStrings(vec![s, new]),
-            HeaderValue::SingleBytes(b) => HeaderValue::MultiBytes(vec![b, new.into()]),
-            HeaderValue::MultiStrings(mut v) => {
-                v.push(new);
-                HeaderValue::MultiStrings(v)
-            }
-            HeaderValue::MultiBytes(mut v) => {
-                v.push(new.into());
-                HeaderValue::MultiBytes(v)
-            }
-        }
-    }
-    /// Extends the current value with another occurrence of that header which
-    /// is a non-utf-8 valid byte sequence
-    pub fn extend_with_bytes(&mut self, new: Vec<u8>) {
-        *self = match replace(self, HeaderValue::SingleBytes(Vec::new())) {
-            HeaderValue::SingleString(s) => HeaderValue::MultiBytes(vec![s.into(), new]),
-            HeaderValue::SingleBytes(b) => HeaderValue::MultiBytes(vec![b, new]),
-            HeaderValue::MultiStrings(v) => {
-                let mut v: Vec<Vec<u8>> = v.into_iter().map(|s| s.into()).collect();
-                v.push(new);
-                HeaderValue::MultiBytes(v)
-            }
-            HeaderValue::MultiBytes(mut v) => {
-                v.push(new);
-                HeaderValue::MultiBytes(v)
-            }
-        }
-    }
-
-    pub fn contains(&self, string_value: &str) -> bool {
-        match self {
-            HeaderValue::SingleString(s) => s.contains(string_value),
-            HeaderValue::MultiStrings(s) => s.iter().any(|s| s.contains(string_value)),
-            _ => false,
-        }
+        ContentSourceContentVc::static_content(content)
     }
 }
 
@@ -175,7 +215,7 @@ pub struct ContentSourceData {
     pub query: Option<Query>,
     /// http headers, might contain multiple headers with the same name, if
     /// requested
-    pub headers: Option<BTreeMap<String, HeaderValue>>,
+    pub headers: Option<Headers>,
     /// request body, if requested
     pub body: Option<BodyVc>,
     /// see [ContentSourceDataVary::cache_buster]
@@ -184,16 +224,18 @@ pub struct ContentSourceData {
 
 /// A request body.
 #[turbo_tasks::value(shared)]
-#[derive(Default)]
+#[derive(Default, Clone, Debug)]
 pub struct Body {
     #[turbo_tasks(debug_ignore, trace_ignore)]
-    chunks: Vec<Bytes>,
+    chunks: Arc<Vec<Bytes>>,
 }
 
 impl Body {
     /// Creates a new body from a list of chunks.
     pub fn new(chunks: Vec<Bytes>) -> Self {
-        Self { chunks }
+        Self {
+            chunks: Arc::new(chunks),
+        }
     }
 
     /// Returns an iterator over the body's chunks.
@@ -204,7 +246,7 @@ impl Body {
 
 /// A wrapper around [hyper::body::Bytes] that implements [Serialize] and
 /// [Deserialize].
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Bytes(hyper::body::Bytes);
 
 impl Bytes {
@@ -240,10 +282,12 @@ impl Default for BodyVc {
 }
 
 /// Filter function that describes which information is required.
-#[derive(Debug, Clone, PartialEq, Eq, TraceRawVcs, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, TraceRawVcs, Hash, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub enum ContentSourceDataFilter {
     All,
-    Subset(HashSet<String>),
+    Subset(BTreeSet<String>),
 }
 
 impl ContentSourceDataFilter {
@@ -280,13 +324,32 @@ impl ContentSourceDataFilter {
             ContentSourceDataFilter::Subset(set) => set.contains(key),
         }
     }
+
+    /// Returns true if the first argument at least contains all values that the
+    /// second argument would contain.
+    pub fn fulfills(
+        this: &Option<ContentSourceDataFilter>,
+        other: &Option<ContentSourceDataFilter>,
+    ) -> bool {
+        match (this, other) {
+            (_, None) => true,
+            (None, Some(_)) => false,
+            (Some(this), Some(other)) => match (this, other) {
+                (ContentSourceDataFilter::All, _) => true,
+                (_, ContentSourceDataFilter::All) => false,
+                (ContentSourceDataFilter::Subset(this), ContentSourceDataFilter::Subset(other)) => {
+                    this.is_superset(other)
+                }
+            },
+        }
+    }
 }
 
 /// Describes additional information that need to be sent to requests to
 /// ContentSource. By sending these information ContentSource responses are
 /// cached-keyed by them and they can access them.
-#[turbo_tasks::value(shared)]
-#[derive(Debug, Default, Clone)]
+#[turbo_tasks::value(shared, serialization = "auto_for_input")]
+#[derive(Debug, Default, Clone, PartialOrd, Ord, Hash)]
 pub struct ContentSourceDataVary {
     pub method: bool,
     pub url: bool,
@@ -310,6 +373,40 @@ impl ContentSourceDataVary {
         self.cache_buster = self.cache_buster || other.cache_buster;
         ContentSourceDataFilter::extend_options(&mut self.query, &other.query);
         ContentSourceDataFilter::extend_options(&mut self.headers, &other.headers);
+    }
+
+    /// Returns true if `self` at least contains all values that the
+    /// argument would contain.
+    pub fn fulfills(&self, other: &ContentSourceDataVary) -> bool {
+        // All fields must be used!
+        let ContentSourceDataVary {
+            method,
+            url,
+            query,
+            headers,
+            body,
+            cache_buster,
+            placeholder_for_future_extensions: _,
+        } = self;
+        if other.method && !method {
+            return false;
+        }
+        if other.url && !url {
+            return false;
+        }
+        if other.body && !body {
+            return false;
+        }
+        if other.cache_buster && !cache_buster {
+            return false;
+        }
+        if !ContentSourceDataFilter::fulfills(query, &other.query) {
+            return false;
+        }
+        if !ContentSourceDataFilter::fulfills(headers, &other.headers) {
+            return false;
+        }
+        true
     }
 }
 
@@ -357,5 +454,47 @@ impl ContentSource for NoContentSource {
     #[turbo_tasks::function]
     fn get(&self, _path: &str, _data: Value<ContentSourceData>) -> ContentSourceResultVc {
         ContentSourceResultVc::not_found()
+    }
+}
+
+/// A rewrite returned from a [ContentSource]. This tells the dev server to
+/// update its parsed url, path, and queries with this new information, and any
+/// later [NeededData] will receive data out of t these new values.
+#[derive(Debug)]
+#[turbo_tasks::value(shared)]
+pub struct Rewrite {
+    /// The new path and query used to lookup content. This _does not_ need to
+    /// be the original path or query.
+    pub path_and_query: String,
+
+    /// A [ContentSource] from which to restart the lookup process. This _does
+    /// not_ need to be the original content source. Having [None] source will
+    /// restart the lookup process from the original ContentSource.
+    pub source: Option<ContentSourceVc>,
+}
+
+#[turbo_tasks::value_impl]
+impl RewriteVc {
+    /// Creates a new [RewriteVc] and starts lookup from the provided
+    /// [ContentSource].
+    #[turbo_tasks::function]
+    pub fn new(path_query: String, source: ContentSourceVc) -> RewriteVc {
+        debug_assert!(path_query.starts_with('/'));
+        Rewrite {
+            path_and_query: path_query,
+            source: Some(source),
+        }
+        .cell()
+    }
+
+    /// Creates a new [RewriteVc] and restarts lookup from the root.
+    #[turbo_tasks::function]
+    pub fn new_path_query(path_query: String) -> RewriteVc {
+        debug_assert!(path_query.starts_with('/'));
+        Rewrite {
+            path_and_query: path_query,
+            source: None,
+        }
+        .cell()
     }
 }

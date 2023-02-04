@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -17,8 +18,6 @@ const ROOT_NODE_NAME = "___ROOT___"
 // but also some adjustments to it, based on business logic.
 type Task struct {
 	Name string
-	// Deps are dependencies between tasks within the same package (e.g. `build` -> `test`)
-	Deps util.Set
 	// TaskDefinition contains the config for the task from turbo.json
 	TaskDefinition fs.TaskDefinition
 }
@@ -27,24 +26,34 @@ type Visitor = func(taskID string) error
 
 // Engine contains both the DAG for the packages and the tasks and implements the methods to execute tasks in them
 type Engine struct {
-	// TopologicGraph is a graph of workspaces
-	TopologicGraph *dag.AcyclicGraph
 	// TaskGraph is a graph of package-tasks
-	TaskGraph *dag.AcyclicGraph
-	// Tasks are a map of tasks in the engine
-	Tasks            map[string]*Task
+	TaskGraph        *dag.AcyclicGraph
 	PackageTaskDeps  map[string][]string
 	rootEnabledTasks util.Set
+
+	// completeGraph is the CompleteGraph. We need this to look up the Pipeline, etc.
+	completeGraph *graph.CompleteGraph
+
+	// Map of packageName to pipeline. We resolve task definitions from here
+	// but we don't want to read from the filesystem every time
+	pipelines map[string]fs.Pipeline
+
+	// isSinglePackage is used to load turbo.json correctly
+	isSinglePackage bool
 }
 
 // NewEngine creates a new engine given a topologic graph of workspace package names
-func NewEngine(topologicalGraph *dag.AcyclicGraph) *Engine {
+func NewEngine(
+	completeGraph *graph.CompleteGraph,
+	isSinglePackage bool,
+) *Engine {
 	return &Engine{
-		Tasks:            make(map[string]*Task),
-		TopologicGraph:   topologicalGraph,
+		completeGraph:    completeGraph,
 		TaskGraph:        &dag.AcyclicGraph{},
 		PackageTaskDeps:  map[string][]string{},
 		rootEnabledTasks: make(util.Set),
+		pipelines:        map[string]fs.Pipeline{},
+		isSinglePackage:  isSinglePackage,
 	}
 }
 
@@ -56,24 +65,6 @@ type EngineBuildingOptions struct {
 	TaskNames []string
 	// Restrict execution to only the listed task names
 	TasksOnly bool
-}
-
-// Prepare constructs the Task Graph for a list of packages and tasks
-func (e *Engine) Prepare(options *EngineBuildingOptions) error {
-	pkgs := options.Packages
-	tasks := options.TaskNames
-	if len(tasks) == 0 {
-		// TODO(gsoltis): Is this behavior used?
-		for key := range e.Tasks {
-			tasks = append(tasks, key)
-		}
-	}
-
-	if err := e.generateTaskGraph(pkgs, tasks, options.TasksOnly); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // EngineExecutionOptions controls a single walk of the task graph
@@ -107,29 +98,52 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 }
 
 func (e *Engine) getTaskDefinition(taskName string, taskID string) (*Task, error) {
-	if task, ok := e.Tasks[taskID]; ok {
-		return task, nil
+	pipeline, err := e.getPipelineFromWorkspace(util.RootPkgName)
+	if err != nil {
+		return nil, err
 	}
-	if task, ok := e.Tasks[taskName]; ok {
-		return task, nil
+
+	if task, ok := pipeline[taskID]; ok {
+		return &Task{
+			Name:           taskName,
+			TaskDefinition: task,
+		}, nil
+	}
+
+	if task, ok := pipeline[taskName]; ok {
+		return &Task{
+			Name:           taskName,
+			TaskDefinition: task,
+		}, nil
 	}
 
 	return nil, fmt.Errorf("Missing task definition, configure \"%s\" or \"%s\" in turbo.json", taskName, taskID)
 }
 
-func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly bool) error {
+// Prepare constructs the Task Graph for a list of packages and tasks
+func (e *Engine) Prepare(options *EngineBuildingOptions) error {
+	pkgs := options.Packages
+	taskNames := options.TaskNames
+	tasksOnly := options.TasksOnly
+
 	traversalQueue := []string{}
+
 	for _, pkg := range pkgs {
 		isRootPkg := pkg == util.RootPkgName
+
 		for _, taskName := range taskNames {
+			// If it's not a task from the root workspace (i.e. tasks from every other workspace)
+			// or if it's a task that we know is rootEnabled task, add it to the traversal queue.
 			if !isRootPkg || e.rootEnabledTasks.Includes(taskName) {
 				taskID := util.GetTaskId(pkg, taskName)
+				// Skip tasks that don't have a definition
 				if _, err := e.getTaskDefinition(taskName, taskID); err != nil {
-					// Initial, non-package tasks are not required to exist, as long as some
+					// Initially, non-package tasks are not required to exist, as long as some
 					// package in the list packages defines it as a package-task. Dependencies
 					// *are* required to have a definition.
 					continue
 				}
+
 				traversalQueue = append(traversalQueue, taskID)
 			}
 		}
@@ -144,10 +158,17 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		traversalQueue = traversalQueue[1:]
 
 		pkg, taskName := util.GetPackageTaskFromId(taskID)
+
 		if pkg == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
 			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
-		task, err := e.getTaskDefinition(taskName, taskID)
+
+		taskDefinition, err := e.GetResolvedTaskDefinition(
+			&e.completeGraph.Pipeline,
+			taskName,
+			taskID,
+		)
+
 		if err != nil {
 			return err
 		}
@@ -159,12 +180,33 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		visited.Add(taskID)
 
-		topoDeps := util.SetFromStrings(task.TaskDefinition.TopologicalDependencies)
+		// Put this taskDefinition into the Graph so we can look it up later during execution.
+		e.completeGraph.TaskDefinitions[taskID] = taskDefinition
+
+		topoDeps := util.SetFromStrings(taskDefinition.TopologicalDependencies)
+		deps := make(util.Set)
+		isPackageTask := util.IsPackageTask(taskName)
+
+		for _, dependency := range taskDefinition.TaskDependencies {
+			// If the current task is a workspace-specific task (including root Task)
+			// and its dependency is _also_ a workspace-specific task, we need to add
+			// a reference to this dependency directly into the engine.
+			// TODO @mehulkar: Why do we need this?
+			if isPackageTask && util.IsPackageTask(dependency) {
+				if err := e.AddDep(dependency, taskName); err != nil {
+					return err
+				}
+			} else {
+				// For non-workspace-specific dependencies, we attach a reference to
+				// the task that is added into the engine.
+				deps.Add(dependency)
+			}
+		}
 
 		// Filter down the tasks if there's a filter in place
 		// https: //turbo.build/repo/docs/reference/command-line-reference#--only
 		if tasksOnly {
-			task.Deps = task.Deps.Filter(func(d interface{}) bool {
+			deps = deps.Filter(func(d interface{}) bool {
 				for _, target := range taskNames {
 					return fmt.Sprintf("%v", d) == target
 				}
@@ -182,11 +224,11 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 
 		// hasTopoDeps will be true if the task depends on any tasks from dependency packages
 		// E.g. `dev: { dependsOn: [^dev] }`
-		hasTopoDeps := topoDeps.Len() > 0 && e.TopologicGraph.DownEdges(pkg).Len() > 0
+		hasTopoDeps := topoDeps.Len() > 0 && e.completeGraph.WorkspaceGraph.DownEdges(pkg).Len() > 0
 
 		// hasDeps will be true if the task depends on any tasks from its own package
 		// E.g. `build: { dependsOn: [dev] }`
-		hasDeps := task.Deps.Len() > 0
+		hasDeps := deps.Len() > 0
 
 		// hasPackageTaskDeps will be true if this is a workspace-specific task, and
 		// it depends on another workspace-specific tasks
@@ -197,7 +239,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		}
 
 		if hasTopoDeps {
-			depPkgs := e.TopologicGraph.DownEdges(pkg)
+			depPkgs := e.completeGraph.WorkspaceGraph.DownEdges(pkg)
 			for _, from := range topoDeps.UnsafeListOfStrings() {
 				// add task dep from all the package deps within repo
 				for depPkg := range depPkgs {
@@ -211,7 +253,7 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 		}
 
 		if hasDeps {
-			for _, from := range task.Deps.UnsafeListOfStrings() {
+			for _, from := range deps.UnsafeListOfStrings() {
 				fromTaskID := util.GetTaskId(pkg, from)
 				e.TaskGraph.Add(fromTaskID)
 				e.TaskGraph.Add(toTaskID)
@@ -242,24 +284,20 @@ func (e *Engine) generateTaskGraph(pkgs []string, taskNames []string, tasksOnly 
 	return nil
 }
 
-// AddTask adds a task to the Engine so it can be looked up later.
-func (e *Engine) AddTask(task *Task) *Engine {
-	// If a root task is added, mark the task name as eligible for
-	// root execution. Otherwise, it will be skipped.
-	if util.IsPackageTask(task.Name) {
-		pkg, taskName := util.GetPackageTaskFromId(task.Name)
+// AddTask adds root tasks to the engine so they can be looked up later.
+func (e *Engine) AddTask(taskName string) {
+	if util.IsPackageTask(taskName) {
+		pkg, taskName := util.GetPackageTaskFromId(taskName)
 		if pkg == util.RootPkgName {
 			e.rootEnabledTasks.Add(taskName)
 		}
 	}
-	e.Tasks[task.Name] = task
-	return e
 }
 
 // AddDep adds tuples from+to task ID combos in tuple format so they can be looked up later.
 func (e *Engine) AddDep(fromTaskID string, toTaskID string) error {
 	fromPkg, _ := util.GetPackageTaskFromId(fromTaskID)
-	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !e.TopologicGraph.HasVertex(fromPkg) {
+	if fromPkg != ROOT_NODE_NAME && fromPkg != util.RootPkgName && !e.completeGraph.WorkspaceGraph.HasVertex(fromPkg) {
 		return fmt.Errorf("found reference to unknown package: %v in task %v", fromPkg, fromTaskID)
 	}
 
@@ -311,6 +349,7 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			packageName, taskName := util.GetPackageTaskFromId(depTaskID)
 
 			// Get the Task Definition so we can check if it is Persistent
+			// TODO(mehulkar): Do we need to get a resolved taskDefinition here?
 			depTaskDefinition, taskExists := e.getTaskDefinition(taskName, depTaskID)
 			if taskExists != nil {
 				return fmt.Errorf("Cannot find task definition for %v in package %v", depTaskID, packageName)
@@ -344,4 +383,89 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 
 	// May or may not be set (could be nil)
 	return validationError
+}
+
+// GetResolvedTaskDefinition returns a "resolved" TaskDefinition.
+// Today, it just looks up the task from the root Pipeline, but in the future
+// we will compose the TaskDefinition from workspaces using the `extends` key.
+func (e *Engine) GetResolvedTaskDefinition(rootPipeline *fs.Pipeline, taskName string, taskID string) (*fs.TaskDefinition, error) {
+	return rootPipeline.GetTask(taskID, taskName)
+}
+
+// GetTaskGraphAncestors gets all the ancestors for a given task in the graph.
+// "Ancestors" are all tasks that the given task depends on.
+// This is only used by DryRun output right now.
+func (e *Engine) GetTaskGraphAncestors(taskID string) ([]string, error) {
+	ancestors, err := e.TaskGraph.Ancestors(taskID)
+	if err != nil {
+		return nil, err
+	}
+	stringAncestors := []string{}
+	for _, dep := range ancestors {
+		// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
+		if !strings.Contains(dep.(string), ROOT_NODE_NAME) {
+			stringAncestors = append(stringAncestors, dep.(string))
+		}
+	}
+	// TODO(mehulkar): Why are ancestors not sorted, but GetTaskGraphDescendants sorts?
+	return stringAncestors, nil
+}
+
+// GetTaskGraphDescendants gets all the descendants for a given task in the graph.
+// "Descendants" are all tasks that depend on the given taskID.
+// This is only used by DryRun output right now.
+func (e *Engine) GetTaskGraphDescendants(taskID string) ([]string, error) {
+	descendents, err := e.TaskGraph.Descendents(taskID)
+	if err != nil {
+		return nil, err
+	}
+	stringDescendents := []string{}
+	for _, dep := range descendents {
+		// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
+		if !strings.Contains(dep.(string), ROOT_NODE_NAME) {
+			stringDescendents = append(stringDescendents, dep.(string))
+		}
+	}
+	sort.Strings(stringDescendents)
+	return stringDescendents, nil
+}
+
+func (e *Engine) getPipelineFromWorkspace(workspaceName string) (fs.Pipeline, error) {
+	cachedPipeline, ok := e.pipelines[workspaceName]
+	if ok {
+		return cachedPipeline, nil
+	}
+
+	// Note: dir for the root workspace will be an empty string, and for
+	// other workspaces, it will be a relative path.
+	dir := e.completeGraph.WorkspaceInfos[workspaceName].Dir
+	repoRoot := e.completeGraph.RepoRoot
+	dirAbsolutePath := dir.RestoreAnchor(repoRoot)
+
+	// We need to a PackageJSON, because LoadTurboConfig requires it as an argument
+	// so it can synthesize tasks for single-package repos.
+	// In the root workspace, actually get and use the root package.json.
+	// For all other workspaces, we don't need the synthesis feature, so we can proceed
+	// with a default/blank PackageJSON
+	pkgJSON := &fs.PackageJSON{}
+
+	if workspaceName == util.RootPkgName {
+		rootPkgJSONPath := dirAbsolutePath.Join("package.json")
+		rootPkgJSON, err := fs.ReadPackageJSON(rootPkgJSONPath)
+		if err != nil {
+			return nil, err
+		}
+		pkgJSON = rootPkgJSON
+	}
+
+	turboConfig, err := fs.LoadTurboConfig(repoRoot, pkgJSON, e.isSinglePackage)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add to internal cache so we don't have to read file system for every task
+	e.pipelines[workspaceName] = turboConfig.Pipeline
+
+	// Return the config from the workspace.
+	return e.pipelines[workspaceName], nil
 }
