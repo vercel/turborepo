@@ -1,0 +1,1092 @@
+{
+  "ref": "83215be471e5d5223ebdef098b68b67f14105ed4",
+  "nextjsVersion": "Next.js v13.1.7-canary.4",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675523278279,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675523323632,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675523278378,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/404-page-router/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675523649263,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              }
+            ],
+            "endTime": 1675523948890,
+            "message": "  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n",
+            "name": "/work/test/e2e/404-page-router/index.test.ts",
+            "startTime": 1675523649354,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/404-page-app/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675523980232,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should not output static 404 if _app has getInitialProps",
+                "location": null,
+                "status": "passed",
+                "title": "should not output static 404 if _app has getInitialProps"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode specify to use the 404 page still in the routes-manifest",
+                "location": null,
+                "status": "passed",
+                "title": "specify to use the 404 page still in the routes-manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should still use 404 page",
+                "location": null,
+                "status": "passed",
+                "title": "should still use 404 page"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-app/test/index.test.js:81:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 Page Support with _app dev mode should not show pages/404 GIP error if _app has GIP",
+                "location": null,
+                "status": "failed",
+                "title": "should not show pages/404 GIP error if _app has GIP"
+              }
+            ],
+            "endTime": 1675523991488,
+            "message": "  ● 404 Page Support with _app › dev mode › should not show pages/404 GIP error if _app has GIP\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      79 |     it('should not show pages/404 GIP error if _app has GIP', async () => {\n      80 |       const res = await fetchViaHTTP(appPort, '/abc')\n    > 81 |       expect(res.status).toBe(404)\n         |                          ^\n      82 |       const $ = cheerio.load(await res.text())\n      83 |       expect($('#404-title').text()).toBe('Hi There')\n      84 |       expect(stderr).not.toMatch(gip404Err)\n\n      at Object.<anonymous> (integration/404-page-app/test/index.test.js:81:26)\n",
+            "name": "/work/test/integration/404-page-app/test/index.test.js",
+            "startTime": 1675523980373,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/api-route-errors/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675523602198,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "api-route-errors cli output"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /pages\\/api/\n\n[500] error: Execution of get_from_source failed\n\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2) (280ms)\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 280ms\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/api-route-errors/index.test.ts:23:5)"
+                ],
+                "fullName": "api-route-errors cli output error",
+                "location": null,
+                "status": "failed",
+                "title": "error"
+              },
+              {
+                "ancestorTitles": [
+                  "api-route-errors cli output"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /pages\\/api/\n\n[500] error: Execution of get_from_source failed\n\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2) (6.012ms)\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 5.804ms\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/api-route-errors/index.test.ts:37:5)"
+                ],
+                "fullName": "api-route-errors cli output uncaught exception",
+                "location": null,
+                "status": "failed",
+                "title": "uncaught exception"
+              },
+              {
+                "ancestorTitles": [
+                  "api-route-errors cli output"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /pages\\/api/\n\n[500] error: Execution of get_from_source failed\n\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2) (6.496ms)\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 6.329ms\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/api-route-errors/index.test.ts:55:5)"
+                ],
+                "fullName": "api-route-errors cli output unhandled rejection",
+                "location": null,
+                "status": "failed",
+                "title": "unhandled rejection"
+              }
+            ],
+            "endTime": 1675523707801,
+            "message": "  ● api-route-errors cli output › error\n\n    TIMED OUT: /pages\\/api/\n\n    [500] error: Execution of get_from_source failed\n\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2) (280ms)\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 280ms\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/api-route-errors/index.test.ts:23:5)\n\n  ● api-route-errors cli output › uncaught exception\n\n    TIMED OUT: /pages\\/api/\n\n    [500] error: Execution of get_from_source failed\n\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2) (6.012ms)\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 5.804ms\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/api-route-errors/index.test.ts:37:5)\n\n  ● api-route-errors cli output › unhandled rejection\n\n    TIMED OUT: /pages\\/api/\n\n    [500] error: Execution of get_from_source failed\n\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2) (6.496ms)\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 6.329ms\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/api-route-errors/index.test.ts:55:5)\n",
+            "name": "/work/test/development/api-route-errors/index.test.ts",
+            "startTime": 1675523602295,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675523782954,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675523829106,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675523783057,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/catches-missing-getStaticProps/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675523858164,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Catches Missing getStaticProps"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /getStaticPaths was added without a getStaticProps in/\nReceived string:  \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/catches-missing-getStaticProps/test/index.test.js:22:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Catches Missing getStaticProps should catch it in dev mode",
+                "location": null,
+                "status": "failed",
+                "title": "should catch it in dev mode"
+              },
+              {
+                "ancestorTitles": [
+                  "Catches Missing getStaticProps"
+                ],
+                "failureMessages": [],
+                "fullName": "Catches Missing getStaticProps should catch it in server build mode",
+                "location": null,
+                "status": "passed",
+                "title": "should catch it in server build mode"
+              }
+            ],
+            "endTime": 1675523868090,
+            "message": "  ● Catches Missing getStaticProps › should catch it in dev mode\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /getStaticPaths was added without a getStaticProps in/\n    Received string:  \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      20 |     await killApp(app)\n      21 |\n    > 22 |     expect(html).toMatch(errorRegex)\n         |                  ^\n      23 |   })\n      24 |\n      25 |   it('should catch it in server build mode', async () => {\n\n      at Object.<anonymous> (integration/catches-missing-getStaticProps/test/index.test.js:22:18)\n",
+            "name": "/work/test/integration/catches-missing-getStaticProps/test/index.test.js",
+            "startTime": 1675523858269,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675523480529,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675523525821,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675523480622,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/404-page-router/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675523851261,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              }
+            ],
+            "endTime": 1675524150325,
+            "message": "  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n",
+            "name": "/work/test/e2e/404-page-router/index.test.ts",
+            "startTime": 1675523851355,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/404-page-app/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675524183118,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should not output static 404 if _app has getInitialProps",
+                "location": null,
+                "status": "passed",
+                "title": "should not output static 404 if _app has getInitialProps"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode specify to use the 404 page still in the routes-manifest",
+                "location": null,
+                "status": "passed",
+                "title": "specify to use the 404 page still in the routes-manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should still use 404 page",
+                "location": null,
+                "status": "passed",
+                "title": "should still use 404 page"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-app/test/index.test.js:81:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 Page Support with _app dev mode should not show pages/404 GIP error if _app has GIP",
+                "location": null,
+                "status": "failed",
+                "title": "should not show pages/404 GIP error if _app has GIP"
+              }
+            ],
+            "endTime": 1675524193794,
+            "message": "  ● 404 Page Support with _app › dev mode › should not show pages/404 GIP error if _app has GIP\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      79 |     it('should not show pages/404 GIP error if _app has GIP', async () => {\n      80 |       const res = await fetchViaHTTP(appPort, '/abc')\n    > 81 |       expect(res.status).toBe(404)\n         |                          ^\n      82 |       const $ = cheerio.load(await res.text())\n      83 |       expect($('#404-title').text()).toBe('Hi There')\n      84 |       expect(stderr).not.toMatch(gip404Err)\n\n      at Object.<anonymous> (integration/404-page-app/test/index.test.js:81:26)\n",
+            "name": "/work/test/integration/404-page-app/test/index.test.js",
+            "startTime": 1675524183220,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/api-route-errors/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675523555712,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "api-route-errors cli output"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /pages\\/api/\n\n[500] error: Execution of get_from_source failed\n\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2) (252ms)\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 252ms\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/api-route-errors/index.test.ts:23:5)"
+                ],
+                "fullName": "api-route-errors cli output error",
+                "location": null,
+                "status": "failed",
+                "title": "error"
+              },
+              {
+                "ancestorTitles": [
+                  "api-route-errors cli output"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /pages\\/api/\n\n[500] error: Execution of get_from_source failed\n\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2) (5.608ms)\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 5.465ms\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/api-route-errors/index.test.ts:37:5)"
+                ],
+                "fullName": "api-route-errors cli output uncaught exception",
+                "location": null,
+                "status": "failed",
+                "title": "uncaught exception"
+              },
+              {
+                "ancestorTitles": [
+                  "api-route-errors cli output"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /pages\\/api/\n\n[500] error: Execution of get_from_source failed\n\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2) (6.449ms)\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 6.305ms\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/api-route-errors/index.test.ts:55:5)"
+                ],
+                "fullName": "api-route-errors cli output unhandled rejection",
+                "location": null,
+                "status": "failed",
+                "title": "unhandled rejection"
+              }
+            ],
+            "endTime": 1675523660296,
+            "message": "  ● api-route-errors cli output › error\n\n    TIMED OUT: /pages\\/api/\n\n    [500] error: Execution of get_from_source failed\n\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2) (252ms)\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 252ms\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/api-route-errors/index.test.ts:23:5)\n\n  ● api-route-errors cli output › uncaught exception\n\n    TIMED OUT: /pages\\/api/\n\n    [500] error: Execution of get_from_source failed\n\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2) (5.608ms)\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 5.465ms\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/api-route-errors/index.test.ts:37:5)\n\n  ● api-route-errors cli output › unhandled rejection\n\n    TIMED OUT: /pages\\/api/\n\n    [500] error: Execution of get_from_source failed\n\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2) (6.449ms)\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 6.305ms\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/api-route-errors/index.test.ts:55:5)\n",
+            "name": "/work/test/development/api-route-errors/index.test.ts",
+            "startTime": 1675523555812,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675523732442,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675523777341,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675523732539,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/catches-missing-getStaticProps/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675523806321,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Catches Missing getStaticProps"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /getStaticPaths was added without a getStaticProps in/\nReceived string:  \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/catches-missing-getStaticProps/test/index.test.js:22:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Catches Missing getStaticProps should catch it in dev mode",
+                "location": null,
+                "status": "failed",
+                "title": "should catch it in dev mode"
+              },
+              {
+                "ancestorTitles": [
+                  "Catches Missing getStaticProps"
+                ],
+                "failureMessages": [],
+                "fullName": "Catches Missing getStaticProps should catch it in server build mode",
+                "location": null,
+                "status": "passed",
+                "title": "should catch it in server build mode"
+              }
+            ],
+            "endTime": 1675523815803,
+            "message": "  ● Catches Missing getStaticProps › should catch it in dev mode\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /getStaticPaths was added without a getStaticProps in/\n    Received string:  \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      20 |     await killApp(app)\n      21 |\n    > 22 |     expect(html).toMatch(errorRegex)\n         |                  ^\n      23 |   })\n      24 |\n      25 |   it('should catch it in server build mode', async () => {\n\n      at Object.<anonymous> (integration/catches-missing-getStaticProps/test/index.test.js:22:18)\n",
+            "name": "/work/test/integration/catches-missing-getStaticProps/test/index.test.js",
+            "startTime": 1675523806425,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
