@@ -33,7 +33,7 @@ func getRandChar() string {
 	return string(rune(i))
 }
 
-func getRandId() string {
+func getRandID() string {
 	return getRandChar() + getRandChar() + getRandChar() + getRandChar()
 }
 
@@ -96,12 +96,12 @@ func (g *GraphVisualizer) GenerateGraphFile(outputName string) error {
 				nameRight := "\"" + parts[1][8:]
 				idLeft, okLeft := dict[nameLeft]
 				if !okLeft {
-					idLeft = getRandId()
+					idLeft = getRandID()
 					dict[nameLeft] = idLeft
 				}
 				idRight, okRight := dict[nameRight]
 				if !okRight {
-					idRight = getRandId()
+					idRight = getRandID()
 					dict[nameRight] = idRight
 				}
 				mermaidString += "    " + idLeft + "(" + nameLeft + ") --> " + idRight + "(" + nameRight + ")\n"
