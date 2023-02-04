@@ -3,8 +3,8 @@ use std::{
     cmp::min,
     fmt::Debug,
     io::{self, BufRead, Read, Result as IoResult, Write},
-    mem, ops,
-    ops::Deref,
+    mem,
+    ops::{AddAssign, Deref},
     pin::Pin,
     sync::Arc,
     task::{Context as TaskContext, Poll},
@@ -127,9 +127,14 @@ impl Rope {
 impl<T: Into<Bytes>> From<T> for Rope {
     fn from(bytes: T) -> Self {
         let bytes = bytes.into();
-        Rope {
-            length: bytes.len(),
-            data: InnerRope::from(bytes),
+        // We can't have an InnerRope which contains an empty Local section.
+        if bytes.is_empty() {
+            Default::default()
+        } else {
+            Rope {
+                length: bytes.len(),
+                data: InnerRope::from(vec![Local(bytes)]),
+            }
         }
     }
 }
@@ -140,6 +145,10 @@ impl RopeBuilder {
     /// If possible use [push_static_bytes] or `+=` operation instead, as they
     /// will create a reference to shared memory instead of cloning the bytes.
     pub fn push_bytes(&mut self, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
+
         self.uncommited.push_bytes(bytes);
     }
 
@@ -148,6 +157,10 @@ impl RopeBuilder {
     /// This is more efficient than pushing owned bytes, because the internal
     /// data does not need to be copied when the rope is read.
     pub fn push_static_bytes(&mut self, bytes: &'static [u8]) {
+        if bytes.is_empty() {
+            return;
+        }
+
         // If the string is smaller than the cost of a Bytes reference (4 usizes), then
         // it's more efficient to own the bytes in a new buffer. We may be able to reuse
         // that buffer when more bytes are pushed.
@@ -167,7 +180,7 @@ impl RopeBuilder {
     /// This is much more efficient than pushing actual bytes, since we can
     /// share the other Rope's references without copying the underlying data.
     pub fn concat(&mut self, other: &Rope) {
-        if other.len() == 0 {
+        if other.is_empty() {
             return;
         }
 
@@ -183,6 +196,7 @@ impl RopeBuilder {
     /// This may be called multiple times without issue.
     pub fn finish(&mut self) {
         if let Some(b) = self.uncommited.finish() {
+            debug_assert!(!b.is_empty(), "must not have empty uncommitted bytes");
             self.length += b.len();
             self.committed.push(Local(b));
         }
@@ -209,7 +223,7 @@ impl RopeBuilder {
 impl From<&'static str> for RopeBuilder {
     default fn from(bytes: &'static str) -> Self {
         let mut r = RopeBuilder::default();
-        r.push_static_bytes(bytes.as_bytes());
+        r += bytes;
         r
     }
 }
@@ -217,6 +231,7 @@ impl From<&'static str> for RopeBuilder {
 impl From<Vec<u8>> for RopeBuilder {
     fn from(bytes: Vec<u8>) -> Self {
         RopeBuilder {
+            // Directly constructing the Uncommitted allows us to skip copying the bytes.
             uncommited: Uncommitted::from(bytes),
             ..Default::default()
         }
@@ -235,7 +250,7 @@ impl Write for RopeBuilder {
     }
 }
 
-impl ops::AddAssign<&'static str> for RopeBuilder {
+impl AddAssign<&'static str> for RopeBuilder {
     /// Pushes a reference to static memory onto the rope.
     ///
     /// This is more efficient than pushing owned bytes, because the internal
@@ -245,7 +260,7 @@ impl ops::AddAssign<&'static str> for RopeBuilder {
     }
 }
 
-impl ops::AddAssign<&Rope> for RopeBuilder {
+impl AddAssign<&Rope> for RopeBuilder {
     fn add_assign(&mut self, rhs: &Rope) {
         self.concat(rhs);
     }
@@ -263,6 +278,7 @@ impl Uncommitted {
     /// Pushes owned bytes, converting the current representation to an Owned if
     /// it's not already.
     fn push_bytes(&mut self, bytes: &[u8]) {
+        debug_assert!(!bytes.is_empty(), "must not push empty uncommitted bytes");
         match self {
             Self::None => *self = Self::Owned(bytes.to_vec()),
             Self::Static(s) => {
@@ -279,6 +295,7 @@ impl Uncommitted {
     /// Pushes static lifetime bytes, but only if the current representation is
     /// None. Else, it coverts to an Owned.
     fn push_static_bytes(&mut self, bytes: &'static [u8]) {
+        debug_assert!(!bytes.is_empty(), "must not push empty uncommitted bytes");
         match self {
             // If we've not already pushed static bytes, we attempt to store the bytes for later. If
             // we push owned bytes or another static bytes, then this attempt will fail and we'll
@@ -332,7 +349,11 @@ impl<'de> Deserialize<'de> for Rope {
 
 impl From<Vec<u8>> for Uncommitted {
     fn from(bytes: Vec<u8>) -> Self {
-        Uncommitted::Owned(bytes)
+        if bytes.is_empty() {
+            Uncommitted::None
+        } else {
+            Uncommitted::Owned(bytes)
+        }
     }
 }
 
@@ -348,14 +369,23 @@ impl DeterministicHash for InnerRope {
     }
 }
 
-impl From<Bytes> for InnerRope {
-    fn from(bytes: Bytes) -> Self {
-        InnerRope::from(vec![Local(bytes)])
-    }
-}
-
 impl From<Vec<RopeElem>> for InnerRope {
     fn from(mut els: Vec<RopeElem>) -> Self {
+        if cfg!(debug_assertions) {
+            // It's important that an InnerRope never contain an empty Bytes section.
+            for el in els.iter() {
+                match el {
+                    RopeElem::Local(b) => debug_assert!(!b.is_empty(), "must not have empty Bytes"),
+                    RopeElem::Shared(s) => {
+                        // We check whether the shared slice is empty, and not its elements. The
+                        // only way to construct the Shared's InnerRope is
+                        // in this mod, and we have already checked that
+                        // none of its elements are empty.
+                        debug_assert!(!s.is_empty(), "must not have empty InnerRope");
+                    }
+                }
+            }
+        }
         // The RopeBuilder likely over-allocated the vec so we could insert more
         // RopeElems into it. But we're constructing a immutable Rope which may
         // stay alive forever, so we need to trim any excess capacity to save
@@ -422,7 +452,7 @@ impl DeterministicHash for RopeElem {
 }
 
 /// Implements the Read/AsyncRead/Stream/Iterator trait over a Rope.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct RopeReader {
     /// The Rope's tree is kept as a cloned stack, allowing us to accomplish
     /// incremental yielding.
@@ -440,8 +470,14 @@ enum StackElem {
 
 impl RopeReader {
     fn new(rope: &InnerRope) -> Self {
-        RopeReader {
-            stack: vec![StackElem::from(rope)],
+        // Only a Rope's root InnerRope can contain an empty slice. Any empty InnerRopes
+        // we concat will be skipped.
+        if rope.is_empty() {
+            Default::default()
+        } else {
+            RopeReader {
+                stack: vec![StackElem::from(rope)],
+            }
         }
     }
 
@@ -480,8 +516,10 @@ impl Iterator for RopeReader {
         loop {
             let (inner, mut index) = match self.stack.pop() {
                 None => return None,
-                Some(StackElem::Local(b)) if !b.is_empty() => return Some(b),
-                Some(StackElem::Local(_)) => continue,
+                Some(StackElem::Local(b)) => {
+                    debug_assert!(!b.is_empty(), "must not have empty Bytes section");
+                    return Some(b);
+                }
                 Some(StackElem::Shared(r, i)) => (r, i),
             };
 
@@ -531,8 +569,6 @@ impl BufRead for RopeReader {
             unreachable!()
         };
 
-        debug_assert!(!bytes.is_empty());
-
         Ok(bytes)
     }
 
@@ -574,5 +610,61 @@ impl From<RopeElem> for StackElem {
             Local(bytes) => Self::Local(bytes),
             Shared(inner) => Self::Shared(inner, 0),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{Rope, RopeBuilder};
+
+    #[test]
+    fn empty_build_without_pushes() {
+        let empty = RopeBuilder::default().build();
+        let mut reader = empty.read();
+        assert!(reader.next().is_none());
+    }
+
+    #[test]
+    fn empty_build_with_empty_static_push() {
+        let mut builder = RopeBuilder::default();
+        builder += "";
+
+        let empty = builder.build();
+        let mut reader = empty.read();
+        assert!(reader.next().is_none());
+    }
+
+    #[test]
+    fn empty_build_with_empty_bytes_push() {
+        let mut builder = RopeBuilder::default();
+        builder.push_bytes(&[]);
+
+        let empty = builder.build();
+        let mut reader = empty.read();
+        assert!(reader.next().is_none());
+    }
+
+    #[test]
+    fn empty_build_with_empty_concat() {
+        let mut builder = RopeBuilder::default();
+        builder += &RopeBuilder::default().build();
+
+        let empty = builder.build();
+        let mut reader = empty.read();
+        assert!(reader.next().is_none());
+    }
+
+    #[test]
+    fn empty_from_empty_static_str() {
+        let empty = Rope::from("");
+        let mut reader = empty.read();
+        assert!(reader.next().is_none());
+    }
+
+    #[test]
+    fn empty_from_empty_string() {
+        let empty = Rope::from("".to_string());
+        let mut reader = empty.read();
+        assert!(reader.next().is_none());
     }
 }
