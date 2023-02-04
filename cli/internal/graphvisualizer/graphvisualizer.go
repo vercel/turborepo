@@ -27,6 +27,15 @@ func hasGraphViz() bool {
 	return err == nil
 }
 
+func getRandChar() string {
+	i := rand.Intn(25) + 65
+	return string(i)
+}
+
+func getRandId() string {
+	return getRandChar() + getRandChar() + getRandChar() + getRandChar()
+}
+
 // New creates an instance of ColorCache with helpers for adding colors to task outputs
 func New(repoRoot turbopath.AbsoluteSystemPath, ui cli.Ui, TaskGraph *dag.AcyclicGraph) *GraphVisualizer {
 	return &GraphVisualizer{
@@ -64,6 +73,50 @@ func (g *GraphVisualizer) GenerateGraphFile(outputName string) error {
 	if ext == "" {
 		ext = ".jpg"
 		outputFilename = g.repoRoot.UntypedJoin(outputName + ext)
+	}
+	if ext == ".mermaid" {
+		f, err := outputFilename.Create()
+		if err != nil {
+			return fmt.Errorf("error creating file: %w", err)
+		}
+		defer f.Close() //nolint errcheck
+
+		lines := strings.Split(graphString, "\n")
+		foundOpening := false
+		dict := make(map[string]string)
+		mermaidString := "graph TD\n"
+		for _, line := range lines {
+			if foundOpening {
+				if line == "\t}" {
+					break
+				}
+				parts := strings.Split(line, " -> ")
+				nameLeft := "\"" + parts[0][10:]
+				nameRight := "\"" + parts[1][8:]
+				idLeft, okLeft := dict[nameLeft]
+				if !okLeft {
+					idLeft = getRandId()
+					dict[nameLeft] = idLeft
+				}
+				idRight, okRight := dict[nameRight]
+				if !okRight {
+					idRight = getRandId()
+					dict[nameRight] = idRight
+				}
+				mermaidString += "    " + idLeft + "(" + nameLeft + ") --> " + idRight + "(" + nameRight + ")\n"
+			}
+			if line == "\tsubgraph \"root\" {" {
+				foundOpening = true
+			}
+		}
+
+		_, writeErr0 := f.WriteString(mermaidString)
+		if writeErr0 != nil {
+			return fmt.Errorf("error writing graph contents: %w", writeErr1)
+		}
+		g.ui.Output("")
+		g.ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
+		return nil
 	}
 	if ext == ".html" {
 		f, err := outputFilename.Create()
