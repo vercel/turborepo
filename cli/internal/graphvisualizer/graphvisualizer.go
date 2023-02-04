@@ -2,6 +2,7 @@ package graphvisualizer
 
 import (
 	"fmt"
+	"math/rand"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -29,7 +30,7 @@ func hasGraphViz() bool {
 
 func getRandChar() string {
 	i := rand.Intn(25) + 65
-	return string(i)
+	return string(rune(i))
 }
 
 func getRandId() string {
