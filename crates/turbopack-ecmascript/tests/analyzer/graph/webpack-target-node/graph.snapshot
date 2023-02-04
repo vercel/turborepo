@@ -1,32 +1,46 @@
 [
     (
-        "*arrow function 1013*",
+        "*arrow function 1213*",
         Function(
-            2,
-            Unknown(
-                None,
-                "unsupported expression",
-            ),
-        ),
-    ),
-    (
-        "*arrow function 121*",
-        Function(
-            2,
-            FreeVar(
-                Other(
-                    Atom('undefined' type=static),
+            4,
+            1213,
+            Call(
+                3,
+                Variable(
+                    (
+                        Atom('__webpack_require__' type=dynamic),
+                        #1,
+                    ),
                 ),
+                [
+                    Unknown(
+                        None,
+                        "unsupported expression",
+                    ),
+                ],
             ),
         ),
     ),
     (
-        "*arrow function 328*",
+        "*arrow function 131*",
         Function(
             2,
-            Unknown(
-                None,
-                "unsupported expression",
+            131,
+            Constant(
+                Undefined,
+            ),
+        ),
+    ),
+    (
+        "*arrow function 389*",
+        Function(
+            2,
+            389,
+            Variable(
+                (
+                    Atom('handler' type=inline),
+                    #2,
+                ),
             ),
         ),
     ),
@@ -48,16 +62,30 @@
         "__webpack_exec__",
         Variable(
             (
-                Atom('*arrow function 1013*' type=dynamic),
+                Atom('*arrow function 1213*' type=dynamic),
                 #0,
             ),
         ),
     ),
     (
         "__webpack_exports__#1",
-        Unknown(
-            None,
-            "unsupported expression",
+        Call(
+            3,
+            Variable(
+                (
+                    Atom('__webpack_exec__' type=dynamic),
+                    #1,
+                ),
+            ),
+            [
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            5166.0,
+                        ),
+                    ),
+                ),
+            ],
         ),
     ),
     (
@@ -107,6 +135,7 @@
     (
         "_req",
         Argument(
+            760,
             0,
         ),
     ),
@@ -121,10 +150,9 @@
         "handler",
         Function(
             2,
-            FreeVar(
-                Other(
-                    Atom('undefined' type=static),
-                ),
+            760,
+            Constant(
+                Undefined,
             ),
         ),
     ),
@@ -190,6 +218,7 @@
     (
         "res",
         Argument(
+            760,
             1,
         ),
     ),

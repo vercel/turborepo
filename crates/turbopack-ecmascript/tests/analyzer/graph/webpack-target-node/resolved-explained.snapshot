@@ -1,21 +1,18 @@
-*arrow function 1013* = (...) => ???*0*
+*arrow function 1213* = (...) => __webpack_require__(???*0*)
 - *0* unsupported expression
 
-*arrow function 121* = (...) => ???*0*
-- *0* FreeVar(undefined)
-  ⚠️  unknown global
+*arrow function 131* = (...) => undefined
 
-*arrow function 328* = (...) => ???*0*
-- *0* unsupported expression
+*arrow function 389* = (...) => handler
 
 __unused_webpack_module = ???*0*
 - *0* __unused_webpack_module
   ⚠️  pattern without value
 
-__webpack_exec__ = (...) => ???*0*
+__webpack_exec__ = (...) => __webpack_require__(???*0*)
 - *0* unsupported expression
 
-__webpack_exports__#1 = ???*0*
+__webpack_exports__#1 = module<../../webpack-api-runtime.js, {}>(???*0*)
 - *0* unsupported expression
 
 __webpack_exports__#2 = ???*0*
@@ -28,15 +25,19 @@ __webpack_require__#2 = ???*0*
 - *0* __webpack_require__
   ⚠️  pattern without value
 
-_req = arguments[0]
+_req = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
 
 exports = {}
 
-handler = (...) => ???*0*
-- *0* FreeVar(undefined)
-  ⚠️  unknown global
+handler = (...) => undefined
 
-hello = module<fs/promises, {}>["readFile"]("./hello.txt", "utf-8")
+hello = ???*0*
+- *0* ???*1*("./hello.txt", "utf-8")
+  ⚠️  unknown callee
+- *1* module<fs/promises, {}>["readFile"]
+  ⚠️  nested operation
 
 moduleId = ???*0*
 - *0* moduleId
@@ -44,6 +45,8 @@ moduleId = ???*0*
 
 promises_namespaceObject = module<fs/promises, {}>
 
-res = arguments[1]
+res = ???*0*
+- *0* arguments[1]
+  ⚠️  function calls are not analysed yet
 
 users = [{"id": 1}, {"id": 2}, {"id": 3}]
