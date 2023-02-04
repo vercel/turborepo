@@ -18,7 +18,7 @@ pub fn unparen(expr: &Expr) -> &Expr {
         return unparen(&expr.expr);
     }
     if let Expr::Seq(seq) = expr {
-        return unparen(&seq.exprs.last().unwrap());
+        return unparen(seq.exprs.last().unwrap());
     }
     expr
 }
