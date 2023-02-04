@@ -112,7 +112,7 @@ func (g *GraphVisualizer) GenerateGraphFile(outputName string) error {
 
 		_, writeErr0 := f.WriteString(mermaidString)
 		if writeErr0 != nil {
-			return fmt.Errorf("error writing graph contents: %w", writeErr1)
+			return fmt.Errorf("error writing graph contents: %w", writeErr0)
 		}
 		g.ui.Output("")
 		g.ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
