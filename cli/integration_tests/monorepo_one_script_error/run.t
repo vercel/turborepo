@@ -8,13 +8,13 @@ Note that npm reports any failed script as exit code 1, even though we "exit 2"
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:okay: cache miss, executing 5eaa36f5c1d36f8d
+  my-app:okay: cache miss, executing 37c76e379efd9d58
   my-app:okay: 
   my-app:okay: > okay
   my-app:okay: > echo 'working'
   my-app:okay: 
   my-app:okay: working
-  my-app:error: cache miss, executing 19a93de426a177b1
+  my-app:error: cache miss, executing fae81c3c4948dad6
   my-app:error: 
   my-app:error: > error
   my-app:error: > echo 'intentionally failing' && exit 2
@@ -39,13 +39,13 @@ Make sure error isn't cached
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:okay: cache hit, replaying output 5eaa36f5c1d36f8d
+  my-app:okay: cache hit, replaying output 37c76e379efd9d58
   my-app:okay: 
   my-app:okay: > okay
   my-app:okay: > echo 'working'
   my-app:okay: 
   my-app:okay: working
-  my-app:error: cache miss, executing 19a93de426a177b1
+  my-app:error: cache miss, executing fae81c3c4948dad6
   my-app:error: 
   my-app:error: > error
   my-app:error: > echo 'intentionally failing' && exit 2
