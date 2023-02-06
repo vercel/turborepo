@@ -1,0 +1,1120 @@
+{
+  "ref": "54df1747add911fb0c29ec3d2f60379bfefc6fee",
+  "nextjsVersion": "Next.js v13.1.7-canary.5",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675679284491,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefresh"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefresh.test.ts:20:5)"
+                ],
+                "fullName": "ReactRefresh can edit a component without losing state",
+                "location": null,
+                "status": "failed",
+                "title": "can edit a component without losing state"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefresh"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefresh.test.ts:157:5)"
+                ],
+                "fullName": "ReactRefresh cyclic dependencies",
+                "location": null,
+                "status": "failed",
+                "title": "cyclic dependencies"
+              }
+            ],
+            "endTime": 1675679377889,
+            "message": "  ● ReactRefresh › can edit a component without losing state\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefresh.test.ts:20:5)\n\n  ● ReactRefresh › cyclic dependencies\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefresh.test.ts:157:5)\n",
+            "name": "/work/test/development/acceptance/ReactRefresh.test.ts",
+            "startTime": 1675679284582,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/middleware-custom-matchers/test/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 10,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675679494721,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware custom matchers should match missing header correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should match missing header correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware custom matchers should match missing query correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should match missing query correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:48:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Middleware custom matchers should match source path",
+                "location": null,
+                "status": "failed",
+                "title": "should match source path"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:58:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Middleware custom matchers should match has header",
+                "location": null,
+                "status": "failed",
+                "title": "should match has header"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:69:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Middleware custom matchers should match has query",
+                "location": null,
+                "status": "failed",
+                "title": "should match has query"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:82:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Middleware custom matchers should match has cookie",
+                "location": null,
+                "status": "failed",
+                "title": "should match has cookie"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:96:27)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Middleware custom matchers should match has host",
+                "location": null,
+                "status": "failed",
+                "title": "should match has host"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:121:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Middleware custom matchers should match has header value",
+                "location": null,
+                "status": "failed",
+                "title": "should match has header value"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#has-match-2')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:139:9)"
+                ],
+                "fullName": "Middleware custom matchers should match has query on client routing",
+                "location": null,
+                "status": "failed",
+                "title": "should match has query on client routing"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#has-match-3')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:156:9)"
+                ],
+                "fullName": "Middleware custom matchers should match has cookie on client routing",
+                "location": null,
+                "status": "failed",
+                "title": "should match has cookie on client routing"
+              }
+            ],
+            "endTime": 1675679572889,
+            "message": "  ● Middleware custom matchers › should match source path\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      46 |     it('should match source path', async () => {\n      47 |       const res = await fetchViaHTTP(next.url, '/source-match')\n    > 48 |       expect(res.status).toBe(200)\n         |                          ^\n      49 |       expect(res.headers.get('x-from-middleware')).toBeDefined()\n      50 |     })\n      51 |\n\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:48:26)\n\n  ● Middleware custom matchers › should match has header\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      56 |         },\n      57 |       })\n    > 58 |       expect(res.status).toBe(200)\n         |                          ^\n      59 |       expect(res.headers.get('x-from-middleware')).toBeDefined()\n      60 |\n      61 |       const res2 = await fetchViaHTTP(next.url, '/has-match-1')\n\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:58:26)\n\n  ● Middleware custom matchers › should match has query\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      67 |         'my-query': 'hellooo',\n      68 |       })\n    > 69 |       expect(res.status).toBe(200)\n         |                          ^\n      70 |       expect(res.headers.get('x-from-middleware')).toBeDefined()\n      71 |\n      72 |       const res2 = await fetchViaHTTP(next.url, '/has-match-2')\n\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:69:26)\n\n  ● Middleware custom matchers › should match has cookie\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      80 |         },\n      81 |       })\n    > 82 |       expect(res.status).toBe(200)\n         |                          ^\n      83 |       expect(res.headers.get('x-from-middleware')).toBeDefined()\n      84 |\n      85 |       const res2 = await fetchViaHTTP(next.url, '/has-match-3', undefined, {\n\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:82:26)\n\n  ● Middleware custom matchers › should match has host\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      94 |     itif(!isModeDeploy)('should match has host', async () => {\n      95 |       const res1 = await fetchViaHTTP(next.url, '/has-match-4')\n    > 96 |       expect(res1.status).toBe(404)\n         |                           ^\n      97 |\n      98 |       const res = await fetchViaHTTP(next.url, '/has-match-4', undefined, {\n      99 |         headers: {\n\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:96:27)\n\n  ● Middleware custom matchers › should match has header value\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      119 |         },\n      120 |       })\n    > 121 |       expect(res.status).toBe(200)\n          |                          ^\n      122 |       expect(res.headers.get('x-from-middleware')).toBeDefined()\n      123 |\n      124 |       const res2 = await fetchViaHTTP(next.url, '/has-match-5', undefined, {\n\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:121:26)\n\n  ● Middleware custom matchers › should match has query on client routing\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#has-match-2')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:139:9)\n\n  ● Middleware custom matchers › should match has cookie on client routing\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#has-match-3')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:156:9)\n",
+            "name": "/work/test/e2e/middleware-custom-matchers/test/index.test.ts",
+            "startTime": 1675679494815,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/404-page-app/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675679601049,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should not output static 404 if _app has getInitialProps",
+                "location": null,
+                "status": "passed",
+                "title": "should not output static 404 if _app has getInitialProps"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode specify to use the 404 page still in the routes-manifest",
+                "location": null,
+                "status": "passed",
+                "title": "specify to use the 404 page still in the routes-manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should still use 404 page",
+                "location": null,
+                "status": "passed",
+                "title": "should still use 404 page"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-app/test/index.test.js:81:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 Page Support with _app dev mode should not show pages/404 GIP error if _app has GIP",
+                "location": null,
+                "status": "failed",
+                "title": "should not show pages/404 GIP error if _app has GIP"
+              }
+            ],
+            "endTime": 1675679610937,
+            "message": "  ● 404 Page Support with _app › dev mode › should not show pages/404 GIP error if _app has GIP\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      79 |     it('should not show pages/404 GIP error if _app has GIP', async () => {\n      80 |       const res = await fetchViaHTTP(appPort, '/abc')\n    > 81 |       expect(res.status).toBe(404)\n         |                          ^\n      82 |       const $ = cheerio.load(await res.text())\n      83 |       expect($('#404-title').text()).toBe('Hi There')\n      84 |       expect(stderr).not.toMatch(gip404Err)\n\n      at Object.<anonymous> (integration/404-page-app/test/index.test.js:81:26)\n",
+            "name": "/work/test/integration/404-page-app/test/index.test.js",
+            "startTime": 1675679601143,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/basic/node-builtins.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675679267939,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:53:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:94:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675679388998,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:53:7)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:94:7)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675679268031,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675679509193,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675679554549,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675679509289,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675679568018,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675679573479,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675679568117,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675679322183,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefresh"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefresh.test.ts:20:5)"
+                ],
+                "fullName": "ReactRefresh can edit a component without losing state",
+                "location": null,
+                "status": "failed",
+                "title": "can edit a component without losing state"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefresh"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefresh.test.ts:157:5)"
+                ],
+                "fullName": "ReactRefresh cyclic dependencies",
+                "location": null,
+                "status": "failed",
+                "title": "cyclic dependencies"
+              }
+            ],
+            "endTime": 1675679416245,
+            "message": "  ● ReactRefresh › can edit a component without losing state\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefresh.test.ts:20:5)\n\n  ● ReactRefresh › cyclic dependencies\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefresh.test.ts:157:5)\n",
+            "name": "/work/test/development/acceptance/ReactRefresh.test.ts",
+            "startTime": 1675679322277,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/middleware-custom-matchers/test/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 10,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675679535359,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware custom matchers should match missing header correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should match missing header correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware custom matchers should match missing query correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should match missing query correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:48:26)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Middleware custom matchers should match source path",
+                "location": null,
+                "status": "failed",
+                "title": "should match source path"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:58:26)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Middleware custom matchers should match has header",
+                "location": null,
+                "status": "failed",
+                "title": "should match has header"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:69:26)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Middleware custom matchers should match has query",
+                "location": null,
+                "status": "failed",
+                "title": "should match has query"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:82:26)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Middleware custom matchers should match has cookie",
+                "location": null,
+                "status": "failed",
+                "title": "should match has cookie"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:96:27)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Middleware custom matchers should match has host",
+                "location": null,
+                "status": "failed",
+                "title": "should match has host"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:121:26)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Middleware custom matchers should match has header value",
+                "location": null,
+                "status": "failed",
+                "title": "should match has header value"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#has-match-2')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:139:9)"
+                ],
+                "fullName": "Middleware custom matchers should match has query on client routing",
+                "location": null,
+                "status": "failed",
+                "title": "should match has query on client routing"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware custom matchers"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#has-match-3')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/e2e/middleware-custom-matchers/test/index.test.ts:156:9)"
+                ],
+                "fullName": "Middleware custom matchers should match has cookie on client routing",
+                "location": null,
+                "status": "failed",
+                "title": "should match has cookie on client routing"
+              }
+            ],
+            "endTime": 1675679613352,
+            "message": "  ● Middleware custom matchers › should match source path\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      46 |     it('should match source path', async () => {\n      47 |       const res = await fetchViaHTTP(next.url, '/source-match')\n    > 48 |       expect(res.status).toBe(200)\n         |                          ^\n      49 |       expect(res.headers.get('x-from-middleware')).toBeDefined()\n      50 |     })\n      51 |\n\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:48:26)\n\n  ● Middleware custom matchers › should match has header\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      56 |         },\n      57 |       })\n    > 58 |       expect(res.status).toBe(200)\n         |                          ^\n      59 |       expect(res.headers.get('x-from-middleware')).toBeDefined()\n      60 |\n      61 |       const res2 = await fetchViaHTTP(next.url, '/has-match-1')\n\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:58:26)\n\n  ● Middleware custom matchers › should match has query\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      67 |         'my-query': 'hellooo',\n      68 |       })\n    > 69 |       expect(res.status).toBe(200)\n         |                          ^\n      70 |       expect(res.headers.get('x-from-middleware')).toBeDefined()\n      71 |\n      72 |       const res2 = await fetchViaHTTP(next.url, '/has-match-2')\n\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:69:26)\n\n  ● Middleware custom matchers › should match has cookie\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      80 |         },\n      81 |       })\n    > 82 |       expect(res.status).toBe(200)\n         |                          ^\n      83 |       expect(res.headers.get('x-from-middleware')).toBeDefined()\n      84 |\n      85 |       const res2 = await fetchViaHTTP(next.url, '/has-match-3', undefined, {\n\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:82:26)\n\n  ● Middleware custom matchers › should match has host\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      94 |     itif(!isModeDeploy)('should match has host', async () => {\n      95 |       const res1 = await fetchViaHTTP(next.url, '/has-match-4')\n    > 96 |       expect(res1.status).toBe(404)\n         |                           ^\n      97 |\n      98 |       const res = await fetchViaHTTP(next.url, '/has-match-4', undefined, {\n      99 |         headers: {\n\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:96:27)\n\n  ● Middleware custom matchers › should match has header value\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      119 |         },\n      120 |       })\n    > 121 |       expect(res.status).toBe(200)\n          |                          ^\n      122 |       expect(res.headers.get('x-from-middleware')).toBeDefined()\n      123 |\n      124 |       const res2 = await fetchViaHTTP(next.url, '/has-match-5', undefined, {\n\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:121:26)\n\n  ● Middleware custom matchers › should match has query on client routing\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#has-match-2')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:139:9)\n\n  ● Middleware custom matchers › should match has cookie on client routing\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#has-match-3')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (e2e/middleware-custom-matchers/test/index.test.ts:156:9)\n",
+            "name": "/work/test/e2e/middleware-custom-matchers/test/index.test.ts",
+            "startTime": 1675679535454,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/404-page-app/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675679643072,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should not output static 404 if _app has getInitialProps",
+                "location": null,
+                "status": "passed",
+                "title": "should not output static 404 if _app has getInitialProps"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode specify to use the 404 page still in the routes-manifest",
+                "location": null,
+                "status": "passed",
+                "title": "specify to use the 404 page still in the routes-manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should still use 404 page",
+                "location": null,
+                "status": "passed",
+                "title": "should still use 404 page"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-app/test/index.test.js:81:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 Page Support with _app dev mode should not show pages/404 GIP error if _app has GIP",
+                "location": null,
+                "status": "failed",
+                "title": "should not show pages/404 GIP error if _app has GIP"
+              }
+            ],
+            "endTime": 1675679652946,
+            "message": "  ● 404 Page Support with _app › dev mode › should not show pages/404 GIP error if _app has GIP\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      79 |     it('should not show pages/404 GIP error if _app has GIP', async () => {\n      80 |       const res = await fetchViaHTTP(appPort, '/abc')\n    > 81 |       expect(res.status).toBe(404)\n         |                          ^\n      82 |       const $ = cheerio.load(await res.text())\n      83 |       expect($('#404-title').text()).toBe('Hi There')\n      84 |       expect(stderr).not.toMatch(gip404Err)\n\n      at Object.<anonymous> (integration/404-page-app/test/index.test.js:81:26)\n",
+            "name": "/work/test/integration/404-page-app/test/index.test.js",
+            "startTime": 1675679643167,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/basic/node-builtins.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675679292602,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:53:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:94:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675679414205,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:53:7)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:94:7)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675679292701,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675679541670,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675679586857,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675679541761,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675679602989,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675679608352,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675679603100,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
