@@ -4,7 +4,7 @@ TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 EXT :=
 ifeq ($(OS),Windows_NT)
 	UNAME := Windows
-	EXT = ".exe"
+	EXT = .exe
 else
 	UNAME := $(shell uname -s)
 endif
