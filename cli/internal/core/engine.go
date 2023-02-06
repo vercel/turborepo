@@ -150,18 +150,6 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 
 				traversalQueue = append(traversalQueue, taskID)
 			}
-
-			taskID := util.GetTaskId(pkg, taskName)
-
-			if _, err := e.getTaskDefinition(pkg, taskName, taskID); err != nil {
-				// Initial, non-package tasks are not required to exist, as long as some
-				// package in the list packages defines it as a package-task. Dependencies
-				// *are* required to have a definition.
-				continue
-			}
-
-			fmt.Printf("[debug] Appending taskID to queue: %#v\n", taskID)
-			traversalQueue = append(traversalQueue, taskID)
 		}
 	}
 
@@ -174,7 +162,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 		traversalQueue = traversalQueue[1:]
 
 		pkg, taskName := util.GetPackageTaskFromId(taskID)
-		// This for lopo adds in the Root Node as a taskID (i.e. __ROOT__#build)
+		// This for loop adds in the Root Node as a taskID (i.e. __ROOT__#build)
 		// into the traversalQueue. But in order to look up the information about
 		// the root workpsace, we need to use the package name "//". Re-assign
 		// the pkgName here to account for that.
