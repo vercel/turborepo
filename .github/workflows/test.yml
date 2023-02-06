@@ -996,108 +996,47 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
-      - name: Check cancellation
-        id: cancelled
-        if: needs.rust_prepare.result == 'cancelled' || needs.rust_lint.result == 'cancelled' || needs.rust_check.result == 'cancelled' || needs.turbopack_rust_test.result == 'cancelled' || needs.turborepo_rust_test.result == 'cancelled' || needs.turbopack_rust_test_bench.result == 'cancelled' || needs.rust_build_release.result == 'cancelled' || needs.format_lint.result == 'cancelled' || needs.rust_bench.result == 'cancelled'
-        run: echo "cancelled=true" >> $GITHUB_OUTPUT
-
-      - name: Start summary
+      - name: Compute info
+        id: info
+        if: always()
         run: |
-          echo "The following steps have failed in CI" > comment.md
-          echo >> comment.md
-
-      - name: Determine Jobs failed
-        if: always() && needs.determine_jobs.result != 'success' && needs.determine_jobs.result != 'skipped'
-        run: |
-          echo "- Determining jobs" >> failures.md
-          exit 1
-
-      - name: Go Linting failed
-        if: always() && needs.go_lint.result != 'success' && needs.go_lint.result != 'skipped'
-        run: |
-          echo "- Go lints" >> failures.md
-          exit 1
-
-      - name: Go Unit Tests failed
-        if: always() && needs.go_unit.result != 'success' && needs.go_unit.result != 'skipped'
-        run: |
-          echo "- Go Unit Tests" >> failures.md
-          exit 1
-
-      - name: Go Integration Tests failed
-        if: always() && needs.go_integration.result != 'success' && needs.go_integration.result != 'skipped'
-        run: |
-          echo "- Go Integration Tests" >> failures.md
-          exit 1
-
-      - name: Go Examples failed
-        if: always() && needs.go_examples.result != 'success' && needs.go_examples.result != 'skipped'
-        run: |
-          echo "- Go Examples" >> failures.md
-          exit 1
-
-      - name: Go E2E failed
-        if: always() && needs.go_e2e.result != 'success' && needs.go_e2e.result != 'skipped'
-        run: |
-          echo "- Go E2E" >> failures.md
-          exit 1
-
-      - name: Rust Compilation failed
-        if: always() && needs.rust_prepare.result != 'success' && needs.rust_prepare.result != 'skipped'
-        run: |
-          echo "- Rust compilation" >> failures.md
-          exit 1
-
-      - name: Rust Linting failed
-        if: always() && needs.rust_lint.result != 'success' && needs.rust_lint.result != 'skipped'
-        run: |
-          echo "- Rust lints" >> failures.md
-          exit 1
-
-      - name: Rust Checking failed
-        if: always() && needs.rust_check.result != 'success' && needs.rust_check.result != 'skipped'
-        run: |
-          echo "- Rust checks / clippy" >> failures.md
-          exit 1
-
-      - name: Turbopack Rust Testing failed
-        if: always() && needs.turbopack_rust_test.result != 'success' && needs.turbopack_rust_test.result != 'skipped'
-        run: |
-          echo "- Turbopack Rust tests" >> failures.md
-          exit 1
-
-      - name: Turborepo Rust Testing failed
-        if: always() && needs.turborepo_rust_test.result != 'success' && needs.turborepo_rust_test.result != 'skipped'
-        run: |
-          echo "- Turborepo Rust tests" >> failures.md
-          exit 1
-
-      - name: Rust Benchmark Testing failed
-        if: always() && needs.turbopack_rust_test_bench.result != 'success' && needs.turbopack_rust_test_bench.result != 'skipped'
-        run: |
-          echo "- Rust benchmark tests" >> failures.md
-          exit 1
-
-      - name: Rust Release Build failed
-        if: always() && needs.rust_build_release.result != 'success' && needs.rust_build_release.result != 'skipped'
-        run: |
-          echo "- Rust release build" >> failures.md
-          exit 1
-
-      - name: Rust benchmarks
-        if: always() && needs.rust_bench.result != 'success' && needs.rust_bench.result != 'skipped'
-        run: |
-          echo "- Rust benchmarks" >> failures.md
-          exit 1
-
-      - name: Formatting failed
-        if: always() && needs.format_lint.result != 'success' && needs.format_lint.result != 'skipped'
-        run: |
-          echo "- Formatting" >> failures.md
-          exit 1
+          cancelled=false
+          failure=false
+          subjob () {
+            local result=$1
+            local name=$2
+            if [ "$result" = "cancelled" ]; then
+              cancelled=true
+            elif [ "$result" != "success" && "$result" != "skipped" ]; then
+              echo "- $name" >> failures.md
+              failure=true
+            fi
+          }
+          subjob needs.determine_jobs.result "Determining jobs"
+          subjob needs.go_lint.result "Go lints"
+          subjob needs.go_unit.result "Go unit tests"
+          subjob needs.go_examples.result "Go examples"
+          subjob needs.go_e2e.result "Go e2e tests"
+          subjob needs.go_integration.result "Go integration tests"
+          subjob needs.rust_prepare.result "Rust prepare"
+          subjob needs.rust_lint.result "Rust lints"
+          subjob needs.rust_check.result "Rust checks"
+          subjob needs.turbopack_rust_test.result "TurboPack Rust tests"
+          subjob needs.turborepo_rust_test.result "TurboRepo Rust tests"
+          subjob needs.turbopack_rust_test_bench.result "TurboPack Rust benchmarks"
+          subjob needs.rust_build_release.result "Rust release build"
+          subjob needs.format_lint.result "Formatting"
+          subjob needs.rust_bench.result "Rust benchmarks"
+          if [ "$cancelled" = "true" ]; then
+             echo "cancelled=true" >> $GITHUB_OUTPUT
+          elif [ "$failure" = "true" ]; then
+            echo "failure=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Add failure prose text
-        if: failure()
+        if: steps.info.outputs.failure == 'true'
         run: |
           echo "## :warning: CI failed :warning:" > comment.md
           echo >> comment.md
@@ -1110,7 +1049,7 @@ jobs:
           echo "<!-- CI COMMENT -->" >> comment.md
 
       - name: Add success prose text
-        if: success()
+        if: steps.info.outputs.success == 'true'
         run: |
           echo "## :green_circle: CI successful :green_circle:" > comment.md
           echo >> comment.md
@@ -1120,7 +1059,7 @@ jobs:
 
       - name: Find PR Comment
         id: comment
-        if: always() && github.event_name == 'pull_request' && steps.cancelled.outputs.cancelled != 'true'
+        if: always() && github.event_name == 'pull_request' && steps.info.outputs.cancelled != 'true'
         uses: peter-evans/find-comment@v2
         with:
           issue-number: ${{ github.event.pull_request.number }}
@@ -1128,7 +1067,7 @@ jobs:
           body-includes: "<!-- CI COMMENT -->"
 
       - name: Create or update PR comment
-        if: always() && github.event_name == 'pull_request' && steps.cancelled.outputs.cancelled != 'true'
+        if: always() && github.event_name == 'pull_request' && steps.info.outputs.cancelled != 'true'
         uses: peter-evans/create-or-update-comment@v2
         continue-on-error: true
         with:
@@ -1138,11 +1077,11 @@ jobs:
           edit-mode: replace
 
       - name: It's not fine
-        if: failure() && steps.cancelled.outputs.cancelled != 'true'
+        if: steps.info.outputs.failure == 'true'
         run: exit 1
 
       - name: It's fine
-        if: success() && steps.cancelled.outputs.cancelled != 'true'
+        if: steps.info.outputs.success == 'true'
         run: echo Ok
 
   cleanup:
