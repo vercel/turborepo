@@ -19,7 +19,6 @@
       "outputMode": "new-only"
     },
 
-
     "missing-workspace-config-task-with-deps": {
       "dependsOn": ["missing-workspace-config-underlying-task", "^missing-workspace-config-underlying-topo-task"],
       "outputs": ["out/**"]
@@ -33,7 +32,6 @@
       "env": ["SOME_VAR"],
       "outputMode": "new-only"
     },
-
 
     "override-values-task": {
       "inputs": ["src/foo.txt"],
@@ -49,7 +47,6 @@
     },
     "override-values-underlying-task": {},
     "override-values-underlying-topo-task": {},
-
 
     "build": {
       "outputs": ["out/**"],
