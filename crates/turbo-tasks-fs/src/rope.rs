@@ -375,8 +375,8 @@ impl From<Box<[RopeElem]>> for InnerRope {
             // It's important that an InnerRope never contain an empty Bytes section.
             for el in els.iter() {
                 match el {
-                    RopeElem::Local(b) => debug_assert!(!b.is_empty(), "must not have empty Bytes"),
-                    RopeElem::Shared(s) => {
+                    Local(b) => debug_assert!(!b.is_empty(), "must not have empty Bytes"),
+                    Shared(s) => {
                         // We check whether the shared slice is empty, and not its elements. The
                         // only way to construct the Shared's InnerRope is
                         // in this mod, and we have already checked that
