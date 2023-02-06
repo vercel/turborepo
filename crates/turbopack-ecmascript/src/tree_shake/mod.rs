@@ -4,6 +4,7 @@ use swc_core::ecma::ast::{Id, Module};
 
 use self::graph::{Graph, ItemData, ItemId, ItemIdKind};
 
+mod condensation;
 mod graph;
 #[cfg(test)]
 mod tests;
