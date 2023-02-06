@@ -193,6 +193,9 @@ jobs:
       - name: Setup Protos
         run: cd cli && make compile-protos
 
+      - name: Build turborepo-ffi
+        run: cd cli && make turborepo-ffi-install
+
       - name: golangci Linting
         uses: golangci/golangci-lint-action@v3
         with:
@@ -598,6 +601,11 @@ jobs:
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
+
+      - name: Setup Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare toolchain on Windows
         run: |
