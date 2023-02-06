@@ -175,7 +175,7 @@ async fn base_resolve_options(
                     for condition in opt.custom_conditions.iter() {
                         conditions.insert(condition.to_string(), ConditionValue::Set);
                     }
-                    // Infer some well known conditions
+                    // Infer some well-known conditions
                     let dev = conditions.get("development").cloned();
                     let prod = conditions.get("production").cloned();
                     if prod.is_none() {
@@ -221,6 +221,7 @@ async fn base_resolve_options(
         },
         import_map: Some(import_map),
         resolved_map: opt.resolved_map,
+        plugins: opt.plugins.clone(),
         ..Default::default()
     }
     .into())

@@ -113,7 +113,7 @@ That's because we don't have a `dev` script to rebuild our packages while we're 
 {
   "scripts": {
     "build": "tsup src/index.ts --format cjs --dts",
-    "dev": "npm run build --watch"
+    "dev": "npm run build -- --watch"
   }
 }
 ```

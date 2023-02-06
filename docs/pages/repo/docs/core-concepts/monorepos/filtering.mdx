@@ -8,7 +8,7 @@ import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
 # Filtering Workspaces
 
-A monorepo can contain hundreds, or thousands, of workspaces. By default, running `turbo run test` will execute the `test` task in **all available workspaces**.
+A monorepo can contain hundreds, or thousands, of workspaces. By default, running `turbo run test` from the root of the repository will execute the `test` task in **all available workspaces**.
 
 ![Without using a filter, test will be run across all packages](/images/docs/no-filter.png)
 
@@ -105,11 +105,11 @@ turbo run build --filter=my-app^...
 Useful for when you want to target a specific directory, not a workspace name. It supports:
 
 - Exact matches: `--filter=./apps/docs`
-- Globs: `--filter=./apps/*`
+- Globs: `--filter='./apps/*'`
 
 ```sh
 # Build all of the workspaces in the 'apps' directory
-turbo run build --filter=./apps/*
+turbo run build --filter='./apps/*'
 ```
 
 #### Combining with other syntaxes
@@ -190,6 +190,14 @@ turbo run build --filter=!@foo/bar
 # Build all of the workspaces in the 'apps' directory, except the 'admin' workspace
 turbo run build --filter=./apps/* --filter=!admin
 ```
+
+### Via global `turbo`
+
+If you are using a globally installed version of `turbo`, running from within a workspace automatically
+filters to that workspace's directory. That means running `turbo run test --filter={./packages/shared}` from the root of the repository is equivalent to
+running `cd packages/shared && turbo run test`.
+
+Running with an explicitly named workspace will always work from anywhere in the repository: `turbo run test --filter=shared`.
 
 <Callout
   type="idea"

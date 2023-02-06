@@ -55,3 +55,10 @@ jobs:
       - name: Run tests
         run: |
           pnpm -- turbo run test --filter=...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --filter=!cli --color
+
+  cleanup:
+    name: Cleanup
+    needs: [test]
+    if: always()
+    uses: ./.github/workflows/pr-clean-caches.yml
+    secrets: inherit

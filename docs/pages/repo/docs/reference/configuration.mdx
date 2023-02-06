@@ -17,6 +17,11 @@ You can configure the behavior of `turbo` by adding a `turbo.json` file in your 
 A list of file globs for implicit global hash dependencies. The contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.
 This is useful for busting the cache based on `.env` files (not in Git) or any root level file that impacts workspace tasks (but are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.js`, `.eslintrc`, etc.)).
 
+<Callout type="info">
+These must be relative paths from the location of `turbo.json`, and they should be valid for any machine where
+  this configuration might be used. For instance, it is not a good idea to reference files in one user's home directory.
+</Callout>
+
 **Example**
 
 ```jsonc
@@ -177,6 +182,10 @@ Omitting this key or passing an empty array can be used to tell `turbo` that a t
 and thus doesn't emit any filesystem artifacts (e.g. like a linter), but you still want to cache its
 logs (and treat them like an artifact).
 
+<Callout type="info">
+  `outputs` globs must be specified as relative paths rooted at the workspace directory.
+</Callout>
+
 **Example**
 
 ```jsonc
@@ -244,6 +253,10 @@ Setting this to a list of globs will cause the task to only be rerun when files 
 changed. This can be helpful if you want to, for example, skip running tests unless a source file changed.
 
 Specifying `[]` will cause the task to be rerun when any file in the workspace changes.
+
+<Callout type="info">
+  `inputs` globs must be specified as relative paths rooted at the workspace directory.
+</Callout>
 
 **Example**
 

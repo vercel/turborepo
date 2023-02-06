@@ -1,11 +1,11 @@
 use anyhow::Result;
-use indexmap::IndexSet;
 use mime::APPLICATION_JSON;
-use turbo_tasks::primitives::StringsVc;
+use turbo_tasks::{primitives::StringsVc, TryFlatMapRecursiveJoinIterExt, TryJoinIterExt};
 use turbo_tasks_fs::File;
 use turbopack_core::asset::AssetContentVc;
 use turbopack_dev_server::source::{
-    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
+    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceResultVc,
+    ContentSourceVc,
 };
 use turbopack_node::render::{
     node_api_source::NodeApiContentSourceVc, rendered_source::NodeRenderContentSourceVc,
@@ -23,31 +23,47 @@ impl DevManifestContentSourceVc {
     #[turbo_tasks::function]
     async fn find_routes(self) -> Result<StringsVc> {
         let this = &*self.await?;
-        let mut queue = this.page_roots.clone();
-        let mut routes = IndexSet::new();
 
-        while let Some(content_source) = queue.pop() {
-            queue.extend(content_source.get_children().await?.iter());
-
+        async fn content_source_to_pathname(
+            content_source: ContentSourceVc,
+        ) -> Result<Option<String>> {
             // TODO This shouldn't use casts but an public api instead
             if let Some(api_source) = NodeApiContentSourceVc::resolve_from(content_source).await? {
-                routes.insert(format!("/{}", api_source.get_pathname().await?));
-
-                continue;
+                return Ok(Some(format!("/{}", api_source.get_pathname().await?)));
             }
 
             if let Some(page_source) =
                 NodeRenderContentSourceVc::resolve_from(content_source).await?
             {
-                routes.insert(format!("/{}", page_source.get_pathname().await?));
-
-                continue;
+                return Ok(Some(format!("/{}", page_source.get_pathname().await?)));
             }
+
+            Ok(None)
         }
+
+        async fn get_content_source_children(
+            content_source: ContentSourceVc,
+        ) -> Result<Vec<ContentSourceVc>> {
+            Ok(content_source.get_children().await?.clone_value())
+        }
+
+        let mut routes = this
+            .page_roots
+            .iter()
+            .copied()
+            .try_flat_map_recursive_join(get_content_source_children)
+            .await?
+            .into_iter()
+            .map(content_source_to_pathname)
+            .try_join()
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
 
         routes.sort();
 
-        Ok(StringsVc::cell(routes.into_iter().collect()))
+        Ok(StringsVc::cell(routes))
     }
 }
 
@@ -77,9 +93,7 @@ impl ContentSource for DevManifestContentSource {
         let file = File::from(manifest_content).with_content_type(APPLICATION_JSON);
 
         Ok(ContentSourceResultVc::exact(
-            ContentSourceContent::Static(AssetContentVc::from(file).into())
-                .cell()
-                .into(),
+            ContentSourceContentVc::static_content(AssetContentVc::from(file).into()).into(),
         ))
     }
 }
