@@ -446,13 +446,26 @@ func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath
 		}
 		return "", false, fmt.Errorf("Unable to find resolved version for %s@%s in %s", name, specifier, workspacePath)
 	}
-	if resolution.Specifier != specifier {
-		if _, ok := p.Packages[p.formatKey(name, specifier)]; ok {
-			return specifier, true, nil
+	overrideSpecifier := p.applyOverrides(name, specifier)
+	if resolution.Specifier != overrideSpecifier {
+		if _, ok := p.Packages[p.formatKey(name, overrideSpecifier)]; ok {
+			return overrideSpecifier, true, nil
 		}
 		return "", false, nil
 	}
 	return resolution.Version, true, nil
+}
+
+// Apply pnpm overrides to specifier, see https://pnpm.io/package_json#pnpmoverrides
+// Note this is barebones support and will only supports global overrides
+// future work will support semver ranges and selector filtering.
+func (p *PnpmLockfile) applyOverrides(name string, specifier string) string {
+	if len(p.Overrides) > 0 {
+		if new, ok := p.Overrides[name]; ok {
+			return new
+		}
+	}
+	return specifier
 }
 
 func formatPnpmKey(name string, version string) string {
