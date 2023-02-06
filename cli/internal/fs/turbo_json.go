@@ -155,7 +155,7 @@ func (p Pipeline) GetTask(taskID string, taskName string) (*TaskDefinition, erro
 }
 
 // LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
-func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON, includeSynthesizedFromRootPackageJSON bool) (*TurboJSON, error) {
+func LoadTurboConfig(dir turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON, includeSynthesizedFromRootPackageJSON bool) (*TurboJSON, error) {
 	// If the root package.json stil has a `turbo` key, log a warning and remove it.
 	if rootPackageJSON.LegacyTurboConfig != nil {
 		log.Printf("[WARNING] \"turbo\" in package.json is no longer supported. Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile)
@@ -163,7 +163,7 @@ func LoadTurboConfig(rootPath turbopath.AbsoluteSystemPath, rootPackageJSON *Pac
 	}
 
 	var turboJSON *TurboJSON
-	turboFromFiles, err := ReadTurboConfig(rootPath.UntypedJoin(configFile))
+	turboFromFiles, err := ReadTurboConfig(dir.UntypedJoin(configFile))
 
 	if !includeSynthesizedFromRootPackageJSON && err != nil {
 		// If the file didn't exist, throw a custom error here instead of propagating

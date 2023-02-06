@@ -100,7 +100,14 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 
 func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
 	pipeline, err := e.getPipelineFromWorkspace(pkg)
+
 	if err != nil {
+		// Fallback to the root workspace to look for a pipeline if one wasn't
+		// found in the target workspace.
+		if pkg != util.RootPkgName {
+			return e.getTaskDefinition(util.RootPkgName, taskName, taskID)
+		}
+
 		return nil, err
 	}
 
