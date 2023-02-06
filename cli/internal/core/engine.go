@@ -180,10 +180,10 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 		} else {
 			pkgJSON, ok := e.completeGraph.WorkspaceInfos[pkg]
 			if !ok {
-				// This should be unlikely to happen. If we have a pkg
-				// it should be in WorkspaceInfos. If we're hitting this error
-				// something has gone wrong earlier when building WorkspaceInfos
-				return fmt.Errorf("Failed to look up workspace %s", pkg)
+				// If we have a pkg it should be in WorkspaceInfos.
+				// If we're hitting this error something has gone wrong earlier when building WorkspaceInfos
+				// or the workspace really doesn't exist and turbo.json is misconfigured.
+				return fmt.Errorf("Could not find task \"%s\" in project", taskID)
 			}
 
 			pkgDefinition = pkgJSON
@@ -522,7 +522,7 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 	}
 
 	if workspaceDefinition == nil && rootTaskDefinition == nil {
-		return nil, fmt.Errorf("Could not find %s in root turbo.json or %s", taskID, pkg.Dir)
+		return nil, fmt.Errorf("Could not find \"%s\" in root turbo.json or \"%s\" workspace", taskID, pkg.Dir)
 	}
 
 	// Start a list of TaskDefinitions we've found for this TaskID
