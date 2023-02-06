@@ -169,30 +169,28 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 		traversalQueue = traversalQueue[1:]
 
 		pkg, taskName := util.GetPackageTaskFromId(taskID)
-		// This for loop adds in the Root Node as a taskID (i.e. __ROOT__#build)
-		// into the traversalQueue. But in order to look up the information about
-		// the root workpsace, we need to use the package name "//". Re-assign
-		// the pkgName here to account for that.
-		// TODO(mehulkar): Is it safe to move this logic into GetPackageTaskFromId()?
-		if pkg == ROOT_NODE_NAME {
-			continue
-		}
 
 		if pkg == util.RootPkgName && !e.rootEnabledTasks.Includes(taskName) {
 			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
 
-		pkgJSON, ok := e.completeGraph.WorkspaceInfos[pkg]
+		var pkgDefinition *fs.PackageJSON
+		if pkg == ROOT_NODE_NAME {
+			pkgDefinition = &fs.PackageJSON{}
+		} else {
+			pkgJSON, ok := e.completeGraph.WorkspaceInfos[pkg]
+			if !ok {
+				// This should be unlikely to happen. If we have a pkg
+				// it should be in WorkspaceInfos. If we're hitting this error
+				// something has gone wrong earlier when building WorkspaceInfos
+				return fmt.Errorf("Failed to look up workspace %s", pkg)
+			}
 
-		if !ok {
-			// This should be unlikely to happen. If we have a pkg
-			// it should be in WorkspaceInfos. If we're hitting this error
-			// something has gone wrong earlier when building WorkspaceInfos
-			return fmt.Errorf("Failed to look up workspace %s", pkg)
+			pkgDefinition = pkgJSON
 		}
 
 		taskDefinition, err := e.GetResolvedTaskDefinition(
-			pkgJSON,
+			pkgDefinition,
 			&e.completeGraph.Pipeline,
 			taskName,
 			taskID,
@@ -478,7 +476,7 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 	// If the taskID is a root task (e.g. //#build), we don't need to look
 	// for a workspace task, since these can only be defined in the root turbo.json.
 	taskIDPackage, _ := util.GetPackageTaskFromId(taskID)
-	if taskIDPackage != util.RootPkgName {
+	if taskIDPackage != util.RootPkgName && taskIDPackage != ROOT_NODE_NAME {
 		// Look up task definition in turbo.json in the workspace directory
 		workspaceConfigPath := turbopath.AbsoluteSystemPath(pkg.Dir).UntypedJoin("turbo.json")
 		workspaceTurboJSON, _ := fs.ReadTurboConfig(workspaceConfigPath)
