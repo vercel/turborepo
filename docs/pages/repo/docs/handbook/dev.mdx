@@ -95,13 +95,22 @@ This means that users of your `dev` task _don't need to worry about codegen or m
 
 ## Running `dev` only in certain workspaces
 
-To run a `dev` task in only certain workspaces, you should use the [`--filter` syntax](/repo/docs/core-concepts/monorepos/filtering). For example:
+Let's assume you want to run the `dev` task in the `docs` workspace, located at `<root>/apps/docs`.
+`turbo` can infer the workspace from your directory, so if you run:
+
+    ```bash
+    cd <root>/apps/docs
+    turbo run dev
+    ```
+
+`turbo` will automatically pick up that you're in the `docs` workspace and run the `dev` task.
+
+To run the same task from any other location in the repository, use [`--filter` syntax](/repo/docs/core-concepts/monorepos/filtering).
+For example:
 
 ```bash
 turbo run dev --filter docs
 ```
-
-Will only run `dev` in the workspace named `docs`.
 
 ## Using environment variables
 
@@ -111,8 +120,9 @@ We recommend using a library called [`dotenv-cli`](https://www.npmjs.com/package
 
 <Callout type="info">
   We want every dev to have a great experience using Turbo. The approach documented below does **not** live up to those standards.
-  
-  We're working on a first-class solution to this problem - but while you wait, here's the next-best solution.
+
+We're working on a first-class solution to this problem - but while you wait, here's the next-best solution.
+
 </Callout>
 
 ### Tutorial

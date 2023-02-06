@@ -4,30 +4,30 @@ Setup
 
 Check
   $ ${TURBO} run test --dry --single-package
-  
+
   Tasks to Run
   build
-    Task                   = build                                                                                                  
-    Hash                   = 818eddfdc27ae508                                                                                       
-    Cached (Local)         = false                                                                                                  
-    Cached (Remote)        = false                                                                                                  
-    Command                = echo 'building' > foo                                                                                  
-    Outputs                = foo                                                                                                    
-    Log File               = .turbo/turbo-build.log                                                                                 
-    Dependencies           =                                                                                                        
-    Dependendents          = test                                                                                                   
-    ResolvedTaskDefinition = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":0,"env":[],"persistent":false} 
+    Task                   = build
+    Hash                   = 818eddfdc27ae508
+    Cached (Local)         = false
+    Cached (Remote)        = false
+    Command                = echo 'building' > foo
+    Outputs                = foo
+    Log File               = .turbo/turbo-build.log
+    Dependencies           =
+    Dependendents          = test
+    ResolvedTaskDefinition = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":0,"env":[],"persistent":false}
   test
-    Task                   = test                                                                                                     
-    Hash                   = 011f1e783558cf3d                                                                                         
-    Cached (Local)         = false                                                                                                    
-    Cached (Remote)        = false                                                                                                    
-    Command                = [[ ( -f foo ) && $(cat foo) == 'building' ]]                                                             
-    Outputs                =                                                                                                          
-    Log File               = .turbo/turbo-test.log                                                                                    
-    Dependencies           = build                                                                                                    
-    Dependendents          =                                                                                                          
-    ResolvedTaskDefinition = {"outputs":[],"cache":true,"dependsOn":["build"],"inputs":[],"outputMode":0,"env":[],"persistent":false} 
+    Task                   = test
+    Hash                   = 011f1e783558cf3d
+    Cached (Local)         = false
+    Cached (Remote)        = false
+    Command                = [[ ( -f foo ) && $(cat foo) == 'building' ]]
+    Outputs                =
+    Log File               = .turbo/turbo-test.log
+    Dependencies           = build
+    Dependendents          =
+    ResolvedTaskDefinition = {"outputs":[],"cache":true,"dependsOn":["build"],"inputs":[],"outputMode":0,"env":[],"persistent":false}
 
   $ ${TURBO} run test --dry=json --single-package
   {
@@ -56,7 +56,7 @@ Check
           "cache": true,
           "dependsOn": [],
           "inputs": [],
-          "outputMode": 0,
+          "outputMode": "full",
           "env": [],
           "persistent": false
         }
@@ -83,7 +83,7 @@ Check
             "build"
           ],
           "inputs": [],
-          "outputMode": 0,
+          "outputMode": "full",
           "env": [],
           "persistent": false
         }

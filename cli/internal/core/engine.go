@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -27,24 +28,33 @@ type Visitor = func(taskID string) error
 // Engine contains both the DAG for the packages and the tasks and implements the methods to execute tasks in them
 type Engine struct {
 	// TaskGraph is a graph of package-tasks
-	TaskGraph *dag.AcyclicGraph
-	// Tasks are a map of tasks in the engine
-	Tasks            map[string]*Task
+	TaskGraph        *dag.AcyclicGraph
 	PackageTaskDeps  map[string][]string
 	rootEnabledTasks util.Set
 
 	// completeGraph is the CompleteGraph. We need this to look up the Pipeline, etc.
 	completeGraph *graph.CompleteGraph
+
+	// Map of packageName to pipeline. We resolve task definitions from here
+	// but we don't want to read from the filesystem every time
+	pipelines map[string]fs.Pipeline
+
+	// isSinglePackage is used to load turbo.json correctly
+	isSinglePackage bool
 }
 
 // NewEngine creates a new engine given a topologic graph of workspace package names
-func NewEngine(completeGraph *graph.CompleteGraph) *Engine {
+func NewEngine(
+	completeGraph *graph.CompleteGraph,
+	isSinglePackage bool,
+) *Engine {
 	return &Engine{
 		completeGraph:    completeGraph,
-		Tasks:            make(map[string]*Task),
 		TaskGraph:        &dag.AcyclicGraph{},
 		PackageTaskDeps:  map[string][]string{},
 		rootEnabledTasks: make(util.Set),
+		pipelines:        map[string]fs.Pipeline{},
+		isSinglePackage:  isSinglePackage,
 	}
 }
 
@@ -88,34 +98,24 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 	})
 }
 
-func (e *Engine) getTaskDefinitionFromWorkspace(workspaceDir turbopath.AnchoredSystemPath, taskName string) (*Task, error) {
-	workspaceConfigPath := turbopath.AbsoluteSystemPath(workspaceDir.Join("turbo.json"))
-	workspaceConfig, err := fs.ReadTurboConfig(workspaceConfigPath)
-
+func (e *Engine) getTaskDefinition(taskName string, taskID string) (*Task, error) {
+	pipeline, err := e.getPipelineFromWorkspace(util.RootPkgName)
 	if err != nil {
-		return nil, fmt.Errorf("Missing turbo.json in workspace %s", workspaceDir.ToString())
+		return nil, err
 	}
 
-	taskDef, ok := workspaceConfig.Pipeline[taskName]
-
-	if !ok {
-		return nil, fmt.Errorf("Missing task definition for %s in workspace", taskName)
+	if task, ok := pipeline[taskID]; ok {
+		return &Task{
+			Name:           taskName,
+			TaskDefinition: task,
+		}, nil
 	}
 
-	task := &Task{
-		Name:           taskName,
-		TaskDefinition: taskDef,
-	}
-	return task, nil
-}
-
-func (e *Engine) getTaskDefinitionFromRoot(taskName string, taskID string) (*Task, error) {
-	// If there was no task found in the workspace, resolve from root instead.
-	if task, ok := e.Tasks[taskID]; ok {
-		return task, nil
-	}
-	if task, ok := e.Tasks[taskName]; ok {
-		return task, nil
+	if task, ok := pipeline[taskName]; ok {
+		return &Task{
+			Name:           taskName,
+			TaskDefinition: task,
+		}, nil
 	}
 
 	return nil, fmt.Errorf("Could not find \"%s\" or \"%s\" in root config", taskName, taskID)
@@ -141,7 +141,8 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	pkgs := options.Packages
 	taskNames := options.TaskNames
 	tasksOnly := options.TasksOnly
-	taskIDsTraversalQueue := []string{}
+
+	traversalQueue := []string{}
 
 	// Get a list of entry points into our TaskGraph.
 	// We do this by taking the input taskNames, and pkgs
@@ -155,8 +156,19 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 		}
 
 		for _, taskName := range taskNames {
-			if e.rootEnabledTasks.Includes(taskName) {
-				continue
+			// If it's not a task from the root workspace (i.e. tasks from every other workspace)
+			// or if it's a task that we know is rootEnabled task, add it to the traversal queue.
+			if !isRootPkg || e.rootEnabledTasks.Includes(taskName) {
+				taskID := util.GetTaskId(pkg, taskName)
+				// Skip tasks that don't have a definition
+				if _, err := e.getTaskDefinition(taskName, taskID); err != nil {
+					// Initially, non-package tasks are not required to exist, as long as some
+					// package in the list packages defines it as a package-task. Dependencies
+					// *are* required to have a definition.
+					continue
+				}
+
+				traversalQueue = append(traversalQueue, taskID)
 			}
 
 			taskID := util.GetTaskId(pkg, taskName)
@@ -173,17 +185,17 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 			}
 
 			fmt.Printf("[debug] Appending taskID to queue: %#v\n", taskID)
-			taskIDsTraversalQueue = append(taskIDsTraversalQueue, taskID)
+			traversalQueue = append(traversalQueue, taskID)
 		}
 	}
 
 	visited := make(util.Set)
 
 	// Things get appended to traversalQueue inside this loop, so we use the len() check instead of range.
-	for len(taskIDsTraversalQueue) > 0 {
-		// pop off the first item from the taskIDsTraversalQueue
-		taskID := taskIDsTraversalQueue[0]
-		taskIDsTraversalQueue = taskIDsTraversalQueue[1:]
+	for len(traversalQueue) > 0 {
+		// pop off the first item from the traversalQueue
+		taskID := traversalQueue[0]
+		traversalQueue = traversalQueue[1:]
 
 		pkg, taskName := util.GetPackageTaskFromId(taskID)
 		// This for lopo adds in the Root Node as a taskID (i.e. __ROOT__#build)
@@ -293,7 +305,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 					e.TaskGraph.Add(fromTaskID)
 					e.TaskGraph.Add(toTaskID)
 					e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
-					taskIDsTraversalQueue = append(taskIDsTraversalQueue, fromTaskID)
+					traversalQueue = append(traversalQueue, fromTaskID)
 				}
 			}
 		}
@@ -304,7 +316,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 				e.TaskGraph.Add(fromTaskID)
 				e.TaskGraph.Add(toTaskID)
 				e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
-				taskIDsTraversalQueue = append(taskIDsTraversalQueue, fromTaskID)
+				traversalQueue = append(traversalQueue, fromTaskID)
 			}
 		}
 
@@ -314,7 +326,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 					e.TaskGraph.Add(fromTaskID)
 					e.TaskGraph.Add(toTaskID)
 					e.TaskGraph.Connect(dag.BasicEdge(toTaskID, fromTaskID))
-					taskIDsTraversalQueue = append(taskIDsTraversalQueue, fromTaskID)
+					traversalQueue = append(traversalQueue, fromTaskID)
 				}
 			}
 		}
@@ -330,18 +342,13 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	return nil
 }
 
-// AddRootEnabledTask keeps track of tasks configured for the root pkg
-// from the root turbo.json pipeline. e.g. `//#build`.
-func (e *Engine) AddRootEnabledTask(taskName string) {
-	// If a root task is added, mark the task name as eligible for
-	// root execution. Otherwise, it will be skipped.
-	if !util.IsPackageTask(taskName) {
-		return
-	}
-
-	pkg, taskName := util.GetPackageTaskFromId(taskName)
-	if pkg == util.RootPkgName {
-		e.rootEnabledTasks.Add(taskName)
+// AddTask adds root tasks to the engine so they can be looked up later.
+func (e *Engine) AddTask(taskName string) {
+	if util.IsPackageTask(taskName) {
+		pkg, taskName := util.GetPackageTaskFromId(taskName)
+		if pkg == util.RootPkgName {
+			e.rootEnabledTasks.Add(taskName)
+		}
 	}
 }
 
@@ -559,4 +566,82 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 	}
 
 	return taskDefinitions, nil
+}
+
+// GetTaskGraphAncestors gets all the ancestors for a given task in the graph.
+// "Ancestors" are all tasks that the given task depends on.
+// This is only used by DryRun output right now.
+func (e *Engine) GetTaskGraphAncestors(taskID string) ([]string, error) {
+	ancestors, err := e.TaskGraph.Ancestors(taskID)
+	if err != nil {
+		return nil, err
+	}
+	stringAncestors := []string{}
+	for _, dep := range ancestors {
+		// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
+		if !strings.Contains(dep.(string), ROOT_NODE_NAME) {
+			stringAncestors = append(stringAncestors, dep.(string))
+		}
+	}
+	// TODO(mehulkar): Why are ancestors not sorted, but GetTaskGraphDescendants sorts?
+	return stringAncestors, nil
+}
+
+// GetTaskGraphDescendants gets all the descendants for a given task in the graph.
+// "Descendants" are all tasks that depend on the given taskID.
+// This is only used by DryRun output right now.
+func (e *Engine) GetTaskGraphDescendants(taskID string) ([]string, error) {
+	descendents, err := e.TaskGraph.Descendents(taskID)
+	if err != nil {
+		return nil, err
+	}
+	stringDescendents := []string{}
+	for _, dep := range descendents {
+		// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
+		if !strings.Contains(dep.(string), ROOT_NODE_NAME) {
+			stringDescendents = append(stringDescendents, dep.(string))
+		}
+	}
+	sort.Strings(stringDescendents)
+	return stringDescendents, nil
+}
+
+func (e *Engine) getPipelineFromWorkspace(workspaceName string) (fs.Pipeline, error) {
+	cachedPipeline, ok := e.pipelines[workspaceName]
+	if ok {
+		return cachedPipeline, nil
+	}
+
+	// Note: dir for the root workspace will be an empty string, and for
+	// other workspaces, it will be a relative path.
+	dir := e.completeGraph.WorkspaceInfos[workspaceName].Dir
+	repoRoot := e.completeGraph.RepoRoot
+	dirAbsolutePath := dir.RestoreAnchor(repoRoot)
+
+	// We need to a PackageJSON, because LoadTurboConfig requires it as an argument
+	// so it can synthesize tasks for single-package repos.
+	// In the root workspace, actually get and use the root package.json.
+	// For all other workspaces, we don't need the synthesis feature, so we can proceed
+	// with a default/blank PackageJSON
+	pkgJSON := &fs.PackageJSON{}
+
+	if workspaceName == util.RootPkgName {
+		rootPkgJSONPath := dirAbsolutePath.Join("package.json")
+		rootPkgJSON, err := fs.ReadPackageJSON(rootPkgJSONPath)
+		if err != nil {
+			return nil, err
+		}
+		pkgJSON = rootPkgJSON
+	}
+
+	turboConfig, err := fs.LoadTurboConfig(repoRoot, pkgJSON, e.isSinglePackage)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add to internal cache so we don't have to read file system for every task
+	e.pipelines[workspaceName] = turboConfig.Pipeline
+
+	// Return the config from the workspace.
+	return e.pipelines[workspaceName], nil
 }

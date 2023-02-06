@@ -22,6 +22,8 @@ const defaultHostname = "127.0.0.1"
 const defaultPort = 9789
 const defaultSSOProvider = "SAML/OIDC Single Sign-On"
 
+var errUserCanceled = errors.New("canceled")
+
 // ExecuteLogin executes the `login` command for SSO Teams (regular login is implemented in Rust).
 func ExecuteLogin(ctx context.Context, helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
@@ -34,8 +36,8 @@ func ExecuteLogin(ctx context.Context, helper *cmdutil.Helper, args *turbostate.
 		return nil
 	}
 
-	if args.Command.Login.SsoTeam != "" {
-		return errors.New("internal error: SSO login should be handled by Rust")
+	if args.Command.Login.SsoTeam == "" {
+		return errors.New("internal error: non-SSO login should be handled by Rust")
 	}
 
 	login := login{

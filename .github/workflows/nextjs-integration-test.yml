@@ -11,9 +11,9 @@ on:
       # Allow to specify Next.js version to run integration test against.
       # If not specified, will use latest release version including canary.
       version:
-        required: false
         type: string
-  workflow_dispatch:
+      force_post_to_slack:
+        type: boolean
 
 jobs:
   # Build debug build of next-dev to use in integration test.
@@ -160,32 +160,27 @@ jobs:
           RECORD_REPLAY_METADATA_TEST_RUN_TITLE: testIntegration / Group ${{ matrix.group }}
           NEXT_INTEGRATION_TEST: true
 
-      - name: Send test data to Slack workflow
-        id: slack
-        uses: slackapi/slack-github-action@v1.23.0
-        with:
-          payload: |
-            {
-              "text": "Hello from Next.js+Turbo integration tests!"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.NEXT_TURBO_INTEGRATION_SLACK_WEBHOOK_URL }}
-
   # Collect integration test results from execute_tests,
   # Store it as github artifact for next step to consume.
   collect_nextjs_integration_stat:
     needs: [execute_tests]
     name: Next.js integration test status report
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
       - name: Collect integration test stat
         uses: ./.github/actions/next-integration-stat
+        env:
+          NEXT_TURBO_FORCE_SLACK_UPDATE: "${{ inputs.force_post_to_slack }}"
 
       - name: Store artifacts
         uses: actions/upload-artifact@v3
         with:
           name: test-results
-          path: nextjs-test-results.json
+          path: |
+            nextjs-test-results.json
+            slack-payload.json
