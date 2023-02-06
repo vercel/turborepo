@@ -1,13 +1,15 @@
 use petgraph::{algo::kosaraju_scc, prelude::*, stable_graph::IndexType, EdgeType, Graph};
 
 /// Port of [petgraph::algo::condensation] for our use case.
-pub fn condensation<N, E, Ty, Ix>(
+pub fn condensation<N, E, Ty, Ix, ME>(
     g: Graph<N, E, Ty, Ix>,
-    make_acyclic: bool,
+    merge_edge: ME,
 ) -> Graph<Vec<N>, E, Ty, Ix>
 where
+    E: Copy,
     Ty: EdgeType,
     Ix: IndexType,
+    ME: Fn(E, E) -> E,
 {
     let sccs = kosaraju_scc(&g);
     let mut condensed: Graph<Vec<N>, E, Ty, Ix> = Graph::with_capacity(sccs.len(), g.edge_count());
@@ -29,12 +31,22 @@ where
     for edge in edges {
         let source = node_map[edge.source().index()];
         let target = node_map[edge.target().index()];
-        if make_acyclic {
-            if source != target {
-                condensed.update_edge(source, target, edge.weight);
+
+        if source == target {
+            continue;
+        }
+
+        let prev = condensed.find_edge(source, target);
+
+        match prev {
+            Some(prev) => {
+                let merged = merge_edge(condensed[prev], edge.weight);
+
+                condensed[prev] = merged;
             }
-        } else {
-            condensed.add_edge(source, target, edge.weight);
+            None => {
+                condensed.add_edge(source, target, edge.weight);
+            }
         }
     }
     condensed
