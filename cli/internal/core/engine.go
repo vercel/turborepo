@@ -460,8 +460,6 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 		}
 	}
 
-	// fmt.Printf("[debug] %v Merged taskDef %#v\n", taskID, mergedTaskDefinition)
-
 	return mergedTaskDefinition, nil
 }
 
@@ -598,7 +596,7 @@ func (e *Engine) getPipelineFromWorkspace(workspaceName string) (fs.Pipeline, er
 		pkgJSON = rootPkgJSON
 	}
 
-	turboConfig, err := fs.LoadTurboConfig(repoRoot, pkgJSON, e.isSinglePackage)
+	turboConfig, err := fs.LoadTurboConfig(dirAbsolutePath, pkgJSON, e.isSinglePackage)
 	if err != nil {
 		return nil, err
 	}
