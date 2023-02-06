@@ -6,6 +6,11 @@ on:
   repository_dispatch:
     # This is the event type defined by next.js upstream's `repository_dispatch` workflow dispatches.
     types: [nextjs-release-published]
+    inputs:
+      force_post_to_slack:
+        description: Override post test results to Slack
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       version:
