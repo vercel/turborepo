@@ -1086,19 +1086,19 @@ jobs:
               failure=true
             fi
           }
-          subjob needs.determine_jobs.result "Determining jobs"
-          subjob needs.go_lint.result "Go lints"
-          subjob needs.go_unit.result "Go unit tests"
-          subjob needs.go_examples.result "Go examples"
-          subjob needs.go_e2e.result "Go e2e tests"
-          subjob needs.go_integration.result "Go integration tests"
-          subjob needs.rust_prepare.result "Rust prepare"
-          subjob needs.rust_lint.result "Rust lints"
-          subjob needs.rust_check.result "Rust checks"
-          subjob needs.turbopack_rust_test1.result "Turbopack Rust tests (linux)"
-          subjob needs.turborepo_rust_test.result "TurboRepo Rust tests"
-          subjob needs.turbopack_rust_test_bench1.result "Turbopack Rust benchmark tests (linux)"
-          subjob needs.format_lint.result "Formatting"
+          subjob ${{needs.determine_jobs.result}} "Determining jobs"
+          subjob ${{needs.go_lint.result}} "Go lints"
+          subjob ${{needs.go_unit.result}} "Go unit tests"
+          subjob ${{needs.go_examples.result}} "Go examples"
+          subjob ${{needs.go_e2e.result}} "Go e2e tests"
+          subjob ${{needs.go_integration.result}} "Go integration tests"
+          subjob ${{needs.rust_prepare.result}} "Rust prepare"
+          subjob ${{needs.rust_lint.result}} "Rust lints"
+          subjob ${{needs.rust_check.result}} "Rust checks"
+          subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
+          subjob ${{needs.turborepo_rust_test.result}} "TurboRepo Rust tests"
+          subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
+          subjob ${{needs.format_lint.result}} "Formatting"
           if [ "$cancelled" = "true" ]; then
              echo "cancelled=true" >> $GITHUB_OUTPUT
           elif [ "$failure" = "true" ]; then
@@ -1196,6 +1196,7 @@ jobs:
           subjob () {
             local result=$1
             local name=$2
+            echo "$name: $result"
             if [ "$result" = "cancelled" ]; then
               cancelled=true
             elif [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
@@ -1203,25 +1204,25 @@ jobs:
               failure=true
             fi
           }
-          subjob needs.determine_jobs.result "Determining jobs"
-          subjob needs.go_lint.result "Go lints"
-          subjob needs.go_unit.result "Go unit tests"
-          subjob needs.go_examples.result "Go examples"
-          subjob needs.go_e2e.result "Go e2e tests"
-          subjob needs.go_integration.result "Go integration tests"
-          subjob needs.rust_prepare.result "Rust prepare"
-          subjob needs.rust_lint.result "Rust lints"
-          subjob needs.rust_check.result "Rust checks"
-          subjob needs.turbopack_rust_test1.result "Turbopack Rust tests (linux)"
-          subjob needs.turbopack_rust_test2.result "Turbopack Rust tests (mac/win, non-blocking)"
-          subjob needs.turborepo_rust_test.result "TurboRepo Rust tests"
-          subjob needs.turbopack_rust_test_bench1.result "Turbopack Rust benchmark tests (linux)"
-          subjob needs.turbopack_rust_test_bench2.result "Turbopack Rust benchmark tests (mac/win, non-blocking)"
-          subjob needs.format_lint.result "Formatting"
-          subjob needs.rust_build_release.result "Rust release build (non-blocking)"
-          subjob needs.rust_bench.result "Turbopack Rust benchmarks (non-blocking)"
-          subjob needs.rust_bench_pr.result "Turbopack Rust PR benchmarks (non-blocking)"
-          subjob needs.next_js_integration.result "Next.js Integration tests (non-blocking)"
+          subjob ${{needs.determine_jobs.result}} "Determining jobs"
+          subjob ${{needs.go_lint.result}} "Go lints"
+          subjob ${{needs.go_unit.result}} "Go unit tests"
+          subjob ${{needs.go_examples.result}} "Go examples"
+          subjob ${{needs.go_e2e.result}} "Go e2e tests"
+          subjob ${{needs.go_integration.result}} "Go integration tests"
+          subjob ${{needs.rust_prepare.result}} "Rust prepare"
+          subjob ${{needs.rust_lint.result}} "Rust lints"
+          subjob ${{needs.rust_check.result}} "Rust checks"
+          subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
+          subjob ${{needs.turbopack_rust_test2.result}} "Turbopack Rust tests (mac/win, non-blocking)"
+          subjob ${{needs.turborepo_rust_test.result}} "TurboRepo Rust tests"
+          subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
+          subjob ${{needs.turbopack_rust_test_bench2.result}} "Turbopack Rust benchmark tests (mac/win, non-blocking)"
+          subjob ${{needs.format_lint.result}} "Formatting"
+          subjob ${{needs.rust_build_release.result}} "Rust release build (non-blocking)"
+          subjob ${{needs.rust_bench.result}} "Turbopack Rust benchmarks (non-blocking)"
+          subjob ${{needs.rust_bench_pr.result}} "Turbopack Rust PR benchmarks (non-blocking)"
+          subjob ${{needs.next_js_integration.result}} "Next.js Integration tests (non-blocking)"
           if [ "$cancelled" = "true" ]; then
              echo "cancelled=true" >> $GITHUB_OUTPUT
           elif [ "$failure" = "true" ]; then
