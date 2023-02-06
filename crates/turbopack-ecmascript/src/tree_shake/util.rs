@@ -21,9 +21,9 @@ impl Visit for IdentUsageCollector {
         } else {
             let old = self.is_read;
             self.is_read = false;
-            n.left.visit_with(self);
+            n.left.visit_children_with(self);
             self.is_read = true;
-            n.left.visit_with(self);
+            n.left.visit_children_with(self);
             self.is_read = old;
         }
     }
