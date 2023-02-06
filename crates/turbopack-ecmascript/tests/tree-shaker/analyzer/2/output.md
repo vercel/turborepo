@@ -279,7 +279,6 @@ graph TD
     Item13 --> Item8;
     Item13 --> Item10;
     Item14 -.-> Item6;
-    Item14 -.-> Item8;
     Item14 -.-> Item9;
     Item14 -.-> Item10;
 ```
@@ -342,7 +341,6 @@ graph TD
     Item13 --> Item8;
     Item13 --> Item10;
     Item14 -.-> Item6;
-    Item14 -.-> Item8;
     Item14 -.-> Item9;
     Item14 -.-> Item10;
     Item15 --> Item11;
