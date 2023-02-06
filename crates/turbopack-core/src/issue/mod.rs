@@ -484,24 +484,18 @@ pub struct PlainIssue {
     pub sub_issues: Vec<PlainIssueReadRef>,
 }
 
-#[turbo_tasks::value_impl]
-impl PlainIssueVc {
-    /// We need deduplicate issues that can come from unique paths, but
-    /// represent the same underlying problem. Eg, a parse error for a file
-    /// that is compiled in both client and server contexts.
-    #[turbo_tasks::function]
-    pub async fn internal_hash(self) -> Result<U64Vc> {
-        let this = self.await?;
+impl PlainIssue {
+    pub fn internal_hash(&self) -> u64 {
         let mut hasher = Xxh3Hash64Hasher::new();
-        hasher.write_ref(&this.severity);
-        hasher.write_ref(&this.context);
-        hasher.write_ref(&this.category);
-        hasher.write_ref(&this.title);
-        hasher.write_ref(&this.description);
-        hasher.write_ref(&this.detail);
-        hasher.write_ref(&this.documentation_link);
+        hasher.write_ref(&self.severity);
+        hasher.write_ref(&self.context);
+        hasher.write_ref(&self.category);
+        hasher.write_ref(&self.title);
+        hasher.write_ref(&self.description);
+        hasher.write_ref(&self.detail);
+        hasher.write_ref(&self.documentation_link);
 
-        if let Some(source) = &this.source {
+        if let Some(source) = &self.source {
             hasher.write_value(1_u8);
             // I'm assuming we don't need to hash the contents. Not 100% correct, but
             // probably 99%.
@@ -511,7 +505,18 @@ impl PlainIssueVc {
             hasher.write_value(0_u8);
         }
 
-        Ok(U64Vc::cell(hasher.finish()))
+        hasher.finish()
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl PlainIssueVc {
+    /// We need deduplicate issues that can come from unique paths, but
+    /// represent the same underlying problem. Eg, a parse error for a file
+    /// that is compiled in both client and server contexts.
+    #[turbo_tasks::function]
+    pub async fn internal_hash(self) -> Result<U64Vc> {
+        Ok(U64Vc::cell(self.await?.internal_hash()))
     }
 }
 
