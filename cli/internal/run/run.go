@@ -434,12 +434,3 @@ const (
 	_dryRunJSONValue = "Json"
 	_dryRunTextValue = "Text"
 )
-
-func validateTasks(pipeline fs.Pipeline, tasks []string) error {
-	for _, task := range tasks {
-		if !pipeline.HasTask(task) {
-			return fmt.Errorf("task `%v` not found", task)
-		}
-	}
-	return nil
-}
