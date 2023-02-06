@@ -87,7 +87,7 @@ type TaskDefinition struct {
 	// or not. We need to do this internal bookkeeping, because this struct assigns "0-values"
 	// in Golang, which are indistinguishable from missing keys in the underlying JSON.
 	// We need to know whether a key was set to a "0-value", or if the key was missing
-	// so that when we can merge  TaskDefinitions correctly.
+	// so that when we can merge TaskDefinitions correctly.
 	// FieldsMeta should ideally be a private key, with a method that looks it up, but
 	// we have a lot of unit tests that would fail without the ability to set this field
 	// (i.e. unit tests that don't go through Unmarshalling the underlying turbo.json from a file).
@@ -391,6 +391,55 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	}
 	c.Persistent = task.Persistent
 	return nil
+}
+
+// MarshalJSON serializes TaskDefinition struct into json
+func (c TaskDefinition) MarshalJSON() ([]byte, error) {
+	// Initialize with empty arrays, so we get empty arrays serialized into JSON
+	task := rawTaskWithDefaults{
+		Outputs:   []string{},
+		Inputs:    []string{},
+		Env:       []string{},
+		DependsOn: []string{},
+	}
+
+	task.Persistent = c.Persistent
+	task.Cache = &c.ShouldCache
+	task.OutputMode = c.OutputMode
+
+	if len(c.Inputs) > 0 {
+		task.Inputs = c.Inputs
+	}
+
+	if len(c.EnvVarDependencies) > 0 {
+		task.Env = append(task.Env, c.EnvVarDependencies...)
+	}
+
+	if len(c.Outputs.Inclusions) > 0 {
+		task.Outputs = append(task.Outputs, c.Outputs.Inclusions...)
+	}
+
+	for _, i := range c.Outputs.Exclusions {
+		task.Outputs = append(task.Outputs, "!"+i)
+	}
+
+	if len(c.TaskDependencies) > 0 {
+		task.DependsOn = append(task.DependsOn, c.TaskDependencies...)
+	}
+
+	for _, i := range c.TopologicalDependencies {
+		task.DependsOn = append(task.DependsOn, "^"+i)
+	}
+
+	// These _should_ already be sorted when the TaskDefinition struct was unmarshaled,
+	// but we want to ensure they're sorted on the way out also, just in case something
+	// in the middle mutates the items.
+	sort.Strings(task.DependsOn)
+	sort.Strings(task.Outputs)
+	sort.Strings(task.Env)
+	sort.Strings(task.Inputs)
+
+	return json.Marshal(task)
 }
 
 // MarshalJSON serializes ResolvedTaskDefinition struct into json
