@@ -1081,7 +1081,7 @@ jobs:
             local name=$2
             if [ "$result" = "cancelled" ]; then
               cancelled=true
-            elif [ "$result" != "success" && "$result" != "skipped" ]; then
+            elif [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
               echo "- $name" >> failures.md
               failure=true
             fi
@@ -1198,7 +1198,7 @@ jobs:
             local name=$2
             if [ "$result" = "cancelled" ]; then
               cancelled=true
-            elif [ "$result" != "success" && "$result" != "skipped" ]; then
+            elif [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
               echo "- $name" >> failures.md
               failure=true
             fi
