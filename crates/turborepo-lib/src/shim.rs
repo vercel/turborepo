@@ -17,8 +17,10 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "turbo-updater")]
+use crate::get_version;
+#[cfg(feature = "turbo-updater")]
 use crate::updater::try_check_for_updates;
-use crate::{cli, get_version, PackageManager, Payload};
+use crate::{cli, PackageManager, Payload};
 
 static TURBO_JSON: &str = "turbo.json";
 
