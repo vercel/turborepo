@@ -123,6 +123,8 @@ type TaskDefinition struct {
 	Persistent bool
 }
 
+// ResolvedTaskDefinition is a modified version the TaskDefinition struct.
+// It is meant for merged task definitions and for printing out in Run Summaries.
 type ResolvedTaskDefinition struct {
 	Outputs                 *TaskOutputs
 	ShouldCache             bool
