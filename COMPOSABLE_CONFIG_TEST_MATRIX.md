@@ -2,7 +2,7 @@
 
 ## General
 
-- [ ] Missing task definition in root, can add task from override.
+- [x] Missing task definition in root, can add task from override.
 - [x] add-keys
   - [x] dependsOn
   - [x] inputs
