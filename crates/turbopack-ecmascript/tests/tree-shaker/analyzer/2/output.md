@@ -66,7 +66,8 @@ const bar = "bar";
 foobar += bar;
 ```
 
-- Reads: "`foobar`"
+- Reads: "`bar`, `foobar`"
+- Write: "`foobar`"
 
 ## Item 8: Stmt 6, `VarDeclarator(0)`
 
@@ -85,6 +86,7 @@ foobar += "foo";
 ```
 
 - Reads: "`foobar`"
+- Write: "`foobar`"
 
 ## Item 10: Stmt 8, `Normal`
 
@@ -102,6 +104,7 @@ foobarCopy += "Unused";
 ```
 
 - Reads: "`foobarCopy`"
+- Write: "`foobarCopy`"
 
 ## Item 12: Stmt 10, `Normal`
 
@@ -125,7 +128,7 @@ export function external2() {
 
 - Hoisted
 - Declares: "`external2`"
-- Reads (eventual): "`foobar`"
+- Write (eventual): "`foobar`"
 
 ## Item 14: Stmt 12, `ImportOfModule`
 
@@ -197,18 +200,25 @@ graph TD
     Item19["export external2"];
     Item1 --> Item2;
     Item6 --> Item5;
+    Item8 --> Item7;
     Item8 --> Item5;
+    Item8 -.-> Item6;
     Item9 --> Item5;
+    Item9 --> Item8;
     Item10 --> Item5;
+    Item10 --> Item8;
+    Item10 -.-> Item6;
+    Item10 -.-> Item9;
     Item11 --> Item9;
     Item11 --> Item1;
     Item11 -.-> Item13;
     Item11 -.-> Item5;
-    Item11 -.-> Item6;
     Item11 -.-> Item8;
     Item11 -.-> Item10;
+    Item11 -.-> Item6;
     Item11 -.-> Item4;
     Item12 --> Item9;
+    Item12 -.-> Item11;
 ```
 
 # Phase 3
@@ -241,23 +251,37 @@ graph TD
     Item19["export external2"];
     Item1 --> Item2;
     Item6 --> Item5;
+    Item8 --> Item7;
     Item8 --> Item5;
+    Item8 -.-> Item6;
     Item9 --> Item5;
+    Item9 --> Item8;
     Item10 --> Item5;
+    Item10 --> Item8;
+    Item10 -.-> Item6;
+    Item10 -.-> Item9;
     Item11 --> Item9;
     Item11 --> Item1;
     Item11 -.-> Item13;
     Item11 -.-> Item5;
-    Item11 -.-> Item6;
     Item11 -.-> Item8;
     Item11 -.-> Item10;
+    Item11 -.-> Item6;
     Item11 -.-> Item4;
     Item12 --> Item9;
+    Item12 -.-> Item11;
     Item3 --> Item13;
     Item3 --> Item5;
+    Item3 --> Item8;
+    Item3 --> Item10;
     Item13 --> Item4;
     Item13 --> Item5;
-    Item14 --> Item5;
+    Item13 --> Item8;
+    Item13 --> Item10;
+    Item14 -.-> Item6;
+    Item14 -.-> Item8;
+    Item14 -.-> Item9;
+    Item14 -.-> Item10;
 ```
 
 # Phase 4
@@ -290,37 +314,53 @@ graph TD
     Item19["export external2"];
     Item1 --> Item2;
     Item6 --> Item5;
+    Item8 --> Item7;
     Item8 --> Item5;
+    Item8 -.-> Item6;
     Item9 --> Item5;
+    Item9 --> Item8;
     Item10 --> Item5;
+    Item10 --> Item8;
+    Item10 -.-> Item6;
+    Item10 -.-> Item9;
     Item11 --> Item9;
     Item11 --> Item1;
     Item11 -.-> Item13;
     Item11 -.-> Item5;
-    Item11 -.-> Item6;
     Item11 -.-> Item8;
     Item11 -.-> Item10;
+    Item11 -.-> Item6;
     Item11 -.-> Item4;
     Item12 --> Item9;
+    Item12 -.-> Item11;
     Item3 --> Item13;
     Item3 --> Item5;
+    Item3 --> Item8;
+    Item3 --> Item10;
     Item13 --> Item4;
     Item13 --> Item5;
-    Item14 --> Item5;
+    Item13 --> Item8;
+    Item13 --> Item10;
+    Item14 -.-> Item6;
+    Item14 -.-> Item8;
+    Item14 -.-> Item9;
+    Item14 -.-> Item10;
     Item15 --> Item11;
     Item15 -.-> Item3;
     Item15 -.-> Item4;
     Item15 -.-> Item5;
-    Item15 -.-> Item6;
     Item15 -.-> Item8;
-    Item15 -.-> Item9;
     Item15 -.-> Item10;
+    Item15 -.-> Item6;
+    Item15 -.-> Item9;
     Item15 -.-> Item7;
     Item15 -.-> Item12;
     Item15 -.-> Item13;
     Item15 -.-> Item14;
     Item16 --> Item3;
     Item17 --> Item5;
+    Item17 --> Item8;
+    Item17 --> Item10;
     Item18 --> Item6;
     Item19 --> Item14;
 ```

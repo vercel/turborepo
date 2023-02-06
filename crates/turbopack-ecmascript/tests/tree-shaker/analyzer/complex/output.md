@@ -18,6 +18,7 @@ dog += "!";
 ```
 
 - Reads: "`dog`"
+- Write: "`dog`"
 
 ## Item 3: Stmt 2, `Normal`
 
@@ -47,6 +48,7 @@ dog += "!";
 ```
 
 - Reads: "`dog`"
+- Write: "`dog`"
 
 ## Item 6: Stmt 5, `Normal`
 
@@ -77,6 +79,7 @@ dog += "!";
 ```
 
 - Reads: "`dog`"
+- Write: "`dog`"
 
 ## Item 9: Stmt 8, `Normal`
 
@@ -190,20 +193,29 @@ graph TD
     Item18["export getChimera"];
     Item2 --> Item1;
     Item3 --> Item1;
-    Item3 -.-> Item2;
+    Item3 --> Item2;
     Item5 --> Item1;
+    Item5 --> Item2;
+    Item5 -.-> Item3;
     Item6 --> Item1;
+    Item6 --> Item2;
+    Item6 --> Item5;
     Item6 --> Item3;
-    Item6 -.-> Item2;
-    Item6 -.-> Item5;
     Item8 --> Item1;
+    Item8 --> Item2;
+    Item8 --> Item5;
+    Item8 -.-> Item3;
+    Item8 -.-> Item6;
     Item9 --> Item1;
+    Item9 --> Item2;
+    Item9 --> Item5;
+    Item9 --> Item8;
     Item9 --> Item6;
-    Item9 -.-> Item2;
     Item9 -.-> Item3;
-    Item9 -.-> Item5;
-    Item9 -.-> Item8;
     Item10 --> Item1;
+    Item10 --> Item2;
+    Item10 --> Item5;
+    Item10 --> Item8;
     Item10 --> Item4;
     Item10 --> Item7;
     Item12 --> Item11;
@@ -238,24 +250,36 @@ graph TD
     Item18["export getChimera"];
     Item2 --> Item1;
     Item3 --> Item1;
-    Item3 -.-> Item2;
+    Item3 --> Item2;
     Item5 --> Item1;
+    Item5 --> Item2;
+    Item5 -.-> Item3;
     Item6 --> Item1;
+    Item6 --> Item2;
+    Item6 --> Item5;
     Item6 --> Item3;
-    Item6 -.-> Item2;
-    Item6 -.-> Item5;
     Item8 --> Item1;
+    Item8 --> Item2;
+    Item8 --> Item5;
+    Item8 -.-> Item3;
+    Item8 -.-> Item6;
     Item9 --> Item1;
+    Item9 --> Item2;
+    Item9 --> Item5;
+    Item9 --> Item8;
     Item9 --> Item6;
-    Item9 -.-> Item2;
     Item9 -.-> Item3;
-    Item9 -.-> Item5;
-    Item9 -.-> Item8;
     Item10 --> Item1;
+    Item10 --> Item2;
+    Item10 --> Item5;
+    Item10 --> Item8;
     Item10 --> Item4;
     Item10 --> Item7;
     Item12 --> Item11;
     Item4 --> Item1;
+    Item4 --> Item2;
+    Item4 --> Item5;
+    Item4 --> Item8;
     Item7 -.-> Item2;
     Item7 -.-> Item3;
     Item7 -.-> Item5;
@@ -265,6 +289,9 @@ graph TD
     Item7 -.-> Item10;
     Item13 --> Item11;
     Item13 --> Item1;
+    Item13 --> Item2;
+    Item13 --> Item5;
+    Item13 --> Item8;
 ```
 
 # Phase 4
@@ -296,24 +323,36 @@ graph TD
     Item18["export getChimera"];
     Item2 --> Item1;
     Item3 --> Item1;
-    Item3 -.-> Item2;
+    Item3 --> Item2;
     Item5 --> Item1;
+    Item5 --> Item2;
+    Item5 -.-> Item3;
     Item6 --> Item1;
+    Item6 --> Item2;
+    Item6 --> Item5;
     Item6 --> Item3;
-    Item6 -.-> Item2;
-    Item6 -.-> Item5;
     Item8 --> Item1;
+    Item8 --> Item2;
+    Item8 --> Item5;
+    Item8 -.-> Item3;
+    Item8 -.-> Item6;
     Item9 --> Item1;
+    Item9 --> Item2;
+    Item9 --> Item5;
+    Item9 --> Item8;
     Item9 --> Item6;
-    Item9 -.-> Item2;
     Item9 -.-> Item3;
-    Item9 -.-> Item5;
-    Item9 -.-> Item8;
     Item10 --> Item1;
+    Item10 --> Item2;
+    Item10 --> Item5;
+    Item10 --> Item8;
     Item10 --> Item4;
     Item10 --> Item7;
     Item12 --> Item11;
     Item4 --> Item1;
+    Item4 --> Item2;
+    Item4 --> Item5;
+    Item4 --> Item8;
     Item7 -.-> Item2;
     Item7 -.-> Item3;
     Item7 -.-> Item5;
@@ -323,13 +362,16 @@ graph TD
     Item7 -.-> Item10;
     Item13 --> Item11;
     Item13 --> Item1;
+    Item13 --> Item2;
+    Item13 --> Item5;
+    Item13 --> Item8;
     Item14 --> Item9;
     Item14 -.-> Item1;
     Item14 -.-> Item2;
-    Item14 -.-> Item3;
     Item14 -.-> Item5;
-    Item14 -.-> Item6;
     Item14 -.-> Item8;
+    Item14 -.-> Item3;
+    Item14 -.-> Item6;
     Item14 -.-> Item10;
     Item14 -.-> Item7;
     Item14 -.-> Item11;
