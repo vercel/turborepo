@@ -32,6 +32,7 @@ import (
 type Tracker struct {
 	rootNode            string
 	globalHash          string
+	pipeline            fs.Pipeline
 	workspaceInfos      graph.WorkspaceInfos
 	mu                  sync.RWMutex
 	packageInputsHashes packageFileHashes
@@ -39,10 +40,11 @@ type Tracker struct {
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
-func NewTracker(rootNode string, globalHash string, workspaceInfos graph.WorkspaceInfos) *Tracker {
+func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, workspaceInfos graph.WorkspaceInfos) *Tracker {
 	return &Tracker{
 		rootNode:          rootNode,
 		globalHash:        globalHash,
+		pipeline:          pipeline,
 		workspaceInfos:    workspaceInfos,
 		packageTaskHashes: make(map[string]string),
 	}
