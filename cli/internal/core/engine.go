@@ -98,8 +98,8 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 	})
 }
 
-func (e *Engine) getTaskDefinition(taskName string, taskID string) (*Task, error) {
-	pipeline, err := e.getPipelineFromWorkspace(util.RootPkgName)
+func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (*Task, error) {
+	pipeline, err := e.getPipelineFromWorkspace(pkg)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 			if !isRootPkg || e.rootEnabledTasks.Includes(taskName) {
 				taskID := util.GetTaskId(pkg, taskName)
 				// Skip tasks that don't have a definition
-				if _, err := e.getTaskDefinition(taskName, taskID); err != nil {
+				if _, err := e.getTaskDefinition(pkg, taskName, taskID); err != nil {
 					// Initially, non-package tasks are not required to exist, as long as some
 					// package in the list packages defines it as a package-task. Dependencies
 					// *are* required to have a definition.
@@ -157,12 +157,8 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 			}
 
 			taskID := util.GetTaskId(pkg, taskName)
-			workspaceInfo, ok := e.completeGraph.WorkspaceInfos[pkg]
-			if !ok {
-				return fmt.Errorf("Could not find workspace information for %s", pkg)
-			}
 
-			if _, err := e.getTaskDefinition(workspaceInfo.Dir, taskName, taskID); err != nil {
+			if _, err := e.getTaskDefinition(pkg, taskName, taskID); err != nil {
 				// Initial, non-package tasks are not required to exist, as long as some
 				// package in the list packages defines it as a package-task. Dependencies
 				// *are* required to have a definition.
