@@ -54,7 +54,7 @@ const bar = "bar";
 foobar += bar;
 ```
 
-- Write: "`foobar`"
+- Reads: "`foobar`"
 
 ## Item 7: Stmt 5, `VarDeclarator(0)`
 
@@ -72,7 +72,7 @@ let foobarCopy = foobar;
 foobar += "foo";
 ```
 
-- Write: "`foobar`"
+- Reads: "`foobar`"
 
 ## Item 9: Stmt 7, `Normal`
 
@@ -89,7 +89,7 @@ console.log(foobarCopy);
 foobarCopy += "Unused";
 ```
 
-- Write: "`foobarCopy`"
+- Reads: "`foobarCopy`"
 
 ## Item 11: Stmt 9, `Normal`
 
@@ -125,7 +125,7 @@ export function external2() {
 
 - Hoisted
 - Declares: "`external2`"
-- Write (eventual): "`foobar`"
+- Reads (eventual): "`foobar`"
 
 # Phase 1
 
@@ -184,20 +184,18 @@ graph TD
     Item18;
     Item18["export external2"];
     Item4 --> Item3;
-    Item6 -.-> Item4;
+    Item6 --> Item3;
     Item7 --> Item3;
-    Item7 --> Item6;
-    Item8 -.-> Item4;
-    Item8 -.-> Item7;
+    Item8 --> Item3;
     Item9 --> Item7;
     Item9 --> Item1;
     Item9 -.-> Item2;
     Item9 -.-> Item3;
+    Item9 -.-> Item4;
     Item9 -.-> Item6;
     Item9 -.-> Item8;
-    Item9 -.-> Item4;
     Item9 -.-> Item11;
-    Item10 -.-> Item9;
+    Item10 --> Item7;
 ```
 
 # Phase 3
@@ -228,30 +226,23 @@ graph TD
     Item18;
     Item18["export external2"];
     Item4 --> Item3;
-    Item6 -.-> Item4;
+    Item6 --> Item3;
     Item7 --> Item3;
-    Item7 --> Item6;
-    Item8 -.-> Item4;
-    Item8 -.-> Item7;
+    Item8 --> Item3;
     Item9 --> Item7;
     Item9 --> Item1;
     Item9 -.-> Item2;
     Item9 -.-> Item3;
+    Item9 -.-> Item4;
     Item9 -.-> Item6;
     Item9 -.-> Item8;
-    Item9 -.-> Item4;
     Item9 -.-> Item11;
-    Item10 -.-> Item9;
+    Item10 --> Item7;
     Item11 --> Item2;
     Item11 --> Item3;
-    Item11 --> Item6;
-    Item11 --> Item8;
     Item12 --> Item11;
     Item12 --> Item3;
-    Item12 --> Item6;
-    Item12 --> Item8;
-    Item13 -.-> Item4;
-    Item13 -.-> Item7;
+    Item13 --> Item3;
 ```
 
 # Phase 4
@@ -282,45 +273,36 @@ graph TD
     Item18;
     Item18["export external2"];
     Item4 --> Item3;
-    Item6 -.-> Item4;
+    Item6 --> Item3;
     Item7 --> Item3;
-    Item7 --> Item6;
-    Item8 -.-> Item4;
-    Item8 -.-> Item7;
+    Item8 --> Item3;
     Item9 --> Item7;
     Item9 --> Item1;
     Item9 -.-> Item2;
     Item9 -.-> Item3;
+    Item9 -.-> Item4;
     Item9 -.-> Item6;
     Item9 -.-> Item8;
-    Item9 -.-> Item4;
     Item9 -.-> Item11;
-    Item10 -.-> Item9;
+    Item10 --> Item7;
     Item11 --> Item2;
     Item11 --> Item3;
-    Item11 --> Item6;
-    Item11 --> Item8;
     Item12 --> Item11;
     Item12 --> Item3;
-    Item12 --> Item6;
-    Item12 --> Item8;
-    Item13 -.-> Item4;
-    Item13 -.-> Item7;
+    Item13 --> Item3;
     Item14 --> Item9;
     Item14 -.-> Item12;
     Item14 -.-> Item2;
     Item14 -.-> Item3;
-    Item14 -.-> Item6;
-    Item14 -.-> Item8;
     Item14 -.-> Item4;
+    Item14 -.-> Item6;
     Item14 -.-> Item7;
+    Item14 -.-> Item8;
     Item14 -.-> Item5;
     Item14 -.-> Item10;
     Item14 -.-> Item11;
     Item14 -.-> Item13;
     Item15 --> Item3;
-    Item15 --> Item6;
-    Item15 --> Item8;
     Item16 --> Item4;
     Item17 --> Item12;
     Item18 --> Item13;
