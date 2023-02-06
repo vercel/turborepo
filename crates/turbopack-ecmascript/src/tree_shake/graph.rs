@@ -1,6 +1,6 @@
 use fxhash::{FxBuildHasher, FxHashMap};
 use indexmap::IndexSet;
-use petgraph::prelude::DiGraphMap;
+use petgraph::{prelude::DiGraphMap, Directed};
 use swc_core::ecma::{
     ast::{
         op, ClassDecl, Decl, ExportDecl, ExportSpecifier, Expr, ExprStmt, FnDecl, Id,
@@ -89,6 +89,21 @@ pub struct Graph {
 }
 
 impl Graph {
+    pub(super) fn finalize(&self) -> petgraph::Graph<Vec<u32>, bool, Directed, u32> {
+        let graph = self.inner.clone().into_graph();
+
+        let mut condensed: petgraph::Graph<_, _, _, u32> =
+            petgraph::algo::condensation(graph, false);
+
+        condensed.retain_edges(|graph, edge| {
+            graph
+                .next_edge(edge, petgraph::Direction::Outgoing)
+                .is_none()
+        });
+
+        condensed
+    }
+
     pub(super) fn node(&mut self, id: &ItemId) -> u32 {
         self.graph_ix.get_index_of(id).unwrap_or_else(|| {
             let ix = self.graph_ix.len();
