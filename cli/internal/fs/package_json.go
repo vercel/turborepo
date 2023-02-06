@@ -59,7 +59,7 @@ func (r *Workspaces) UnmarshalJSON(data []byte) error {
 }
 
 // ReadPackageJSON returns a struct of package.json
-func ReadPackageJSON(repoRoot, path turbopath.AbsoluteSystemPath) (*PackageJSON, error) {
+func ReadPackageJSON(path turbopath.AbsoluteSystemPath) (*PackageJSON, error) {
 	b, err := path.ReadFile()
 	if err != nil {
 		return nil, err
@@ -69,8 +69,6 @@ func ReadPackageJSON(repoRoot, path turbopath.AbsoluteSystemPath) (*PackageJSON,
 		return nil, err
 	}
 
-	relativePkgJSONPath, err := repoRoot.PathTo(path)
-	pkg.PackageJSONPath = turbopath.AnchoredSystemPathFromUpstream(relativePkgJSONPath)
 	return pkg, nil
 }
 
