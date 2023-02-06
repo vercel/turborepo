@@ -399,9 +399,27 @@
 <span id="399">399</span>
 <span id="400">400</span>
 <span id="401">401</span>
+<span id="402">402</span>
+<span id="403">403</span>
+<span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem::take;
 
-<span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
 
@@ -476,7 +494,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>expression = Vec::new();
 
         <span class="kw">while </span>!current.is_empty() {
-            <span class="kw">let </span>(part, remainder) = GlobPart::parse(current, <span class="bool-val">false</span>)<span class="question-mark">?</span>;
+            <span class="kw">let </span>(part, remainder) = GlobPart::parse(current, <span class="bool-val">false</span>)
+                .with_context(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Failed to parse glob {input}&quot;</span>))<span class="question-mark">?</span>;
             expression.push(part);
             current = remainder;
         }
@@ -599,7 +618,10 @@
                             current = <span class="kw-2">&amp;</span>current[<span class="number">1</span>..];
                             <span class="kw">break</span>;
                         }
-                        <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Unterminated glob braces&quot;</span>),
+                        <span class="prelude-val">None </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Unterminated glob braces&quot;</span>),
+                        <span class="kw">_ </span>=&gt; {
+                            <span class="comment">// next part of the glob
+                        </span>}
                     }
                 }
 
@@ -792,6 +814,20 @@
         <span class="string">&quot;**/*/next/dist/server/next.js&quot;</span>,
         <span class="string">&quot;node_modules/next/dist/server/next.js&quot;
     </span>)]
+    #[case::node_modules_root(<span class="string">&quot;**/node_modules/**&quot;</span>, <span class="string">&quot;node_modules/next/dist/server/next.js&quot;</span>)]
+    #[case::node_modules_nested(
+        <span class="string">&quot;**/node_modules/**&quot;</span>,
+        <span class="string">&quot;apps/some-app/node_modules/regenerate-unicode-properties/Script_Extensions/Osage.js&quot;
+    </span>)]
+    #[case::node_modules_pnpm(
+        <span class="string">&quot;**/node_modules/**&quot;</span>,
+        <span class="string">&quot;node_modules/.pnpm/regenerate-unicode-properties@9.0.0/node_modules/\
+         regenerate-unicode-properties/Script_Extensions/Osage.js&quot;
+    </span>)]
+    #[case::alternatives_nested1(<span class="string">&quot;{a,b/c,d/e/{f,g/h}}&quot;</span>, <span class="string">&quot;a&quot;</span>)]
+    #[case::alternatives_nested2(<span class="string">&quot;{a,b/c,d/e/{f,g/h}}&quot;</span>, <span class="string">&quot;b/c&quot;</span>)]
+    #[case::alternatives_nested3(<span class="string">&quot;{a,b/c,d/e/{f,g/h}}&quot;</span>, <span class="string">&quot;d/e/f&quot;</span>)]
+    #[case::alternatives_nested4(<span class="string">&quot;{a,b/c,d/e/{f,g/h}}&quot;</span>, <span class="string">&quot;d/e/g/h&quot;</span>)]
     </span><span class="kw">fn </span>glob_match(<span class="attr">#[case] </span>glob: <span class="kw-2">&amp;</span>str, <span class="attr">#[case] </span>path: <span class="kw-2">&amp;</span>str) {
         <span class="kw">let </span>glob = Glob::parse(glob).unwrap();
 
