@@ -121,21 +121,6 @@ func (e *Engine) getTaskDefinition(taskName string, taskID string) (*Task, error
 	return nil, fmt.Errorf("Could not find \"%s\" or \"%s\" in root config", taskName, taskID)
 }
 
-func (e *Engine) getTaskDefinition(workspaceDir turbopath.AnchoredSystemPath, taskName string, taskID string) (*Task, error) {
-	// Look in the workspace first. We do not look up with taskID,
-	// becuase workspace configs should not use package#task syntax.
-	if task, err := e.getTaskDefinitionFromWorkspace(workspaceDir, taskName); err == nil {
-		return task, nil
-	}
-
-	// Fallback to root workspace.
-	if task, err := e.getTaskDefinitionFromRoot(taskName, taskID); err == nil {
-		return task, nil
-	}
-
-	return nil, fmt.Errorf("Missing task definition, configure \"%s\" or \"%s\" in turbo.json", taskName, taskID)
-}
-
 // Prepare constructs the Task Graph for a list of packages and tasks
 func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	pkgs := options.Packages
