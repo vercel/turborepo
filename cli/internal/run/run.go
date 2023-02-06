@@ -244,10 +244,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	// TODO: consolidate some of these arguments
 	g := &graph.CompleteGraph{
-		WorkspaceGraph: pkgDepGraph.WorkspaceGraph,
-		// TODO(mehulkar): We can remove pipeline from here eventually
-		// It is only used by the taskhash tracker to look up taskDefinitions
-		// but we will eventually replace that
+		WorkspaceGraph:  pkgDepGraph.WorkspaceGraph,
 		Pipeline:        pipeline,
 		WorkspaceInfos:  pkgDepGraph.WorkspaceInfos,
 		GlobalHash:      globalHash,
