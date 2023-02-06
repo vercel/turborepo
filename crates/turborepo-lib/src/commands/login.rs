@@ -183,6 +183,8 @@ mod test {
         redirect_uri: String,
     }
 
+    /// NOTE: Each test server should be on its own port to avoid any
+    /// concurrency bugs.
     async fn start_test_server() -> Result<()> {
         let app = Router::new()
             // `GET /` goes to `root`
