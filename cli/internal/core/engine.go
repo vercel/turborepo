@@ -134,11 +134,6 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 	// and creating a queue of taskIDs that we can traverse and gather dependencies from.
 	for _, pkg := range pkgs {
 		isRootPkg := pkg == util.RootPkgName
-		// We can skip the root package, because we don't need to add in tasks for it
-		// unless it's a rootEnabled task name, in which case we'll add it in later.
-		if isRootPkg {
-			continue
-		}
 
 		for _, taskName := range taskNames {
 			// If it's not a task from the root workspace (i.e. tasks from every other workspace)
