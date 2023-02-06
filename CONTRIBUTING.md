@@ -54,7 +54,7 @@ To run a single Go test, you can run `go test ./[path/to/package/]`. See more [i
 
 #### Rust Tests
 
-The recommended way to run tests is: `cargo nextest run -p turborepo-lib`.
+The recommended way to run tests is: `**cargo nextest run -p turborepo-lib`.
 You'll have to [install it first](https://nexte.st/book/pre-built-binaries.html).
 
 You can also use the built in [`cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html) directly `cargo test -p turborepo-lib`.
@@ -88,6 +88,18 @@ TURBO_BINARY_PATH=~/repos/vercel/turbo/cli/turbo.exe npm link turbo
 ```
 
 If you're using a different package manager replace npm accordingly.
+
+## Manually testing `turbo`
+
+Before releasing, it's recommended to test the `turbo` binary manually. Here's a checklist of testing strategies to cover:
+
+- Test `login`, `logout`, `login --sso-team`, `link`, `unlink`
+- Test every command with `--skip-infer`.
+
+There are also multiple installation scenarios worth testing:
+
+- Global-only. `turbo` is installed as global binary, no local `turbo` in repository.
+-
 
 ## Publishing `turbo` to the npm registry
 
