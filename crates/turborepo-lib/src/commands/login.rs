@@ -5,7 +5,9 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 #[cfg(not(test))]
 use axum::{extract::Query, response::Redirect, routing::get, Router};
-use log::{debug, warn};
+use log::debug;
+#[cfg(not(test))]
+use log::warn;
 use serde::Deserialize;
 use tokio::sync::OnceCell;
 
@@ -48,10 +50,8 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
         .ok_or_else(|| anyhow!("Failed to get token"))?;
 
     base.user_config_mut()?.set_token(Some(token.to_string()))?;
-
     let client = base.api_client()?.unwrap();
     let user_response = client.get_user().await?;
-
     let ui = &base.ui;
 
     println!(
@@ -74,7 +74,7 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
 }
 
 #[cfg(test)]
-async fn direct_user_to_url(_: &str) {}
+fn direct_user_to_url(_: &str) {}
 #[cfg(not(test))]
 fn direct_user_to_url(url: &str) {
     if webbrowser::open(url).is_err() {
@@ -149,7 +149,7 @@ mod test {
         )
         .unwrap();
 
-        tokio::spawn(start_test_server());
+        let handle = tokio::spawn(start_test_server());
         let mut base = CommandBase {
             repo_root: Default::default(),
             ui: UI::new(false),
@@ -160,8 +160,7 @@ mod test {
             ),
             repo_config: OnceCell::from(
                 RepoConfigLoader::new(repo_config_file.path().to_path_buf())
-                    .with_api(Some("http://localhost:3000".to_string()))
-                    .with_login(Some("http://localhost:3000".to_string()))
+                    .with_api(Some("http://localhost:3001".to_string()))
                     .load()
                     .unwrap(),
             ),
@@ -174,6 +173,8 @@ mod test {
             base.user_config().unwrap().token().unwrap(),
             EXPECTED_TOKEN_TEST
         );
+
+        handle.abort();
     }
 
     #[derive(Debug, Clone, Deserialize)]
@@ -199,7 +200,7 @@ mod test {
                     })
                 }),
             );
-        let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+        let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
 
         Ok(axum_server::bind(addr)
             .serve(app.into_make_service())
