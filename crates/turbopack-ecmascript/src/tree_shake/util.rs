@@ -1,7 +1,7 @@
 use swc_core::ecma::{
     ast::{
-        op, AssignExpr, BlockStmtOrExpr, Constructor, Expr, Function, Id, Ident, MemberProp, Pat,
-        PatOrExpr, PropName,
+        BlockStmtOrExpr, Constructor, Expr, Function, Id, Ident, MemberProp, Pat, PatOrExpr,
+        PropName,
     },
     visit::{noop_visit_type, visit_obj_and_computed, Visit, VisitWith},
 };
@@ -15,19 +15,6 @@ pub(crate) struct IdentUsageCollector {
 }
 
 impl Visit for IdentUsageCollector {
-    fn visit_assign_expr(&mut self, n: &AssignExpr) {
-        if n.op == op!("=") {
-            n.visit_children_with(self);
-        } else {
-            let old = self.is_read;
-            self.is_read = false;
-            n.left.visit_children_with(self);
-            self.is_read = true;
-            n.left.visit_children_with(self);
-            self.is_read = old;
-        }
-    }
-
     fn visit_block_stmt_or_expr(&mut self, n: &BlockStmtOrExpr) {
         if self.ignore_nested {
             return;
