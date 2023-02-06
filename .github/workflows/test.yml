@@ -1062,7 +1062,7 @@ jobs:
       - rust_check
       - turbopack_rust_test1
       - turborepo_rust_test
-      - turbopack_rust_test1_bench
+      - turbopack_rust_test_bench1
       - format_lint
     if: always()
     permissions:
@@ -1174,8 +1174,8 @@ jobs:
       - turbopack_rust_test1
       - turbopack_rust_test2
       - turborepo_rust_test
-      - turbopack_rust_test1_bench
-      - turbopack_rust_test2_bench
+      - turbopack_rust_test_bench1
+      - turbopack_rust_test_bench1
       - rust_build_release
       - rust_bench
       - rust_bench_pr
