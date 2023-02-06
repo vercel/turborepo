@@ -275,8 +275,6 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	tracker := taskhash.NewTracker(
 		g.RootNode,
 		g.GlobalHash,
-		// TODO(mehulkar): remove g,Pipeline, because we need to get task definitions from CompleteGaph instead
-		g.Pipeline,
 		g.WorkspaceInfos,
 	)
 
