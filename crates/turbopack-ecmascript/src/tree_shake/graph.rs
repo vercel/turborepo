@@ -249,7 +249,6 @@ impl Graph {
                                 eventual_read_vars: er,
                                 write_vars: decl_ids.into_iter().chain(w).collect(),
                                 eventual_write_vars: ew,
-                                side_effects: true,
                                 ..Default::default()
                             },
                         );
