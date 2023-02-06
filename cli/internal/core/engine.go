@@ -473,49 +473,53 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.PackageJSON, taskID string, taskName string) ([]fs.TaskDefinition, error) {
 	// Look for the taskDefinition in the root pipeline. We'll wait to throw errors until the end
 	rootTaskDefinition, _ := rootPipeline.GetTask(taskID, taskName)
-
-	// Look up task definition in turbo.json in the workspace directory
-	workspaceConfigPath := turbopath.AbsoluteSystemPath(pkg.Dir).UntypedJoin("turbo.json")
-	workspaceTurboJSON, _ := fs.ReadTurboConfig(workspaceConfigPath)
-
 	var workspaceDefinition *fs.TaskDefinition
 
-	if workspaceTurboJSON != nil {
-		// TODO(mehulkar): Enable extending from more than one workspace.
-		if len(workspaceTurboJSON.Extends) > 1 {
-			return nil, fmt.Errorf(
-				"You can only extend from the root workspace. \"%s\" extends from %v",
-				pkg.Name,
-				workspaceTurboJSON.Extends,
-			)
-		}
+	// If the taskID is a root task (e.g. //#build), we don't need to look
+	// for a workspace task, since these can only be defined in the root turbo.json.
+	taskIDPackage, _ := util.GetPackageTaskFromId(taskID)
+	if taskIDPackage != util.RootPkgName {
+		// Look up task definition in turbo.json in the workspace directory
+		workspaceConfigPath := turbopath.AbsoluteSystemPath(pkg.Dir).UntypedJoin("turbo.json")
+		workspaceTurboJSON, _ := fs.ReadTurboConfig(workspaceConfigPath)
 
-		// TODO(mehulkar):
-		// 		Pipeline.GetTask allows searching with a taskID (e.g. `package#task`).
-		// 		But we do not want to allow this, except if we're in the root workspace.
-		workspaceDefinition, _ = workspaceTurboJSON.Pipeline.GetTask(taskID, taskName)
-
-		// If there is no Extends key, we are either in a workspace that didn't
-		// extend from anything, or in a single package repo, where the workspace is the root.
-		if len(workspaceTurboJSON.Extends) == 0 {
-			// For the single package case, we can just return the workspaceDefinition
-			// (It should be the same as the rootTaskDefinition)
-			if pkg.PackageJSONPath == "package.json" {
-				return []fs.TaskDefinition{*workspaceDefinition}, nil
+		if workspaceTurboJSON != nil {
+			// TODO(mehulkar): Enable extending from more than one workspace.
+			if len(workspaceTurboJSON.Extends) > 1 {
+				return nil, fmt.Errorf(
+					"You can only extend from the root workspace. \"%s\" extends from %v",
+					pkg.Name,
+					workspaceTurboJSON.Extends,
+				)
 			}
 
-			// For turbo.jsons in workspaces that don't have an extends key, throw an error
-			// We don't support this right now.
-			return nil, fmt.Errorf("No \"extends\" key found in %s", workspaceConfigPath)
-		}
+			// TODO(mehulkar):
+			// 		Pipeline.GetTask allows searching with a taskID (e.g. `package#task`).
+			// 		But we do not want to allow this, except if we're in the root workspace.
+			workspaceDefinition, _ = workspaceTurboJSON.Pipeline.GetTask(taskID, taskName)
 
-		// TODO(mehulkar): Enable extending from non-root workspace.
-		if workspaceTurboJSON.Extends[0] != util.RootPkgName {
-			return nil, fmt.Errorf(
-				"You can only extend from the root workspace. \"%s\" extends from %v",
-				pkg.Name,
-				workspaceTurboJSON.Extends,
-			)
+			// If there is no Extends key, we are either in a workspace that didn't
+			// extend from anything, or in a single package repo, where the workspace is the root.
+			if len(workspaceTurboJSON.Extends) == 0 {
+				// For the single package case, we can just return the workspaceDefinition
+				// (It should be the same as the rootTaskDefinition)
+				if pkg.PackageJSONPath == "package.json" {
+					return []fs.TaskDefinition{*workspaceDefinition}, nil
+				}
+
+				// For turbo.jsons in workspaces that don't have an extends key, throw an error
+				// We don't support this right now.
+				return nil, fmt.Errorf("No \"extends\" key found in %s", workspaceConfigPath)
+			}
+
+			// TODO(mehulkar): Enable extending from non-root workspace.
+			if workspaceTurboJSON.Extends[0] != util.RootPkgName {
+				return nil, fmt.Errorf(
+					"You can only extend from the root workspace. \"%s\" extends from %v",
+					pkg.Name,
+					workspaceTurboJSON.Extends,
+				)
+			}
 		}
 	}
 
