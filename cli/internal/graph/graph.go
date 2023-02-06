@@ -9,6 +9,7 @@ import (
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/nodes"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
@@ -34,6 +35,8 @@ type CompleteGraph struct {
 
 	// Map of TaskDefinitions by taskID
 	TaskDefinitions map[string]*fs.TaskDefinition
+
+	RepoRoot turbopath.AbsoluteSystemPath
 }
 
 // GetPackageTaskVisitor wraps a `visitor` function that is used for walking the TaskGraph
