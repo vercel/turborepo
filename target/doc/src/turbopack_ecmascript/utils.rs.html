@@ -128,6 +128,9 @@
 <span id="128">128</span>
 <span id="129">129</span>
 <span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     future::Future,
     pin::Pin,
@@ -146,6 +149,9 @@
 <span class="kw">pub fn </span>unparen(expr: <span class="kw-2">&amp;</span>Expr) -&gt; <span class="kw-2">&amp;</span>Expr {
     <span class="kw">if let </span><span class="prelude-val">Some</span>(expr) = expr.as_paren() {
         <span class="kw">return </span>unparen(<span class="kw-2">&amp;</span>expr.expr);
+    }
+    <span class="kw">if let </span>Expr::Seq(seq) = expr {
+        <span class="kw">return </span>unparen(seq.exprs.last().unwrap());
     }
     expr
 }

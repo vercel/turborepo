@@ -1683,6 +1683,8 @@
 <span id="1683">1683</span>
 <span id="1684">1684</span>
 <span id="1685">1685</span>
+<span id="1686">1686</span>
+<span id="1687">1687</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     iter,
@@ -2133,6 +2135,8 @@
                 <span class="macro">format!</span>(<span class="string">&quot;*arrow function {}*&quot;</span>, expr.span.lo.<span class="number">0</span>).into(),
                 SyntaxContext::empty(),
             )),
+
+            Expr::Await(AwaitExpr { arg, .. }) =&gt; <span class="self">self</span>.eval(arg),
 
             Expr::New(..) =&gt; JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;unknown new expression&quot;</span>),
 

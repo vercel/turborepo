@@ -988,9 +988,9 @@
         WellKnownObjectKind::PathModule | WellKnownObjectKind::PathModuleDefault =&gt; {
             path_module_member(kind, prop)
         }
-        WellKnownObjectKind::FsModule | WellKnownObjectKind::FsModuleDefault =&gt; {
-            fs_module_member(kind, prop)
-        }
+        WellKnownObjectKind::FsModule
+        | WellKnownObjectKind::FsModuleDefault
+        | WellKnownObjectKind::FsModulePromises =&gt; fs_module_member(kind, prop),
         WellKnownObjectKind::UrlModule | WellKnownObjectKind::UrlModuleDefault =&gt; {
             url_module_member(kind, prop)
         }
