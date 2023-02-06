@@ -66,7 +66,6 @@ const bar = "bar";
 foobar += bar;
 ```
 
-- Reads: "`bar`"
 - Write: "`foobar`"
 
 ## Item 8: Stmt 6, `VarDeclarator(0)`
@@ -198,7 +197,6 @@ graph TD
     Item19["export external2"];
     Item1 --> Item2;
     Item6 --> Item5;
-    Item8 --> Item7;
     Item8 -.-> Item6;
     Item9 --> Item5;
     Item9 --> Item8;
@@ -245,7 +243,6 @@ graph TD
     Item19["export external2"];
     Item1 --> Item2;
     Item6 --> Item5;
-    Item8 --> Item7;
     Item8 -.-> Item6;
     Item9 --> Item5;
     Item9 --> Item8;
@@ -302,7 +299,6 @@ graph TD
     Item19["export external2"];
     Item1 --> Item2;
     Item6 --> Item5;
-    Item8 --> Item7;
     Item8 -.-> Item6;
     Item9 --> Item5;
     Item9 --> Item8;
