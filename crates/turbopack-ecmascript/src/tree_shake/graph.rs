@@ -93,13 +93,7 @@ impl Graph {
         let graph = self.inner.clone().into_graph();
 
         let mut condensed: petgraph::Graph<_, _, _, u32> =
-            petgraph::algo::condensation(graph, false);
-
-        condensed.retain_edges(|graph, edge| {
-            graph
-                .next_edge(edge, petgraph::Direction::Outgoing)
-                .is_none()
-        });
+            super::condensation::condensation(graph, |strong1, strong2| strong1 || strong2);
 
         condensed
     }
