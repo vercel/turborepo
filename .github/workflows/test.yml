@@ -480,7 +480,7 @@ jobs:
       - name: Count clippy warnings
         run: |
           count="0"
-          clippy_output="$(cargo clippy --workspace --all-targets 2>&1)"
+          clippy_output="$(cargo clippy --workspace --all-targets --features rustls-tls 2>&1)"
 
           # Clippy will be invoked and report on each crate individually. We need to sum manually.
           for warnings in $(echo "$clippy_output" | sed -n 's/.*generated \([0-9]*\) warnings\?$/\1/p'); do
