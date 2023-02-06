@@ -1,5 +1,5 @@
-import * as jest from "jest-circus-browser/dist/umd/jest-circus.js";
-import expectMod from "expect/build-es5/index.js";
+import * as jest from "jest-circus-browser/dist/umd/jest-circus";
+import expectMod from "expect/build-es5/index";
 
 type CallSignature<T extends (...a: any[]) => unknown> = (
   ...a: Parameters<T>

@@ -15,7 +15,7 @@ export default function Page() {
   );
 }
 
-type Harness = typeof import("@turbo/pack-test-harness/harness");
+type Harness = typeof import("@turbo/pack-test-harness");
 
 function runTests(harness: Harness, iframe: HTMLIFrameElement) {
   it("returns a 404 status code", async () => {
