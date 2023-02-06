@@ -76,6 +76,11 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
     }
 
     #[turbo_tasks::function]
+    fn related_path(&self) -> FileSystemPathVc {
+        self.manifest.path()
+    }
+
+    #[turbo_tasks::function]
     async fn content(&self) -> Result<EcmascriptChunkItemContentVc> {
         let mut code = Vec::new();
 
@@ -236,6 +241,11 @@ impl EcmascriptChunkItem for ManifestChunkItem {
     #[turbo_tasks::function]
     fn chunking_context(&self) -> ChunkingContextVc {
         self.context
+    }
+
+    #[turbo_tasks::function]
+    fn related_path(&self) -> FileSystemPathVc {
+        self.manifest.path()
     }
 
     #[turbo_tasks::function]
