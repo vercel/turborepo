@@ -26,7 +26,6 @@ import { upper } from "module";
 export let foobar = "foo";
 ```
 
-- Side effects
 - Declares: "`foobar`"
 - Write: "`foobar`"
 
@@ -36,7 +35,6 @@ export let foobar = "foo";
 export const foo = foobar;
 ```
 
-- Side effects
 - Declares: "`foo`"
 - Reads: "`foobar`"
 - Write: "`foo`"
@@ -47,7 +45,6 @@ export const foo = foobar;
 const bar = "bar";
 ```
 
-- Side effects
 - Declares: "`bar`"
 - Write: "`bar`"
 
@@ -66,7 +63,6 @@ foobar += bar;
 let foobarCopy = foobar;
 ```
 
-- Side effects
 - Declares: "`foobarCopy`"
 - Reads: "`foobar`"
 - Write: "`foobarCopy`"
@@ -188,27 +184,15 @@ graph TD
     Item17["export external1"];
     Item18;
     Item18["export external2"];
-    Item3 --> Item1;
-    Item3 -.-> Item2;
-    Item3 -.-> Item11;
     Item4 --> Item3;
-    Item4 -.-> Item2;
-    Item4 -.-> Item11;
-    Item5 --> Item4;
-    Item5 -.-> Item2;
-    Item5 -.-> Item3;
-    Item5 -.-> Item11;
     Item6 --> Item5;
     Item6 -.-> Item4;
     Item7 --> Item3;
     Item7 --> Item6;
-    Item7 --> Item5;
-    Item7 -.-> Item2;
-    Item7 -.-> Item4;
-    Item7 -.-> Item11;
     Item8 -.-> Item4;
     Item8 -.-> Item7;
     Item9 --> Item7;
+    Item9 --> Item1;
     Item9 -.-> Item2;
     Item9 -.-> Item3;
     Item9 -.-> Item6;
@@ -245,27 +229,15 @@ graph TD
     Item17["export external1"];
     Item18;
     Item18["export external2"];
-    Item3 --> Item1;
-    Item3 -.-> Item2;
-    Item3 -.-> Item11;
     Item4 --> Item3;
-    Item4 -.-> Item2;
-    Item4 -.-> Item11;
-    Item5 --> Item4;
-    Item5 -.-> Item2;
-    Item5 -.-> Item3;
-    Item5 -.-> Item11;
     Item6 --> Item5;
     Item6 -.-> Item4;
     Item7 --> Item3;
     Item7 --> Item6;
-    Item7 --> Item5;
-    Item7 -.-> Item2;
-    Item7 -.-> Item4;
-    Item7 -.-> Item11;
     Item8 -.-> Item4;
     Item8 -.-> Item7;
     Item9 --> Item7;
+    Item9 --> Item1;
     Item9 -.-> Item2;
     Item9 -.-> Item3;
     Item9 -.-> Item6;
@@ -312,27 +284,15 @@ graph TD
     Item17["export external1"];
     Item18;
     Item18["export external2"];
-    Item3 --> Item1;
-    Item3 -.-> Item2;
-    Item3 -.-> Item11;
     Item4 --> Item3;
-    Item4 -.-> Item2;
-    Item4 -.-> Item11;
-    Item5 --> Item4;
-    Item5 -.-> Item2;
-    Item5 -.-> Item3;
-    Item5 -.-> Item11;
     Item6 --> Item5;
     Item6 -.-> Item4;
     Item7 --> Item3;
     Item7 --> Item6;
-    Item7 --> Item5;
-    Item7 -.-> Item2;
-    Item7 -.-> Item4;
-    Item7 -.-> Item11;
     Item8 -.-> Item4;
     Item8 -.-> Item7;
     Item9 --> Item7;
+    Item9 --> Item1;
     Item9 -.-> Item2;
     Item9 -.-> Item3;
     Item9 -.-> Item6;

@@ -8,7 +8,6 @@ Count: 7
 const dog = "dog";
 ```
 
-- Side effects
 - Declares: "`dog`"
 - Write: "`dog`"
 
@@ -18,7 +17,6 @@ const dog = "dog";
 const cat = "cat";
 ```
 
-- Side effects
 - Declares: "`cat`"
 - Write: "`cat`"
 
@@ -28,7 +26,6 @@ const cat = "cat";
 export const DOG = dog;
 ```
 
-- Side effects
 - Declares: "`DOG`"
 - Reads: "`dog`"
 - Write: "`DOG`"
@@ -39,7 +36,6 @@ export const DOG = dog;
 export const CHIMERA = cat + dog;
 ```
 
-- Side effects
 - Declares: "`CHIMERA`"
 - Reads: "`cat`, `dog`"
 - Write: "`CHIMERA`"
@@ -74,12 +70,9 @@ graph TD
     Item6["export DOG"];
     Item7;
     Item7["export CHIMERA"];
-    Item2 --> Item1;
     Item3 --> Item1;
-    Item3 --> Item2;
     Item4 --> Item2;
     Item4 --> Item1;
-    Item4 --> Item3;
 ```
 
 # Phase 3
@@ -96,12 +89,9 @@ graph TD
     Item6["export DOG"];
     Item7;
     Item7["export CHIMERA"];
-    Item2 --> Item1;
     Item3 --> Item1;
-    Item3 --> Item2;
     Item4 --> Item2;
     Item4 --> Item1;
-    Item4 --> Item3;
 ```
 
 # Phase 4
@@ -118,15 +108,12 @@ graph TD
     Item6["export DOG"];
     Item7;
     Item7["export CHIMERA"];
-    Item2 --> Item1;
     Item3 --> Item1;
-    Item3 --> Item2;
     Item4 --> Item2;
     Item4 --> Item1;
-    Item4 --> Item3;
-    Item5 --> Item4;
     Item5 -.-> Item1;
     Item5 -.-> Item3;
+    Item5 -.-> Item4;
     Item5 -.-> Item2;
     Item6 --> Item3;
     Item7 --> Item4;

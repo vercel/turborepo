@@ -8,7 +8,6 @@ Count: 18
 let dog = "dog";
 ```
 
-- Side effects
 - Declares: "`dog`"
 - Write: "`dog`"
 
@@ -98,7 +97,6 @@ export const dogRef = {
 };
 ```
 
-- Side effects
 - Declares: "`dogRef`"
 - Reads: "`dog`, `getDog`, `setDog`"
 - Write: "`dogRef`"
@@ -109,7 +107,6 @@ export const dogRef = {
 export let cat = "cat";
 ```
 
-- Side effects
 - Declares: "`cat`"
 - Write: "`cat`"
 
@@ -119,7 +116,6 @@ export let cat = "cat";
 export const initialCat = cat;
 ```
 
-- Side effects
 - Declares: "`initialCat`"
 - Reads: "`cat`"
 - Write: "`initialCat`"
@@ -213,26 +209,7 @@ graph TD
     Item10 --> Item8;
     Item10 --> Item4;
     Item10 --> Item7;
-    Item10 --> Item9;
-    Item10 -.-> Item3;
-    Item10 -.-> Item6;
-    Item11 --> Item10;
-    Item11 -.-> Item1;
-    Item11 -.-> Item2;
-    Item11 -.-> Item5;
-    Item11 -.-> Item8;
-    Item11 -.-> Item3;
-    Item11 -.-> Item6;
-    Item11 -.-> Item9;
     Item12 --> Item11;
-    Item12 -.-> Item1;
-    Item12 -.-> Item2;
-    Item12 -.-> Item5;
-    Item12 -.-> Item8;
-    Item12 -.-> Item3;
-    Item12 -.-> Item6;
-    Item12 -.-> Item9;
-    Item12 -.-> Item10;
 ```
 
 # Phase 3
@@ -283,26 +260,7 @@ graph TD
     Item10 --> Item8;
     Item10 --> Item4;
     Item10 --> Item7;
-    Item10 --> Item9;
-    Item10 -.-> Item3;
-    Item10 -.-> Item6;
-    Item11 --> Item10;
-    Item11 -.-> Item1;
-    Item11 -.-> Item2;
-    Item11 -.-> Item5;
-    Item11 -.-> Item8;
-    Item11 -.-> Item3;
-    Item11 -.-> Item6;
-    Item11 -.-> Item9;
     Item12 --> Item11;
-    Item12 -.-> Item1;
-    Item12 -.-> Item2;
-    Item12 -.-> Item5;
-    Item12 -.-> Item8;
-    Item12 -.-> Item3;
-    Item12 -.-> Item6;
-    Item12 -.-> Item9;
-    Item12 -.-> Item10;
     Item4 --> Item1;
     Item4 --> Item2;
     Item4 --> Item5;
@@ -366,26 +324,7 @@ graph TD
     Item10 --> Item8;
     Item10 --> Item4;
     Item10 --> Item7;
-    Item10 --> Item9;
-    Item10 -.-> Item3;
-    Item10 -.-> Item6;
-    Item11 --> Item10;
-    Item11 -.-> Item1;
-    Item11 -.-> Item2;
-    Item11 -.-> Item5;
-    Item11 -.-> Item8;
-    Item11 -.-> Item3;
-    Item11 -.-> Item6;
-    Item11 -.-> Item9;
     Item12 --> Item11;
-    Item12 -.-> Item1;
-    Item12 -.-> Item2;
-    Item12 -.-> Item5;
-    Item12 -.-> Item8;
-    Item12 -.-> Item3;
-    Item12 -.-> Item6;
-    Item12 -.-> Item9;
-    Item12 -.-> Item10;
     Item4 --> Item1;
     Item4 --> Item2;
     Item4 --> Item5;
@@ -399,17 +338,17 @@ graph TD
     Item13 --> Item2;
     Item13 --> Item5;
     Item13 --> Item8;
-    Item14 --> Item12;
+    Item14 --> Item9;
     Item14 -.-> Item1;
     Item14 -.-> Item2;
     Item14 -.-> Item5;
     Item14 -.-> Item8;
     Item14 -.-> Item3;
     Item14 -.-> Item6;
-    Item14 -.-> Item9;
     Item14 -.-> Item10;
     Item14 -.-> Item7;
     Item14 -.-> Item11;
+    Item14 -.-> Item12;
     Item14 -.-> Item4;
     Item14 -.-> Item13;
     Item15 --> Item10;
