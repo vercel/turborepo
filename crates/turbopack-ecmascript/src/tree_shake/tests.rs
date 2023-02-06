@@ -162,7 +162,7 @@ fn run(input: PathBuf) {
 
                 buf
             },
-            |ix, edge| edge,
+            |ix, edge| *edge,
         );
 
         let dot = petgraph::dot::Dot::with_config(&condensed, &[]);

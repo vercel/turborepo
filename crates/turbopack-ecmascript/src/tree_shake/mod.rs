@@ -99,6 +99,8 @@ impl Analyzer<'_> {
                     continue;
                 }
 
+                let mut items_to_remove_from_last_reads = FxHashMap::<_, Vec<_>>::default();
+
                 // For each var in READ_VARS:
                 for id in item.read_vars.iter() {
                     // Create a strong dependency to all module items listed in LAST_WRITES for that
@@ -108,6 +110,11 @@ impl Analyzer<'_> {
                     if let Some(state) = self.vars.get(id) {
                         for last_write in state.last_writes.iter() {
                             self.g.add_strong_dep(item_id, last_write);
+
+                            items_to_remove_from_last_reads
+                                .entry(id.clone())
+                                .or_default()
+                                .push(last_write.clone());
                         }
                     }
                 }
@@ -167,8 +174,16 @@ impl Analyzer<'_> {
                     let state = self.vars.entry(id.clone()).or_default();
                     state.last_reads.push(item_id.clone());
 
-                    // TODO: Optimization: Remove each module item to which we
+                    // Optimization: Remove each module item to which we
                     // just created a strong dependency from LAST_READS
+
+                    if let Some(items) = items_to_remove_from_last_reads.get(id) {
+                        for item in items {
+                            if let Some(pos) = state.last_reads.iter().position(|v| *v == *item) {
+                                state.last_reads.remove(pos);
+                            }
+                        }
+                    }
                 }
 
                 if item.side_effects {
