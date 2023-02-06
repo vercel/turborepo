@@ -6,6 +6,8 @@ mod package_manager;
 mod retry;
 mod shim;
 mod ui;
+#[cfg(feature = "turbo-updater")]
+mod updater;
 
 use anyhow::Result;
 use log::error;

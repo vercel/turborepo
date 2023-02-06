@@ -7,6 +7,8 @@ license = "MPL-2.0"
 [features]
 native-tls = ["turborepo-lib/native-tls"]
 rustls-tls = ["turborepo-lib/rustls-tls"]
+turbo-updater = ["turborepo-lib/turbo-updater"]
+default = ["turbo-updater"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [build-dependencies]

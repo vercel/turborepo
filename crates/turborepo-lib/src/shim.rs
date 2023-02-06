@@ -6,7 +6,6 @@ use std::{
     path::{Path, PathBuf},
     process,
     process::Stdio,
-    time::Duration,
 };
 
 use anyhow::{anyhow, Result};
@@ -16,25 +15,12 @@ use env_logger::{fmt::Color, Builder, Env, WriteStyle};
 use log::{debug, Level, LevelFilter};
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use tiny_gradient::{GradientStr, RGB};
-use turbo_updater::check_for_updates;
 
+#[cfg(feature = "turbo-updater")]
+use crate::updater::try_check_for_updates;
 use crate::{cli, get_version, PackageManager, Payload};
 
 static TURBO_JSON: &str = "turbo.json";
-// all arguments that result in a stdout that much be directly parsable and
-// should not be paired with additional output (from the update notifier for
-// example)
-static TURBO_PURE_OUTPUT_ARGS: [&str; 6] = [
-    "--json",
-    "--dry",
-    "--dry-run",
-    "--dry=json",
-    "--graph",
-    "--dry-run=json",
-];
-
-static TURBO_SKIP_NOTIFIER_ARGS: [&str; 4] = ["--help", "--h", "--version", "--v"];
 
 fn turbo_version_has_shim(version: &str) -> bool {
     let version = Version::parse(version).unwrap();
@@ -47,13 +33,14 @@ fn turbo_version_has_shim(version: &str) -> bool {
 }
 
 #[derive(Debug)]
-struct ShimArgs {
+pub(crate) struct ShimArgs {
     cwd: PathBuf,
     invocation_dir: PathBuf,
     skip_infer: bool,
     verbosity: usize,
-    force_update_check: bool,
-    remaining_turbo_args: Vec<String>,
+    #[allow(dead_code)]
+    pub force_update_check: bool,
+    pub remaining_turbo_args: Vec<String>,
     forwarded_args: Vec<String>,
 }
 
@@ -136,32 +123,6 @@ impl ShimArgs {
                 forwarded_args,
             })
         }
-    }
-
-    // returns true if any flags result in pure json output to stdout
-    fn has_json_flags(&self) -> bool {
-        self.remaining_turbo_args
-            .iter()
-            .any(|arg| TURBO_PURE_OUTPUT_ARGS.contains(&arg.as_str()))
-    }
-
-    // returns true if any flags should bypass the update notifier
-    fn has_notifier_skip_flags(&self) -> bool {
-        self.remaining_turbo_args
-            .iter()
-            .any(|arg| TURBO_SKIP_NOTIFIER_ARGS.contains(&arg.as_str()))
-    }
-
-    pub fn should_check_for_update(&self) -> bool {
-        if self.force_update_check {
-            return true;
-        }
-
-        if self.has_notifier_skip_flags() || self.has_json_flags() {
-            return false;
-        }
-
-        true
     }
 }
 
@@ -323,13 +284,16 @@ impl RepoState {
     ///
     /// returns: Result<i32, Error>
     fn run_correct_turbo(self, shim_args: ShimArgs) -> Result<Payload> {
+        #[allow(unused_variables)]
         if let Some(LocalTurboState { bin_path, version }) = &self.local_turbo_state {
+            #[cfg(feature = "turbo-updater")]
             try_check_for_updates(&shim_args, version, false);
             let canonical_local_turbo = fs_canonicalize(bin_path)?;
             Ok(Payload::Rust(
                 self.spawn_local_turbo(&canonical_local_turbo, shim_args),
             ))
         } else {
+            #[cfg(feature = "turbo-updater")]
             try_check_for_updates(&shim_args, get_version(), true);
             // cli::run checks for this env var, rather than an arg, so that we can support
             // calling old versions without passing unknown flags.
@@ -475,36 +439,6 @@ fn init_env_logger(verbosity: usize) {
     });
 
     builder.init();
-}
-
-fn try_check_for_updates(args: &ShimArgs, current_version: &str, is_global_turbo: bool) {
-    if args.should_check_for_update() {
-        // custom footer for update message
-        let footer = format!(
-            "Follow {username} for updates: {url}",
-            username = "@turborepo".gradient([RGB::new(0, 153, 247), RGB::new(241, 23, 18)]),
-            url = "https://twitter.com/turborepo"
-        );
-
-        let interval = if args.force_update_check {
-            // force update check
-            Some(Duration::ZERO)
-        } else {
-            // use default (24 hours)
-            None
-        };
-        // check for updates
-        let _ = check_for_updates(
-            "turbo",
-            "https://github.com/vercel/turbo",
-            Some(&footer),
-            current_version,
-            // use default for timeout (800ms)
-            None,
-            interval,
-            is_global_turbo,
-        );
-    }
 }
 
 pub fn run() -> Result<Payload> {

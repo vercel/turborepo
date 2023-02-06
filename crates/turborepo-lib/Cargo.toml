@@ -44,5 +44,8 @@ serde_json = "1.0.86"
 serde_yaml = "0.8.26"
 tiny-gradient = "0.1"
 tokio = { version = "1.24.2", features = ["full"] }
-turbo-updater = { path = "../turbo-updater" }
+# turbo-updater is optional because it uses ureq which in turn uses ring
+# which doesn't compile on Windows with ARM currently:
+# https://github.com/briansmith/ring/issues/1514
+turbo-updater = { path = "../turbo-updater", optional = true }
 webbrowser = "0.8.4"
