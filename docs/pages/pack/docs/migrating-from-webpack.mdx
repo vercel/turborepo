@@ -1,30 +1,30 @@
 ---
-title: Migrate from Webpack to Turbopack
-description: Learn about how to migrate from Webpack to its Rust-powered successor, Turbopack.
+title: Migrate from webpack to Turbopack
+description: Learn about how to migrate from webpack to its Rust-powered successor, Turbopack.
 ---
 
 import Callout from "../../../components/Callout";
 
-# Migrating from Webpack to Turbopack
+# Migrating from webpack to Turbopack
 
 <Callout type="info">
-  Turbopack now implements basic Webpack loader support and configuration familiar to Webpack users
+  Turbopack now implements basic webpack loader support and configuration familiar to webpack users
 </Callout>
 
-We're planning Turbopack as the successor to Webpack. In the future, we plan to give Turbopack all the tools needed to support your Webpack app.
+We're planning Turbopack as the successor to webpack. In the future, we plan to give Turbopack all the tools needed to support your webpack app.
 
-Currently, Turbopack supports a subset of Webpack's loader API and offers similar configuration aliasing module resolution. Note that using Webpack-based Next.js plugins as-is from `next.config.js` is **not yet possible**.
+Currently, Turbopack supports a subset of webpack's loader API and offers similar configuration aliasing module resolution. Note that using webpack-based Next.js plugins as-is from `next.config.js` is **not yet possible**.
 
-## Webpack loaders
+## webpack loaders
 
 Firstly, Turbopack for Next.js does not require loaders nor loader configuration for built-in functionality, just as they aren't required for Next.js. There's no need for `css-loader`, `postcss-loader`, or `babel-loader` if you're just using `@babel/preset-env`.
 
-If you need loader support beyond what's built in, some Webpack loaders, including [`@mdx-js/loader`](https://mdxjs.com/packages/loader/) already work with Turbopack! There are currently some limitations:
+If you need loader support beyond what's built in, some webpack loaders, including [`@mdx-js/loader`](https://mdxjs.com/packages/loader/) already work with Turbopack! There are currently some limitations:
 
-- At the moment, only a core subset of the Webpack loader API is implemented. This is enough for some popular loaders, and we'll expand our support for this API in the future.
-- Options passed to Webpack loaders must be plain JavaScript primitives, objects, and arrays. For example, it's not possible to pass `require()`d plugin modules as option values.
+- At the moment, only a core subset of the webpack loader API is implemented. This is enough for some popular loaders, and we'll expand our support for this API in the future.
+- Options passed to webpack loaders must be plain JavaScript primitives, objects, and arrays. For example, it's not possible to pass `require()`d plugin modules as option values.
 
-At the moment, configuring Webpack loaders is possible for Next.js apps through an experimental option in `next.config.js`. `turbopackLoaders` can be set to a mapping of file extensions to a list of package names or `{loader, options}` pairs:
+At the moment, configuring webpack loaders is possible for Next.js apps through an experimental option in `next.config.js`. `turbopackLoaders` can be set to a mapping of file extensions to a list of package names or `{loader, options}` pairs:
 
 ```js filename="next.config.js"
 module.exports = {
@@ -44,7 +44,7 @@ module.exports = {
 
 ## Resolve aliases
 
-Turbopack can be configured to modify module resolution through aliases, similar to Webpack's [`resolve.alias`](https://Webpack.js.org/configuration/resolve/#resolvealias) configuration:
+Turbopack can be configured to modify module resolution through aliases, similar to webpack's [`resolve.alias`](https://webpack.js.org/configuration/resolve/#resolvealias) configuration:
 
 ```js filename="next.config.js"
 module.exports = {
@@ -65,21 +65,21 @@ Turbopack also supports conditional aliasing through this field, similar to Node
 
 ### Which loaders are currently supported?
 
-The following loaders have been tested to work with Turbopack's Webpack loader implementation:
+The following loaders have been tested to work with Turbopack's webpack loader implementation:
 
 - [`@mdx-js/loader`](https://mdxjs.com/packages/loader/) — note that plugin modules passed to `rehypePlugins` and `remarkPlugins` are not currently supported.
 - [`raw-loader`](https://www.npmjs.com/package/raw-loader)
 
-### Will it be compatible with Webpack's API?
+### Will it be compatible with webpack's API?
 
-Webpack has a huge API. It's extremely flexible and extensible, which is a big reason why it's so popular.
+webpack has a huge API. It's extremely flexible and extensible, which is a big reason why it's so popular.
 
-We're planning on making Turbopack very flexible and extensible, but we're **not planning 1:1 compatibility with Webpack**. This lets us make choices which improve on Webpack's API, and lets us optimize for speed and efficiency.
+We're planning on making Turbopack very flexible and extensible, but we're **not planning 1:1 compatibility with webpack**. This lets us make choices which improve on webpack's API, and lets us optimize for speed and efficiency.
 
-### Will we be able to use Webpack plugins?
+### Will we be able to use webpack plugins?
 
-Webpack plugins are a crucial part of Webpack's ecosystem. They let you customize your toolchain, giving you low-level tools to maximize your productivity.
+webpack plugins are a crucial part of webpack's ecosystem. They let you customize your toolchain, giving you low-level tools to maximize your productivity.
 
-Unlike loaders, Webpack plugins can be tightly integrated with Webpack's internals.
+Unlike loaders, webpack plugins can be tightly integrated with webpack's internals.
 
-Since we're not offering 1:1 API compatibility for plugins, most won't work out of the box with Turbopack. However, we're working on porting several of the most popular Webpack plugins to Turbopack.
+Since we're not offering 1:1 API compatibility for plugins, most won't work out of the box with Turbopack. However, we're working on porting several of the most popular webpack plugins to Turbopack.
