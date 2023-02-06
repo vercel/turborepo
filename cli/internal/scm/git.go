@@ -75,6 +75,19 @@ func (g *git) ChangedFiles(fromCommit string, toCommit string, includeUntracked 
 	return normalized, nil
 }
 
+func (g *git) PreviousContent(fromCommit string, filePath string) ([]byte, error) {
+	if fromCommit == "" {
+		return nil, fmt.Errorf("Need commit sha to inspect file contents")
+	}
+
+	out, err := exec.Command("git", "show", fmt.Sprintf("%s:%s", fromCommit, filePath)).CombinedOutput()
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to get contents of %s", filePath)
+	}
+
+	return out, nil
+}
+
 func commitExists(commit string) (bool, error) {
 	err := exec.Command("git", "cat-file", "-t", commit).Run()
 	if err != nil {

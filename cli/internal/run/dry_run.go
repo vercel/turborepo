@@ -25,6 +25,11 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
+// missingTaskLabel is printed when a package is missing a definition for a task that is supposed to run
+// E.g. if `turbo run build --dry` is run, and package-a doesn't define a `build` script in package.json,
+// the DryRunSummary will print this, instead of the script (e.g. `next build`).
+const missingTaskLabel = "<NONEXISTENT>"
+
 // DryRunSummary contains a summary of the packages and tasks that would run
 // if the --dry flag had not been passed
 type dryRunSummary struct {
@@ -102,10 +107,11 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			return err
 		}
 
-		command, ok := packageTask.Command()
-		if !ok {
-			command = "<NONEXISTENT>"
+		command := missingTaskLabel
+		if packageTask.Command != "" {
+			command = packageTask.Command
 		}
+
 		isRootTask := packageTask.PackageName == util.RootPkgName
 		if isRootTask && commandLooksLikeTurbo(command) {
 			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, command)
@@ -130,17 +136,19 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 			TaskID:                 packageTask.TaskID,
 			Task:                   packageTask.Task,
 			Package:                packageTask.PackageName,
-			Hash:                   hash,
-			CacheState:             itemStatus,
-			Command:                command,
-			Dir:                    packageTask.Pkg.Dir.ToString(),
-			Outputs:                packageTask.TaskDefinition.Outputs.Inclusions,
-			ExcludedOutputs:        packageTask.TaskDefinition.Outputs.Exclusions,
-			LogFile:                packageTask.RepoRelativeLogFile(),
-			Dependencies:           ancestors,
-			Dependents:             descendents,
+			Dir:                    packageTask.Dir,
+			Outputs:                packageTask.Outputs,
+			ExcludedOutputs:        packageTask.ExcludedOutputs,
+			LogFile:                packageTask.LogFile,
 			ResolvedTaskDefinition: packageTask.TaskDefinition,
+			Command:                command,
+
+			Hash:         hash,        // TODO(mehulkar): Move this to PackageTask
+			CacheState:   itemStatus,  // TODO(mehulkar): Move this to PackageTask
+			Dependencies: ancestors,   // TODO(mehulkar): Move this to PackageTask
+			Dependents:   descendents, // TODO(mehulkar): Move this to PackageTask
 		})
+
 		return nil
 	}
 

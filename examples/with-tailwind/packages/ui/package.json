@@ -15,9 +15,11 @@
     "dev": "tsup --watch",
     "check-types": "tsc --noEmit"
   },
+  "peerDependencies": {
+    "react": "^18.2.0"
+  },
   "devDependencies": {
     "@types/react": "^18.0.26",
-    "@types/react-dom": "^18.0.9",
     "eslint": "^7.32.0",
     "eslint-config-custom": "workspace:*",
     "postcss": "^8.4.20",

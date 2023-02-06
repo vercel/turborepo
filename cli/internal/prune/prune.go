@@ -8,6 +8,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/context"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/ui"
@@ -96,7 +97,7 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 	if !canPrune {
 		return errors.Errorf("this command is not yet implemented for %s", ctx.PackageManager.Name)
 	}
-	if ctx.Lockfile == nil {
+	if lockfile.IsNil(ctx.Lockfile) {
 		return errors.New("Cannot prune without parsed lockfile")
 	}
 
@@ -128,7 +129,9 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 	p.base.Logger.Trace("targets", "value", targets)
 
 	lockfileKeys := make([]string, 0, len(rootPackageJSON.TransitiveDeps))
-	lockfileKeys = append(lockfileKeys, rootPackageJSON.TransitiveDeps...)
+	for _, pkg := range rootPackageJSON.TransitiveDeps {
+		lockfileKeys = append(lockfileKeys, pkg.Key)
+	}
 
 	for _, internalDep := range targets {
 		// We skip over the pseudo root node and the root package
@@ -160,7 +163,9 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 			}
 		}
 
-		lockfileKeys = append(lockfileKeys, ctx.WorkspaceInfos[internalDep].TransitiveDeps...)
+		for _, pkg := range ctx.WorkspaceInfos[internalDep].TransitiveDeps {
+			lockfileKeys = append(lockfileKeys, pkg.Key)
+		}
 
 		p.base.UI.Output(fmt.Sprintf(" - Added %v", ctx.WorkspaceInfos[internalDep].Name))
 	}

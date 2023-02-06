@@ -1,5 +1,3 @@
-import * as React from "react";
-
 // styles
 import "./styles.css";
 

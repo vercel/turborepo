@@ -8,6 +8,6 @@ export default defineConfig((options: Options) => ({
   dts: true,
   minify: true,
   clean: true,
-  external: ["react", "react-dom"],
+  external: ["react"],
   ...options,
 }));
