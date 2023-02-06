@@ -1,0 +1,1240 @@
+{
+  "ref": "5a13e583f5b869a9d0cdbfb9e659e5d9f04cb8ee",
+  "nextjsVersion": "Next.js v13.1.7-canary.5",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675681585886,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675681631042,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675681585980,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/i18n-api-support/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675681672601,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/i18n-api-support/index.test.ts:47:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "i18n API support should respond to normal API request",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to normal API request"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/i18n-api-support/index.test.ts:53:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "i18n API support should respond to normal dynamic API request",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to normal dynamic API request"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/i18n-api-support/index.test.ts:69:28)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "i18n API support should fallback rewrite non-matching API request",
+                "location": null,
+                "status": "failed",
+                "title": "should fallback rewrite non-matching API request"
+              }
+            ],
+            "endTime": 1675681687210,
+            "message": "  ● i18n API support › should respond to normal API request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      45 |   it('should respond to normal API request', async () => {\n      46 |     const res = await fetchViaHTTP(next.url, '/api/hello')\n    > 47 |     expect(res.status).toBe(200)\n         |                        ^\n      48 |     expect(await res.text()).toBe('hello world')\n      49 |   })\n      50 |\n\n      at Object.<anonymous> (e2e/i18n-api-support/index.test.ts:47:24)\n\n  ● i18n API support › should respond to normal dynamic API request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      51 |   it('should respond to normal dynamic API request', async () => {\n      52 |     const res = await fetchViaHTTP(next.url, '/api/blog/first')\n    > 53 |     expect(res.status).toBe(200)\n         |                        ^\n      54 |     expect(await res.text()).toBe('blog/[slug]')\n      55 |   })\n      56 |\n\n      at Object.<anonymous> (e2e/i18n-api-support/index.test.ts:53:24)\n\n  ● i18n API support › should fallback rewrite non-matching API request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 500\n\n      67 |       for (const path of paths) {\n      68 |         const res = await fetchViaHTTP(next.url, path)\n    > 69 |         expect(res.status).toBe(200)\n         |                            ^\n      70 |         expect(await res.text()).toContain('Example Domain')\n      71 |       }\n      72 |     })\n\n      at Object.<anonymous> (e2e/i18n-api-support/index.test.ts:69:28)\n",
+            "name": "/work/test/e2e/i18n-api-support/index.test.ts",
+            "startTime": 1675681672695,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/404-page-app/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675681720446,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should not output static 404 if _app has getInitialProps",
+                "location": null,
+                "status": "passed",
+                "title": "should not output static 404 if _app has getInitialProps"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode specify to use the 404 page still in the routes-manifest",
+                "location": null,
+                "status": "passed",
+                "title": "specify to use the 404 page still in the routes-manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should still use 404 page",
+                "location": null,
+                "status": "passed",
+                "title": "should still use 404 page"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-app/test/index.test.js:81:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 Page Support with _app dev mode should not show pages/404 GIP error if _app has GIP",
+                "location": null,
+                "status": "failed",
+                "title": "should not show pages/404 GIP error if _app has GIP"
+              }
+            ],
+            "endTime": 1675681730103,
+            "message": "  ● 404 Page Support with _app › dev mode › should not show pages/404 GIP error if _app has GIP\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      79 |     it('should not show pages/404 GIP error if _app has GIP', async () => {\n      80 |       const res = await fetchViaHTTP(appPort, '/abc')\n    > 81 |       expect(res.status).toBe(404)\n         |                          ^\n      82 |       const $ = cheerio.load(await res.text())\n      83 |       expect($('#404-title').text()).toBe('Hi There')\n      84 |       expect(stderr).not.toMatch(gip404Err)\n\n      at Object.<anonymous> (integration/404-page-app/test/index.test.js:81:26)\n",
+            "name": "/work/test/integration/404-page-app/test/index.test.js",
+            "startTime": 1675681720537,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/basic/define-class-fields.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675681527878,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:53:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:94:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675681650332,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:53:7)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:94:7)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675681527975,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/layout-params/layout-params.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 6,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675681741399,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app dir - layout params",
+                  "basic params"
+                ],
+                "failureMessages": [],
+                "fullName": "app dir - layout params basic params check layout without params get no params",
+                "location": null,
+                "status": "passed",
+                "title": "check layout without params get no params"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir - layout params",
+                  "basic params"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/app-dir/layout-params/layout-params.test.ts:22:48)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir - layout params basic params check layout renders just it's params",
+                "location": null,
+                "status": "failed",
+                "title": "check layout renders just it's params"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir - layout params",
+                  "basic params"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 2\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/app-dir/layout-params/layout-params.test.ts:29:48)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir - layout params basic params check topmost layout renders all params",
+                "location": null,
+                "status": "failed",
+                "title": "check topmost layout renders all params"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir - layout params",
+                  "catchall params"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/app-dir/layout-params/layout-params.test.ts:40:48)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir - layout params catchall params should give catchall params just to last layout",
+                "location": null,
+                "status": "failed",
+                "title": "should give catchall params just to last layout"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir - layout params",
+                  "catchall params"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/app-dir/layout-params/layout-params.test.ts:49:48)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app dir - layout params catchall params should give optional catchall params just to last layout",
+                "location": null,
+                "status": "failed",
+                "title": "should give optional catchall params just to last layout"
+              },
+              {
+                "ancestorTitles": [
+                  "app dir - layout params",
+                  "catchall params"
+                ],
+                "failureMessages": [],
+                "fullName": "app dir - layout params catchall params should give empty optional catchall params won't give params to any layout",
+                "location": null,
+                "status": "passed",
+                "title": "should give empty optional catchall params won't give params to any layout"
+              }
+            ],
+            "endTime": 1675681756813,
+            "message": "  ● app dir - layout params › basic params › check layout renders just it's params\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n      20 |         const $ = await next.render$('/base/something/another')\n      21 |\n    > 22 |         expect($('#lvl2-layout > div').length).toBe(1)\n         |                                                ^\n      23 |         expect($('#lvl2-param1').text()).toBe('\"something\"')\n      24 |       })\n      25 |\n\n      at Object.<anonymous> (e2e/app-dir/layout-params/layout-params.test.ts:22:48)\n\n  ● app dir - layout params › basic params › check topmost layout renders all params\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 2\n    Received: 0\n\n      27 |         const $ = await next.render$('/base/something/another')\n      28 |\n    > 29 |         expect($('#lvl3-layout > div').length).toBe(2)\n         |                                                ^\n      30 |         expect($('#lvl3-param1').text()).toBe('\"something\"')\n      31 |         expect($('#lvl3-param2').text()).toBe('\"another\"')\n      32 |       })\n\n      at Object.<anonymous> (e2e/app-dir/layout-params/layout-params.test.ts:29:48)\n\n  ● app dir - layout params › catchall params › should give catchall params just to last layout\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n      38 |\n      39 |         expect($(`#root-layout > div`).length).toBe(0)\n    > 40 |         expect($('#lvl2-layout > div').length).toBe(1)\n         |                                                ^\n      41 |         expect($('#lvl2-params').text()).toBe('[\"something\",\"another\"]')\n      42 |       })\n      43 |\n\n      at Object.<anonymous> (e2e/app-dir/layout-params/layout-params.test.ts:40:48)\n\n  ● app dir - layout params › catchall params › should give optional catchall params just to last layout\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n      47 |         expect($(`#root-layout > div`).length).toBe(0)\n      48 |\n    > 49 |         expect($('#lvl2-layout > div').length).toBe(1)\n         |                                                ^\n      50 |         expect($('#lvl2-params').text()).toBe('[\"something\",\"another\"]')\n      51 |       })\n      52 |\n\n      at Object.<anonymous> (e2e/app-dir/layout-params/layout-params.test.ts:49:48)\n",
+            "name": "/work/test/e2e/app-dir/layout-params/layout-params.test.ts",
+            "startTime": 1675681741498,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/404-page-custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 9,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675681788243,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should respond to 404 correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render error correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render index page normal",
+                "location": null,
+                "status": "passed",
+                "title": "should render index page normal"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should set pages404 in routes-manifest correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should set pages404 in routes-manifest correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should have output 404.html",
+                "location": null,
+                "status": "passed",
+                "title": "should have output 404.html"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:26:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should respond to 404 correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"oops\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:32:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from index\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:37:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render index page normal",
+                "location": null,
+                "status": "failed",
+                "title": "should render index page normal"
+              }
+            ],
+            "endTime": 1675681798452,
+            "message": "  ● Default 404 Page with custom _error › dev mode › should respond to 404 correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      24 |   it('should respond to 404 correctly', async () => {\n      25 |     const res = await fetchViaHTTP(appPort, '/404')\n    > 26 |     expect(res.status).toBe(404)\n         |                        ^\n      27 |     expect(await res.text()).toContain('This page could not be found')\n      28 |   })\n      29 |\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:26:24)\n\n  ● Default 404 Page with custom _error › dev mode › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"oops\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      30 |   it('should render error correctly', async () => {\n      31 |     const text = await renderViaHTTP(appPort, '/err')\n    > 32 |     expect(text).toContain(isDev ? 'oops' : 'Internal Server Error')\n         |                  ^\n      33 |   })\n      34 |\n      35 |   it('should render index page normal', async () => {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:32:18)\n\n  ● Default 404 Page with custom _error › dev mode › should render index page normal\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from index\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      35 |   it('should render index page normal', async () => {\n      36 |     const html = await renderViaHTTP(appPort, '/')\n    > 37 |     expect(html).toContain('hello from index')\n         |                  ^\n      38 |   })\n      39 |\n      40 |   if (!isDev) {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:37:18)\n",
+            "name": "/work/test/integration/404-page-custom-error/test/index.test.js",
+            "startTime": 1675681788360,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675681595375,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675681640865,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675681595484,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/edge-configurable-runtime/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675682001642,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:39:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode runs with no warning API route on the edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "runs with no warning API route on the edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:54:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode warns about API route using experimental-edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about API route using experimental-edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:70:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode warns about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:87:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode errors about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "errors about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:39:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode runs with no warning API route on the edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "runs with no warning API route on the edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:54:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode warns about API route using experimental-edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about API route using experimental-edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:70:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode warns about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:87:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode errors about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "errors about page using edge runtime"
+              }
+            ],
+            "endTime": 1675682036398,
+            "message": "  ● Configurable runtime for src/pages and API routes › In dev mode › runs with no warning API route on the edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      37 |         await next.start()\n      38 |         const res = await fetchViaHTTP(next.url, `/api/edge`)\n    > 39 |         expect(res.status).toEqual(200)\n         |                            ^\n      40 |         expect(next.cliOutput).not.toInclude('error')\n      41 |         expect(next.cliOutput).not.toInclude('warn')\n      42 |       })\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:39:28)\n\n  ● Configurable runtime for src/pages and API routes › In dev mode › warns about API route using experimental-edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      52 |         await next.start()\n      53 |         const res = await fetchViaHTTP(next.url, `/api/edge`)\n    > 54 |         expect(res.status).toEqual(200)\n         |                            ^\n      55 |         expect(next.cliOutput).not.toInclude('error')\n      56 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      57 |           `warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.`\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:54:28)\n\n  ● Configurable runtime for src/pages and API routes › In dev mode › warns about page using edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      68 |         await next.start()\n      69 |         const res = await fetchViaHTTP(next.url, `/`)\n    > 70 |         expect(res.status).toEqual(200)\n         |                            ^\n      71 |         expect(next.cliOutput).not.toInclude('error')\n      72 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      73 |           `warn  - You are using an experimental edge runtime, the API might change.`\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:70:28)\n\n  ● Configurable runtime for src/pages and API routes › In dev mode › errors about page using edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      85 |         await next.start()\n      86 |         const res = await fetchViaHTTP(next.url, `/`)\n    > 87 |         expect(res.status).toEqual(200)\n         |                            ^\n      88 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      89 |           `error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.`\n      90 |         )\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:87:28)\n\n  ● Configurable runtime for pages and API routes › In dev mode › runs with no warning API route on the edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      37 |         await next.start()\n      38 |         const res = await fetchViaHTTP(next.url, `/api/edge`)\n    > 39 |         expect(res.status).toEqual(200)\n         |                            ^\n      40 |         expect(next.cliOutput).not.toInclude('error')\n      41 |         expect(next.cliOutput).not.toInclude('warn')\n      42 |       })\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:39:28)\n\n  ● Configurable runtime for pages and API routes › In dev mode › warns about API route using experimental-edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      52 |         await next.start()\n      53 |         const res = await fetchViaHTTP(next.url, `/api/edge`)\n    > 54 |         expect(res.status).toEqual(200)\n         |                            ^\n      55 |         expect(next.cliOutput).not.toInclude('error')\n      56 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      57 |           `warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.`\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:54:28)\n\n  ● Configurable runtime for pages and API routes › In dev mode › warns about page using edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      68 |         await next.start()\n      69 |         const res = await fetchViaHTTP(next.url, `/`)\n    > 70 |         expect(res.status).toEqual(200)\n         |                            ^\n      71 |         expect(next.cliOutput).not.toInclude('error')\n      72 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      73 |           `warn  - You are using an experimental edge runtime, the API might change.`\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:70:28)\n\n  ● Configurable runtime for pages and API routes › In dev mode › errors about page using edge runtime\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: 200\n    Received: 500\n\n      85 |         await next.start()\n      86 |         const res = await fetchViaHTTP(next.url, `/`)\n    > 87 |         expect(res.status).toEqual(200)\n         |                            ^\n      88 |         expect(stripAnsi(next.cliOutput)).toInclude(\n      89 |           `error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.`\n      90 |         )\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:87:28)\n",
+            "name": "/work/test/e2e/edge-configurable-runtime/index.test.ts",
+            "startTime": 1675682001742,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/404-page-app/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675682070024,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should not output static 404 if _app has getInitialProps",
+                "location": null,
+                "status": "passed",
+                "title": "should not output static 404 if _app has getInitialProps"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode specify to use the 404 page still in the routes-manifest",
+                "location": null,
+                "status": "passed",
+                "title": "specify to use the 404 page still in the routes-manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "404 Page Support with _app production mode should still use 404 page",
+                "location": null,
+                "status": "passed",
+                "title": "should still use 404 page"
+              },
+              {
+                "ancestorTitles": [
+                  "404 Page Support with _app",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-app/test/index.test.js:81:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "404 Page Support with _app dev mode should not show pages/404 GIP error if _app has GIP",
+                "location": null,
+                "status": "failed",
+                "title": "should not show pages/404 GIP error if _app has GIP"
+              }
+            ],
+            "endTime": 1675682079905,
+            "message": "  ● 404 Page Support with _app › dev mode › should not show pages/404 GIP error if _app has GIP\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      79 |     it('should not show pages/404 GIP error if _app has GIP', async () => {\n      80 |       const res = await fetchViaHTTP(appPort, '/abc')\n    > 81 |       expect(res.status).toBe(404)\n         |                          ^\n      82 |       const $ = cheerio.load(await res.text())\n      83 |       expect($('#404-title').text()).toBe('Hi There')\n      84 |       expect(stderr).not.toMatch(gip404Err)\n\n      at Object.<anonymous> (integration/404-page-app/test/index.test.js:81:26)\n",
+            "name": "/work/test/integration/404-page-app/test/index.test.js",
+            "startTime": 1675682070121,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/basic/define-class-fields.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675681523046,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:53:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:94:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675681643288,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:53:7)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:94:7)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675681523136,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675682064871,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675682110008,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675682064961,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/404-page-custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 9,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675682138512,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should build successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should build successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should respond to 404 correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render error correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should render index page normal",
+                "location": null,
+                "status": "passed",
+                "title": "should render index page normal"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should set pages404 in routes-manifest correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should set pages404 in routes-manifest correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Default 404 Page with custom _error server mode should have output 404.html",
+                "location": null,
+                "status": "passed",
+                "title": "should have output 404.html"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 500\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:26:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should respond to 404 correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should respond to 404 correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"oops\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:32:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Default 404 Page with custom _error",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from index\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: Execution of get_evaluate_pool failed\n    6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n    7: Execution of turbopack_core::asset::AssetContentVc::write failed\n    8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n    9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n   10: Execution of content_from_relative_path failed\n   11: failed to canonicalize embedded file path\n   12: No such file or directory (os error 2)\"\n    at Object.<anonymous> (/work/test/integration/404-page-custom-error/test/index.test.js:37:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Default 404 Page with custom _error dev mode should render index page normal",
+                "location": null,
+                "status": "failed",
+                "title": "should render index page normal"
+              }
+            ],
+            "endTime": 1675682148743,
+            "message": "  ● Default 404 Page with custom _error › dev mode › should respond to 404 correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 500\n\n      24 |   it('should respond to 404 correctly', async () => {\n      25 |     const res = await fetchViaHTTP(appPort, '/404')\n    > 26 |     expect(res.status).toBe(404)\n         |                        ^\n      27 |     expect(await res.text()).toContain('This page could not be found')\n      28 |   })\n      29 |\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:26:24)\n\n  ● Default 404 Page with custom _error › dev mode › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"oops\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      30 |   it('should render error correctly', async () => {\n      31 |     const text = await renderViaHTTP(appPort, '/err')\n    > 32 |     expect(text).toContain(isDev ? 'oops' : 'Internal Server Error')\n         |                  ^\n      33 |   })\n      34 |\n      35 |   it('should render index page normal', async () => {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:32:18)\n\n  ● Default 404 Page with custom _error › dev mode › should render index page normal\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from index\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: Execution of get_evaluate_pool failed\n        6: Execution of turbo_tasks::completion::CompletionsVc::all failed\n        7: Execution of turbopack_core::asset::AssetContentVc::write failed\n        8: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::content failed\n        9: Execution of turbopack_ecmascript::chunk::EcmascriptChunkContentVc::code failed\n       10: Execution of content_from_relative_path failed\n       11: failed to canonicalize embedded file path\n       12: No such file or directory (os error 2)\"\n\n      35 |   it('should render index page normal', async () => {\n      36 |     const html = await renderViaHTTP(appPort, '/')\n    > 37 |     expect(html).toContain('hello from index')\n         |                  ^\n      38 |   })\n      39 |\n      40 |   if (!isDev) {\n\n      at Object.<anonymous> (integration/404-page-custom-error/test/index.test.js:37:18)\n",
+            "name": "/work/test/integration/404-page-custom-error/test/index.test.js",
+            "startTime": 1675682138606,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
