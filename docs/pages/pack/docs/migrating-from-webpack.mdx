@@ -30,15 +30,17 @@ At the moment, configuring webpack loaders is possible for Next.js apps through 
 module.exports = {
   experimental: {
     turbopackLoaders: {
-      ".md": [{
-        loader: "@mdx-js/loader",
-        options: {
-          format: "md"
-        }
-      }],
-      ".foo": "my-foo-loader"
-    }
-  }
+      '.md': [
+        {
+          loader: '@mdx-js/loader',
+          options: {
+            format: 'md',
+          },
+        },
+      ],
+      '.mdx': '@mdx-js/loader',
+    },
+  },
 }
 ```
 
@@ -49,17 +51,17 @@ Turbopack can be configured to modify module resolution through aliases, similar
 ```js filename="next.config.js"
 module.exports = {
   experimental: {
-    resolveAlias: {
-      foo: "bar",
-      baz: { browser: "baz/browser" },
+    turbopackResolveAlias: {
+      underscore: 'lodash',
+      mocha: { browser: 'mocha/browser-entry.js' },
     },
-  }
+  },
 }
 ```
 
-The above aliases imports of the `foo` package to the `bar` package.
+This aliases imports of the `underscore` package to the `lodash` package. In other words, `import underscore from 'underscore'` will load the `lodash` module instead of `underscore`.
 
-Turbopack also supports conditional aliasing through this field, similar to Node.js's [conditional exports](https://nodejs.org/docs/latest-v18.x/api/packages.html#conditional-exports). At the moment only the `browser` condition is supported. In the case above, imports of the `baz` module will be aliased to `baz/browser` when Turbopack targets browser environments.
+Turbopack also supports conditional aliasing through this field, similar to Node.js's [conditional exports](https://nodejs.org/docs/latest-v18.x/api/packages.html#conditional-exports). At the moment only the `browser` condition is supported. In the case above, imports of the `mocha` module will be aliased to `mocha/browser-entry.js` when Turbopack targets browser environments.
 
 ## FAQ
 
