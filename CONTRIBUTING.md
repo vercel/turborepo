@@ -91,7 +91,8 @@ If you're using a different package manager replace npm accordingly.
 
 ## Manually testing `turbo`
 
-Before releasing, it's recommended to test the `turbo` binary manually. Here's a checklist of testing strategies to cover:
+Before releasing, it's recommended to test the `turbo` binary manually.
+Here's a checklist of testing strategies to cover:
 
 - Test `login`, `logout`, `login --sso-team`, `link`, `unlink`
 - Test every command with `--skip-infer`.
@@ -99,7 +100,17 @@ Before releasing, it's recommended to test the `turbo` binary manually. Here's a
 There are also multiple installation scenarios worth testing:
 
 - Global-only. `turbo` is installed as global binary, no local `turbo` in repository.
--
+- Local-only. `turbo` is installed as local binary, no global `turbo` in PATH. turbo` is invoked via a root package script.
+- Global + local. `turbo` is installed as global binary, and local `turbo` in repository. Global `turbo` delegates to local `turbo`
+- npx. `turbo` is invoked via `npx turbo`.
+- npx + local. `turbo` is invoked via `npx turbo` in a repository with a local `turbo` binary.
+
+Here are a few repositories that you can test on:
+
+- [Next.js](https://github.com/vercel/next.js)
+- [tldraw](https://github.com/tldraw/tldraw)
+- [tailwindcss](https://github.com/tailwindlabs/tailwindcss)
+- [vercel](https://github.com/vercel/vercel)
 
 ## Publishing `turbo` to the npm registry
 
