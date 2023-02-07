@@ -85,8 +85,6 @@ func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 		return "", fmt.Errorf("error hashing files: %w", err)
 	}
 
-	pipelineForGlobalHash := pipeline.Pristine()
-
 	globalHashable := struct {
 		globalFileHashMap    map[turbopath.AnchoredUnixPath]string
 		rootExternalDepsHash string
@@ -98,7 +96,7 @@ func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
 		hashedSortedEnvPairs: globalHashableEnvPairs,
 		globalCacheKey:       _globalCacheKey,
-		pipeline:             pipelineForGlobalHash,
+		pipeline:             pipeline.Pristine(),
 	}
 
 	globalHash, err := fs.HashObject(globalHashable)
