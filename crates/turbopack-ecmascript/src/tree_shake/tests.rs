@@ -240,9 +240,8 @@ where
             "    Item{}[\"{}\"];",
             i + 1,
             render(item)
-                .replace(';', "")
                 .replace('"', "\\\"")
-                .replace('\n', "")
+                .replace([';', '\n', '}'], "")
         )
         .unwrap();
     }
