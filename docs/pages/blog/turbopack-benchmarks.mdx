@@ -1,7 +1,7 @@
 ---
 title: "Turbopack Performance Benchmarks"
 date: 2022/10/31
-description: "Benchmarking Turbopack performance against Vite and Webpack."
+description: "Benchmarking Turbopack performance against Vite and webpack."
 tag: "web development"
 ogImage: "/images/blog/turbopack-benchmarks/twitter-card.png"
 ---
@@ -33,7 +33,7 @@ import Date from "../../components/blog/Date";
 
 At [Next.js Conf](https://nextjs.org), [we announced](https://www.youtube.com/watch?v=NiknNI_0J48) our latest open-source project: Turbopack, an incremental bundler and build system optimized for JavaScript and TypeScript, written in Rust.
 
-The project began as an exploration to improve Webpack’s performance and create ways for it to more easily integrate with tooling moving forward. In doing so, the team realized that a greater effort was necessary. While we saw opportunities for better performance, the premise of a new architecture that could scale to the largest projects in the world was inspiring.
+The project began as an exploration to improve webpack’s performance and create ways for it to more easily integrate with tooling moving forward. In doing so, the team realized that a greater effort was necessary. While we saw opportunities for better performance, the premise of a new architecture that could scale to the largest projects in the world was inspiring.
 
 In this post, we will explore why Turbopack is so fast, how its incremental engine works, and benchmark it against existing approaches.
 
@@ -45,7 +45,7 @@ This does not work like traditional caching where you look up a result from a ca
 
 Instead, Turbopack skips work altogether for cached results and only recomputes affected parts of its internal dependency graph of functions. This makes updates independent of the size of the whole compilation, and eliminates the usual overhead of traditional caching.
 
-## Benchmarking Turbopack, Webpack, and Vite
+## Benchmarking Turbopack, webpack, and Vite
 
 We created a test generator that makes an application with a variable amount of modules to benchmark cold startup and file updating tasks. This generated app includes entries for these tools:
 
@@ -54,7 +54,7 @@ We created a test generator that makes an application with a variable amount of 
 - Next.js 13 with Turbopack
 - Vite
 
-As the current state of the art, we are including [Vite](https://vitejs.dev/) along with Webpack-based [Next.js](https://nextjs.org) solutions. All of these toolchains point to the same generated component tree, assembling a [Sierpiński triangle](https://en.wikipedia.org/wiki/Sierpi%C5%84ski_triangle) in the browser, where every triangle is a separate module.
+As the current state of the art, we are including [Vite](https://vitejs.dev/) along with webpack-based [Next.js](https://nextjs.org) solutions. All of these toolchains point to the same generated component tree, assembling a [Sierpiński triangle](https://en.wikipedia.org/wiki/Sierpi%C5%84ski_triangle) in the browser, where every triangle is a separate module.
 
 <ThemedImageFigure
   borderRadius={false}
@@ -150,7 +150,7 @@ We report the linear regression slope of the data points as the target metric. T
     width: 1960
   }}
   captionSpacing={24}
-  caption="Turbopack, Next.js (Webpack), and Vite HMR by module count. Benchmark data generated from 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400)."
+  caption="Turbopack, Next.js (webpack), and Vite HMR by module count. Benchmark data generated from 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400)."
 />
 
 <a id="bench"/>
@@ -173,7 +173,7 @@ We report the linear regression slope of the data points as the target metric. T
 
 The takeaway: Turbopack performance is a function of **the size of an update**, not the size of an application.
 
-For more info, visit the comparison docs for [Vite](/pack/docs/comparisons/vite) and [Webpack](/pack/docs/comparisons/webpack).
+For more info, visit the comparison docs for [Vite](/pack/docs/comparisons/vite) and [webpack](/pack/docs/comparisons/webpack).
 
 #### Data
 
@@ -210,7 +210,7 @@ Visit the [Turbopack benchmark documentation](/pack/docs/benchmarks) to run the 
 
 ## The future of the open-source Web
 
-Our team has taken the lessons from 10 years of Webpack, combined with the innovations in incremental computation from [Turborepo](/repo) and Google's Bazel, and created an architecture ready to support the coming decades of computing.
+Our team has taken the lessons from 10 years of webpack, combined with the innovations in incremental computation from [Turborepo](/repo) and Google's Bazel, and created an architecture ready to support the coming decades of computing.
 
 Our goal is to create a system of open source tooling that helps to build the future of the Web—powered by Turbopack. We are creating a reusable piece of architecture that will make both development and warm production builds faster for everyone.
 

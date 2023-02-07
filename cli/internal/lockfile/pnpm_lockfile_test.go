@@ -289,3 +289,22 @@ func Test_LockfileTopLevelOverride(t *testing.T) {
 	assert.DeepEqual(t, pkg.Key, "/ci-info/3.7.1")
 	assert.DeepEqual(t, pkg.Version, "3.7.1")
 }
+
+func Test_PnpmOverride(t *testing.T) {
+	contents, err := getFixture(t, "pnpm_override.yaml")
+	if err != nil {
+		t.Error(err)
+	}
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err, "decode lockfile")
+
+	pkg, err := lockfile.ResolvePackage(
+		turbopath.AnchoredUnixPath("config/hardhat"),
+		"@nomiclabs/hardhat-ethers",
+		"npm:hardhat-deploy-ethers@0.3.0-beta.13",
+	)
+	assert.NilError(t, err, "failure to find package")
+	assert.Assert(t, pkg.Found)
+	assert.DeepEqual(t, pkg.Key, "/hardhat-deploy-ethers/0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy")
+	assert.DeepEqual(t, pkg.Version, "/hardhat-deploy-ethers/0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy")
+}
