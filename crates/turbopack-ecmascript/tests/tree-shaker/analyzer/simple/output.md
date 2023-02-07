@@ -123,20 +123,20 @@ graph TD
 
 ```mermaid
 graph TD
-    Item1["const cat = \"cat\""];
-    Item2["const dog = \"dog\""];
-    Item3["export const CHIMERA = cat + dog"];
-    Item4["export CHIMERA"];
-    Item5["export const DOG = dog"];
-    Item6["export DOG"];
-    Item7["ModuleEvaluation"];
-    Item5 --> Item2;
-    Item3 --> Item1;
-    Item3 --> Item2;
-    Item7 -.-> Item2;
-    Item7 -.-> Item5;
-    Item7 -.-> Item3;
-    Item7 -.-> Item1;
-    Item6 --> Item5;
-    Item4 --> Item3;
+    N0["Statements: [1]"];
+    N1["Statements: [0]"];
+    N2["Statements: [3]"];
+    N3["Statements: [6]"];
+    N4["Statements: [2]"];
+    N5["Statements: [5]"];
+    N6["Statements: [4]"];
+    N4 --> N1;
+    N2 --> N0;
+    N2 --> N1;
+    N6 -.-> N1;
+    N6 -.-> N4;
+    N6 -.-> N2;
+    N6 -.-> N0;
+    N5 --> N4;
+    N3 --> N2;
 ```
