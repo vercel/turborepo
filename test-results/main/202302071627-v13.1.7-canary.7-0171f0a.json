@@ -1,0 +1,1055 @@
+{
+  "ref": "bf0980ed1d816568e8258c206ddf45d9a7e93c4f",
+  "nextjsVersion": "Next.js v13.1.7-canary.7",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675786624969,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675786691936,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675786625069,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/i18n-api-support/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675786750474,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n API support should respond to normal API request",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to normal API request"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n API support should respond to normal dynamic API request",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to normal dynamic API request"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/i18n-api-support/index.test.ts:69:28)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "i18n API support should fallback rewrite non-matching API request",
+                "location": null,
+                "status": "failed",
+                "title": "should fallback rewrite non-matching API request"
+              }
+            ],
+            "endTime": 1675786774978,
+            "message": "  ● i18n API support › should fallback rewrite non-matching API request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      67 |       for (const path of paths) {\n      68 |         const res = await fetchViaHTTP(next.url, path)\n    > 69 |         expect(res.status).toBe(200)\n         |                            ^\n      70 |         expect(await res.text()).toContain('Example Domain')\n      71 |       }\n      72 |     })\n\n      at Object.<anonymous> (e2e/i18n-api-support/index.test.ts:69:28)\n",
+            "name": "/work/test/e2e/i18n-api-support/index.test.ts",
+            "startTime": 1675786750571,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/build-indicator/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675786870878,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Build Activity Indicator"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Invalid \\\"devIndicator.buildActivityPosition\\\" provided, expected one of top-left, top-right, bottom-left, bottom-right, received ttop-leff\"\nReceived string:    \"Error: You are using configuration and/or tools that are not yet\nsupported by Next.js v13 with Turbopack:··\n- Unsupported Next.js configuration option(s) (next.config.js)\n  The only configurations options supported are:\n    - configFileName\n    - env\n    - experimental.appDir\n    - experimental.resolveAlias\n    - experimental.serverComponentsExternalPackages\n    - experimental.turbopackLoaders\n    - images\n    - pageExtensions\n    - onDemandEntries\n    - rewrites\n    - redirects\n    - headers\n    - reactStrictMode\n    - swcMinify\n    - transpilePackages\n  To use Turbopack, remove other configuration options.····\nIf you cannot make the changes above, but still want to try out\nNext.js v13 with Turbopack, create the Next.js v13 playground app\nby running the following commands:·\n  yarn create next-app --example with-turbopack with-turbopack-app\n  cd with-turbopack-app\n  yarn run dev·········\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback··\nWarning: Unsupported config found; but continuing with custom Turbopack binary.·\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/build-indicator --is-next-dev-command --port 44587 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/build-indicator/test/index.test.js:49:20)"
+                ],
+                "fullName": "Build Activity Indicator should validate buildActivityPosition config",
+                "location": null,
+                "status": "failed",
+                "title": "should validate buildActivityPosition config"
+              },
+              {
+                "ancestorTitles": [
+                  "Build Activity Indicator",
+                  "Enabled"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /__next-build-watcher/\nReceived string:  \"<div id=\\\"__next\\\"><a id=\\\"to-a\\\" href=\\\"/a\\\">Go to a</a><a id=\\\"to-b\\\" href=\\\"/b\\\">Go to b</a></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script><next-route-announcer><p aria-live=\\\"assertive\\\" id=\\\"__next-route-announcer__\\\" role=\\\"alert\\\" style=\\\"border: 0px; clip: rect(0px, 0px, 0px, 0px); height: 1px; margin: -1px; overflow: hidden; padding: 0px; position: absolute; width: 1px; white-space: nowrap; overflow-wrap: normal;\\\"></p></next-route-announcer>\"\n    at Object.<anonymous> (/work/test/integration/build-indicator/test/index.test.js:69:20)"
+                ],
+                "fullName": "Build Activity Indicator Enabled Adds the build indicator container",
+                "location": null,
+                "status": "failed",
+                "title": "Adds the build indicator container"
+              },
+              {
+                "ancestorTitles": [
+                  "Build Activity Indicator",
+                  "Enabled"
+                ],
+                "failureMessages": [
+                  "elementHandle.click: Timeout 30000ms exceeded.\n=========================== logs ===========================\nattempting click action\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #1\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #2\n  waiting 20ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #3\n  waiting 100ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #4\n  waiting 100ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #5\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #6\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #7\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #8\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #9\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #10\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #11\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #12\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #13\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #14\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #15\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #16\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #17\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #18\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #19\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #20\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #21\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #22\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #23\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #24\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #25\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #26\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #27\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #28\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #29\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #30\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #31\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #32\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #33\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #34\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #35\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #36\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #37\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #38\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #39\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #40\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #41\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #42\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #43\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #44\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #45\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #46\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #47\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #48\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #49\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #50\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #51\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #52\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #53\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #54\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #55\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #56\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #57\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #58\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #59\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #60\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #61\n  waiting 500ms\n============================================================\n    at /work/test/lib/browsers/playwright.ts:302:17\n    at Object.<anonymous> (/work/test/integration/build-indicator/test/index.test.js:76:7)"
+                ],
+                "fullName": "Build Activity Indicator Enabled Shows the build indicator when a page is built during navigation",
+                "location": null,
+                "status": "failed",
+                "title": "Shows the build indicator when a page is built during navigation"
+              },
+              {
+                "ancestorTitles": [
+                  "Build Activity Indicator",
+                  "Enabled"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: undefined\n    at Object.<anonymous> (/work/test/integration/build-indicator/test/index.test.js:94:26)"
+                ],
+                "fullName": "Build Activity Indicator Enabled Shows build indicator when page is built from modifying",
+                "location": null,
+                "status": "failed",
+                "title": "Shows build indicator when page is built from modifying"
+              },
+              {
+                "ancestorTitles": [
+                  "Build Activity Indicator",
+                  "Disabled with next.config.js"
+                ],
+                "failureMessages": [],
+                "fullName": "Build Activity Indicator Disabled with next.config.js Does not add the build indicator container",
+                "location": null,
+                "status": "passed",
+                "title": "Does not add the build indicator container"
+              }
+            ],
+            "endTime": 1675786956426,
+            "message": "  ● Build Activity Indicator › should validate buildActivityPosition config\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Invalid \\\"devIndicator.buildActivityPosition\\\" provided, expected one of top-left, top-right, bottom-left, bottom-right, received ttop-leff\"\n    Received string:    \"Error: You are using configuration and/or tools that are not yet\n    supported by Next.js v13 with Turbopack:··\n    - Unsupported Next.js configuration option(s) (next.config.js)\n      The only configurations options supported are:\n        - configFileName\n        - env\n        - experimental.appDir\n        - experimental.resolveAlias\n        - experimental.serverComponentsExternalPackages\n        - experimental.turbopackLoaders\n        - images\n        - pageExtensions\n        - onDemandEntries\n        - rewrites\n        - redirects\n        - headers\n        - reactStrictMode\n        - swcMinify\n        - transpilePackages\n      To use Turbopack, remove other configuration options.····\n    If you cannot make the changes above, but still want to try out\n    Next.js v13 with Turbopack, create the Next.js v13 playground app\n    by running the following commands:·\n      yarn create next-app --example with-turbopack with-turbopack-app\n      cd with-turbopack-app\n      yarn run dev·········\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback··\n    Warning: Unsupported config found; but continuing with custom Turbopack binary.·\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/build-indicator --is-next-dev-command --port 44587 --root /work --no-open]\n    \"\n\n      47 |     await fs.remove(configPath)\n      48 |\n    > 49 |     expect(stderr).toContain(\n         |                    ^\n      50 |       `Invalid \"devIndicator.buildActivityPosition\" provided, expected one of top-left, top-right, bottom-left, bottom-right, received ttop-leff`\n      51 |     )\n      52 |\n\n      at Object.<anonymous> (integration/build-indicator/test/index.test.js:49:20)\n\n  ● Build Activity Indicator › Enabled › Adds the build indicator container\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /__next-build-watcher/\n    Received string:  \"<div id=\\\"__next\\\"><a id=\\\"to-a\\\" href=\\\"/a\\\">Go to a</a><a id=\\\"to-b\\\" href=\\\"/b\\\">Go to b</a></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script><next-route-announcer><p aria-live=\\\"assertive\\\" id=\\\"__next-route-announcer__\\\" role=\\\"alert\\\" style=\\\"border: 0px; clip: rect(0px, 0px, 0px, 0px); height: 1px; margin: -1px; overflow: hidden; padding: 0px; position: absolute; width: 1px; white-space: nowrap; overflow-wrap: normal;\\\"></p></next-route-announcer>\"\n\n      67 |       const browser = await webdriver(appPort, '/')\n      68 |       const html = await browser.eval('document.body.innerHTML')\n    > 69 |       expect(html).toMatch(/__next-build-watcher/)\n         |                    ^\n      70 |       await browser.close()\n      71 |     })\n      72 |\n\n      at Object.<anonymous> (integration/build-indicator/test/index.test.js:69:20)\n\n  ● Build Activity Indicator › Enabled › Shows the build indicator when a page is built during navigation\n\n    elementHandle.click: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    attempting click action\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #1\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #2\n      waiting 20ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #3\n      waiting 100ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #4\n      waiting 100ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #5\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #6\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #7\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #8\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #9\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #10\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #11\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #12\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #13\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #14\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #15\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #16\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #17\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #18\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #19\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #20\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #21\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #22\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #23\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #24\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #25\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #26\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #27\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #28\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #29\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #30\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #31\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #32\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #33\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #34\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #35\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #36\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #37\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #38\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #39\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #40\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #41\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #42\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #43\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #44\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #45\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #46\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #47\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #48\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #49\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #50\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #51\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #52\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #53\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #54\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #55\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #56\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #57\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #58\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #59\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #60\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #61\n      waiting 500ms\n    ============================================================\n\n      300 |   click() {\n      301 |     return this.chain((el) => {\n    > 302 |       return el.click().then(() => el)\n          |                 ^\n      303 |     })\n      304 |   }\n      305 |\n\n      at lib/browsers/playwright.ts:302:17\n      at Object.<anonymous> (integration/build-indicator/test/index.test.js:76:7)\n\n  ● Build Activity Indicator › Enabled › Shows build indicator when page is built from modifying\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: undefined\n\n      92 |       const wasVisible = await browser.eval('window.showedBuilder')\n      93 |\n    > 94 |       expect(wasVisible).toBe(true)\n         |                          ^\n      95 |       await fs.writeFile(pagePath, origContent, 'utf8')\n      96 |       await browser.close()\n      97 |     })\n\n      at Object.<anonymous> (integration/build-indicator/test/index.test.js:94:26)\n",
+            "name": "/work/test/integration/build-indicator/test/index.test.js",
+            "startTime": 1675786870978,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/basic/misc.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675786533627,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675786693687,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675786533721,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675786875101,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675786925292,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675786875198,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675786616310,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675786680537,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675786616407,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/i18n-api-support/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675786731268,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n API support should respond to normal API request",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to normal API request"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n API support should respond to normal dynamic API request",
+                "location": null,
+                "status": "passed",
+                "title": "should respond to normal dynamic API request"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n API support"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/i18n-api-support/index.test.ts:69:28)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "i18n API support should fallback rewrite non-matching API request",
+                "location": null,
+                "status": "failed",
+                "title": "should fallback rewrite non-matching API request"
+              }
+            ],
+            "endTime": 1675786753579,
+            "message": "  ● i18n API support › should fallback rewrite non-matching API request\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      67 |       for (const path of paths) {\n      68 |         const res = await fetchViaHTTP(next.url, path)\n    > 69 |         expect(res.status).toBe(200)\n         |                            ^\n      70 |         expect(await res.text()).toContain('Example Domain')\n      71 |       }\n      72 |     })\n\n      at Object.<anonymous> (e2e/i18n-api-support/index.test.ts:69:28)\n",
+            "name": "/work/test/e2e/i18n-api-support/index.test.ts",
+            "startTime": 1675786731364,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/build-indicator/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675786848949,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Build Activity Indicator"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Invalid \\\"devIndicator.buildActivityPosition\\\" provided, expected one of top-left, top-right, bottom-left, bottom-right, received ttop-leff\"\nReceived string:    \"Error: You are using configuration and/or tools that are not yet\nsupported by Next.js v13 with Turbopack:··\n- Unsupported Next.js configuration option(s) (next.config.js)\n  The only configurations options supported are:\n    - configFileName\n    - env\n    - experimental.appDir\n    - experimental.resolveAlias\n    - experimental.serverComponentsExternalPackages\n    - experimental.turbopackLoaders\n    - images\n    - pageExtensions\n    - onDemandEntries\n    - rewrites\n    - redirects\n    - headers\n    - reactStrictMode\n    - swcMinify\n    - transpilePackages\n  To use Turbopack, remove other configuration options.····\nIf you cannot make the changes above, but still want to try out\nNext.js v13 with Turbopack, create the Next.js v13 playground app\nby running the following commands:·\n  yarn create next-app --example with-turbopack with-turbopack-app\n  cd with-turbopack-app\n  yarn run dev·········\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback··\nWarning: Unsupported config found; but continuing with custom Turbopack binary.·\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/build-indicator --is-next-dev-command --port 33567 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/build-indicator/test/index.test.js:49:20)"
+                ],
+                "fullName": "Build Activity Indicator should validate buildActivityPosition config",
+                "location": null,
+                "status": "failed",
+                "title": "should validate buildActivityPosition config"
+              },
+              {
+                "ancestorTitles": [
+                  "Build Activity Indicator",
+                  "Enabled"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /__next-build-watcher/\nReceived string:  \"<div id=\\\"__next\\\"><a id=\\\"to-a\\\" href=\\\"/a\\\">Go to a</a><a id=\\\"to-b\\\" href=\\\"/b\\\">Go to b</a></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script><next-route-announcer><p aria-live=\\\"assertive\\\" id=\\\"__next-route-announcer__\\\" role=\\\"alert\\\" style=\\\"border: 0px; clip: rect(0px, 0px, 0px, 0px); height: 1px; margin: -1px; overflow: hidden; padding: 0px; position: absolute; width: 1px; white-space: nowrap; overflow-wrap: normal;\\\"></p></next-route-announcer>\"\n    at Object.<anonymous> (/work/test/integration/build-indicator/test/index.test.js:69:20)"
+                ],
+                "fullName": "Build Activity Indicator Enabled Adds the build indicator container",
+                "location": null,
+                "status": "failed",
+                "title": "Adds the build indicator container"
+              },
+              {
+                "ancestorTitles": [
+                  "Build Activity Indicator",
+                  "Enabled"
+                ],
+                "failureMessages": [
+                  "elementHandle.click: Timeout 30000ms exceeded.\n=========================== logs ===========================\nattempting click action\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #1\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #2\n  waiting 20ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #3\n  waiting 100ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #4\n  waiting 100ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #5\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #6\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #7\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #8\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #9\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #10\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #11\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #12\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #13\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #14\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #15\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #16\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #17\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #18\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #19\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #20\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #21\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #22\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #23\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #24\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #25\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #26\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #27\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #28\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #29\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #30\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #31\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #32\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #33\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #34\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #35\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #36\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #37\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #38\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #39\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #40\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #41\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #42\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #43\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #44\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #45\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #46\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #47\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #48\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #49\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #50\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #51\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #52\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #53\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #54\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #55\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #56\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #57\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #58\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #59\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #60\n  waiting 500ms\n  waiting for element to be visible, enabled and stable\n  element is visible, enabled and stable\n  scrolling into view if needed\n  done scrolling\n  <nextjs-portal></nextjs-portal> intercepts pointer events\nretrying click action, attempt #61\n  waiting 500ms\n============================================================\n    at /work/test/lib/browsers/playwright.ts:302:17\n    at Object.<anonymous> (/work/test/integration/build-indicator/test/index.test.js:76:7)"
+                ],
+                "fullName": "Build Activity Indicator Enabled Shows the build indicator when a page is built during navigation",
+                "location": null,
+                "status": "failed",
+                "title": "Shows the build indicator when a page is built during navigation"
+              },
+              {
+                "ancestorTitles": [
+                  "Build Activity Indicator",
+                  "Enabled"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: undefined\n    at Object.<anonymous> (/work/test/integration/build-indicator/test/index.test.js:94:26)"
+                ],
+                "fullName": "Build Activity Indicator Enabled Shows build indicator when page is built from modifying",
+                "location": null,
+                "status": "failed",
+                "title": "Shows build indicator when page is built from modifying"
+              },
+              {
+                "ancestorTitles": [
+                  "Build Activity Indicator",
+                  "Disabled with next.config.js"
+                ],
+                "failureMessages": [],
+                "fullName": "Build Activity Indicator Disabled with next.config.js Does not add the build indicator container",
+                "location": null,
+                "status": "passed",
+                "title": "Does not add the build indicator container"
+              }
+            ],
+            "endTime": 1675786934003,
+            "message": "  ● Build Activity Indicator › should validate buildActivityPosition config\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Invalid \\\"devIndicator.buildActivityPosition\\\" provided, expected one of top-left, top-right, bottom-left, bottom-right, received ttop-leff\"\n    Received string:    \"Error: You are using configuration and/or tools that are not yet\n    supported by Next.js v13 with Turbopack:··\n    - Unsupported Next.js configuration option(s) (next.config.js)\n      The only configurations options supported are:\n        - configFileName\n        - env\n        - experimental.appDir\n        - experimental.resolveAlias\n        - experimental.serverComponentsExternalPackages\n        - experimental.turbopackLoaders\n        - images\n        - pageExtensions\n        - onDemandEntries\n        - rewrites\n        - redirects\n        - headers\n        - reactStrictMode\n        - swcMinify\n        - transpilePackages\n      To use Turbopack, remove other configuration options.····\n    If you cannot make the changes above, but still want to try out\n    Next.js v13 with Turbopack, create the Next.js v13 playground app\n    by running the following commands:·\n      yarn create next-app --example with-turbopack with-turbopack-app\n      cd with-turbopack-app\n      yarn run dev·········\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback··\n    Warning: Unsupported config found; but continuing with custom Turbopack binary.·\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/build-indicator --is-next-dev-command --port 33567 --root /work --no-open]\n    \"\n\n      47 |     await fs.remove(configPath)\n      48 |\n    > 49 |     expect(stderr).toContain(\n         |                    ^\n      50 |       `Invalid \"devIndicator.buildActivityPosition\" provided, expected one of top-left, top-right, bottom-left, bottom-right, received ttop-leff`\n      51 |     )\n      52 |\n\n      at Object.<anonymous> (integration/build-indicator/test/index.test.js:49:20)\n\n  ● Build Activity Indicator › Enabled › Adds the build indicator container\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /__next-build-watcher/\n    Received string:  \"<div id=\\\"__next\\\"><a id=\\\"to-a\\\" href=\\\"/a\\\">Go to a</a><a id=\\\"to-b\\\" href=\\\"/b\\\">Go to b</a></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script><next-route-announcer><p aria-live=\\\"assertive\\\" id=\\\"__next-route-announcer__\\\" role=\\\"alert\\\" style=\\\"border: 0px; clip: rect(0px, 0px, 0px, 0px); height: 1px; margin: -1px; overflow: hidden; padding: 0px; position: absolute; width: 1px; white-space: nowrap; overflow-wrap: normal;\\\"></p></next-route-announcer>\"\n\n      67 |       const browser = await webdriver(appPort, '/')\n      68 |       const html = await browser.eval('document.body.innerHTML')\n    > 69 |       expect(html).toMatch(/__next-build-watcher/)\n         |                    ^\n      70 |       await browser.close()\n      71 |     })\n      72 |\n\n      at Object.<anonymous> (integration/build-indicator/test/index.test.js:69:20)\n\n  ● Build Activity Indicator › Enabled › Shows the build indicator when a page is built during navigation\n\n    elementHandle.click: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    attempting click action\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #1\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #2\n      waiting 20ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #3\n      waiting 100ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #4\n      waiting 100ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #5\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #6\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #7\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #8\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #9\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #10\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #11\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #12\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #13\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #14\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #15\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #16\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #17\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #18\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #19\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #20\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #21\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #22\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #23\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #24\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #25\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #26\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #27\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #28\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #29\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #30\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #31\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #32\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #33\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #34\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #35\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #36\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #37\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #38\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #39\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #40\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #41\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #42\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #43\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #44\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #45\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #46\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #47\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #48\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #49\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #50\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #51\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #52\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #53\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #54\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #55\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #56\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #57\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #58\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #59\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #60\n      waiting 500ms\n      waiting for element to be visible, enabled and stable\n      element is visible, enabled and stable\n      scrolling into view if needed\n      done scrolling\n      <nextjs-portal></nextjs-portal> intercepts pointer events\n    retrying click action, attempt #61\n      waiting 500ms\n    ============================================================\n\n      300 |   click() {\n      301 |     return this.chain((el) => {\n    > 302 |       return el.click().then(() => el)\n          |                 ^\n      303 |     })\n      304 |   }\n      305 |\n\n      at lib/browsers/playwright.ts:302:17\n      at Object.<anonymous> (integration/build-indicator/test/index.test.js:76:7)\n\n  ● Build Activity Indicator › Enabled › Shows build indicator when page is built from modifying\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: undefined\n\n      92 |       const wasVisible = await browser.eval('window.showedBuilder')\n      93 |\n    > 94 |       expect(wasVisible).toBe(true)\n         |                          ^\n      95 |       await fs.writeFile(pagePath, origContent, 'utf8')\n      96 |       await browser.close()\n      97 |     })\n\n      at Object.<anonymous> (integration/build-indicator/test/index.test.js:94:26)\n",
+            "name": "/work/test/integration/build-indicator/test/index.test.js",
+            "startTime": 1675786849049,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/basic/misc.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675786387663,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675786546531,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675786387754,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 14,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 5,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 24,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675786673699,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should bypass fetch cache with cache-control: no-cache",
+                "location": null,
+                "status": "passed",
+                "title": "should bypass fetch cache with cache-control: no-cache"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor fetch cache correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should honor fetch cache correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling Should not throw Dynamic Server Usage error when using generateStaticParams with previewData",
+                "location": null,
+                "status": "passed",
+                "title": "Should not throw Dynamic Server Usage error when using generateStaticParams with previewData"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should force SSR correctly for headers usage",
+                "location": null,
+                "status": "passed",
+                "title": "should force SSR correctly for headers usage"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor dynamic = \"force-static\" correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should honor dynamic = \"force-static\" correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor dynamic = \"force-static\" correctly (lazy)",
+                "location": null,
+                "status": "passed",
+                "title": "should honor dynamic = \"force-static\" correctly (lazy)"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 200\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:510:35)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should handle dynamicParams: false correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle dynamicParams: false correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should work with forced dynamic path",
+                "location": null,
+                "status": "passed",
+                "title": "should work with forced dynamic path"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should work with dynamic path no generateStaticParams",
+                "location": null,
+                "status": "passed",
+                "title": "should work with dynamic path no generateStaticParams"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should handle dynamicParams: true correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle dynamicParams: true correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should navigate to static path correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should navigate to static path correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).not.toBe(expected) // Object.is equality\n\nExpected: not \"1675786728912\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:630:30)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when detected automatically with fetch cache option",
+                "location": null,
+                "status": "failed",
+                "title": "should ssr dynamically when detected automatically with fetch cache option"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 200\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:637:26)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should render not found pages correctly and fallback to the default one",
+                "location": null,
+                "status": "failed",
+                "title": "should render not found pages correctly and fallback to the default one"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when detected automatically with fetch revalidate option",
+                "location": null,
+                "status": "pending",
+                "title": "should ssr dynamically when detected automatically with fetch revalidate option"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).not.toBe(expected) // Object.is equality\n\nExpected: not \"1675786729563\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:697:30)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when forced via config",
+                "location": null,
+                "status": "failed",
+                "title": "should ssr dynamically when forced via config"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should bailout to client rendering - without suspense boundary",
+                "location": null,
+                "status": "passed",
+                "title": "should bailout to client rendering - without suspense boundary"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should bailout to client rendering - with suspense boundary",
+                "location": null,
+                "status": "passed",
+                "title": "should bailout to client rendering - with suspense boundary"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should have empty search params on force-static",
+                "location": null,
+                "status": "pending",
+                "title": "should have empty search params on force-static"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should have values from canonical url on rewrite",
+                "location": null,
+                "status": "passed",
+                "title": "should have values from canonical url on rewrite"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should bail out to client rendering during SSG",
+                "location": null,
+                "status": "pending",
+                "title": "should bail out to client rendering during SSG"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should have the correct values",
+                "location": null,
+                "status": "pending",
+                "title": "should have the correct values"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should have values from canonical url on rewrite",
+                "location": null,
+                "status": "pending",
+                "title": "should have values from canonical url on rewrite"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Thank you for testing `appDir` please leave your feedback at https://nextjs.link/app-feedback\"\nReceived string:    \"yarn run v1.22.19\n$ /tmp/next-install-865f4a2828e1450c56364028195388ec6ecab4781e3d3ad9ecffd96e5f5a048d/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nError: You are using configuration and/or tools that are not yet\nsupported by Next.js v13 with Turbopack:··\n- Unsupported Next.js configuration option(s) (next.config.js)\n  The only configurations options supported are:\n    - configFileName\n    - env\n    - experimental.appDir\n    - experimental.resolveAlias\n    - experimental.serverComponentsExternalPackages\n    - experimental.turbopackLoaders\n    - images\n    - pageExtensions\n    - onDemandEntries\n    - rewrites\n    - redirects\n    - headers\n    - reactStrictMode\n    - swcMinify\n    - transpilePackages\n  To use Turbopack, remove other configuration options.····\nIf you cannot make the changes above, but still want to try out\nNext.js v13 with Turbopack, create the Next.js v13 playground app\nby running the following commands:·\n  pnpm create next-app --example with-turbopack with-turbopack-app\n  cd with-turbopack-app\n  pnpm run dev·········\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback··\nWarning: Unsupported config found; but continuing with custom Turbopack binary.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-865f4a2828e1450c56364028195388ec6ecab4781e3d3ad9ecffd96e5f5a048d --is-next-dev-command --root /tmp/next-install-865f4a2828e1450c56364028195388ec6ecab4781e3d3ad9ecffd96e5f5a048d --no-open]\n\u001b[32mready\u001b[39m - started server on 0.0.0.0:36851, url: http://localhost:36851\n\u001b[35mevent\u001b[39m - initial compilation 5.487ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 2353ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 191ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 869ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 993ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 2004ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 974ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 470ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 529ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 686ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 150ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 108ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 581ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 632ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 630ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 149ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 106ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 104ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1719ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 492ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 52ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 277ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 508ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 94ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 0.84ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1611ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 116ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 536ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 694ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 483ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 240ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 441ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 0.945ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 532ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 414ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 54ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 426ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 73ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 407ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 58ms\n\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:846:32)\n    at Promise.then.completed (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/utils.js:391:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/utils.js:316:10)\n    at _callCircusTest (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:218:40)\n    at _runTest (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:155:3)\n    at _runTestsForDescribeBlock (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:66:9)\n    at _runTestsForDescribeBlock (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:60:9)\n    at run (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:25:3)\n    at runAndTransformResultsToJestFormat (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:170:21)"
+                ],
+                "fullName": "app-dir static/dynamic handling should show a message to leave feedback for `appDir`",
+                "location": null,
+                "status": "failed",
+                "title": "should show a message to leave feedback for `appDir`"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should keep querystring on static page",
+                "location": null,
+                "status": "passed",
+                "title": "should keep querystring on static page"
+              }
+            ],
+            "endTime": 1675786775555,
+            "message": "  ● app-dir static/dynamic handling › should handle dynamicParams: false correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 200\n\n      508 |           redirect: 'manual',\n      509 |         })\n    > 510 |         expect(invalidRes.status).toBe(404)\n          |                                   ^\n      511 |         expect(await invalidRes.text()).toContain('page could not be found')\n      512 |       }\n      513 |     })\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:510:35)\n\n  ● app-dir static/dynamic handling › should ssr dynamically when detected automatically with fetch cache option\n\n    expect(received).not.toBe(expected) // Object.is equality\n\n    Expected: not \"1675786728912\"\n\n      628 |\n      629 |       expect(secondHtml).toContain('Example Domain')\n    > 630 |       expect(secondDate).not.toBe(initialDate)\n          |                              ^\n      631 |     })\n      632 |\n      633 |     it('should render not found pages correctly and fallback to the default one', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:630:30)\n\n  ● app-dir static/dynamic handling › should render not found pages correctly and fallback to the default one\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 200\n\n      635 |         redirect: 'manual',\n      636 |       })\n    > 637 |       expect(res.status).toBe(404)\n          |                          ^\n      638 |       const html = await res.text()\n      639 |       expect(html).toInclude('\"noindex\"')\n      640 |       expect(html).toInclude('This page could not be found.')\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:637:26)\n\n  ● app-dir static/dynamic handling › should ssr dynamically when forced via config\n\n    expect(received).not.toBe(expected) // Object.is equality\n\n    Expected: not \"1675786729563\"\n\n      695 |       const secondDate = second$('#date').text()\n      696 |\n    > 697 |       expect(secondDate).not.toBe(initialDate)\n          |                              ^\n      698 |     })\n      699 |\n      700 |     describe('useSearchParams', () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:697:30)\n\n  ● app-dir static/dynamic handling › should show a message to leave feedback for `appDir`\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Thank you for testing `appDir` please leave your feedback at https://nextjs.link/app-feedback\"\n    Received string:    \"yarn run v1.22.19\n    $ /tmp/next-install-865f4a2828e1450c56364028195388ec6ecab4781e3d3ad9ecffd96e5f5a048d/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Error: You are using configuration and/or tools that are not yet\n    supported by Next.js v13 with Turbopack:··\n    - Unsupported Next.js configuration option(s) (next.config.js)\n      The only configurations options supported are:\n        - configFileName\n        - env\n        - experimental.appDir\n        - experimental.resolveAlias\n        - experimental.serverComponentsExternalPackages\n        - experimental.turbopackLoaders\n        - images\n        - pageExtensions\n        - onDemandEntries\n        - rewrites\n        - redirects\n        - headers\n        - reactStrictMode\n        - swcMinify\n        - transpilePackages\n      To use Turbopack, remove other configuration options.····\n    If you cannot make the changes above, but still want to try out\n    Next.js v13 with Turbopack, create the Next.js v13 playground app\n    by running the following commands:·\n      pnpm create next-app --example with-turbopack with-turbopack-app\n      cd with-turbopack-app\n      pnpm run dev·········\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback··\n    Warning: Unsupported config found; but continuing with custom Turbopack binary.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-865f4a2828e1450c56364028195388ec6ecab4781e3d3ad9ecffd96e5f5a048d --is-next-dev-command --root /tmp/next-install-865f4a2828e1450c56364028195388ec6ecab4781e3d3ad9ecffd96e5f5a048d --no-open]\n    \u001b[32mready\u001b[39m - started server on 0.0.0.0:36851, url: http://localhost:36851\n    \u001b[35mevent\u001b[39m - initial compilation 5.487ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 2353ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 191ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 869ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 993ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 2004ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 974ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 470ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 529ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 686ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 150ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 108ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 581ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 632ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 630ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 149ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 106ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 104ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1719ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 492ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 52ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 277ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 508ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 94ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 0.84ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1611ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 116ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 536ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 694ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 483ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 240ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 441ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 0.945ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 532ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 414ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 54ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 426ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 73ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 407ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 58ms\n    \"\n\n      844 |     if (!(global as any).isNextDeploy) {\n      845 |       it('should show a message to leave feedback for `appDir`', async () => {\n    > 846 |         expect(next.cliOutput).toContain(\n          |                                ^\n      847 |           `Thank you for testing \\`appDir\\` please leave your feedback at https://nextjs.link/app-feedback`\n      848 |         )\n      849 |       })\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:846:32)\n",
+            "name": "/work/test/e2e/app-dir/app-static/app-static.test.ts",
+            "startTime": 1675786673789,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
