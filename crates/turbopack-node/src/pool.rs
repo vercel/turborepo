@@ -307,6 +307,10 @@ impl NodeJsOperation {
             .as_mut()
             .context("Node.js operation already finished")?;
 
+        if !self.allow_process_reuse {
+            bail!("Node.js process is no longer usable");
+        }
+
         let result = f(process).await;
         if result.is_err() {
             self.allow_process_reuse = false;
