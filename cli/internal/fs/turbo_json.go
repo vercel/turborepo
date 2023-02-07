@@ -445,7 +445,7 @@ func (c TaskDefinition) MarshalJSON() ([]byte, error) {
 }
 
 // MarshalJSON serializes ResolvedTaskDefinition struct into json
-// It sets defaults for empty fields.
+// It sets defaults for empty fields. This is used to print out a Run Summary
 func (c *ResolvedTaskDefinition) MarshalJSON() ([]byte, error) {
 	// Initialize with empty arrays, so we get empty arrays serialized into JSON
 	task := rawTaskWithDefaults{
