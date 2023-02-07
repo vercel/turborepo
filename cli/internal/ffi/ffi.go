@@ -2,7 +2,7 @@ package ffi
 
 // #include "bindings.h"
 //
-// #cgo LDFLAGS: -L${SRCDIR} -lturborepo_ffi -lgit2 -lssh2
+// #cgo LDFLAGS: -L${SRCDIR} -lturborepo_ffi -lz -liconv
 // #cgo windows LDFLAGS: -lole32 -lbcrypt -lws2_32 -luserenv
 import "C"
 
@@ -74,13 +74,14 @@ func GetTurboDataDir() string {
 	return resp.Dir
 }
 
-func ChangedFiles(repo_root string, from_commit string, to_commit string, include_untracked bool) []string {
+func ChangedFiles(repoRoot string, fromCommit string, toCommit string, includeUntracked bool) []string {
 	req := ffi_proto.ChangedFilesReq{
-		RepoRoot:         repo_root,
-		FromCommit:       from_commit,
-		ToCommit:         to_commit,
-		IncludeUntracked: include_untracked,
+		RepoRoot:         repoRoot,
+		FromCommit:       fromCommit,
+		ToCommit:         toCommit,
+		IncludeUntracked: includeUntracked,
 	}
+
 	buffer := C.changed_files(Marshal(&req))
 	resp := ffi_proto.ChangedFilesResp{}
 	if err := Unmarshal(buffer, resp.ProtoReflect().Interface()); err != nil {

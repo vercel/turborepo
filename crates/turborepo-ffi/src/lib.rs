@@ -55,7 +55,7 @@ pub extern "C" fn changed_files(buffer: Buffer) -> Buffer {
         req.from_commit,
         req.to_commit,
         req.include_untracked,
-        req.relative_to.map(PathBuf::from),
+        req.relative_to,
     ) {
         Ok(files) => proto::changed_files_resp::Response::Files(proto::ChangedFilesList { files }),
         Err(err) => proto::changed_files_resp::Response::Error(err.to_string()),
