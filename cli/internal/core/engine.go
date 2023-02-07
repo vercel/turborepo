@@ -526,17 +526,17 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 	}
 
 	// Start a list of TaskDefinitions we've found for this TaskID
-	taskDefinitionsOriginal := []fs.BookkeepingTaskDefinition{}
+	taskDefinitions := []fs.BookkeepingTaskDefinition{}
 
 	if rootTaskDefinition != nil {
-		taskDefinitionsOriginal = append(taskDefinitionsOriginal, *rootTaskDefinition)
+		taskDefinitions = append(taskDefinitions, *rootTaskDefinition)
 	}
 
 	if workspaceDefinition != nil {
-		taskDefinitionsOriginal = append(taskDefinitionsOriginal, *workspaceDefinition)
+		taskDefinitions = append(taskDefinitions, *workspaceDefinition)
 	}
 
-	return taskDefinitionsOriginal, nil
+	return taskDefinitions, nil
 }
 
 // GetTaskGraphAncestors gets all the ancestors for a given task in the graph.

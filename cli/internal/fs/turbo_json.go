@@ -22,15 +22,39 @@ const (
 )
 
 type rawTurboJSON struct {
-	GlobalDependencies []string           `json:"globalDependencies,omitempty"` // files that affect every task
-	GlobalEnv          []string           `json:"globalEnv,omitempty"`          // env vars that affect every task
-	Pipeline           Pipeline           `json:"pipeline"`                     // map of tasks that define the task graph and cache behavior on a per task or per package-task basis.
-	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`        // options to interface with the remote cache
-	Extends            []string           `json:"extends,omitempty"`            // to inherit config from another workspace
+	// Global root filesystem dependencies
+	GlobalDependencies []string `json:"globalDependencies,omitempty"`
+	// Global env
+	GlobalEnv []string `json:"globalEnv,omitempty"`
+	// Pipeline is a map of Turbo pipeline entries which define the task graph
+	// and cache behavior on a per task or per package-task basis.
+	Pipeline Pipeline `json:"pipeline"`
+	// Configuration options when interfacing with the remote cache
+	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
+
+	// Extends can be the name of another workspace
+	Extends []string `json:"extends,omitempty"`
+}
+
+// TurboJSON represents a turbo.json configuration file
+type TurboJSON struct {
+	GlobalDeps         []string
+	GlobalEnv          []string
+	Pipeline           Pipeline
+	RemoteCacheOptions RemoteCacheOptions
+
+	// A list of Workspace names
+	Extends []string
+}
+
+// RemoteCacheOptions is a struct for deserializing .remoteCache of configFile
+type RemoteCacheOptions struct {
+	TeamID    string `json:"teamId,omitempty"`
+	Signature bool   `json:"signature,omitempty"`
 }
 
 // rawTaskWithDefaults exists to Marshal (i.e. turn a TaskDefinition into json).
-// We use this to print the ResolvedTaskConfiguration, because we want to show
+// We use this for printing ResolvedTaskConfiguration, because we _want_ to show
 // the user the default values for key they have not configured.
 type rawTaskWithDefaults struct {
 	Outputs    []string            `json:"outputs"`
@@ -52,21 +76,6 @@ type rawTask struct {
 	OutputMode *util.TaskOutputMode `json:"outputMode,omitempty"`
 	Env        []string             `json:"env,omitempty"`
 	Persistent bool                 `json:"persistent,omitempty"`
-}
-
-// TurboJSON represents a turbo.json configuration file
-type TurboJSON struct {
-	GlobalDeps         []string
-	GlobalEnv          []string
-	Pipeline           Pipeline
-	RemoteCacheOptions RemoteCacheOptions
-	Extends            []string // A list of Workspace names
-}
-
-// RemoteCacheOptions is a struct for deserializing .remoteCache of configFile
-type RemoteCacheOptions struct {
-	TeamID    string `json:"teamId,omitempty"`
-	Signature bool   `json:"signature,omitempty"`
 }
 
 // Pipeline is a struct for deserializing .pipeline in configFile
@@ -110,7 +119,7 @@ type TaskDefinition struct {
 }
 
 // ResolvedTaskDefinition is a modified version the TaskDefinition struct.
-// It is used for merged task definitions, and for printing out in Run Summaries.
+// It is meant for merged task definitions and for printing out in Run Summaries.
 type ResolvedTaskDefinition struct {
 	Outputs                 *TaskOutputs
 	ShouldCache             bool
@@ -291,51 +300,6 @@ func (btd BookkeepingTaskDefinition) HasField(fieldName string) bool {
 	return false
 }
 
-// ----------- Unmarshaling from JSON ----------------- //
-
-// UnmarshalJSON deserializes the contents of turbo.json into a TurboJSON struct
-func (c *TurboJSON) UnmarshalJSON(data []byte) error {
-	raw := &rawTurboJSON{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-
-	envVarDependencies := make(util.Set)
-	globalFileDependencies := make(util.Set)
-
-	for _, value := range raw.GlobalEnv {
-		if strings.HasPrefix(value, envPipelineDelimiter) {
-			// Hard error to help people specify this correctly during migration.
-			// TODO: Remove this error after we have run summary.
-			return fmt.Errorf("You specified \"%s\" in the \"env\" key. You should not prefix your environment variables with \"%s\"", value, envPipelineDelimiter)
-		}
-
-		envVarDependencies.Add(value)
-	}
-
-	for _, value := range raw.GlobalDependencies {
-		if strings.HasPrefix(value, envPipelineDelimiter) {
-			log.Printf("[DEPRECATED] Declaring an environment variable in \"globalDependencies\" is deprecated, found %s. Use the \"globalEnv\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", value)
-			envVarDependencies.Add(strings.TrimPrefix(value, envPipelineDelimiter))
-		} else {
-			globalFileDependencies.Add(value)
-		}
-	}
-
-	// turn the set into an array and assign to the TurboJSON struct fields.
-	c.GlobalEnv = envVarDependencies.UnsafeListOfStrings()
-	sort.Strings(c.GlobalEnv)
-	c.GlobalDeps = globalFileDependencies.UnsafeListOfStrings()
-	sort.Strings(c.GlobalDeps)
-
-	// copy these over, we don't need any changes here.
-	c.Pipeline = raw.Pipeline
-	c.RemoteCacheOptions = raw.RemoteCacheOptions
-	c.Extends = raw.Extends
-
-	return nil
-}
-
 // UnmarshalJSON deserializes a single task definition from
 // turbo.json into a TaskDefinition struct
 func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
@@ -439,21 +403,7 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// -------------- Marshalling into JSON -------------- //
-
-// MarshalJSON converts a TurboJSON into the equivalent json object in bytes
-// note: we go via rawTurboJSON so that the output format is correct
-func (c *TurboJSON) MarshalJSON() ([]byte, error) {
-	raw := rawTurboJSON{}
-	raw.GlobalDependencies = c.GlobalDeps
-	raw.GlobalEnv = c.GlobalEnv
-	raw.Pipeline = c.Pipeline
-	raw.RemoteCacheOptions = c.RemoteCacheOptions
-
-	return json.Marshal(&raw)
-}
-
-// MarshalJSON serializes TaskDefinition struct into JSON.
+// MarshalJSON serializes TaskDefinition struct into json
 func (c TaskDefinition) MarshalJSON() ([]byte, error) {
 	// Initialize with empty arrays, so we get empty arrays serialized into JSON
 	task := rawTaskWithDefaults{
@@ -550,4 +500,59 @@ func (c *ResolvedTaskDefinition) MarshalJSON() ([]byte, error) {
 	sort.Strings(task.Inputs)
 
 	return json.Marshal(task)
+}
+
+// UnmarshalJSON deserializes the contents of turbo.json into a TurboJSON struct
+func (c *TurboJSON) UnmarshalJSON(data []byte) error {
+	raw := &rawTurboJSON{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	envVarDependencies := make(util.Set)
+	globalFileDependencies := make(util.Set)
+
+	for _, value := range raw.GlobalEnv {
+		if strings.HasPrefix(value, envPipelineDelimiter) {
+			// Hard error to help people specify this correctly during migration.
+			// TODO: Remove this error after we have run summary.
+			return fmt.Errorf("You specified \"%s\" in the \"env\" key. You should not prefix your environment variables with \"%s\"", value, envPipelineDelimiter)
+		}
+
+		envVarDependencies.Add(value)
+	}
+
+	for _, value := range raw.GlobalDependencies {
+		if strings.HasPrefix(value, envPipelineDelimiter) {
+			log.Printf("[DEPRECATED] Declaring an environment variable in \"globalDependencies\" is deprecated, found %s. Use the \"globalEnv\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", value)
+			envVarDependencies.Add(strings.TrimPrefix(value, envPipelineDelimiter))
+		} else {
+			globalFileDependencies.Add(value)
+		}
+	}
+
+	// turn the set into an array and assign to the TurboJSON struct fields.
+	c.GlobalEnv = envVarDependencies.UnsafeListOfStrings()
+	sort.Strings(c.GlobalEnv)
+	c.GlobalDeps = globalFileDependencies.UnsafeListOfStrings()
+	sort.Strings(c.GlobalDeps)
+
+	// copy these over, we don't need any changes here.
+	c.Pipeline = raw.Pipeline
+	c.RemoteCacheOptions = raw.RemoteCacheOptions
+	c.Extends = raw.Extends
+
+	return nil
+}
+
+// MarshalJSON converts a TurboJSON into the equivalent json object in bytes
+// note: we go via rawTurboJSON so that the output format is correct
+func (c *TurboJSON) MarshalJSON() ([]byte, error) {
+	raw := rawTurboJSON{}
+	raw.GlobalDependencies = c.GlobalDeps
+	raw.GlobalEnv = c.GlobalEnv
+	raw.Pipeline = c.Pipeline
+	raw.RemoteCacheOptions = c.RemoteCacheOptions
+
+	return json.Marshal(&raw)
 }
