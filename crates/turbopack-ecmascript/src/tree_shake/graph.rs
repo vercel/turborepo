@@ -1,6 +1,8 @@
+use std::hash::Hash;
+
 use fxhash::{FxBuildHasher, FxHashMap};
 use indexmap::IndexSet;
-use petgraph::{prelude::DiGraphMap, Directed};
+use petgraph::prelude::DiGraphMap;
 use swc_core::ecma::{
     ast::{
         op, ClassDecl, Decl, ExportDecl, ExportSpecifier, Expr, ExprStmt, FnDecl, Id,
@@ -81,52 +83,71 @@ pub(super) struct ItemData {
 #[derive(Debug)]
 pub(super) struct VarInfo {}
 
-#[derive(Debug, Default)]
-pub struct DepGraph {
+#[derive(Debug)]
+pub struct InternedGraph<T>
+where
+    T: Eq + Hash + Clone,
+{
     /// `bool`: Strong
     pub(super) inner: DiGraphMap<u32, bool>,
-    pub(super) graph_ix: IndexSet<ItemId, FxBuildHasher>,
+    pub(super) graph_ix: IndexSet<T, FxBuildHasher>,
 }
 
-impl DepGraph {
-    pub(super) fn finalize(&self) -> (IndexSet<Vec<u32>, FxBuildHasher>, DiGraphMap<u32, bool>) {
-        let graph = self.inner.clone().into_graph();
-
-        let mut condensed: petgraph::Graph<_, _, _, u32> =
-            super::condensation::condensation(graph, |strong1, strong2| strong1 || strong2);
-
-        let mut graph_ix = IndexSet::<Vec<u32>, FxBuildHasher>::default();
-
-        let mut digraph = DiGraphMap::default();
-
-        for node in condensed.node_weights() {
-            let node = graph_ix.get_index_of(node).unwrap_or_else(|| {
-                let ix = graph_ix.len();
-                graph_ix.insert_full(node.clone());
-                ix
-            }) as u32;
-
-            digraph.add_node(node);
+impl<T> Default for InternedGraph<T>
+where
+    T: Eq + Hash + Clone,
+{
+    fn default() -> Self {
+        Self {
+            inner: Default::default(),
+            graph_ix: Default::default(),
         }
-
-        for edge in condensed.edge_indices() {
-            let (from, to) = condensed.edge_endpoints(edge).unwrap();
-
-            let from = graph_ix.get_index_of(&condensed[from]).unwrap() as u32;
-            let to = graph_ix.get_index_of(&condensed[to]).unwrap() as u32;
-
-            digraph.add_edge(from, to, condensed[edge]);
-        }
-
-        (graph_ix, digraph)
     }
+}
 
-    pub(super) fn node(&mut self, id: &ItemId) -> u32 {
+impl<T> InternedGraph<T>
+where
+    T: Eq + Hash + Clone,
+{
+    pub(super) fn node(&mut self, id: &T) -> u32 {
         self.graph_ix.get_index_of(id).unwrap_or_else(|| {
             let ix = self.graph_ix.len();
             self.graph_ix.insert_full(id.clone());
             ix
         }) as _
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct DepGraph {
+    pub(super) g: InternedGraph<ItemId>,
+}
+
+impl DepGraph {
+    pub(super) fn finalize(&self) -> InternedGraph<Vec<u32>> {
+        let graph = self.g.inner.clone().into_graph();
+
+        let mut condensed: petgraph::Graph<_, _, _, u32> =
+            super::condensation::condensation(graph, |strong1, strong2| strong1 || strong2);
+
+        let mut g = InternedGraph::default();
+
+        for node in condensed.node_weights() {
+            let node = g.node(node);
+
+            g.inner.add_node(node);
+        }
+
+        for edge in condensed.edge_indices() {
+            let (from, to) = condensed.edge_endpoints(edge).unwrap();
+
+            let from = g.node(&condensed[from]);
+            let to = g.node(&condensed[to]);
+
+            g.inner.add_edge(from, to, condensed[edge]);
+        }
+
+        g
     }
 
     /// Fills information per module items
@@ -375,19 +396,19 @@ impl DepGraph {
     }
 
     pub(super) fn add_strong_dep(&mut self, item: &ItemId, dep: &ItemId) {
-        let from = self.node(item);
-        let to = self.node(dep);
+        let from = self.g.node(item);
+        let to = self.g.node(dep);
 
-        self.inner.add_edge(from, to, true);
+        self.g.inner.add_edge(from, to, true);
     }
 
     pub(super) fn add_weak_dep(&mut self, item: &ItemId, dep: &ItemId) {
-        let from = self.node(item);
-        let to = self.node(dep);
+        let from = self.g.node(item);
+        let to = self.g.node(dep);
 
-        if let Some(true) = self.inner.edge_weight(from, to) {
+        if let Some(true) = self.g.inner.edge_weight(from, to) {
             return;
         }
-        self.inner.add_edge(from, to, false);
+        self.g.inner.add_edge(from, to, false);
     }
 }

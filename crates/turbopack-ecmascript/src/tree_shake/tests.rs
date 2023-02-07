@@ -153,7 +153,7 @@ fn run(input: PathBuf) {
             |ix, indexes| {
                 let mut buf = vec![];
                 for index in indexes {
-                    let item_id = analyzer.g.graph_ix.get_index(*index as _).unwrap();
+                    let item_id = analyzer.g.g.graph_ix.get_index(*index as _).unwrap();
 
                     let rendered = render_item_id(&item_id.kind)
                         .unwrap_or_else(|| print(&cm, &[&module.body[item_id.index]]));
