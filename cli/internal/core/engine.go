@@ -426,7 +426,7 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 
 	// For each of the TaskDefinitions we know of, merge them in
 	for _, taskDef := range taskDefinitions {
-		if _, ok := taskDef.FieldsMeta["HasOutputs"]; ok {
+		if taskDef.HasField("Outputs") {
 			// TODO(mehulkar): Couldn't figure out how to just assign taskDef.Outputs here
 			mergedTaskDefinition.Outputs = &fs.TaskOutputs{
 				Inclusions: taskDef.Outputs.Inclusions,
@@ -435,23 +435,23 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 		}
 
 		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
-		if _, ok := taskDef.FieldsMeta["HasEnvVarDependencies"]; ok {
+		if taskDef.HasField("EnvVarDependencies") {
 			mergedTaskDefinition.EnvVarDependencies = taskDef.EnvVarDependencies
 		}
 
-		if _, ok := taskDef.FieldsMeta["HasTopologicalDependencies"]; ok {
+		if taskDef.HasField("TopologicalDependencies") {
 			mergedTaskDefinition.TopologicalDependencies = taskDef.TopologicalDependencies
 		}
 
-		if _, ok := taskDef.FieldsMeta["HasTaskDependencies"]; ok {
+		if taskDef.HasField("TaskDependencies") {
 			mergedTaskDefinition.TaskDependencies = taskDef.TaskDependencies
 		}
 
-		if _, ok := taskDef.FieldsMeta["HasInputs"]; ok {
+		if taskDef.HasField("Inputs") {
 			mergedTaskDefinition.Inputs = taskDef.Inputs
 		}
 
-		if _, ok := taskDef.FieldsMeta["HasOutputMode"]; ok {
+		if taskDef.HasField("OutputMode") {
 			mergedTaskDefinition.OutputMode = taskDef.OutputMode
 		}
 		mergedTaskDefinition.Persistent = taskDef.Persistent

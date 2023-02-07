@@ -37,10 +37,10 @@ func Test_ReadTurboConfig(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
-			FieldsMeta: map[string]bool{
-				"HasOutputs":                 true,
-				"HasOutputMode":              true,
-				"HasTopologicalDependencies": true,
+			fieldsMeta: map[string]bool{
+				"Outputs":                 true,
+				"OutputMode":              true,
+				"TopologicalDependencies": true,
 			},
 			Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 			TopologicalDependencies: []string{"build"},
@@ -50,9 +50,9 @@ func Test_ReadTurboConfig(t *testing.T) {
 			OutputMode:              util.NewTaskOutput,
 		},
 		"lint": {
-			FieldsMeta: map[string]bool{
-				"HasOutputs":    true,
-				"HasOutputMode": true,
+			fieldsMeta: map[string]bool{
+				"Outputs":    true,
+				"OutputMode": true,
 			},
 			Outputs:                 TaskOutputs{},
 			TopologicalDependencies: []string{},
@@ -62,8 +62,8 @@ func Test_ReadTurboConfig(t *testing.T) {
 			OutputMode:              util.NewTaskOutput,
 		},
 		"dev": {
-			FieldsMeta: map[string]bool{
-				"HasOutputMode": true,
+			fieldsMeta: map[string]bool{
+				"OutputMode": true,
 			},
 			Outputs:                 TaskOutputs{},
 			TopologicalDependencies: []string{},
@@ -73,11 +73,11 @@ func Test_ReadTurboConfig(t *testing.T) {
 			OutputMode:              util.FullTaskOutput,
 		},
 		"publish": {
-			FieldsMeta: map[string]bool{
-				"HasInputs":                  true,
-				"HasOutputs":                 true,
-				"HasTaskDependencies":        true,
-				"HasTopologicalDependencies": true,
+			fieldsMeta: map[string]bool{
+				"Inputs":                  true,
+				"Outputs":                 true,
+				"TaskDependencies":        true,
+				"TopologicalDependencies": true,
 			},
 			Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
 			TopologicalDependencies: []string{"build", "publish"},
@@ -126,10 +126,10 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 
 	pipelineExpected := map[string]TaskDefinition{
 		"build": {
-			FieldsMeta: map[string]bool{
-				"HasOutputs":                 true,
-				"HasOutputMode":              true,
-				"HasTopologicalDependencies": true,
+			fieldsMeta: map[string]bool{
+				"Outputs":                 true,
+				"OutputMode":              true,
+				"TopologicalDependencies": true,
 			},
 			Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 			TopologicalDependencies: []string{"build"},

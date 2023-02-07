@@ -6,12 +6,12 @@ Check
   $ ${TURBO} run test --single-package
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache miss, executing ae4b9314abf5edb5
+  build: cache miss, executing 51be3761199dddcb
   build: 
   build: > build
   build: > echo 'building' > foo
   build: 
-  test: cache miss, executing ee164f24b20aaf51
+  test: cache miss, executing a2a9c2680c5a8e04
   test: 
   test: > test
   test: > [[ ( -f foo ) && $(cat foo) == 'building' ]]
@@ -25,12 +25,12 @@ Run a second time, verify caching works because there is a config
   $ ${TURBO} run test --single-package
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, replaying output ae4b9314abf5edb5
+  build: cache hit, replaying output 51be3761199dddcb
   build: 
   build: > build
   build: > echo 'building' > foo
   build: 
-  test: cache hit, replaying output ee164f24b20aaf51
+  test: cache hit, replaying output a2a9c2680c5a8e04
   test: 
   test: > test
   test: > [[ ( -f foo ) && $(cat foo) == 'building' ]]
@@ -44,8 +44,8 @@ Run with --output-logs=hash-only
   $ ${TURBO} run test --single-package --output-logs=hash-only
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, suppressing output ae4b9314abf5edb5
-  test: cache hit, suppressing output ee164f24b20aaf51
+  build: cache hit, suppressing output 51be3761199dddcb
+  test: cache hit, suppressing output a2a9c2680c5a8e04
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total
