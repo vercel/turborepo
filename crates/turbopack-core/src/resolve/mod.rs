@@ -72,7 +72,6 @@ pub enum SpecialType {
 #[derive(Clone, Debug)]
 pub enum ResolveResult {
     Single(AssetVc, Vec<AssetReferenceVc>),
-    Keyed(HashMap<String, AssetVc>, Vec<AssetReferenceVc>),
     Alternatives(Vec<AssetVc>, Vec<AssetReferenceVc>),
     Special(SpecialType, Vec<AssetReferenceVc>),
     Unresolveable(Vec<AssetReferenceVc>),
@@ -92,7 +91,6 @@ impl ResolveResult {
     pub fn add_reference(&mut self, reference: AssetReferenceVc) {
         match self {
             ResolveResult::Single(_, list)
-            | ResolveResult::Keyed(_, list)
             | ResolveResult::Alternatives(_, list)
             | ResolveResult::Special(_, list)
             | ResolveResult::Unresolveable(list) => list.push(reference),
@@ -102,7 +100,6 @@ impl ResolveResult {
     pub fn get_references(&self) -> &Vec<AssetReferenceVc> {
         match self {
             ResolveResult::Single(_, list)
-            | ResolveResult::Keyed(_, list)
             | ResolveResult::Alternatives(_, list)
             | ResolveResult::Special(_, list)
             | ResolveResult::Unresolveable(list) => list,
@@ -112,7 +109,6 @@ impl ResolveResult {
     fn clone_with_references(&self, references: Vec<AssetReferenceVc>) -> ResolveResult {
         match self {
             ResolveResult::Single(asset, _) => ResolveResult::Single(*asset, references),
-            ResolveResult::Keyed(map, _) => ResolveResult::Keyed(map.clone(), references),
             ResolveResult::Alternatives(alternatives, _) => {
                 ResolveResult::Alternatives(alternatives.clone(), references)
             }
@@ -128,9 +124,6 @@ impl ResolveResult {
             ResolveResult::Single(asset, list) => {
                 *self = ResolveResult::Alternatives(vec![*asset], take(list))
             }
-            ResolveResult::Keyed(_, list) => {
-                *self = ResolveResult::Unresolveable(take(list));
-            }
             ResolveResult::Alternatives(_, _)
             | ResolveResult::Special(_, _)
             | ResolveResult::Unresolveable(_) => {
@@ -138,7 +131,7 @@ impl ResolveResult {
             }
         }
         match self {
-            ResolveResult::Single(_, _) | ResolveResult::Keyed(_, _) => {
+            ResolveResult::Single(_, _) => {
                 unreachable!()
             }
             ResolveResult::Alternatives(assets, list) => match other {
@@ -150,9 +143,7 @@ impl ResolveResult {
                     assets.extend(assets2.iter().cloned());
                     list.extend(list2.iter().cloned());
                 }
-                ResolveResult::Keyed(_, _)
-                | ResolveResult::Special(_, _)
-                | ResolveResult::Unresolveable(_) => {
+                ResolveResult::Special(_, _) | ResolveResult::Unresolveable(_) => {
                     list.extend(other.get_references().iter().cloned());
                 }
             },
@@ -181,7 +172,7 @@ impl ResolveResult {
                     list.extend(list2.iter().cloned());
                     *self = ResolveResult::Special(special.clone(), take(list));
                 }
-                ResolveResult::Keyed(_, _) | ResolveResult::Unresolveable(_) => {
+                ResolveResult::Unresolveable(_) => {
                     list.extend(other.get_references().iter().cloned());
                 }
             },
@@ -204,14 +195,6 @@ impl ResolveResult {
                 let asset = asset_fn(*asset).await?;
                 let refs = refs.iter().map(|r| reference_fn(*r)).try_join().await?;
                 ResolveResult::Single(asset, refs)
-            }
-            ResolveResult::Keyed(map, refs) => {
-                let mut new_map = HashMap::new();
-                for (key, value) in map.iter() {
-                    new_map.insert(key.clone(), asset_fn(*value).await?);
-                }
-                let refs = refs.iter().map(|r| reference_fn(*r)).try_join().await?;
-                ResolveResult::Keyed(new_map, refs)
             }
             ResolveResult::Alternatives(assets, refs) => {
                 let mut new_assets = Vec::new();
@@ -331,7 +314,6 @@ impl ResolveResultVc {
         let this = self.await?;
         Ok(AssetsVc::cell(match &*this {
             ResolveResult::Single(asset, _) => vec![*asset],
-            ResolveResult::Keyed(map, _) => map.values().copied().collect(),
             ResolveResult::Alternatives(assets, _) => assets.clone(),
             ResolveResult::Special(_, _) | ResolveResult::Unresolveable(_) => Vec::new(),
         }))
