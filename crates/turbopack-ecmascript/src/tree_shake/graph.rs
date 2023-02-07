@@ -89,13 +89,36 @@ pub struct DepGraph {
 }
 
 impl DepGraph {
-    pub(super) fn finalize(&self) -> petgraph::Graph<Vec<u32>, bool, Directed, u32> {
+    pub(super) fn finalize(&self) -> (IndexSet<Vec<u32>, FxBuildHasher>, DiGraphMap<u32, bool>) {
         let graph = self.inner.clone().into_graph();
 
         let mut condensed: petgraph::Graph<_, _, _, u32> =
             super::condensation::condensation(graph, |strong1, strong2| strong1 || strong2);
 
-        condensed
+        let mut graph_ix = IndexSet::<Vec<u32>, FxBuildHasher>::default();
+
+        let mut digraph = DiGraphMap::default();
+
+        for node in condensed.node_weights() {
+            let node = graph_ix.get_index_of(node).unwrap_or_else(|| {
+                let ix = graph_ix.len();
+                graph_ix.insert_full(node.clone());
+                ix
+            }) as u32;
+
+            digraph.add_node(node);
+        }
+
+        for edge in condensed.edge_indices() {
+            let (from, to) = condensed.edge_endpoints(edge).unwrap();
+
+            let from = graph_ix.get_index_of(&condensed[from]).unwrap() as u32;
+            let to = graph_ix.get_index_of(&condensed[to]).unwrap() as u32;
+
+            digraph.add_edge(from, to, condensed[edge]);
+        }
+
+        (graph_ix, digraph)
     }
 
     pub(super) fn node(&mut self, id: &ItemId) -> u32 {
