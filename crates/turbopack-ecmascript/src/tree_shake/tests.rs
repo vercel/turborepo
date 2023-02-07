@@ -154,7 +154,10 @@ fn run(input: PathBuf) {
         writeln!(
             s,
             "```mermaid\n{}```",
-            render_mermaid(&mut condensed, &|buf: &Vec<u32>| format!("{:?}", buf))
+            render_mermaid(&mut condensed, &|buf: &Vec<u32>| format!(
+                "Stmts: {:?}",
+                buf
+            ))
         )
         .unwrap();
 
@@ -225,7 +228,7 @@ where
 
         writeln!(
             mermaid,
-            "    Item{}[\"{}\"];",
+            "    N{}[\"{}\"];",
             i,
             render(item)
                 .replace('"', "\\\"")
@@ -237,7 +240,7 @@ where
     for (from, to, strong) in g.inner.all_edges() {
         writeln!(
             mermaid,
-            "    Item{} -{}-> Item{};",
+            "    N{} -{}-> N{};",
             from,
             if *strong { "" } else { "." },
             to,
