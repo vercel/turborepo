@@ -450,14 +450,16 @@ async fn chunk_content_internal<I: FromChunkableAsset>(
                 // not loaded in parallel
                 let mut inner_chunk_groups = Vec::new();
 
-                for asset in result.await?.primary.iter().filter_map(|result| {
+                let result = result.await?;
+                let assets = result.primary.iter().filter_map(|result| {
                     if let PrimaryResolveResult::Asset(asset) = *result {
                         if processed_assets.insert((chunking_type, asset)) {
                             return Some(asset);
                         }
                     }
                     None
-                }) {
+                });
+                for asset in assets {
                     let chunkable_asset = match ChunkableAssetVc::resolve_from(asset).await? {
                         Some(chunkable_asset) => chunkable_asset,
                         _ => {
