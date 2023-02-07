@@ -367,7 +367,7 @@ graph TD
 
 ```mermaid
 graph TD
-    Item1["import { upper } from \"module\""];
+    Item1["import { upper  from \"module\""];
     Item2["const bar = \"bar\""];
     Item3["export let foobar = \"foo\""];
     Item4["export const foo = foobar"];
@@ -376,10 +376,10 @@ graph TD
     Item7["let foobarCopy = foobar"];
     Item8["foobar += \"foo\""];
     Item9["export foobar"];
-    Item10["export function external2() {    foobar += \".\"}"];
+    Item10["export function external2() {    foobar += \".\""];
     Item11["export external2"];
-    Item12["function internal() {    return upper(foobar)}"];
-    Item13["export function external1() {    return internal() + foobar}"];
+    Item12["function internal() {    return upper(foobar)"];
+    Item13["export function external1() {    return internal() + foobar"];
     Item14["export external1"];
     Item15["import \"other\""];
     Item16["console.log(foobarCopy)"];
