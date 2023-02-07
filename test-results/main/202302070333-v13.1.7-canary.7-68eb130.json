@@ -1,0 +1,862 @@
+{
+  "ref": "6cbb83526da9aa5c10982ecec87b32c77fcd620b",
+  "nextjsVersion": "Next.js v13.1.7-canary.7",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675739383172,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675739446804,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675739383267,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/getserversideprops/test/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675739471480,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              }
+            ],
+            "endTime": 1675739885328,
+            "message": "  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n",
+            "name": "/work/test/e2e/404-page-router/index.test.ts",
+            "startTime": 1675739471574,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/empty-project/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675740189990,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Empty Project"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 200\n    at Object.<anonymous> (/work/test/integration/empty-project/test/index.test.js:20:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Empty Project Should not time out and return 404",
+                "location": null,
+                "status": "failed",
+                "title": "Should not time out and return 404"
+              }
+            ],
+            "endTime": 1675740194968,
+            "message": "  ● Empty Project › Should not time out and return 404\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 200\n\n      18 |   it('Should not time out and return 404', async () => {\n      19 |     const res = await fetch('/')\n    > 20 |     expect(res.status).toBe(404)\n         |                        ^\n      21 |   })\n      22 |\n      23 |   afterAll(() => {\n\n      at Object.<anonymous> (integration/empty-project/test/index.test.js:20:24)\n",
+            "name": "/work/test/integration/empty-project/test/index.test.js",
+            "startTime": 1675740190088,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/basic/legacy-decorators.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675739079725,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675739240255,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675739079816,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675739397368,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675739446440,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675739397461,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675739359127,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675739422530,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675739359241,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/getserversideprops/test/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675739444633,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              }
+            ],
+            "endTime": 1675739856359,
+            "message": "  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n",
+            "name": "/work/test/e2e/404-page-router/index.test.ts",
+            "startTime": 1675739444732,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/empty-project/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675740163653,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Empty Project"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 200\n    at Object.<anonymous> (/work/test/integration/empty-project/test/index.test.js:20:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Empty Project Should not time out and return 404",
+                "location": null,
+                "status": "failed",
+                "title": "Should not time out and return 404"
+              }
+            ],
+            "endTime": 1675740168491,
+            "message": "  ● Empty Project › Should not time out and return 404\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 200\n\n      18 |   it('Should not time out and return 404', async () => {\n      19 |     const res = await fetch('/')\n    > 20 |     expect(res.status).toBe(404)\n         |                        ^\n      21 |   })\n      22 |\n      23 |   afterAll(() => {\n\n      at Object.<anonymous> (integration/empty-project/test/index.test.js:20:24)\n",
+            "name": "/work/test/integration/empty-project/test/index.test.js",
+            "startTime": 1675740163755,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/basic/legacy-decorators.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675739330511,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675739492376,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675739330606,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675739656635,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675739706217,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675739656728,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
