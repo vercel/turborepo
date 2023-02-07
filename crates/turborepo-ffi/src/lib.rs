@@ -1,4 +1,6 @@
-use std::mem::ManuallyDrop;
+mod scm;
+
+use std::{mem::ManuallyDrop, path::PathBuf};
 
 mod proto {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
@@ -42,4 +44,25 @@ pub extern "C" fn get_turbo_data_dir() -> Buffer {
 
     let dir = dirs.data_dir().to_string_lossy().to_string();
     proto::TurboDataDirResp { dir }.into()
+}
+
+#[no_mangle]
+pub extern "C" fn changed_files(buffer: Buffer) -> Buffer {
+    let req: proto::ChangedFilesReq = buffer.into_proto().expect("buffer is valid protobuf");
+
+    let response = match scm::git::changed_files(
+        PathBuf::from(req.repo_root),
+        req.from_commit,
+        req.to_commit,
+        req.include_untracked,
+        req.relative_to.map(PathBuf::from),
+    ) {
+        Ok(files) => proto::changed_files_resp::Response::Files(proto::ChangedFilesList { files }),
+        Err(err) => proto::changed_files_resp::Response::Error(err.to_string()),
+    };
+
+    let resp = proto::ChangedFilesResp {
+        response: Some(response),
+    };
+    resp.into()
 }

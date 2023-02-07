@@ -9,3 +9,5 @@ typedef struct Buffer {
 } Buffer;
 
 struct Buffer get_turbo_data_dir(void);
+
+struct Buffer changed_files(struct Buffer buffer);

@@ -22,3 +22,22 @@ message GlobResp {
 message GlobRespList {
   repeated string files = 1;
 }
+
+message ChangedFilesReq {
+  string repo_root = 1;
+  string from_commit = 2;
+  string to_commit = 3;
+  bool include_untracked = 4;
+  optional string relative_to = 5;
+}
+
+message ChangedFilesResp {
+  oneof response {
+    ChangedFilesList files = 1;
+    string error = 2;
+  }
+}
+
+message ChangedFilesList {
+  repeated string files = 1;
+}
