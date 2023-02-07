@@ -54,7 +54,7 @@ To run a single Go test, you can run `go test ./[path/to/package/]`. See more [i
 
 #### Rust Tests
 
-The recommended way to run tests is: `**cargo nextest run -p turborepo-lib`.
+The recommended way to run tests is: `cargo nextest run -p turborepo-lib`.
 You'll have to [install it first](https://nexte.st/book/pre-built-binaries.html).
 
 You can also use the built in [`cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html) directly `cargo test -p turborepo-lib`.
