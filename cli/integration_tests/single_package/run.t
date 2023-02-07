@@ -6,7 +6,7 @@ Check
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache miss, executing 97d67b80d76fbe89
+  build: cache miss, executing 7bf32e1dedb04a5d
   build: 
   build: > build
   build: > echo 'building' > foo
@@ -20,7 +20,7 @@ Run a second time, verify caching works because there is a config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, replaying output 97d67b80d76fbe89
+  build: cache hit, replaying output 7bf32e1dedb04a5d
   build: 
   build: > build
   build: > echo 'building' > foo

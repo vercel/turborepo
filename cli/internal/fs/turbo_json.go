@@ -36,7 +36,18 @@ type rawTurboJSON struct {
 	Extends []string `json:"extends,omitempty"`
 }
 
-// TurboJSON is the root turborepo configuration
+// pristineTurboJSON is used when marshaling a TurboJSON object into a turbo.json string
+// Notably, it includes a PristinePipeline instead of the regular Pipeline. (i.e. TaskDefinition)
+// instead of BookkeepingTaskDefinition.
+type pristineTurboJSON struct {
+	GlobalDependencies []string           `json:"globalDependencies,omitempty"`
+	GlobalEnv          []string           `json:"globalEnv,omitempty"`
+	Pipeline           PristinePipeline   `json:"pipeline"`
+	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
+	Extends            []string           `json:"extends,omitempty"`
+}
+
+// TurboJSON represents a turbo.json configuration file
 type TurboJSON struct {
 	GlobalDeps         []string
 	GlobalEnv          []string
@@ -78,21 +89,19 @@ type rawTask struct {
 	Persistent bool                 `json:"persistent,omitempty"`
 }
 
+// PristinePipeline contains original TaskDefinitions without the bookkeeping
+type PristinePipeline map[string]TaskDefinition
+
 // Pipeline is a struct for deserializing .pipeline in configFile
-type Pipeline map[string]TaskDefinition
+type Pipeline map[string]BookkeepingTaskDefinition
+
+type BookkeepingTaskDefinition struct {
+	fieldsMeta     map[string]bool // holds some bookkeeping info about the TaskDefinition
+	TaskDefinition TaskDefinition
+}
 
 // TaskDefinition is a representation of the configFile pipeline for further computation.
 type TaskDefinition struct {
-	// fieldsMeta has a set of keys which tell us whether the turbo.json had a key
-	// or not. We need to do this internal bookkeeping, because this struct assigns "0-values"
-	// in Golang, which are indistinguishable from missing keys in the underlying JSON.
-	// We need to know whether a key was set to a "0-value", or if the key was missing
-	// so that when we can merge TaskDefinitions correctly.
-	// fieldsMeta should ideally be a private key, with a method that looks it up, but
-	// we have a lot of unit tests that would fail without the ability to set this field
-	// (i.e. unit tests that don't go through Unmarshalling the underlying turbo.json from a file).
-	fieldsMeta map[string]bool
-
 	Outputs     TaskOutputs
 	ShouldCache bool
 
@@ -137,7 +146,7 @@ type ResolvedTaskDefinition struct {
 }
 
 // GetTask returns a TaskDefinition based on the ID (package#task format) or name (e.g. "build")
-func (pc Pipeline) GetTask(taskID string, taskName string) (*TaskDefinition, error) {
+func (pc Pipeline) GetTask(taskID string, taskName string) (*BookkeepingTaskDefinition, error) {
 	// first check for package-tasks
 	taskDefinition, ok := pc[taskID]
 	if !ok {
@@ -205,7 +214,10 @@ func LoadTurboConfig(dir turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJ
 	for scriptName := range rootPackageJSON.Scripts {
 		if !turboJSON.Pipeline.HasTask(scriptName) {
 			taskName := util.RootTaskID(scriptName)
-			turboJSON.Pipeline[taskName] = TaskDefinition{}
+			turboJSON.Pipeline[taskName] = BookkeepingTaskDefinition{
+				fieldsMeta:     map[string]bool{},
+				TaskDefinition: TaskDefinition{},
+			}
 		}
 	}
 	return turboJSON, nil
@@ -268,11 +280,11 @@ func readTurboJSON(path turbopath.AbsoluteSystemPath) (*TurboJSON, error) {
 // GetTaskDefinition returns a TaskDefinition from a serialized definition in configFile
 func (pc Pipeline) GetTaskDefinition(taskID string) (TaskDefinition, bool) {
 	if entry, ok := pc[taskID]; ok {
-		return entry, true
+		return entry.TaskDefinition, true
 	}
 	_, task := util.GetPackageTaskFromId(taskID)
 	entry, ok := pc[task]
-	return entry, ok
+	return entry.TaskDefinition, ok
 }
 
 // HasTask returns true if the given task is defined in the pipeline, either directly or
@@ -292,12 +304,20 @@ func (pc Pipeline) HasTask(task string) bool {
 	return false
 }
 
+// Pristine returns a PristinePipeline
+func (pc Pipeline) Pristine() PristinePipeline {
+	pristine := PristinePipeline{}
+	for taskName, taskDef := range pc {
+		pristine[taskName] = taskDef.TaskDefinition
+	}
+	return pristine
+}
+
 // HasField checks the internal bookkeeping fieldsMeta field to
 // see whether a field was actually in the underlying turbo.json
 // or whether it was initialized with its 0-value.
-func (c TaskDefinition) HasField(fieldName string) bool {
-	// TODO(pass field name without the "Has" prefix)
-	if _, ok := c.fieldsMeta[fieldName]; ok {
+func (btd BookkeepingTaskDefinition) HasField(fieldName string) bool {
+	if _, ok := btd.fieldsMeta[fieldName]; ok {
 		return true
 	}
 	return false
@@ -305,21 +325,21 @@ func (c TaskDefinition) HasField(fieldName string) bool {
 
 // UnmarshalJSON deserializes a single task definition from
 // turbo.json into a TaskDefinition struct
-func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
+func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	task := rawTask{}
 	if err := json.Unmarshal(data, &task); err != nil {
 		return err
 	}
 
-	// Start a bookkeeping map
-	c.fieldsMeta = map[string]bool{}
+	btd.fieldsMeta = map[string]bool{}
+	c := &btd.TaskDefinition
 
 	if task.Outputs != nil {
 		var inclusions []string
 		var exclusions []string
 		// Assign a bookkeeping field so we know that there really were
 		// outputs configured in the underlying config file.
-		c.fieldsMeta["Outputs"] = true
+		btd.fieldsMeta["Outputs"] = true
 
 		for _, glob := range task.Outputs {
 			if strings.HasPrefix(glob, "!") {
@@ -356,14 +376,14 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 				envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
 			} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
 				// Assign bookkeeping, but only once, since we are in a loop
-				if _, ok := c.fieldsMeta["TopologicalDependencies"]; !ok {
-					c.fieldsMeta["TopologicalDependencies"] = true
+				if _, ok := btd.fieldsMeta["TopologicalDependencies"]; !ok {
+					btd.fieldsMeta["TopologicalDependencies"] = true
 				}
 				c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
 			} else {
 				// Assign bookkeeping, but only once, since we are in a loop
-				if _, ok := c.fieldsMeta["TaskDependencies"]; !ok {
-					c.fieldsMeta["TaskDependencies"] = true
+				if _, ok := btd.fieldsMeta["TaskDependencies"]; !ok {
+					btd.fieldsMeta["TaskDependencies"] = true
 				}
 				c.TaskDependencies = append(c.TaskDependencies, dependency)
 			}
@@ -375,7 +395,7 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 
 	// Append env key into EnvVarDependencies
 	if task.Env != nil {
-		c.fieldsMeta["EnvVarDependencies"] = true
+		btd.fieldsMeta["EnvVarDependencies"] = true
 		for _, value := range task.Env {
 			if strings.HasPrefix(value, envPipelineDelimiter) {
 				// Hard error to help people specify this correctly during migration.
@@ -394,12 +414,12 @@ func (c *TaskDefinition) UnmarshalJSON(data []byte) error {
 	if task.Inputs != nil {
 		// Note that we don't require Inputs to be sorted, we're going to
 		// hash the resulting files and sort that instead
-		c.fieldsMeta["Inputs"] = true
+		btd.fieldsMeta["Inputs"] = true
 		c.Inputs = task.Inputs
 	}
 
 	if task.OutputMode != nil {
-		c.fieldsMeta["OutputMode"] = true
+		btd.fieldsMeta["OutputMode"] = true
 		c.OutputMode = *task.OutputMode
 	}
 	c.Persistent = task.Persistent
@@ -551,10 +571,10 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 // MarshalJSON converts a TurboJSON into the equivalent json object in bytes
 // note: we go via rawTurboJSON so that the output format is correct
 func (c *TurboJSON) MarshalJSON() ([]byte, error) {
-	raw := rawTurboJSON{}
+	raw := pristineTurboJSON{}
 	raw.GlobalDependencies = c.GlobalDeps
 	raw.GlobalEnv = c.GlobalEnv
-	raw.Pipeline = c.Pipeline
+	raw.Pipeline = c.Pipeline.Pristine()
 	raw.RemoteCacheOptions = c.RemoteCacheOptions
 
 	return json.Marshal(&raw)

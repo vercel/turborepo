@@ -35,42 +35,48 @@ func Test_ReadTurboConfig(t *testing.T) {
 		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
 	}
 
-	pipelineExpected := map[string]TaskDefinition{
+	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
 			fieldsMeta: map[string]bool{
 				"Outputs":                 true,
 				"OutputMode":              true,
 				"TopologicalDependencies": true,
 			},
-			Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
-			TopologicalDependencies: []string{"build"},
-			EnvVarDependencies:      []string{},
-			TaskDependencies:        []string{},
-			ShouldCache:             true,
-			OutputMode:              util.NewTaskOutput,
+			TaskDefinition: TaskDefinition{
+				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
+				TopologicalDependencies: []string{"build"},
+				EnvVarDependencies:      []string{},
+				TaskDependencies:        []string{},
+				ShouldCache:             true,
+				OutputMode:              util.NewTaskOutput,
+			},
 		},
 		"lint": {
 			fieldsMeta: map[string]bool{
 				"Outputs":    true,
 				"OutputMode": true,
 			},
-			Outputs:                 TaskOutputs{},
-			TopologicalDependencies: []string{},
-			EnvVarDependencies:      []string{"MY_VAR"},
-			TaskDependencies:        []string{},
-			ShouldCache:             true,
-			OutputMode:              util.NewTaskOutput,
+			TaskDefinition: TaskDefinition{
+				Outputs:                 TaskOutputs{},
+				TopologicalDependencies: []string{},
+				EnvVarDependencies:      []string{"MY_VAR"},
+				TaskDependencies:        []string{},
+				ShouldCache:             true,
+				OutputMode:              util.NewTaskOutput,
+			},
 		},
 		"dev": {
 			fieldsMeta: map[string]bool{
 				"OutputMode": true,
 			},
-			Outputs:                 TaskOutputs{},
-			TopologicalDependencies: []string{},
-			EnvVarDependencies:      []string{},
-			TaskDependencies:        []string{},
-			ShouldCache:             false,
-			OutputMode:              util.FullTaskOutput,
+			TaskDefinition: TaskDefinition{
+				Outputs:                 TaskOutputs{},
+				TopologicalDependencies: []string{},
+				EnvVarDependencies:      []string{},
+				TaskDependencies:        []string{},
+				ShouldCache:             false,
+				OutputMode:              util.FullTaskOutput,
+			},
 		},
 		"publish": {
 			fieldsMeta: map[string]bool{
@@ -79,13 +85,15 @@ func Test_ReadTurboConfig(t *testing.T) {
 				"TaskDependencies":        true,
 				"TopologicalDependencies": true,
 			},
-			Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
-			TopologicalDependencies: []string{"build", "publish"},
-			EnvVarDependencies:      []string{},
-			TaskDependencies:        []string{"admin#lint", "build"},
-			ShouldCache:             false,
-			Inputs:                  []string{"build/**/*"},
-			OutputMode:              util.FullTaskOutput,
+			TaskDefinition: TaskDefinition{
+				Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
+				TopologicalDependencies: []string{"build", "publish"},
+				EnvVarDependencies:      []string{},
+				TaskDependencies:        []string{"admin#lint", "build"},
+				ShouldCache:             false,
+				Inputs:                  []string{"build/**/*"},
+				OutputMode:              util.FullTaskOutput,
+			},
 		},
 	}
 
@@ -124,19 +132,21 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
 	}
 
-	pipelineExpected := map[string]TaskDefinition{
+	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
 			fieldsMeta: map[string]bool{
 				"Outputs":                 true,
 				"OutputMode":              true,
 				"TopologicalDependencies": true,
 			},
-			Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
-			TopologicalDependencies: []string{"build"},
-			EnvVarDependencies:      []string{},
-			TaskDependencies:        []string{},
-			ShouldCache:             true,
-			OutputMode:              util.NewTaskOutput,
+			TaskDefinition: TaskDefinition{
+				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
+				TopologicalDependencies: []string{"build"},
+				EnvVarDependencies:      []string{},
+				TaskDependencies:        []string{},
+				ShouldCache:             true,
+				OutputMode:              util.NewTaskOutput,
+			},
 		},
 	}
 
@@ -178,16 +188,16 @@ func Test_ReadTurboConfig_EnvDeclarations(t *testing.T) {
 	}
 
 	pipeline := turboJSON.Pipeline
-	assert.EqualValues(t, pipeline["task1"].EnvVarDependencies, sortedArray([]string{"A"}))
-	assert.EqualValues(t, pipeline["task2"].EnvVarDependencies, sortedArray([]string{"A"}))
-	assert.EqualValues(t, pipeline["task3"].EnvVarDependencies, sortedArray([]string{"A"}))
-	assert.EqualValues(t, pipeline["task4"].EnvVarDependencies, sortedArray([]string{"A", "B"}))
-	assert.EqualValues(t, pipeline["task6"].EnvVarDependencies, sortedArray([]string{"A", "B", "C", "D", "E", "F"}))
-	assert.EqualValues(t, pipeline["task7"].EnvVarDependencies, sortedArray([]string{"A", "B", "C"}))
-	assert.EqualValues(t, pipeline["task8"].EnvVarDependencies, sortedArray([]string{"A", "B", "C"}))
-	assert.EqualValues(t, pipeline["task9"].EnvVarDependencies, sortedArray([]string{"A"}))
-	assert.EqualValues(t, pipeline["task10"].EnvVarDependencies, sortedArray([]string{"A"}))
-	assert.EqualValues(t, pipeline["task11"].EnvVarDependencies, sortedArray([]string{"A", "B"}))
+	assert.EqualValues(t, pipeline["task1"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task2"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task3"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task4"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A", "B"}))
+	assert.EqualValues(t, pipeline["task6"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A", "B", "C", "D", "E", "F"}))
+	assert.EqualValues(t, pipeline["task7"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A", "B", "C"}))
+	assert.EqualValues(t, pipeline["task8"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A", "B", "C"}))
+	assert.EqualValues(t, pipeline["task9"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task10"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task11"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A", "B"}))
 
 	// check global env vars also
 	assert.EqualValues(t, sortedArray([]string{"FOO", "BAR", "BAZ", "QUX"}), sortedArray(turboJSON.GlobalEnv))
@@ -205,14 +215,14 @@ func Test_TaskOutputsSort(t *testing.T) {
 }
 
 // Helpers
-func validateOutput(t *testing.T, turboJSON *TurboJSON, expectedPipeline map[string]TaskDefinition) {
+func validateOutput(t *testing.T, turboJSON *TurboJSON, expectedPipeline Pipeline) {
 	t.Helper()
 	assertIsSorted(t, turboJSON.GlobalDeps, "Global Deps")
 	assertIsSorted(t, turboJSON.GlobalEnv, "Global Env")
 	validatePipeline(t, turboJSON.Pipeline, expectedPipeline)
 }
 
-func validatePipeline(t *testing.T, actual Pipeline, expected map[string]TaskDefinition) {
+func validatePipeline(t *testing.T, actual Pipeline, expected Pipeline) {
 	t.Helper()
 	// check top level keys
 	if len(actual) != len(expected) {
@@ -229,16 +239,17 @@ func validatePipeline(t *testing.T, actual Pipeline, expected map[string]TaskDef
 
 	// check individual task definitions
 	for taskName, expectedTaskDefinition := range expected {
-		actualTaskDefinition, ok := actual[taskName]
+		bookkeepingTaskDef, ok := actual[taskName]
 		if !ok {
 			t.Errorf("missing expected task: %v", taskName)
 		}
+		actualTaskDefinition := bookkeepingTaskDef.TaskDefinition
 		assertIsSorted(t, actualTaskDefinition.Outputs.Inclusions, "Task output inclusions")
 		assertIsSorted(t, actualTaskDefinition.Outputs.Exclusions, "Task output exclusions")
 		assertIsSorted(t, actualTaskDefinition.EnvVarDependencies, "Task env vars")
 		assertIsSorted(t, actualTaskDefinition.TopologicalDependencies, "Topo deps")
 		assertIsSorted(t, actualTaskDefinition.TaskDependencies, "Task deps")
-		assert.EqualValuesf(t, expectedTaskDefinition, actualTaskDefinition, "task definition mismatch for %v", taskName)
+		assert.EqualValuesf(t, expectedTaskDefinition, bookkeepingTaskDef, "task definition mismatch for %v", taskName)
 	}
 }
 

@@ -114,14 +114,14 @@ func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (
 	if task, ok := pipeline[taskID]; ok {
 		return &Task{
 			Name:           taskName,
-			TaskDefinition: task,
+			TaskDefinition: task.TaskDefinition,
 		}, nil
 	}
 
 	if task, ok := pipeline[taskName]; ok {
 		return &Task{
 			Name:           taskName,
-			TaskDefinition: task,
+			TaskDefinition: task.TaskDefinition,
 		}, nil
 	}
 
@@ -425,9 +425,9 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 	mergedTaskDefinition := &fs.ResolvedTaskDefinition{}
 
 	// For each of the TaskDefinitions we know of, merge them in
-	for _, taskDef := range taskDefinitions {
-		if taskDef.HasField("Outputs") {
-			// TODO(mehulkar): Couldn't figure out how to just assign taskDef.Outputs here
+	for _, bookkeepingTaskDef := range taskDefinitions {
+		taskDef := bookkeepingTaskDef.TaskDefinition
+		if bookkeepingTaskDef.HasField("Outputs") {
 			mergedTaskDefinition.Outputs = &fs.TaskOutputs{
 				Inclusions: taskDef.Outputs.Inclusions,
 				Exclusions: taskDef.Outputs.Exclusions,
@@ -435,23 +435,23 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 		}
 
 		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
-		if taskDef.HasField("EnvVarDependencies") {
+		if bookkeepingTaskDef.HasField("EnvVarDependencies") {
 			mergedTaskDefinition.EnvVarDependencies = taskDef.EnvVarDependencies
 		}
 
-		if taskDef.HasField("TopologicalDependencies") {
+		if bookkeepingTaskDef.HasField("TopologicalDependencies") {
 			mergedTaskDefinition.TopologicalDependencies = taskDef.TopologicalDependencies
 		}
 
-		if taskDef.HasField("TaskDependencies") {
+		if bookkeepingTaskDef.HasField("TaskDependencies") {
 			mergedTaskDefinition.TaskDependencies = taskDef.TaskDependencies
 		}
 
-		if taskDef.HasField("Inputs") {
+		if bookkeepingTaskDef.HasField("Inputs") {
 			mergedTaskDefinition.Inputs = taskDef.Inputs
 		}
 
-		if taskDef.HasField("OutputMode") {
+		if bookkeepingTaskDef.HasField("OutputMode") {
 			mergedTaskDefinition.OutputMode = taskDef.OutputMode
 		}
 		mergedTaskDefinition.Persistent = taskDef.Persistent
@@ -468,10 +468,10 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 	return mergedTaskDefinition, nil
 }
 
-func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.PackageJSON, taskID string, taskName string) ([]fs.TaskDefinition, error) {
+func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.PackageJSON, taskID string, taskName string) ([]fs.BookkeepingTaskDefinition, error) {
 	// Look for the taskDefinition in the root pipeline. We'll wait to throw errors until the end
 	rootTaskDefinition, _ := rootPipeline.GetTask(taskID, taskName)
-	var workspaceDefinition *fs.TaskDefinition
+	var workspaceDefinition *fs.BookkeepingTaskDefinition
 
 	// If the taskID is a root task (e.g. //#build), we don't need to look
 	// for a workspace task, since these can only be defined in the root turbo.json.
@@ -502,7 +502,7 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 				// For the single package case, we can just return the workspaceDefinition
 				// (It should be the same as the rootTaskDefinition)
 				if pkg.PackageJSONPath == "package.json" {
-					return []fs.TaskDefinition{*workspaceDefinition}, nil
+					return []fs.BookkeepingTaskDefinition{*workspaceDefinition}, nil
 				}
 
 				// For turbo.jsons in workspaces that don't have an extends key, throw an error
@@ -526,7 +526,7 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 	}
 
 	// Start a list of TaskDefinitions we've found for this TaskID
-	taskDefinitions := []fs.TaskDefinition{}
+	taskDefinitions := []fs.BookkeepingTaskDefinition{}
 
 	if rootTaskDefinition != nil {
 		taskDefinitions = append(taskDefinitions, *rootTaskDefinition)
