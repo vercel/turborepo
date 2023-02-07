@@ -26,6 +26,8 @@ pub fn get_version() -> &'static str {
         .split_once('\n')
         .expect("Failed to read version from version.txt")
         .0
+        // On windows we still have a trailing \r
+        .trim_end()
 }
 
 pub fn main() -> Payload {

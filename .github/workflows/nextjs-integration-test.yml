@@ -16,12 +16,12 @@ on:
         type: boolean
 
 jobs:
-  # Build debug build of next-dev to use in integration test.
+  # Build next-dev binary to use in integration test.
   rust_build_dev:
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest-16-core-oss
-    name: Rust building debug next-dev for next.js integration test
+    name: Building next-dev for next.js integration test
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -41,15 +41,15 @@ jobs:
           sudo ln -sf /usr/x86_64-linux-musl/bin/x86_64-linux-musl-cc /usr/bin/musl-gcc
           sudo ln -sf /usr/x86_64-linux-musl/bin/x86_64-linux-musl-g++ /usr/bin/musl-g++
 
-      - name: Build debug next-dev (rustls-tls)
+      - name: Build next-dev (rustls-tls)
         run: |
-          cargo build -p next-dev --target x86_64-unknown-linux-musl --no-default-features --features cli,custom_allocator,rustls-tls
+          cargo build --release -p next-dev --target x86_64-unknown-linux-musl --no-default-features --features cli,custom_allocator,rustls-tls
 
       - uses: actions/upload-artifact@v3
         with:
-          name: debug-next-dev-linux-musl
+          name: release-next-dev-linux-musl
           path: |
-            target/x86_64-unknown-linux-musl/debug/next-dev
+            target/x86_64-unknown-linux-musl/release/next-dev
 
   # Run actual next.js integration test
   execute_tests:
@@ -120,8 +120,8 @@ jobs:
       - name: Validate next-dev binary
         run: |
           ls -r ${{ github.workspace }}/artifacts
-          chmod +x ${{ github.workspace }}/artifacts/debug-next-dev-linux-musl/next-dev
-          cp ${{ github.workspace }}/artifacts/debug-next-dev-linux-musl/next-dev .
+          chmod +x ${{ github.workspace }}/artifacts/release-next-dev-linux-musl/next-dev
+          cp ${{ github.workspace }}/artifacts/release-next-dev-linux-musl/next-dev .
           ./next-dev --display-version
 
       - name: Install dependencies
