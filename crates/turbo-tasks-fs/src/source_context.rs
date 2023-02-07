@@ -60,7 +60,17 @@ impl<'a> Display for SourceContextLine<'a> {
                 inside,
                 after,
             } => {
-                writeln!(f, "{line:>6} | {before}{inside}{after}")?;
+                if inside.len() >= 2 {
+                    writeln!(
+                        f,
+                        "       | {}v{}v",
+                        " ".repeat(before.len()),
+                        "-".repeat(inside.len() - 2)
+                    )?;
+                } else {
+                    writeln!(f, "       | {}v", " ".repeat(before.len()))?;
+                }
+                writeln!(f, "{line:>6} + {before}{inside}{after}")?;
                 if inside.len() >= 2 {
                     writeln!(
                         f,
@@ -69,7 +79,7 @@ impl<'a> Display for SourceContextLine<'a> {
                         "-".repeat(inside.len() - 2),
                     )
                 } else {
-                    writeln!(f, "       | {}^", " ".repeat(before.len()),)
+                    writeln!(f, "       | {}^", " ".repeat(before.len()))
                 }
             }
             SourceContextLine::Inside { line, inside } => {

@@ -127,9 +127,22 @@ fn format_source_content(source: &PlainIssueSource, formatted_issue: &mut String
                     inside,
                     after,
                 } => {
+                    if inside.len() >= 2 {
+                        writeln!(
+                            f,
+                            "       + {}{}{}{}",
+                            " ".repeat(before.len()),
+                            "v".bold(),
+                            "-".repeat(inside.len() - 2).bold(),
+                            "v".bold(),
+                        )
+                        .unwrap();
+                    } else {
+                        writeln!(f, "       | {}{}", " ".repeat(before.len()), "v".bold()).unwrap();
+                    }
                     writeln!(
                         f,
-                        "{line:>6} | {}{}{}",
+                        "{line:>6} + {}{}{}",
                         before.dimmed(),
                         inside.bold(),
                         after.dimmed()

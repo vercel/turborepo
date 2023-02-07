@@ -17,7 +17,7 @@ __turbopack_export_value__(JSON.parse({"name":"json-snapshot"}));
 })()),
 "[project]/crates/turbopack-tests/tests/snapshot/imports/json/input/invalid.json (json)": (() => {{
 
-throw new Error("An error occurred while generating the chunk item [project]/crates/turbopack-tests/tests/snapshot/imports/json/input/invalid.json (json)\n  at Execution of module_factory failed\n  at Execution of JsonChunkItem::content failed\n  at Unable to make a module from invalid JSON: expected `,` or `}` at line 3 column 26\n at nested.?\n     1 | {\n     2 |   \"nested\": {\n     3 |     \"this-is\": \"invalid\" // lint-staged will remove trailing commas, so here's a comment\n       |                           ^\n     4 |   }\n     5 | }\n");
+throw new Error("An error occurred while generating the chunk item [project]/crates/turbopack-tests/tests/snapshot/imports/json/input/invalid.json (json)\n  at Execution of module_factory failed\n  at Execution of JsonChunkItem::content failed\n  at Unable to make a module from invalid JSON: expected `,` or `}` at line 3 column 26\n  at nested.?\n     1 | {\n     2 |   \"nested\": {\n       |                          v\n     3 +     \"this-is\": \"invalid\" // lint-staged will remove trailing commas, so here's a comment\n       |                          ^\n     4 |   }\n     5 | }\n");
 
 }}),
 }, ({ loadedChunks, instantiateRuntimeModule }) => {
