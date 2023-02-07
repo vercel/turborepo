@@ -90,7 +90,7 @@ func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 		rootExternalDepsHash string
 		hashedSortedEnvPairs []string
 		globalCacheKey       string
-		pipeline             map[string]fs.TaskDefinition
+		pipeline             fs.PristinePipeline
 	}{
 		globalFileHashMap:    globalFileHashMap,
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
