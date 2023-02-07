@@ -1,0 +1,2138 @@
+{
+  "ref": "a3034a565f0e9b605c41592a41eddc5267472312",
+  "nextjsVersion": "Next.js v13.1.7-canary.7",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675813428052,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675813490987,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675813428143,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/middleware-fetches-with-body/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 10,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675813587858,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with default bodyParser sizeLimit (1mb)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Body exceeded 1mb limit\"\nReceived: \"Payload Too Large\"\n    at Object.<anonymous> (/work/test/e2e/middleware-fetches-with-body/index.test.ts:69:32)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Middleware fetches with body with default bodyParser sizeLimit (1mb) should return 413 for body greater than 1mb",
+                "location": null,
+                "status": "failed",
+                "title": "should return 413 for body greater than 1mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with default bodyParser sizeLimit (1mb)"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with default bodyParser sizeLimit (1mb) should be able to send and return body size equal to 1mb",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return body size equal to 1mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with default bodyParser sizeLimit (1mb)"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with default bodyParser sizeLimit (1mb) should be able to send and return body greater than default highWaterMark (16KiB)",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return body greater than default highWaterMark (16KiB)"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5kb)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Body exceeded 5kb limit\"\nReceived: \"Payload Too Large\"\n    at Object.<anonymous> (/work/test/e2e/middleware-fetches-with-body/index.test.ts:137:32)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5kb) should return 413 for body greater than 5kb",
+                "location": null,
+                "status": "failed",
+                "title": "should return 413 for body greater than 5kb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5kb)"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5kb) should be able to send and return body size equal to 5kb",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return body size equal to 5kb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5mb)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Body exceeded 5mb limit\"\nReceived: \"Payload Too Large\"\n    at Object.<anonymous> (/work/test/e2e/middleware-fetches-with-body/index.test.ts:182:32)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5mb) should return 413 for body equal to 10mb",
+                "location": null,
+                "status": "failed",
+                "title": "should return 413 for body equal to 10mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5mb)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Body exceeded 5mb limit\"\nReceived: \"Payload Too Large\"\n    at Object.<anonymous> (/work/test/e2e/middleware-fetches-with-body/index.test.ts:203:32)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5mb) should return 413 for body greater than 5mb",
+                "location": null,
+                "status": "failed",
+                "title": "should return 413 for body greater than 5mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5mb)"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5mb) should be able to send and return body size equal to 5mb",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return body size equal to 5mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with bodyParser = false"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with bodyParser = false should be able to send and return with body size equal to 16KiB",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return with body size equal to 16KiB"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with bodyParser = false"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with bodyParser = false should be able to send and return with body greater than 16KiB",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return with body greater than 16KiB"
+              }
+            ],
+            "endTime": 1675813608765,
+            "message": "  ● Middleware fetches with body › with default bodyParser sizeLimit (1mb) › should return 413 for body greater than 1mb\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Body exceeded 1mb limit\"\n    Received: \"Payload Too Large\"\n\n      67 |\n      68 |       if (!(global as any).isNextDeploy) {\n    > 69 |         expect(res.statusText).toBe('Body exceeded 1mb limit')\n         |                                ^\n      70 |       }\n      71 |     })\n      72 |\n\n      at Object.<anonymous> (e2e/middleware-fetches-with-body/index.test.ts:69:32)\n\n  ● Middleware fetches with body › with custom bodyParser sizeLimit (5kb) › should return 413 for body greater than 5kb\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Body exceeded 5kb limit\"\n    Received: \"Payload Too Large\"\n\n      135 |\n      136 |       if (!(global as any).isNextDeploy) {\n    > 137 |         expect(res.statusText).toBe('Body exceeded 5kb limit')\n          |                                ^\n      138 |       }\n      139 |     })\n      140 |\n\n      at Object.<anonymous> (e2e/middleware-fetches-with-body/index.test.ts:137:32)\n\n  ● Middleware fetches with body › with custom bodyParser sizeLimit (5mb) › should return 413 for body equal to 10mb\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Body exceeded 5mb limit\"\n    Received: \"Payload Too Large\"\n\n      180 |\n      181 |       if (!(global as any).isNextDeploy) {\n    > 182 |         expect(res.statusText).toBe('Body exceeded 5mb limit')\n          |                                ^\n      183 |       }\n      184 |     })\n      185 |\n\n      at Object.<anonymous> (e2e/middleware-fetches-with-body/index.test.ts:182:32)\n\n  ● Middleware fetches with body › with custom bodyParser sizeLimit (5mb) › should return 413 for body greater than 5mb\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Body exceeded 5mb limit\"\n    Received: \"Payload Too Large\"\n\n      201 |\n      202 |       if (!(global as any).isNextDeploy) {\n    > 203 |         expect(res.statusText).toBe('Body exceeded 5mb limit')\n          |                                ^\n      204 |       }\n      205 |     })\n      206 |\n\n      at Object.<anonymous> (e2e/middleware-fetches-with-body/index.test.ts:203:32)\n",
+            "name": "/work/test/e2e/middleware-fetches-with-body/index.test.ts",
+            "startTime": 1675813587949,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/scroll-forward-restoration/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675813870384,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Scroll Restoration Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"manual\"\nReceived: \"auto\"\n    at Object.<anonymous> (/work/test/integration/scroll-forward-restoration/test/index.test.js:35:31)"
+                ],
+                "fullName": "Scroll Restoration Support dev mode should restore the scroll position on navigating forward",
+                "location": null,
+                "status": "failed",
+                "title": "should restore the scroll position on navigating forward"
+              },
+              {
+                "ancestorTitles": [
+                  "Scroll Restoration Support",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Scroll Restoration Support server mode should restore the scroll position on navigating forward",
+                "location": null,
+                "status": "passed",
+                "title": "should restore the scroll position on navigating forward"
+              }
+            ],
+            "endTime": 1675813894435,
+            "message": "  ● Scroll Restoration Support › dev mode › should restore the scroll position on navigating forward\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"manual\"\n    Received: \"auto\"\n\n      33 |     )\n      34 |\n    > 35 |     expect(scrollRestoration).toBe('manual')\n         |                               ^\n      36 |\n      37 |     const scrollX = Math.floor(await browser.eval(() => window.scrollX))\n      38 |     const scrollY = Math.floor(await browser.eval(() => window.scrollY))\n\n      at Object.<anonymous> (integration/scroll-forward-restoration/test/index.test.js:35:31)\n",
+            "name": "/work/test/integration/scroll-forward-restoration/test/index.test.js",
+            "startTime": 1675813870473,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/basic/misc.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675813358192,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675813523602,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675813358282,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675813696567,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675813746466,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675813696662,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/cli/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 54,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 55,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675813882780,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command --version",
+                "location": null,
+                "status": "passed",
+                "title": "--version"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command -v",
+                "location": null,
+                "status": "passed",
+                "title": "-v"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command detects command typos",
+                "location": null,
+                "status": "passed",
+                "title": "detects command typos"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should exit when SIGINT is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGINT is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should exit when SIGTERM is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGTERM is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev custom directory",
+                "location": null,
+                "status": "passed",
+                "title": "custom directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --port",
+                "location": null,
+                "status": "passed",
+                "title": "--port"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --port 0",
+                "location": null,
+                "status": "passed",
+                "title": "--port 0"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev PORT=0",
+                "location": null,
+                "status": "passed",
+                "title": "PORT=0"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev NODE_OPTIONS='--inspect'",
+                "location": null,
+                "status": "passed",
+                "title": "NODE_OPTIONS='--inspect'"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev -p",
+                "location": null,
+                "status": "passed",
+                "title": "-p"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [
+                  "Error: thrown: \"Exceeded timeout of 90000 ms for a test.\nUse jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n    at /work/test/integration/cli/test/index.test.js:227:5\n    at _dispatchDescribe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:98:26)\n    at describe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:60:5)\n    at /work/test/integration/cli/test/index.test.js:153:3\n    at _dispatchDescribe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:98:26)\n    at describe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:60:5)\n    at Object.<anonymous> (/work/test/integration/cli/test/index.test.js:18:1)\n    at Runtime._execModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1646:24)\n    at Runtime._loadModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1185:12)\n    at Runtime.requireModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1009:12)"
+                ],
+                "fullName": "CLI Usage dev -p conflict",
+                "location": null,
+                "status": "failed",
+                "title": "-p conflict"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --hostname",
+                "location": null,
+                "status": "passed",
+                "title": "--hostname"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev -H",
+                "location": null,
+                "status": "passed",
+                "title": "-H"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should format IPv6 addresses correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should format IPv6 addresses correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should exit when SIGINT is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGINT is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should exit when SIGTERM is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGTERM is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should format IPv6 addresses correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should format IPv6 addresses correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start duplicate sass deps",
+                "location": null,
+                "status": "passed",
+                "title": "duplicate sass deps"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should exit when SIGINT is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGINT is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should exit when SIGTERM is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGTERM is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout string arg",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout string arg"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout negative number",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout negative number"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout Infinity",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout Infinity"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout happy path",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout happy path"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "info"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage info --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "info"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage info -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "info"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage info should print output",
+                "location": null,
+                "status": "passed",
+                "title": "should print output"
+              }
+            ],
+            "endTime": 1675813999714,
+            "message": "  ● CLI Usage › dev › -p conflict\n\n    thrown: \"Exceeded timeout of 90000 ms for a test.\n    Use jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n\n      225 |     })\n      226 |\n    > 227 |     test('-p conflict', async () => {\n          |     ^\n      228 |       const port = await findPort()\n      229 |\n      230 |       let app = http.createServer((_, res) => {\n\n      at integration/cli/test/index.test.js:227:5\n      at integration/cli/test/index.test.js:153:3\n      at Object.<anonymous> (integration/cli/test/index.test.js:18:1)\n",
+            "name": "/work/test/integration/cli/test/index.test.js",
+            "startTime": 1675813882873,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675813542741,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675813607246,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675813542835,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/middleware-custom-matchers-i18n/test/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675813631277,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              }
+            ],
+            "endTime": 1675814050329,
+            "message": "  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n",
+            "name": "/work/test/e2e/404-page-router/index.test.ts",
+            "startTime": 1675813631372,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/basic/misc.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675813355059,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675813518315,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675813355149,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675813695793,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675813745168,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675813695887,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/cli/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 54,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 55,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675813882509,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command --version",
+                "location": null,
+                "status": "passed",
+                "title": "--version"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command -v",
+                "location": null,
+                "status": "passed",
+                "title": "-v"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command detects command typos",
+                "location": null,
+                "status": "passed",
+                "title": "detects command typos"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should exit when SIGINT is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGINT is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should exit when SIGTERM is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGTERM is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev custom directory",
+                "location": null,
+                "status": "passed",
+                "title": "custom directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --port",
+                "location": null,
+                "status": "passed",
+                "title": "--port"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --port 0",
+                "location": null,
+                "status": "passed",
+                "title": "--port 0"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev PORT=0",
+                "location": null,
+                "status": "passed",
+                "title": "PORT=0"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev NODE_OPTIONS='--inspect'",
+                "location": null,
+                "status": "passed",
+                "title": "NODE_OPTIONS='--inspect'"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev -p",
+                "location": null,
+                "status": "passed",
+                "title": "-p"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [
+                  "Error: thrown: \"Exceeded timeout of 90000 ms for a test.\nUse jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n    at /work/test/integration/cli/test/index.test.js:227:5\n    at _dispatchDescribe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:98:26)\n    at describe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:60:5)\n    at /work/test/integration/cli/test/index.test.js:153:3\n    at _dispatchDescribe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:98:26)\n    at describe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:60:5)\n    at Object.<anonymous> (/work/test/integration/cli/test/index.test.js:18:1)\n    at Runtime._execModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1646:24)\n    at Runtime._loadModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1185:12)\n    at Runtime.requireModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1009:12)"
+                ],
+                "fullName": "CLI Usage dev -p conflict",
+                "location": null,
+                "status": "failed",
+                "title": "-p conflict"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --hostname",
+                "location": null,
+                "status": "passed",
+                "title": "--hostname"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev -H",
+                "location": null,
+                "status": "passed",
+                "title": "-H"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should format IPv6 addresses correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should format IPv6 addresses correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should exit when SIGINT is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGINT is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should exit when SIGTERM is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGTERM is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should format IPv6 addresses correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should format IPv6 addresses correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start duplicate sass deps",
+                "location": null,
+                "status": "passed",
+                "title": "duplicate sass deps"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should exit when SIGINT is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGINT is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should exit when SIGTERM is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGTERM is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout string arg",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout string arg"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout negative number",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout negative number"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout Infinity",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout Infinity"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout happy path",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout happy path"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "info"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage info --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "info"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage info -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "info"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage info should print output",
+                "location": null,
+                "status": "passed",
+                "title": "should print output"
+              }
+            ],
+            "endTime": 1675813999349,
+            "message": "  ● CLI Usage › dev › -p conflict\n\n    thrown: \"Exceeded timeout of 90000 ms for a test.\n    Use jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n\n      225 |     })\n      226 |\n    > 227 |     test('-p conflict', async () => {\n          |     ^\n      228 |       const port = await findPort()\n      229 |\n      230 |       let app = http.createServer((_, res) => {\n\n      at integration/cli/test/index.test.js:227:5\n      at integration/cli/test/index.test.js:153:3\n      at Object.<anonymous> (integration/cli/test/index.test.js:18:1)\n",
+            "name": "/work/test/integration/cli/test/index.test.js",
+            "startTime": 1675813882604,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
