@@ -206,6 +206,11 @@
 <span id="206">206</span>
 <span id="207">207</span>
 <span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{BoolVc, StringVc},
@@ -331,7 +336,8 @@
         } <span class="kw">else </span>{
             clean(<span class="kw-2">&amp;</span>path_vc.to_string().<span class="kw">await</span><span class="question-mark">?</span>)
         };
-        <span class="kw">if </span>name.ends_with(extension) {
+        <span class="kw">let </span>removed_extension = name.ends_with(extension);
+        <span class="kw">if </span>removed_extension {
             name.truncate(name.len() - extension.len());
         }
 
@@ -356,9 +362,13 @@
             <span class="kw">let </span>truncated_hash = <span class="kw-2">&amp;</span>hash[..<span class="number">5</span>];
             name = <span class="macro">format!</span>(<span class="string">&quot;{}_{}&quot;</span>, truncated_hash, <span class="kw-2">&amp;</span>name[i..]);
         }
-        <span class="kw">if </span>!name.ends_with(extension) {
-            name += extension;
+        <span class="comment">// We need to make sure that `.json` and `.json.js` doesn&#39;t end up with the same
+        // name. So when we add an extra extension when want to mark that with a &quot;._&quot;
+        // suffix.
+        </span><span class="kw">if </span>!removed_extension {
+            name += <span class="string">&quot;._&quot;</span>;
         }
+        name += extension;
         <span class="kw">let </span><span class="kw-2">mut </span>root_path = <span class="self">self</span>.chunk_root_path;
         <span class="attr">#[allow(clippy::single_match, reason = <span class="string">&quot;future extensions&quot;</span>)]
         </span><span class="kw">match </span>extension {
