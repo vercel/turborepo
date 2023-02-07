@@ -17,7 +17,7 @@ to assert that
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing 86e742c7f211dbcc
+  omit-keys:omit-keys-task: cache miss, executing 1cfdc3f9c2d0b257
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
@@ -39,7 +39,7 @@ to assert that
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache hit, suppressing output 86e742c7f211dbcc
+  omit-keys:omit-keys-task: cache hit, suppressing output 1cfdc3f9c2d0b257
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -51,7 +51,7 @@ to assert that
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing 5c7b8752f00c2a3d
+  omit-keys:omit-keys-task: cache miss, executing 1de6963a2a2f1b58
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
@@ -68,7 +68,7 @@ to assert that
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache hit, suppressing output 5c7b8752f00c2a3d
+  omit-keys:omit-keys-task: cache hit, suppressing output 1de6963a2a2f1b58
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -79,7 +79,7 @@ to assert that
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing 0a994b81282c0559
+  omit-keys:omit-keys-task: cache miss, executing 7edfff1b54906dd5
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
