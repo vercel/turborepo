@@ -119,7 +119,7 @@ impl PatternMappingVc {
         resolve_type: Value<ResolveType>,
     ) -> Result<PatternMappingVc> {
         let result = resolve_result.await?;
-        let asset = match result.primary.iter().next() {
+        let asset = match result.primary.first() {
             None => {
                 return Ok(PatternMapping::Unresolveable(
                     request_to_string(request).await?.to_string(),
