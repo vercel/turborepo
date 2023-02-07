@@ -1,11 +1,11 @@
 use std::mem::take;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use swc_core::{
     common::DUMMY_SP,
     ecma::{
-        ast::{CallExpr, Callee, Expr, ExprOrSpread, Ident},
+        ast::{CallExpr, Callee, Expr, ExprOrSpread, Ident, Lit, Str},
         utils::private_ident,
     },
     quote,
@@ -119,7 +119,7 @@ impl CodeGenerateable for AmdDefineWithDependenciesCodeGen {
         let mut visitors = Vec::new();
 
         enum ResolvedElement {
-            PatternMapping(PatternMappingReadRef),
+            PatternMapping(PatternMappingReadRef, String),
             Expr(Expr),
         }
 
@@ -138,6 +138,10 @@ impl CodeGenerateable for AmdDefineWithDependenciesCodeGen {
                                 Value::new(Cjs),
                             )
                             .await?,
+                            request
+                                .await?
+                                .request()
+                                .context("amd request pattern can't be turned into a string")?,
                         )
                     }
                     AmdDefineDependencyElement::Exports => {
@@ -172,7 +176,7 @@ impl CodeGenerateable for AmdDefineWithDependenciesCodeGen {
                 if let Some(factory) = take(args).pop().map(|e| e.expr) {
                     let deps = resolved_elements.iter().map(|element| {
                         match element {
-                            ResolvedElement::PatternMapping(pm) => {
+                            ResolvedElement::PatternMapping(pm, req) => {
                                 match &**pm {
                                     PatternMapping::Invalid => Expr::Ident(Ident::new("undefined".into(), DUMMY_SP)),
                                     pm => Expr::Call(CallExpr {
@@ -187,7 +191,11 @@ impl CodeGenerateable for AmdDefineWithDependenciesCodeGen {
                                             ))
                                         ),
                                         args: vec![
-                                            pm.create().into(),
+                                            pm.apply(Expr::Lit(Lit::Str(Str {
+                                                span: DUMMY_SP,
+                                                value: req.as_str().into(),
+                                                raw: None,
+                                            }))).into(),
                                         ],
                                         type_args: None
                                     }),
