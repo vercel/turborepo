@@ -16,16 +16,16 @@
 #| Function Name               | Description                                                                |
 #| --------------------------- | -------------------------------------------------------------------------- |
 #| `isAnyFilePathMatch`        | Returns true if any filename in the PR diff matches the given regex        |
-#| `isNotAnyFilePathMatch`     | The negation of `isAnyFilePathMatch`                                       |
 #| `isPRBodyMatch`             | Returns true if the PR description matches the given regex                 |
-#| `isNotPRBodyMatch`          | The negation of `isPRBodyMatch`                                            |
 #| `isPRTitleMatch`            | Returns true if the PR title matches the given regex                       |
-#| `isNotPRTitleMatch`         | The negation of `isPRTitleMatch`                                           |
 #| `isPRAuthorMatch`           | Returns true if the PR author matches the given regex                      |
-#| `isNotPRAuthorMatch`        | The negation of `isPRAuthorMatch`                                          |
 #| `isPRAuthorCompanyMatch`    | Returns true if the PR author's company matches the given regex            |
-#| `isNotPRAuthorCompanyMatch` | The negation of `isPRAuthorCompanyMatch`                                   |
 #| `isAnyFileOwnedByMatch`     | Returns true if any owner of a file in the PR diff matches the given regex |
+#| `isNotAnyFilePathMatch`     | The negation of `isAnyFilePathMatch`                                       |
+#| `isNotPRBodyMatch`          | The negation of `isPRBodyMatch`                                            |
+#| `isNotPRTitleMatch`         | The negation of `isPRTitleMatch`                                           |
+#| `isNotPRAuthorMatch`        | The negation of `isPRAuthorMatch`                                          |
+#| `isNotPRAuthorCompanyMatch` | The negation of `isPRAuthorCompanyMatch`                                   |
 #| `isNotAnyFileOwnerByMatch`  | The negation of `isAnyFileOwnedByMatch`                                    |
 
 labeler:
