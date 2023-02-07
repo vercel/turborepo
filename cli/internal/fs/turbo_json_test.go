@@ -35,42 +35,48 @@ func Test_ReadTurboConfig(t *testing.T) {
 		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
 	}
 
-	pipelineExpected := map[string]TaskDefinition{
+	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
 			fieldsMeta: map[string]bool{
 				"Outputs":                 true,
 				"OutputMode":              true,
 				"TopologicalDependencies": true,
 			},
-			Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
-			TopologicalDependencies: []string{"build"},
-			EnvVarDependencies:      []string{},
-			TaskDependencies:        []string{},
-			ShouldCache:             true,
-			OutputMode:              util.NewTaskOutput,
+			TaskDefinition: TaskDefinition{
+				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
+				TopologicalDependencies: []string{"build"},
+				EnvVarDependencies:      []string{},
+				TaskDependencies:        []string{},
+				ShouldCache:             true,
+				OutputMode:              util.NewTaskOutput,
+			},
 		},
 		"lint": {
 			fieldsMeta: map[string]bool{
 				"Outputs":    true,
 				"OutputMode": true,
 			},
-			Outputs:                 TaskOutputs{},
-			TopologicalDependencies: []string{},
-			EnvVarDependencies:      []string{"MY_VAR"},
-			TaskDependencies:        []string{},
-			ShouldCache:             true,
-			OutputMode:              util.NewTaskOutput,
+			TaskDefinition: TaskDefinition{
+				Outputs:                 TaskOutputs{},
+				TopologicalDependencies: []string{},
+				EnvVarDependencies:      []string{"MY_VAR"},
+				TaskDependencies:        []string{},
+				ShouldCache:             true,
+				OutputMode:              util.NewTaskOutput,
+			},
 		},
 		"dev": {
 			fieldsMeta: map[string]bool{
 				"OutputMode": true,
 			},
-			Outputs:                 TaskOutputs{},
-			TopologicalDependencies: []string{},
-			EnvVarDependencies:      []string{},
-			TaskDependencies:        []string{},
-			ShouldCache:             false,
-			OutputMode:              util.FullTaskOutput,
+			TaskDefinition: TaskDefinition{
+				Outputs:                 TaskOutputs{},
+				TopologicalDependencies: []string{},
+				EnvVarDependencies:      []string{},
+				TaskDependencies:        []string{},
+				ShouldCache:             false,
+				OutputMode:              util.FullTaskOutput,
+			},
 		},
 		"publish": {
 			fieldsMeta: map[string]bool{
@@ -79,13 +85,15 @@ func Test_ReadTurboConfig(t *testing.T) {
 				"TaskDependencies":        true,
 				"TopologicalDependencies": true,
 			},
-			Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
-			TopologicalDependencies: []string{"build", "publish"},
-			EnvVarDependencies:      []string{},
-			TaskDependencies:        []string{"admin#lint", "build"},
-			ShouldCache:             false,
-			Inputs:                  []string{"build/**/*"},
-			OutputMode:              util.FullTaskOutput,
+			TaskDefinition: TaskDefinition{
+				Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
+				TopologicalDependencies: []string{"build", "publish"},
+				EnvVarDependencies:      []string{},
+				TaskDependencies:        []string{"admin#lint", "build"},
+				ShouldCache:             false,
+				Inputs:                  []string{"build/**/*"},
+				OutputMode:              util.FullTaskOutput,
+			},
 		},
 	}
 

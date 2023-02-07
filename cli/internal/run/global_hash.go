@@ -84,19 +84,28 @@ func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 	if err != nil {
 		return "", fmt.Errorf("error hashing files: %w", err)
 	}
+
+	pipelineForGlobalHash := map[string]fs.TaskDefinition{}
+	for taskName, bookkeepingTaskDef := range pipeline {
+		pipelineForGlobalHash[taskName] = bookkeepingTaskDef.TaskDefinition
+	}
+
 	globalHashable := struct {
 		globalFileHashMap    map[turbopath.AnchoredUnixPath]string
 		rootExternalDepsHash string
 		hashedSortedEnvPairs []string
 		globalCacheKey       string
-		pipeline             fs.Pipeline
+		pipeline             map[string]fs.TaskDefinition
 	}{
 		globalFileHashMap:    globalFileHashMap,
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
 		hashedSortedEnvPairs: globalHashableEnvPairs,
 		globalCacheKey:       _globalCacheKey,
-		pipeline:             pipeline,
+		pipeline:             pipelineForGlobalHash,
 	}
+
+	fmt.Printf("[debug] globalHashable.pipeline: %#v\n", globalHashable.pipeline)
+
 	globalHash, err := fs.HashObject(globalHashable)
 	if err != nil {
 		return "", fmt.Errorf("error hashing global dependencies %w", err)
