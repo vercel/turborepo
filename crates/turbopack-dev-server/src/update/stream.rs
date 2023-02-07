@@ -4,22 +4,15 @@ use anyhow::{bail, Result};
 use futures::{prelude::*, Stream};
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
-use turbo_tasks::{CollectiblesSource, State, TransientInstance, Value};
+use turbo_tasks::{CollectiblesSource, State, TransientInstance};
 use turbopack_core::{
     issue::{IssueVc, PlainIssueReadRef},
-    version::{
-        NotFoundVersionVc, PartialUpdate, TotalUpdate, Update, UpdateReadRef, VersionVc,
-        VersionedContentVc,
-    },
+    version::{NotFoundVersionVc, PartialUpdate, TotalUpdate, Update, UpdateReadRef, VersionVc},
 };
 
-use super::protocol::ResourceIdentifier;
-use crate::{
-    resource_to_data,
-    source::{ContentSourceContent, ContentSourceResultVc},
-};
+use crate::source::resolve::{ResolveSourceRequestResult, ResolveSourceRequestResultVc};
 
-type GetContentFn = Box<dyn Fn() -> ContentSourceResultVc + Send + Sync>;
+type GetContentFn = Box<dyn Fn() -> ResolveSourceRequestResultVc + Send + Sync>;
 
 async fn peek_issues<T: CollectiblesSource + Copy>(source: T) -> Result<Vec<PlainIssueReadRef>> {
     let captured = IssueVc::peek_issues_with_path(source).await?.await?;
@@ -38,45 +31,28 @@ fn extend_issues(issues: &mut Vec<PlainIssueReadRef>, new_issues: Vec<PlainIssue
 }
 
 #[turbo_tasks::function]
-async fn get_content_wrapper(
-    resource: Value<ResourceIdentifier>,
-    get_content: TransientInstance<GetContentFn>,
-) -> Result<ContentSourceResultVc> {
-    let mut content = get_content();
-    while let ContentSourceContent::NeedData(data) = &*content.await?.content.await? {
-        content = data.source.get(
-            &data.path,
-            Value::new(resource_to_data(resource.clone().into_value(), &data.vary)),
-        );
-    }
-    Ok(content)
-}
-
-async fn resolve_static_content(
-    content_source_result: ContentSourceResultVc,
-) -> Result<Option<VersionedContentVc>> {
-    Ok(match *content_source_result.await?.content.await? {
-        ContentSourceContent::NotFound => None,
-        ContentSourceContent::HttpProxy(_) => {
-            panic!("HTTP proxying is not supported in UpdateStream")
-        }
-        ContentSourceContent::Static(content) => Some(content),
-        ContentSourceContent::NeedData(_) => {
-            bail!("this might only happen temporary as get_content_wrapper resolves the data")
-        }
-    })
-}
-
-#[turbo_tasks::function]
 async fn get_update_stream_item(
     from: VersionStateVc,
-    resource: Value<ResourceIdentifier>,
     get_content: TransientInstance<GetContentFn>,
 ) -> Result<UpdateStreamItemVc> {
-    let content = get_content_wrapper(resource, get_content);
+    let content = get_content();
 
-    match resolve_static_content(content).await? {
-        None => {
+    match &*content.await? {
+        ResolveSourceRequestResult::Static(static_content) => {
+            let resolved_content = static_content.await?.content;
+            let from = from.get();
+            let update = resolved_content.update(from);
+
+            let mut plain_issues = peek_issues(update).await?;
+            extend_issues(&mut plain_issues, peek_issues(content).await?);
+
+            Ok(UpdateStreamItem {
+                update: update.await?,
+                issues: plain_issues,
+            }
+            .cell())
+        }
+        _ => {
             let plain_issues = peek_issues(content).await?;
 
             let update = if plain_issues.is_empty() {
@@ -98,30 +74,16 @@ async fn get_update_stream_item(
             }
             .cell())
         }
-        Some(resolved_content) => {
-            let from = from.get();
-            let update = resolved_content.update(from);
-
-            let mut plain_issues = peek_issues(update).await?;
-            extend_issues(&mut plain_issues, peek_issues(content).await?);
-
-            Ok(UpdateStreamItem {
-                update: update.await?,
-                issues: plain_issues,
-            }
-            .cell())
-        }
     }
 }
 
 #[turbo_tasks::function]
 async fn compute_update_stream(
     from: VersionStateVc,
-    resource: Value<ResourceIdentifier>,
     get_content: TransientInstance<GetContentFn>,
     sender: TransientInstance<Sender<UpdateStreamItemReadRef>>,
 ) -> Result<()> {
-    let item = get_update_stream_item(from, resource, get_content)
+    let item = get_update_stream_item(from, get_content)
         .strongly_consistent()
         .await?;
 
@@ -166,27 +128,21 @@ impl VersionStateVc {
 pub(super) struct UpdateStream(Pin<Box<dyn Stream<Item = UpdateStreamItemReadRef> + Send + Sync>>);
 
 impl UpdateStream {
-    pub async fn new(
-        resource: ResourceIdentifier,
-        get_content: TransientInstance<GetContentFn>,
-    ) -> Result<UpdateStream> {
+    pub async fn new(get_content: TransientInstance<GetContentFn>) -> Result<UpdateStream> {
         let (sx, rx) = tokio::sync::mpsc::channel(32);
 
-        let content = get_content_wrapper(Value::new(resource.clone()), get_content.clone());
+        let content = get_content();
         // We can ignore issues reported in content here since [compute_update_stream]
         // will handle them
-        let version = match resolve_static_content(content).await? {
-            Some(content) => content.version(),
-            None => NotFoundVersionVc::new().into(),
+        let version = match &*content.await? {
+            ResolveSourceRequestResult::Static(static_content) => {
+                static_content.await?.content.version()
+            }
+            _ => NotFoundVersionVc::new().into(),
         };
         let version_state = VersionStateVc::new(version).await?;
 
-        compute_update_stream(
-            version_state,
-            Value::new(resource),
-            get_content,
-            TransientInstance::new(sx),
-        );
+        compute_update_stream(version_state, get_content, TransientInstance::new(sx));
 
         let mut last_had_issues = false;
 

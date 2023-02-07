@@ -172,7 +172,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// so that downstream tasks can count on the hash existing
 	//
 	// bail if the script doesn't exist
-	if _, ok := packageTask.Command(); !ok {
+	if packageTask.Command == "" {
 		progressLogger.Debug("no task in package, skipping")
 		progressLogger.Debug("done", "status", "skipped", "duration", time.Since(cmdTime))
 		return nil

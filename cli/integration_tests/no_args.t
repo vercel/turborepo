@@ -33,7 +33,7 @@ Make sure exit code is 2 when no args are passed
         --token <TOKEN>             Set the auth token for API calls
         --trace <TRACE>             Specify a file to save a pprof trace
         --verbosity <COUNT>         Verbosity level
-    -h, --help                      Print help information
+    -h, --help                      Print help
   
   Run Arguments:
         --cache-dir <CACHE_DIR>          Override the filesystem cache directory

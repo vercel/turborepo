@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
-	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/yaml"
 	"gotest.tools/v3/assert"
@@ -17,10 +17,7 @@ func getFixture(t *testing.T, name string) ([]byte, error) {
 	if err != nil {
 		t.Errorf("failed to get cwd: %v", err)
 	}
-	cwd, err := fs.CheckedToAbsoluteSystemPath(defaultCwd)
-	if err != nil {
-		t.Fatalf("cwd is not an absolute directory %v: %v", defaultCwd, err)
-	}
+	cwd := turbopath.AbsoluteSystemPath(defaultCwd)
 	lockfilePath := cwd.UntypedJoin("testdata", name)
 	if !lockfilePath.FileExists() {
 		return nil, errors.Errorf("unable to find 'testdata/%s'", name)
@@ -49,7 +46,14 @@ func Test_Roundtrip(t *testing.T) {
 			t.Errorf("decoding failed %s", err)
 		}
 
-		assert.DeepEqual(t, lockfile, newLockfile)
+		assert.DeepEqual(
+			t,
+			lockfile,
+			newLockfile,
+			// Skip over fields that don't get serialized
+			cmpopts.IgnoreUnexported(PnpmLockfile{}),
+			cmpopts.IgnoreTypes(yaml.Node{}),
+		)
 	}
 }
 
@@ -58,8 +62,7 @@ func Test_SpecifierResolution(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	untypedLockfile, err := DecodePnpmLockfile(contents)
-	lockfile := untypedLockfile.(*PnpmLockfile)
+	lockfile, err := DecodePnpmLockfile(contents)
 	if err != nil {
 		t.Errorf("failure decoding lockfile: %v", err)
 	}
@@ -79,6 +82,7 @@ func Test_SpecifierResolution(t *testing.T) {
 		{workspacePath: "apps/web", pkg: "typescript", specifier: "^4.5.3", version: "4.8.3", found: true},
 		{workspacePath: "apps/web", pkg: "lodash", specifier: "bad-tag", version: "", found: false},
 		{workspacePath: "apps/web", pkg: "lodash", specifier: "^4.17.21", version: "4.17.21_ehchni3mpmovsvjxesffg2i5a4", found: true},
+		{workspacePath: "apps/docs", pkg: "dashboard-icons", specifier: "github:peerigon/dashboard-icons", version: "github.com/peerigon/dashboard-icons/ce27ef933144e09cef3911025f3649040a8571b6", found: true},
 		{workspacePath: "", pkg: "turbo", specifier: "latest", version: "1.4.6", found: true},
 		{workspacePath: "apps/bad_workspace", pkg: "turbo", specifier: "latest", version: "1.4.6", err: "no workspace 'apps/bad_workspace' found in lockfile"},
 	}
@@ -99,8 +103,7 @@ func Test_SpecifierResolutionV6(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	untypedLockfile, err := DecodePnpmLockfile(contents)
-	lockfile := untypedLockfile.(*PnpmLockfileV6)
+	lockfile, err := DecodePnpmLockfile(contents)
 	if err != nil {
 		t.Errorf("failure decoding lockfile: %v", err)
 	}
@@ -152,6 +155,22 @@ func Test_SubgraphInjectedPackages(t *testing.T) {
 
 	assert.Assert(t, hasInjectedPackage, "pruned lockfile is missing injected package")
 
+}
+
+func Test_GitPackages(t *testing.T) {
+	contents, err := getFixture(t, "pnpm7-workspace.yaml")
+	if err != nil {
+		t.Error(err)
+	}
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err, "decode lockfile")
+
+	pkg, err := lockfile.ResolvePackage(turbopath.AnchoredUnixPath("apps/docs"), "dashboard-icons", "github:peerigon/dashboard-icons")
+	assert.NilError(t, err, "failure to find package")
+	assert.Assert(t, pkg.Found)
+	assert.DeepEqual(t, pkg.Key, "github.com/peerigon/dashboard-icons/ce27ef933144e09cef3911025f3649040a8571b6")
+	assert.DeepEqual(t, pkg.Version, "1.0.0")
+	// make sure subgraph produces git dep
 }
 
 func Test_DecodePnpmUnquotedURL(t *testing.T) {
@@ -213,4 +232,79 @@ func Test_PnpmPrunePatchesV6(t *testing.T) {
 	assert.NilError(t, err)
 
 	assert.Equal(t, len(prunedLockfile.Patches()), 1)
+}
+
+func Test_PnpmAbsoluteDependency(t *testing.T) {
+	type testCase struct {
+		fixture string
+		key     string
+	}
+	testcases := []testCase{
+		{"pnpm-absolute.yaml", "/@scope/child/1.0.0"},
+		{"pnpm-absolute-v6.yaml", "/@scope/child@1.0.0"},
+	}
+	for _, tc := range testcases {
+		contents, err := getFixture(t, tc.fixture)
+		assert.NilError(t, err, tc.fixture)
+
+		lockfile, err := DecodePnpmLockfile(contents)
+		assert.NilError(t, err, tc.fixture)
+
+		pkg, err := lockfile.ResolvePackage(turbopath.AnchoredUnixPath("packages/a"), "child", tc.key)
+		assert.NilError(t, err, "resolve")
+		assert.Assert(t, pkg.Found, tc.fixture)
+		assert.DeepEqual(t, pkg.Key, tc.key)
+		assert.DeepEqual(t, pkg.Version, "1.0.0")
+	}
+}
+
+func Test_LockfilePeer(t *testing.T) {
+	contents, err := getFixture(t, "pnpm-peer-v6.yaml")
+	if err != nil {
+		t.Error(err)
+	}
+	assert.NilError(t, err, "read fixture")
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err, "parse lockfile")
+
+	pkg, err := lockfile.ResolvePackage(turbopath.AnchoredUnixPath("apps/web"), "next", "13.0.4")
+	assert.NilError(t, err, "read lockfile")
+	assert.Assert(t, pkg.Found)
+	assert.DeepEqual(t, pkg.Version, "13.0.4(react-dom@18.2.0)(react@18.2.0)")
+	assert.DeepEqual(t, pkg.Key, "/next@13.0.4(react-dom@18.2.0)(react@18.2.0)")
+}
+
+func Test_LockfileTopLevelOverride(t *testing.T) {
+	contents, err := getFixture(t, "pnpm-top-level-dupe.yaml")
+	if err != nil {
+		t.Error(err)
+	}
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err, "decode lockfile")
+
+	pkg, err := lockfile.ResolvePackage(turbopath.AnchoredUnixPath("packages/a"), "ci-info", "3.7.1")
+	assert.NilError(t, err, "resolve package")
+
+	assert.Assert(t, pkg.Found)
+	assert.DeepEqual(t, pkg.Key, "/ci-info/3.7.1")
+	assert.DeepEqual(t, pkg.Version, "3.7.1")
+}
+
+func Test_PnpmOverride(t *testing.T) {
+	contents, err := getFixture(t, "pnpm_override.yaml")
+	if err != nil {
+		t.Error(err)
+	}
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err, "decode lockfile")
+
+	pkg, err := lockfile.ResolvePackage(
+		turbopath.AnchoredUnixPath("config/hardhat"),
+		"@nomiclabs/hardhat-ethers",
+		"npm:hardhat-deploy-ethers@0.3.0-beta.13",
+	)
+	assert.NilError(t, err, "failure to find package")
+	assert.Assert(t, pkg.Found)
+	assert.DeepEqual(t, pkg.Key, "/hardhat-deploy-ethers/0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy")
+	assert.DeepEqual(t, pkg.Version, "/hardhat-deploy-ethers/0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy")
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/ui"
 	"github.com/vercel/turbo/cli/internal/util"
 
+	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
 )
 
@@ -150,7 +151,15 @@ func (r *RunState) Close(terminal cli.Ui) error {
 
 	maybeFullTurbo := ""
 	if r.Cached == r.Attempted && r.Attempted > 0 {
-		maybeFullTurbo = ui.Rainbow(">>> FULL TURBO")
+		terminalProgram := os.Getenv("TERM_PROGRAM")
+		// On the macOS Terminal, the rainbow colors show up as a magenta background
+		// with a gray background on a single letter. Instead, we print in bold magenta
+		if terminalProgram == "Apple_Terminal" {
+			fallbackTurboColor := color.New(color.FgHiMagenta, color.Bold).SprintFunc()
+			maybeFullTurbo = fallbackTurboColor(">>> FULL TURBO")
+		} else {
+			maybeFullTurbo = ui.Rainbow(">>> FULL TURBO")
+		}
 	}
 
 	if r.Attempted == 0 {

@@ -4,7 +4,7 @@ TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 EXT :=
 ifeq ($(OS),Windows_NT)
 	UNAME := Windows
-	EXT = ".exe"
+	EXT = .exe
 else
 	UNAME := $(shell uname -s)
 endif
@@ -17,6 +17,9 @@ GO_FLAGS += -trimpath
 
 CLI_DIR = $(shell pwd)
 
+# allow opting in to the rust codepaths
+GO_TAG ?= go
+
 GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
@@ -24,8 +27,23 @@ GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/t
 turbo: go-turbo$(EXT)
 	cargo build --manifest-path ../crates/turborepo/Cargo.toml
 
-go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod
-	CGO_ENABLED=1 go build $(GO_FLAGS) -o go-turbo$(EXT) ./cmd/turbo
+go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
+	CGO_ENABLED=1 go build $(GO_FLAGS) -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
+
+.PHONY: turborepo-ffi-install
+turborepo-ffi-install: turborepo-ffi turborepo-ffi-proto
+	cp -r ../crates/turborepo-ffi/bindings.h \
+	      ../crates/turborepo-ffi/ffi/proto \
+	      ../crates/turborepo-ffi/target/release/libturborepo_ffi.a \
+	      ./internal/ffi
+
+.PHONY: turborepo-ffi
+turborepo-ffi:
+	cd ../crates/turborepo-ffi && CARGO_TARGET_DIR=./target cargo build --release
+
+.PHONY: turborepo-ffi-proto
+turborepo-ffi-proto:
+	cd ../crates/turborepo-ffi && protoc --go_out=. messages.proto
 
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
@@ -57,7 +75,7 @@ clean-go:
 	go clean -testcache ./...
 
 test-go: $(GENERATED_FILES) $(GO_FILES) go.mod go.sum
-	go test $(TURBO_RACE) ./...
+	go test $(TURBO_RACE) -tags $(GO_TAG) ./...
 
 # protos need to be compiled before linting, since linting needs to pick up
 # some types from the generated code
@@ -88,9 +106,9 @@ cmd/turbo/version.go: ../version.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
 build: install
-	# cd $(CLI_DIR)/../packages/turbo-ignore && pnpm install --filter=turbo-ignore && pnpm run build
-	cd $(CLI_DIR)/../packages/create-turbo && pnpm install --filter=create-turbo && pnpm run build
-	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm install --filter=@turbo/codemod && pnpm run build
+	cd $(CLI_DIR)/../ && pnpm install --filter=create-turbo && pnpm turbo build --filter=create-turbo...
+	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/codemod && pnpm turbo build --filter=@turbo/codemod...
+	cd $(CLI_DIR)/../ && pnpm install --filter=turbo-ignore && pnpm turbo build --filter=turbo-ignore...
 
 .PHONY: prepublish
 prepublish: compile-protos cmd/turbo/version.go
@@ -152,9 +170,9 @@ stage-release: cmd/turbo/version.go
 
 	# Prepare the packages.
 	cd $(CLI_DIR)/../packages/turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	# cd $(CLI_DIR)/../packages/turbo-ignore && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/create-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm version "$(TURBO_VERSION)" --allow-same-version
 
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"

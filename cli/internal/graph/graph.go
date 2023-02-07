@@ -4,10 +4,12 @@ package graph
 import (
 	gocontext "context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/nodes"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
@@ -33,6 +35,8 @@ type CompleteGraph struct {
 
 	// Map of TaskDefinitions by taskID
 	TaskDefinitions map[string]*fs.TaskDefinition
+
+	RepoRoot turbopath.AbsoluteSystemPath
 }
 
 // GetPackageTaskVisitor wraps a `visitor` function that is used for walking the TaskGraph
@@ -45,17 +49,35 @@ func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor fun
 		if !ok {
 			return fmt.Errorf("cannot find package %v for task %v", packageName, taskID)
 		}
+
 		taskDefinition, ok := g.TaskDefinitions[taskID]
 		if !ok {
 			return fmt.Errorf("Could not find definition for task")
 		}
 
-		return visitor(ctx, &nodes.PackageTask{
-			TaskID:         taskID,
-			Task:           taskName,
-			PackageName:    packageName,
-			Pkg:            pkg,
-			TaskDefinition: taskDefinition,
-		})
+		packageTask := &nodes.PackageTask{
+			TaskID:          taskID,
+			Task:            taskName,
+			PackageName:     packageName,
+			Pkg:             pkg,
+			Dir:             pkg.Dir.ToString(),
+			TaskDefinition:  taskDefinition,
+			Outputs:         taskDefinition.Outputs.Inclusions,
+			ExcludedOutputs: taskDefinition.Outputs.Exclusions,
+		}
+
+		if cmd, ok := pkg.Scripts[taskName]; ok {
+			packageTask.Command = cmd
+		}
+
+		packageTask.LogFile = repoRelativeLogFile(packageTask)
+
+		return visitor(ctx, packageTask)
 	}
+}
+
+// repoRelativeLogFile returns the path to the log file for this task execution as a
+// relative path from the root of the monorepo.
+func repoRelativeLogFile(pt *nodes.PackageTask) string {
+	return filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), ".turbo", fmt.Sprintf("turbo-%v.log", pt.Task))
 }

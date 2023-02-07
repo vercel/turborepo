@@ -8,6 +8,7 @@ import { clsx } from "../helpers/clsx";
 import { getErrorSource } from "../helpers/nodeStackFrames";
 import { noop as css } from "../helpers/noop-template";
 import { ReadyRuntimeError } from "../helpers/getErrorByType";
+import { decodeMagicIdentifiers } from "../helpers/magic-identifier";
 import { getFrameSource, OriginalStackFrame } from "../helpers/stack-frame";
 import { usePagination } from "../hooks/usePagination";
 import { ExternalLink } from "../icons";
@@ -162,15 +163,20 @@ export function RuntimeError({ error }: RuntimeErrorProps) {
 function HotlinkedText(props: { text: string }) {
   const { text } = props;
 
-  const linkRegex = /https?:\/\/[^\s/$.?#].[^\s"]*/i;
+  const linkRegex = /https?:\/\/[^\s/$.?#].[^\s)'"]*/i;
   return (
     <>
       {linkRegex.test(text)
         ? text.split(" ").map((word, index, array) => {
             if (linkRegex.test(word)) {
+              const link = linkRegex.exec(word);
               return (
                 <React.Fragment key={`link-${index}`}>
-                  <a href={word}>{word}</a>
+                  {link && (
+                    <a href={link[0]} target="_blank" rel="noreferrer noopener">
+                      {word}
+                    </a>
+                  )}
                   {index === array.length - 1 ? "" : " "}
                 </React.Fragment>
               );
@@ -209,7 +215,7 @@ export function RuntimeErrorsDialogBody({
         data-hidden={hidden}
         className={clsx("runtime-errors", className)}
       >
-        <h1 id="errors_label">Resolving Source Maps...</h1>
+        <h1 id="nextjs__container_errors_label">Resolving Source Maps...</h1>
       </DialogBody>
     );
   }
@@ -235,7 +241,7 @@ export function RuntimeErrorsDialogBody({
       className={clsx("runtime-errors", className)}
     >
       <div className="title-pagination">
-        <h1 id="errors_label">
+        <h1 id="nextjs__container_errors_label">
           {isServerError ? "Server Error" : "Unhandled Runtime Error"}
         </h1>
         <LeftRightDialogHeader
@@ -249,9 +255,11 @@ export function RuntimeErrorsDialogBody({
           </small>
         </LeftRightDialogHeader>
       </div>
-      <h2 id="errors_desc" data-severity="error">
+      <h2 id="nextjs__container_errors_desc" data-severity="error">
         {activeError.error.name}:{" "}
-        <HotlinkedText text={activeError.error.message} />
+        <HotlinkedText
+          text={decodeMagicIdentifiers(activeError.error.message)}
+        />
       </h2>
       {isServerError ? (
         <div>

@@ -13,7 +13,7 @@ use log::{debug, error};
 use serde::Serialize;
 
 use crate::{
-    commands::{bin, logout},
+    commands::{bin, link, login, logout, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     ui::UI,
@@ -376,7 +376,8 @@ pub struct RunArgs {
 /// we use it here to modify clap's arguments.
 ///
 /// returns: Result<Payload, Error>
-pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
+#[tokio::main]
+pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
     let mut clap_args = Args::new()?;
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
@@ -422,9 +423,14 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
         clap_args.cwd = Some(repo_state.root);
     }
 
-    if let Some(cwd) = &clap_args.cwd {
-        clap_args.cwd = Some(fs_canonicalize(cwd)?);
-    }
+    let repo_root = if let Some(cwd) = &clap_args.cwd {
+        let canonical_cwd = fs_canonicalize(cwd)?;
+        // Update on clap_args so that Go gets a canonical path.
+        clap_args.cwd = Some(canonical_cwd.clone());
+        canonical_cwd
+    } else {
+        current_dir()?
+    };
 
     match clap_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
@@ -433,13 +439,43 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Logout { .. } => {
-            logout::logout(clap_args.ui())?;
+            let mut base = CommandBase::new(clap_args, repo_root)?;
+            logout::logout(&mut base)?;
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Login { .. }
-        | Command::Link { .. }
-        | Command::Unlink { .. }
+        Command::Login { sso_team } => {
+            if clap_args.test_run {
+                println!("Login test run successful");
+                return Ok(Payload::Rust(Ok(0)));
+            }
+            // We haven't implemented sso_team yet so we delegate to Go
+            if sso_team.is_some() {
+                return Ok(Payload::Go(Box::new(clap_args)));
+            }
+
+            let base = CommandBase::new(clap_args, repo_root)?;
+
+            login::login(base).await?;
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Link { no_gitignore } => {
+            if clap_args.test_run {
+                println!("Link test run successful");
+                return Ok(Payload::Rust(Ok(0)));
+            }
+
+            let modify_gitignore = !*no_gitignore;
+            let mut base = CommandBase::new(clap_args, repo_root)?;
+
+            if let Err(err) = link::link(&mut base, modify_gitignore).await {
+                error!("error: {}", err.to_string())
+            };
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Unlink { .. }
         | Command::Daemon { .. }
         | Command::Prune { .. }
         | Command::Run(_) => Ok(Payload::Go(Box::new(clap_args))),
@@ -452,7 +488,7 @@ pub fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 }
 
 impl Args {
-    fn ui(&self) -> UI {
+    pub fn ui(&self) -> UI {
         if self.no_color {
             UI::new(true)
         } else if self.color {
