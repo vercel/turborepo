@@ -1,4 +1,4 @@
-use std::{fmt::Write, path::PathBuf, sync::Arc};
+use std::{fmt::Write, hash::Hash, path::PathBuf, sync::Arc};
 
 use swc_core::{
     common::SourceMap,
@@ -162,8 +162,13 @@ fn run(input: PathBuf) {
             buf
         });
 
-        writeln!(s, "# Condensed").unwrap();
-        writeln!(s, "```mermaid\n{}```", render_final_graph(&mut condensed)).unwrap();
+        writeln!(s, "# Final").unwrap();
+        writeln!(
+            s,
+            "```mermaid\n{}```",
+            render_mermaid(&mut condensed, &|buf: &Vec<String>| buf.join("\n"))
+        )
+        .unwrap();
 
         NormalizedOutput::from(s)
             .compare_to_file(input.with_file_name("output.md"))
@@ -220,23 +225,25 @@ fn render_graph(item_ids: &[ItemId], g: &mut DepGraph) -> String {
     mermaid
 }
 
-fn render_final_graph(g: &mut InternedGraph<Vec<String>>) -> String {
+fn render_mermaid<T>(g: &mut InternedGraph<T>, render: &dyn Fn(&T) -> String) -> String
+where
+    T: Clone + Eq + Hash,
+{
     let mut mermaid = String::from("graph TD\n");
+    let ix = g.graph_ix.clone();
 
-    // for (i, id) in item_ids.iter().enumerate() {
-    //     let i = g.g.node(id);
+    for item in &ix {
+        let i = g.node(item);
 
-    //     writeln!(mermaid, "    Item{};", i + 1).unwrap();
+        writeln!(mermaid, "    Item{};", i + 1).unwrap();
 
-    //     if let Some(item_id) = render_item_id(&id.kind) {
-    //         writeln!(mermaid, "    Item{}[\"{}\"];", i + 1, item_id).unwrap();
-    //     }
-    // }
+        writeln!(mermaid, "    Item{}[\"{}\"];", i + 1, render(item)).unwrap();
+    }
 
     for (from, to, strong) in g.inner.all_edges() {
         writeln!(
             mermaid,
-            "    Stmt{} -{}-> Stmt{};",
+            "    Item{} -{}-> Item{};",
             from + 1,
             if *strong { "" } else { "." },
             to + 1,
