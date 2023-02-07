@@ -148,25 +148,13 @@ fn run(input: PathBuf) {
         )
         .unwrap();
 
-        let condensed = analyzer.g.finalize();
-        let mut condensed = condensed.map(|indexes| {
-            let mut buf = vec![];
-            for index in indexes {
-                let item_id = analyzer.g.g.graph_ix.get_index(index as _).unwrap();
-
-                let rendered = render_item_id(&item_id.kind)
-                    .unwrap_or_else(|| print(&cm, &[&module.body[item_id.index]]));
-                buf.push(rendered);
-            }
-
-            buf
-        });
+        let mut condensed = analyzer.g.finalize();
 
         writeln!(s, "# Final").unwrap();
         writeln!(
             s,
             "```mermaid\n{}```",
-            render_mermaid(&mut condensed, &|buf: &Vec<String>| buf.join("\n"))
+            render_mermaid(&mut condensed, &|buf: &Vec<u32>| format!("{:?}", buf))
         )
         .unwrap();
 
@@ -238,7 +226,7 @@ where
         writeln!(
             mermaid,
             "    Item{}[\"{}\"];",
-            i + 1,
+            i,
             render(item)
                 .replace('"', "\\\"")
                 .replace([';', '\n', '}'], "")
@@ -250,9 +238,9 @@ where
         writeln!(
             mermaid,
             "    Item{} -{}-> Item{};",
-            from + 1,
+            from,
             if *strong { "" } else { "." },
-            to + 1,
+            to,
         )
         .unwrap();
     }

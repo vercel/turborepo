@@ -139,7 +139,7 @@ impl DepGraph {
     pub(super) fn finalize(&self) -> InternedGraph<Vec<u32>> {
         let graph = self.g.inner.clone().into_graph();
 
-        let mut condensed: petgraph::Graph<_, _, _, u32> =
+        let condensed: petgraph::Graph<_, _, _, u32> =
             super::condensation::condensation(graph, |strong1, strong2| strong1 || strong2);
 
         let mut g = InternedGraph::default();
