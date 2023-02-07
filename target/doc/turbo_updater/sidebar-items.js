@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["UpdateNotifierError",""]],"fn":[["check_for_updates",""]]};

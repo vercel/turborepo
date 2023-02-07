@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["register",""]],"struct":[["MdxModuleAsset",""],["MdxModuleAssetVc","Vc for [`MdxModuleAsset`]"]],"type":[["MdxModuleAssetReadRef","see [turbo_tasks::ReadRef]"]]};

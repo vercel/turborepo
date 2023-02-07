@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["WebpackLoaderConfig",""]],"struct":[["WebpackLoaderConfigs",""],["WebpackLoaderConfigsVc","Vc for [`WebpackLoaderConfigs`]"],["WebpackLoaders",""],["WebpackLoadersVc","Vc for [`WebpackLoaders`]"]],"type":[["WebpackLoaderConfigsReadRef","see [turbo_tasks::ReadRef]"],["WebpackLoadersReadRef","see [turbo_tasks::ReadRef]"]]};

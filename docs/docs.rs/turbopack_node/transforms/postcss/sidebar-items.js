@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["PostCssTransform",""],["PostCssTransformVc","Vc for [`PostCssTransform`]"]],"type":[["PostCssTransformReadRef","see [turbo_tasks::ReadRef]"]]};

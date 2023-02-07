@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["StaticResult",""]],"fn":[["render_static","Renders a module as static HTML in a node.js process."],["render_static_inline","Renders a module as static HTML in a node.js process."]],"struct":[["StaticResultVc","Vc for [`StaticResult`]"]],"type":[["StaticResultReadRef","see [turbo_tasks::ReadRef]"]]};

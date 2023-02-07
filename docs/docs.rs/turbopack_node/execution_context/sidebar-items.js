@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["ExecutionContext",""],["ExecutionContextVc","Vc for [`ExecutionContext`]"]],"type":[["ExecutionContextReadRef","see [turbo_tasks::ReadRef]"]]};

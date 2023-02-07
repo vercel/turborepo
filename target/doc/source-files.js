@@ -11,12 +11,14 @@ var sourcesIndex = JSON.parse('{\
 "turbo_tasks":["",[["debug",[],["internal.rs","mod.rs"]]],["backend.rs","collectibles.rs","completion.rs","display.rs","event.rs","id.rs","id_factory.rs","join_iter_ext.rs","lib.rs","magic_any.rs","manager.rs","native_function.rs","no_move_vec.rs","nothing.rs","once_map.rs","persisted_graph.rs","primitives.rs","raw_vc.rs","read_ref.rs","registry.rs","small_duration.rs","state.rs","task_input.rs","timed_future.rs","trace.rs","util.rs","value.rs","value_type.rs"]],\
 "turbo_tasks_build":["",[],["lib.rs"]],\
 "turbo_tasks_env":["",[],["command_line.rs","custom.rs","dotenv.rs","filter.rs","lib.rs"]],\
+"turbo_tasks_fetch":["",[],["lib.rs"]],\
 "turbo_tasks_fs":["",[["embed",[],["dir.rs","file.rs","fs.rs","mod.rs"]]],["attach.rs","glob.rs","invalidator_map.rs","lib.rs","mutex_map.rs","read_glob.rs","retry.rs","rope.rs","util.rs"]],\
 "turbo_tasks_hash":["",[],["base16.rs","deterministic_hash.rs","hex.rs","lib.rs","md4.rs","xxh3_hash64.rs"]],\
 "turbo_tasks_macros":["",[["derive",[],["deterministic_hash_macro.rs","mod.rs","trace_raw_vcs_macro.rs","value_debug_format_macro.rs","value_debug_macro.rs"]]],["func.rs","function_macro.rs","lib.rs","util.rs","value_impl_macro.rs","value_macro.rs","value_trait_macro.rs"]],\
 "turbo_tasks_macros_shared":["",[],["expand.rs","ident.rs","lib.rs","value_trait_arguments.rs"]],\
 "turbo_tasks_memory":["",[["task",[],["meta_state.rs","stats.rs"]],["viz",[],["graph.rs","mod.rs","table.rs"]]],["cell.rs","concurrent_priority_queue.rs","count_hash_set.rs","gc.rs","lib.rs","map_guard.rs","memory_backend.rs","memory_backend_with_pg.rs","output.rs","priority_pair.rs","scope.rs","stats.rs","task.rs"]],\
 "turbo_tasks_testing":["",[],["lib.rs","macros.rs","retry.rs"]],\
+"turbo_updater":["",[["ui",[],["mod.rs","utils.rs"]]],["lib.rs"]],\
 "turbopack":["",[["graph",[],["mod.rs"]],["module_options",[],["mod.rs","module_options_context.rs","module_rule.rs","rule_condition.rs"]],["rebase",[],["mod.rs"]],["transition",[],["mod.rs"]]],["condition.rs","evaluate_context.rs","lib.rs","resolve.rs","resolve_options_context.rs"]],\
 "turbopack_cli_utils":["",[],["issue.rs","lib.rs"]],\
 "turbopack_core":["",[["chunk",[],["dev.rs","mod.rs","optimize.rs"]],["introspect",[],["asset.rs","mod.rs"]],["issue",[],["analyze.rs","code_gen.rs","mod.rs","package_json.rs","resolve.rs","unsupported_module.rs"]],["reference",[],["mod.rs","source_map.rs"]],["resolve",[],["alias_map.rs","exports.rs","mod.rs","options.rs","origin.rs","parse.rs","pattern.rs","plugin.rs"]]],["asset.rs","code_builder.rs","context.rs","environment.rs","lib.rs","reference_type.rs","server_fs.rs","source_asset.rs","source_map.rs","source_pos.rs","source_transform.rs","target.rs","utils.rs","version.rs","virtual_asset.rs"]],\
@@ -26,8 +28,11 @@ var sourcesIndex = JSON.parse('{\
 "turbopack_ecmascript":["",[["analyzer",[],["builtin.rs","graph.rs","imports.rs","linker.rs","mod.rs","well_known.rs"]],["chunk",[],["loader.rs","mod.rs","optimize.rs","source_map.rs"]],["references",[["esm",[],["base.rs","binding.rs","dynamic.rs","export.rs","meta.rs","mod.rs","module_id.rs","module_item.rs","url.rs"]]],["amd.rs","cjs.rs","constant_condition.rs","mod.rs","node.rs","pattern_mapping.rs","raw.rs","typescript.rs","unreachable.rs","util.rs"]],["resolve",[],["mod.rs","node_native_binding.rs"]],["transform",[],["mod.rs","server_to_client_proxy.rs"]],["typescript",[],["mod.rs","resolve.rs"]],["webpack",[],["mod.rs","parse.rs","references.rs"]]],["chunk_group_files_asset.rs","code_gen.rs","errors.rs","lib.rs","magic_identifier.rs","parse.rs","path_visitor.rs","special_cases.rs","utils.rs"]],\
 "turbopack_env":["",[],["asset.rs","embeddable.rs","issue.rs","lib.rs","try_env.rs"]],\
 "turbopack_json":["",[],["lib.rs"]],\
+"turbopack_mdx":["",[],["lib.rs"]],\
+"turbopack_node":["",[["render",[],["issue.rs","mod.rs","node_api_source.rs","render_proxy.rs","render_static.rs","rendered_source.rs"]],["source_map",[],["content_source.rs","mod.rs","trace.rs"]],["transforms",[],["mod.rs","postcss.rs","util.rs","webpack.rs"]]],["bootstrap.rs","embed_js.rs","evaluate.rs","execution_context.rs","lib.rs","node_entry.rs","pool.rs","route_matcher.rs"]],\
 "turbopack_static":["",[],["lib.rs"]],\
 "turbopack_swc_utils":["",[],["emitter.rs","lib.rs"]],\
+"turborepo_lib":["",[["commands",[],["bin.rs","link.rs","login.rs","logout.rs","mod.rs"]],["config",[],["env.rs","mod.rs","repo.rs","user.rs"]],["ui",[],["mod.rs"]]],["cli.rs","client.rs","lib.rs","package_manager.rs","retry.rs","shim.rs"]],\
 "xtask":["",[["summarize_bench",[],["data.rs","mod.rs"]]],["command.rs","main.rs","nft_bench.rs","publish.rs","visualize_bundler_bench.rs"]]\
 }');
 createSourceSidebar();
