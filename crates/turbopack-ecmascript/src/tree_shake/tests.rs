@@ -237,7 +237,7 @@ where
 
         writeln!(
             mermaid,
-            "    Item{}[\" {} \"];",
+            "    Item{}[\"{}\"];",
             i + 1,
             render(item)
                 .replace(';', "")
