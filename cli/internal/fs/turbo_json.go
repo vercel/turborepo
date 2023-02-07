@@ -137,12 +137,12 @@ type ResolvedTaskDefinition struct {
 }
 
 // GetTask returns a TaskDefinition based on the ID (package#task format) or name (e.g. "build")
-func (p Pipeline) GetTask(taskID string, taskName string) (*TaskDefinition, error) {
+func (pc Pipeline) GetTask(taskID string, taskName string) (*TaskDefinition, error) {
 	// first check for package-tasks
-	taskDefinition, ok := p[taskID]
+	taskDefinition, ok := pc[taskID]
 	if !ok {
 		// then check for regular tasks
-		fallbackTaskDefinition, notcool := p[taskName]
+		fallbackTaskDefinition, notcool := pc[taskName]
 		// if neither, then bail
 		if !notcool {
 			// Return an empty TaskDefinition
