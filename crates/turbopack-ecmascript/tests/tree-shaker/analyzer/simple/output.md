@@ -119,17 +119,35 @@ graph TD
     Item7 --> Item4;
 ```
 
-# Condensed
+# Final
 
 ```mermaid
 graph TD
-    Stmt5 --> Stmt2;
-    Stmt3 --> Stmt1;
-    Stmt3 --> Stmt2;
-    Stmt7 -.-> Stmt2;
-    Stmt7 -.-> Stmt5;
-    Stmt7 -.-> Stmt3;
-    Stmt7 -.-> Stmt1;
-    Stmt6 --> Stmt5;
-    Stmt4 --> Stmt3;
+    Item1;
+    Item1["const cat = "cat";
+"];
+    Item2;
+    Item2["const dog = "dog";
+"];
+    Item3;
+    Item3["export const CHIMERA = cat + dog;
+"];
+    Item4;
+    Item4["export CHIMERA"];
+    Item5;
+    Item5["export const DOG = dog;
+"];
+    Item6;
+    Item6["export DOG"];
+    Item7;
+    Item7["ModuleEvaluation"];
+    Item5 --> Item2;
+    Item3 --> Item1;
+    Item3 --> Item2;
+    Item7 -.-> Item2;
+    Item7 -.-> Item5;
+    Item7 -.-> Item3;
+    Item7 -.-> Item1;
+    Item6 --> Item5;
+    Item4 --> Item3;
 ```
