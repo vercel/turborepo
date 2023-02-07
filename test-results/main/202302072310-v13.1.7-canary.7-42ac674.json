@@ -1,0 +1,916 @@
+{
+  "ref": "be1af9a4b672540a32ca9592040138e241940df0",
+  "nextjsVersion": "Next.js v13.1.7-canary.7",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675810889827,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675810953232,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675810889920,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/browserslist/browserslist.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811001133,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Browserslist"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/e2e/browserslist/browserslist.test.ts:41:22)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Browserslist should apply browserslist target",
+                "location": null,
+                "status": "failed",
+                "title": "should apply browserslist target"
+              }
+            ],
+            "endTime": 1675811021276,
+            "message": "  ● Browserslist › should apply browserslist target\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      39 |         })\n      40 |     )\n    > 41 |     expect(finished).toBe(true)\n         |                      ^\n      42 |   })\n      43 | })\n      44 |\n\n      at Object.<anonymous> (e2e/browserslist/browserslist.test.ts:41:22)\n",
+            "name": "/work/test/e2e/browserslist/browserslist.test.ts",
+            "startTime": 1675811001289,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/next-dynamic-lazy-compilation/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 6,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811311384,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "next/dynamic",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "next/dynamic dev mode should render server value",
+                "location": null,
+                "status": "passed",
+                "title": "should render server value"
+              },
+              {
+                "ancestorTitles": [
+                  "next/dynamic",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"\"\nReceived: \"Warning: You are importing hydrateRoot from \\\"react-dom\\\" which is not supported. You should instead import it from \\\"react-dom/client\\\".\"\n    at Object.<anonymous> (/work/test/integration/next-dynamic-lazy-compilation/test/index.test.js:35:55)"
+                ],
+                "fullName": "next/dynamic dev mode should render dynamic server rendered values before hydration",
+                "location": null,
+                "status": "failed",
+                "title": "should render dynamic server rendered values before hydration"
+              },
+              {
+                "ancestorTitles": [
+                  "next/dynamic",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"\"\nReceived: \"Warning: You are importing hydrateRoot from \\\"react-dom\\\" which is not supported. You should instead import it from \\\"react-dom/client\\\".\"\n    at Object.<anonymous> (/work/test/integration/next-dynamic-lazy-compilation/test/index.test.js:45:55)"
+                ],
+                "fullName": "next/dynamic dev mode should render dynamic server rendered values on client mount",
+                "location": null,
+                "status": "failed",
+                "title": "should render dynamic server rendered values on client mount"
+              },
+              {
+                "ancestorTitles": [
+                  "next/dynamic",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "next/dynamic production mode should render server value",
+                "location": null,
+                "status": "passed",
+                "title": "should render server value"
+              },
+              {
+                "ancestorTitles": [
+                  "next/dynamic",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "next/dynamic production mode should render dynamic server rendered values before hydration",
+                "location": null,
+                "status": "passed",
+                "title": "should render dynamic server rendered values before hydration"
+              },
+              {
+                "ancestorTitles": [
+                  "next/dynamic",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "next/dynamic production mode should render dynamic server rendered values on client mount",
+                "location": null,
+                "status": "passed",
+                "title": "should render dynamic server rendered values on client mount"
+              }
+            ],
+            "endTime": 1675811348039,
+            "message": "  ● next/dynamic › dev mode › should render dynamic server rendered values before hydration\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"\"\n    Received: \"Warning: You are importing hydrateRoot from \\\"react-dom\\\" which is not supported. You should instead import it from \\\"react-dom/client\\\".\"\n\n      33 |       /^Index<!--\\/?(\\$|\\s)-->1(<!--\\/?(\\$|\\s)-->)+2(<!--\\/?(\\$|\\s)-->)+3(<!--\\/?(\\$|\\s)-->)+4(<!--\\/?(\\$|\\s)-->)+4$/\n      34 |     )\n    > 35 |     expect(await browser.eval('window.caughtErrors')).toBe('')\n         |                                                       ^\n      36 |   })\n      37 |\n      38 |   it('should render dynamic server rendered values on client mount', async () => {\n\n      at Object.<anonymous> (integration/next-dynamic-lazy-compilation/test/index.test.js:35:55)\n\n  ● next/dynamic › dev mode › should render dynamic server rendered values on client mount\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"\"\n    Received: \"Warning: You are importing hydrateRoot from \\\"react-dom\\\" which is not supported. You should instead import it from \\\"react-dom/client\\\".\"\n\n      43 |       /^Index<!--\\/?(\\$|\\s)-->1(<!--\\/?(\\$|\\s)-->)+2(<!--\\/?(\\$|\\s)-->)+3(<!--\\/?(\\$|\\s)-->)+4(<!--\\/?(\\$|\\s)-->)+4$/\n      44 |     )\n    > 45 |     expect(await browser.eval('window.caughtErrors')).toBe('')\n         |                                                       ^\n      46 |   })\n      47 | }\n      48 |\n\n      at Object.<anonymous> (integration/next-dynamic-lazy-compilation/test/index.test.js:45:55)\n",
+            "name": "/work/test/integration/next-dynamic-lazy-compilation/test/index.test.js",
+            "startTime": 1675811311477,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675810985457,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675811142135,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675810985560,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-rendering/rendering.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811165014,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675811218001,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675811165104,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/config-devtool-dev/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": true,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 1,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 1,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 1,
+          "updated": 0
+        },
+        "startTime": 1675811328890,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "devtool set in development mode in next config"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBeTruthy()\n\nReceived: false\n    at Object.<anonymous> (/work/test/integration/config-devtool-dev/test/index.test.js:54:19)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)",
+                  "Error: expect(received).toMatchInlineSnapshot(snapshot)\n\nSnapshot name: `devtool set in development mode in next config should warn and revert when a devtool is set in development mode 1`\n\nSnapshot: \"pages/index.js (5:10) @ eval\n\n  3 | export default function Index(props) {\n  4 | useEffect(() => {\n> 5 |   throw new Error('this should render')\n    |        ^\n  6 | }, [])\n  7 | return <div>Index Page</div>\n  8 | }\"\nReceived: null\n    at Object.<anonymous> (/work/test/integration/config-devtool-dev/test/index.test.js:39:46)"
+                ],
+                "fullName": "devtool set in development mode in next config should warn and revert when a devtool is set in development mode",
+                "location": null,
+                "status": "failed",
+                "title": "should warn and revert when a devtool is set in development mode"
+              }
+            ],
+            "endTime": 1675811375643,
+            "message": "  ● devtool set in development mode in next config › should warn and revert when a devtool is set in development mode\n\n    expect(received).toBeTruthy()\n\n    Received: false\n\n      52 |\n      53 |     await killApp(app)\n    > 54 |     expect(found).toBeTruthy()\n         |                   ^\n      55 |   })\n      56 | })\n      57 |\n\n      at Object.<anonymous> (integration/config-devtool-dev/test/index.test.js:54:19)\n\n  ● devtool set in development mode in next config › should warn and revert when a devtool is set in development mode\n\n    expect(received).toMatchInlineSnapshot(snapshot)\n\n    Snapshot name: `devtool set in development mode in next config should warn and revert when a devtool is set in development mode 1`\n\n    Snapshot: \"pages/index.js (5:10) @ eval\n\n      3 | export default function Index(props) {\n      4 | useEffect(() => {\n    > 5 |   throw new Error('this should render')\n        |        ^\n      6 | }, [])\n      7 | return <div>Index Page</div>\n      8 | }\"\n    Received: null\n\n      37 |       // TODO: add win32 snapshot\n      38 |     } else {\n    > 39 |       expect(await getRedboxSource(browser)).toMatchInlineSnapshot(`\n         |                                              ^\n      40 | \"pages/index.js (5:10) @ eval\n      41 |\n      42 |   3 | export default function Index(props) {\n\n      at Object.<anonymous> (integration/config-devtool-dev/test/index.test.js:39:46)\n",
+            "name": "/work/test/integration/config-devtool-dev/test/index.test.js",
+            "startTime": 1675811328985,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675810882164,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675810945257,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675810882257,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/browserslist/legacybrowsers-false.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811010931,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "legacyBrowsers: false"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/e2e/browserslist/legacybrowsers-false.test.ts:40:22)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "legacyBrowsers: false should apply legacyBrowsers: false by default",
+                "location": null,
+                "status": "failed",
+                "title": "should apply legacyBrowsers: false by default"
+              }
+            ],
+            "endTime": 1675811029610,
+            "message": "  ● legacyBrowsers: false › should apply legacyBrowsers: false by default\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      38 |         })\n      39 |     )\n    > 40 |     expect(finished).toBe(true)\n         |                      ^\n      41 |   })\n      42 | })\n      43 |\n\n      at Object.<anonymous> (e2e/browserslist/legacybrowsers-false.test.ts:40:22)\n",
+            "name": "/work/test/e2e/browserslist/legacybrowsers-false.test.ts",
+            "startTime": 1675811011024,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/next-dynamic-lazy-compilation/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 6,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811318659,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "next/dynamic",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "next/dynamic dev mode should render server value",
+                "location": null,
+                "status": "passed",
+                "title": "should render server value"
+              },
+              {
+                "ancestorTitles": [
+                  "next/dynamic",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"\"\nReceived: \"Warning: You are importing hydrateRoot from \\\"react-dom\\\" which is not supported. You should instead import it from \\\"react-dom/client\\\".\"\n    at Object.<anonymous> (/work/test/integration/next-dynamic-lazy-compilation/test/index.test.js:35:55)"
+                ],
+                "fullName": "next/dynamic dev mode should render dynamic server rendered values before hydration",
+                "location": null,
+                "status": "failed",
+                "title": "should render dynamic server rendered values before hydration"
+              },
+              {
+                "ancestorTitles": [
+                  "next/dynamic",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"\"\nReceived: \"Warning: You are importing hydrateRoot from \\\"react-dom\\\" which is not supported. You should instead import it from \\\"react-dom/client\\\".\"\n    at Object.<anonymous> (/work/test/integration/next-dynamic-lazy-compilation/test/index.test.js:45:55)"
+                ],
+                "fullName": "next/dynamic dev mode should render dynamic server rendered values on client mount",
+                "location": null,
+                "status": "failed",
+                "title": "should render dynamic server rendered values on client mount"
+              },
+              {
+                "ancestorTitles": [
+                  "next/dynamic",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "next/dynamic production mode should render server value",
+                "location": null,
+                "status": "passed",
+                "title": "should render server value"
+              },
+              {
+                "ancestorTitles": [
+                  "next/dynamic",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "next/dynamic production mode should render dynamic server rendered values before hydration",
+                "location": null,
+                "status": "passed",
+                "title": "should render dynamic server rendered values before hydration"
+              },
+              {
+                "ancestorTitles": [
+                  "next/dynamic",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "next/dynamic production mode should render dynamic server rendered values on client mount",
+                "location": null,
+                "status": "passed",
+                "title": "should render dynamic server rendered values on client mount"
+              }
+            ],
+            "endTime": 1675811355356,
+            "message": "  ● next/dynamic › dev mode › should render dynamic server rendered values before hydration\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"\"\n    Received: \"Warning: You are importing hydrateRoot from \\\"react-dom\\\" which is not supported. You should instead import it from \\\"react-dom/client\\\".\"\n\n      33 |       /^Index<!--\\/?(\\$|\\s)-->1(<!--\\/?(\\$|\\s)-->)+2(<!--\\/?(\\$|\\s)-->)+3(<!--\\/?(\\$|\\s)-->)+4(<!--\\/?(\\$|\\s)-->)+4$/\n      34 |     )\n    > 35 |     expect(await browser.eval('window.caughtErrors')).toBe('')\n         |                                                       ^\n      36 |   })\n      37 |\n      38 |   it('should render dynamic server rendered values on client mount', async () => {\n\n      at Object.<anonymous> (integration/next-dynamic-lazy-compilation/test/index.test.js:35:55)\n\n  ● next/dynamic › dev mode › should render dynamic server rendered values on client mount\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"\"\n    Received: \"Warning: You are importing hydrateRoot from \\\"react-dom\\\" which is not supported. You should instead import it from \\\"react-dom/client\\\".\"\n\n      43 |       /^Index<!--\\/?(\\$|\\s)-->1(<!--\\/?(\\$|\\s)-->)+2(<!--\\/?(\\$|\\s)-->)+3(<!--\\/?(\\$|\\s)-->)+4(<!--\\/?(\\$|\\s)-->)+4$/\n      44 |     )\n    > 45 |     expect(await browser.eval('window.caughtErrors')).toBe('')\n         |                                                       ^\n      46 |   })\n      47 | }\n      48 |\n\n      at Object.<anonymous> (integration/next-dynamic-lazy-compilation/test/index.test.js:45:55)\n",
+            "name": "/work/test/integration/next-dynamic-lazy-compilation/test/index.test.js",
+            "startTime": 1675811318772,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675810990966,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675811147139,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675810991060,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-rendering/rendering.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811168879,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675811221686,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675811168969,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/config-devtool-dev/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": true,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 1,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 1,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 1,
+          "updated": 0
+        },
+        "startTime": 1675811332016,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "devtool set in development mode in next config"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBeTruthy()\n\nReceived: false\n    at Object.<anonymous> (/work/test/integration/config-devtool-dev/test/index.test.js:54:19)",
+                  "Error: expect(received).toMatchInlineSnapshot(snapshot)\n\nSnapshot name: `devtool set in development mode in next config should warn and revert when a devtool is set in development mode 1`\n\nSnapshot: \"pages/index.js (5:10) @ eval\n\n  3 | export default function Index(props) {\n  4 | useEffect(() => {\n> 5 |   throw new Error('this should render')\n    |        ^\n  6 | }, [])\n  7 | return <div>Index Page</div>\n  8 | }\"\nReceived: null\n    at Object.<anonymous> (/work/test/integration/config-devtool-dev/test/index.test.js:39:46)"
+                ],
+                "fullName": "devtool set in development mode in next config should warn and revert when a devtool is set in development mode",
+                "location": null,
+                "status": "failed",
+                "title": "should warn and revert when a devtool is set in development mode"
+              }
+            ],
+            "endTime": 1675811378724,
+            "message": "  ● devtool set in development mode in next config › should warn and revert when a devtool is set in development mode\n\n    expect(received).toBeTruthy()\n\n    Received: false\n\n      52 |\n      53 |     await killApp(app)\n    > 54 |     expect(found).toBeTruthy()\n         |                   ^\n      55 |   })\n      56 | })\n      57 |\n\n      at Object.<anonymous> (integration/config-devtool-dev/test/index.test.js:54:19)\n\n  ● devtool set in development mode in next config › should warn and revert when a devtool is set in development mode\n\n    expect(received).toMatchInlineSnapshot(snapshot)\n\n    Snapshot name: `devtool set in development mode in next config should warn and revert when a devtool is set in development mode 1`\n\n    Snapshot: \"pages/index.js (5:10) @ eval\n\n      3 | export default function Index(props) {\n      4 | useEffect(() => {\n    > 5 |   throw new Error('this should render')\n        |        ^\n      6 | }, [])\n      7 | return <div>Index Page</div>\n      8 | }\"\n    Received: null\n\n      37 |       // TODO: add win32 snapshot\n      38 |     } else {\n    > 39 |       expect(await getRedboxSource(browser)).toMatchInlineSnapshot(`\n         |                                              ^\n      40 | \"pages/index.js (5:10) @ eval\n      41 |\n      42 |   3 | export default function Index(props) {\n\n      at Object.<anonymous> (integration/config-devtool-dev/test/index.test.js:39:46)\n",
+            "name": "/work/test/integration/config-devtool-dev/test/index.test.js",
+            "startTime": 1675811332112,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
