@@ -36,6 +36,17 @@ type rawTurboJSON struct {
 	Extends []string `json:"extends,omitempty"`
 }
 
+// pristineTurboJSON is used when marshaling a TurboJSON object into a turbo.json string
+// Notably, it includes a PristinePipeline instead of the regular Pipeline. (i.e. TaskDefinition)
+// instead of BookkeepingTaskDefinition.
+type pristineTurboJSON struct {
+	GlobalDependencies []string           `json:"globalDependencies,omitempty"`
+	GlobalEnv          []string           `json:"globalEnv,omitempty"`
+	Pipeline           PristinePipeline   `json:"pipeline"`
+	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
+	Extends            []string           `json:"extends,omitempty"`
+}
+
 // TurboJSON represents a turbo.json configuration file
 type TurboJSON struct {
 	GlobalDeps         []string
@@ -77,6 +88,9 @@ type rawTask struct {
 	Env        []string             `json:"env,omitempty"`
 	Persistent bool                 `json:"persistent,omitempty"`
 }
+
+// PristinePipeline contains original TaskDefinitions without the bookkeeping
+type PristinePipeline map[string]TaskDefinition
 
 // Pipeline is a struct for deserializing .pipeline in configFile
 type Pipeline map[string]BookkeepingTaskDefinition
@@ -288,6 +302,15 @@ func (pc Pipeline) HasTask(task string) bool {
 		}
 	}
 	return false
+}
+
+// Pristine returns a PristinePipeline
+func (pc Pipeline) Pristine() PristinePipeline {
+	pristine := PristinePipeline{}
+	for taskName, taskDef := range pc {
+		pristine[taskName] = taskDef.TaskDefinition
+	}
+	return pristine
 }
 
 // HasField checks the internal bookkeeping fieldsMeta field to
@@ -548,10 +571,10 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 // MarshalJSON converts a TurboJSON into the equivalent json object in bytes
 // note: we go via rawTurboJSON so that the output format is correct
 func (c *TurboJSON) MarshalJSON() ([]byte, error) {
-	raw := rawTurboJSON{}
+	raw := pristineTurboJSON{}
 	raw.GlobalDependencies = c.GlobalDeps
 	raw.GlobalEnv = c.GlobalEnv
-	raw.Pipeline = c.Pipeline
+	raw.Pipeline = c.Pipeline.Pristine()
 	raw.RemoteCacheOptions = c.RemoteCacheOptions
 
 	return json.Marshal(&raw)

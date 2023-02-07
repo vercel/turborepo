@@ -85,10 +85,7 @@ func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 		return "", fmt.Errorf("error hashing files: %w", err)
 	}
 
-	pipelineForGlobalHash := map[string]fs.TaskDefinition{}
-	for taskName, bookkeepingTaskDef := range pipeline {
-		pipelineForGlobalHash[taskName] = bookkeepingTaskDef.TaskDefinition
-	}
+	pipelineForGlobalHash := pipeline.Pristine()
 
 	globalHashable := struct {
 		globalFileHashMap    map[turbopath.AnchoredUnixPath]string
