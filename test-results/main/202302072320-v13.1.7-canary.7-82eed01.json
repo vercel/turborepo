@@ -1,0 +1,1532 @@
+{
+  "ref": "a9b9da2e64b0eb0a28f2b8a32beef38365bddb58",
+  "nextjsVersion": "Next.js v13.1.7-canary.7",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811360811,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675811424243,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675811360907,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/middleware-fetches-with-body/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 10,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811474740,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with default bodyParser sizeLimit (1mb)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Body exceeded 1mb limit\"\nReceived: \"Payload Too Large\"\n    at Object.<anonymous> (/work/test/e2e/middleware-fetches-with-body/index.test.ts:69:32)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Middleware fetches with body with default bodyParser sizeLimit (1mb) should return 413 for body greater than 1mb",
+                "location": null,
+                "status": "failed",
+                "title": "should return 413 for body greater than 1mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with default bodyParser sizeLimit (1mb)"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with default bodyParser sizeLimit (1mb) should be able to send and return body size equal to 1mb",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return body size equal to 1mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with default bodyParser sizeLimit (1mb)"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with default bodyParser sizeLimit (1mb) should be able to send and return body greater than default highWaterMark (16KiB)",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return body greater than default highWaterMark (16KiB)"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5kb)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Body exceeded 5kb limit\"\nReceived: \"Payload Too Large\"\n    at Object.<anonymous> (/work/test/e2e/middleware-fetches-with-body/index.test.ts:137:32)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5kb) should return 413 for body greater than 5kb",
+                "location": null,
+                "status": "failed",
+                "title": "should return 413 for body greater than 5kb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5kb)"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5kb) should be able to send and return body size equal to 5kb",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return body size equal to 5kb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5mb)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Body exceeded 5mb limit\"\nReceived: \"Payload Too Large\"\n    at Object.<anonymous> (/work/test/e2e/middleware-fetches-with-body/index.test.ts:182:32)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5mb) should return 413 for body equal to 10mb",
+                "location": null,
+                "status": "failed",
+                "title": "should return 413 for body equal to 10mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5mb)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Body exceeded 5mb limit\"\nReceived: \"Payload Too Large\"\n    at Object.<anonymous> (/work/test/e2e/middleware-fetches-with-body/index.test.ts:203:32)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5mb) should return 413 for body greater than 5mb",
+                "location": null,
+                "status": "failed",
+                "title": "should return 413 for body greater than 5mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5mb)"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5mb) should be able to send and return body size equal to 5mb",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return body size equal to 5mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with bodyParser = false"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with bodyParser = false should be able to send and return with body size equal to 16KiB",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return with body size equal to 16KiB"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with bodyParser = false"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with bodyParser = false should be able to send and return with body greater than 16KiB",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return with body greater than 16KiB"
+              }
+            ],
+            "endTime": 1675811497887,
+            "message": "  ● Middleware fetches with body › with default bodyParser sizeLimit (1mb) › should return 413 for body greater than 1mb\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Body exceeded 1mb limit\"\n    Received: \"Payload Too Large\"\n\n      67 |\n      68 |       if (!(global as any).isNextDeploy) {\n    > 69 |         expect(res.statusText).toBe('Body exceeded 1mb limit')\n         |                                ^\n      70 |       }\n      71 |     })\n      72 |\n\n      at Object.<anonymous> (e2e/middleware-fetches-with-body/index.test.ts:69:32)\n\n  ● Middleware fetches with body › with custom bodyParser sizeLimit (5kb) › should return 413 for body greater than 5kb\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Body exceeded 5kb limit\"\n    Received: \"Payload Too Large\"\n\n      135 |\n      136 |       if (!(global as any).isNextDeploy) {\n    > 137 |         expect(res.statusText).toBe('Body exceeded 5kb limit')\n          |                                ^\n      138 |       }\n      139 |     })\n      140 |\n\n      at Object.<anonymous> (e2e/middleware-fetches-with-body/index.test.ts:137:32)\n\n  ● Middleware fetches with body › with custom bodyParser sizeLimit (5mb) › should return 413 for body equal to 10mb\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Body exceeded 5mb limit\"\n    Received: \"Payload Too Large\"\n\n      180 |\n      181 |       if (!(global as any).isNextDeploy) {\n    > 182 |         expect(res.statusText).toBe('Body exceeded 5mb limit')\n          |                                ^\n      183 |       }\n      184 |     })\n      185 |\n\n      at Object.<anonymous> (e2e/middleware-fetches-with-body/index.test.ts:182:32)\n\n  ● Middleware fetches with body › with custom bodyParser sizeLimit (5mb) › should return 413 for body greater than 5mb\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Body exceeded 5mb limit\"\n    Received: \"Payload Too Large\"\n\n      201 |\n      202 |       if (!(global as any).isNextDeploy) {\n    > 203 |         expect(res.statusText).toBe('Body exceeded 5mb limit')\n          |                                ^\n      204 |       }\n      205 |     })\n      206 |\n\n      at Object.<anonymous> (e2e/middleware-fetches-with-body/index.test.ts:203:32)\n",
+            "name": "/work/test/e2e/middleware-fetches-with-body/index.test.ts",
+            "startTime": 1675811474841,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/custom-routes-catchall/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 7,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811551988,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes dev mode should rewrite and render page correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should rewrite and render page correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"/hello\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_f54f8f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_84b4eb._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__e5ee5e._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/custom-routes-catchall/test/index.test.js:32:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Custom routes dev mode should rewrite to /_next/static correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should rewrite to /_next/static correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes dev mode should rewrite to public/static correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should rewrite to public/static correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes dev mode should rewrite to public file correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should rewrite to public file correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes production mode should rewrite and render page correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should rewrite and render page correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes production mode should rewrite to /_next/static correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should rewrite to /_next/static correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes production mode should rewrite to public/static correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should rewrite to public/static correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes production mode should rewrite to public file correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should rewrite to public file correctly"
+              }
+            ],
+            "endTime": 1675811562948,
+            "message": "  ● Custom routes › dev mode › should rewrite to /_next/static correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"/hello\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_f54f8f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_84b4eb._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__e5ee5e._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      30 |     )\n      31 |     const data = await renderViaHTTP(appPort, bundlePath)\n    > 32 |     expect(data).toContain('/hello')\n         |                  ^\n      33 |   })\n      34 |\n      35 |   it('should rewrite to public/static correctly', async () => {\n\n      at Object.<anonymous> (integration/custom-routes-catchall/test/index.test.js:32:18)\n",
+            "name": "/work/test/integration/custom-routes-catchall/test/index.test.js",
+            "startTime": 1675811552081,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance/ReactRefreshRegression.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811137078,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675811297458,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675811137171,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811504914,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675811553950,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675811505005,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/invalid-custom-routes/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 10,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 10,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 20,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811675526,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"`headers` field cannot be empty for route {\\\"source\\\":\\\"/:path*\\\"\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 43751 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:38:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should error when empty headers array is present on header item",
+                "location": null,
+                "status": "failed",
+                "title": "should error when empty headers array is present on header item"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"`source` exceeds max built length of 4096 for route {\\\"source\\\":\\\"/aaaaaaaaaaaaaaaaaa\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 42283 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:61:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should error when source and destination length is exceeded",
+                "location": null,
+                "status": "failed",
+                "title": "should error when source and destination length is exceeded"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"`destination` is missing for route {\\\"source\\\":\\\"/hello\\\",\\\"permanent\\\":false}\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 43433 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:142:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should error during next build for invalid redirects",
+                "location": null,
+                "status": "failed",
+                "title": "should error during next build for invalid redirects"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"`destination` is missing for route {\\\"source\\\":\\\"/hello\\\"}\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 38879 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:273:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should error during next build for invalid rewrites",
+                "location": null,
+                "status": "failed",
+                "title": "should error during next build for invalid rewrites"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"`source` is missing, `key` in header item must be string for route {\\\"headers\\\":[{\\\"x-first\\\":\\\"first\\\"}]}\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 41275 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:447:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should error during next build for invalid headers",
+                "location": null,
+                "status": "failed",
+                "title": "should error during next build for invalid headers"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Error parsing `/feedback/(?!general)` https://nextjs.org/docs/messages/invalid-route-source\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 37215 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:517:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should show formatted error for redirect source parse fail",
+                "location": null,
+                "status": "failed",
+                "title": "should show formatted error for redirect source parse fail"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"rewrites must return an array, received object\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 35631 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:541:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should show valid error when non-array is returned from rewrites",
+                "location": null,
+                "status": "failed",
+                "title": "should show valid error when non-array is returned from rewrites"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"redirects must return an array, received boolean\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 35859 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:549:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should show valid error when non-array is returned from redirects",
+                "location": null,
+                "status": "failed",
+                "title": "should show valid error when non-array is returned from redirects"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"headers must return an array, received undefined\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 41135 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:557:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should show valid error when non-array is returned from headers",
+                "location": null,
+                "status": "failed",
+                "title": "should show valid error when non-array is returned from headers"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"`destination` has segments not in `source` or `has` (id) for route {\\\"source\\\":\\\"/feedback/:type\\\",\\\"destination\\\":\\\"/feedback/:id\\\"}\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 33339 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:573:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should show valid error when segments not in source are used in destination",
+                "location": null,
+                "status": "failed",
+                "title": "should show valid error when segments not in source are used in destination"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should error when empty headers array is present on header item",
+                "location": null,
+                "status": "passed",
+                "title": "should error when empty headers array is present on header item"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should error when source and destination length is exceeded",
+                "location": null,
+                "status": "passed",
+                "title": "should error when source and destination length is exceeded"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should error during next build for invalid redirects",
+                "location": null,
+                "status": "passed",
+                "title": "should error during next build for invalid redirects"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should error during next build for invalid rewrites",
+                "location": null,
+                "status": "passed",
+                "title": "should error during next build for invalid rewrites"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should error during next build for invalid headers",
+                "location": null,
+                "status": "passed",
+                "title": "should error during next build for invalid headers"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should show formatted error for redirect source parse fail",
+                "location": null,
+                "status": "passed",
+                "title": "should show formatted error for redirect source parse fail"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should show valid error when non-array is returned from rewrites",
+                "location": null,
+                "status": "passed",
+                "title": "should show valid error when non-array is returned from rewrites"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should show valid error when non-array is returned from redirects",
+                "location": null,
+                "status": "passed",
+                "title": "should show valid error when non-array is returned from redirects"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should show valid error when non-array is returned from headers",
+                "location": null,
+                "status": "passed",
+                "title": "should show valid error when non-array is returned from headers"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should show valid error when segments not in source are used in destination",
+                "location": null,
+                "status": "passed",
+                "title": "should show valid error when segments not in source are used in destination"
+              }
+            ],
+            "endTime": 1675811683769,
+            "message": "  ● Errors on invalid custom routes › dev mode › should error when empty headers array is present on header item\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"`headers` field cannot be empty for route {\\\"source\\\":\\\"/:path*\\\"\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 43751 --root /work --no-open]\n    \"\n\n      36 |     const stderr = await getStderr()\n      37 |\n    > 38 |     expect(stderr).toContain(\n         |                    ^\n      39 |       '`headers` field cannot be empty for route {\"source\":\"/:path*\"'\n      40 |     )\n      41 |   })\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:38:20)\n\n  ● Errors on invalid custom routes › dev mode › should error when source and destination length is exceeded\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"`source` exceeds max built length of 4096 for route {\\\"source\\\":\\\"/aaaaaaaaaaaaaaaaaa\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 42283 --root /work --no-open]\n    \"\n\n      59 |     const stderr = await getStderr()\n      60 |\n    > 61 |     expect(stderr).toContain(\n         |                    ^\n      62 |       '`source` exceeds max built length of 4096 for route {\"source\":\"/aaaaaaaaaaaaaaaaaa'\n      63 |     )\n      64 |     expect(stderr).toContain(\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:61:20)\n\n  ● Errors on invalid custom routes › dev mode › should error during next build for invalid redirects\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"`destination` is missing for route {\\\"source\\\":\\\"/hello\\\",\\\"permanent\\\":false}\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 43433 --root /work --no-open]\n    \"\n\n      140 |     const stderr = await getStderr()\n      141 |\n    > 142 |     expect(stderr).toContain(\n          |                    ^\n      143 |       `\\`destination\\` is missing for route {\"source\":\"/hello\",\"permanent\":false}`\n      144 |     )\n      145 |\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:142:20)\n\n  ● Errors on invalid custom routes › dev mode › should error during next build for invalid rewrites\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"`destination` is missing for route {\\\"source\\\":\\\"/hello\\\"}\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 38879 --root /work --no-open]\n    \"\n\n      271 |     const stderr = await getStderr()\n      272 |\n    > 273 |     expect(stderr).toContain(\n          |                    ^\n      274 |       `\\`destination\\` is missing for route {\"source\":\"/hello\"}`\n      275 |     )\n      276 |\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:273:20)\n\n  ● Errors on invalid custom routes › dev mode › should error during next build for invalid headers\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"`source` is missing, `key` in header item must be string for route {\\\"headers\\\":[{\\\"x-first\\\":\\\"first\\\"}]}\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 41275 --root /work --no-open]\n    \"\n\n      445 |     const stderr = await getStderr()\n      446 |\n    > 447 |     expect(stderr).toContain(\n          |                    ^\n      448 |       '`source` is missing, `key` in header item must be string for route {\"headers\":[{\"x-first\":\"first\"}]}'\n      449 |     )\n      450 |\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:447:20)\n\n  ● Errors on invalid custom routes › dev mode › should show formatted error for redirect source parse fail\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Error parsing `/feedback/(?!general)` https://nextjs.org/docs/messages/invalid-route-source\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 37215 --root /work --no-open]\n    \"\n\n      515 |     const stderr = await getStderr()\n      516 |\n    > 517 |     expect(stderr).toContain(\n          |                    ^\n      518 |       `Error parsing \\`/feedback/(?!general)\\` https://nextjs.org/docs/messages/invalid-route-source`\n      519 |     )\n      520 |     expect(stderr).toContain(`Reason: Pattern cannot start with \"?\" at 11`)\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:517:20)\n\n  ● Errors on invalid custom routes › dev mode › should show valid error when non-array is returned from rewrites\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"rewrites must return an array, received object\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 35631 --root /work --no-open]\n    \"\n\n      539 |     const stderr = await getStderr()\n      540 |\n    > 541 |     expect(stderr).toContain(`rewrites must return an array, received object`)\n          |                    ^\n      542 |   })\n      543 |\n      544 |   it('should show valid error when non-array is returned from redirects', async () => {\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:541:20)\n\n  ● Errors on invalid custom routes › dev mode › should show valid error when non-array is returned from redirects\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"redirects must return an array, received boolean\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 35859 --root /work --no-open]\n    \"\n\n      547 |     const stderr = await getStderr()\n      548 |\n    > 549 |     expect(stderr).toContain(`redirects must return an array, received boolean`)\n          |                    ^\n      550 |   })\n      551 |\n      552 |   it('should show valid error when non-array is returned from headers', async () => {\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:549:20)\n\n  ● Errors on invalid custom routes › dev mode › should show valid error when non-array is returned from headers\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"headers must return an array, received undefined\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 41135 --root /work --no-open]\n    \"\n\n      555 |     const stderr = await getStderr()\n      556 |\n    > 557 |     expect(stderr).toContain(`headers must return an array, received undefined`)\n          |                    ^\n      558 |   })\n      559 |\n      560 |   it('should show valid error when segments not in source are used in destination', async () => {\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:557:20)\n\n  ● Errors on invalid custom routes › dev mode › should show valid error when segments not in source are used in destination\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"`destination` has segments not in `source` or `has` (id) for route {\\\"source\\\":\\\"/feedback/:type\\\",\\\"destination\\\":\\\"/feedback/:id\\\"}\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 33339 --root /work --no-open]\n    \"\n\n      571 |     const stderr = await getStderr()\n      572 |\n    > 573 |     expect(stderr).toContain(\n          |                    ^\n      574 |       `\\`destination\\` has segments not in \\`source\\` or \\`has\\` (id) for route {\"source\":\"/feedback/:type\",\"destination\":\"/feedback/:id\"}`\n      575 |     )\n      576 |   })\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:573:20)\n",
+            "name": "/work/test/integration/invalid-custom-routes/test/index.test.js",
+            "startTime": 1675811675619,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811356523,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675811421273,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675811356622,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/middleware-fetches-with-body/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 10,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811473305,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with default bodyParser sizeLimit (1mb)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Body exceeded 1mb limit\"\nReceived: \"Payload Too Large\"\n    at Object.<anonymous> (/work/test/e2e/middleware-fetches-with-body/index.test.ts:69:32)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Middleware fetches with body with default bodyParser sizeLimit (1mb) should return 413 for body greater than 1mb",
+                "location": null,
+                "status": "failed",
+                "title": "should return 413 for body greater than 1mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with default bodyParser sizeLimit (1mb)"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with default bodyParser sizeLimit (1mb) should be able to send and return body size equal to 1mb",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return body size equal to 1mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with default bodyParser sizeLimit (1mb)"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with default bodyParser sizeLimit (1mb) should be able to send and return body greater than default highWaterMark (16KiB)",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return body greater than default highWaterMark (16KiB)"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5kb)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Body exceeded 5kb limit\"\nReceived: \"Payload Too Large\"\n    at Object.<anonymous> (/work/test/e2e/middleware-fetches-with-body/index.test.ts:137:32)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5kb) should return 413 for body greater than 5kb",
+                "location": null,
+                "status": "failed",
+                "title": "should return 413 for body greater than 5kb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5kb)"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5kb) should be able to send and return body size equal to 5kb",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return body size equal to 5kb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5mb)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Body exceeded 5mb limit\"\nReceived: \"Payload Too Large\"\n    at Object.<anonymous> (/work/test/e2e/middleware-fetches-with-body/index.test.ts:182:32)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5mb) should return 413 for body equal to 10mb",
+                "location": null,
+                "status": "failed",
+                "title": "should return 413 for body equal to 10mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5mb)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"Body exceeded 5mb limit\"\nReceived: \"Payload Too Large\"\n    at Object.<anonymous> (/work/test/e2e/middleware-fetches-with-body/index.test.ts:203:32)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5mb) should return 413 for body greater than 5mb",
+                "location": null,
+                "status": "failed",
+                "title": "should return 413 for body greater than 5mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with custom bodyParser sizeLimit (5mb)"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with custom bodyParser sizeLimit (5mb) should be able to send and return body size equal to 5mb",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return body size equal to 5mb"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with bodyParser = false"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with bodyParser = false should be able to send and return with body size equal to 16KiB",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return with body size equal to 16KiB"
+              },
+              {
+                "ancestorTitles": [
+                  "Middleware fetches with body",
+                  "with bodyParser = false"
+                ],
+                "failureMessages": [],
+                "fullName": "Middleware fetches with body with bodyParser = false should be able to send and return with body greater than 16KiB",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to send and return with body greater than 16KiB"
+              }
+            ],
+            "endTime": 1675811497372,
+            "message": "  ● Middleware fetches with body › with default bodyParser sizeLimit (1mb) › should return 413 for body greater than 1mb\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Body exceeded 1mb limit\"\n    Received: \"Payload Too Large\"\n\n      67 |\n      68 |       if (!(global as any).isNextDeploy) {\n    > 69 |         expect(res.statusText).toBe('Body exceeded 1mb limit')\n         |                                ^\n      70 |       }\n      71 |     })\n      72 |\n\n      at Object.<anonymous> (e2e/middleware-fetches-with-body/index.test.ts:69:32)\n\n  ● Middleware fetches with body › with custom bodyParser sizeLimit (5kb) › should return 413 for body greater than 5kb\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Body exceeded 5kb limit\"\n    Received: \"Payload Too Large\"\n\n      135 |\n      136 |       if (!(global as any).isNextDeploy) {\n    > 137 |         expect(res.statusText).toBe('Body exceeded 5kb limit')\n          |                                ^\n      138 |       }\n      139 |     })\n      140 |\n\n      at Object.<anonymous> (e2e/middleware-fetches-with-body/index.test.ts:137:32)\n\n  ● Middleware fetches with body › with custom bodyParser sizeLimit (5mb) › should return 413 for body equal to 10mb\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Body exceeded 5mb limit\"\n    Received: \"Payload Too Large\"\n\n      180 |\n      181 |       if (!(global as any).isNextDeploy) {\n    > 182 |         expect(res.statusText).toBe('Body exceeded 5mb limit')\n          |                                ^\n      183 |       }\n      184 |     })\n      185 |\n\n      at Object.<anonymous> (e2e/middleware-fetches-with-body/index.test.ts:182:32)\n\n  ● Middleware fetches with body › with custom bodyParser sizeLimit (5mb) › should return 413 for body greater than 5mb\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"Body exceeded 5mb limit\"\n    Received: \"Payload Too Large\"\n\n      201 |\n      202 |       if (!(global as any).isNextDeploy) {\n    > 203 |         expect(res.statusText).toBe('Body exceeded 5mb limit')\n          |                                ^\n      204 |       }\n      205 |     })\n      206 |\n\n      at Object.<anonymous> (e2e/middleware-fetches-with-body/index.test.ts:203:32)\n",
+            "name": "/work/test/e2e/middleware-fetches-with-body/index.test.ts",
+            "startTime": 1675811473404,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/custom-routes-catchall/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 7,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811555229,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes dev mode should rewrite and render page correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should rewrite and render page correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"/hello\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_f54f8f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_84b4eb._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__e5ee5e._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/custom-routes-catchall/test/index.test.js:32:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Custom routes dev mode should rewrite to /_next/static correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should rewrite to /_next/static correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes dev mode should rewrite to public/static correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should rewrite to public/static correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes dev mode should rewrite to public file correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should rewrite to public file correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes production mode should rewrite and render page correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should rewrite and render page correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes production mode should rewrite to /_next/static correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should rewrite to /_next/static correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes production mode should rewrite to public/static correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should rewrite to public/static correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes production mode should rewrite to public file correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should rewrite to public file correctly"
+              }
+            ],
+            "endTime": 1675811566850,
+            "message": "  ● Custom routes › dev mode › should rewrite to /_next/static correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"/hello\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_f54f8f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_84b4eb._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__e5ee5e._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      30 |     )\n      31 |     const data = await renderViaHTTP(appPort, bundlePath)\n    > 32 |     expect(data).toContain('/hello')\n         |                  ^\n      33 |   })\n      34 |\n      35 |   it('should rewrite to public/static correctly', async () => {\n\n      at Object.<anonymous> (integration/custom-routes-catchall/test/index.test.js:32:18)\n",
+            "name": "/work/test/integration/custom-routes-catchall/test/index.test.js",
+            "startTime": 1675811555329,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 15,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 16,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811296435,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire re-runs accepted modules",
+                "location": null,
+                "status": "passed",
+                "title": "re-runs accepted modules"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire propagates a hot update to closest accepted module",
+                "location": null,
+                "status": "passed",
+                "title": "propagates a hot update to closest accepted module"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire propagates hot update to all inverse dependencies",
+                "location": null,
+                "status": "passed",
+                "title": "propagates hot update to all inverse dependencies"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire runs dependencies before dependents",
+                "location": null,
+                "status": "passed",
+                "title": "runs dependencies before dependents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire provides fresh value for module.exports in parents",
+                "location": null,
+                "status": "passed",
+                "title": "provides fresh value for module.exports in parents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire provides fresh value for exports.* in parents",
+                "location": null,
+                "status": "passed",
+                "title": "provides fresh value for exports.* in parents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire provides fresh value for ES6 named import in parents",
+                "location": null,
+                "status": "passed",
+                "title": "provides fresh value for ES6 named import in parents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire provides fresh value for ES6 default import in parents",
+                "location": null,
+                "status": "passed",
+                "title": "provides fresh value for ES6 default import in parents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire stops update propagation after module-level errors",
+                "location": null,
+                "status": "passed",
+                "title": "stops update propagation after module-level errors"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire can continue hot updates after module-level errors with module.exports",
+                "location": null,
+                "status": "passed",
+                "title": "can continue hot updates after module-level errors with module.exports"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire can continue hot updates after module-level errors with ES6 exports",
+                "location": null,
+                "status": "passed",
+                "title": "can continue hot updates after module-level errors with ES6 exports"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire does not accumulate stale exports over time",
+                "location": null,
+                "status": "passed",
+                "title": "does not accumulate stale exports over time"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire bails out if update bubbles to the root via the only path",
+                "location": null,
+                "status": "passed",
+                "title": "bails out if update bubbles to the root via the only path"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire bails out if the update bubbles to the root via one of the paths",
+                "location": null,
+                "status": "passed",
+                "title": "bails out if the update bubbles to the root via one of the paths"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 2\n+ Received  + 0\n\n  Array [\n    \"init BarV2\",\n-   \"init BarV2\",\n-   \"init FooV1\",\n  ]\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshRequire.test.ts:430:63)"
+                ],
+                "fullName": "ReactRefreshRequire propagates a module that stops accepting in next version",
+                "location": null,
+                "status": "failed",
+                "title": "propagates a module that stops accepting in next version"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire can replace a module before it is loaded",
+                "location": null,
+                "status": "passed",
+                "title": "can replace a module before it is loaded"
+              }
+            ],
+            "endTime": 1675811517747,
+            "message": "  ● ReactRefreshRequire › propagates a module that stops accepting in next version\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 2\n    + Received  + 0\n\n      Array [\n        \"init BarV2\",\n    -   \"init BarV2\",\n    -   \"init FooV1\",\n      ]\n\n      428 |     // it didn't export a component, so we go higher.\n      429 |     // We stop at Foo which currently _does_ export a component.\n    > 430 |     expect(await session.evaluate(() => (window as any).log)).toEqual([\n          |                                                               ^\n      431 |       // Bar evaluates twice:\n      432 |       // 1. To invalidate itself once it realizes it's no longer acceptable.\n      433 |       // 2. As a child of Foo re-evaluating.\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshRequire.test.ts:430:63)\n",
+            "name": "/work/test/development/acceptance/ReactRefreshRequire.test.ts",
+            "startTime": 1675811296530,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-rendering/rendering.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811638145,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675811693282,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675811638242,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/next-dynamic-css/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675811940729,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "next/dynamic",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#__next div:nth-child(2)')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "next/dynamic dev mode should load page correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should load page correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "next/dynamic",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "next/dynamic production mode should load page correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should load page correctly"
+              }
+            ],
+            "endTime": 1675811991759,
+            "message": "  ● next/dynamic › dev mode › should load page correctly\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#__next div:nth-child(2)')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/next-dynamic-css/test/index.test.js",
+            "startTime": 1675811940824,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
