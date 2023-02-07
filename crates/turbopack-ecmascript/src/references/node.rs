@@ -72,7 +72,7 @@ impl AssetReference for DirAssetReference {
         let context_path = self.source.path().await?;
         // ignore path.join in `node-gyp`, it will includes too many files
         if context_path.path.contains("node_modules/node-gyp") {
-            return Ok(ResolveResult::assets_with_references(Vec::new(), vec![]).into());
+            return Ok(ResolveResult::unresolveable().into());
         }
         let context = self.source.path().parent();
         let pat = self.path.await?;
