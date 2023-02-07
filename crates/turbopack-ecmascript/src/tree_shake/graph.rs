@@ -82,13 +82,13 @@ pub(super) struct ItemData {
 pub(super) struct VarInfo {}
 
 #[derive(Debug, Default)]
-pub struct Graph {
+pub struct DepGraph {
     /// `bool`: Strong
     pub(super) inner: DiGraphMap<u32, bool>,
     pub(super) graph_ix: IndexSet<ItemId, FxBuildHasher>,
 }
 
-impl Graph {
+impl DepGraph {
     pub(super) fn finalize(&self) -> petgraph::Graph<Vec<u32>, bool, Directed, u32> {
         let graph = self.inner.clone().into_graph();
 

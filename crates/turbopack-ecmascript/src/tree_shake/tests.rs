@@ -11,7 +11,7 @@ use swc_core::{
 };
 
 use super::{
-    graph::{Graph, ItemId, ItemIdKind},
+    graph::{DepGraph, ItemId, ItemIdKind},
     Analyzer,
 };
 
@@ -33,7 +33,7 @@ fn run(input: PathBuf) {
         )
         .unwrap();
 
-        let mut g = Graph::default();
+        let mut g = DepGraph::default();
         let (item_ids, mut items) = g.init(&module);
 
         let mut s = String::new();
@@ -196,7 +196,7 @@ fn print<N: swc_core::ecma::codegen::Node>(cm: &Arc<SourceMap>, nodes: &[&N]) ->
     String::from_utf8(buf).unwrap()
 }
 
-fn render_graph(item_ids: &[ItemId], g: &mut Graph) -> String {
+fn render_graph(item_ids: &[ItemId], g: &mut DepGraph) -> String {
     let mut mermaid = String::from("graph TD\n");
 
     for (i, id) in item_ids.iter().enumerate() {

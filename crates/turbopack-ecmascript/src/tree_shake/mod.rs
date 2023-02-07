@@ -2,7 +2,7 @@ use fxhash::FxHashMap;
 use indexmap::IndexSet;
 use swc_core::ecma::ast::{Id, Module};
 
-use self::graph::{Graph, ItemData, ItemId, ItemIdKind};
+use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
 
 mod condensation;
 mod graph;
@@ -11,7 +11,7 @@ mod tests;
 mod util;
 
 pub struct Analyzer<'a> {
-    g: &'a mut Graph,
+    g: &'a mut DepGraph,
     item_ids: &'a Vec<ItemId>,
     items: &'a mut FxHashMap<ItemId, ItemData>,
 
@@ -31,8 +31,8 @@ struct VarState {
 }
 
 impl Analyzer<'_> {
-    pub fn analyze(module: &Module) -> Graph {
-        let mut g = Graph::default();
+    pub fn analyze(module: &Module) -> DepGraph {
+        let mut g = DepGraph::default();
         let (item_ids, mut items) = g.init(module);
 
         let mut analyzer = Analyzer {
