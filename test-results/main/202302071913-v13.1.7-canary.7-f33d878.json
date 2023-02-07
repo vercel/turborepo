@@ -1,0 +1,818 @@
+{
+  "ref": "255b3d64e524661f26f533afe4592108ed69becb",
+  "nextjsVersion": "Next.js v13.1.7-canary.7",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675796615582,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675796679961,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675796615674,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/handle-non-hoisted-swc-helpers/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675796729557,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "handle-non-hoisted-swc-helpers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello world\"\nReceived string:    \"<!DOCTYPE html>\n<html>\n<head>·\n</head>\n<body>\n<script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n    <div id=\\\"__next\\\">\n        <h1>Error rendering page</h1>\n        <h2>Message</h2>\n        <pre>Error: Cannot find module '@swc/helpers/lib/_object_spread.js'\n  at &lt;unknown&gt; (/.next/server/pages/chunks/pages_index.js:23:19)\n  at getServerSideProps (/.next/server/pages/chunks/pages_index.js:26:7)\n  at Object.renderToHTML (/node_modules/next/dist/server/render.js:506:26)\n  at processTicksAndRejections (node:internal/process/task_queues:96:5)\n  at async runOperation (/.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_internal_page-server-handler.tsx.js:140:30)\n  at async (/.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_internal_page-server-handler.tsx.js:45:25)\n</pre>\n        <h2>Exit status</h2><pre>exit status: 1</pre>\n    </div>\n<script src=\\\"/_chunks/_8e8dc0.js\\\"></script>\n<script src=\\\"/_chunks/node_modules_react_680ebc.js\\\"></script>\n<script src=\\\"/_chunks/node_modules_react-dom_a9e04f.js\\\"></script>\n<script src=\\\"/_chunks/node_modules_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/node_modules_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_9f69cd.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n</body>\n</html>\"\n    at Object.<anonymous> (/work/test/e2e/handle-non-hoisted-swc-helpers/index.test.ts:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "handle-non-hoisted-swc-helpers should work",
+                "location": null,
+                "status": "failed",
+                "title": "should work"
+              }
+            ],
+            "endTime": 1675796753025,
+            "message": "  ● handle-non-hoisted-swc-helpers › should work\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello world\"\n    Received string:    \"<!DOCTYPE html>\n    <html>\n    <head>·\n    </head>\n    <body>\n    <script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n        <div id=\\\"__next\\\">\n            <h1>Error rendering page</h1>\n            <h2>Message</h2>\n            <pre>Error: Cannot find module '@swc/helpers/lib/_object_spread.js'\n\n      at &lt;unknown&gt; (../../.next/server/pages/chunks/pages_index.js:23:19)\n      at getServerSideProps (../../.next/server/pages/chunks/pages_index.js:26:7)\n      at Object.renderToHTML (../../node_modules/next/dist/server/render.js:506:26)\n      at async runOperation (../../.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_internal_page-server-handler.tsx.js:140:30)\n      at async (../../.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_internal_page-server-handler.tsx.js:45:25)\n      </pre>\n              <h2>Exit status</h2><pre>exit status: 1</pre>\n          </div>\n      <script src=\\\"/_chunks/_8e8dc0.js\\\"></script>\n      <script src=\\\"/_chunks/node_modules_react_680ebc.js\\\"></script>\n      <script src=\\\"/_chunks/node_modules_react-dom_a9e04f.js\\\"></script>\n      <script src=\\\"/_chunks/node_modules_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/node_modules_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_9f69cd.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n      </body>\n      </html>\"\n      at Object.<anonymous> (e2e/handle-non-hoisted-swc-helpers/index.test.ts:36:18)\n",
+            "name": "/work/test/e2e/handle-non-hoisted-swc-helpers/index.test.ts",
+            "startTime": 1675796729708,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675796766815,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__e8d0c9.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675796771704,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__e8d0c9.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675796766920,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675796541198,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "api-route-errors cli output"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /pages\\/api/\n\n[500] /api/error (938ms)\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 938ms\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/api-route-errors/index.test.ts:23:5)"
+                ],
+                "fullName": "api-route-errors cli output error",
+                "location": null,
+                "status": "failed",
+                "title": "error"
+              },
+              {
+                "ancestorTitles": [
+                  "api-route-errors cli output"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /pages\\/api/\n\n[500] /api/uncaught-exception (110ms)\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 110ms\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/api-route-errors/index.test.ts:37:5)"
+                ],
+                "fullName": "api-route-errors cli output uncaught exception",
+                "location": null,
+                "status": "failed",
+                "title": "uncaught exception"
+              },
+              {
+                "ancestorTitles": [
+                  "api-route-errors cli output"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /pages\\/api/\n\n[500] /api/unhandled-rejection (143ms)\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 143ms\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/api-route-errors/index.test.ts:55:5)"
+                ],
+                "fullName": "api-route-errors cli output unhandled rejection",
+                "location": null,
+                "status": "failed",
+                "title": "unhandled rejection"
+              }
+            ],
+            "endTime": 1675796651795,
+            "message": "  ● api-route-errors cli output › error\n\n    TIMED OUT: /pages\\/api/\n\n    [500] /api/error (938ms)\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 938ms\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/api-route-errors/index.test.ts:23:5)\n\n  ● api-route-errors cli output › uncaught exception\n\n    TIMED OUT: /pages\\/api/\n\n    [500] /api/uncaught-exception (110ms)\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 110ms\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/api-route-errors/index.test.ts:37:5)\n\n  ● api-route-errors cli output › unhandled rejection\n\n    TIMED OUT: /pages\\/api/\n\n    [500] /api/unhandled-rejection (143ms)\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 143ms\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/api-route-errors/index.test.ts:55:5)\n",
+            "name": "/work/test/development/api-route-errors/index.test.ts",
+            "startTime": 1675796541289,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675796816124,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675796865177,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675796816218,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/gssp-redirect-with-rewrites/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675796956066,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "getServerSideProps redirects"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: undefined\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-with-rewrites/test/index.test.js:45:54)"
+                ],
+                "fullName": "getServerSideProps redirects should use a client-side navigation for a rewritten URL",
+                "location": null,
+                "status": "failed",
+                "title": "should use a client-side navigation for a rewritten URL"
+              },
+              {
+                "ancestorTitles": [
+                  "getServerSideProps redirects"
+                ],
+                "failureMessages": [],
+                "fullName": "getServerSideProps redirects should fallback to browser navigation for an unknown URL",
+                "location": null,
+                "status": "passed",
+                "title": "should fallback to browser navigation for an unknown URL"
+              }
+            ],
+            "endTime": 1675796986377,
+            "message": "  ● getServerSideProps redirects › should use a client-side navigation for a rewritten URL\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: undefined\n\n      43 |     await browser.waitForElementByCss('.refreshed')\n      44 |\n    > 45 |     expect(await browser.eval('window.__SAME_PAGE')).toBe(true)\n         |                                                      ^\n      46 |   })\n      47 |\n      48 |   it('should fallback to browser navigation for an unknown URL', async () => {\n\n      at Object.<anonymous> (integration/gssp-redirect-with-rewrites/test/index.test.js:45:54)\n",
+            "name": "/work/test/integration/gssp-redirect-with-rewrites/test/index.test.js",
+            "startTime": 1675796956164,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675796639723,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675796704955,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675796639816,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/handle-non-hoisted-swc-helpers/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675796753237,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "handle-non-hoisted-swc-helpers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello world\"\nReceived string:    \"<!DOCTYPE html>\n<html>\n<head>·\n</head>\n<body>\n<script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n    <div id=\\\"__next\\\">\n        <h1>Error rendering page</h1>\n        <h2>Message</h2>\n        <pre>Error: Cannot find module '@swc/helpers/lib/_object_spread.js'\n  at &lt;unknown&gt; (/.next/server/pages/chunks/pages_index.js:23:19)\n  at getServerSideProps (/.next/server/pages/chunks/pages_index.js:26:7)\n  at Object.renderToHTML (/node_modules/next/dist/server/render.js:506:26)\n  at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n  at async runOperation (/.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_internal_page-server-handler.tsx.js:140:30)\n  at async (/.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_internal_page-server-handler.tsx.js:45:25)\n</pre>\n        <h2>Exit status</h2><pre>exit status: 1</pre>\n    </div>\n<script src=\\\"/_chunks/_8e8dc0.js\\\"></script>\n<script src=\\\"/_chunks/node_modules_react_680ebc.js\\\"></script>\n<script src=\\\"/_chunks/node_modules_react-dom_a9e04f.js\\\"></script>\n<script src=\\\"/_chunks/node_modules_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/node_modules_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_9f69cd.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n</body>\n</html>\"\n    at Object.<anonymous> (/work/test/e2e/handle-non-hoisted-swc-helpers/index.test.ts:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "handle-non-hoisted-swc-helpers should work",
+                "location": null,
+                "status": "failed",
+                "title": "should work"
+              }
+            ],
+            "endTime": 1675796773544,
+            "message": "  ● handle-non-hoisted-swc-helpers › should work\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello world\"\n    Received string:    \"<!DOCTYPE html>\n    <html>\n    <head>·\n    </head>\n    <body>\n    <script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n        <div id=\\\"__next\\\">\n            <h1>Error rendering page</h1>\n            <h2>Message</h2>\n            <pre>Error: Cannot find module '@swc/helpers/lib/_object_spread.js'\n\n      at &lt;unknown&gt; (../../.next/server/pages/chunks/pages_index.js:23:19)\n      at getServerSideProps (../../.next/server/pages/chunks/pages_index.js:26:7)\n      at Object.renderToHTML (../../node_modules/next/dist/server/render.js:506:26)\n      at async runOperation (../../.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_internal_page-server-handler.tsx.js:140:30)\n      at async (../../.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_internal_page-server-handler.tsx.js:45:25)\n      </pre>\n              <h2>Exit status</h2><pre>exit status: 1</pre>\n          </div>\n      <script src=\\\"/_chunks/_8e8dc0.js\\\"></script>\n      <script src=\\\"/_chunks/node_modules_react_680ebc.js\\\"></script>\n      <script src=\\\"/_chunks/node_modules_react-dom_a9e04f.js\\\"></script>\n      <script src=\\\"/_chunks/node_modules_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/node_modules_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_9f69cd.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n      </body>\n      </html>\"\n      at Object.<anonymous> (e2e/handle-non-hoisted-swc-helpers/index.test.ts:36:18)\n",
+            "name": "/work/test/e2e/handle-non-hoisted-swc-helpers/index.test.ts",
+            "startTime": 1675796753330,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675796785235,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__e8d0c9.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675796790260,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__e8d0c9.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675796785340,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675796720967,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "api-route-errors cli output"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /pages\\/api/\n\n[500] /api/error (980ms)\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 980ms\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/api-route-errors/index.test.ts:23:5)"
+                ],
+                "fullName": "api-route-errors cli output error",
+                "location": null,
+                "status": "failed",
+                "title": "error"
+              },
+              {
+                "ancestorTitles": [
+                  "api-route-errors cli output"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /pages\\/api/\n\n[500] /api/uncaught-exception (130ms)\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 130ms\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/api-route-errors/index.test.ts:37:5)"
+                ],
+                "fullName": "api-route-errors cli output uncaught exception",
+                "location": null,
+                "status": "failed",
+                "title": "uncaught exception"
+              },
+              {
+                "ancestorTitles": [
+                  "api-route-errors cli output"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /pages\\/api/\n\n[500] /api/unhandled-rejection (153ms)\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 153ms\n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at runNextTicks (node:internal/process/task_queues:60:5)\n    at listOnTimeout (node:internal/timers:538:9)\n    at processTimers (node:internal/timers:512:7)\n    at Object.<anonymous> (/work/test/development/api-route-errors/index.test.ts:55:5)"
+                ],
+                "fullName": "api-route-errors cli output unhandled rejection",
+                "location": null,
+                "status": "failed",
+                "title": "unhandled rejection"
+              }
+            ],
+            "endTime": 1675796832391,
+            "message": "  ● api-route-errors cli output › error\n\n    TIMED OUT: /pages\\/api/\n\n    [500] /api/error (980ms)\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 980ms\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/api-route-errors/index.test.ts:23:5)\n\n  ● api-route-errors cli output › uncaught exception\n\n    TIMED OUT: /pages\\/api/\n\n    [500] /api/uncaught-exception (130ms)\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 130ms\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/api-route-errors/index.test.ts:37:5)\n\n  ● api-route-errors cli output › unhandled rejection\n\n    TIMED OUT: /pages\\/api/\n\n    [500] /api/unhandled-rejection (153ms)\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 153ms\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/api-route-errors/index.test.ts:55:5)\n",
+            "name": "/work/test/development/api-route-errors/index.test.ts",
+            "startTime": 1675796721088,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675796998154,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675797048003,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675796998253,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/gssp-redirect-with-rewrites/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675797141283,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "getServerSideProps redirects"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: undefined\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-with-rewrites/test/index.test.js:45:54)"
+                ],
+                "fullName": "getServerSideProps redirects should use a client-side navigation for a rewritten URL",
+                "location": null,
+                "status": "failed",
+                "title": "should use a client-side navigation for a rewritten URL"
+              },
+              {
+                "ancestorTitles": [
+                  "getServerSideProps redirects"
+                ],
+                "failureMessages": [],
+                "fullName": "getServerSideProps redirects should fallback to browser navigation for an unknown URL",
+                "location": null,
+                "status": "passed",
+                "title": "should fallback to browser navigation for an unknown URL"
+              }
+            ],
+            "endTime": 1675797171855,
+            "message": "  ● getServerSideProps redirects › should use a client-side navigation for a rewritten URL\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: undefined\n\n      43 |     await browser.waitForElementByCss('.refreshed')\n      44 |\n    > 45 |     expect(await browser.eval('window.__SAME_PAGE')).toBe(true)\n         |                                                      ^\n      46 |   })\n      47 |\n      48 |   it('should fallback to browser navigation for an unknown URL', async () => {\n\n      at Object.<anonymous> (integration/gssp-redirect-with-rewrites/test/index.test.js:45:54)\n",
+            "name": "/work/test/integration/gssp-redirect-with-rewrites/test/index.test.js",
+            "startTime": 1675797141384,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
