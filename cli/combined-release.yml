@@ -5,6 +5,8 @@ dist: dist
 builds:
   - id: turbo
     builder: prebuilt
+    tags:
+      - go
     goos:
       - linux
       - windows

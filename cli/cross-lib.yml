@@ -10,6 +10,8 @@ builds:
   - id: turbo-linux
     main: ./cmd/turbo
     binary: lib/libturbo.a
+    tags:
+      - go
     flags:
       - -trimpath
       - -buildmode=c-archive
