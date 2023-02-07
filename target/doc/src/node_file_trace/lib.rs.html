@@ -609,6 +609,13 @@
 <span id="609">609</span>
 <span id="610">610</span>
 <span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>nft_json;
@@ -954,7 +961,10 @@
         .collect()
 }
 
-<span class="kw">pub async fn </span>start(args: Arc&lt;Args&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;String&gt;&gt; {
+<span class="kw">pub async fn </span>start(
+    args: Arc&lt;Args&gt;,
+    turbo_tasks: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Arc&lt;TurboTasks&lt;MemoryBackend&gt;&gt;&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;String&gt;&gt; {
     register();
     <span class="kw">let </span><span class="kw-2">&amp;</span>CommonArgs {
         visualize_graph,
@@ -1017,7 +1027,11 @@
 
     run(
         args.clone(),
-        || TurboTasks::new(MemoryBackend::new(memory_limit.unwrap_or(usize::MAX))),
+        || {
+            turbo_tasks.cloned().unwrap_or_else(|| {
+                TurboTasks::new(MemoryBackend::new(memory_limit.unwrap_or(usize::MAX)))
+            })
+        },
         |tt, root_task, <span class="kw">_</span>| <span class="kw">async move </span>{
             <span class="kw">if </span>visualize_graph {
                 <span class="kw">let </span><span class="kw-2">mut </span>stats = Stats::new();
