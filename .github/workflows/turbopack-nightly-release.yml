@@ -32,11 +32,11 @@ jobs:
           # Ensure we generate prerelease versions, not stables.
           release_branches: ""
           pre_release_branches: "main"
-          append_to_pre_release_tag: "alpha"
+          append_to_pre_release_tag: "nightly"
 
       - name: Create GitHub release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.tag_version.outputs.new_tag }}
           name: Turbopack Release ${{ steps.tag_version.outputs.new_tag }}
-          body: ${{ steps.tag_version.outputs.changelog }}
+          omitBody: true
