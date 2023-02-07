@@ -104,8 +104,6 @@ func calculateGlobalHash(rootpath turbopath.AbsoluteSystemPath, rootPackageJSON 
 		pipeline:             pipelineForGlobalHash,
 	}
 
-	fmt.Printf("[debug] globalHashable.pipeline: %#v\n", globalHashable.pipeline)
-
 	globalHash, err := fs.HashObject(globalHashable)
 	if err != nil {
 		return "", fmt.Errorf("error hashing global dependencies %w", err)

@@ -251,7 +251,6 @@ func readTurboJSON(path turbopath.AbsoluteSystemPath) (*TurboJSON, error) {
 		return nil, err
 	}
 
-	fmt.Printf("[debug] turboJSON %#v\n", turboJSON)
 	return turboJSON, nil
 }
 
@@ -348,7 +347,6 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	btd.fieldsMeta = map[string]bool{}
 	c := &btd.TaskDefinition
 
-	fmt.Printf("[debug] task.Outputs %#v\n", task.Outputs)
 	if task.Outputs != nil {
 		var inclusions []string
 		var exclusions []string

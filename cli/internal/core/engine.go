@@ -428,7 +428,6 @@ func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 	for _, bookkeepingTaskDef := range taskDefinitions {
 		taskDef := bookkeepingTaskDef.TaskDefinition
 		if bookkeepingTaskDef.HasField("Outputs") {
-			fmt.Printf("[debug] Overriding Outputs to %#v\n", taskDef.Outputs)
 			mergedTaskDefinition.Outputs = &fs.TaskOutputs{
 				Inclusions: taskDef.Outputs.Inclusions,
 				Exclusions: taskDef.Outputs.Exclusions,
