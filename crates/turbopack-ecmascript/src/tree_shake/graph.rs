@@ -116,6 +116,18 @@ where
             ix
         }) as _
     }
+
+    pub(super) fn map<N, F>(self, mut map: F) -> InternedGraph<N>
+    where
+        N: Clone + Eq + Hash,
+        F: FnMut(T) -> N,
+    {
+        let ix = self.graph_ix.into_iter().map(|v| map(v)).collect();
+        InternedGraph {
+            inner: self.inner,
+            graph_ix: ix,
+        }
+    }
 }
 
 #[derive(Debug, Default)]

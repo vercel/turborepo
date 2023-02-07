@@ -11,7 +11,7 @@ use swc_core::{
 };
 
 use super::{
-    graph::{DepGraph, ItemId, ItemIdKind},
+    graph::{DepGraph, InternedGraph, ItemId, ItemIdKind},
     Analyzer,
 };
 
@@ -149,24 +149,21 @@ fn run(input: PathBuf) {
         .unwrap();
 
         let condensed = analyzer.g.finalize();
-        let condensed = condensed.map(
-            |ix, indexes| {
-                let mut buf = vec![];
-                for index in indexes {
-                    let item_id = analyzer.g.g.graph_ix.get_index(*index as _).unwrap();
+        let mut condensed = condensed.map(|indexes| {
+            let mut buf = vec![];
+            for index in indexes {
+                let item_id = analyzer.g.g.graph_ix.get_index(index as _).unwrap();
 
-                    let rendered = render_item_id(&item_id.kind)
-                        .unwrap_or_else(|| print(&cm, &[&module.body[item_id.index]]));
-                    buf.push(rendered);
-                }
+                let rendered = render_item_id(&item_id.kind)
+                    .unwrap_or_else(|| print(&cm, &[&module.body[item_id.index]]));
+                buf.push(rendered);
+            }
 
-                buf
-            },
-            |ix, edge| *edge,
-        );
+            buf
+        });
 
-        let dot = petgraph::dot::Dot::with_config(&condensed, &[]);
-        println!("DOT!\n{:?}", dot);
+        writeln!(s, "# Condensed").unwrap();
+        writeln!(s, "```mermaid\n{}```", render_final_graph(&mut condensed)).unwrap();
 
         NormalizedOutput::from(s)
             .compare_to_file(input.with_file_name("output.md"))
@@ -200,7 +197,7 @@ fn render_graph(item_ids: &[ItemId], g: &mut DepGraph) -> String {
     let mut mermaid = String::from("graph TD\n");
 
     for (i, id) in item_ids.iter().enumerate() {
-        let i = g.node(id);
+        let i = g.g.node(id);
 
         writeln!(mermaid, "    Item{};", i + 1).unwrap();
 
@@ -209,10 +206,37 @@ fn render_graph(item_ids: &[ItemId], g: &mut DepGraph) -> String {
         }
     }
 
-    for (from, to, strong) in g.inner.all_edges() {
+    for (from, to, strong) in g.g.inner.all_edges() {
         writeln!(
             mermaid,
             "    Item{} -{}-> Item{};",
+            from + 1,
+            if *strong { "" } else { "." },
+            to + 1,
+        )
+        .unwrap();
+    }
+
+    mermaid
+}
+
+fn render_final_graph(g: &mut InternedGraph<Vec<String>>) -> String {
+    let mut mermaid = String::from("graph TD\n");
+
+    // for (i, id) in item_ids.iter().enumerate() {
+    //     let i = g.g.node(id);
+
+    //     writeln!(mermaid, "    Item{};", i + 1).unwrap();
+
+    //     if let Some(item_id) = render_item_id(&id.kind) {
+    //         writeln!(mermaid, "    Item{}[\"{}\"];", i + 1, item_id).unwrap();
+    //     }
+    // }
+
+    for (from, to, strong) in g.inner.all_edges() {
+        writeln!(
+            mermaid,
+            "    Stmt{} -{}-> Stmt{};",
             from + 1,
             if *strong { "" } else { "." },
             to + 1,
