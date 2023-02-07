@@ -120,7 +120,8 @@ impl ChunkingContext for DevChunkingContext {
         } else {
             clean(&path_vc.to_string().await?)
         };
-        if name.ends_with(extension) {
+        let removed_extension = name.ends_with(extension);
+        if removed_extension {
             name.truncate(name.len() - extension.len());
         }
 
@@ -145,9 +146,13 @@ impl ChunkingContext for DevChunkingContext {
             let truncated_hash = &hash[..5];
             name = format!("{}_{}", truncated_hash, &name[i..]);
         }
-        if !name.ends_with(extension) {
-            name += extension;
+        // We need to make sure that `.json` and `.json.js` doesn't end up with the same
+        // name. So when we add an extra extension when want to mark that with a "._"
+        // suffix.
+        if !removed_extension {
+            name += "._";
         }
+        name += extension;
         let mut root_path = self.chunk_root_path;
         #[allow(clippy::single_match, reason = "future extensions")]
         match extension {
