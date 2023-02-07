@@ -24,9 +24,11 @@ use turbopack_node::{
 
 use crate::{
     embed_js::{next_asset, wrap_with_next_js_fs},
+    next_config::NextConfigVc,
     next_import_map::get_next_build_import_map,
 };
 
+#[turbo_tasks::function]
 fn next_configs() -> StringsVc {
     StringsVc::cell(
         ["next.config.mjs", "next.config.js"]
@@ -34,6 +36,16 @@ fn next_configs() -> StringsVc {
             .map(ToOwned::to_owned)
             .collect(),
     )
+}
+
+#[turbo_tasks::function]
+async fn middleware_files(page_extensions: StringsVc) -> Result<StringsVc> {
+    let extensions = page_extensions.await?;
+    let files = ["middleware.", "src/middleware."]
+        .into_iter()
+        .flat_map(|f| extensions.iter().map(move |ext| String::from(f) + ext))
+        .collect();
+    Ok(StringsVc::cell(files))
 }
 
 #[turbo_tasks::value(shared)]
@@ -117,11 +129,12 @@ impl From<RouterIncomingMessage> for RouterResult {
 }
 
 #[turbo_tasks::function]
-async fn extra_configs(
+async fn extra_config(
     context: AssetContextVc,
     project_path: FileSystemPathVc,
+    configs: StringsVc,
 ) -> Result<EcmascriptChunkPlaceablesVc> {
-    let find_config_result = find_context_file(project_path, next_configs());
+    let find_config_result = find_context_file(project_path, configs);
     let config_asset = match &*find_config_result.await? {
         FindContextFileResult::Found(config_path, _) => Some(SourceAssetVc::new(*config_path)),
         FindContextFileResult::NotFound(_) => None,
@@ -129,6 +142,7 @@ async fn extra_configs(
     let Some(config_asset) = config_asset else {
         return Ok(EcmascriptChunkPlaceablesVc::empty());
     };
+
     let config_chunk = EcmascriptModuleAssetVc::new(
         config_asset.into(),
         context,
@@ -138,6 +152,21 @@ async fn extra_configs(
     )
     .as_ecmascript_chunk_placeable();
     Ok(EcmascriptChunkPlaceablesVc::cell(vec![config_chunk]))
+}
+
+#[turbo_tasks::function]
+async fn extra_configs(
+    context: AssetContextVc,
+    project_path: FileSystemPathVc,
+    page_extensions: StringsVc,
+) -> Result<EcmascriptChunkPlaceablesVc> {
+    let next_config = extra_config(context, project_path, next_configs()).await?;
+    let middleware_config =
+        extra_config(context, project_path, middleware_files(page_extensions)).await?;
+
+    let mut concat = next_config.clone_value();
+    concat.extend(&*middleware_config);
+    Ok(EcmascriptChunkPlaceablesVc::cell(concat))
 }
 
 #[turbo_tasks::function]
@@ -156,6 +185,7 @@ fn route_executor(context: AssetContextVc, project_path: FileSystemPathVc) -> As
 pub async fn route(
     execution_context: ExecutionContextVc,
     request: RouterRequestVc,
+    next_config: NextConfigVc,
 ) -> Result<RouterResultVc> {
     let ExecutionContext {
         project_root,
@@ -165,7 +195,7 @@ pub async fn route(
     let context = node_evaluate_asset_context(Some(get_next_build_import_map(project_path)));
     let router_asset = route_executor(context, project_path);
     // TODO this is a hack to get these files watched.
-    let extra_configs = extra_configs(context, project_path);
+    let extra_configs = extra_configs(context, project_path, next_config.page_extensions());
 
     let request = serde_json::value::to_value(&*request.await?)?;
     let Some(dir) = to_sys_path(project_root).await? else {
