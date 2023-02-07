@@ -4,12 +4,10 @@ Setup
 
 # The omit-keys-task task in the root turbo.json has ALL the config. The workspace config
 # defines the task, but does not override any of the keys. The tests below use `omit-keys-task`
-to assert that
-# - `outputs`, `inputs`, `env` are retained from the root.
-# These tests use a different task from the ones above because
+# to assert that `outputs`, `inputs`, `env` are retained from the root.
+# These tests use a different task from the composing-omit-keys-deps.t, because
 # tasks with dependencies have side effects and can have cache
-# misses because of those dependencies. These tests attempt to isolate
-# for inputs and env changes.
+# misses because of those dependencies. These tests attempt to isolate for configs other than dependsOn.
 
 # 1. First run, assert for `outputs`
   $ ${TURBO} run omit-keys-task --skip-infer --filter=omit-keys > tmp.log
@@ -17,7 +15,7 @@ to assert that
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing 1cfdc3f9c2d0b257
+  omit-keys:omit-keys-task: cache miss, executing 250d296c143a2986
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
@@ -39,7 +37,7 @@ to assert that
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache hit, suppressing output 1cfdc3f9c2d0b257
+  omit-keys:omit-keys-task: cache hit, suppressing output 250d296c143a2986
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -51,7 +49,7 @@ to assert that
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing 1de6963a2a2f1b58
+  omit-keys:omit-keys-task: cache miss, executing d033c46d2023485a
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
@@ -62,13 +60,13 @@ to assert that
     Time:\s*[\.0-9]+m?s  (re)
   
 
-3a. Changeing a different file (that is not in `inputs` config) gets cache hit and FULL TURBO
+3a. Changing a different file (that is not in `inputs` config) gets cache hit and FULL TURBO
   $ echo "more text" >> $TARGET_DIR/apps/omit-keys/src/bar.txt
   $ ${TURBO} run omit-keys-task --skip-infer --filter=omit-keys
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache hit, suppressing output 1de6963a2a2f1b58
+  omit-keys:omit-keys-task: cache hit, suppressing output d033c46d2023485a
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -79,7 +77,7 @@ to assert that
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing 7edfff1b54906dd5
+  omit-keys:omit-keys-task: cache miss, executing f23b2a17e510b935
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
