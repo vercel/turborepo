@@ -139,7 +139,7 @@ impl EcmascriptChunkItem for JsonChunkItem {
                 } else {
                     write!(message, "{}", e)?;
                 }
-                return Err(Error::msg(message));
+                Err(Error::msg(message))
             }
             FileJsonContent::NotFound => {
                 bail!(

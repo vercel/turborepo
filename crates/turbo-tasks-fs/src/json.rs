@@ -100,11 +100,9 @@ pub fn parse_json_with_source_context<'de, T: Deserialize<'de>>(text: &'de str) 
     let de = &mut serde_json::Deserializer::from_str(text);
     match serde_path_to_error::deserialize(de) {
         Ok(data) => Ok(data),
-        Err(e) => {
-            return Err(anyhow::Error::msg(
-                UnparseableJson::from_serde_path_to_error(e).to_string_with_content(text),
-            ))
-        }
+        Err(e) => Err(anyhow::Error::msg(
+            UnparseableJson::from_serde_path_to_error(e).to_string_with_content(text),
+        )),
     }
 }
 
@@ -114,9 +112,9 @@ pub fn parse_json_rope_with_source_context<'de, T: Deserialize<'de>>(rope: &'de 
         Ok(data) => Ok(data),
         Err(e) => {
             let cow = rope.to_str()?;
-            return Err(anyhow::Error::msg(
+            Err(anyhow::Error::msg(
                 UnparseableJson::from_serde_path_to_error(e).to_string_with_content(&cow),
-            ));
+            ))
         }
     }
 }
