@@ -206,7 +206,7 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>PackageJsonReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        ResolveResult::Single(SourceAssetVc::new(<span class="self">self</span>.package_json).into(), Vec::new()).into()
+        ResolveResult::asset(SourceAssetVc::new(<span class="self">self</span>.package_json).into()).into()
     }
 }
 
@@ -243,7 +243,7 @@
         <span class="kw">let </span>context_path = <span class="self">self</span>.source.path().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// ignore path.join in `node-gyp`, it will includes too many files
         </span><span class="kw">if </span>context_path.path.contains(<span class="string">&quot;node_modules/node-gyp&quot;</span>) {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::Alternatives(Vec::new(), <span class="macro">vec!</span>[]).into());
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::unresolveable().into());
         }
         <span class="kw">let </span>context = <span class="self">self</span>.source.path().parent();
         <span class="kw">let </span>pat = <span class="self">self</span>.path.<span class="kw">await</span><span class="question-mark">?</span>;
@@ -264,7 +264,7 @@
             }
             <span class="kw">_ </span>=&gt; {}
         }
-        <span class="prelude-val">Ok</span>(ResolveResult::Alternatives(result.into_iter().collect(), <span class="macro">vec!</span>[]).into())
+        <span class="prelude-val">Ok</span>(ResolveResult::assets_with_references(result.into_iter().collect(), <span class="macro">vec!</span>[]).into())
     }
 }
 

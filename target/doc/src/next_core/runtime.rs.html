@@ -22,21 +22,9 @@
 <span id="22">22</span>
 <span id="23">23</span>
 <span id="24">24</span>
-<span id="25">25</span>
-<span id="26">26</span>
-<span id="27">27</span>
-<span id="28">28</span>
-<span id="29">29</span>
-<span id="30">30</span>
-<span id="31">31</span>
-<span id="32">32</span>
-<span id="33">33</span>
-<span id="34">34</span>
-<span id="35">35</span>
-<span id="36">36</span>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbopack::ecmascript::{chunk::EcmascriptChunkPlaceableVc, resolve::cjs_resolve};
-<span class="kw">use </span>turbopack_core::resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResult};
+<span class="kw">use </span>turbopack_core::resolve::{origin::ResolveOriginVc, parse::RequestVc};
 
 <span class="doccomment">/// Resolves the turbopack runtime module from the given [AssetContextVc].
 </span><span class="attr">#[turbo_tasks::function]
@@ -47,27 +35,15 @@
     <span class="kw">let </span>runtime_request_path = <span class="macro">format!</span>(<span class="string">&quot;@vercel/turbopack-next/{}&quot;</span>, path);
     <span class="kw">let </span>request = RequestVc::parse_string(runtime_request_path.clone());
 
-    <span class="kw">match </span><span class="kw-2">&amp;*</span>cjs_resolve(origin, request).<span class="kw">await</span><span class="question-mark">? </span>{
-        ResolveResult::Single(asset, <span class="kw">_</span>) =&gt; {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="prelude-val">Ok</span>(placeable)
-            } <span class="kw">else </span>{
-                <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;turbopack runtime asset is not placeable&quot;</span>))
-            }
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(asset) = <span class="kw-2">*</span>cjs_resolve(origin, request).first_asset().<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="prelude-val">Ok</span>(placeable)
+        } <span class="kw">else </span>{
+            <span class="macro">bail!</span>(<span class="string">&quot;turbopack runtime asset is not placeable&quot;</span>)
         }
-        ResolveResult::Alternatives(assets, <span class="kw">_</span>) <span class="kw">if </span>!assets.is_empty() =&gt; {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(assets[<span class="number">0</span>]).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="prelude-val">Ok</span>(placeable)
-            } <span class="kw">else </span>{
-                <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;turbopack runtime asset is not placeable&quot;</span>))
-            }
-        }
+    } <span class="kw">else </span>{
         <span class="comment">// The @vercel/turbopack-runtime module is not installed.
-        </span>ResolveResult::Unresolveable(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
-            <span class="string">&quot;could not resolve the `{}` module&quot;</span>,
-            runtime_request_path
-        )),
-        <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;invalid turbopack runtime asset&quot;</span>)),
+        </span><span class="macro">bail!</span>(<span class="string">&quot;could not resolve the `{}` module&quot;</span>, runtime_request_path)
     }
 }
 </code></pre></div>

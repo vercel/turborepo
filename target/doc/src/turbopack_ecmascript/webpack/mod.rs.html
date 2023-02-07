@@ -187,7 +187,6 @@
 <span id="187">187</span>
 <span id="188">188</span>
 <span id="189">189</span>
-<span id="190">190</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::ecma::ast::Lit;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
@@ -282,9 +281,8 @@
                 <span class="kw">let </span>filename = <span class="macro">format!</span>(<span class="string">&quot;./chunks/{}.js&quot;</span>, chunk_id);
                 <span class="kw">let </span>source = SourceAssetVc::new(context_path.join(<span class="kw-2">&amp;</span>filename)).into();
 
-                ResolveResult::Single(
+                ResolveResult::asset(
                     WebpackModuleAssetVc::new(source, <span class="self">self</span>.runtime, <span class="self">self</span>.transforms).into(),
-                    Vec::new(),
                 )
                 .into()
             }
@@ -317,9 +315,8 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>WebpackEntryAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        ResolveResult::Single(
+        ResolveResult::asset(
             WebpackModuleAssetVc::new(<span class="self">self</span>.source, <span class="self">self</span>.runtime, <span class="self">self</span>.transforms).into(),
-            Vec::new(),
         )
         .into()
     }
@@ -356,15 +353,16 @@
             options,
         );
 
-        <span class="kw">if let </span>ResolveResult::Single(source, <span class="kw-2">ref </span>refs) = <span class="kw-2">*</span>resolved.<span class="kw">await</span><span class="question-mark">? </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::Single(
-                WebpackModuleAssetVc::new(source, <span class="self">self</span>.runtime, <span class="self">self</span>.transforms).into(),
-                refs.clone(),
+        <span class="prelude-val">Ok</span>(resolved
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.map(
+                |source| <span class="kw">async move </span>{
+                    <span class="prelude-val">Ok</span>(WebpackModuleAssetVc::new(source, <span class="self">self</span>.runtime, <span class="self">self</span>.transforms).into())
+                },
+                |r| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(r) },
             )
-            .into());
-        }
-
-        <span class="prelude-val">Ok</span>(ResolveResult::unresolveable().into())
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.cell())
     }
 }
 

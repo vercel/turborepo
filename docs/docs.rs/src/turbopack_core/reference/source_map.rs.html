@@ -46,7 +46,6 @@
 <span id="46">46</span>
 <span id="47">47</span>
 <span id="48">48</span>
-<span id="49">49</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::{FileSystemEntryType, FileSystemPathVc};
@@ -58,28 +57,27 @@
 };
 
 <span class="attr">#[turbo_tasks::value]
-</span><span class="kw">pub struct </span>SourceMap {
+</span><span class="kw">pub struct </span>SourceMapReference {
     from: FileSystemPathVc,
     file: FileSystemPathVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>SourceMapVc {
+</span><span class="kw">impl </span>SourceMapReferenceVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new(from: FileSystemPathVc, file: FileSystemPathVc) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::cell(SourceMap { from, file })
+        <span class="self">Self</span>::cell(SourceMapReference { from, file })
     }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>AssetReference <span class="kw">for </span>SourceMap {
+</span><span class="kw">impl </span>AssetReference <span class="kw">for </span>SourceMapReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
         <span class="kw">let </span>file_type = <span class="self">self</span>.file.get_type().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Ok</span>(file_type_result) = file_type.as_ref() {
             <span class="kw">if let </span>FileSystemEntryType::File = <span class="kw-2">&amp;**</span>file_type_result {
-                <span class="kw">return </span>ResolveResult::Single(SourceAssetVc::new(<span class="self">self</span>.file).into(), Vec::new())
-                    .into();
+                <span class="kw">return </span>ResolveResult::asset(SourceAssetVc::new(<span class="self">self</span>.file).into()).into();
             }
         }
         ResolveResult::unresolveable().into()
@@ -87,7 +85,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>SourceMap {
+</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>SourceMapReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
         <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(

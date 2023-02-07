@@ -124,6 +124,7 @@
 <span id="124">124</span>
 <span id="125">125</span>
 <span id="126">126</span>
+<span id="127">127</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
@@ -138,7 +139,7 @@
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
-        ResolveResultVc,
+        PrimaryResolveResult, ResolveResultVc,
     },
 };
 <span class="kw">use </span>turbopack_ecmascript::resolve::url_resolve;
@@ -177,13 +178,14 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>get_referenced_asset(<span class="self">self</span>, context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;ReferencedAssetVc&gt; {
-        <span class="kw">let </span>assets = <span class="self">self</span>.resolve_reference().primary_assets();
-        <span class="kw">for </span>asset <span class="kw">in </span>assets.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(embeddable) = CssEmbeddableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAsset::Some(
-                    embeddable.as_css_embed(context).embeddable_asset(),
-                )
-                .into());
+        <span class="kw">for </span>result <span class="kw">in </span><span class="self">self</span>.resolve_reference().<span class="kw">await</span><span class="question-mark">?</span>.primary.iter() {
+            <span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(embeddable) = CssEmbeddableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAsset::Some(
+                        embeddable.as_css_embed(context).embeddable_asset(),
+                    )
+                    .into());
+                }
             }
         }
         <span class="prelude-val">Ok</span>(ReferencedAssetVc::cell(ReferencedAsset::None))

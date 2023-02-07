@@ -150,7 +150,7 @@
         <span class="kw">let </span>asset = EcmascriptChunkSourceMapAsset { chunk: <span class="self">self</span>.chunk }
             .cell()
             .into();
-        <span class="prelude-val">Ok</span>(ResolveResult::Single(asset, <span class="macro">vec!</span>[]).cell())
+        <span class="prelude-val">Ok</span>(ResolveResult::asset(asset).cell())
     }
 }
 

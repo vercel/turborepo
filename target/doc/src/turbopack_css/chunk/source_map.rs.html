@@ -132,7 +132,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
         <span class="kw">let </span>source_maps = <span class="macro">vec!</span>[CssChunkSourceMapAsset { chunk: <span class="self">self</span>.chunk }.cell().into()];
-        <span class="prelude-val">Ok</span>(ResolveResult::Alternatives(source_maps, <span class="macro">vec!</span>[]).cell())
+        <span class="prelude-val">Ok</span>(ResolveResult::assets_with_references(source_maps, <span class="macro">vec!</span>[]).cell())
     }
 }
 

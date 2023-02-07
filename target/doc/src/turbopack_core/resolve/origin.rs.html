@@ -176,7 +176,7 @@
         reference_type: Value&lt;ReferenceType&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(asset) = <span class="kw-2">*</span><span class="self">self</span>.get_inner_asset(request).<span class="kw">await</span><span class="question-mark">? </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::Single(asset, Vec::new()).cell());
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::asset(asset).cell());
         }
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.context()

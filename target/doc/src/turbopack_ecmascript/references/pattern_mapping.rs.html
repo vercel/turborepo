@@ -187,15 +187,6 @@
 <span id="187">187</span>
 <span id="188">188</span>
 <span id="189">189</span>
-<span id="190">190</span>
-<span id="191">191</span>
-<span id="192">192</span>
-<span id="193">193</span>
-<span id="194">194</span>
-<span id="195">195</span>
-<span id="196">196</span>
-<span id="197">197</span>
-<span id="198">198</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>swc_core::{
@@ -210,7 +201,7 @@
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
-        ResolveResult, ResolveResultVc, SpecialType,
+        PrimaryResolveResult, ResolveResultVc,
     },
 };
 
@@ -317,30 +308,21 @@
         resolve_type: Value&lt;ResolveType&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PatternMappingVc&gt; {
         <span class="kw">let </span>result = resolve_result.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>asset = <span class="kw">match </span><span class="kw-2">&amp;*</span>result {
-            ResolveResult::Alternatives(assets, <span class="kw">_</span>) =&gt; {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(asset) = assets.first() {
-                    asset
-                } <span class="kw">else </span>{
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(PatternMappingVc::cell(PatternMapping::Invalid));
-                }
-            }
-            ResolveResult::Single(asset, <span class="kw">_</span>) =&gt; asset,
-            ResolveResult::Special(SpecialType::OriginalReferenceExternal, <span class="kw">_</span>) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(PatternMapping::OriginalReferenceExternal.cell())
-            }
-            ResolveResult::Special(SpecialType::OriginalReferenceTypeExternal(s), <span class="kw">_</span>) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(PatternMapping::OriginalReferenceTypeExternal(s.clone()).cell())
-            }
-            ResolveResult::Special(SpecialType::Ignore, <span class="kw">_</span>) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(PatternMapping::Ignored.cell())
-            }
-            ResolveResult::Unresolveable(<span class="kw">_</span>) =&gt; {
+        <span class="kw">let </span>asset = <span class="kw">match </span>result.primary.first() {
+            <span class="prelude-val">None </span>=&gt; {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(PatternMapping::Unresolveable(
                     request_to_string(request).<span class="kw">await</span><span class="question-mark">?</span>.to_string(),
                 )
-                .cell());
+                .cell())
             }
+            <span class="prelude-val">Some</span>(PrimaryResolveResult::Asset(asset)) =&gt; <span class="kw-2">*</span>asset,
+            <span class="prelude-val">Some</span>(PrimaryResolveResult::OriginalReferenceExternal) =&gt; {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(PatternMapping::OriginalReferenceExternal.cell())
+            }
+            <span class="prelude-val">Some</span>(PrimaryResolveResult::OriginalReferenceTypeExternal(s)) =&gt; {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(PatternMapping::OriginalReferenceTypeExternal(s.clone()).cell())
+            }
+            <span class="prelude-val">Some</span>(PrimaryResolveResult::Ignore) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(PatternMapping::Ignored.cell()),
             <span class="kw">_ </span>=&gt; {
                 <span class="comment">// TODO implement mapping
                 </span>CodeGenerationIssue {
@@ -372,7 +354,7 @@
                     )));
                 }
             } <span class="kw">else if let </span><span class="prelude-val">Some</span>(chunk_item) =
-                EcmascriptChunkItemVc::from_asset(context, <span class="kw-2">*</span>asset).<span class="kw">await</span><span class="question-mark">?
+                EcmascriptChunkItemVc::from_asset(context, asset).<span class="kw">await</span><span class="question-mark">?
             </span>{
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(PatternMappingVc::cell(PatternMapping::Single(
                     chunk_item.id().<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),

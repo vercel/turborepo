@@ -89,6 +89,9 @@
 <span id="89">89</span>
 <span id="90">90</span>
 <span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>anyhow::Result;
@@ -99,6 +102,7 @@
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     reference::{AssetReference, AssetReferencesVc},
+    resolve::PrimaryResolveResult,
 };
 
 <span class="attr">#[turbo_tasks::value]
@@ -174,8 +178,10 @@
     <span class="kw">let </span><span class="kw-2">mut </span>children = HashSet::new();
     <span class="kw">let </span>references = references.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">for </span>reference <span class="kw">in </span><span class="kw-2">&amp;*</span>references {
-        <span class="kw">for </span>asset <span class="kw">in </span><span class="kw-2">&amp;*</span>reference.resolve_reference().primary_assets().<span class="kw">await</span><span class="question-mark">? </span>{
-            children.insert((key, IntrospectableAssetVc::new(<span class="kw-2">*</span>asset)));
+        <span class="kw">for </span>result <span class="kw">in </span>reference.resolve_reference().<span class="kw">await</span><span class="question-mark">?</span>.primary.iter() {
+            <span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
+                children.insert((key, IntrospectableAssetVc::new(<span class="kw-2">*</span>asset)));
+            }
         }
     }
     <span class="prelude-val">Ok</span>(IntrospectableChildrenVc::cell(children))

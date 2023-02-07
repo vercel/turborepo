@@ -142,19 +142,6 @@
 <span id="142">142</span>
 <span id="143">143</span>
 <span id="144">144</span>
-<span id="145">145</span>
-<span id="146">146</span>
-<span id="147">147</span>
-<span id="148">148</span>
-<span id="149">149</span>
-<span id="150">150</span>
-<span id="151">151</span>
-<span id="152">152</span>
-<span id="153">153</span>
-<span id="154">154</span>
-<span id="155">155</span>
-<span id="156">156</span>
-<span id="157">157</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{HashSet, VecDeque};
 
 <span class="kw">use </span>anyhow::Result;
@@ -163,11 +150,11 @@
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetVc, AssetsVc},
     issue::IssueVc,
-    resolve::{ResolveResult, ResolveResultVc},
+    resolve::{PrimaryResolveResult, ResolveResult, ResolveResultVc},
 };
 <span class="kw">pub mod </span>source_map;
 
-<span class="kw">pub use </span>source_map::SourceMapVc;
+<span class="kw">pub use </span>source_map::SourceMapReferenceVc;
 
 <span class="doccomment">/// A reference to one or multiple [Asset]s or other special things.
 /// There are a bunch of optional traits that can influence how these references
@@ -214,7 +201,7 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>SingleAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        ResolveResult::Single(<span class="self">self</span>.asset, <span class="macro">vec!</span>[]).cell()
+        ResolveResult::asset(<span class="self">self</span>.asset).cell()
     }
 }
 
@@ -258,30 +245,17 @@
     // while let Some(result) = race_pop(&amp;mut queue).await {
     // match &amp;*result? {
     </span><span class="kw">while let </span><span class="prelude-val">Some</span>(resolve_result) = queue.pop_front() {
-        <span class="kw">match </span><span class="kw-2">&amp;*</span>resolve_result.<span class="kw">await</span><span class="question-mark">? </span>{
-            ResolveResult::Single(module, references) =&gt; {
-                assets.push(<span class="kw-2">*</span>module);
-                <span class="kw">for </span>reference <span class="kw">in </span>references {
-                    queue.push_back(reference.resolve_reference());
-                }
+        <span class="kw">let </span>ResolveResult {
+            primary,
+            references,
+        } = <span class="kw-2">&amp;*</span>resolve_result.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">for </span>result <span class="kw">in </span>primary {
+            <span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = <span class="kw-2">*</span>result {
+                assets.push(asset);
             }
-            ResolveResult::Alternatives(modules, references) =&gt; {
-                assets.extend(modules);
-                <span class="kw">for </span>reference <span class="kw">in </span>references {
-                    queue.push_back(reference.resolve_reference());
-                }
-            }
-            ResolveResult::Special(<span class="kw">_</span>, references) =&gt; {
-                <span class="kw">for </span>reference <span class="kw">in </span>references {
-                    queue.push_back(reference.resolve_reference());
-                }
-            }
-            ResolveResult::Keyed(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
-            ResolveResult::Unresolveable(references) =&gt; {
-                <span class="kw">for </span>reference <span class="kw">in </span>references {
-                    queue.push_back(reference.resolve_reference());
-                }
-            }
+        }
+        <span class="kw">for </span>reference <span class="kw">in </span>references {
+            queue.push_back(reference.resolve_reference());
         }
     }
     <span class="prelude-val">Ok</span>(AssetsVc::cell(assets))

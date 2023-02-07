@@ -2166,6 +2166,15 @@
 <span id="2166">2166</span>
 <span id="2167">2167</span>
 <span id="2168">2168</span>
+<span id="2169">2169</span>
+<span id="2170">2170</span>
+<span id="2171">2171</span>
+<span id="2172">2172</span>
+<span id="2173">2173</span>
+<span id="2174">2174</span>
+<span id="2175">2175</span>
+<span id="2176">2176</span>
+<span id="2177">2177</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2207,7 +2216,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
     environment::EnvironmentVc,
-    reference::{AssetReferenceVc, AssetReferencesVc, SourceMapVc},
+    reference::{AssetReferenceVc, AssetReferencesVc, SourceMapReferenceVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
         find_context_file,
@@ -2215,7 +2224,7 @@
         package_json,
         parse::RequestVc,
         pattern::Pattern,
-        resolve, FindContextFileResult, ResolveResult,
+        resolve, FindContextFileResult, PrimaryResolveResult,
     },
 };
 <span class="kw">use </span>turbopack_swc_utils::emitter::IssueEmitter;
@@ -2442,7 +2451,7 @@
                             <span class="comment">// TODO this probably needs to be a field in EcmascriptModuleAsset so it
                             // knows to use that SourceMap when running code generation.
                             // The reference is needed too for turbotrace
-                            </span>analysis.add_reference(SourceMapVc::new(
+                            </span>analysis.add_reference(SourceMapReferenceVc::new(
                                 source.path(),
                                 source.path().parent().join(path),
                             ))
@@ -3767,24 +3776,33 @@
                     <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
                     <span class="kw">let </span>request = RequestVc::parse(Value::new(pat.clone()));
                     <span class="kw">let </span>resolved = cjs_resolve(origin, request).<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">match </span><span class="kw-2">&amp;*</span>resolved {
-                        ResolveResult::Single(asset, <span class="kw">_</span>) =&gt; require_resolve(asset.path()).<span class="kw">await</span><span class="question-mark">?</span>,
-                        ResolveResult::Alternatives(assets, <span class="kw">_</span>) =&gt; JsValue::alternatives(
-                            assets
-                                .iter()
-                                .map(|asset| require_resolve(asset.path()))
-                                .try_join()
-                                .<span class="kw">await</span><span class="question-mark">?</span>,
-                        ),
-                        <span class="kw">_ </span>=&gt; JsValue::Unknown(
+                    <span class="kw">let </span><span class="kw-2">mut </span>values = resolved
+                        .primary
+                        .iter()
+                        .map(|result| <span class="kw">async move </span>{
+                            <span class="prelude-val">Ok</span>(<span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
+                                <span class="prelude-val">Some</span>(require_resolve(asset.path()).<span class="kw">await</span><span class="question-mark">?</span>)
+                            } <span class="kw">else </span>{
+                                <span class="prelude-val">None
+                            </span>})
+                        })
+                        .try_join()
+                        .<span class="kw">await</span><span class="question-mark">?
+                        </span>.into_iter()
+                        .flatten()
+                        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+                    <span class="kw">match </span>values.len() {
+                        <span class="number">0 </span>=&gt; JsValue::Unknown(
                             <span class="prelude-val">Some</span>(Arc::new(JsValue::call(
                                 <span class="kw">box </span>JsValue::WellKnownFunction(
                                     WellKnownFunctionKind::RequireResolve,
                                 ),
                                 args,
                             ))),
-                            Box::leak(Box::new(<span class="macro">format!</span>(<span class="string">&quot;unresolveable request {pat}&quot;</span>))),
+                            <span class="string">&quot;unresolveable request&quot;</span>,
                         ),
+                        <span class="number">1 </span>=&gt; values.pop().unwrap(),
+                        <span class="kw">_ </span>=&gt; JsValue::alternatives(values),
                     }
                 } <span class="kw">else </span>{
                     JsValue::Unknown(
@@ -4282,8 +4300,8 @@
         options,
     );
 
-    <span class="kw">if let </span>ResolveResult::Single(source, <span class="kw">_</span>) = <span class="kw-2">&amp;*</span>resolved.<span class="kw">await</span><span class="question-mark">? </span>{
-        <span class="prelude-val">Ok</span>(webpack_runtime(<span class="kw-2">*</span>source, transforms))
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(source) = <span class="kw-2">*</span>resolved.first_asset().<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="prelude-val">Ok</span>(webpack_runtime(source, transforms))
     } <span class="kw">else </span>{
         <span class="prelude-val">Ok</span>(WebpackRuntime::None.into())
     }

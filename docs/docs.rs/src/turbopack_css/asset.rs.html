@@ -276,6 +276,11 @@
 <span id="276">276</span>
 <span id="277">277</span>
 <span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::{Globals, GLOBALS},
@@ -292,7 +297,10 @@
     chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
     context::AssetContextVc,
     reference::{AssetReference, AssetReferencesVc},
-    resolve::origin::{ResolveOrigin, ResolveOriginVc},
+    resolve::{
+        origin::{ResolveOrigin, ResolveOriginVc},
+        PrimaryResolveResult,
+    },
 };
 
 <span class="kw">use crate</span>::{
@@ -446,12 +454,14 @@
 
         <span class="kw">for </span>reference <span class="kw">in </span>references.iter() {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(import) = ImportAssetReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="kw">for </span>asset <span class="kw">in </span><span class="kw-2">&amp;*</span>import.resolve_reference().primary_assets().<span class="kw">await</span><span class="question-mark">? </span>{
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = CssChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                        imports.push(CssImport::Internal(
-                            import,
-                            placeable.as_chunk_item(context),
-                        ));
+                <span class="kw">for </span>result <span class="kw">in </span>import.resolve_reference().<span class="kw">await</span><span class="question-mark">?</span>.primary.iter() {
+                    <span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = CssChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
+                            imports.push(CssImport::Internal(
+                                import,
+                                placeable.as_chunk_item(context),
+                            ));
+                        }
                     }
                 }
             }

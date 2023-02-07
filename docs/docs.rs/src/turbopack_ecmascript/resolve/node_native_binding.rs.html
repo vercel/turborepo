@@ -368,6 +368,12 @@
 <span id="368">368</span>
 <span id="369">369</span>
 <span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>lazy_static::lazy_static;
@@ -380,7 +386,8 @@
     reference::{AssetReference, AssetReferenceVc},
     resolve::{
         pattern::{Pattern, PatternVc},
-        resolve_raw, AffectingResolvingAssetReferenceVc, ResolveResult, ResolveResultVc,
+        resolve_raw, AffectingResolvingAssetReferenceVc, PrimaryResolveResult, ResolveResult,
+        ResolveResultVc,
     },
     source_asset::SourceAssetVc,
     target::{CompileTargetVc, Platform},
@@ -462,12 +469,14 @@
         <span class="kw">static </span><span class="kw-2">ref </span>LIBC_TEMPLATE: Regex =
             Regex::new(<span class="string">r&quot;\{libc\}&quot;</span>).expect(<span class="string">&quot;create node_libc regex failed&quot;</span>);
     }
-    <span class="kw">let </span>config = resolve_raw(context, config_file_pattern, <span class="bool-val">true</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>config = resolve_raw(context, config_file_pattern, <span class="bool-val">true</span>)
+        .first_asset()
+        .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>compile_target = compile_target.<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">if let </span>ResolveResult::Single(<span class="kw-2">ref </span>config_path, <span class="kw">_</span>) = <span class="kw-2">&amp;*</span>config {
-        <span class="kw">if let </span>AssetContent::File(file) = <span class="kw-2">&amp;*</span>config_path.content().<span class="kw">await</span><span class="question-mark">? </span>{
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(config_asset) = <span class="kw-2">*</span>config {
+        <span class="kw">if let </span>AssetContent::File(file) = <span class="kw-2">&amp;*</span>config_asset.content().<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">if let </span>FileContent::Content(<span class="kw-2">ref </span>config_file) = <span class="kw-2">&amp;*</span>file.<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="kw">let </span>config_file_path = config_path.path();
+                <span class="kw">let </span>config_file_path = config_asset.path();
                 <span class="kw">let </span>config_file_dir = config_file_path.parent();
                 <span class="kw">let </span>node_pre_gyp_config: NodePreGypConfigJson =
                     serde_json::from_reader(config_file.read())<span class="question-mark">?</span>;
@@ -515,7 +524,7 @@
                     }
                     assets.insert(SourceAssetVc::new(resolved_file_vc).into());
                 }
-                <span class="kw">for </span>entry <span class="kw">in </span>config_path
+                <span class="kw">for </span>entry <span class="kw">in </span>config_asset
                     .path()
                     .parent()
                     <span class="comment">// TODO
@@ -540,7 +549,7 @@
                         <span class="kw">_ </span>=&gt; {}
                     }
                 }
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::Alternatives(
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::assets_with_references(
                     assets.into_iter().collect(),
                     <span class="macro">vec!</span>[AffectingResolvingAssetReferenceVc::new(config_file_path).into()],
                 )
@@ -601,8 +610,8 @@
     }
     <span class="kw">let </span>binding_gyp_pat = PatternVc::new(Pattern::Constant(<span class="string">&quot;binding.gyp&quot;</span>.to_owned()));
     <span class="kw">let </span>gyp_file = resolve_raw(context, binding_gyp_pat, <span class="bool-val">true</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">if let </span>ResolveResult::Single(binding_gyp, gyp_file_references) = <span class="kw-2">&amp;*</span>gyp_file {
-        <span class="kw">let </span><span class="kw-2">mut </span>merged_references = gyp_file_references.clone();
+    <span class="kw">if let </span>[PrimaryResolveResult::Asset(binding_gyp)] = <span class="kw-2">&amp;</span>gyp_file.primary[..] {
+        <span class="kw">let </span><span class="kw-2">mut </span>merged_references = gyp_file.references.clone();
         <span class="kw">if let </span>AssetContent::File(file) = <span class="kw-2">&amp;*</span>binding_gyp.content().<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">if let </span>FileContent::Content(config_file) = <span class="kw-2">&amp;*</span>file.<span class="kw">await</span><span class="question-mark">? </span>{
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(captured) =
@@ -618,13 +627,15 @@
                             <span class="bool-val">true</span>,
                         )
                         .<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if let </span>ResolveResult::Single(file, references) = <span class="kw-2">&amp;*</span>resolved_prebuilt_file {
-                            resolved.insert(SourceAssetVc::new(file.path()).into());
-                            merged_references.extend_from_slice(references);
+                        <span class="kw">if let </span>[PrimaryResolveResult::Asset(asset)] =
+                            <span class="kw-2">&amp;</span>resolved_prebuilt_file.primary[..]
+                        {
+                            resolved.insert(asset.resolve().<span class="kw">await</span><span class="question-mark">?</span>);
+                            merged_references.extend_from_slice(<span class="kw-2">&amp;</span>resolved_prebuilt_file.references);
                         }
                     }
                     <span class="kw">if </span>!resolved.is_empty() {
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::Alternatives(
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::assets_with_references(
                             resolved.into_iter().collect(),
                             merged_references,
                         )
@@ -700,14 +711,15 @@
     }
     <span class="kw">let </span><span class="kw-2">mut </span>root_context = context;
     <span class="kw">loop </span>{
-        <span class="kw">if let </span>ResolveResult::Single(file, <span class="kw">_</span>) = <span class="kw-2">&amp;*</span>resolve_raw(
+        <span class="kw">let </span>resolved = resolve_raw(
             root_context,
             Pattern::Constant(<span class="string">&quot;package.json&quot;</span>.to_owned()).into(),
             <span class="bool-val">true</span>,
         )
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>{
-            <span class="kw">if let </span>AssetContent::File(file) = <span class="kw-2">&amp;*</span>file.content().<span class="kw">await</span><span class="question-mark">? </span>{
+        .first_asset()
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(asset) = <span class="kw-2">*</span>resolved {
+            <span class="kw">if let </span>AssetContent::File(file) = <span class="kw-2">&amp;*</span>asset.content().<span class="kw">await</span><span class="question-mark">? </span>{
                 <span class="kw">if let </span>FileContent::Content(<span class="kw">_</span>) = <span class="kw-2">&amp;*</span>file.<span class="kw">await</span><span class="question-mark">? </span>{
                     <span class="kw">break</span>;
                 }
@@ -728,7 +740,7 @@
         })
         .collect();
 
-    <span class="prelude-val">Ok</span>(ResolveResult::Alternatives(
+    <span class="prelude-val">Ok</span>(ResolveResult::assets_with_references(
         bindings_try,
         <span class="macro">vec!</span>[SourceAssetReferenceVc::new(
             SourceAssetVc::new(root_context).into(),

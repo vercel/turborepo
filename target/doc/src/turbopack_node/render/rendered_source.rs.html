@@ -269,6 +269,13 @@
 <span id="269">269</span>
 <span id="270">270</span>
 <span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -281,6 +288,7 @@
         asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
     reference::AssetReference,
+    resolve::PrimaryResolveResult,
 };
 <span class="kw">use </span>turbopack_dev_server::{
     html::DevHtmlAssetVc,
@@ -376,10 +384,16 @@
             set.extend(
                 reference
                     .resolve_reference()
-                    .primary_assets()
                     .<span class="kw">await</span><span class="question-mark">?
-                    </span>.iter()
-                    .copied(),
+                    </span>.primary
+                    .iter()
+                    .filter_map(|result| {
+                        <span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
+                            <span class="prelude-val">Some</span>(asset)
+                        } <span class="kw">else </span>{
+                            <span class="prelude-val">None
+                        </span>}
+                    }),
             )
         }
         <span class="kw">for </span><span class="kw-2">&amp;</span>entry <span class="kw">in </span>entries.<span class="kw">await</span><span class="question-mark">?</span>.iter() {

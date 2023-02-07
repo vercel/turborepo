@@ -391,7 +391,7 @@ const chunks = {};
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>WithClientChunksAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        ResolveResult::Single(<span class="self">self</span>.asset, Vec::new()).cell()
+        ResolveResult::asset(<span class="self">self</span>.asset).cell()
     }
 }
 

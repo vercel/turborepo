@@ -573,6 +573,8 @@
 <span id="573">573</span>
 <span id="574">574</span>
 <span id="575">575</span>
+<span id="576">576</span>
+<span id="577">577</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     env,
     env::current_dir,
@@ -786,6 +788,7 @@
         <span class="kw">let </span>package_json: PackageJson =
             serde_json::from_reader(File::open(local_turbo_package_path).ok()<span class="question-mark">?</span>).ok()<span class="question-mark">?</span>;
 
+        <span class="macro">debug!</span>(<span class="string">&quot;Local turbo version: {}&quot;</span>, package_json.version);
         <span class="prelude-val">Some</span>(<span class="self">Self </span>{
             bin_path: local_turbo_path,
             version: package_json.version,
@@ -1085,6 +1088,7 @@
     <span class="kw">let </span>args = ShimArgs::parse()<span class="question-mark">?</span>;
 
     init_env_logger(args.verbosity);
+    <span class="macro">debug!</span>(<span class="string">&quot;Global turbo version: {}&quot;</span>, get_version());
 
     <span class="comment">// If skip_infer is passed, we&#39;re probably running local turbo with
     // global turbo having handled the inference. We can run without any

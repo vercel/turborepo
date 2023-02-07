@@ -414,6 +414,8 @@
 <span id="414">414</span>
 <span id="415">415</span>
 <span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub mod </span>source_map;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>writer;
@@ -434,6 +436,7 @@
     },
     code_builder::{CodeBuilder, CodeVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
+    resolve::PrimaryResolveResult,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
 };
 <span class="kw">use </span>turbopack_ecmascript::utils::FormatIter;
@@ -726,11 +729,12 @@
         <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
         <span class="kw">for </span>r <span class="kw">in </span>content.external_asset_references.iter() {
             references.push(<span class="kw-2">*</span>r);
-            <span class="kw">let </span>assets = r.resolve_reference().primary_assets();
-            <span class="kw">for </span>asset <span class="kw">in </span>assets.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(embeddable) = CssEmbeddableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                    <span class="kw">let </span>embed = embeddable.as_css_embed(this.context);
-                    references.extend(embed.references().<span class="kw">await</span><span class="question-mark">?</span>.iter());
+            <span class="kw">for </span>result <span class="kw">in </span>r.resolve_reference().<span class="kw">await</span><span class="question-mark">?</span>.primary.iter() {
+                <span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(embeddable) = CssEmbeddableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
+                        <span class="kw">let </span>embed = embeddable.as_css_embed(this.context);
+                        references.extend(embed.references().<span class="kw">await</span><span class="question-mark">?</span>.iter());
+                    }
                 }
             }
         }

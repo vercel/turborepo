@@ -448,7 +448,7 @@
 
 <span class="kw">use super</span>::{
     alias_map::{AliasMap, AliasTemplate},
-    AliasPattern, ResolveResult, ResolveResultVc, SpecialType,
+    AliasPattern, PrimaryResolveResult, ResolveResult, ResolveResultVc,
 };
 <span class="kw">use </span><span class="kw">crate</span>::resolve::{parse::RequestVc, plugin::ResolvePluginVc};
 
@@ -679,20 +679,20 @@
     <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>mapping.<span class="kw">await</span><span class="question-mark">? </span>{
         ImportMapping::Direct(result) =&gt; ImportMapResult::Result(<span class="kw-2">*</span>result),
         ImportMapping::External(name) =&gt; ImportMapResult::Result(
-            ResolveResult::Special(
+            ResolveResult::primary_with_references(
                 name.as_ref().map_or_else(
-                    || SpecialType::OriginalReferenceExternal,
-                    |req| SpecialType::OriginalReferenceTypeExternal(req.to_string()),
+                    || PrimaryResolveResult::OriginalReferenceExternal,
+                    |req| PrimaryResolveResult::OriginalReferenceTypeExternal(req.to_string()),
                 ),
                 Vec::new(),
             )
             .into(),
         ),
         ImportMapping::Ignore =&gt; {
-            ImportMapResult::Result(ResolveResult::Special(SpecialType::Ignore, Vec::new()).into())
+            ImportMapResult::Result(ResolveResult::primary(PrimaryResolveResult::Ignore).into())
         }
         ImportMapping::Empty =&gt; {
-            ImportMapResult::Result(ResolveResult::Special(SpecialType::Empty, Vec::new()).into())
+            ImportMapResult::Result(ResolveResult::primary(PrimaryResolveResult::Empty).into())
         }
         ImportMapping::PrimaryAlternative(name, context) =&gt; {
             <span class="kw">let </span>request = RequestVc::parse(Value::new(name.to_string().into()));

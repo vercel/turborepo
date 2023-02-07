@@ -486,7 +486,7 @@
                 .into(),
             );
 
-        <span class="prelude-val">Ok</span>(ImportMapResult::Result(ResolveResult::Single(js_asset.into(), <span class="macro">vec!</span>[]).into()).into())
+        <span class="prelude-val">Ok</span>(ImportMapResult::Result(ResolveResult::asset(js_asset.into()).into()).into())
     }
 }
 
@@ -603,7 +603,7 @@
             .into(),
         );
 
-        <span class="prelude-val">Ok</span>(ImportMapResult::Result(ResolveResult::Single(css_asset.into(), <span class="macro">vec!</span>[]).into()).into())
+        <span class="prelude-val">Ok</span>(ImportMapResult::Result(ResolveResult::asset(css_asset.into()).into()).into())
     }
 }
 

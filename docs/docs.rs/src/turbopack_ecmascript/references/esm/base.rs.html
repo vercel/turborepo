@@ -297,6 +297,9 @@
 <span id="297">297</span>
 <span id="298">298</span>
 <span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>swc_core::{
@@ -312,9 +315,7 @@
         ChunkingTypeOptionVc, ModuleId,
     },
     reference::{AssetReference, AssetReferenceVc},
-    resolve::{
-        origin::ResolveOriginVc, parse::RequestVc, ResolveResult, ResolveResultVc, SpecialType,
-    },
+    resolve::{origin::ResolveOriginVc, parse::RequestVc, PrimaryResolveResult, ResolveResultVc},
 };
 
 <span class="kw">use crate</span>::{
@@ -362,23 +363,28 @@
         resolve_result: ResolveResultVc,
         request: RequestVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">match </span><span class="kw-2">&amp;*</span>resolve_result.<span class="kw">await</span><span class="question-mark">? </span>{
-            ResolveResult::Special(SpecialType::OriginalReferenceExternal, <span class="kw">_</span>) =&gt; {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(request) = request.<span class="kw">await</span><span class="question-mark">?</span>.request() {
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAsset::OriginalReferenceTypeExternal(request).cell());
-                } <span class="kw">else </span>{
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAssetVc::cell(ReferencedAsset::None));
+        <span class="kw">for </span>result <span class="kw">in </span>resolve_result.<span class="kw">await</span><span class="question-mark">?</span>.primary.iter() {
+            <span class="kw">match </span>result {
+                PrimaryResolveResult::OriginalReferenceExternal =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(request) = request.<span class="kw">await</span><span class="question-mark">?</span>.request() {
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAsset::OriginalReferenceTypeExternal(request).cell());
+                    } <span class="kw">else </span>{
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAssetVc::cell(ReferencedAsset::None));
+                    }
                 }
-            }
-            ResolveResult::Special(SpecialType::OriginalReferenceTypeExternal(request), <span class="kw">_</span>) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAsset::OriginalReferenceTypeExternal(request.clone()).cell());
-            }
-            <span class="kw">_ </span>=&gt; {}
-        }
-        <span class="kw">let </span>assets = resolve_result.primary_assets();
-        <span class="kw">for </span>asset <span class="kw">in </span>assets.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAssetVc::cell(ReferencedAsset::Some(placeable)));
+                PrimaryResolveResult::OriginalReferenceTypeExternal(request) =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(
+                        ReferencedAsset::OriginalReferenceTypeExternal(request.clone()).cell(),
+                    );
+                }
+                PrimaryResolveResult::Asset(asset) =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">?
+                    </span>{
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(ReferencedAssetVc::cell(ReferencedAsset::Some(placeable)));
+                    }
+                }
+                <span class="comment">// TODO ignore should probably be handled differently
+                </span><span class="kw">_ </span>=&gt; {}
             }
         }
         <span class="prelude-val">Ok</span>(ReferencedAssetVc::cell(ReferencedAsset::None))

@@ -138,16 +138,6 @@
 <span id="138">138</span>
 <span id="139">139</span>
 <span id="140">140</span>
-<span id="141">141</span>
-<span id="142">142</span>
-<span id="143">143</span>
-<span id="144">144</span>
-<span id="145">145</span>
-<span id="146">146</span>
-<span id="147">147</span>
-<span id="148">148</span>
-<span id="149">149</span>
-<span id="150">150</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{debug::ValueDebug, primitives::StringVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -160,7 +150,7 @@
 };
 <span class="kw">use </span>turbopack_core::{
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResult},
+    resolve::{origin::ResolveOriginVc, parse::RequestVc},
 };
 
 <span class="attr">#[turbo_tasks::function]
@@ -207,13 +197,10 @@
     <span class="kw">let </span>resolve_options =
         apply_cjs_specific_options(turbopack::resolve_options(path, resolve_options_context));
     <span class="kw">for </span>request <span class="kw">in </span>[react_refresh_request_in_next(), react_refresh_request()] {
-        <span class="kw">let </span>result = turbopack_core::resolve::resolve(path, request, resolve_options);
+        <span class="kw">let </span>result = turbopack_core::resolve::resolve(path, request, resolve_options).first_asset();
 
-        <span class="kw">match </span><span class="kw-2">&amp;*</span>result.<span class="kw">await</span><span class="question-mark">? </span>{
-            ResolveResult::Single(<span class="kw">_</span>, <span class="kw">_</span>) | ResolveResult::Alternatives(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(AssertReactRefreshResult::Found(request).cell())
-            }
-            <span class="kw">_ </span>=&gt; {}
+        <span class="kw">if </span>result.<span class="kw">await</span><span class="question-mark">?</span>.is_some() {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(AssertReactRefreshResult::Found(request).cell());
         }
     }
     ReactRefreshResolvingIssue {
@@ -232,26 +219,19 @@
 <span class="doccomment">/// Resolves the React Refresh runtime module from the given [AssetContextVc].
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>resolve_react_refresh(origin: ResolveOriginVc) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkPlaceableVc&gt; {
-    <span class="kw">match </span><span class="kw-2">&amp;*</span>cjs_resolve(origin, react_refresh_request()).<span class="kw">await</span><span class="question-mark">? </span>{
-        ResolveResult::Single(asset, <span class="kw">_</span>) =&gt; {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="prelude-val">Ok</span>(placeable)
-            } <span class="kw">else </span>{
-                <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;React Refresh runtime asset is not placeable&quot;</span>))
-            }
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(asset) = <span class="kw-2">*</span>cjs_resolve(origin, react_refresh_request())
+        .first_asset()
+        .<span class="kw">await</span><span class="question-mark">?
+    </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="prelude-val">Ok</span>(placeable)
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;React Refresh runtime asset is not placeable&quot;</span>))
         }
-        ResolveResult::Alternatives(assets, <span class="kw">_</span>) <span class="kw">if </span>!assets.is_empty() =&gt; {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(assets[<span class="number">0</span>]).<span class="kw">await</span><span class="question-mark">? </span>{
-                <span class="prelude-val">Ok</span>(placeable)
-            } <span class="kw">else </span>{
-                <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;React Refresh runtime asset is not placeable&quot;</span>))
-            }
-        }
-        <span class="comment">// The react-refresh-runtime module is not installed.
-        </span>ResolveResult::Unresolveable(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
+    } <span class="kw">else </span>{
+        <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
             <span class="string">&quot;could not resolve the `@next/react-refresh-utils/dist/runtime` module&quot;
-        </span>)),
-        <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;invalid React Refresh runtime asset&quot;</span>)),
+        </span>))
     }
 }
 

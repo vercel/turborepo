@@ -1222,22 +1222,17 @@
 <span id="1222">1222</span>
 <span id="1223">1223</span>
 <span id="1224">1224</span>
-<span id="1225">1225</span>
-<span id="1226">1226</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
     future::Future,
-    mem::take,
     pin::Pin,
 };
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value <span class="kw">as </span>JsonValue;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{BoolVc, StringVc, StringsVc},
-    trace::TraceRawVcs,
     TryJoinIterExt, Value, ValueToString, ValueToStringVc,
 };
 <span class="kw">use </span>turbo_tasks_fs::{
@@ -1256,7 +1251,7 @@
     pattern::QueryMapVc,
 };
 <span class="kw">use crate</span>::{
-    asset::{AssetVc, AssetsVc},
+    asset::{AssetOptionVc, AssetVc, AssetsVc},
     issue::{
         package_json::{PackageJsonIssue, PackageJsonIssueVc},
         resolve::{ResolvingIssue, ResolvingIssueVc},
@@ -1285,176 +1280,158 @@
 };
 <span class="kw">pub use </span>exports::{ExportsValue, ResolveAliasMap, ResolveAliasMapVc};
 
-<span class="attr">#[derive(PartialEq, Eq, Clone, Debug, TraceRawVcs, Serialize, Deserialize)]
-</span><span class="kw">pub enum </span>SpecialType {
+<span class="attr">#[turbo_tasks::value(shared)]
+#[derive(Clone, Debug)]
+</span><span class="kw">pub enum </span>PrimaryResolveResult {
+    Asset(AssetVc),
     OriginalReferenceExternal,
     OriginalReferenceTypeExternal(String),
     Ignore,
     Empty,
     Custom(u8),
+    Unresolveable,
 }
 
 <span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
-</span><span class="kw">pub enum </span>ResolveResult {
-    Single(AssetVc, Vec&lt;AssetReferenceVc&gt;),
-    Keyed(HashMap&lt;String, AssetVc&gt;, Vec&lt;AssetReferenceVc&gt;),
-    Alternatives(Vec&lt;AssetVc&gt;, Vec&lt;AssetReferenceVc&gt;),
-    Special(SpecialType, Vec&lt;AssetReferenceVc&gt;),
-    Unresolveable(Vec&lt;AssetReferenceVc&gt;),
+</span><span class="kw">pub struct </span>ResolveResult {
+    <span class="kw">pub </span>primary: Vec&lt;PrimaryResolveResult&gt;,
+    <span class="kw">pub </span>references: Vec&lt;AssetReferenceVc&gt;,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>ResolveResult {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        ResolveResult::Unresolveable(Vec::new())
+        ResolveResult::unresolveable()
     }
 }
 
 <span class="kw">impl </span>ResolveResult {
     <span class="kw">pub fn </span>unresolveable() -&gt; <span class="self">Self </span>{
-        ResolveResult::Unresolveable(Vec::new())
+        ResolveResult {
+            primary: Vec::new(),
+            references: Vec::new(),
+        }
+    }
+
+    <span class="kw">pub fn </span>unresolveable_with_references(references: Vec&lt;AssetReferenceVc&gt;) -&gt; ResolveResult {
+        ResolveResult {
+            primary: Vec::new(),
+            references,
+        }
+    }
+
+    <span class="kw">pub fn </span>primary(result: PrimaryResolveResult) -&gt; ResolveResult {
+        ResolveResult {
+            primary: <span class="macro">vec!</span>[result],
+            references: Vec::new(),
+        }
+    }
+
+    <span class="kw">pub fn </span>primary_with_references(
+        result: PrimaryResolveResult,
+        references: Vec&lt;AssetReferenceVc&gt;,
+    ) -&gt; ResolveResult {
+        ResolveResult {
+            primary: <span class="macro">vec!</span>[result],
+            references,
+        }
+    }
+
+    <span class="kw">pub fn </span>asset(asset: AssetVc) -&gt; ResolveResult {
+        ResolveResult {
+            primary: <span class="macro">vec!</span>[PrimaryResolveResult::Asset(asset)],
+            references: Vec::new(),
+        }
+    }
+
+    <span class="kw">pub fn </span>asset_with_references(
+        asset: AssetVc,
+        references: Vec&lt;AssetReferenceVc&gt;,
+    ) -&gt; ResolveResult {
+        ResolveResult {
+            primary: <span class="macro">vec!</span>[PrimaryResolveResult::Asset(asset)],
+            references,
+        }
+    }
+
+    <span class="kw">pub fn </span>assets(assets: Vec&lt;AssetVc&gt;) -&gt; ResolveResult {
+        ResolveResult {
+            primary: assets
+                .into_iter()
+                .map(PrimaryResolveResult::Asset)
+                .collect(),
+            references: Vec::new(),
+        }
+    }
+
+    <span class="kw">pub fn </span>assets_with_references(
+        assets: Vec&lt;AssetVc&gt;,
+        references: Vec&lt;AssetReferenceVc&gt;,
+    ) -&gt; ResolveResult {
+        ResolveResult {
+            primary: assets
+                .into_iter()
+                .map(PrimaryResolveResult::Asset)
+                .collect(),
+            references,
+        }
     }
 
     <span class="kw">pub fn </span>add_reference(<span class="kw-2">&amp;mut </span><span class="self">self</span>, reference: AssetReferenceVc) {
-        <span class="kw">match </span><span class="self">self </span>{
-            ResolveResult::Single(<span class="kw">_</span>, list)
-            | ResolveResult::Keyed(<span class="kw">_</span>, list)
-            | ResolveResult::Alternatives(<span class="kw">_</span>, list)
-            | ResolveResult::Special(<span class="kw">_</span>, list)
-            | ResolveResult::Unresolveable(list) =&gt; list.push(reference),
-        }
+        <span class="self">self</span>.references.push(reference);
     }
 
     <span class="kw">pub fn </span>get_references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Vec&lt;AssetReferenceVc&gt; {
-        <span class="kw">match </span><span class="self">self </span>{
-            ResolveResult::Single(<span class="kw">_</span>, list)
-            | ResolveResult::Keyed(<span class="kw">_</span>, list)
-            | ResolveResult::Alternatives(<span class="kw">_</span>, list)
-            | ResolveResult::Special(<span class="kw">_</span>, list)
-            | ResolveResult::Unresolveable(list) =&gt; list,
-        }
+        <span class="kw-2">&amp;</span><span class="self">self</span>.references
     }
 
     <span class="kw">fn </span>clone_with_references(<span class="kw-2">&amp;</span><span class="self">self</span>, references: Vec&lt;AssetReferenceVc&gt;) -&gt; ResolveResult {
-        <span class="kw">match </span><span class="self">self </span>{
-            ResolveResult::Single(asset, <span class="kw">_</span>) =&gt; ResolveResult::Single(<span class="kw-2">*</span>asset, references),
-            ResolveResult::Keyed(map, <span class="kw">_</span>) =&gt; ResolveResult::Keyed(map.clone(), references),
-            ResolveResult::Alternatives(alternatives, <span class="kw">_</span>) =&gt; {
-                ResolveResult::Alternatives(alternatives.clone(), references)
-            }
-            ResolveResult::Special(special_type, <span class="kw">_</span>) =&gt; {
-                ResolveResult::Special(special_type.clone(), references)
-            }
-            ResolveResult::Unresolveable(<span class="kw">_</span>) =&gt; ResolveResult::Unresolveable(references),
+        ResolveResult {
+            primary: <span class="self">self</span>.primary.clone(),
+            references,
         }
     }
 
     <span class="kw">pub fn </span>merge_alternatives(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>ResolveResult) {
-        <span class="kw">match </span><span class="self">self </span>{
-            ResolveResult::Single(asset, list) =&gt; {
-                <span class="kw-2">*</span><span class="self">self </span>= ResolveResult::Alternatives(<span class="macro">vec!</span>[<span class="kw-2">*</span>asset], take(list))
-            }
-            ResolveResult::Keyed(<span class="kw">_</span>, list) =&gt; {
-                <span class="kw-2">*</span><span class="self">self </span>= ResolveResult::Unresolveable(take(list));
-            }
-            ResolveResult::Alternatives(<span class="kw">_</span>, <span class="kw">_</span>)
-            | ResolveResult::Special(<span class="kw">_</span>, <span class="kw">_</span>)
-            | ResolveResult::Unresolveable(<span class="kw">_</span>) =&gt; {
-                <span class="comment">// already is appropriate type
-            </span>}
-        }
-        <span class="kw">match </span><span class="self">self </span>{
-            ResolveResult::Single(<span class="kw">_</span>, <span class="kw">_</span>) | ResolveResult::Keyed(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; {
-                <span class="macro">unreachable!</span>()
-            }
-            ResolveResult::Alternatives(assets, list) =&gt; <span class="kw">match </span>other {
-                ResolveResult::Single(asset, list2) =&gt; {
-                    assets.push(<span class="kw-2">*</span>asset);
-                    list.extend(list2.iter().cloned());
-                }
-                ResolveResult::Alternatives(assets2, list2) =&gt; {
-                    assets.extend(assets2.iter().cloned());
-                    list.extend(list2.iter().cloned());
-                }
-                ResolveResult::Keyed(<span class="kw">_</span>, <span class="kw">_</span>)
-                | ResolveResult::Special(<span class="kw">_</span>, <span class="kw">_</span>)
-                | ResolveResult::Unresolveable(<span class="kw">_</span>) =&gt; {
-                    list.extend(other.get_references().iter().cloned());
-                }
-            },
-            ResolveResult::Special(special, list) =&gt; <span class="kw">match </span>other {
-                ResolveResult::Special(special2, list2) <span class="kw">if </span>special2 == special =&gt; {
-                    list.extend(list2.iter().cloned());
-                }
-                ResolveResult::Unresolveable(list2) =&gt; {
-                    list.extend(list2.iter().cloned());
-                }
-                <span class="kw">_ </span>=&gt; {
-                    list.extend(other.get_references().iter().cloned());
-                    <span class="kw-2">*</span><span class="self">self </span>= ResolveResult::Unresolveable(take(list));
-                }
-            },
-            ResolveResult::Unresolveable(list) =&gt; <span class="kw">match </span>other {
-                ResolveResult::Single(asset, list2) =&gt; {
-                    list.extend(list2.iter().cloned());
-                    <span class="kw-2">*</span><span class="self">self </span>= ResolveResult::Alternatives(<span class="macro">vec!</span>[<span class="kw-2">*</span>asset], take(list));
-                }
-                ResolveResult::Alternatives(assets, list2) =&gt; {
-                    list.extend(list2.iter().cloned());
-                    <span class="kw-2">*</span><span class="self">self </span>= ResolveResult::Alternatives(assets.clone(), take(list));
-                }
-                ResolveResult::Special(special, list2) =&gt; {
-                    list.extend(list2.iter().cloned());
-                    <span class="kw-2">*</span><span class="self">self </span>= ResolveResult::Special(special.clone(), take(list));
-                }
-                ResolveResult::Keyed(<span class="kw">_</span>, <span class="kw">_</span>) | ResolveResult::Unresolveable(<span class="kw">_</span>) =&gt; {
-                    list.extend(other.get_references().iter().cloned());
-                }
-            },
-        }
+        <span class="self">self</span>.primary.extend(other.primary.iter().cloned());
+        <span class="self">self</span>.references.extend(other.references.iter().copied());
     }
 
     <span class="kw">pub fn </span>is_unresolveable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="macro">matches!</span>(<span class="self">self</span>, ResolveResult::Unresolveable(<span class="kw">_</span>))
+        <span class="self">self</span>.primary.is_empty()
     }
 
-    <span class="kw">pub async fn </span>map&lt;A, AF, R, RF&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>asset_fn: A, <span class="kw-2">mut </span>reference_fn: R) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;
+    <span class="kw">pub async fn </span>map&lt;A, AF, R, RF&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, asset_fn: A, reference_fn: R) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;
     <span class="kw">where
-        </span>A: FnMut(AssetVc) -&gt; AF,
+        </span>A: Fn(AssetVc) -&gt; AF,
         AF: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;AssetVc&gt;&gt;,
-        R: FnMut(AssetReferenceVc) -&gt; RF,
+        R: Fn(AssetReferenceVc) -&gt; RF,
         RF: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;AssetReferenceVc&gt;&gt;,
     {
-        <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="self">self </span>{
-            ResolveResult::Single(asset, refs) =&gt; {
-                <span class="kw">let </span>asset = asset_fn(<span class="kw-2">*</span>asset).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>refs = refs.iter().map(|r| reference_fn(<span class="kw-2">*</span>r)).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
-                ResolveResult::Single(asset, refs)
-            }
-            ResolveResult::Keyed(map, refs) =&gt; {
-                <span class="kw">let </span><span class="kw-2">mut </span>new_map = HashMap::new();
-                <span class="kw">for </span>(key, value) <span class="kw">in </span>map.iter() {
-                    new_map.insert(key.clone(), asset_fn(<span class="kw-2">*</span>value).<span class="kw">await</span><span class="question-mark">?</span>);
-                }
-                <span class="kw">let </span>refs = refs.iter().map(|r| reference_fn(<span class="kw-2">*</span>r)).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
-                ResolveResult::Keyed(new_map, refs)
-            }
-            ResolveResult::Alternatives(assets, refs) =&gt; {
-                <span class="kw">let </span><span class="kw-2">mut </span>new_assets = Vec::new();
-                <span class="kw">for </span>asset <span class="kw">in </span>assets.iter() {
-                    new_assets.push(asset_fn(<span class="kw-2">*</span>asset).<span class="kw">await</span><span class="question-mark">?</span>);
-                }
-                <span class="kw">let </span>refs = refs.iter().map(|r| reference_fn(<span class="kw-2">*</span>r)).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
-                ResolveResult::Alternatives(new_assets, refs)
-            }
-            ResolveResult::Special(ty, refs) =&gt; {
-                <span class="kw">let </span>refs = refs.iter().map(|r| reference_fn(<span class="kw-2">*</span>r)).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
-                ResolveResult::Special(ty.clone(), refs)
-            }
-            ResolveResult::Unresolveable(refs) =&gt; {
-                <span class="kw">let </span>refs = refs.iter().map(|r| reference_fn(<span class="kw-2">*</span>r)).try_join().<span class="kw">await</span><span class="question-mark">?</span>;
-                ResolveResult::Unresolveable(refs)
-            }
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            primary: <span class="self">self
+                </span>.primary
+                .iter()
+                .cloned()
+                .map(|result| {
+                    <span class="kw">let </span>asset_fn = <span class="kw-2">&amp;</span>asset_fn;
+                    <span class="kw">async move </span>{
+                        <span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
+                            <span class="prelude-val">Ok</span>(PrimaryResolveResult::Asset(asset_fn(asset).<span class="kw">await</span><span class="question-mark">?</span>))
+                        } <span class="kw">else </span>{
+                            <span class="prelude-val">Ok</span>(result)
+                        }
+                    }
+                })
+                .try_join()
+                .<span class="kw">await</span><span class="question-mark">?</span>,
+            references: <span class="self">self
+                </span>.references
+                .iter()
+                .copied()
+                .map(reference_fn)
+                .try_join()
+                .<span class="kw">await</span><span class="question-mark">?</span>,
         })
     }
 }
@@ -1492,7 +1469,7 @@
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(result_ref.clone_with_references(references).cell());
             }
         }
-        <span class="prelude-val">Ok</span>(ResolveResult::Unresolveable(references).into())
+        <span class="prelude-val">Ok</span>(ResolveResult::unresolveable_with_references(references).into())
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -1500,17 +1477,17 @@
         <span class="kw">if </span>results.len() == <span class="number">1 </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(results.into_iter().next().unwrap());
         }
-        <span class="kw">let </span><span class="kw-2">mut </span>iter = results.into_iter();
+        <span class="kw">let </span><span class="kw-2">mut </span>iter = results.into_iter().try_join().<span class="kw">await</span><span class="question-mark">?</span>.into_iter();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(current) = iter.next() {
-            <span class="kw">let </span><span class="kw-2">mut </span>current = current.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
+            <span class="kw">let </span><span class="kw-2">mut </span>current = current.clone_value();
             <span class="kw">for </span>result <span class="kw">in </span>iter {
                 <span class="comment">// For clippy -- This explicit deref is necessary
-                </span><span class="kw">let </span>other = <span class="kw-2">&amp;*</span>result.<span class="kw">await</span><span class="question-mark">?</span>;
+                </span><span class="kw">let </span>other = <span class="kw-2">&amp;*</span>result;
                 current.merge_alternatives(other);
             }
             <span class="prelude-val">Ok</span>(<span class="self">Self</span>::cell(current))
         } <span class="kw">else </span>{
-            <span class="prelude-val">Ok</span>(<span class="self">Self</span>::cell(ResolveResult::Unresolveable(Vec::new())))
+            <span class="prelude-val">Ok</span>(<span class="self">Self</span>::cell(ResolveResult::unresolveable()))
         }
     }
 
@@ -1529,20 +1506,20 @@
                 .unwrap()
                 .add_references(references));
         }
-        <span class="kw">let </span><span class="kw-2">mut </span>iter = results.into_iter();
+        <span class="kw">let </span><span class="kw-2">mut </span>iter = results.into_iter().try_join().<span class="kw">await</span><span class="question-mark">?</span>.into_iter();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(current) = iter.next() {
-            <span class="kw">let </span><span class="kw-2">mut </span>current = current.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
-            <span class="kw">for </span>reference <span class="kw">in </span>references {
-                current.add_reference(reference)
-            }
-            <span class="kw">for </span>result_vc <span class="kw">in </span>iter {
+            <span class="kw">let </span><span class="kw-2">mut </span>current = current.clone_value();
+            <span class="kw">for </span>result <span class="kw">in </span>iter {
                 <span class="comment">// For clippy -- This explicit deref is necessary
-                </span><span class="kw">let </span>result = <span class="kw-2">&amp;*</span>result_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-                current.merge_alternatives(result);
+                </span><span class="kw">let </span>other = <span class="kw-2">&amp;*</span>result;
+                current.merge_alternatives(other);
             }
+            current.references.extend(references);
             <span class="prelude-val">Ok</span>(<span class="self">Self</span>::cell(current))
         } <span class="kw">else </span>{
-            <span class="prelude-val">Ok</span>(<span class="self">Self</span>::cell(ResolveResult::Unresolveable(references)))
+            <span class="prelude-val">Ok</span>(<span class="self">Self</span>::cell(ResolveResult::unresolveable_with_references(
+                references,
+            )))
         }
     }
 
@@ -1553,14 +1530,32 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>first_asset(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetOptionVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(AssetOptionVc::cell(this.primary.iter().find_map(|item| {
+            <span class="kw">if let </span>PrimaryResolveResult::Asset(a) = item {
+                <span class="prelude-val">Some</span>(<span class="kw-2">*</span>a)
+            } <span class="kw">else </span>{
+                <span class="prelude-val">None
+            </span>}
+        })))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>primary_assets(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(AssetsVc::cell(<span class="kw">match </span><span class="kw-2">&amp;*</span>this {
-            ResolveResult::Single(asset, <span class="kw">_</span>) =&gt; <span class="macro">vec!</span>[<span class="kw-2">*</span>asset],
-            ResolveResult::Keyed(map, <span class="kw">_</span>) =&gt; map.values().copied().collect(),
-            ResolveResult::Alternatives(assets, <span class="kw">_</span>) =&gt; assets.clone(),
-            ResolveResult::Special(<span class="kw">_</span>, <span class="kw">_</span>) | ResolveResult::Unresolveable(<span class="kw">_</span>) =&gt; Vec::new(),
-        }))
+        <span class="prelude-val">Ok</span>(AssetsVc::cell(
+            this.primary
+                .iter()
+                .filter_map(|item| {
+                    <span class="kw">if let </span>PrimaryResolveResult::Asset(a) = item {
+                        <span class="prelude-val">Some</span>(<span class="kw-2">*</span>a)
+                    } <span class="kw">else </span>{
+                        <span class="prelude-val">None
+                    </span>}
+                })
+                .collect(),
+        ))
     }
 }
 
@@ -1763,7 +1758,7 @@
         <span class="kw">return </span>merge_results(results);
     }
     <span class="kw">match </span>results.len() {
-        <span class="number">0 </span>=&gt; ResolveResult::Unresolveable(references).into(),
+        <span class="number">0 </span>=&gt; ResolveResult::unresolveable_with_references(references).into(),
         <span class="number">1 </span>=&gt; results
             .into_iter()
             .next()
@@ -1781,7 +1776,7 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
     <span class="kw">async fn </span>to_result(path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
         <span class="kw">let </span>RealPathResult { path, symlinks } = <span class="kw-2">&amp;*</span>path.realpath_with_links().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(ResolveResult::Single(
+        <span class="prelude-val">Ok</span>(ResolveResult::asset_with_references(
             SourceAssetVc::new(<span class="kw-2">*</span>path).into(),
             symlinks
                 .iter()
@@ -1973,10 +1968,9 @@
         Request::Uri {
             protocol,
             remainder,
-        } =&gt; ResolveResult::Special(
-            SpecialType::OriginalReferenceTypeExternal(<span class="macro">format!</span>(<span class="string">&quot;{}{}&quot;</span>, protocol, remainder)),
-            Vec::new(),
-        )
+        } =&gt; ResolveResult::primary(PrimaryResolveResult::OriginalReferenceTypeExternal(
+            <span class="macro">format!</span>(<span class="string">&quot;{}{}&quot;</span>, protocol, remainder),
+        ))
         .into(),
         Request::Unknown { path } =&gt; {
             <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
@@ -2088,7 +2082,7 @@
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">if </span>result.packages.is_empty() {
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::Unresolveable(result.references.clone()).into());
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::unresolveable_with_references(result.references.clone()).into());
     }
 
     <span class="kw">let </span><span class="kw-2">mut </span>results = <span class="macro">vec!</span>[];
@@ -2240,7 +2234,9 @@
     field_name: <span class="kw-2">&amp;</span>str,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
     <span class="kw">if </span>result.as_bool() == <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) {
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::Special(SpecialType::Ignore, refs).cell());
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(
+            ResolveResult::primary_with_references(PrimaryResolveResult::Ignore, refs).cell(),
+        );
     }
     <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = result.as_str() {
         <span class="kw">return </span><span class="prelude-val">Ok</span>(resolve(
@@ -2259,7 +2255,7 @@
     }
     .cell();
     issue.as_issue().emit();
-    <span class="prelude-val">Ok</span>(ResolveResult::Unresolveable(refs).cell())
+    <span class="prelude-val">Ok</span>(ResolveResult::unresolveable_with_references(refs).cell())
 }
 
 <span class="kw">async fn </span>resolved(
@@ -2329,7 +2325,7 @@
         }
     }
 
-    <span class="prelude-val">Ok</span>(ResolveResult::Single(
+    <span class="prelude-val">Ok</span>(ResolveResult::asset_with_references(
         SourceAssetVc::new(<span class="kw-2">*</span>path).into(),
         symlinks
             .iter()
@@ -2399,7 +2395,7 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>AffectingResolvingAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        ResolveResult::Single(SourceAssetVc::new(<span class="self">self</span>.path).into(), Vec::new()).into()
+        ResolveResult::asset(SourceAssetVc::new(<span class="self">self</span>.path).into()).into()
     }
 }
 

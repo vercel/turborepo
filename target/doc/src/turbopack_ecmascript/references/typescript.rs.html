@@ -146,10 +146,6 @@
 <span id="146">146</span>
 <span id="147">147</span>
 <span id="148">148</span>
-<span id="149">149</span>
-<span id="150">150</span>
-<span id="151">151</span>
-<span id="152">152</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -187,10 +183,9 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>TsConfigReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        ResolveResult::Single(
+        ResolveResult::asset(
             TsConfigModuleAssetVc::new(<span class="self">self</span>.origin, SourceAssetVc::new(<span class="self">self</span>.tsconfig).into())
                 .into(),
-            Vec::new(),
         )
         .into()
     }
@@ -234,15 +229,12 @@
                 .try_join(<span class="kw-2">&amp;</span><span class="self">self</span>.path)
                 .<span class="kw">await</span><span class="question-mark">?
             </span>{
-                ResolveResult::Single(
-                    <span class="self">self</span>.origin.context().process(
-                        SourceAssetVc::new(<span class="kw-2">*</span>path).into(),
-                        Value::new(ReferenceType::TypeScript(
-                            TypeScriptReferenceSubType::Undefined,
-                        )),
-                    ),
-                    Vec::new(),
-                )
+                ResolveResult::asset(<span class="self">self</span>.origin.context().process(
+                    SourceAssetVc::new(<span class="kw-2">*</span>path).into(),
+                    Value::new(ReferenceType::TypeScript(
+                        TypeScriptReferenceSubType::Undefined,
+                    )),
+                ))
                 .into()
             } <span class="kw">else </span>{
                 ResolveResult::unresolveable().into()
