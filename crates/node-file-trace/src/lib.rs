@@ -42,7 +42,7 @@ use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
-    issue::{IssueSeverity, IssueVc},
+    issue::{IssueReporter, IssueSeverity, IssueVc},
     reference::all_assets,
     resolve::options::{ImportMapping, ResolvedMap},
     source_asset::SourceAssetVc,
@@ -501,10 +501,10 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
         Box::pin(async move {
             let output = main_operation(TransientValue::new(dir.clone()), args.clone().into());
 
+            let source = TransientValue::new(output.into());
+            let issues = IssueVc::peek_issues_with_path(output).await?;
             let console_ui = (*console_ui).clone().cell();
-            console_ui
-                .group_and_display_issues(TransientValue::new(output.into()))
-                .await?;
+            console_ui.as_issue_reporter().report_issues(issues, source);
 
             if has_return_value {
                 let output_read_ref = output.await?;

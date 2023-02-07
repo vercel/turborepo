@@ -17,7 +17,8 @@ use futures::FutureExt;
 use turbo_tasks::{
     emit,
     primitives::{BoolVc, StringVc, U64Vc},
-    CollectiblesSource, ReadRef, TryJoinIterExt, ValueToString, ValueToStringVc,
+    CollectiblesSource, RawVc, ReadRef, TransientValue, TryJoinIterExt, ValueToString,
+    ValueToStringVc,
 };
 use turbo_tasks_fs::{
     FileContent, FileContentReadRef, FileLine, FileLinesContent, FileSystemPathReadRef,
@@ -567,4 +568,9 @@ impl PlainAssetVc {
         }
         .cell())
     }
+}
+
+#[turbo_tasks::value_trait]
+pub trait IssueReporter {
+    fn report_issues(&self, issues: CapturedIssuesVc, source: TransientValue<RawVc>);
 }

@@ -23,18 +23,20 @@ use next_core::{
     next_image::NextImageContentSourceVc, router_source::NextRouterContentSourceVc,
     source_map::NextSourceMapTraceContentSourceVc,
 };
+use once_cell::sync::Lazy;
 use owo_colors::OwoColorize;
 use turbo_malloc::TurboMalloc;
 use turbo_tasks::{
     util::{FormatBytes, FormatDuration},
-    RawVc, StatsType, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
+    CollectiblesSource, RawVc, StatsType, TransientInstance, TransientValue, TurboTasks,
+    TurboTasksBackendApi, Value,
 };
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
-use turbopack_cli_utils::issue::{ConsoleUi, ConsoleUiVc, LogOptions};
+use turbopack_cli_utils::issue::{ConsoleUi, LogOptions};
 use turbopack_core::{
     environment::ServerAddr,
-    issue::IssueSeverity,
+    issue::{Issue, IssueReporter, IssueReporterVc, IssueSeverity, IssueVc},
     resolve::{parse::RequestVc, pattern::QueryMapVc},
     server_fs::ServerFileSystemVc,
 };
@@ -45,7 +47,7 @@ use turbopack_dev_server::{
         source_maps::SourceMapContentSourceVc, static_assets::StaticAssetsContentSourceVc,
         ContentSourceVc,
     },
-    DevServer, DevServerBuilder,
+    DevServer, DevServerBuilder, IssueReporterProvider,
 };
 use turbopack_node::execution_context::ExecutionContextVc;
 
@@ -62,6 +64,7 @@ pub struct NextDevServerBuilder {
     entry_requests: Vec<EntryRequest>,
     eager_compile: bool,
     hostname: Option<IpAddr>,
+    issue_reporter: Option<Box<dyn IssueReporterProvider>>,
     port: Option<u16>,
     browserslist_query: String,
     log_level: IssueSeverity,
@@ -83,6 +86,7 @@ impl NextDevServerBuilder {
             entry_requests: vec![],
             eager_compile: false,
             hostname: None,
+            issue_reporter: None,
             port: None,
             browserslist_query: "last 1 Chrome versions, last 1 Firefox versions, last 1 Safari \
                                  versions, last 1 Edge versions"
@@ -136,6 +140,14 @@ impl NextDevServerBuilder {
 
     pub fn log_detail(mut self, log_detail: bool) -> NextDevServerBuilder {
         self.log_detail = log_detail;
+        self
+    }
+
+    pub fn issue_reporter(
+        mut self,
+        issue_reporter: Box<dyn IssueReporterProvider>,
+    ) -> NextDevServerBuilder {
+        self.issue_reporter = Some(issue_reporter);
         self
     }
 
@@ -199,10 +211,18 @@ impl NextDevServerBuilder {
             log_level: self.log_level,
         };
         let entry_requests = Arc::new(self.entry_requests);
-        let console_ui = Arc::new(ConsoleUi::new(log_options));
-        let console_ui_to_dev_server = console_ui.clone();
         let server_addr = Arc::new(server.addr);
         let tasks = turbo_tasks.clone();
+        let issue_reporter_once = Arc::new(Lazy::new(|| {
+            self.issue_reporter
+                .unwrap_or_else(|| {
+                    // Initialize a ConsoleUi reporter if no custom reporter was provided
+                    Box::new(|log_options| ConsoleUi::new(log_options).cell().into())
+                })
+                .get_issue_reporter(log_options)
+        }));
+        let issue_reporter_arc = Arc::new(move || **issue_reporter_once);
+        let get_issue_reporter = issue_reporter_arc.clone();
         let source = move || {
             source(
                 root_dir.clone(),
@@ -210,22 +230,33 @@ impl NextDevServerBuilder {
                 entry_requests.clone().into(),
                 eager_compile,
                 turbo_tasks.clone().into(),
-                console_ui.clone().into(),
+                get_issue_reporter(),
                 browserslist_query.clone(),
                 server_addr.clone().into(),
             )
         };
 
-        Ok(server.serve(tasks, source, console_ui_to_dev_server))
+        Ok(server.serve(tasks, source, issue_reporter_arc.clone()))
     }
 }
 
-async fn handle_issues<T: Into<RawVc>>(source: T, console_ui: ConsoleUiVc) -> Result<()> {
-    let state = console_ui
-        .group_and_display_issues(TransientValue::new(source.into()))
-        .await?;
+async fn handle_issues<T: Into<RawVc> + CollectiblesSource + Copy>(
+    source: T,
+    issue_reporter: IssueReporterVc,
+) -> Result<()> {
+    let issues = IssueVc::peek_issues_with_path(source).await?;
+    issue_reporter.report_issues(issues, TransientValue::new(source.into()));
 
-    if state.has_fatal {
+    let mut has_fatal = false;
+    for issue in issues.strongly_consistent().await?.iter() {
+        let severity = *issue.severity().await?;
+        if severity == IssueSeverity::Fatal {
+            has_fatal = true;
+            break;
+        }
+    }
+
+    if has_fatal {
         Err(anyhow!("Fatal issue(s) occurred"))
     } else {
         Ok(())
@@ -233,17 +264,17 @@ async fn handle_issues<T: Into<RawVc>>(source: T, console_ui: ConsoleUiVc) -> Re
 }
 
 #[turbo_tasks::function]
-async fn project_fs(project_dir: &str, console_ui: ConsoleUiVc) -> Result<FileSystemVc> {
+async fn project_fs(project_dir: &str, issue_reporter: IssueReporterVc) -> Result<FileSystemVc> {
     let disk_fs = DiskFileSystemVc::new("project".to_string(), project_dir.to_string());
-    handle_issues(disk_fs, console_ui).await?;
+    handle_issues(disk_fs, issue_reporter).await?;
     disk_fs.await?.start_watching()?;
     Ok(disk_fs.into())
 }
 
 #[turbo_tasks::function]
-async fn output_fs(project_dir: &str, console_ui: ConsoleUiVc) -> Result<FileSystemVc> {
+async fn output_fs(project_dir: &str, issue_reporter: IssueReporterVc) -> Result<FileSystemVc> {
     let disk_fs = DiskFileSystemVc::new("output".to_string(), project_dir.to_string());
-    handle_issues(disk_fs, console_ui).await?;
+    handle_issues(disk_fs, issue_reporter).await?;
     disk_fs.await?.start_watching()?;
     Ok(disk_fs.into())
 }
@@ -256,13 +287,12 @@ async fn source(
     entry_requests: TransientInstance<Vec<EntryRequest>>,
     eager_compile: bool,
     turbo_tasks: TransientInstance<TurboTasks<MemoryBackend>>,
-    console_ui: TransientInstance<ConsoleUi>,
+    issue_reporter: IssueReporterVc,
     browserslist_query: String,
     server_addr: TransientInstance<SocketAddr>,
 ) -> Result<ContentSourceVc> {
-    let console_ui = (*console_ui).clone().cell();
-    let output_fs = output_fs(&project_dir, console_ui);
-    let fs = project_fs(&root_dir, console_ui);
+    let output_fs = output_fs(&project_dir, issue_reporter);
+    let fs = project_fs(&root_dir, issue_reporter);
     let project_relative = project_dir.strip_prefix(&root_dir).unwrap();
     let project_relative = project_relative
         .strip_prefix(MAIN_SEPARATOR)
@@ -371,9 +401,9 @@ async fn source(
     .cell()
     .into();
 
-    handle_issues(dev_server_fs, console_ui).await?;
-    handle_issues(web_source, console_ui).await?;
-    handle_issues(page_source, console_ui).await?;
+    handle_issues(dev_server_fs, issue_reporter).await?;
+    handle_issues(web_source, issue_reporter).await?;
+    handle_issues(page_source, issue_reporter).await?;
 
     Ok(source)
 }

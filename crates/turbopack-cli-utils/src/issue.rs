@@ -17,8 +17,8 @@ use turbo_tasks_fs::{
     to_sys_path, FileLinesContent, FileSystemPathVc,
 };
 use turbopack_core::issue::{
-    Issue, IssueProcessingPathItem, IssueSeverity, IssueVc, OptionIssueProcessingPathItemsVc,
-    PlainIssue, PlainIssueSource,
+    CapturedIssuesVc, Issue, IssueProcessingPathItem, IssueReporter, IssueReporterVc,
+    IssueSeverity, OptionIssueProcessingPathItemsVc, PlainIssue, PlainIssueSource,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -421,32 +421,22 @@ impl ConsoleUi {
     }
 }
 
-#[turbo_tasks::value(transparent)]
-pub struct DisplayIssueState {
-    pub has_fatal: bool,
-    pub has_issues: bool,
-    pub has_new_issues: bool,
-}
-
 #[turbo_tasks::value_impl]
-impl ConsoleUiVc {
+impl IssueReporter for ConsoleUi {
     #[turbo_tasks::function]
-    pub async fn group_and_display_issues(
-        self,
+    async fn report_issues(
+        &self,
+        issues: CapturedIssuesVc,
         source: TransientValue<RawVc>,
-    ) -> Result<DisplayIssueStateVc> {
-        let source = source.into_value();
-        let this = self.await?;
-
-        let issues = IssueVc::peek_issues_with_path(source).await?;
+    ) -> Result<()> {
         let issues = issues.await?;
-        let &LogOptions {
+        let LogOptions {
             ref current_dir,
             show_all,
             log_detail,
             log_level,
             ..
-        } = &this.options;
+        } = self.options;
         let mut grouped_issues: GroupedIssues = HashMap::new();
 
         let issues = issues
@@ -464,11 +454,11 @@ impl ConsoleUiVc {
             .iter()
             .map(|(_, _, _, id)| *id)
             .collect::<HashSet<_>>();
-        let mut new_ids = this.seen.lock().unwrap().new_ids(source, issue_ids);
-
-        let mut has_fatal = false;
-        let has_issues = !issues.is_empty();
-        let has_new_issues = !new_ids.is_empty();
+        let mut new_ids = self
+            .seen
+            .lock()
+            .unwrap()
+            .new_ids(source.into_value(), issue_ids);
 
         for (plain_issue, path, context, id) in issues {
             if !new_ids.remove(&id) {
@@ -479,7 +469,6 @@ impl ConsoleUiVc {
             let context_path = make_relative_to_cwd(context, current_dir).await?;
             let category = &plain_issue.category;
             let title = &plain_issue.title;
-            has_fatal = severity == IssueSeverity::Fatal;
             let severity_map = grouped_issues
                 .entry(severity)
                 .or_insert_with(Default::default);
@@ -612,12 +601,7 @@ impl ConsoleUiVc {
             }
         }
 
-        Ok(DisplayIssueState {
-            has_fatal,
-            has_issues,
-            has_new_issues,
-        }
-        .cell())
+        Ok(())
     }
 }
 
