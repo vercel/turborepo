@@ -616,9 +616,11 @@
 <span id="616">616</span>
 <span id="617">617</span>
 <span id="618">618</span>
+<span id="619">619</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>nft_json;
+
 <span class="kw">use </span>std::{
     collections::{BTreeSet, HashMap},
     env::current_dir,
@@ -643,7 +645,7 @@
     NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
 <span class="kw">use </span>turbo_tasks_fs::{
-    glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystemVc, ReadGlobResultVc,
+    glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystem, FileSystemVc, ReadGlobResultVc,
 };
 <span class="kw">use </span>turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
@@ -657,7 +659,7 @@
 <span class="kw">use </span>turbopack_cli_utils::issue::{ConsoleUi, IssueSeverityCliOption, LogOptions};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
-    context::AssetContextVc,
+    context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     issue::{IssueSeverity, IssueVc},
     reference::all_assets,

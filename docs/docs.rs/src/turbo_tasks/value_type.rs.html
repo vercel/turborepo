@@ -297,6 +297,41 @@
 <span id="297">297</span>
 <span id="298">298</span>
 <span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::{type_name, Any},
     borrow::Cow,
@@ -348,6 +383,41 @@
     + Clone
 {
     <span class="kw">fn </span>get_trait_type_id() -&gt; TraitTypeId;
+}
+
+<span class="kw">pub trait </span>IntoSuperTrait&lt;T&gt;: ValueTraitVc
+<span class="kw">where
+    </span>T: ValueTraitVc,
+{
+    <span class="kw">fn </span>into_super_trait(<span class="self">self</span>) -&gt; T;
+}
+
+<span class="kw">pub trait </span>FromSubTrait&lt;T&gt;: ValueTraitVc
+<span class="kw">where
+    </span>T: ValueTraitVc,
+{
+    <span class="kw">fn </span>from_sub_trait(t: T) -&gt; <span class="self">Self</span>;
+}
+
+<span class="kw">impl</span>&lt;T, U&gt; IntoSuperTrait&lt;U&gt; <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: ValueTraitVc,
+    U: ValueTraitVc + FromSubTrait&lt;T&gt;,
+{
+    <span class="kw">fn </span>into_super_trait(<span class="self">self</span>) -&gt; U {
+        U::from_sub_trait(<span class="self">self</span>)
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; FromSubTrait&lt;T&gt; <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: ValueTraitVc,
+{
+    <span class="doccomment">/// Returns the argument unchanged.
+    </span><span class="attr">#[inline(always)]
+    </span><span class="kw">fn </span>from_sub_trait(t: T) -&gt; T {
+        t
+    }
 }
 
 <span class="doccomment">/// Marker trait that a turbo_tasks::value is prepared for

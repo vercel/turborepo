@@ -321,11 +321,30 @@
 <span id="321">321</span>
 <span id="322">322</span>
 <span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::{Ident, TokenStream <span class="kw">as </span>TokenStream2};
 <span class="kw">use </span>quote::quote;
 <span class="kw">use </span>syn::{
-    parse_macro_input, ItemTrait, Path, PathSegment, Signature, TraitBound, TraitItem,
+    parse_macro_input, parse_quote, ItemTrait, Path, PathSegment, Signature, TraitBound, TraitItem,
     TraitItemMethod, TypeParamBound,
 };
 <span class="kw">use </span>turbo_tasks_macros_shared::{
@@ -461,6 +480,10 @@
                 });
 
                 <span class="kw-2">*</span>sig = external_sig;
+                <span class="kw-2">*</span>default = <span class="prelude-val">Some</span>(<span class="macro">parse_quote! </span>{{
+                    <span class="kw">let </span>result = turbo_tasks::dynamic_call(<span class="kw-2">*</span>#function_id_ident, <span class="macro">vec!</span>[#(#input_raw_vc_arguments),<span class="kw-2">*</span>]);
+                    #convert_result_code
+                }});
             }
         }
     }
@@ -491,7 +514,7 @@
             <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; turbo_tasks::debug::ValueDebugFormatString {
                 turbo_tasks::debug::ValueDebugFormatString::Async(Box::pin(<span class="kw">async move </span>{
                     <span class="prelude-val">Ok</span>(<span class="kw">if let </span><span class="prelude-val">Some</span>(value_debug) = turbo_tasks::debug::ValueDebugVc::resolve_from(<span class="self">self</span>).<span class="kw">await</span><span class="question-mark">? </span>{
-                        <span class="macro">format!</span>(<span class="macro">concat!</span>(<span class="macro">stringify!</span>(#ident), <span class="string">&quot;({})&quot;</span>), value_debug.dbg_depth(depth).<span class="kw">await</span><span class="question-mark">?</span>.as_str())
+                        <span class="macro">format!</span>(<span class="macro">concat!</span>(<span class="macro">stringify!</span>(#ident), <span class="string">&quot;({})&quot;</span>), turbo_tasks::debug::ValueDebug::dbg_depth(<span class="kw-2">&amp;</span>value_debug, depth).<span class="kw">await</span><span class="question-mark">?</span>.as_str())
                     } <span class="kw">else </span>{
                         <span class="comment">// This case means the `Vc` pointed to by this `Vc` does not implement `ValueDebug`.
                         // This could happen if we provide a way to opt-out of the default `ValueDebug` derive,
@@ -504,9 +527,15 @@
         }
     };
 
+    <span class="kw">let </span>where_clause = <span class="kw">if </span>!default_method_registers.is_empty() || !supertraits.is_empty() {
+        <span class="prelude-val">Some</span>(<span class="macro">quote! </span>{ <span class="kw">where </span>turbo_tasks::TaskInput: <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; std::convert::From&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>&gt; })
+    } <span class="kw">else </span>{
+        <span class="prelude-val">None
+    </span>};
+
     <span class="kw">let </span>expanded = <span class="macro">quote! </span>{
         #(#attrs)*
-        #vis #trait_token #ident #colon_token #(#supertraits)+* {
+        #vis #trait_token #ident #colon_token #(#supertraits)+* #where_clause {
             #(#items)*
         }
 
@@ -556,8 +585,6 @@
                 <span class="kw">let </span>raw_vc: turbo_tasks::RawVc = super_trait_vc.into();
                 #ref_ident { node: raw_vc }
             }
-
-            #(<span class="kw">pub </span>#trait_fns)*
         }
 
         <span class="kw">impl </span>turbo_tasks::CollectiblesSource <span class="kw">for </span>#ref_ident {
@@ -577,13 +604,24 @@
             }
         }
 
-        <span class="kw">impl</span>&lt;T&gt; #ident <span class="kw">for </span>T <span class="kw">where </span>#ref_ident: std::convert::From&lt;T&gt;, turbo_tasks::TaskInput: <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; std::convert::From&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>T&gt; #(, #supertrait_refs: std::convert::From&lt;T&gt;)* {
-            #(default #trait_fns)*
+        <span class="kw">impl</span>&lt;T&gt; #ident <span class="kw">for </span>T
+        <span class="kw">where
+            </span>T: turbo_tasks::ValueTraitVc,
+            #ref_ident: turbo_tasks::FromSubTrait&lt;T&gt;,
+            turbo_tasks::TaskInput: <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; std::convert::From&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>T&gt;
+            #(, #supertrait_refs: turbo_tasks::FromSubTrait&lt;T&gt;)* {
+            #(#trait_fns)*
         }
 
         #(
             <span class="kw">impl </span>From&lt;#ref_ident&gt; <span class="kw">for </span>#supertrait_refs {
                 <span class="kw">fn </span>from(node_ref: #ref_ident) -&gt; <span class="self">Self </span>{
+                    node_ref.node.into()
+                }
+            }
+
+            <span class="kw">impl </span>turbo_tasks::FromSubTrait&lt;#ref_ident&gt; <span class="kw">for </span>#supertrait_refs {
+                <span class="kw">fn </span>from_sub_trait(node_ref: #ref_ident) -&gt; <span class="self">Self </span>{
                     node_ref.node.into()
                 }
             }

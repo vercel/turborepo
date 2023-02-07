@@ -2162,6 +2162,10 @@
 <span id="2162">2162</span>
 <span id="2163">2163</span>
 <span id="2164">2164</span>
+<span id="2165">2165</span>
+<span id="2166">2166</span>
+<span id="2167">2167</span>
+<span id="2168">2168</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2201,13 +2205,17 @@
 <span class="kw">use </span>turbo_tasks::{TryJoinIterExt, Value};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
-    asset::AssetVc,
+    asset::{Asset, AssetVc},
     environment::EnvironmentVc,
     reference::{AssetReferenceVc, AssetReferencesVc, SourceMapVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
-        find_context_file, origin::ResolveOriginVc, package_json, parse::RequestVc,
-        pattern::Pattern, resolve, FindContextFileResult, ResolveResult,
+        find_context_file,
+        origin::{ResolveOrigin, ResolveOriginVc},
+        package_json,
+        parse::RequestVc,
+        pattern::Pattern,
+        resolve, FindContextFileResult, ResolveResult,
     },
 };
 <span class="kw">use </span>turbopack_swc_utils::emitter::IssueEmitter;

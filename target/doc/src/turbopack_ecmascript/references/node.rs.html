@@ -168,16 +168,18 @@
 <span id="168">168</span>
 <span id="169">169</span>
 <span id="170">170</span>
+<span id="171">171</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, pin::Pin};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::{
-    DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathVc, FileSystemVc,
+    DirectoryContent, DirectoryEntry, FileSystem, FileSystemEntryType, FileSystemPathVc,
+    FileSystemVc,
 };
 <span class="kw">use </span>turbopack_core::{
-    asset::AssetVc,
+    asset::{Asset, AssetVc},
     reference::{AssetReference, AssetReferenceVc},
     resolve::{
         pattern::{Pattern, PatternVc},

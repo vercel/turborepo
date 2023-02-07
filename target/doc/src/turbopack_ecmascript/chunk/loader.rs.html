@@ -300,6 +300,16 @@
 <span id="300">300</span>
 <span id="301">301</span>
 <span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
@@ -310,7 +320,7 @@
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         ChunkGroupVc, ChunkItem, ChunkItemVc, ChunkReferenceVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContextVc, ChunksVc,
+        ChunkableAssetVc, ChunkingContext, ChunkingContextVc, ChunksVc,
     },
     reference::AssetReferencesVc,
 };
@@ -375,6 +385,11 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
         <span class="self">self</span>.context
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>related_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
+        <span class="self">self</span>.manifest.path()
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -538,6 +553,11 @@ __turbopack_export_value__((__turbopack_import__) =&gt; {{
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
         <span class="self">self</span>.context
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>related_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
+        <span class="self">self</span>.manifest.path()
     }
 
     <span class="attr">#[turbo_tasks::function]

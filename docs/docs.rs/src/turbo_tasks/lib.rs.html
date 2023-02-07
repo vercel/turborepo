@@ -102,6 +102,7 @@
 <span id="102">102</span>
 <span id="103">103</span>
 <span id="104">104</span>
+<span id="105">105</span>
 </pre><pre class="rust"><code><span class="doccomment">//! A task scheduling and caching system that is focused on incremental
 //! execution.
 //!
@@ -189,7 +190,8 @@
 <span class="kw">pub use </span>turbo_tasks_macros::{function, value, value_impl, value_trait};
 <span class="kw">pub use </span>value::{TransientInstance, TransientValue, Value};
 <span class="kw">pub use </span>value_type::{
-    TraitMethod, TraitType, Typed, TypedForInput, ValueTraitVc, ValueType, ValueVc,
+    FromSubTrait, IntoSuperTrait, TraitMethod, TraitType, Typed, TypedForInput, ValueTraitVc,
+    ValueType, ValueVc,
 };
 
 <span class="attr">#[doc(hidden)]

@@ -47,15 +47,21 @@
 <span id="47">47</span>
 <span id="48">48</span>
 <span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack::{resolve_options, resolve_options_context::ResolveOptionsContext};
-<span class="kw">use </span>turbopack_core::resolve::{
-    options::{ImportMapping, ImportMappingVc},
-    parse::RequestVc,
-    pattern::Pattern,
-    resolve,
+<span class="kw">use </span>turbopack_core::{
+    asset::Asset,
+    resolve::{
+        options::{ImportMapping, ImportMappingVc},
+        parse::RequestVc,
+        pattern::Pattern,
+        resolve,
+    },
 };
 
 <span class="attr">#[turbo_tasks::function]

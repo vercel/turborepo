@@ -621,6 +621,8 @@
 <span id="621">621</span>
 <span id="622">622</span>
 <span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(trivial_bounds)]
@@ -654,7 +656,7 @@
 };
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
-    asset::AssetVc,
+    asset::{Asset, AssetVc},
     context::{AssetContext, AssetContextVc},
     environment::EnvironmentVc,
     issue::{unsupported_module::UnsupportedModuleIssue, Issue, IssueVc},
@@ -668,6 +670,8 @@
         resolve, ResolveResultVc,
     },
 };
+
+<span class="kw">use </span><span class="kw">crate</span>::transition::Transition;
 
 <span class="kw">pub mod </span>condition;
 <span class="kw">pub mod </span>evaluate_context;

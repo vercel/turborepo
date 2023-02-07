@@ -197,6 +197,11 @@
 <span id="197">197</span>
 <span id="198">198</span>
 <span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     ecma::ast::{Expr, ExprOrSpread, NewExpr},
@@ -212,11 +217,16 @@
     issue::{code_gen::CodeGenerationIssue, IssueSeverity},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::UrlReferenceSubType,
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
+    resolve::{
+        origin::{ResolveOrigin, ResolveOriginVc},
+        parse::RequestVc,
+        ResolveResultVc,
+    },
 };
 
 <span class="kw">use </span><span class="kw">super</span>::base::{ReferencedAsset, ReferencedAssetVc};
 <span class="kw">use crate</span>::{
+    chunk::{EcmascriptChunkItem, EcmascriptChunkPlaceable},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::AstPathVc,

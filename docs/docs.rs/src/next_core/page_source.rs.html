@@ -739,9 +739,9 @@
 };
 <span class="kw">use </span>turbopack::{transition::TransitionsByNameVc, ModuleAssetContextVc};
 <span class="kw">use </span>turbopack_core::{
-    asset::AssetVc,
+    asset::{Asset, AssetVc},
     chunk::{dev::DevChunkingContextVc, ChunkingContextVc},
-    context::AssetContextVc,
+    context::{AssetContext, AssetContextVc},
     environment::ServerAddrVc,
     reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,

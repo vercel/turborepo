@@ -89,6 +89,7 @@
 <span id="89">89</span>
 <span id="90">90</span>
 <span id="91">91</span>
+<span id="92">92</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{ecma::ast::Expr, quote};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
@@ -103,6 +104,7 @@
 
 <span class="kw">use super</span>::{base::ReferencedAsset, EsmAssetReferenceVc};
 <span class="kw">use crate</span>::{
+    chunk::{EcmascriptChunkItem, EcmascriptChunkPlaceable},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::AstPathVc,

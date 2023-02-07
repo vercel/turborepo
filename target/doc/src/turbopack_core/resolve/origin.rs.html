@@ -124,12 +124,20 @@
 <span id="124">124</span>
 <span id="125">125</span>
 <span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
 <span class="kw">use super</span>::{options::ResolveOptionsVc, parse::RequestVc, ResolveResult, ResolveResultVc};
-<span class="kw">use crate</span>::{asset::AssetOptionVc, context::AssetContextVc, reference_type::ReferenceType};
+<span class="kw">use crate</span>::{
+    asset::AssetOptionVc,
+    context::{AssetContext, AssetContextVc},
+    reference_type::ReferenceType,
+};
 
 <span class="doccomment">/// A location where resolving can occur from. It carries some meta information
 /// that are needed for resolving from here.

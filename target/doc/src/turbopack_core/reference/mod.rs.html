@@ -155,18 +155,16 @@
 <span id="155">155</span>
 <span id="156">156</span>
 <span id="157">157</span>
-<span id="158">158</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{HashSet, VecDeque};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 
 <span class="kw">use crate</span>::{
-    asset::{AssetVc, AssetsVc},
+    asset::{Asset, AssetVc, AssetsVc},
     issue::IssueVc,
     resolve::{ResolveResult, ResolveResultVc},
 };
-
 <span class="kw">pub mod </span>source_map;
 
 <span class="kw">pub use </span>source_map::SourceMapVc;

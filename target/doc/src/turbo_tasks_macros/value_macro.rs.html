@@ -1233,7 +1233,7 @@
             <span class="kw">fn </span>value_debug_format(<span class="kw-2">&amp;</span><span class="self">self</span>, depth: usize) -&gt; turbo_tasks::debug::ValueDebugFormatString {
                 turbo_tasks::debug::ValueDebugFormatString::Async(Box::pin(<span class="kw">async move </span>{
                     <span class="prelude-val">Ok</span>(<span class="kw">if let </span><span class="prelude-val">Some</span>(value_debug) = turbo_tasks::debug::ValueDebugVc::resolve_from(<span class="self">self</span>).<span class="kw">await</span><span class="question-mark">? </span>{
-                        value_debug.dbg_depth(depth).<span class="kw">await</span><span class="question-mark">?</span>.to_string()
+                        turbo_tasks::debug::ValueDebug::dbg_depth(<span class="kw-2">&amp;</span>value_debug, depth).<span class="kw">await</span><span class="question-mark">?</span>.to_string()
                     } <span class="kw">else </span>{
                         <span class="comment">// This case means `SelfVc` does not implement `ValueDebugVc`, which is not possible
                         // if this implementation exists.

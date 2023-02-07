@@ -495,6 +495,7 @@
 <span id="495">495</span>
 <span id="496">496</span>
 <span id="497">497</span>
+<span id="498">498</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -511,6 +512,7 @@
 };
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
+    context::AssetContext,
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{
         find_context_file,

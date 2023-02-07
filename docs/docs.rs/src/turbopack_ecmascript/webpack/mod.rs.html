@@ -184,6 +184,10 @@
 <span id="184">184</span>
 <span id="185">185</span>
 <span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::ecma::ast::Lit;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
@@ -192,7 +196,11 @@
     asset::{Asset, AssetContentVc, AssetVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, resolve, ResolveResult, ResolveResultVc},
+    resolve::{
+        origin::{ResolveOrigin, ResolveOriginVc},
+        parse::RequestVc,
+        resolve, ResolveResult, ResolveResultVc,
+    },
     source_asset::SourceAssetVc,
 };
 

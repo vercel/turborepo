@@ -41,9 +41,11 @@
 <span id="41">41</span>
 <span id="42">42</span>
 <span id="43">43</span>
+<span id="44">44</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks_fs::{
-    attach::AttachedFileSystemVc, embed_directory, FileContentVc, FileSystemPathVc, FileSystemVc,
+    attach::AttachedFileSystemVc, embed_directory, FileContentVc, FileSystem, FileSystemPathVc,
+    FileSystemVc,
 };
 <span class="kw">use </span>turbopack_core::{asset::AssetVc, virtual_asset::VirtualAssetVc};
 

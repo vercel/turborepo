@@ -267,6 +267,8 @@
 <span id="267">267</span>
 <span id="268">268</span>
 <span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -278,6 +280,7 @@
     introspect::{
         asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
+    reference::AssetReference,
 };
 <span class="kw">use </span>turbopack_dev_server::{
     html::DevHtmlAssetVc,
@@ -299,8 +302,9 @@
     RenderData,
 };
 <span class="kw">use crate</span>::{
-    external_asset_entrypoints, get_intermediate_asset, node_entry::NodeEntryVc,
-    route_matcher::RouteMatcherVc,
+    external_asset_entrypoints, get_intermediate_asset,
+    node_entry::{NodeEntry, NodeEntryVc},
+    route_matcher::{RouteMatcher, RouteMatcherVc},
 };
 
 <span class="doccomment">/// Creates a content source that renders something in Node.js with the passed

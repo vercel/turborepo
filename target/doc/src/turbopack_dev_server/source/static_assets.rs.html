@@ -94,12 +94,14 @@
 <span id="94">94</span>
 <span id="95">95</span>
 <span id="96">96</span>
+<span id="97">97</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
+    asset::Asset,
     introspect::{
         asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },

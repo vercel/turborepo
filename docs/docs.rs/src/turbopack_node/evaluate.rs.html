@@ -321,9 +321,9 @@
     glob::GlobVc, rope::Rope, to_sys_path, DirectoryEntry, File, FileSystemPathVc, ReadGlobResultVc,
 };
 <span class="kw">use </span>turbopack_core::{
-    asset::AssetVc,
+    asset::{Asset, AssetVc},
     chunk::{dev::DevChunkingContextVc, ChunkGroupVc},
-    context::AssetContextVc,
+    context::{AssetContext, AssetContextVc},
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,

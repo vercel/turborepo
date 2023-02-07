@@ -194,6 +194,9 @@
 <span id="194">194</span>
 <span id="195">195</span>
 <span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -203,7 +206,10 @@
 <span class="kw">use </span>turbo_tasks::{CollectiblesSource, State, TransientInstance};
 <span class="kw">use </span>turbopack_core::{
     issue::{IssueVc, PlainIssueReadRef},
-    version::{NotFoundVersionVc, PartialUpdate, TotalUpdate, Update, UpdateReadRef, VersionVc},
+    version::{
+        NotFoundVersionVc, PartialUpdate, TotalUpdate, Update, UpdateReadRef, VersionVc,
+        VersionedContent,
+    },
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::source::resolve::{ResolveSourceRequestResult, ResolveSourceRequestResultVc};

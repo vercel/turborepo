@@ -150,6 +150,9 @@
 <span id="150">150</span>
 <span id="151">151</span>
 <span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::btree_map::Entry,
     sync::atomic::{AtomicU64, Ordering},
@@ -167,7 +170,10 @@
     ContentSourceContent, ContentSourceDataVary, ContentSourceResult, ContentSourceVc,
     ProxyResultVc, StaticContentVc,
 };
-<span class="kw">use crate</span>::{handle_issues, source::ContentSourceData};
+<span class="kw">use crate</span>::{
+    handle_issues,
+    source::{ContentSource, ContentSourceData, GetContentSourceContent},
+};
 
 <span class="doccomment">/// The result of [`resolve_source_request`]. Similar to a
 /// `ContentSourceContent`, but without the `Rewrite` variant as this is taken

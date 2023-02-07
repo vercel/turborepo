@@ -195,6 +195,12 @@
 <span id="195">195</span>
 <span id="196">196</span>
 <span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -204,7 +210,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
-    context::AssetContextVc,
+    context::{AssetContext, AssetContextVc},
     reference::AssetReferencesVc,
     resolve::origin::{ResolveOrigin, ResolveOriginVc},
     virtual_asset::VirtualAssetVc,
@@ -212,7 +218,8 @@
 <span class="kw">use </span>turbopack_ecmascript::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc,
-        EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkVc,
+        EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkVc, EcmascriptExports,
+        EcmascriptExportsVc,
     },
     AnalyzeEcmascriptModuleResultVc, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
     EcmascriptModuleAssetVc,
@@ -321,6 +328,11 @@
             context,
         })
         .into()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>get_exports(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptExportsVc {
+        EcmascriptExports::Value.cell()
     }
 }
 

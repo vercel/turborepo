@@ -195,6 +195,10 @@
 <span id="195">195</span>
 <span id="196">196</span>
 <span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -212,7 +216,11 @@
 <span class="kw">use </span>turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
 
 <span class="kw">use super</span>::{render_proxy::render_proxy, RenderData};
-<span class="kw">use crate</span>::{get_intermediate_asset, node_entry::NodeEntryVc, route_matcher::RouteMatcherVc};
+<span class="kw">use crate</span>::{
+    get_intermediate_asset,
+    node_entry::{NodeEntry, NodeEntryVc},
+    route_matcher::{RouteMatcher, RouteMatcherVc},
+};
 
 <span class="doccomment">/// Creates a [NodeApiContentSource].
 </span><span class="attr">#[turbo_tasks::function]

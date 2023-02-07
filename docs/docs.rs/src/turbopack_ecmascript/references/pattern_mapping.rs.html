@@ -190,6 +190,12 @@
 <span id="190">190</span>
 <span id="191">191</span>
 <span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>swc_core::{
@@ -198,15 +204,21 @@
 };
 <span class="kw">use </span>turbo_tasks::{debug::ValueDebug, primitives::StringVc, Value, ValueToString};
 <span class="kw">use </span>turbopack_core::{
+    asset::Asset,
     chunk::{ChunkableAssetVc, ChunkingContextVc, FromChunkableAsset, ModuleId},
     issue::{code_gen::CodeGenerationIssue, IssueSeverity},
     resolve::{
-        origin::ResolveOriginVc, parse::RequestVc, ResolveResult, ResolveResultVc, SpecialType,
+        origin::{ResolveOrigin, ResolveOriginVc},
+        parse::RequestVc,
+        ResolveResult, ResolveResultVc, SpecialType,
     },
 };
 
 <span class="kw">use </span><span class="kw">super</span>::util::{request_to_string, throw_module_not_found_expr};
-<span class="kw">use crate</span>::{chunk::EcmascriptChunkItemVc, utils::module_id_to_lit};
+<span class="kw">use crate</span>::{
+    chunk::{EcmascriptChunkItem, EcmascriptChunkItemVc},
+    utils::module_id_to_lit,
+};
 
 <span class="doccomment">/// A mapping from a request pattern (e.g. &quot;./module&quot;, `./images/${name}.png`)
 /// to corresponding module ids. The same pattern can map to multiple module ids

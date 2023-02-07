@@ -95,11 +95,13 @@
 <span id="95">95</span>
 <span id="96">96</span>
 <span id="97">97</span>
+<span id="98">98</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>node_native_binding;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbopack_core::{
+    context::AssetContext,
     reference_type::{
         CommonJsReferenceSubType, EcmaScriptModulesReferenceSubType, ReferenceType,
         UrlReferenceSubType,
@@ -107,7 +109,7 @@
     resolve::{
         handle_resolve_error,
         options::{ConditionValue, ResolveIntoPackage, ResolveOptions, ResolveOptionsVc},
-        origin::ResolveOriginVc,
+        origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
         resolve, ResolveResultVc,
     },

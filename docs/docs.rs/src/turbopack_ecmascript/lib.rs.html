@@ -397,6 +397,7 @@
 <span id="397">397</span>
 <span id="398">398</span>
 <span id="399">399</span>
+<span id="400">400</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
@@ -467,6 +468,7 @@
 };
 <span class="kw">use crate</span>::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
+    code_gen::CodeGenerateable,
     references::analyze_ecmascript_module,
 };
 

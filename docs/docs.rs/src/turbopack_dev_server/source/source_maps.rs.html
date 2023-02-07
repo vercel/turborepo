@@ -117,13 +117,14 @@
 <span id="117">117</span>
 <span id="118">118</span>
 <span id="119">119</span>
+<span id="120">120</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::File;
 <span class="kw">use </span>turbopack_core::{
     asset::AssetContentVc,
     introspect::{Introspectable, IntrospectableVc},
-    source_map::GenerateSourceMapVc,
+    source_map::{GenerateSourceMap, GenerateSourceMapVc},
 };
 
 <span class="kw">use super</span>::{
@@ -131,6 +132,7 @@
     ContentSourceData, ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResult,
     ContentSourceResultVc, ContentSourceVc, NeededData,
 };
+<span class="kw">use </span><span class="kw">crate</span>::source::GetContentSourceContent;
 
 <span class="doccomment">/// SourceMapContentSource allows us to serve full source maps, and individual
 /// sections of source maps, of any found asset in the graph without adding

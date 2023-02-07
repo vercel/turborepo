@@ -384,6 +384,7 @@
 <span id="384">384</span>
 <span id="385">385</span>
 <span id="386">386</span>
+<span id="387">387</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
@@ -394,7 +395,8 @@
 };
 <span class="kw">use </span>turbo_tasks_fs::{FileJsonContent, FileJsonContentVc, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
-    asset::AssetVc,
+    asset::{Asset, AssetVc},
+    context::AssetContext,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
@@ -404,7 +406,7 @@
             ConditionValue, ImportMap, ImportMapVc, ImportMapping, ResolveIntoPackage,
             ResolveModules, ResolveOptionsVc,
         },
-        origin::ResolveOriginVc,
+        origin::{ResolveOrigin, ResolveOriginVc},
         parse::{Request, RequestVc},
         pattern::QueryMapVc,
         resolve, AliasPattern, ResolveResultVc,

@@ -340,6 +340,7 @@
 <span id="340">340</span>
 <span id="341">341</span>
 <span id="342">342</span>
+<span id="343">343</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 
@@ -360,9 +361,10 @@
 <span class="kw">use </span>turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt};
 <span class="kw">use </span>turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
-    asset::{AssetVc, AssetsSetVc},
+    asset::{Asset, AssetVc, AssetsSetVc},
     chunk::{ChunkGroupVc, ChunkVc, ChunkingContextVc},
-    source_map::{GenerateSourceMapVc, SourceMapVc},
+    reference::AssetReference,
+    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
     virtual_asset::VirtualAssetVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};

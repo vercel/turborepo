@@ -1222,6 +1222,8 @@
 <span id="1222">1222</span>
 <span id="1223">1223</span>
 <span id="1224">1224</span>
+<span id="1225">1225</span>
+<span id="1226">1226</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -1263,7 +1265,9 @@
     reference_type::ReferenceType,
     resolve::{
         options::{ConditionValue, ResolveOptions},
+        origin::ResolveOrigin,
         pattern::{read_matches, Pattern, PatternMatch, PatternVc},
+        plugin::ResolvePlugin,
     },
     source_asset::SourceAssetVc,
 };

@@ -412,6 +412,8 @@
 <span id="412">412</span>
 <span id="413">413</span>
 <span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub mod </span>source_map;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>writer;
@@ -427,11 +429,11 @@
         chunk_content, chunk_content_split,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
         Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkGroupVc, ChunkItem, ChunkItemVc,
-        ChunkReferenceVc, ChunkVc, ChunkableAssetVc, ChunkingContextVc, FromChunkableAsset,
-        ModuleId, ModuleIdVc,
+        ChunkReferenceVc, ChunkVc, ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
+        FromChunkableAsset, ModuleId, ModuleIdVc,
     },
     code_builder::{CodeBuilder, CodeVc},
-    reference::{AssetReferenceVc, AssetReferencesVc},
+    reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
 };
 <span class="kw">use </span>turbopack_ecmascript::utils::FormatIter;
@@ -439,7 +441,9 @@
 
 <span class="kw">use </span><span class="self">self</span>::{optimize::CssChunkOptimizerVc, source_map::CssChunkSourceMapAssetReferenceVc};
 <span class="kw">use crate</span>::{
-    embed::CssEmbeddableVc, parse::ParseResultSourceMapVc, util::stringify_str,
+    embed::{CssEmbed, CssEmbeddable, CssEmbeddableVc},
+    parse::ParseResultSourceMapVc,
+    util::stringify_str,
     ImportAssetReferenceVc,
 };
 

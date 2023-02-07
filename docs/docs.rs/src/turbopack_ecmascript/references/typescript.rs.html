@@ -147,15 +147,21 @@
 <span id="147">147</span>
 <span id="148">148</span>
 <span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
+    context::AssetContext,
     reference::{AssetReference, AssetReferenceVc},
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
     resolve::{
-        origin::ResolveOriginVc, parse::RequestVc, pattern::QueryMapVc, ResolveResult,
-        ResolveResultVc,
+        origin::{ResolveOrigin, ResolveOriginVc},
+        parse::RequestVc,
+        pattern::QueryMapVc,
+        ResolveResult, ResolveResultVc,
     },
     source_asset::SourceAssetVc,
 };

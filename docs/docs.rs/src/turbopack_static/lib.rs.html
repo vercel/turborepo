@@ -228,6 +228,9 @@
 <span id="228">228</span>
 <span id="229">229</span>
 <span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Static asset support for turbopack.
 //!
 //! Static assets are copied directly to the output folder.
@@ -245,7 +248,10 @@
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
-    chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    chunk::{
+        ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContext,
+        ChunkingContextVc,
+    },
     context::AssetContextVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };

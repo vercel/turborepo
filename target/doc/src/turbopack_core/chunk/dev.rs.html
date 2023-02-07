@@ -203,6 +203,9 @@
 <span id="203">203</span>
 <span id="204">204</span>
 <span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{BoolVc, StringVc},
@@ -212,7 +215,10 @@
 <span class="kw">use </span>turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
 
 <span class="kw">use super</span>::{ChunkingContext, ChunkingContextVc};
-<span class="kw">use crate</span>::{asset::AssetVc, environment::EnvironmentVc};
+<span class="kw">use crate</span>::{
+    asset::{Asset, AssetVc},
+    environment::EnvironmentVc,
+};
 
 <span class="kw">pub struct </span>DevChunkingContextBuilder {
     context: DevChunkingContext,
