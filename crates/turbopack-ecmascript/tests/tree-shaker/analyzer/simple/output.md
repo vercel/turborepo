@@ -118,3 +118,18 @@ graph TD
     Item6 --> Item3;
     Item7 --> Item4;
 ```
+
+# Condensed
+
+```mermaid
+graph TD
+    Stmt5 --> Stmt2;
+    Stmt3 --> Stmt1;
+    Stmt3 --> Stmt2;
+    Stmt7 -.-> Stmt2;
+    Stmt7 -.-> Stmt5;
+    Stmt7 -.-> Stmt3;
+    Stmt7 -.-> Stmt1;
+    Stmt6 --> Stmt5;
+    Stmt4 --> Stmt3;
+```

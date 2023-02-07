@@ -362,3 +362,59 @@ graph TD
     Item18 --> Item6;
     Item19 --> Item14;
 ```
+
+# Condensed
+
+```mermaid
+graph TD
+    Stmt16 --> Stmt15;
+    Stmt4 --> Stmt3;
+    Stmt6 --> Stmt2;
+    Stmt6 --> Stmt3;
+    Stmt6 -.-> Stmt4;
+    Stmt7 --> Stmt3;
+    Stmt7 --> Stmt6;
+    Stmt8 --> Stmt3;
+    Stmt8 --> Stmt6;
+    Stmt8 -.-> Stmt4;
+    Stmt8 -.-> Stmt7;
+    Stmt17 --> Stmt7;
+    Stmt17 --> Stmt16;
+    Stmt17 -.-> Stmt12;
+    Stmt17 -.-> Stmt3;
+    Stmt17 -.-> Stmt6;
+    Stmt17 -.-> Stmt8;
+    Stmt17 -.-> Stmt4;
+    Stmt17 -.-> Stmt1;
+    Stmt18 --> Stmt7;
+    Stmt18 -.-> Stmt17;
+    Stmt13 --> Stmt12;
+    Stmt13 --> Stmt3;
+    Stmt13 --> Stmt6;
+    Stmt13 --> Stmt8;
+    Stmt12 --> Stmt1;
+    Stmt12 --> Stmt3;
+    Stmt12 --> Stmt6;
+    Stmt12 --> Stmt8;
+    Stmt10 -.-> Stmt4;
+    Stmt10 -.-> Stmt7;
+    Stmt10 -.-> Stmt8;
+    Stmt19 --> Stmt17;
+    Stmt19 -.-> Stmt13;
+    Stmt19 -.-> Stmt1;
+    Stmt19 -.-> Stmt3;
+    Stmt19 -.-> Stmt6;
+    Stmt19 -.-> Stmt8;
+    Stmt19 -.-> Stmt4;
+    Stmt19 -.-> Stmt7;
+    Stmt19 -.-> Stmt2;
+    Stmt19 -.-> Stmt18;
+    Stmt19 -.-> Stmt12;
+    Stmt19 -.-> Stmt10;
+    Stmt14 --> Stmt13;
+    Stmt9 --> Stmt3;
+    Stmt9 --> Stmt6;
+    Stmt9 --> Stmt8;
+    Stmt5 --> Stmt4;
+    Stmt11 --> Stmt10;
+```
