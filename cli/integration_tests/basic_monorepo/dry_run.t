@@ -9,7 +9,6 @@ Check my-app#build output
   my-app apps/my-app   
   util   packages/util 
   
-
   $ ${TURBO} run build --dry | grep "my-app#build" -A 12
   my-app#build
     Task                   = build                                                                                                                           

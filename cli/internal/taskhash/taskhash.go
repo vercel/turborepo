@@ -54,7 +54,6 @@ func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline, worksp
 type packageFileSpec struct {
 	pkg    string
 	inputs []string
-	taskID string
 }
 
 func specFromPackageTask(packageTask *nodes.PackageTask) packageFileSpec {
@@ -189,7 +188,6 @@ func (th *Tracker) CalculateFileHashes(
 		pfs := &packageFileSpec{
 			pkg:    pkgName,
 			inputs: taskDefinition.Inputs,
-			taskID: taskID,
 		}
 
 		hashTasks.Add(pfs)
