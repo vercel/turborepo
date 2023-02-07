@@ -382,19 +382,19 @@ graph TD
 
 ```mermaid
 graph TD
-    Item1[" export let cat = \"cat\" "];
-    Item2[" export cat "];
-    Item3[" export const initialCat = cat "];
-    Item4[" export initialCat "];
-    Item5[" let dog = \"dog\" "];
-    Item6[" dog += \"!\" "];
-    Item7[" console.log(dog) "];
-    Item8[" export function getChimera() {    return cat + dog} "];
-    Item9[" export getChimera "];
-    Item10[" function getDog() {    return dog} "];
-    Item11[" export const dogRef = {    initial: dog,    get: getDog,    set: setDog}function setDog(newDog) {    dog = newDog} "];
-    Item12[" export dogRef "];
-    Item13[" ModuleEvaluation "];
+    Item1["export let cat = \"cat\""];
+    Item2["export cat"];
+    Item3["export const initialCat = cat"];
+    Item4["export initialCat"];
+    Item5["let dog = \"dog\""];
+    Item6["dog += \"!\""];
+    Item7["console.log(dog)"];
+    Item8["export function getChimera() {    return cat + dog}"];
+    Item9["export getChimera"];
+    Item10["function getDog() {    return dog}"];
+    Item11["export const dogRef = {    initial: dog,    get: getDog,    set: setDog}function setDog(newDog) {    dog = newDog}"];
+    Item12["export dogRef"];
+    Item13["ModuleEvaluation"];
     Item6 --> Item5;
     Item7 --> Item5;
     Item7 --> Item6;

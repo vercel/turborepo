@@ -123,13 +123,13 @@ graph TD
 
 ```mermaid
 graph TD
-    Item1[" const cat = \"cat\" "];
-    Item2[" const dog = \"dog\" "];
-    Item3[" export const CHIMERA = cat + dog "];
-    Item4[" export CHIMERA "];
-    Item5[" export const DOG = dog "];
-    Item6[" export DOG "];
-    Item7[" ModuleEvaluation "];
+    Item1["const cat = \"cat\""];
+    Item2["const dog = \"dog\""];
+    Item3["export const CHIMERA = cat + dog"];
+    Item4["export CHIMERA"];
+    Item5["export const DOG = dog"];
+    Item6["export DOG"];
+    Item7["ModuleEvaluation"];
     Item5 --> Item2;
     Item3 --> Item1;
     Item3 --> Item2;
