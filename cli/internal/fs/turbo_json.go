@@ -95,8 +95,10 @@ type PristinePipeline map[string]TaskDefinition
 // Pipeline is a struct for deserializing .pipeline in configFile
 type Pipeline map[string]BookkeepingTaskDefinition
 
+// BookkeepingTaskDefinition holds the underlying TaskDefinition and some bookkeeping data
+// about the TaskDefinition. This wrapper struct allows us to leave TaskDefinition untouched.
 type BookkeepingTaskDefinition struct {
-	fieldsMeta     map[string]bool // holds some bookkeeping info about the TaskDefinition
+	fieldsMeta     map[string]bool
 	TaskDefinition TaskDefinition
 }
 
