@@ -235,9 +235,16 @@ where
     for item in &ix {
         let i = g.node(item);
 
-        writeln!(mermaid, "    Item{};", i + 1).unwrap();
-
-        writeln!(mermaid, "    Item{}[\"{}\"];", i + 1, render(item)).unwrap();
+        writeln!(
+            mermaid,
+            "    Item{}[\" {} \"];",
+            i + 1,
+            render(item)
+                .replace(';', "")
+                .replace('"', "\\\"")
+                .replace('\n', "")
+        )
+        .unwrap();
     }
 
     for (from, to, strong) in g.inner.all_edges() {
