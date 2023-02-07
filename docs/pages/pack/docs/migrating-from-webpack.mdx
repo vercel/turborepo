@@ -30,6 +30,7 @@ At the moment, configuring webpack loaders is possible for Next.js apps through 
 module.exports = {
   experimental: {
     turbopackLoaders: {
+      // Option format
       '.md': [
         {
           loader: '@mdx-js/loader',
@@ -38,6 +39,7 @@ module.exports = {
           },
         },
       ],
+      // Option-less format
       '.mdx': '@mdx-js/loader',
     },
   },
