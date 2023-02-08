@@ -1,11 +1,17 @@
 use anyhow::{bail, Result};
-use turbo_tasks::primitives::{BoolVc, StringVc};
-use turbopack_node::route_matcher::{ParamsVc, RouteMatcher, RouteMatcherVc};
+use turbo_tasks::{primitives::StringVc, Value};
+use turbopack_dev_server::source::{
+    ContentSourceData, ContentSourceDataFilter, ContentSourceDataVary, ParamsVc,
+};
+use turbopack_node::route_matcher::{MatchResultVc, RouteMatcher, RouteMatcherVc};
 
 use self::{
     all::AllMatch,
     path_regex::{PathRegex, PathRegexBuilder},
     prefix_suffix::PrefixSuffixMatcher,
+};
+use crate::router_source::{
+    TURBOPACK_NEXT_VALID_ROUTE, TURBOPACK_NEXT_VALID_ROUTE_FALSE, TURBOPACK_NEXT_VALID_ROUTE_TRUE,
 };
 
 mod all;
@@ -29,17 +35,16 @@ impl NextExactMatcherVc {
 #[turbo_tasks::value_impl]
 impl RouteMatcher for NextExactMatcher {
     #[turbo_tasks::function]
-    async fn matches(&self, path: &str) -> Result<BoolVc> {
-        Ok(BoolVc::cell(path == *self.path.await?))
-    }
-
-    #[turbo_tasks::function]
-    async fn params(&self, path: &str) -> Result<ParamsVc> {
-        Ok(ParamsVc::cell(if path == *self.path.await? {
-            Some(Default::default())
+    async fn match_params(
+        &self,
+        path: &str,
+        _data: Value<ContentSourceData>,
+    ) -> Result<MatchResultVc> {
+        Ok(if path == *self.path.await? {
+            MatchResultVc::match_params(ParamsVc::empty())
         } else {
-            None
-        }))
+            MatchResultVc::not_found()
+        })
     }
 }
 
@@ -60,16 +65,60 @@ impl NextParamsMatcherVc {
     }
 }
 
+/// Checks whether the given route is a valid Next.js route according to the
+/// Next.js router.
+///
+/// Only valid routes will be served by the Next.js page and app content
+/// sources.
+fn lookup_turbopack_header<T>(
+    path: &str,
+    data: Value<ContentSourceData>,
+    matcher: &T,
+) -> Result<MatchResultVc>
+where
+    T: RouteMatcher,
+{
+    Ok(if let Some(headers) = &data.headers {
+        if let Some(found) = headers.get(TURBOPACK_NEXT_VALID_ROUTE) {
+            match found.as_str() {
+                Some(TURBOPACK_NEXT_VALID_ROUTE_TRUE) => matcher.match_params(path, data),
+                Some(TURBOPACK_NEXT_VALID_ROUTE_FALSE) => MatchResultVc::not_found(),
+                Some(value) => {
+                    bail!(
+                        "expected header {} to be set to {} or {}, but found {}",
+                        TURBOPACK_NEXT_VALID_ROUTE,
+                        TURBOPACK_NEXT_VALID_ROUTE_TRUE,
+                        TURBOPACK_NEXT_VALID_ROUTE_FALSE,
+                        value
+                    );
+                }
+                None => {
+                    bail!(
+                        "expected header {} to be set to {} or {}, but found an invalid value",
+                        TURBOPACK_NEXT_VALID_ROUTE,
+                        TURBOPACK_NEXT_VALID_ROUTE_TRUE,
+                        TURBOPACK_NEXT_VALID_ROUTE_FALSE,
+                    );
+                }
+            }
+        } else {
+            bail!("expected header {} to be set", TURBOPACK_NEXT_VALID_ROUTE);
+        }
+    } else {
+        MatchResultVc::need_data(Value::new(ContentSourceDataVary {
+            headers: Some(ContentSourceDataFilter::Subset(
+                [TURBOPACK_NEXT_VALID_ROUTE.to_string()].into(),
+            )),
+            ..Default::default()
+        }))
+    })
+}
+
 #[turbo_tasks::value_impl]
 impl RouteMatcher for NextParamsMatcher {
     #[turbo_tasks::function]
-    fn matches(&self, path: &str) -> BoolVc {
-        self.matcher.matches(path)
-    }
-
-    #[turbo_tasks::function]
-    fn params(&self, path: &str) -> ParamsVc {
-        self.matcher.params(path)
+    fn match_params(&self, path: &str, data: Value<ContentSourceData>) -> Result<MatchResultVc> {
+        lookup_turbopack_header(path, data, &self.matcher)
     }
 }
 
@@ -100,13 +149,8 @@ impl NextPrefixSuffixParamsMatcherVc {
 #[turbo_tasks::value_impl]
 impl RouteMatcher for NextPrefixSuffixParamsMatcher {
     #[turbo_tasks::function]
-    fn matches(&self, path: &str) -> BoolVc {
-        self.matcher.matches(path)
-    }
-
-    #[turbo_tasks::function]
-    fn params(&self, path: &str) -> ParamsVc {
-        self.matcher.params(path)
+    fn match_params(&self, path: &str, data: Value<ContentSourceData>) -> Result<MatchResultVc> {
+        lookup_turbopack_header(path, data, &self.matcher)
     }
 }
 
@@ -128,13 +172,8 @@ impl NextFallbackMatcherVc {
 #[turbo_tasks::value_impl]
 impl RouteMatcher for NextFallbackMatcher {
     #[turbo_tasks::function]
-    fn matches(&self, path: &str) -> BoolVc {
-        self.matcher.matches(path)
-    }
-
-    #[turbo_tasks::function]
-    fn params(&self, path: &str) -> ParamsVc {
-        self.matcher.params(path)
+    fn match_params(&self, path: &str, data: Value<ContentSourceData>) -> MatchResultVc {
+        self.matcher.match_params(path, data)
     }
 }
 

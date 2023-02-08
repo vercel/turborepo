@@ -14,8 +14,9 @@ pub mod static_assets;
 use std::{collections::BTreeSet, sync::Arc};
 
 use anyhow::Result;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize, Serializer};
-use turbo_tasks::{trace::TraceRawVcs, Value};
+use turbo_tasks::{primitives::OptionStringVc, trace::TraceRawVcs, Value};
 use turbo_tasks_fs::rope::Rope;
 use turbopack_core::version::VersionedContentVc;
 
@@ -32,6 +33,17 @@ pub struct ProxyResult {
     pub body: Rope,
 }
 
+#[turbo_tasks::value(transparent, shared)]
+pub struct Params(IndexMap<String, String>);
+
+#[turbo_tasks::value_impl]
+impl ParamsVc {
+    #[turbo_tasks::function]
+    pub fn empty() -> Self {
+        Params(IndexMap::default()).cell()
+    }
+}
+
 /// The return value of a content source when getting a path. A specificity is
 /// attached and when combining results this specificity should be used to order
 /// results.
@@ -41,6 +53,7 @@ pub enum ContentSourceResult {
     NeedData(NeededData),
     Result {
         specificity: SpecificityVc,
+        params: ParamsVc,
         get_content: GetContentSourceContentVc,
     },
 }
@@ -64,12 +77,13 @@ impl ContentSourceResultVc {
     pub fn exact(get_content: GetContentSourceContentVc) -> ContentSourceResultVc {
         ContentSourceResult::Result {
             specificity: SpecificityVc::exact(),
+            params: ParamsVc::empty(),
             get_content,
         }
         .cell()
     }
 
-    /// Wraps some content source content with exact match specificity.
+    /// Result when data is needed to continue.
     #[turbo_tasks::function]
     pub fn need_data(data: Value<NeededData>) -> ContentSourceResultVc {
         ContentSourceResult::NeedData(data.into_value()).cell()
@@ -92,7 +106,7 @@ pub trait GetContentSourceContent {
     }
 
     /// Get the content
-    fn get(&self, data: Value<ContentSourceData>) -> ContentSourceContentVc;
+    fn get(&self, params: ParamsVc, data: Value<ContentSourceData>) -> ContentSourceContentVc;
 }
 
 #[turbo_tasks::value]
@@ -117,6 +131,7 @@ impl GetContentSourceContent for ContentSourceContent {
     #[turbo_tasks::function]
     fn get(
         self_vc: ContentSourceContentVc,
+        _params: ParamsVc,
         _data: Value<ContentSourceData>,
     ) -> ContentSourceContentVc {
         self_vc
@@ -424,6 +439,13 @@ pub trait ContentSource {
     fn get_children(&self) -> ContentSourcesVc {
         ContentSourcesVc::empty()
     }
+
+    /// The base path of the source, if any. This is used by the dev server to
+    /// expose other resources that are not part of the content source, e.g. the
+    /// HMR endpoint.
+    fn base_path(&self) -> OptionStringVc {
+        OptionStringVc::cell(None)
+    }
 }
 
 #[turbo_tasks::value(transparent)]
@@ -467,6 +489,8 @@ pub struct Rewrite {
     /// be the original path or query.
     pub path_and_query: String,
 
+    pub headers: Option<Vec<(String, String)>>,
+
     /// A [ContentSource] from which to restart the lookup process. This _does
     /// not_ need to be the original content source. Having [None] source will
     /// restart the lookup process from the original ContentSource.
@@ -478,10 +502,15 @@ impl RewriteVc {
     /// Creates a new [RewriteVc] and starts lookup from the provided
     /// [ContentSource].
     #[turbo_tasks::function]
-    pub fn new(path_query: String, source: ContentSourceVc) -> RewriteVc {
-        debug_assert!(path_query.starts_with('/'));
+    pub fn new(
+        path_and_query: String,
+        headers: Vec<(String, String)>,
+        source: ContentSourceVc,
+    ) -> RewriteVc {
+        debug_assert!(path_and_query.starts_with('/'));
         Rewrite {
-            path_and_query: path_query,
+            path_and_query,
+            headers: Some(headers),
             source: Some(source),
         }
         .cell()
@@ -489,10 +518,11 @@ impl RewriteVc {
 
     /// Creates a new [RewriteVc] and restarts lookup from the root.
     #[turbo_tasks::function]
-    pub fn new_path_query(path_query: String) -> RewriteVc {
-        debug_assert!(path_query.starts_with('/'));
+    pub fn new_path_query(path_and_query: String) -> RewriteVc {
+        debug_assert!(path_and_query.starts_with('/'));
         Rewrite {
-            path_and_query: path_query,
+            path_and_query,
+            headers: None,
             source: None,
         }
         .cell()

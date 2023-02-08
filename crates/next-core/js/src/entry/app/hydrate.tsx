@@ -5,12 +5,6 @@ import { createFromReadableStream } from "next/dist/compiled/react-server-dom-we
 
 import { HeadManagerContext } from "next/dist/shared/lib/head-manager-context";
 
-import { initializeHMR } from "@vercel/turbopack-next/dev/client";
-
-initializeHMR({
-  assetPrefix: "",
-});
-
 globalThis.__next_require__ = (data) => {
   const [client_id] = JSON.parse(data);
   return __turbopack_require__(client_id);

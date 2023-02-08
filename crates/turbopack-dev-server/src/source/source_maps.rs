@@ -10,7 +10,7 @@ use turbopack_core::{
 use super::{
     query::QueryValue, ContentSource, ContentSourceContent, ContentSourceContentVc,
     ContentSourceData, ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResult,
-    ContentSourceResultVc, ContentSourceVc, NeededData,
+    ContentSourceResultVc, ContentSourceVc, NeededData, ParamsVc,
 };
 use crate::source::GetContentSourceContent;
 
@@ -74,7 +74,9 @@ impl ContentSource for SourceMapContentSource {
         let result = this.asset_source.get(pathname, Default::default()).await?;
         let content = match &*result {
             ContentSourceResult::Result { get_content, .. } => {
-                get_content.get(Default::default()).await?
+                get_content
+                    .get(ParamsVc::empty(), Default::default())
+                    .await?
             }
             _ => return Ok(ContentSourceResultVc::not_found()),
         };

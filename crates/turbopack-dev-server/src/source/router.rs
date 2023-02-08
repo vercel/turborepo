@@ -1,5 +1,8 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
+use turbo_tasks::{
+    primitives::{OptionStringVc, StringVc},
+    TryJoinIterExt, Value,
+};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 
 use super::{ContentSource, ContentSourceData, ContentSourceResultVc, ContentSourceVc};
@@ -9,6 +12,7 @@ use crate::source::ContentSourcesVc;
 /// ContentSource will serve all other subpaths.
 #[turbo_tasks::value(shared)]
 pub struct RouterContentSource {
+    pub base_path: OptionStringVc,
     pub routes: Vec<(String, ContentSourceVc)>,
     pub fallback: ContentSourceVc,
 }
@@ -41,6 +45,11 @@ impl ContentSource for RouterContentSource {
         sources.push(self.fallback);
 
         ContentSourcesVc::cell(sources)
+    }
+
+    #[turbo_tasks::function]
+    fn base_path(&self) -> OptionStringVc {
+        self.base_path
     }
 }
 

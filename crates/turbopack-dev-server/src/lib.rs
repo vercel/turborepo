@@ -28,7 +28,7 @@ use turbo_tasks::{
 use turbopack_cli_utils::issue::{ConsoleUi, ConsoleUiVc};
 
 use self::{
-    source::{ContentSourceResultVc, ContentSourceVc},
+    source::{ContentSource, ContentSourceResultVc, ContentSourceVc},
     update::UpdateServer,
 };
 
@@ -121,10 +121,25 @@ impl DevServerBuilder {
                     let future = async move {
                         run_once(tt.clone(), async move {
                             let console_ui = (*console_ui).clone().cell();
+                            let source = source_provider.get_source();
 
                             if hyper_tungstenite::is_upgrade_request(&request) {
+                                let base_path = source.base_path().await?;
+
                                 let uri = request.uri();
                                 let path = uri.path();
+
+                                let path = if let Some(base_path) = base_path.as_deref() {
+                                    if let Some(path) = path.strip_prefix(base_path) {
+                                        path
+                                    } else {
+                                        return Ok(Response::builder()
+                                            .status(404)
+                                            .body(hyper::Body::empty())?);
+                                    }
+                                } else {
+                                    path
+                                };
 
                                 if path == "/turbopack-hmr" {
                                     let (response, websocket) =

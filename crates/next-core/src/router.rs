@@ -52,7 +52,7 @@ pub struct RouterRequest {
 #[serde(rename_all = "camelCase")]
 pub struct RewriteResponse {
     pub url: String,
-    pub headers: Vec<String>,
+    pub headers: Vec<(String, String)>,
 }
 
 #[turbo_tasks::value(shared)]
@@ -74,7 +74,7 @@ pub struct FullMiddlewareResponse {
     pub body: Vec<u8>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 enum RouterIncomingMessage {
     Rewrite {
@@ -93,6 +93,7 @@ enum RouterIncomingMessage {
     FullMiddleware {
         data: FullMiddlewareResponse,
     },
+    None,
     Error(StructuredError),
 }
 
@@ -101,6 +102,7 @@ enum RouterIncomingMessage {
 pub enum RouterResult {
     Rewrite(RewriteResponse),
     FullMiddleware(FullMiddlewareResponse),
+    None,
     Error,
 }
 
@@ -109,6 +111,7 @@ impl From<RouterIncomingMessage> for RouterResult {
         match value {
             RouterIncomingMessage::Rewrite { data } => Self::Rewrite(data),
             RouterIncomingMessage::FullMiddleware { data } => Self::FullMiddleware(data),
+            RouterIncomingMessage::None => Self::None,
             _ => Self::Error,
         }
     }

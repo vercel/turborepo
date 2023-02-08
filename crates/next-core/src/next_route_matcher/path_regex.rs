@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use turbo_tasks::primitives::{BoolVc, Regex};
-use turbopack_node::route_matcher::{ParamsVc, RouteMatcher};
+use turbo_tasks::{primitives::Regex, Value};
+use turbopack_dev_server::source::{ContentSourceData, ParamsVc};
+use turbopack_node::route_matcher::{MatchResultVc, RouteMatcher};
 
 /// A regular expression that matches a path, with named capture groups for the
 /// dynamic parts of the path.
@@ -18,12 +19,8 @@ impl std::fmt::Display for PathRegex {
 }
 
 impl RouteMatcher for PathRegex {
-    fn matches(&self, path: &str) -> BoolVc {
-        BoolVc::cell(self.regex.is_match(path))
-    }
-
-    fn params(&self, path: &str) -> ParamsVc {
-        ParamsVc::cell(self.regex.captures(path).map(|capture| {
+    fn match_params(&self, path: &str, _data: Value<ContentSourceData>) -> MatchResultVc {
+        let option_params = self.regex.captures(path).map(|capture| {
             self.named_params
                 .iter()
                 .enumerate()
@@ -35,7 +32,13 @@ impl RouteMatcher for PathRegex {
                     Some((name.to_string(), value.as_str().to_string()))
                 })
                 .collect()
-        }))
+        });
+
+        if let Some(params) = option_params {
+            MatchResultVc::match_params(ParamsVc::cell(params))
+        } else {
+            MatchResultVc::not_found()
+        }
     }
 }
 

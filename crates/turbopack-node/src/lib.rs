@@ -36,6 +36,7 @@ pub mod bootstrap;
 mod embed_js;
 pub mod evaluate;
 pub mod execution_context;
+pub mod html_error;
 mod node_entry;
 mod pool;
 pub mod render;
@@ -254,6 +255,7 @@ enum EvalJavaScriptIncomingMessage {
     Error(StructuredError),
 }
 
+#[derive(Debug)]
 #[turbo_tasks::value(shared)]
 pub struct StructuredError {
     name: String,

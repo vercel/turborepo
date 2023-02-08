@@ -94,7 +94,7 @@ impl ContentSource for IntrospectionSource {
         let details = introspectable.details().await?;
         let children = introspectable.children().await?;
         let has_children = !children.is_empty();
-        let mut children = children
+        let children = children
             .iter()
             .map(|&(name, child)| async move {
                 let name = name.await?;
@@ -111,7 +111,6 @@ impl ContentSource for IntrospectionSource {
             })
             .try_join()
             .await?;
-        children.sort();
         let details = if details.is_empty() {
             String::new()
         } else if has_children {

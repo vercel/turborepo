@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
-use turbo_tasks::primitives::BoolVc;
-use turbopack_node::route_matcher::{ParamsVc, RouteMatcher};
+use turbo_tasks::Value;
+use turbopack_dev_server::source::ContentSourceData;
+use turbopack_node::route_matcher::{MatchResultVc, RouteMatcher};
 
 /// A composite route matcher that matches a path if it has a given prefix and
 /// suffix.
@@ -37,19 +38,11 @@ impl<T> RouteMatcher for PrefixSuffixMatcher<T>
 where
     T: RouteMatcher,
 {
-    fn matches(&self, path: &str) -> BoolVc {
+    fn match_params(&self, path: &str, data: Value<ContentSourceData>) -> MatchResultVc {
         if let Some(path) = self.strip_prefix_and_suffix(path) {
-            self.inner.matches(path)
+            self.inner.match_params(path, data)
         } else {
-            BoolVc::cell(false)
-        }
-    }
-
-    fn params(&self, path: &str) -> ParamsVc {
-        if let Some(path) = self.strip_prefix_and_suffix(path) {
-            self.inner.params(path)
-        } else {
-            ParamsVc::cell(None)
+            MatchResultVc::not_found()
         }
     }
 }

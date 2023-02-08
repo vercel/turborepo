@@ -1,6 +1,5 @@
-use std::collections::HashSet;
-
 use anyhow::Result;
+use indexmap::IndexSet;
 use turbo_tasks::{primitives::StringVc, Value};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 use turbopack_dev_server::source::{
@@ -51,6 +50,21 @@ fn need_data(source: ContentSourceVc, path: &str) -> ContentSourceResultVc {
     )
 }
 
+/// If the route was resolved correctly by the Next.js router, this header will
+/// be set to "1". Otherwise, it will be set to "0".
+///
+/// We need to differentiate between the two cases because the Next.js router
+/// will apply rewrites and other URL modifications such as stripping the
+/// base path.
+///
+/// For instance, if the base path is configured to be "/base", then we need to
+/// handle "/base/page" and "/page" differently. However, once we go through the
+/// Next.js router, both paths will be rewritten to "/page" and we won't be able
+/// to tell which one was valid according to the router.
+pub const TURBOPACK_NEXT_VALID_ROUTE: &str = "x-turbopack-valid-route";
+pub const TURBOPACK_NEXT_VALID_ROUTE_TRUE: &str = "1";
+pub const TURBOPACK_NEXT_VALID_ROUTE_FALSE: &str = "0";
+
 #[turbo_tasks::value_impl]
 impl ContentSource for NextRouterContentSource {
     #[turbo_tasks::function]
@@ -92,13 +106,34 @@ impl ContentSource for NextRouterContentSource {
                     .get(path, Value::new(ContentSourceData::default()))
             }
             RouterResult::Rewrite(data) => {
+                let mut headers = data.headers.clone();
+                headers.push((
+                    TURBOPACK_NEXT_VALID_ROUTE.to_string(),
+                    TURBOPACK_NEXT_VALID_ROUTE_TRUE.to_string(),
+                ));
                 // TODO: We can't set response headers on the returned content.
                 ContentSourceResultVc::exact(
-                    ContentSourceContent::Rewrite(RewriteVc::new(data.url.clone(), this.inner))
-                        .cell()
-                        .into(),
+                    ContentSourceContent::Rewrite(RewriteVc::new(
+                        data.url.clone(),
+                        headers,
+                        this.inner,
+                    ))
+                    .cell()
+                    .into(),
                 )
             }
+            RouterResult::None => ContentSourceResultVc::exact(
+                ContentSourceContent::Rewrite(RewriteVc::new(
+                    format!("/{}?{}", path, serde_qs::to_string(query)?),
+                    vec![(
+                        TURBOPACK_NEXT_VALID_ROUTE.to_string(),
+                        TURBOPACK_NEXT_VALID_ROUTE_FALSE.to_string(),
+                    )],
+                    this.inner,
+                ))
+                .cell()
+                .into(),
+            ),
             RouterResult::FullMiddleware(data) => ContentSourceResultVc::exact(
                 ContentSourceContent::HttpProxy(
                     ProxyResult {
@@ -129,7 +164,7 @@ impl Introspectable for NextRouterContentSource {
 
     #[turbo_tasks::function]
     async fn children(&self) -> Result<IntrospectableChildrenVc> {
-        let mut children = HashSet::new();
+        let mut children = IndexSet::new();
         if let Some(inner) = IntrospectableVc::resolve_from(self.inner).await? {
             children.insert((StringVc::cell("inner".to_string()), inner));
         }

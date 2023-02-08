@@ -16,19 +16,16 @@ use turbopack_core::{
     asset::{Asset, AssetVc},
     chunk::{dev::DevChunkingContextVc, ChunkingContextVc},
     context::{AssetContext, AssetContextVc},
-    environment::ServerAddrVc,
+    environment::{EnvironmentVc, ServerAddrVc},
     reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
 };
-use turbopack_dev_server::{
-    html::DevHtmlAssetVc,
-    source::{
-        asset_graph::AssetGraphContentSourceVc,
-        combined::{CombinedContentSource, CombinedContentSourceVc},
-        specificity::SpecificityVc,
-        ContentSourceData, ContentSourceVc, NoContentSourceVc,
-    },
+use turbopack_dev_server::source::{
+    asset_graph::AssetGraphContentSourceVc,
+    combined::{CombinedContentSource, CombinedContentSourceVc},
+    specificity::SpecificityVc,
+    ContentSourceData, ContentSourceVc, NoContentSourceVc,
 };
 use turbopack_ecmascript::{
     chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
@@ -37,6 +34,7 @@ use turbopack_ecmascript::{
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_node::{
     execution_context::ExecutionContextVc,
+    html_error::FallbackPageAssetVc,
     render::{
         node_api_source::create_node_api_source, rendered_source::create_node_rendered_source,
     },
@@ -82,6 +80,7 @@ pub async fn create_page_source(
     execution_context: ExecutionContextVc,
     output_path: FileSystemPathVc,
     server_root: FileSystemPathVc,
+    assets_root: FileSystemPathVc,
     env: ProcessEnvVc,
     browserslist_query: &str,
     next_config: NextConfigVc,
@@ -121,8 +120,13 @@ pub async fn create_page_source(
     )
     .into();
 
-    let client_chunking_context =
-        get_client_chunking_context(project_path, server_root, client_environment, client_ty);
+    let client_chunking_context = get_client_chunking_context(
+        project_path,
+        server_root,
+        assets_root,
+        client_environment,
+        client_ty,
+    );
 
     let client_runtime_entries =
         get_client_runtime_entries(project_path, env, client_ty, next_config);
@@ -133,7 +137,7 @@ pub async fn create_page_source(
         client_module_options_context,
         client_resolve_options_context,
         client_environment,
-        server_root,
+        assets_root,
         runtime_entries: client_runtime_entries,
     }
     .cell()
@@ -146,7 +150,7 @@ pub async fn create_page_source(
         output_path.join("edge"),
         output_path.join("edge/chunks"),
         get_client_assets_path(
-            server_root,
+            assets_root,
             Value::new(ClientContextType::Pages { pages_dir }),
         ),
         edge_environment,
@@ -182,6 +186,7 @@ pub async fn create_page_source(
                     execution_context,
                     client_ty,
                     server_root,
+                    assets_root,
                     browserslist_query,
                     next_config,
                 )
@@ -225,6 +230,7 @@ pub async fn create_page_source(
         project_path,
         execution_context,
         server_root,
+        assets_root,
         env,
         browserslist_query,
         next_config,
@@ -241,6 +247,7 @@ pub async fn create_page_source(
         server_runtime_entries,
         fallback_page,
         server_root,
+        assets_root,
         output_path.join("force_not_found"),
         SpecificityVc::exact(),
         NextExactMatcherVc::new(StringVc::cell("_next/404".to_string())).into(),
@@ -254,6 +261,7 @@ pub async fn create_page_source(
         server_runtime_entries,
         fallback_page,
         server_root,
+        assets_root,
         output_path.join("fallback_not_found"),
         SpecificityVc::not_found(),
         NextFallbackMatcherVc::new().into(),
@@ -271,6 +279,7 @@ pub async fn create_page_source(
         server_runtime_entries,
         fallback_page,
         server_root,
+        assets_root,
         server_root,
         server_root.join("api"),
         output_path,
@@ -292,6 +301,24 @@ pub async fn create_page_source(
     .into())
 }
 
+#[turbo_tasks::function]
+fn get_server_chunking_context(
+    context_path: FileSystemPathVc,
+    intermediate_output_path: FileSystemPathVc,
+    assets_root: FileSystemPathVc,
+    environment: EnvironmentVc,
+    ty: Value<ClientContextType>,
+) -> ChunkingContextVc {
+    DevChunkingContextVc::builder(
+        context_path,
+        intermediate_output_path,
+        intermediate_output_path.join("chunks"),
+        get_client_assets_path(assets_root, ty),
+        environment,
+    )
+    .build()
+}
+
 /// Handles a single page file in the pages directory
 #[turbo_tasks::function]
 async fn create_page_source_for_file(
@@ -303,8 +330,9 @@ async fn create_page_source_for_file(
     specificity: SpecificityVc,
     page_asset: AssetVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
     server_root: FileSystemPathVc,
+    assets_root: FileSystemPathVc,
     server_path: FileSystemPathVc,
     is_api_path: BoolVc,
     intermediate_output_path: FileSystemPathVc,
@@ -319,37 +347,32 @@ async fn create_page_source_for_file(
         Value::new(ReferenceType::Entry(EntryReferenceSubType::Page)),
     );
 
-    let server_chunking_context = DevChunkingContextVc::builder(
-        context_path,
-        intermediate_output_path,
-        intermediate_output_path.join("chunks"),
-        get_client_assets_path(
-            server_root,
-            Value::new(ClientContextType::Pages { pages_dir }),
-        ),
-        server_context.environment(),
-    )
-    .build();
-
     let data_intermediate_output_path = intermediate_output_path.join("data");
 
-    let server_data_chunking_context = DevChunkingContextVc::builder(
+    let client_ty = Value::new(ClientContextType::Pages { pages_dir });
+
+    let server_chunking_context = get_server_chunking_context(
+        context_path,
+        intermediate_output_path,
+        assets_root,
+        server_context.environment(),
+        client_ty.clone(),
+    );
+
+    let server_data_chunking_context = get_server_chunking_context(
         context_path,
         data_intermediate_output_path,
-        data_intermediate_output_path.join("chunks"),
-        get_client_assets_path(
-            server_root,
-            Value::new(ClientContextType::Pages { pages_dir }),
-        ),
+        assets_root,
         server_context.environment(),
-    )
-    .build();
+        client_ty.clone(),
+    );
 
     let client_chunking_context = get_client_chunking_context(
         context_path,
         server_root,
+        assets_root,
         client_context.environment(),
-        Value::new(ClientContextType::Pages { pages_dir }),
+        client_ty,
     );
 
     let pathname = pathname_for_path(server_root, server_path, true);
@@ -427,6 +450,7 @@ async fn create_page_source_for_file(
             ),
             create_page_loader(
                 server_root,
+                assets_root,
                 client_context,
                 client_chunking_context,
                 entry_asset,
@@ -460,29 +484,29 @@ async fn create_not_found_page_source(
     pages_dir: FileSystemPathVc,
     page_extensions: StringsVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
     server_root: FileSystemPathVc,
+    assets_root: FileSystemPathVc,
     intermediate_output_path: FileSystemPathVc,
     specificity: SpecificityVc,
     route_matcher: RouteMatcherVc,
 ) -> Result<ContentSourceVc> {
-    let server_chunking_context = DevChunkingContextVc::builder(
+    let client_ty = Value::new(ClientContextType::Pages { pages_dir });
+
+    let server_chunking_context = get_server_chunking_context(
         context_path,
         intermediate_output_path,
-        intermediate_output_path.join("chunks"),
-        get_client_assets_path(
-            server_root,
-            Value::new(ClientContextType::Pages { pages_dir }),
-        ),
+        assets_root,
         server_context.environment(),
-    )
-    .build();
+        client_ty.clone(),
+    );
 
     let client_chunking_context = get_client_chunking_context(
         context_path,
         server_root,
+        assets_root,
         client_context.environment(),
-        Value::new(ClientContextType::Pages { pages_dir }),
+        client_ty,
     );
 
     let (page_asset, pathname) =
@@ -520,6 +544,7 @@ async fn create_not_found_page_source(
 
     let page_loader = create_page_loader(
         server_root,
+        assets_root,
         client_context,
         client_chunking_context,
         entry_asset,
@@ -556,8 +581,9 @@ async fn create_page_source_for_directory(
     position: u32,
     input_dir: FileSystemPathVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
     server_root: FileSystemPathVc,
+    assets_root: FileSystemPathVc,
     server_path: FileSystemPathVc,
     server_api_path: FileSystemPathVc,
     intermediate_output_path: FileSystemPathVc,
@@ -605,6 +631,7 @@ async fn create_page_source_for_directory(
                                     runtime_entries,
                                     fallback_page,
                                     server_root,
+                                    assets_root,
                                     dev_server_path,
                                     dev_server_path.is_inside(server_api_path),
                                     intermediate_output_path,
@@ -630,6 +657,7 @@ async fn create_page_source_for_directory(
                             runtime_entries,
                             fallback_page,
                             server_root,
+                            assets_root,
                             server_path.join(name),
                             server_api_path,
                             intermediate_output_path.join(name),

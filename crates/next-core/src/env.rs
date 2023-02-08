@@ -61,14 +61,22 @@ pub async fn env_for_js(
         EmbeddableProcessEnvVc::new(CustomProcessEnvVc::new(env, next_config.env()).into()).into();
 
     let image_config = next_config.image_config().await?;
+    let base_path = next_config.base_path().await?;
+    let asset_prefix = next_config.asset_prefix().await?;
+
+    let next_config = next_config.await?;
+
     let mut map = indexmap! {
         // We need to overload the __NEXT_IMAGE_OPTS to override the default remotePatterns field.
         // This allows us to support loading from remote hostnames until we properly support reading
         // the next.config.js file.
         "__NEXT_IMAGE_OPTS".to_string() => serde_json::to_string(&image_config)?,
+        // This ensures next/link and the Next.js router work properly when a basePath is configured.
+        // This is also used in server-renderer.tsx.
+        "__NEXT_ROUTER_BASEPATH".to_string() => serde_json::to_string(&base_path)?,
+        // This is used in app-renderer.tsx and server-renderer.tsx, but not in Next.js itself.
+        "__TURBOPACK_NEXT_ASSET_PREFIX".to_string() => serde_json::to_string(&asset_prefix)?,
     };
-
-    let next_config = next_config.await?;
 
     if next_config.react_strict_mode.unwrap_or(false) {
         map.insert("__NEXT_STRICT_MODE".to_string(), "true".to_string());

@@ -5,7 +5,7 @@ use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, Intro
 use super::{
     combined::CombinedContentSource, ContentSource, ContentSourceData, ContentSourceDataVaryVc,
     ContentSourceResult, ContentSourceResultVc, ContentSourceVc, GetContentSourceContent,
-    GetContentSourceContentVc,
+    GetContentSourceContentVc, ParamsVc,
 };
 use crate::source::{ContentSourceContentVc, ContentSourcesVc};
 
@@ -54,6 +54,7 @@ impl ContentSource for ConditionalContentSource {
             return Ok(match &*first_value {
                 &ContentSourceResult::Result {
                     get_content,
+                    params,
                     specificity,
                 } => ContentSourceResult::Result {
                     get_content: ActivateOnGetContentSource {
@@ -62,6 +63,7 @@ impl ContentSource for ConditionalContentSource {
                     }
                     .cell()
                     .into(),
+                    params,
                     specificity,
                 }
                 .cell(),
@@ -144,8 +146,8 @@ impl GetContentSourceContent for ActivateOnGetContentSource {
     }
 
     #[turbo_tasks::function]
-    fn get(&self, data: Value<ContentSourceData>) -> ContentSourceContentVc {
+    fn get(&self, params: ParamsVc, data: Value<ContentSourceData>) -> ContentSourceContentVc {
         self.source.activated.set(true);
-        self.get_content.get(data)
+        self.get_content.get(params, data)
     }
 }

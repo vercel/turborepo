@@ -18,9 +18,12 @@ use std::{
 use anyhow::{anyhow, Context, Result};
 use devserver_options::DevServerOptions;
 use next_core::{
-    create_app_source, create_page_source, create_web_entry_source, env::load_env,
-    manifest::DevManifestContentSource, next_config::load_next_config,
-    next_image::NextImageContentSourceVc, router_source::NextRouterContentSourceVc,
+    create_app_source, create_page_source, create_web_entry_source,
+    env::load_env,
+    manifest::DevManifestContentSource,
+    next_config::{load_next_config, NextConfigVc},
+    next_image::NextImageContentSourceVc,
+    router_source::NextRouterContentSourceVc,
     source_map::NextSourceMapTraceContentSourceVc,
 };
 use owo_colors::OwoColorize;
@@ -29,7 +32,7 @@ use turbo_tasks::{
     util::{FormatBytes, FormatDuration},
     RawVc, StatsType, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
 };
-use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
+use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemPathVc, FileSystemVc};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack_cli_utils::issue::{ConsoleUi, ConsoleUiVc, LogOptions};
 use turbopack_core::{
@@ -270,18 +273,19 @@ async fn source(
         .replace(MAIN_SEPARATOR, "/");
     let project_path = fs.root().join(&project_relative);
 
-    let env = load_env(project_path);
     let build_output_root = output_fs.root().join(".next/build");
 
     let execution_context = ExecutionContextVc::new(project_path, build_output_root);
 
     let next_config = load_next_config(execution_context.join("next_config"));
 
+    let env = load_env(project_path);
     let output_root = output_fs.root().join(".next/server");
     let server_addr = ServerAddr::new(*server_addr).cell();
 
     let dev_server_fs = ServerFileSystemVc::new().as_file_system();
     let dev_server_root = dev_server_fs.root();
+    let dev_assets_root = get_assets_root(dev_server_root, next_config);
     let entry_requests = entry_requests
         .iter()
         .map(|r| match r {
@@ -297,6 +301,7 @@ async fn source(
         execution_context,
         entry_requests,
         dev_server_root,
+        dev_assets_root,
         env,
         eager_compile,
         &browserslist_query,
@@ -307,6 +312,7 @@ async fn source(
         execution_context,
         output_root.join("pages"),
         dev_server_root,
+        dev_assets_root,
         env,
         &browserslist_query,
         next_config,
@@ -317,6 +323,7 @@ async fn source(
         execution_context,
         output_root.join("app"),
         dev_server_root,
+        dev_assets_root,
         env,
         &browserslist_query,
         next_config,
@@ -330,6 +337,7 @@ async fn source(
     let static_source =
         StaticAssetsContentSourceVc::new(String::new(), project_path.join("public")).into();
     let manifest_source = DevManifestContentSource {
+        base_path: next_config.base_path(),
         page_roots: vec![app_source, page_source],
     }
     .cell()
@@ -355,6 +363,7 @@ async fn source(
     .into();
     let router_source = NextRouterContentSourceVc::new(main_source, execution_context).into();
     let source = RouterContentSource {
+        base_path: next_config.base_path(),
         routes: vec![
             ("__turbopack__/".to_string(), introspect),
             ("__turbo_tasks__/".to_string(), viz),
@@ -376,6 +385,21 @@ async fn source(
     handle_issues(page_source, console_ui).await?;
 
     Ok(source)
+}
+
+/// Returns the root path to Turbopack-generated Next.js assets.
+#[turbo_tasks::function]
+pub async fn get_assets_root(
+    server_root: FileSystemPathVc,
+    next_config: NextConfigVc,
+) -> Result<FileSystemPathVc> {
+    Ok(
+        if let Some(base_path) = next_config.base_path().await?.as_deref() {
+            server_root.join(base_path)
+        } else {
+            server_root
+        },
+    )
 }
 
 pub fn register() {
