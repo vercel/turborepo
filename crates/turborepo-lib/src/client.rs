@@ -106,9 +106,10 @@ impl UserClient for APIClient {
     async fn get_user(&self) -> Result<UserResponse> {
         let response = self
             .make_retryable_request(|| {
+                let url = self.make_url("/v2/user");
                 let request_builder = self
                     .client
-                    .get(self.make_url("/v2/user"))
+                    .get(url)
                     .header("User-Agent", USER_AGENT.clone())
                     .header("Authorization", format!("Bearer {}", self.token))
                     .header("Content-Type", "application/json");
