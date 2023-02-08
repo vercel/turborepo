@@ -27,11 +27,7 @@ Thanks for your interest in contributing to Turbo!
 
 Dependencies
 
-1. Install `jq` and `sponge`
-
-   On macOS: `brew install sponge jq`
-
-1. Install [turborepo crate](https://github.com/vercel/turbo/blob/main/crates/turborepo/README.md) build requirements
+1. Install [turborepo crate](./crates/turborepo/README.md) build requirements
 
 1. Run `pnpm install` at root
 
@@ -41,6 +37,12 @@ Building
 - Using `turbo` to build `turbo` CLI: `./turbow.js`
 
 ### Running Turborepo Tests
+
+Dependencies
+
+1. Install `jq`, `sponge`, and `zstd`
+
+On macOS: `brew install sponge jq zstd`
 
 #### Go Tests
 
