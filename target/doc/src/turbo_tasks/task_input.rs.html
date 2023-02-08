@@ -860,6 +860,52 @@
 <span id="860">860</span>
 <span id="861">861</span>
 <span id="862">862</span>
+<span id="863">863</span>
+<span id="864">864</span>
+<span id="865">865</span>
+<span id="866">866</span>
+<span id="867">867</span>
+<span id="868">868</span>
+<span id="869">869</span>
+<span id="870">870</span>
+<span id="871">871</span>
+<span id="872">872</span>
+<span id="873">873</span>
+<span id="874">874</span>
+<span id="875">875</span>
+<span id="876">876</span>
+<span id="877">877</span>
+<span id="878">878</span>
+<span id="879">879</span>
+<span id="880">880</span>
+<span id="881">881</span>
+<span id="882">882</span>
+<span id="883">883</span>
+<span id="884">884</span>
+<span id="885">885</span>
+<span id="886">886</span>
+<span id="887">887</span>
+<span id="888">888</span>
+<span id="889">889</span>
+<span id="890">890</span>
+<span id="891">891</span>
+<span id="892">892</span>
+<span id="893">893</span>
+<span id="894">894</span>
+<span id="895">895</span>
+<span id="896">896</span>
+<span id="897">897</span>
+<span id="898">898</span>
+<span id="899">899</span>
+<span id="900">900</span>
+<span id="901">901</span>
+<span id="902">902</span>
+<span id="903">903</span>
+<span id="904">904</span>
+<span id="905">905</span>
+<span id="906">906</span>
+<span id="907">907</span>
+<span id="908">908</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::{type_name, Any},
     borrow::Cow,
@@ -1722,5 +1768,51 @@
         }
     }
 }
+
+<span class="macro">macro_rules! </span>tuple_impls {
+    ( $( <span class="macro-nonterminal">$name</span>:ident )+ ) =&gt; {
+        <span class="kw">impl</span>&lt;$(<span class="macro-nonterminal">$name</span>: Into&lt;TaskInput&gt;),+&gt; From&lt;($(<span class="macro-nonterminal">$name</span>,)+)&gt; <span class="kw">for </span>TaskInput {
+            <span class="attr">#[allow(non_snake_case)]
+            </span><span class="kw">fn </span>from(s: ($(<span class="macro-nonterminal">$name</span>,)+)) -&gt; <span class="self">Self </span>{
+                <span class="kw">let </span>($(<span class="macro-nonterminal">$name</span>,)+) = s;
+                <span class="kw">let </span>($(<span class="macro-nonterminal">$name</span>,)+) = ($(<span class="macro-nonterminal">$name</span>.into(),)+);
+                TaskInput::List(<span class="macro">vec!</span>[ $(<span class="macro-nonterminal">$name</span>,)+ ])
+            }
+        }
+
+        <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, $(<span class="macro-nonterminal">$name</span>: FromTaskInput&lt;<span class="lifetime">&#39;a</span>, Error = anyhow::Error&gt;,)+&gt; FromTaskInput&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">for </span>($(<span class="macro-nonterminal">$name</span>,)+) {
+            <span class="kw">type </span>Error = anyhow::Error;
+
+            <span class="attr">#[allow(non_snake_case)]
+            </span><span class="kw">fn </span>try_from(value: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>TaskInput) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
+                <span class="kw">match </span>value {
+                    TaskInput::List(value) =&gt; {
+                        <span class="kw">let </span><span class="kw-2">mut </span>iter = value.iter();
+                        $(
+                            <span class="kw">let </span><span class="macro-nonterminal">$name </span>= iter.next().ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;missing tuple element&quot;</span>))<span class="question-mark">?</span>;
+                            <span class="kw">let </span><span class="macro-nonterminal">$name </span>= FromTaskInput::try_from(<span class="macro-nonterminal">$name</span>)<span class="question-mark">?</span>;
+                        )+
+                        <span class="prelude-val">Ok</span>(($(<span class="macro-nonterminal">$name</span>,)+))
+                    },
+                    <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;invalid task input type, expected list&quot;</span>)),
+                }
+            }
+        }
+    };
+
+}
+
+<span class="macro">tuple_impls! </span>{ A }
+<span class="macro">tuple_impls! </span>{ A B }
+<span class="macro">tuple_impls! </span>{ A B C }
+<span class="macro">tuple_impls! </span>{ A B C D }
+<span class="macro">tuple_impls! </span>{ A B C D E }
+<span class="macro">tuple_impls! </span>{ A B C D E F }
+<span class="macro">tuple_impls! </span>{ A B C D E F G }
+<span class="macro">tuple_impls! </span>{ A B C D E F G H }
+<span class="macro">tuple_impls! </span>{ A B C D E F G H I }
+<span class="macro">tuple_impls! </span>{ A B C D E F G H I J }
+<span class="macro">tuple_impls! </span>{ A B C D E F G H I J K }
+<span class="macro">tuple_impls! </span>{ A B C D E F G H I J K L }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="turbo_tasks" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.67.0-nightly (215e3cd21 2022-11-03)" ></div></body></html>
