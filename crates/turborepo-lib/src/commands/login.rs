@@ -256,6 +256,15 @@ fn get_token_and_redirect(payload: SsoPayload) -> Result<(Option<String>, Url)> 
     Ok((payload.token, url))
 }
 
+#[cfg(test)]
+async fn run_sso_one_shot_server(_: u16, verification_token: Arc<OnceCell<String>>) -> Result<()> {
+    verification_token
+        .set(EXPECTED_TOKEN_TEST.to_string())
+        .unwrap();
+    Ok(())
+}
+
+#[cfg(not(test))]
 async fn run_sso_one_shot_server(
     port: u16,
     verification_token: Arc<OnceCell<String>>,
@@ -295,7 +304,7 @@ mod test {
     use tokio::sync::OnceCell;
 
     use crate::{
-        client::{User, UserResponse},
+        client::{CachingStatus, CachingStatusResponse, User, UserResponse, VerificationResponse},
         commands::{login, login::EXPECTED_TOKEN_TEST, CommandBase},
         config::{RepoConfigLoader, UserConfigLoader},
         ui::UI,
@@ -361,12 +370,98 @@ mod test {
                             username: "my_username".to_string(),
                             email: "my_email".to_string(),
                             name: None,
-                            created_at: 0,
+                            created_at: Some(0),
                         },
                     })
                 }),
             );
         let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
+
+        Ok(axum_server::bind(addr)
+            .serve(app.into_make_service())
+            .await?)
+    }
+
+    const EXPECTED_SSO_TEAM_SLUG: &str = "vercel";
+    const EXPECTED_SSO_TEAM_ID: &str = "vercel";
+
+    #[tokio::test]
+    async fn test_sso_login() {
+        let user_config_file = NamedTempFile::new().unwrap();
+        fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
+        let repo_config_file = NamedTempFile::new().unwrap();
+        fs::write(
+            repo_config_file.path(),
+            r#"{ "apiurl": "http://localhost:3002" }"#,
+        )
+        .unwrap();
+
+        let handle = tokio::spawn(start_sso_test_server());
+        let mut base = CommandBase {
+            repo_root: Default::default(),
+            ui: UI::new(false),
+            user_config: OnceCell::from(
+                UserConfigLoader::new(user_config_file.path().to_path_buf())
+                    .load()
+                    .unwrap(),
+            ),
+            repo_config: OnceCell::from(
+                RepoConfigLoader::new(repo_config_file.path().to_path_buf())
+                    .with_api(Some("http://localhost:3002".to_string()))
+                    .load()
+                    .unwrap(),
+            ),
+            args: Args::default(),
+        };
+
+        login::sso_login(&mut base, EXPECTED_SSO_TEAM_SLUG)
+            .await
+            .unwrap();
+
+        handle.abort();
+
+        assert_eq!(
+            base.user_config().unwrap().token().unwrap(),
+            EXPECTED_TOKEN_TEST
+        );
+    }
+
+    /// NOTE: Each test server should be on its own port to avoid any
+    /// concurrency bugs.
+    async fn start_sso_test_server() -> Result<()> {
+        let app = Router::new()
+            .route(
+                "/registration/verify",
+                get(|| async move {
+                    Json(VerificationResponse {
+                        token: EXPECTED_TOKEN_TEST.to_string(),
+                        team_id: Some(EXPECTED_SSO_TEAM_ID.to_string()),
+                    })
+                }),
+            )
+            .route(
+                "/v8/artifacts/status",
+                get(|| async move {
+                    Json(CachingStatusResponse {
+                        status: CachingStatus::Enabled,
+                    })
+                }),
+            )
+            .route(
+                "/v2/user",
+                get(|| async move {
+                    Json(UserResponse {
+                        user: User {
+                            id: "0".to_string(),
+                            username: "my_username_3".to_string(),
+                            email: "me@vercel.com".to_string(),
+                            name: None,
+                            created_at: None,
+                        },
+                    })
+                }),
+            );
+        let addr = SocketAddr::from(([127, 0, 0, 1], 3002));
 
         Ok(axum_server::bind(addr)
             .serve(app.into_make_service())

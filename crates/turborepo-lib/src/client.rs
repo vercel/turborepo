@@ -13,11 +13,11 @@ pub struct VerifiedSsoUser {
     pub team_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerificationResponse {
-    token: String,
-    team_id: Option<String>,
+    pub token: String,
+    pub team_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

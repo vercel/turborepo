@@ -365,7 +365,7 @@ mod test {
                             username: "my_username".to_string(),
                             email: "my_email".to_string(),
                             name: None,
-                            created_at: 0,
+                            created_at: Some(0),
                         },
                     })
                 }),
