@@ -29,7 +29,7 @@ Check
           "remote": false
         },
         "command": "echo 'building'",
-        "outputs": [],
+        "outputs": null,
         "excludedOutputs": null,
         "logFile": ".turbo/turbo-build.log",
         "dependencies": [],

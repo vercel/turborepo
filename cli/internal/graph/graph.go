@@ -34,7 +34,7 @@ type CompleteGraph struct {
 	RootNode string
 
 	// Map of TaskDefinitions by taskID
-	TaskDefinitions map[string]*fs.ResolvedTaskDefinition
+	TaskDefinitions map[string]*fs.TaskDefinition
 	RepoRoot        turbopath.AbsoluteSystemPath
 }
 

@@ -134,19 +134,6 @@ type TaskDefinition struct {
 	Persistent bool
 }
 
-// ResolvedTaskDefinition is a modified version the TaskDefinition struct.
-// It is meant for merged task definitions and for printing out in Run Summaries.
-type ResolvedTaskDefinition struct {
-	Outputs                 *TaskOutputs
-	ShouldCache             bool
-	EnvVarDependencies      []string
-	TopologicalDependencies []string
-	TaskDependencies        []string
-	Inputs                  []string
-	OutputMode              util.TaskOutputMode
-	Persistent              bool
-}
-
 // GetTask returns a TaskDefinition based on the ID (package#task format) or name (e.g. "build")
 func (pc Pipeline) GetTask(taskID string, taskName string) (*BookkeepingTaskDefinition, error) {
 	// first check for package-tasks
@@ -430,56 +417,6 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 
 // MarshalJSON serializes TaskDefinition struct into json
 func (c TaskDefinition) MarshalJSON() ([]byte, error) {
-	// Initialize with empty arrays, so we get empty arrays serialized into JSON
-	task := rawTaskWithDefaults{
-		Outputs:   []string{},
-		Inputs:    []string{},
-		Env:       []string{},
-		DependsOn: []string{},
-	}
-
-	task.Persistent = c.Persistent
-	task.Cache = &c.ShouldCache
-	task.OutputMode = c.OutputMode
-
-	if len(c.Inputs) > 0 {
-		task.Inputs = c.Inputs
-	}
-
-	if len(c.EnvVarDependencies) > 0 {
-		task.Env = append(task.Env, c.EnvVarDependencies...)
-	}
-
-	if len(c.Outputs.Inclusions) > 0 {
-		task.Outputs = append(task.Outputs, c.Outputs.Inclusions...)
-	}
-
-	for _, i := range c.Outputs.Exclusions {
-		task.Outputs = append(task.Outputs, "!"+i)
-	}
-
-	if len(c.TaskDependencies) > 0 {
-		task.DependsOn = append(task.DependsOn, c.TaskDependencies...)
-	}
-
-	for _, i := range c.TopologicalDependencies {
-		task.DependsOn = append(task.DependsOn, "^"+i)
-	}
-
-	// These _should_ already be sorted when the TaskDefinition struct was unmarshaled,
-	// but we want to ensure they're sorted on the way out also, just in case something
-	// in the middle mutates the items.
-	sort.Strings(task.DependsOn)
-	sort.Strings(task.Outputs)
-	sort.Strings(task.Env)
-	sort.Strings(task.Inputs)
-
-	return json.Marshal(task)
-}
-
-// MarshalJSON serializes ResolvedTaskDefinition struct into json
-// It sets defaults for empty fields. This is used to print out a Run Summary
-func (c *ResolvedTaskDefinition) MarshalJSON() ([]byte, error) {
 	// Initialize with empty arrays, so we get empty arrays serialized into JSON
 	task := rawTaskWithDefaults{
 		Outputs:   []string{},

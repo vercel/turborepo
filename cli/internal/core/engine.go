@@ -414,20 +414,20 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 // getResolvedTaskDefinition returns a "resolved" TaskDefinition composed of one
 // turbo.json in the workspace and following any `extends` keys up. If there is
 // no turbo.json in the workspace, returns the taskDefinition from the root Pipeline.
-func (e *Engine) getResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs.Pipeline, taskName string, taskID string) (*fs.ResolvedTaskDefinition, error) {
+func (e *Engine) getResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs.Pipeline, taskName string, taskID string) (*fs.TaskDefinition, error) {
 	taskDefinitions, err := e.getTaskDefinitionChain(rootPipeline, pkg, taskID, taskName)
 	if err != nil {
 		return nil, err
 	}
 
 	// Start with an empty definition
-	mergedTaskDefinition := &fs.ResolvedTaskDefinition{}
+	mergedTaskDefinition := &fs.TaskDefinition{}
 
 	// For each of the TaskDefinitions we know of, merge them in
 	for _, bookkeepingTaskDef := range taskDefinitions {
 		taskDef := bookkeepingTaskDef.TaskDefinition
 		if bookkeepingTaskDef.HasField("Outputs") {
-			mergedTaskDefinition.Outputs = &taskDef.Outputs
+			mergedTaskDefinition.Outputs = taskDef.Outputs
 		}
 
 		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
@@ -451,14 +451,6 @@ func (e *Engine) getResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 			mergedTaskDefinition.OutputMode = taskDef.OutputMode
 		}
 		mergedTaskDefinition.Persistent = taskDef.Persistent
-	}
-
-	// Set defaults if we had no config for this.
-	if mergedTaskDefinition.Outputs == nil {
-		mergedTaskDefinition.Outputs = &fs.TaskOutputs{
-			Inclusions: []string{},
-			Exclusions: []string{},
-		}
 	}
 
 	return mergedTaskDefinition, nil
