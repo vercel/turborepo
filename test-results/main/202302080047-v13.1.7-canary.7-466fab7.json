@@ -1,0 +1,1254 @@
+{
+  "ref": "45a69f11014b2d39a16b3b4ff1a65ce25801bd75",
+  "nextjsVersion": "Next.js v13.1.7-canary.7",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675815966976,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675816030167,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675815967073,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/404-page-router/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675816465508,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              }
+            ],
+            "endTime": 1675816873643,
+            "message": "  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n",
+            "name": "/work/test/e2e/404-page-router/index.test.ts",
+            "startTime": 1675816465603,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/i18n-support-catchall/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 10,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675817071037,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"en-US\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/i18n-support-catchall/test/index.test.js:47:40)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "i18n Support Root Catch-all dev mode should load the index route correctly SSR",
+                "location": null,
+                "status": "failed",
+                "title": "should load the index route correctly SSR"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#router-locale')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "i18n Support Root Catch-all dev mode should load the index route correctly CSR",
+                "location": null,
+                "status": "failed",
+                "title": "should load the index route correctly CSR"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#to-locale-index')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "i18n Support Root Catch-all dev mode should navigate to other locale index and back",
+                "location": null,
+                "status": "failed",
+                "title": "should navigate to other locale index and back"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#to-locale-another')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "i18n Support Root Catch-all dev mode should navigate to other locale page and back",
+                "location": null,
+                "status": "failed",
+                "title": "should navigate to other locale page and back"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n Support Root Catch-all production mode should output prerendered index routes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should output prerendered index routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n Support Root Catch-all production mode should load the index route correctly SSR",
+                "location": null,
+                "status": "passed",
+                "title": "should load the index route correctly SSR"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n Support Root Catch-all production mode should load the index route correctly CSR",
+                "location": null,
+                "status": "passed",
+                "title": "should load the index route correctly CSR"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n Support Root Catch-all production mode should navigate to other locale index and back",
+                "location": null,
+                "status": "passed",
+                "title": "should navigate to other locale index and back"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n Support Root Catch-all production mode should navigate to other locale page and back",
+                "location": null,
+                "status": "passed",
+                "title": "should navigate to other locale page and back"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n Support Root Catch-all production mode should preload data correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should preload data correctly"
+              }
+            ],
+            "endTime": 1675817186713,
+            "message": "  ● i18n Support Root Catch-all › dev mode › should load the index route correctly SSR\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"en-US\"\n    Received: \"\"\n\n      45 |     const $ = cheerio.load(html)\n      46 |\n    > 47 |     expect($('#router-locale').text()).toBe('en-US')\n         |                                        ^\n      48 |     expect($('#router-default-locale').text()).toBe('en-US')\n      49 |     expect($('#router-pathname').text()).toBe('/[[...slug]]')\n      50 |     expect($('#router-as-path').text()).toBe('/')\n\n      at Object.<anonymous> (integration/i18n-support-catchall/test/index.test.js:47:40)\n\n  ● i18n Support Root Catch-all › dev mode › should load the index route correctly CSR\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#router-locale')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● i18n Support Root Catch-all › dev mode › should navigate to other locale index and back\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#to-locale-index')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● i18n Support Root Catch-all › dev mode › should navigate to other locale page and back\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#to-locale-another')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/i18n-support-catchall/test/index.test.js",
+            "startTime": 1675817071132,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675816035027,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675816190748,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675816035122,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/dynamic/dynamic.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675816213458,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675816265440,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675816213549,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/custom-page-extension/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675816362952,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Custom page extension",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Blog - CPE\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_f54f8f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_ece85a._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__89fa25._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/custom-page-extension/test/index.test.js:20:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Custom page extension dev mode should work with normal page",
+                "location": null,
+                "status": "failed",
+                "title": "should work with normal page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom page extension",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Post - nextjs\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_f54f8f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_ece85a._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__89fa25._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/custom-page-extension/test/index.test.js:25:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Custom page extension dev mode should work dynamic page",
+                "location": null,
+                "status": "failed",
+                "title": "should work dynamic page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom page extension",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom page extension production mode should work with normal page",
+                "location": null,
+                "status": "passed",
+                "title": "should work with normal page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom page extension",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom page extension production mode should work dynamic page",
+                "location": null,
+                "status": "passed",
+                "title": "should work dynamic page"
+              }
+            ],
+            "endTime": 1675816372749,
+            "message": "  ● Custom page extension › dev mode › should work with normal page\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Blog - CPE\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_f54f8f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_ece85a._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__89fa25._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      18 |   it('should work with normal page', async () => {\n      19 |     const html = await renderViaHTTP(appPort, '/blog')\n    > 20 |     expect(html).toContain('Blog - CPE')\n         |                  ^\n      21 |   })\n      22 |\n      23 |   it('should work dynamic page', async () => {\n\n      at Object.<anonymous> (integration/custom-page-extension/test/index.test.js:20:18)\n\n  ● Custom page extension › dev mode › should work dynamic page\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Post - nextjs\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_f54f8f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_ece85a._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__89fa25._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      23 |   it('should work dynamic page', async () => {\n      24 |     const html = await renderViaHTTP(appPort, '/blog/nextjs')\n    > 25 |     expect(html).toContain('Post - nextjs')\n         |                  ^\n      26 |   })\n      27 | }\n      28 |\n\n      at Object.<anonymous> (integration/custom-page-extension/test/index.test.js:25:18)\n",
+            "name": "/work/test/integration/custom-page-extension/test/index.test.js",
+            "startTime": 1675816363047,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675815938594,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675816001566,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675815938706,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/404-page-router/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675816438710,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              }
+            ],
+            "endTime": 1675816847792,
+            "message": "  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n",
+            "name": "/work/test/e2e/404-page-router/index.test.ts",
+            "startTime": 1675816438805,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/i18n-support-catchall/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 10,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675817045180,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"en-US\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/i18n-support-catchall/test/index.test.js:47:40)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "i18n Support Root Catch-all dev mode should load the index route correctly SSR",
+                "location": null,
+                "status": "failed",
+                "title": "should load the index route correctly SSR"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#router-locale')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "i18n Support Root Catch-all dev mode should load the index route correctly CSR",
+                "location": null,
+                "status": "failed",
+                "title": "should load the index route correctly CSR"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#to-locale-index')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "i18n Support Root Catch-all dev mode should navigate to other locale index and back",
+                "location": null,
+                "status": "failed",
+                "title": "should navigate to other locale index and back"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#to-locale-another')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "i18n Support Root Catch-all dev mode should navigate to other locale page and back",
+                "location": null,
+                "status": "failed",
+                "title": "should navigate to other locale page and back"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n Support Root Catch-all production mode should output prerendered index routes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should output prerendered index routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n Support Root Catch-all production mode should load the index route correctly SSR",
+                "location": null,
+                "status": "passed",
+                "title": "should load the index route correctly SSR"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n Support Root Catch-all production mode should load the index route correctly CSR",
+                "location": null,
+                "status": "passed",
+                "title": "should load the index route correctly CSR"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n Support Root Catch-all production mode should navigate to other locale index and back",
+                "location": null,
+                "status": "passed",
+                "title": "should navigate to other locale index and back"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n Support Root Catch-all production mode should navigate to other locale page and back",
+                "location": null,
+                "status": "passed",
+                "title": "should navigate to other locale page and back"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n Support Root Catch-all",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n Support Root Catch-all production mode should preload data correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should preload data correctly"
+              }
+            ],
+            "endTime": 1675817160809,
+            "message": "  ● i18n Support Root Catch-all › dev mode › should load the index route correctly SSR\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"en-US\"\n    Received: \"\"\n\n      45 |     const $ = cheerio.load(html)\n      46 |\n    > 47 |     expect($('#router-locale').text()).toBe('en-US')\n         |                                        ^\n      48 |     expect($('#router-default-locale').text()).toBe('en-US')\n      49 |     expect($('#router-pathname').text()).toBe('/[[...slug]]')\n      50 |     expect($('#router-as-path').text()).toBe('/')\n\n      at Object.<anonymous> (integration/i18n-support-catchall/test/index.test.js:47:40)\n\n  ● i18n Support Root Catch-all › dev mode › should load the index route correctly CSR\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#router-locale')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● i18n Support Root Catch-all › dev mode › should navigate to other locale index and back\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#to-locale-index')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● i18n Support Root Catch-all › dev mode › should navigate to other locale page and back\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#to-locale-another')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/i18n-support-catchall/test/index.test.js",
+            "startTime": 1675817045273,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675816123750,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675816278211,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675816123841,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675816302914,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app dir - global error"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/e2e/app-dir/global-error/global-error.test.ts:18:48)"
+                ],
+                "fullName": "app dir - global error should trigger error component when an error happens during rendering",
+                "location": null,
+                "status": "failed",
+                "title": "should trigger error component when an error happens during rendering"
+              }
+            ],
+            "endTime": 1675816369619,
+            "message": "  ● app dir - global error › should trigger error component when an error happens during rendering\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      16 |\n      17 |       if (isNextDev) {\n    > 18 |         expect(await hasRedbox(browser, true)).toBe(true)\n         |                                                ^\n      19 |         expect(await getRedboxHeader(browser)).toMatch(/Error: Client error/)\n      20 |       } else {\n      21 |         await browser\n\n      at Object.<anonymous> (e2e/app-dir/global-error/global-error.test.ts:18:48)\n",
+            "name": "/work/test/e2e/app-dir/global-error/global-error.test.ts",
+            "startTime": 1675816303026,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/custom-page-extension/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675816456907,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Custom page extension",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Blog - CPE\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_f54f8f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_ece85a._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__89fa25._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/custom-page-extension/test/index.test.js:20:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Custom page extension dev mode should work with normal page",
+                "location": null,
+                "status": "failed",
+                "title": "should work with normal page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom page extension",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Post - nextjs\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_f54f8f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_ece85a._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__89fa25._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/custom-page-extension/test/index.test.js:25:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Custom page extension dev mode should work dynamic page",
+                "location": null,
+                "status": "failed",
+                "title": "should work dynamic page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom page extension",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom page extension production mode should work with normal page",
+                "location": null,
+                "status": "passed",
+                "title": "should work with normal page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom page extension",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom page extension production mode should work dynamic page",
+                "location": null,
+                "status": "passed",
+                "title": "should work dynamic page"
+              }
+            ],
+            "endTime": 1675816466812,
+            "message": "  ● Custom page extension › dev mode › should work with normal page\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Blog - CPE\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_f54f8f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_ece85a._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__89fa25._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      18 |   it('should work with normal page', async () => {\n      19 |     const html = await renderViaHTTP(appPort, '/blog')\n    > 20 |     expect(html).toContain('Blog - CPE')\n         |                  ^\n      21 |   })\n      22 |\n      23 |   it('should work dynamic page', async () => {\n\n      at Object.<anonymous> (integration/custom-page-extension/test/index.test.js:20:18)\n\n  ● Custom page extension › dev mode › should work dynamic page\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Post - nextjs\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_f54f8f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_ece85a._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__89fa25._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      23 |   it('should work dynamic page', async () => {\n      24 |     const html = await renderViaHTTP(appPort, '/blog/nextjs')\n    > 25 |     expect(html).toContain('Post - nextjs')\n         |                  ^\n      26 |   })\n      27 | }\n      28 |\n\n      at Object.<anonymous> (integration/custom-page-extension/test/index.test.js:25:18)\n",
+            "name": "/work/test/integration/custom-page-extension/test/index.test.js",
+            "startTime": 1675816457013,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
