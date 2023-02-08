@@ -114,23 +114,9 @@ impl APIClient {
 
                 request_builder.send()
             })
-            .await;
+            .await?;
 
-        match response {
-            Ok(response) => {
-                let user_response = response.json().await?;
-                Ok(user_response)
-            }
-            Err(error) => {
-                if let Some(error) = error.downcast_ref::<reqwest::Error>() {
-                    if error.status() == Some(StatusCode::NOT_FOUND) {
-                        return Err(anyhow!("404 - Not found"));
-                    }
-                }
-
-                Err(error)
-            }
-        }
+        Ok(response.json().await?)
     }
 
     pub async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
@@ -145,23 +131,9 @@ impl APIClient {
 
                 request_builder.send()
             })
-            .await;
+            .await?;
 
-        match response {
-            Ok(response) => {
-                let teams_response = response.json().await?;
-                Ok(teams_response)
-            }
-            Err(error) => {
-                if let Some(error) = error.downcast_ref::<reqwest::Error>() {
-                    if error.status() == Some(StatusCode::NOT_FOUND) {
-                        return Err(anyhow!("404 - Not found"));
-                    }
-                }
-
-                Err(error)
-            }
-        }
+        Ok(response.json().await?)
     }
 
     pub async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
