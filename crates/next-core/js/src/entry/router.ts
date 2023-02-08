@@ -1,7 +1,8 @@
 import type { Ipc } from "@vercel/turbopack-next/ipc/index";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { ClientRequest, IncomingMessage, ServerResponse } from "node:http";
 import { Buffer } from "node:buffer";
 import { createServer, makeRequest } from "@vercel/turbopack-next/ipc/server";
+import { REWRITE_NOT_FOUND } from "@vercel/turbopack-next/internal/not-found";
 import { makeResolver } from "next/dist/server/router.js";
 import loadConfig from "next/dist/server/config";
 import { PHASE_DEVELOPMENT_SERVER } from "next/dist/shared/lib/constants";
@@ -16,10 +17,12 @@ type RouterRequest = {
   rawQuery: string;
 };
 
+// Keep in sync with packages/next/src/server/lib/route-resolver.ts
 type RouteResult =
   | {
       type: "rewrite";
       url: string;
+      // TODO(alexkirsz) This is Record<string, undefined | number | string | string[]> on the Next.js side
       headers: Record<string, string>;
     }
   | {
@@ -46,12 +49,12 @@ type MessageData =
 
 type RewriteResponse = {
   url: string;
-  headers: string[];
+  headers: Array<[string, string]>;
 };
 
 type MiddlewareHeadersResponse = {
   statusCode: number;
-  headers: string[];
+  headers: Array<[string, string]>;
 };
 
 let resolveRouteMemo: Promise<
@@ -149,19 +152,21 @@ async function handleClientResponse(
           type: "rewrite",
           data: {
             url: data.url,
-            headers: Object.entries(data.headers).flat(),
+            headers: Object.entries(data.headers),
           },
         };
       case "none":
         return {
           type: "none",
         };
+      default:
+        throw new Error(`Unexpected route result type: ${buffer}`);
     }
   }
 
   const responseHeaders: MiddlewareHeadersResponse = {
     statusCode: clientResponse.statusCode!,
-    headers: clientResponse.rawHeaders,
+    headers: toPairs(clientResponse.rawHeaders),
   };
 
   // TODO: support streaming middleware
@@ -191,4 +196,26 @@ async function handleClientResponse(
       body: Buffer.concat(buffers).toJSON().data,
     },
   };
+}
+
+/**
+ * Transforms an array of elements into an array of pairs of elements.
+ *
+ * ## Example
+ *
+ * ```ts
+ * toPairs(["a", "b", "c", "d"]) // => [["a", "b"], ["c", "d"]]
+ * ```
+ */
+function toPairs<T>(arr: T[]): Array<[T, T]> {
+  if (arr.length % 2 !== 0) {
+    throw new Error("toPairs: expected an even number of elements");
+  }
+
+  const pairs: Array<[T, T]> = [];
+  for (let i = 0; i < arr.length; i += 2) {
+    pairs.push([arr[i], arr[i + 1]]);
+  }
+
+  return pairs;
 }

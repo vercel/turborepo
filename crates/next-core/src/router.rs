@@ -51,7 +51,7 @@ pub struct RouterRequest {
 #[serde(rename_all = "camelCase")]
 pub struct RewriteResponse {
     pub url: String,
-    pub headers: Vec<String>,
+    pub headers: Vec<(String, String)>,
 }
 
 #[turbo_tasks::value(shared)]
@@ -73,7 +73,7 @@ pub struct FullMiddlewareResponse {
     pub body: Vec<u8>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 enum RouterIncomingMessage {
     Rewrite {

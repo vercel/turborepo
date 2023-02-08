@@ -1,7 +1,8 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use turbopack_dev_server::source::Param;
 
-use crate::{route_matcher::Param, ResponseHeaders, StructuredError};
+use crate::{ResponseHeaders, StructuredError};
 
 pub mod issue;
 pub mod node_api_source;

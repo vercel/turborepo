@@ -9,6 +9,8 @@ import type { ServerResponse } from "node:http";
 import { createServer, makeRequest } from "@vercel/turbopack-next/ipc/server";
 import { Buffer } from "node:buffer";
 
+import { removePathPrefix } from "next/dist/shared/lib/router/utils/remove-path-prefix";
+
 const ipc = IPC as Ipc<IpcIncomingMessage, IpcOutgoingMessage>;
 
 type IpcIncomingMessage =
@@ -105,6 +107,13 @@ export default function startHandler(handler: Handler): void {
   async function createOperation(renderData: RenderData): Promise<Operation> {
     const server = await createServer();
 
+    const basePath = process.env.__NEXT_ROUTER_BASEPATH;
+
+    const path =
+      basePath != null
+        ? removePathPrefix(renderData.path, basePath)
+        : renderData.path;
+
     const {
       clientRequest,
       clientResponsePromise,
@@ -113,7 +122,7 @@ export default function startHandler(handler: Handler): void {
     } = await makeRequest(
       server,
       renderData.method,
-      renderData.path,
+      path,
       renderData.rawQuery,
       renderData.rawHeaders
     );
@@ -127,7 +136,7 @@ export default function startHandler(handler: Handler): void {
         response: serverResponse,
         query: renderData.rawQuery,
         params: renderData.params,
-        path: renderData.path,
+        path,
       }),
     };
   }

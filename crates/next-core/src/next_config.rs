@@ -3,12 +3,12 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use turbo_tasks::{
-    primitives::{BoolVc, StringsVc},
+    primitives::{BoolVc, OptionStringVc, StringVc, StringsVc},
     trace::TraceRawVcs,
     Value,
 };
 use turbo_tasks_env::EnvMapVc;
-use turbo_tasks_fs::json::parse_json_rope_with_source_context;
+use turbo_tasks_fs::{json::parse_json_rope_with_source_context, FileSystemPathVc};
 use turbopack::{
     evaluate_context::node_evaluate_asset_context,
     module_options::{WebpackLoadersOptions, WebpackLoadersOptionsVc},
@@ -16,6 +16,8 @@ use turbopack::{
 use turbopack_core::{
     asset::Asset,
     context::AssetContext,
+    emit_and_bail,
+    issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{
         find_context_file,
@@ -40,6 +42,8 @@ use crate::embed_js::next_asset;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NextConfig {
+    pub base_path: Option<String>,
+    pub asset_prefix: Option<String>,
     pub config_file: Option<String>,
     pub config_file_name: String,
 
@@ -56,8 +60,6 @@ pub struct NextConfig {
     compiler: Option<CompilerConfig>,
     amp: AmpConfig,
     analytics_id: String,
-    asset_prefix: String,
-    base_path: String,
     clean_dist_dir: bool,
     compress: bool,
     dev_indicators: DevIndicatorsConfig,
@@ -446,8 +448,57 @@ pub enum RemoveConsoleConfig {
     Config { exclude: Option<Vec<String>> },
 }
 
+#[turbo_tasks::value(shared)]
+struct NextConfigIssue {
+    pub severity: IssueSeverityVc,
+    pub path: FileSystemPathVc,
+    pub message: StringVc,
+}
+
+#[turbo_tasks::value_impl]
+impl Issue for NextConfigIssue {
+    #[turbo_tasks::function]
+    fn severity(&self) -> IssueSeverityVc {
+        self.severity
+    }
+
+    #[turbo_tasks::function]
+    async fn title(&self) -> Result<StringVc> {
+        Ok(StringVc::cell(
+            "An issue occurred while reading the Next.js configuration".to_string(),
+        ))
+    }
+
+    #[turbo_tasks::function]
+    fn category(&self) -> StringVc {
+        StringVc::cell("next config".to_string())
+    }
+
+    #[turbo_tasks::function]
+    fn context(&self) -> FileSystemPathVc {
+        self.path
+    }
+
+    #[turbo_tasks::function]
+    fn description(&self) -> StringVc {
+        self.message
+    }
+}
+
 #[turbo_tasks::value_impl]
 impl NextConfigVc {
+    /// Returns `basePath` from the Next.js configuration, if any.
+    #[turbo_tasks::function]
+    pub async fn base_path(self) -> Result<OptionStringVc> {
+        Ok(OptionStringVc::cell(self.await?.base_path.clone()))
+    }
+
+    /// Returns `assetPrefix` from the Next.js configuration, if any.
+    #[turbo_tasks::function]
+    pub async fn asset_prefix(self) -> Result<OptionStringVc> {
+        Ok(OptionStringVc::cell(self.await?.asset_prefix.clone()))
+    }
+
     #[turbo_tasks::function]
     pub async fn server_component_externals(self) -> Result<StringsVc> {
         Ok(StringsVc::cell(
@@ -590,13 +641,51 @@ pub async fn load_next_config(execution_context: ExecutionContextVc) -> Result<N
     match &*config_value {
         JavaScriptValue::Value(val) => {
             let next_config: NextConfig = parse_json_rope_with_source_context(val)?;
+
+            if let Some(asset) = config_asset {
+                // TODO(alexkirsz) Does it still make sense to validate next.config.js locally?
+                validate_next_config(&next_config, asset.path()).await?;
+            }
+
             let next_config = next_config.cell();
 
             Ok(next_config)
         }
         JavaScriptValue::Error => Ok(NextConfig::default().cell()),
         JavaScriptValue::Stream(_) => {
-            unimplemented!("Stream not supported now");
+            unimplemented!("Stream not supported for now");
         }
     }
+}
+
+/// Validates the Next.js configuration.
+async fn validate_next_config(next_config: &NextConfig, path: FileSystemPathVc) -> Result<()> {
+    if let Some(base_path) = next_config.base_path.as_deref() {
+        if !base_path.is_empty() {
+            if !base_path.starts_with('/') {
+                emit_and_bail!(NextConfigIssue {
+                    severity: IssueSeverityVc::cell(IssueSeverity::Fatal),
+                    path,
+                    message: StringVc::cell(format!(
+                        "Specified basePath has to start with a /, found {}",
+                        base_path
+                    )),
+                }
+                .cell());
+            }
+
+            if base_path.ends_with('/') {
+                emit_and_bail!(NextConfigIssue {
+                    severity: IssueSeverityVc::cell(IssueSeverity::Fatal),
+                    path,
+                    message: StringVc::cell(format!(
+                        "Specified basePath has to start with a /, found {}",
+                        base_path
+                    )),
+                }
+                .cell());
+            }
+        }
+    }
+    Ok(())
 }

@@ -21,6 +21,31 @@ pub enum HeaderValue {
     MultiBytes(Vec<Vec<u8>>),
 }
 
+impl<T> PartialEq<T> for HeaderValue
+where
+    T: AsRef<str> + ?Sized,
+{
+    fn eq(&self, other: &T) -> bool {
+        match self {
+            HeaderValue::SingleString(s) => s == other.as_ref(),
+            HeaderValue::SingleBytes(b) => b == other.as_ref().as_bytes(),
+            HeaderValue::MultiStrings(_s) => false,
+            HeaderValue::MultiBytes(_b) => false,
+        }
+    }
+}
+
+impl HeaderValue {
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            HeaderValue::SingleString(s) => Some(s),
+            HeaderValue::SingleBytes(b) => std::str::from_utf8(b).ok(),
+            HeaderValue::MultiStrings(_s) => None,
+            HeaderValue::MultiBytes(_b) => None,
+        }
+    }
+}
+
 impl PartialOrd for Headers {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))

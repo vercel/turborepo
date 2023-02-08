@@ -7,7 +7,7 @@ use turbopack_core::{
 use turbopack_dev_server::source::{
     ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
     ContentSourceDataVary, ContentSourceResult, ContentSourceResultVc, ContentSourceVc,
-    ContentSourcesVc, GetContentSourceContent, NeededData,
+    ContentSourcesVc, GetContentSourceContent, NeededData, ParamsVc,
 };
 use url::Url;
 
@@ -77,7 +77,9 @@ impl ContentSource for NextSourceMapTraceContentSource {
         let result = this.asset_source.get(path, Default::default()).await?;
         let content = match &*result {
             ContentSourceResult::Result { get_content, .. } => {
-                get_content.get(Default::default()).await?
+                get_content
+                    .get(ParamsVc::empty(), Default::default())
+                    .await?
             }
             _ => return Ok(ContentSourceResultVc::not_found()),
         };

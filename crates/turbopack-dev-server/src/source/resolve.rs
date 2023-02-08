@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{bail, Result};
-use hyper::Uri;
+use hyper::{header::HeaderName, Uri};
 use turbo_tasks::{TransientInstance, Value};
 use turbopack_core::issue::IssueReporterVc;
 
@@ -61,10 +61,14 @@ pub async fn resolve_source_request(
                 current_asset_path = needed.path.clone();
                 data = request_to_data(&request_overwrites, &needed.vary).await?;
             }
-            ContentSourceResult::Result { get_content, .. } => {
+            ContentSourceResult::Result {
+                get_content,
+                params,
+                ..
+            } => {
                 let content_vary = get_content.vary().await?;
                 let content_data = request_to_data(&request_overwrites, &content_vary).await?;
-                let content = get_content.get(Value::new(content_data));
+                let content = get_content.get(*params, Value::new(content_data));
                 match &*content.await? {
                     ContentSourceContent::Rewrite(rewrite) => {
                         let rewrite = rewrite.await?;
@@ -79,9 +83,17 @@ pub async fn resolve_source_request(
 
                         current_source = new_source;
                         request_overwrites.uri = new_uri;
+                        if let Some(headers) = &rewrite.headers {
+                            for (name, value) in headers {
+                                request_overwrites.headers.append(
+                                    HeaderName::try_from(name.clone())?,
+                                    hyper::header::HeaderValue::try_from(value.as_str())?,
+                                );
+                            }
+                        }
                         current_asset_path = new_asset_path;
                         data = ContentSourceData::default();
-                    } // _ => ,
+                    }
                     ContentSourceContent::NotFound => {
                         break Ok(ResolveSourceRequestResult::NotFound.cell())
                     }
