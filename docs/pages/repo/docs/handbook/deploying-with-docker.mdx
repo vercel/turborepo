@@ -87,14 +87,17 @@ First, we want to copy over only what we need to install the packages. When runn
 ```txt
 out
 ├── json
-│   └── apps
-│       └── docs
-│           └── package.json
+│   ├── apps
+│   │   └── docs
+│   │       └── package.json
+│   └── package.json
 ├── full
-│   └── apps
-│       └── docs
-│           ├── server.js
-│           └── package.json
+│   ├── apps
+│   │   └── docs
+│   │       ├── server.js
+│   │       └── package.json
+│   ├── package.json
+│   └── turbo.json
 └── package-lock.json
 ```
 
@@ -134,7 +137,6 @@ RUN yarn install
 
 # Build the project
 COPY --from=builder /app/out/full/ .
-COPY turbo.json turbo.json
 RUN yarn turbo run build --filter=web...
 
 FROM node:alpine AS runner

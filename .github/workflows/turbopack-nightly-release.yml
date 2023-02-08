@@ -1,0 +1,42 @@
+name: Turobpack Nightly Release
+
+on:
+  schedule:
+    - cron: "15 8 * * *" # Run every day at 00:15 PST
+  workflow_dispatch:
+
+jobs:
+  turbopack_nightly:
+    name: Cut nightly Turbopack release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout latest commit that passes CI
+        uses: talentpair/last-green-commit-action@d95cfa836b22ef047dd0a8ddb1e6d9567982d702
+        id: green_commit
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag nightly
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          commit_sha: ${{ steps.green_commit.outputs.result }}
+          tag_prefix: "turbopack-"
+          # Override the default conventional commit messages
+          # so that we always generate patch releases.
+          # This would be easier if we could filter Turbopack
+          # commits from Turborepo, but that'd require a custom
+          # action.
+          custom_release_rules: ""
+          # Ensure we generate prerelease versions, not stables.
+          release_branches: ""
+          pre_release_branches: "main"
+          append_to_pre_release_tag: "nightly"
+
+      - name: Create GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.tag_version.outputs.new_tag }}
+          name: Turbopack Release ${{ steps.tag_version.outputs.new_tag }}
+          omitBody: true
