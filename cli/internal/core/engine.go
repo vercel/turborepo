@@ -427,10 +427,7 @@ func (e *Engine) getResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 	for _, bookkeepingTaskDef := range taskDefinitions {
 		taskDef := bookkeepingTaskDef.TaskDefinition
 		if bookkeepingTaskDef.HasField("Outputs") {
-			mergedTaskDefinition.Outputs = &fs.TaskOutputs{
-				Inclusions: taskDef.Outputs.Inclusions,
-				Exclusions: taskDef.Outputs.Exclusions,
-			}
+			mergedTaskDefinition.Outputs = &taskDef.Outputs
 		}
 
 		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
