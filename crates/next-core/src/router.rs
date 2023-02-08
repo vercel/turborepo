@@ -1,20 +1,26 @@
+use std::collections::HashMap;
+
 use anyhow::{bail, Result};
 use serde::Deserialize;
 use turbo_tasks::{
     primitives::{JsonValueVc, StringsVc},
     Value,
 };
-use turbo_tasks_fs::{json::parse_json_rope_with_source_context, to_sys_path, FileSystemPathVc};
+use turbo_tasks_fs::{
+    json::parse_json_rope_with_source_context, to_sys_path, File, FileSystemPathVc,
+};
 use turbopack::evaluate_context::node_evaluate_asset_context;
 use turbopack_core::{
     asset::AssetVc,
     context::{AssetContext, AssetContextVc},
     resolve::{find_context_file, FindContextFileResult},
     source_asset::SourceAssetVc,
+    virtual_asset::VirtualAssetVc,
 };
 use turbopack_ecmascript::{
-    chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
-    EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
+    chunk::{EcmascriptChunkPlaceableVc, EcmascriptChunkPlaceablesVc},
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
+    EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 use turbopack_node::{
     evaluate::{evaluate, JavaScriptValue},
@@ -129,54 +135,73 @@ impl From<RouterIncomingMessage> for RouterResult {
 }
 
 #[turbo_tasks::function]
-async fn extra_config(
+async fn get_config(
     context: AssetContextVc,
     project_path: FileSystemPathVc,
     configs: StringsVc,
-) -> Result<EcmascriptChunkPlaceablesVc> {
+) -> Result<EcmascriptChunkPlaceableVc> {
     let find_config_result = find_context_file(project_path, configs);
     let config_asset = match &*find_config_result.await? {
         FindContextFileResult::Found(config_path, _) => Some(SourceAssetVc::new(*config_path)),
         FindContextFileResult::NotFound(_) => None,
     };
-    let Some(config_asset) = config_asset else {
-        return Ok(EcmascriptChunkPlaceablesVc::empty());
+    let config_asset: AssetVc = match config_asset {
+        Some(c) => c.into(),
+        None => {
+            let configs = configs.await?;
+            let Some(config_path) = configs.first() else {
+                bail!("no config path provided");
+            };
+            VirtualAssetVc::new(project_path.join(config_path), File::from("").into()).into()
+        }
     };
 
-    let config_chunk = EcmascriptModuleAssetVc::new(
-        config_asset.into(),
+    Ok(EcmascriptModuleAssetVc::new(
+        config_asset,
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
         context.compile_time_info(),
     )
-    .as_ecmascript_chunk_placeable();
-    Ok(EcmascriptChunkPlaceablesVc::cell(vec![config_chunk]))
+    .into())
 }
 
 #[turbo_tasks::function]
-async fn extra_configs(
+fn watch_files_hack(
+    context: AssetContextVc,
+    project_path: FileSystemPathVc,
+) -> EcmascriptChunkPlaceablesVc {
+    let next_config = get_config(context, project_path, next_configs());
+    EcmascriptChunkPlaceablesVc::cell(vec![next_config])
+}
+
+#[turbo_tasks::function]
+async fn config_assets(
     context: AssetContextVc,
     project_path: FileSystemPathVc,
     page_extensions: StringsVc,
-) -> Result<EcmascriptChunkPlaceablesVc> {
-    let next_config = extra_config(context, project_path, next_configs()).await?;
-    let middleware_config =
-        extra_config(context, project_path, middleware_files(page_extensions)).await?;
+) -> Result<InnerAssetsVc> {
+    let mut inner = HashMap::new();
 
-    let mut concat = next_config.clone_value();
-    concat.extend(&*middleware_config);
-    Ok(EcmascriptChunkPlaceablesVc::cell(concat))
+    let middleware_config = get_config(context, project_path, middleware_files(page_extensions));
+    inner.insert("MIDDLEWARE_CONFIG".to_string(), middleware_config.into());
+
+    Ok(InnerAssetsVc::cell(inner))
 }
 
 #[turbo_tasks::function]
-fn route_executor(context: AssetContextVc, project_path: FileSystemPathVc) -> AssetVc {
-    EcmascriptModuleAssetVc::new(
+fn route_executor(
+    context: AssetContextVc,
+    project_path: FileSystemPathVc,
+    configs: InnerAssetsVc,
+) -> AssetVc {
+    EcmascriptModuleAssetVc::new_with_inner_assets(
         next_asset(project_path.join("router.js"), "entry/router.ts"),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript]),
         context.compile_time_info(),
+        configs,
     )
     .into()
 }
@@ -193,9 +218,12 @@ pub async fn route(
     } = *execution_context.await?;
     let project_path = wrap_with_next_js_fs(project_root);
     let context = node_evaluate_asset_context(Some(get_next_build_import_map(project_path)));
-    let router_asset = route_executor(context, project_path);
-    // TODO this is a hack to get these files watched.
-    let extra_configs = extra_configs(context, project_path, next_config.page_extensions());
+
+    let configs = config_assets(context, project_path, next_config.page_extensions());
+    let router_asset = route_executor(context, project_path, configs);
+
+    // TODO this is a hack to get this files watched.
+    let next_config = watch_files_hack(context, project_path);
 
     let request = serde_json::value::to_value(&*request.await?)?;
     let Some(dir) = to_sys_path(project_root).await? else {
@@ -208,7 +236,7 @@ pub async fn route(
         project_root,
         context,
         intermediate_output_path.join("router"),
-        Some(extra_configs),
+        Some(next_config),
         vec![
             JsonValueVc::cell(request),
             JsonValueVc::cell(dir.to_string_lossy().into()),

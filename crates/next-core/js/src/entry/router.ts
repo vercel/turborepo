@@ -7,6 +7,7 @@ import loadConfig from "next/dist/server/config";
 import { PHASE_DEVELOPMENT_SERVER } from "next/dist/shared/lib/constants";
 
 import "next/dist/server/node-polyfill-fetch.js";
+import * as middleware from "MIDDLEWARE_CONFIG";
 
 type RouterRequest = {
   method: string;
@@ -71,7 +72,7 @@ async function getResolveRoute(
     true
   );
 
-  return await makeResolver(dir, nextConfig);
+  return await makeResolver(dir, nextConfig, middleware);
 }
 
 export default async function route(
