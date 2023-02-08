@@ -879,14 +879,10 @@ macro_rules! tuple_impls {
             fn try_from(value: &'a TaskInput) -> Result<Self, Self::Error> {
                 match value {
                     TaskInput::List(value) => {
-                        let mut i = 0;
+                        let mut iter = value.iter();
                         $(
-                            let $name = value.get(i).ok_or_else(|| anyhow!("missing tuple element"))?;
+                            let $name = iter.next().ok_or_else(|| anyhow!("missing tuple element"))?;
                             let $name = FromTaskInput::try_from($name)?;
-                            #[allow(unused_assignments)]
-                            {
-                                i += 1;
-                            }
                         )+
                         Ok(($($name,)+))
                     },
