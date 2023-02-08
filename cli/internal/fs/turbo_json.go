@@ -358,24 +358,22 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	c.TopologicalDependencies = []string{} // TODO @mehulkar: this should be a set
 	c.TaskDependencies = []string{}        // TODO @mehulkar: this should be a set
 
-	if task.DependsOn != nil {
-		for _, dependency := range task.DependsOn {
-			if strings.HasPrefix(dependency, envPipelineDelimiter) {
-				log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
-				envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
-			} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
-				// Assign bookkeeping, but only once, since we are in a loop
-				if _, ok := btd.fieldsMeta["TopologicalDependencies"]; !ok {
-					btd.fieldsMeta["TopologicalDependencies"] = true
-				}
-				c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
-			} else {
-				// Assign bookkeeping, but only once, since we are in a loop
-				if _, ok := btd.fieldsMeta["TaskDependencies"]; !ok {
-					btd.fieldsMeta["TaskDependencies"] = true
-				}
-				c.TaskDependencies = append(c.TaskDependencies, dependency)
+	for _, dependency := range task.DependsOn {
+		if strings.HasPrefix(dependency, envPipelineDelimiter) {
+			log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
+			envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
+		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
+			// Assign bookkeeping, but only once, since we are in a loop
+			if _, ok := btd.fieldsMeta["TopologicalDependencies"]; !ok {
+				btd.fieldsMeta["TopologicalDependencies"] = true
 			}
+			c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
+		} else {
+			// Assign bookkeeping, but only once, since we are in a loop
+			if _, ok := btd.fieldsMeta["TaskDependencies"]; !ok {
+				btd.fieldsMeta["TaskDependencies"] = true
+			}
+			c.TaskDependencies = append(c.TaskDependencies, dependency)
 		}
 	}
 
