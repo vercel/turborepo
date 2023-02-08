@@ -214,7 +214,8 @@ async fn run_login_one_shot_server(
         .await?)
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Default, Clone, Deserialize)]
+#[allow(dead_code)]
 struct SsoPayload {
     login_error: Option<String>,
     sso_email: Option<String>,
@@ -299,13 +300,18 @@ mod test {
 
     use anyhow::Result;
     use axum::{routing::get, Json, Router};
+    use reqwest::Url;
     use serde::Deserialize;
     use tempfile::NamedTempFile;
     use tokio::sync::OnceCell;
 
     use crate::{
         client::{CachingStatus, CachingStatusResponse, User, UserResponse, VerificationResponse},
-        commands::{login, login::EXPECTED_TOKEN_TEST, CommandBase},
+        commands::{
+            login,
+            login::{get_token_and_redirect, SsoPayload, EXPECTED_TOKEN_TEST},
+            CommandBase,
+        },
         config::{RepoConfigLoader, UserConfigLoader},
         ui::UI,
         Args,
@@ -383,7 +389,7 @@ mod test {
     }
 
     const EXPECTED_SSO_TEAM_SLUG: &str = "vercel";
-    const EXPECTED_SSO_TEAM_ID: &str = "vercel";
+    const EXPECTED_SSO_TEAM_ID: &str = "team_0";
 
     #[tokio::test]
     async fn test_sso_login() {
@@ -423,6 +429,10 @@ mod test {
         assert_eq!(
             base.user_config().unwrap().token().unwrap(),
             EXPECTED_TOKEN_TEST
+        );
+        assert_eq!(
+            base.repo_config().unwrap().team_id().unwrap(),
+            EXPECTED_SSO_TEAM_ID
         );
     }
 
@@ -466,5 +476,67 @@ mod test {
         Ok(axum_server::bind(addr)
             .serve(app.into_make_service())
             .await?)
+    }
+
+    #[test]
+    fn test_get_token_and_redirect() {
+        assert_eq!(
+            get_token_and_redirect(SsoPayload::default()).unwrap(),
+            (
+                None,
+                Url::parse("https://vercel.com/notifications/cli-login-success").unwrap()
+            )
+        );
+
+        assert_eq!(
+            get_token_and_redirect(SsoPayload {
+                login_error: Some("error".to_string()),
+                ..SsoPayload::default()
+            })
+            .unwrap(),
+            (
+                None,
+                Url::parse("https://vercel.com/notifications/cli-login-failed?loginError=error")
+                    .unwrap()
+            )
+        );
+
+        assert_eq!(
+            get_token_and_redirect(SsoPayload {
+                sso_email: Some("email".to_string()),
+                ..SsoPayload::default()
+            })
+            .unwrap(),
+            (
+                None,
+                Url::parse("https://vercel.com/notifications/cli-login-incomplete?ssoEmail=email")
+                    .unwrap()
+            )
+        );
+
+        assert_eq!(
+            get_token_and_redirect(SsoPayload {
+                sso_email: Some("email".to_string()),
+                team_name: Some("team".to_string()),
+                ..SsoPayload::default()
+            }).unwrap(),
+            (
+                None,
+                Url::parse("https://vercel.com/notifications/cli-login-incomplete?ssoEmail=email&teamName=team")
+                    .unwrap()
+            )
+        );
+
+        assert_eq!(
+            get_token_and_redirect(SsoPayload {
+                token: Some("token".to_string()),
+                ..SsoPayload::default()
+            })
+            .unwrap(),
+            (
+                Some("token".to_string()),
+                Url::parse("https://vercel.com/notifications/cli-login-success").unwrap()
+            )
+        );
     }
 }
