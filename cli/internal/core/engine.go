@@ -7,7 +7,6 @@ import (
 
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
-	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 
 	"github.com/pyr-sh/dag"
@@ -484,7 +483,7 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 	taskIDPackage, _ := util.GetPackageTaskFromId(taskID)
 	if taskIDPackage != util.RootPkgName && taskIDPackage != ROOT_NODE_NAME {
 		// Look up task definition in turbo.json in the workspace directory
-		workspaceConfigPath := turbopath.AbsoluteSystemPath(pkg.Dir).UntypedJoin("turbo.json")
+		workspaceConfigPath := pkg.Dir.Join("turbo.json").RestoreAnchor(e.completeGraph.RepoRoot)
 
 		// If there is an error, we can ignore it, since turbo.json config is not required in the workspace.
 		if workspaceTurboJSON, err := fs.ReadTurboConfig(workspaceConfigPath); err == nil {
