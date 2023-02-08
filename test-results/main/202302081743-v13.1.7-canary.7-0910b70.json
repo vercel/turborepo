@@ -1,0 +1,1206 @@
+{
+  "ref": "d8172aad369fe7944881f4d88a174bb907364bb2",
+  "nextjsVersion": "Next.js v13.1.7-canary.7",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675877760354,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675877824877,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675877760456,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 9,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 12,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675877876567,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from file.txt\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_939dff._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c0cf9_next_20f321._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at /work/test/e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get public file by skipping locale in rewrite, locale: ",
+                "location": null,
+                "status": "failed",
+                "title": "get public file by skipping locale in rewrite, locale: "
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from file.txt\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_939dff._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c0cf9_next_20f321._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at /work/test/e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get public file by skipping locale in rewrite, locale: /en",
+                "location": null,
+                "status": "failed",
+                "title": "get public file by skipping locale in rewrite, locale: /en"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from file.txt\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_939dff._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c0cf9_next_20f321._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at /work/test/e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get public file by skipping locale in rewrite, locale: /sv",
+                "location": null,
+                "status": "failed",
+                "title": "get public file by skipping locale in rewrite, locale: /sv"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from file.txt\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_939dff._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c0cf9_next_20f321._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at /work/test/e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get public file by skipping locale in rewrite, locale: /nl",
+                "location": null,
+                "status": "failed",
+                "title": "get public file by skipping locale in rewrite, locale: /nl"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from api\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_939dff._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c0cf9_next_20f321._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at /work/test/e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:69:19\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath call api by skipping locale in rewrite, locale: ",
+                "location": null,
+                "status": "failed",
+                "title": "call api by skipping locale in rewrite, locale: "
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath call api by skipping locale in rewrite, locale: /en",
+                "location": null,
+                "status": "passed",
+                "title": "call api by skipping locale in rewrite, locale: /en"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath call api by skipping locale in rewrite, locale: /sv",
+                "location": null,
+                "status": "passed",
+                "title": "call api by skipping locale in rewrite, locale: /sv"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath call api by skipping locale in rewrite, locale: /nl",
+                "location": null,
+                "status": "passed",
+                "title": "call api by skipping locale in rewrite, locale: /nl"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, scandir '/tmp/next-install-d64ba4af0cf813ef972b424207532934e49990787817724ef81675735dcd59f8/.next/static/chunks'"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get _next/static/ files by skipping locale in rewrite, locale: ",
+                "location": null,
+                "status": "failed",
+                "title": "get _next/static/ files by skipping locale in rewrite, locale: "
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, scandir '/tmp/next-install-d64ba4af0cf813ef972b424207532934e49990787817724ef81675735dcd59f8/.next/static/chunks'"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get _next/static/ files by skipping locale in rewrite, locale: /en",
+                "location": null,
+                "status": "failed",
+                "title": "get _next/static/ files by skipping locale in rewrite, locale: /en"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, scandir '/tmp/next-install-d64ba4af0cf813ef972b424207532934e49990787817724ef81675735dcd59f8/.next/static/chunks'"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get _next/static/ files by skipping locale in rewrite, locale: /sv",
+                "location": null,
+                "status": "failed",
+                "title": "get _next/static/ files by skipping locale in rewrite, locale: /sv"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, scandir '/tmp/next-install-d64ba4af0cf813ef972b424207532934e49990787817724ef81675735dcd59f8/.next/static/chunks'"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get _next/static/ files by skipping locale in rewrite, locale: /nl",
+                "location": null,
+                "status": "failed",
+                "title": "get _next/static/ files by skipping locale in rewrite, locale: /nl"
+              }
+            ],
+            "endTime": 1675877898862,
+            "message": "  ● i18n-ignore-rewrite-source-locale with basepath › get public file by skipping locale in rewrite, locale: \n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from file.txt\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_939dff._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c0cf9_next_20f321._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      56 |         `/basepath${locale}/rewrite-files/file.txt`\n      57 |       )\n    > 58 |       expect(res).toContain('hello from file.txt')\n         |                   ^\n      59 |     }\n      60 |   )\n      61 |\n\n      at e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n\n  ● i18n-ignore-rewrite-source-locale with basepath › get public file by skipping locale in rewrite, locale: /en\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from file.txt\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_939dff._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c0cf9_next_20f321._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      56 |         `/basepath${locale}/rewrite-files/file.txt`\n      57 |       )\n    > 58 |       expect(res).toContain('hello from file.txt')\n         |                   ^\n      59 |     }\n      60 |   )\n      61 |\n\n      at e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n\n  ● i18n-ignore-rewrite-source-locale with basepath › get public file by skipping locale in rewrite, locale: /sv\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from file.txt\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_939dff._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c0cf9_next_20f321._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      56 |         `/basepath${locale}/rewrite-files/file.txt`\n      57 |       )\n    > 58 |       expect(res).toContain('hello from file.txt')\n         |                   ^\n      59 |     }\n      60 |   )\n      61 |\n\n      at e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n\n  ● i18n-ignore-rewrite-source-locale with basepath › get public file by skipping locale in rewrite, locale: /nl\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from file.txt\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_939dff._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c0cf9_next_20f321._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      56 |         `/basepath${locale}/rewrite-files/file.txt`\n      57 |       )\n    > 58 |       expect(res).toContain('hello from file.txt')\n         |                   ^\n      59 |     }\n      60 |   )\n      61 |\n\n      at e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n\n  ● i18n-ignore-rewrite-source-locale with basepath › call api by skipping locale in rewrite, locale: \n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from api\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_939dff._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c0cf9_next_20f321._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      67 |         `/basepath${locale}/rewrite-api/hello`\n      68 |       )\n    > 69 |       expect(res).toContain('hello from api')\n         |                   ^\n      70 |     }\n      71 |   )\n      72 |\n\n      at e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:69:19\n\n  ● i18n-ignore-rewrite-source-locale with basepath › get _next/static/ files by skipping locale in rewrite, locale: \n\n    ENOENT: no such file or directory, scandir '/tmp/next-install-d64ba4af0cf813ef972b424207532934e49990787817724ef81675735dcd59f8/.next/static/chunks'\n\n\n\n  ● i18n-ignore-rewrite-source-locale with basepath › get _next/static/ files by skipping locale in rewrite, locale: /en\n\n    ENOENT: no such file or directory, scandir '/tmp/next-install-d64ba4af0cf813ef972b424207532934e49990787817724ef81675735dcd59f8/.next/static/chunks'\n\n\n\n  ● i18n-ignore-rewrite-source-locale with basepath › get _next/static/ files by skipping locale in rewrite, locale: /sv\n\n    ENOENT: no such file or directory, scandir '/tmp/next-install-d64ba4af0cf813ef972b424207532934e49990787817724ef81675735dcd59f8/.next/static/chunks'\n\n\n\n  ● i18n-ignore-rewrite-source-locale with basepath › get _next/static/ files by skipping locale in rewrite, locale: /nl\n\n    ENOENT: no such file or directory, scandir '/tmp/next-install-d64ba4af0cf813ef972b424207532934e49990787817724ef81675735dcd59f8/.next/static/chunks'\n\n\n",
+            "name": "/work/test/e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts",
+            "startTime": 1675877876666,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/getinitialprops/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 7,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675878005618,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "getInitialProps dev mode should have gip in __NEXT_DATA__",
+                "location": null,
+                "status": "passed",
+                "title": "should have gip in __NEXT_DATA__"
+              },
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "getInitialProps dev mode should not have gip in __NEXT_DATA__ for non-GIP page",
+                "location": null,
+                "status": "passed",
+                "title": "should not have gip in __NEXT_DATA__ for non-GIP page"
+              },
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "getInitialProps dev mode should have correct router.asPath for direct visit dynamic page",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct router.asPath for direct visit dynamic page"
+              },
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/blog/post/1\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/getinitialprops/test/index.test.js:38:34)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "getInitialProps dev mode should have correct router.asPath for direct visit dynamic page rewrite direct",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct router.asPath for direct visit dynamic page rewrite direct"
+              },
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "getInitialProps production mode should have gip in __NEXT_DATA__",
+                "location": null,
+                "status": "passed",
+                "title": "should have gip in __NEXT_DATA__"
+              },
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "getInitialProps production mode should not have gip in __NEXT_DATA__ for non-GIP page",
+                "location": null,
+                "status": "passed",
+                "title": "should not have gip in __NEXT_DATA__ for non-GIP page"
+              },
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "getInitialProps production mode should have correct router.asPath for direct visit dynamic page",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct router.asPath for direct visit dynamic page"
+              },
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "getInitialProps production mode should have correct router.asPath for direct visit dynamic page rewrite direct",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct router.asPath for direct visit dynamic page rewrite direct"
+              }
+            ],
+            "endTime": 1675878018321,
+            "message": "  ● getInitialProps › dev mode › should have correct router.asPath for direct visit dynamic page rewrite direct\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/blog/post/1\"\n    Received: \"\"\n\n      36 |     const html = await renderViaHTTP(appPort, '/blog/post/1')\n      37 |     const $ = cheerio.load(html)\n    > 38 |     expect($('#as-path').text()).toBe('/blog/post/1')\n         |                                  ^\n      39 |   })\n      40 | }\n      41 |\n\n      at Object.<anonymous> (integration/getinitialprops/test/index.test.js:38:34)\n",
+            "name": "/work/test/integration/getinitialprops/test/index.test.js",
+            "startTime": 1675878005715,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675877690752,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675877852093,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675877690860,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675878054459,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675878103893,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675878054558,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675878118890,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675878123883,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675878119038,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675877765308,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675877828923,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675877765429,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 9,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 12,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675877878630,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from file.txt\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_7d5c0c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/31549_next_a8f58c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at /work/test/e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get public file by skipping locale in rewrite, locale: ",
+                "location": null,
+                "status": "failed",
+                "title": "get public file by skipping locale in rewrite, locale: "
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from file.txt\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_7d5c0c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/31549_next_a8f58c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at /work/test/e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get public file by skipping locale in rewrite, locale: /en",
+                "location": null,
+                "status": "failed",
+                "title": "get public file by skipping locale in rewrite, locale: /en"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from file.txt\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_7d5c0c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/31549_next_a8f58c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at /work/test/e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get public file by skipping locale in rewrite, locale: /sv",
+                "location": null,
+                "status": "failed",
+                "title": "get public file by skipping locale in rewrite, locale: /sv"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from file.txt\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_7d5c0c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/31549_next_a8f58c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at /work/test/e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get public file by skipping locale in rewrite, locale: /nl",
+                "location": null,
+                "status": "failed",
+                "title": "get public file by skipping locale in rewrite, locale: /nl"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello from api\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_7d5c0c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/31549_next_a8f58c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at /work/test/e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:69:19\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath call api by skipping locale in rewrite, locale: ",
+                "location": null,
+                "status": "failed",
+                "title": "call api by skipping locale in rewrite, locale: "
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath call api by skipping locale in rewrite, locale: /en",
+                "location": null,
+                "status": "passed",
+                "title": "call api by skipping locale in rewrite, locale: /en"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath call api by skipping locale in rewrite, locale: /sv",
+                "location": null,
+                "status": "passed",
+                "title": "call api by skipping locale in rewrite, locale: /sv"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath call api by skipping locale in rewrite, locale: /nl",
+                "location": null,
+                "status": "passed",
+                "title": "call api by skipping locale in rewrite, locale: /nl"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, scandir '/tmp/next-install-784e5a66cb90d17c2ac2b0d2dd0541eeb62fe1ea5a3571319dc2bb3cfb969652/.next/static/chunks'"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get _next/static/ files by skipping locale in rewrite, locale: ",
+                "location": null,
+                "status": "failed",
+                "title": "get _next/static/ files by skipping locale in rewrite, locale: "
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, scandir '/tmp/next-install-784e5a66cb90d17c2ac2b0d2dd0541eeb62fe1ea5a3571319dc2bb3cfb969652/.next/static/chunks'"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get _next/static/ files by skipping locale in rewrite, locale: /en",
+                "location": null,
+                "status": "failed",
+                "title": "get _next/static/ files by skipping locale in rewrite, locale: /en"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, scandir '/tmp/next-install-784e5a66cb90d17c2ac2b0d2dd0541eeb62fe1ea5a3571319dc2bb3cfb969652/.next/static/chunks'"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get _next/static/ files by skipping locale in rewrite, locale: /sv",
+                "location": null,
+                "status": "failed",
+                "title": "get _next/static/ files by skipping locale in rewrite, locale: /sv"
+              },
+              {
+                "ancestorTitles": [
+                  "i18n-ignore-rewrite-source-locale with basepath"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, scandir '/tmp/next-install-784e5a66cb90d17c2ac2b0d2dd0541eeb62fe1ea5a3571319dc2bb3cfb969652/.next/static/chunks'"
+                ],
+                "fullName": "i18n-ignore-rewrite-source-locale with basepath get _next/static/ files by skipping locale in rewrite, locale: /nl",
+                "location": null,
+                "status": "failed",
+                "title": "get _next/static/ files by skipping locale in rewrite, locale: /nl"
+              }
+            ],
+            "endTime": 1675877900537,
+            "message": "  ● i18n-ignore-rewrite-source-locale with basepath › get public file by skipping locale in rewrite, locale: \n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from file.txt\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_7d5c0c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/31549_next_a8f58c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      56 |         `/basepath${locale}/rewrite-files/file.txt`\n      57 |       )\n    > 58 |       expect(res).toContain('hello from file.txt')\n         |                   ^\n      59 |     }\n      60 |   )\n      61 |\n\n      at e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n\n  ● i18n-ignore-rewrite-source-locale with basepath › get public file by skipping locale in rewrite, locale: /en\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from file.txt\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_7d5c0c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/31549_next_a8f58c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      56 |         `/basepath${locale}/rewrite-files/file.txt`\n      57 |       )\n    > 58 |       expect(res).toContain('hello from file.txt')\n         |                   ^\n      59 |     }\n      60 |   )\n      61 |\n\n      at e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n\n  ● i18n-ignore-rewrite-source-locale with basepath › get public file by skipping locale in rewrite, locale: /sv\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from file.txt\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_7d5c0c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/31549_next_a8f58c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      56 |         `/basepath${locale}/rewrite-files/file.txt`\n      57 |       )\n    > 58 |       expect(res).toContain('hello from file.txt')\n         |                   ^\n      59 |     }\n      60 |   )\n      61 |\n\n      at e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n\n  ● i18n-ignore-rewrite-source-locale with basepath › get public file by skipping locale in rewrite, locale: /nl\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from file.txt\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_7d5c0c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/31549_next_a8f58c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      56 |         `/basepath${locale}/rewrite-files/file.txt`\n      57 |       )\n    > 58 |       expect(res).toContain('hello from file.txt')\n         |                   ^\n      59 |     }\n      60 |   )\n      61 |\n\n      at e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:58:19\n\n  ● i18n-ignore-rewrite-source-locale with basepath › call api by skipping locale in rewrite, locale: \n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello from api\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_7d5c0c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/31549_next_a8f58c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      67 |         `/basepath${locale}/rewrite-api/hello`\n      68 |       )\n    > 69 |       expect(res).toContain('hello from api')\n         |                   ^\n      70 |     }\n      71 |   )\n      72 |\n\n      at e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts:69:19\n\n  ● i18n-ignore-rewrite-source-locale with basepath › get _next/static/ files by skipping locale in rewrite, locale: \n\n    ENOENT: no such file or directory, scandir '/tmp/next-install-784e5a66cb90d17c2ac2b0d2dd0541eeb62fe1ea5a3571319dc2bb3cfb969652/.next/static/chunks'\n\n\n\n  ● i18n-ignore-rewrite-source-locale with basepath › get _next/static/ files by skipping locale in rewrite, locale: /en\n\n    ENOENT: no such file or directory, scandir '/tmp/next-install-784e5a66cb90d17c2ac2b0d2dd0541eeb62fe1ea5a3571319dc2bb3cfb969652/.next/static/chunks'\n\n\n\n  ● i18n-ignore-rewrite-source-locale with basepath › get _next/static/ files by skipping locale in rewrite, locale: /sv\n\n    ENOENT: no such file or directory, scandir '/tmp/next-install-784e5a66cb90d17c2ac2b0d2dd0541eeb62fe1ea5a3571319dc2bb3cfb969652/.next/static/chunks'\n\n\n\n  ● i18n-ignore-rewrite-source-locale with basepath › get _next/static/ files by skipping locale in rewrite, locale: /nl\n\n    ENOENT: no such file or directory, scandir '/tmp/next-install-784e5a66cb90d17c2ac2b0d2dd0541eeb62fe1ea5a3571319dc2bb3cfb969652/.next/static/chunks'\n\n\n",
+            "name": "/work/test/e2e/i18n-ignore-rewrite-source-locale/rewrites-with-basepath.test.ts",
+            "startTime": 1675877878725,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/getinitialprops/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 7,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675878002487,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "getInitialProps dev mode should have gip in __NEXT_DATA__",
+                "location": null,
+                "status": "passed",
+                "title": "should have gip in __NEXT_DATA__"
+              },
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "getInitialProps dev mode should not have gip in __NEXT_DATA__ for non-GIP page",
+                "location": null,
+                "status": "passed",
+                "title": "should not have gip in __NEXT_DATA__ for non-GIP page"
+              },
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "getInitialProps dev mode should have correct router.asPath for direct visit dynamic page",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct router.asPath for direct visit dynamic page"
+              },
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/blog/post/1\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/getinitialprops/test/index.test.js:38:34)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "getInitialProps dev mode should have correct router.asPath for direct visit dynamic page rewrite direct",
+                "location": null,
+                "status": "failed",
+                "title": "should have correct router.asPath for direct visit dynamic page rewrite direct"
+              },
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "getInitialProps production mode should have gip in __NEXT_DATA__",
+                "location": null,
+                "status": "passed",
+                "title": "should have gip in __NEXT_DATA__"
+              },
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "getInitialProps production mode should not have gip in __NEXT_DATA__ for non-GIP page",
+                "location": null,
+                "status": "passed",
+                "title": "should not have gip in __NEXT_DATA__ for non-GIP page"
+              },
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "getInitialProps production mode should have correct router.asPath for direct visit dynamic page",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct router.asPath for direct visit dynamic page"
+              },
+              {
+                "ancestorTitles": [
+                  "getInitialProps",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "getInitialProps production mode should have correct router.asPath for direct visit dynamic page rewrite direct",
+                "location": null,
+                "status": "passed",
+                "title": "should have correct router.asPath for direct visit dynamic page rewrite direct"
+              }
+            ],
+            "endTime": 1675878014874,
+            "message": "  ● getInitialProps › dev mode › should have correct router.asPath for direct visit dynamic page rewrite direct\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/blog/post/1\"\n    Received: \"\"\n\n      36 |     const html = await renderViaHTTP(appPort, '/blog/post/1')\n      37 |     const $ = cheerio.load(html)\n    > 38 |     expect($('#as-path').text()).toBe('/blog/post/1')\n         |                                  ^\n      39 |   })\n      40 | }\n      41 |\n\n      at Object.<anonymous> (integration/getinitialprops/test/index.test.js:38:34)\n",
+            "name": "/work/test/integration/getinitialprops/test/index.test.js",
+            "startTime": 1675878002580,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675877716864,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675877880494,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675877716961,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675878088580,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675878138860,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675878088679,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675878152452,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675878157648,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675878152572,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
