@@ -18,6 +18,7 @@ startHandler(({ request, response, query, params, path }) => {
 
   const mergedQuery = { ...parsedQuery, ...params };
 
+  // This enables `req.cookies` in API routes.
   const req = new NodeNextRequest(request);
   const res = new NodeNextResponse(response);
 
