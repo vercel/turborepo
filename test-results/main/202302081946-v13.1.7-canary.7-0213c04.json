@@ -1,0 +1,1550 @@
+{
+  "ref": "81c93a130b7da2580ef926f3aadd10f93f784228",
+  "nextjsVersion": "Next.js v13.1.7-canary.7",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675884576992,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675884639783,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675884577087,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/404-page-router/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675885076356,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              }
+            ],
+            "endTime": 1675885485187,
+            "message": "  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n",
+            "name": "/work/test/e2e/404-page-router/index.test.ts",
+            "startTime": 1675885076452,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675885501187,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675885506177,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675885501285,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/basic/emotion-swc.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675884497579,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675884659400,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675884497671,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 14,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 5,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 24,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675884759640,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should bypass fetch cache with cache-control: no-cache",
+                "location": null,
+                "status": "passed",
+                "title": "should bypass fetch cache with cache-control: no-cache"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor fetch cache correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should honor fetch cache correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling Should not throw Dynamic Server Usage error when using generateStaticParams with previewData",
+                "location": null,
+                "status": "passed",
+                "title": "Should not throw Dynamic Server Usage error when using generateStaticParams with previewData"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should force SSR correctly for headers usage",
+                "location": null,
+                "status": "passed",
+                "title": "should force SSR correctly for headers usage"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor dynamic = \"force-static\" correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should honor dynamic = \"force-static\" correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor dynamic = \"force-static\" correctly (lazy)",
+                "location": null,
+                "status": "passed",
+                "title": "should honor dynamic = \"force-static\" correctly (lazy)"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 200\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:510:35)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should handle dynamicParams: false correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle dynamicParams: false correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should work with forced dynamic path",
+                "location": null,
+                "status": "passed",
+                "title": "should work with forced dynamic path"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should work with dynamic path no generateStaticParams",
+                "location": null,
+                "status": "passed",
+                "title": "should work with dynamic path no generateStaticParams"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should handle dynamicParams: true correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle dynamicParams: true correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should navigate to static path correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should navigate to static path correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).not.toBe(expected) // Object.is equality\n\nExpected: not \"1675884816764\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:630:30)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when detected automatically with fetch cache option",
+                "location": null,
+                "status": "failed",
+                "title": "should ssr dynamically when detected automatically with fetch cache option"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 200\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:637:26)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should render not found pages correctly and fallback to the default one",
+                "location": null,
+                "status": "failed",
+                "title": "should render not found pages correctly and fallback to the default one"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when detected automatically with fetch revalidate option",
+                "location": null,
+                "status": "pending",
+                "title": "should ssr dynamically when detected automatically with fetch revalidate option"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).not.toBe(expected) // Object.is equality\n\nExpected: not \"1675884817762\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:697:30)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when forced via config",
+                "location": null,
+                "status": "failed",
+                "title": "should ssr dynamically when forced via config"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should bailout to client rendering - without suspense boundary",
+                "location": null,
+                "status": "passed",
+                "title": "should bailout to client rendering - without suspense boundary"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should bailout to client rendering - with suspense boundary",
+                "location": null,
+                "status": "passed",
+                "title": "should bailout to client rendering - with suspense boundary"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should have empty search params on force-static",
+                "location": null,
+                "status": "pending",
+                "title": "should have empty search params on force-static"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should have values from canonical url on rewrite",
+                "location": null,
+                "status": "passed",
+                "title": "should have values from canonical url on rewrite"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should bail out to client rendering during SSG",
+                "location": null,
+                "status": "pending",
+                "title": "should bail out to client rendering during SSG"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should have the correct values",
+                "location": null,
+                "status": "pending",
+                "title": "should have the correct values"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should have values from canonical url on rewrite",
+                "location": null,
+                "status": "pending",
+                "title": "should have values from canonical url on rewrite"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Thank you for testing `appDir` please leave your feedback at https://nextjs.link/app-feedback\"\nReceived string:    \"yarn run v1.22.19\n$ /tmp/next-install-d22796340e87a5b98aff7bdb127dee2546b2b6ca336365d43449489d54077490/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nError: You are using configuration and/or tools that are not yet\nsupported by Next.js v13 with Turbopack:··\n- Unsupported Next.js configuration option(s) (next.config.js)\n  The only configurations options supported are:\n    - configFileName\n    - env\n    - experimental.appDir\n    - experimental.resolveAlias\n    - experimental.serverComponentsExternalPackages\n    - experimental.turbopackLoaders\n    - images\n    - pageExtensions\n    - onDemandEntries\n    - rewrites\n    - redirects\n    - headers\n    - reactStrictMode\n    - swcMinify\n    - transpilePackages\n  To use Turbopack, remove other configuration options.····\nIf you cannot make the changes above, but still want to try out\nNext.js v13 with Turbopack, create the Next.js v13 playground app\nby running the following commands:·\n  pnpm create next-app --example with-turbopack with-turbopack-app\n  cd with-turbopack-app\n  pnpm run dev·········\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback··\nWarning: Unsupported config found; but continuing with custom Turbopack binary.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-d22796340e87a5b98aff7bdb127dee2546b2b6ca336365d43449489d54077490 --is-next-dev-command --root /tmp/next-install-d22796340e87a5b98aff7bdb127dee2546b2b6ca336365d43449489d54077490 --no-open]\n\u001b[32mready\u001b[39m - started server on 0.0.0.0:34423, url: http://localhost:34423\n\u001b[35mevent\u001b[39m - initial compilation 5.055ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 2675ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 294ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 913ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1024ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 2015ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1063ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 486ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 574ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 610ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 101ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 207ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 610ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 682ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 631ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 115ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 110ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 411ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 586ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1130ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 540ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 51ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 169ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 112ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 399ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 99ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 96ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 0.812ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1649ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 173ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 760ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 571ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 432ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 236ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 461ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1.031ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 593ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 434ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 51ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 458ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 71ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 475ms\n\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:846:32)\n    at Promise.then.completed (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/utils.js:391:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/utils.js:316:10)\n    at _callCircusTest (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:218:40)\n    at _runTest (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:155:3)\n    at _runTestsForDescribeBlock (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:66:9)\n    at _runTestsForDescribeBlock (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:60:9)\n    at run (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:25:3)\n    at runAndTransformResultsToJestFormat (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:170:21)"
+                ],
+                "fullName": "app-dir static/dynamic handling should show a message to leave feedback for `appDir`",
+                "location": null,
+                "status": "failed",
+                "title": "should show a message to leave feedback for `appDir`"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should keep querystring on static page",
+                "location": null,
+                "status": "passed",
+                "title": "should keep querystring on static page"
+              }
+            ],
+            "endTime": 1675884863465,
+            "message": "  ● app-dir static/dynamic handling › should handle dynamicParams: false correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 200\n\n      508 |           redirect: 'manual',\n      509 |         })\n    > 510 |         expect(invalidRes.status).toBe(404)\n          |                                   ^\n      511 |         expect(await invalidRes.text()).toContain('page could not be found')\n      512 |       }\n      513 |     })\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:510:35)\n\n  ● app-dir static/dynamic handling › should ssr dynamically when detected automatically with fetch cache option\n\n    expect(received).not.toBe(expected) // Object.is equality\n\n    Expected: not \"1675884816764\"\n\n      628 |\n      629 |       expect(secondHtml).toContain('Example Domain')\n    > 630 |       expect(secondDate).not.toBe(initialDate)\n          |                              ^\n      631 |     })\n      632 |\n      633 |     it('should render not found pages correctly and fallback to the default one', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:630:30)\n\n  ● app-dir static/dynamic handling › should render not found pages correctly and fallback to the default one\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 200\n\n      635 |         redirect: 'manual',\n      636 |       })\n    > 637 |       expect(res.status).toBe(404)\n          |                          ^\n      638 |       const html = await res.text()\n      639 |       expect(html).toInclude('\"noindex\"')\n      640 |       expect(html).toInclude('This page could not be found.')\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:637:26)\n\n  ● app-dir static/dynamic handling › should ssr dynamically when forced via config\n\n    expect(received).not.toBe(expected) // Object.is equality\n\n    Expected: not \"1675884817762\"\n\n      695 |       const secondDate = second$('#date').text()\n      696 |\n    > 697 |       expect(secondDate).not.toBe(initialDate)\n          |                              ^\n      698 |     })\n      699 |\n      700 |     describe('useSearchParams', () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:697:30)\n\n  ● app-dir static/dynamic handling › should show a message to leave feedback for `appDir`\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Thank you for testing `appDir` please leave your feedback at https://nextjs.link/app-feedback\"\n    Received string:    \"yarn run v1.22.19\n    $ /tmp/next-install-d22796340e87a5b98aff7bdb127dee2546b2b6ca336365d43449489d54077490/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Error: You are using configuration and/or tools that are not yet\n    supported by Next.js v13 with Turbopack:··\n    - Unsupported Next.js configuration option(s) (next.config.js)\n      The only configurations options supported are:\n        - configFileName\n        - env\n        - experimental.appDir\n        - experimental.resolveAlias\n        - experimental.serverComponentsExternalPackages\n        - experimental.turbopackLoaders\n        - images\n        - pageExtensions\n        - onDemandEntries\n        - rewrites\n        - redirects\n        - headers\n        - reactStrictMode\n        - swcMinify\n        - transpilePackages\n      To use Turbopack, remove other configuration options.····\n    If you cannot make the changes above, but still want to try out\n    Next.js v13 with Turbopack, create the Next.js v13 playground app\n    by running the following commands:·\n      pnpm create next-app --example with-turbopack with-turbopack-app\n      cd with-turbopack-app\n      pnpm run dev·········\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback··\n    Warning: Unsupported config found; but continuing with custom Turbopack binary.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-d22796340e87a5b98aff7bdb127dee2546b2b6ca336365d43449489d54077490 --is-next-dev-command --root /tmp/next-install-d22796340e87a5b98aff7bdb127dee2546b2b6ca336365d43449489d54077490 --no-open]\n    \u001b[32mready\u001b[39m - started server on 0.0.0.0:34423, url: http://localhost:34423\n    \u001b[35mevent\u001b[39m - initial compilation 5.055ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 2675ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 294ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 913ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1024ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 2015ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1063ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 486ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 574ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 610ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 101ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 207ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 610ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 682ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 631ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 115ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 110ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 411ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 586ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1130ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 540ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 51ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 169ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 112ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 399ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 99ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 96ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 0.812ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1649ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 173ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 760ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 571ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 432ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 236ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 461ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1.031ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 593ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 434ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 51ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 458ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 71ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 475ms\n    \"\n\n      844 |     if (!(global as any).isNextDeploy) {\n      845 |       it('should show a message to leave feedback for `appDir`', async () => {\n    > 846 |         expect(next.cliOutput).toContain(\n          |                                ^\n      847 |           `Thank you for testing \\`appDir\\` please leave your feedback at https://nextjs.link/app-feedback`\n      848 |         )\n      849 |       })\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:846:32)\n",
+            "name": "/work/test/e2e/app-dir/app-static/app-static.test.ts",
+            "startTime": 1675884759733,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675884922445,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Custom _error",
+                  "dev mode 1"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Unexpected eof\"\nReceived string:    \"<!DOCTYPE html>\n<html>\n<head>·\n</head>\n<body>\n<script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n    <div id=\\\"__next\\\">\n        <h1>Error rendering page</h1>\n        <h2>Message</h2>\n        <pre>Error: Could not parse module '[project-with-next]/test/integration/custom-error/pages/404.js'\n  at &lt;unknown&gt; (/.next/server/pages/404/chunks/pages_404.js:5:11)\n  at Object.[project-with-next]/test/integration/custom-error/pages/404.js (ecmascript) (/.next/server/pages/404/chunks/pages_404.js:8:3)\n  at &lt;unknown&gt; (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:457:19)\n  at runModuleExecutionHooks (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:497:3)\n  at instantiateModule (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:456:3)\n  at getOrInstantiateModuleFromParent (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:539:10)\n  at esmImport (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:282:18)\n  at &lt;unknown&gt; (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:37:134)\n  at Object.[project-with-next]/test/integration/custom-error/pages/404.js/server-renderer.tsx (ecmascript) (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:55:3)\n  at &lt;unknown&gt; (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:457:19)\n  at runModuleExecutionHooks (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:497:3)\n  at instantiateModule (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:456:3)\n  at instantiateRuntimeModule (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:1061:10)\n  at &lt;unknown&gt; (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:77:1)\n  at &lt;unknown&gt; (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:1112:37)\n  at &lt;anonymous&gt;\n  at Object.registerChunk [as push] (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:1112:23)\n  at Object.&lt;anonymous&gt; (/.next/server/pages/404/chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js:1:41)\n  at Module._compile (node:internal/modules/cjs/loader:1165:14)\n  at Object.Module._extensions..js (node:internal/modules/cjs/loader:1219:10)\n  at Module.load (node:internal/modules/cjs/loader:1043:32)\n  at Function.Module._load (node:internal/modules/cjs/loader:878:12)\n  at Module.require (node:internal/modules/cjs/loader:1067:19)\n  at require (node:internal/modules/cjs/helpers:103:18)\n  at Object.&lt;anonymous&gt; (/.next/server/pages/404/index.js:7:1)\n  at Module._compile (node:internal/modules/cjs/loader:1165:14)\n  at Object.Module._extensions..js (node:internal/modules/cjs/loader:1219:10)\n  at Module.load (node:internal/modules/cjs/loader:1043:32)\n  at Function.Module._load (node:internal/modules/cjs/loader:878:12)\n  at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:81:12)\n  at &lt;unknown&gt; (node:internal/main/run_main_module:22:47)\n</pre>\n        <h2>Exit status</h2><pre>exit status: 1</pre>\n    </div>\n<script src=\\\"/_chunks/[project-with-next]__5d2a04._.js\\\"></script>\n<script src=\\\"/_chunks/[project-with-next]_packages_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n<script src=\\\"/_chunks/49f66_react_60336f._.js\\\"></script>\n<script src=\\\"/_chunks/aaab9_react-dom_814789._.js\\\"></script>\n<script src=\\\"/_chunks/f2a84_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/6c183_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_4bcba1._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n</body>\n</html>\"\n    at Object.<anonymous> (/work/test/integration/custom-error/test/index.test.js:48:20)"
+                ],
+                "fullName": "Custom _error dev mode 1 should not warn with /_error and /404 when rendering error first",
+                "location": null,
+                "status": "failed",
+                "title": "should not warn with /_error and /404 when rendering error first"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom _error",
+                  "dev mode 2"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom _error dev mode 2 should not warn with /_error and /404",
+                "location": null,
+                "status": "passed",
+                "title": "should not warn with /_error and /404"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom _error",
+                  "dev mode 2"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /You have added a custom \\/_error page without a custom \\/404 page/\nReceived string:  \"\"\n    at Object.<anonymous> (/work/test/integration/custom-error/test/index.test.js:79:22)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Custom _error dev mode 2 should warn on custom /_error without custom /404",
+                "location": null,
+                "status": "failed",
+                "title": "should warn on custom /_error without custom /404"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom _error",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom _error production mode should not contain /_error in build output",
+                "location": null,
+                "status": "passed",
+                "title": "should not contain /_error in build output"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom _error",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom _error production mode renders custom _error successfully",
+                "location": null,
+                "status": "passed",
+                "title": "renders custom _error successfully"
+              }
+            ],
+            "endTime": 1675884936426,
+            "message": "  ● Custom _error › dev mode 1 › should not warn with /_error and /404 when rendering error first\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Unexpected eof\"\n    Received string:    \"<!DOCTYPE html>\n    <html>\n    <head>·\n    </head>\n    <body>\n    <script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n        <div id=\\\"__next\\\">\n            <h1>Error rendering page</h1>\n            <h2>Message</h2>\n            <pre>Error: Could not parse module '[project-with-next]/test/integration/custom-error/pages/404.js'\n\n      at &lt;unknown&gt; (../../.next/server/pages/404/chunks/pages_404.js:5:11)\n      at Object.[project-with-next]/test/integration/custom-error/pages/404.js (ecmascript) (../../.next/server/pages/404/chunks/pages_404.js:8:3)\n      at &lt;unknown&gt; (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:457:19)\n      at runModuleExecutionHooks (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:497:3)\n      at instantiateModule (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:456:3)\n      at getOrInstantiateModuleFromParent (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:539:10)\n      at esmImport (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:282:18)\n      at &lt;unknown&gt; (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:37:134)\n      at Object.[project-with-next]/test/integration/custom-error/pages/404.js/server-renderer.tsx (ecmascript) (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:55:3)\n      at &lt;unknown&gt; (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:457:19)\n      at runModuleExecutionHooks (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:497:3)\n      at instantiateModule (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:456:3)\n      at instantiateRuntimeModule (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:1061:10)\n      at &lt;unknown&gt; (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:77:1)\n      at &lt;unknown&gt; (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:1112:37)\n        at &lt;anonymous&gt;\n      at Object.registerChunk [as push] (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:1112:23)\n      at Object.&lt;anonymous&gt; (../../.next/server/pages/404/chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js:1:41)\n      at Object.&lt;anonymous&gt; (../../.next/server/pages/404/index.js:7:1)\n      </pre>\n              <h2>Exit status</h2><pre>exit status: 1</pre>\n          </div>\n      <script src=\\\"/_chunks/[project-with-next]__5d2a04._.js\\\"></script>\n      <script src=\\\"/_chunks/[project-with-next]_packages_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n      <script src=\\\"/_chunks/49f66_react_60336f._.js\\\"></script>\n      <script src=\\\"/_chunks/aaab9_react-dom_814789._.js\\\"></script>\n      <script src=\\\"/_chunks/f2a84_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/6c183_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_4bcba1._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n      </body>\n      </html>\"\n      at Object.<anonymous> (integration/custom-error/test/index.test.js:48:20)\n\n  ● Custom _error › dev mode 2 › should warn on custom /_error without custom /404\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /You have added a custom \\/_error page without a custom \\/404 page/\n    Received string:  \"\"\n\n      77 |       const html = await renderViaHTTP(appPort, '/404')\n      78 |       expect(html).toContain('An error 404 occurred on server')\n    > 79 |       expect(stderr).toMatch(customErrNo404Match)\n         |                      ^\n      80 |     })\n      81 |   })\n      82 |\n\n      at Object.<anonymous> (integration/custom-error/test/index.test.js:79:22)\n",
+            "name": "/work/test/integration/custom-error/test/index.test.js",
+            "startTime": 1675884922544,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675884580934,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675884645431,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675884581031,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/404-page-router/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675885092097,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              }
+            ],
+            "endTime": 1675885503003,
+            "message": "  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n",
+            "name": "/work/test/e2e/404-page-router/index.test.ts",
+            "startTime": 1675885092197,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675885516226,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675885521410,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675885516326,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/basic/emotion-swc.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675884625739,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675884785889,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675884625829,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 14,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 5,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 24,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675884915961,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should bypass fetch cache with cache-control: no-cache",
+                "location": null,
+                "status": "passed",
+                "title": "should bypass fetch cache with cache-control: no-cache"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor fetch cache correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should honor fetch cache correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling Should not throw Dynamic Server Usage error when using generateStaticParams with previewData",
+                "location": null,
+                "status": "passed",
+                "title": "Should not throw Dynamic Server Usage error when using generateStaticParams with previewData"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should force SSR correctly for headers usage",
+                "location": null,
+                "status": "passed",
+                "title": "should force SSR correctly for headers usage"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor dynamic = \"force-static\" correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should honor dynamic = \"force-static\" correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor dynamic = \"force-static\" correctly (lazy)",
+                "location": null,
+                "status": "passed",
+                "title": "should honor dynamic = \"force-static\" correctly (lazy)"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 200\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:510:35)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should handle dynamicParams: false correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle dynamicParams: false correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should work with forced dynamic path",
+                "location": null,
+                "status": "passed",
+                "title": "should work with forced dynamic path"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should work with dynamic path no generateStaticParams",
+                "location": null,
+                "status": "passed",
+                "title": "should work with dynamic path no generateStaticParams"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should handle dynamicParams: true correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle dynamicParams: true correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should navigate to static path correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should navigate to static path correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).not.toBe(expected) // Object.is equality\n\nExpected: not \"1675884971475\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:630:30)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when detected automatically with fetch cache option",
+                "location": null,
+                "status": "failed",
+                "title": "should ssr dynamically when detected automatically with fetch cache option"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 200\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:637:26)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should render not found pages correctly and fallback to the default one",
+                "location": null,
+                "status": "failed",
+                "title": "should render not found pages correctly and fallback to the default one"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when detected automatically with fetch revalidate option",
+                "location": null,
+                "status": "pending",
+                "title": "should ssr dynamically when detected automatically with fetch revalidate option"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).not.toBe(expected) // Object.is equality\n\nExpected: not \"1675884972117\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:697:30)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when forced via config",
+                "location": null,
+                "status": "failed",
+                "title": "should ssr dynamically when forced via config"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should bailout to client rendering - without suspense boundary",
+                "location": null,
+                "status": "passed",
+                "title": "should bailout to client rendering - without suspense boundary"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should bailout to client rendering - with suspense boundary",
+                "location": null,
+                "status": "passed",
+                "title": "should bailout to client rendering - with suspense boundary"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should have empty search params on force-static",
+                "location": null,
+                "status": "pending",
+                "title": "should have empty search params on force-static"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should have values from canonical url on rewrite",
+                "location": null,
+                "status": "passed",
+                "title": "should have values from canonical url on rewrite"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should bail out to client rendering during SSG",
+                "location": null,
+                "status": "pending",
+                "title": "should bail out to client rendering during SSG"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should have the correct values",
+                "location": null,
+                "status": "pending",
+                "title": "should have the correct values"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should have values from canonical url on rewrite",
+                "location": null,
+                "status": "pending",
+                "title": "should have values from canonical url on rewrite"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Thank you for testing `appDir` please leave your feedback at https://nextjs.link/app-feedback\"\nReceived string:    \"yarn run v1.22.19\n$ /tmp/next-install-3311b0b188b695b13061315fe3324d7c6f8c9cd7effd2566b3599d114b5d7621/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nError: You are using configuration and/or tools that are not yet\nsupported by Next.js v13 with Turbopack:··\n- Unsupported Next.js configuration option(s) (next.config.js)\n  The only configurations options supported are:\n    - configFileName\n    - env\n    - experimental.appDir\n    - experimental.resolveAlias\n    - experimental.serverComponentsExternalPackages\n    - experimental.turbopackLoaders\n    - images\n    - pageExtensions\n    - onDemandEntries\n    - rewrites\n    - redirects\n    - headers\n    - reactStrictMode\n    - swcMinify\n    - transpilePackages\n  To use Turbopack, remove other configuration options.····\nIf you cannot make the changes above, but still want to try out\nNext.js v13 with Turbopack, create the Next.js v13 playground app\nby running the following commands:·\n  pnpm create next-app --example with-turbopack with-turbopack-app\n  cd with-turbopack-app\n  pnpm run dev·········\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback··\nWarning: Unsupported config found; but continuing with custom Turbopack binary.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-3311b0b188b695b13061315fe3324d7c6f8c9cd7effd2566b3599d114b5d7621 --is-next-dev-command --root /tmp/next-install-3311b0b188b695b13061315fe3324d7c6f8c9cd7effd2566b3599d114b5d7621 --no-open]\n\u001b[32mready\u001b[39m - started server on 0.0.0.0:35035, url: http://localhost:35035\n\u001b[35mevent\u001b[39m - initial compilation 7.223ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 2475ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 162ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 886ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 2997ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1013ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 461ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 540ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 721ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 148ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 113ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 580ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 631ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 629ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 151ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 109ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 108ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 582ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1134ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 491ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 51ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 254ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 402ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 100ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 98ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 0.846ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1637ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 116ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 528ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1089ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 435ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 237ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 451ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1.078ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 551ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 420ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 50ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 435ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 70ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 472ms\n\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:846:32)\n    at Promise.then.completed (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/utils.js:391:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/utils.js:316:10)\n    at _callCircusTest (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:218:40)\n    at _runTest (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:155:3)\n    at _runTestsForDescribeBlock (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:66:9)\n    at _runTestsForDescribeBlock (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:60:9)\n    at run (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:25:3)\n    at runAndTransformResultsToJestFormat (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:170:21)"
+                ],
+                "fullName": "app-dir static/dynamic handling should show a message to leave feedback for `appDir`",
+                "location": null,
+                "status": "failed",
+                "title": "should show a message to leave feedback for `appDir`"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should keep querystring on static page",
+                "location": null,
+                "status": "passed",
+                "title": "should keep querystring on static page"
+              }
+            ],
+            "endTime": 1675885018373,
+            "message": "  ● app-dir static/dynamic handling › should handle dynamicParams: false correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 200\n\n      508 |           redirect: 'manual',\n      509 |         })\n    > 510 |         expect(invalidRes.status).toBe(404)\n          |                                   ^\n      511 |         expect(await invalidRes.text()).toContain('page could not be found')\n      512 |       }\n      513 |     })\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:510:35)\n\n  ● app-dir static/dynamic handling › should ssr dynamically when detected automatically with fetch cache option\n\n    expect(received).not.toBe(expected) // Object.is equality\n\n    Expected: not \"1675884971475\"\n\n      628 |\n      629 |       expect(secondHtml).toContain('Example Domain')\n    > 630 |       expect(secondDate).not.toBe(initialDate)\n          |                              ^\n      631 |     })\n      632 |\n      633 |     it('should render not found pages correctly and fallback to the default one', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:630:30)\n\n  ● app-dir static/dynamic handling › should render not found pages correctly and fallback to the default one\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 200\n\n      635 |         redirect: 'manual',\n      636 |       })\n    > 637 |       expect(res.status).toBe(404)\n          |                          ^\n      638 |       const html = await res.text()\n      639 |       expect(html).toInclude('\"noindex\"')\n      640 |       expect(html).toInclude('This page could not be found.')\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:637:26)\n\n  ● app-dir static/dynamic handling › should ssr dynamically when forced via config\n\n    expect(received).not.toBe(expected) // Object.is equality\n\n    Expected: not \"1675884972117\"\n\n      695 |       const secondDate = second$('#date').text()\n      696 |\n    > 697 |       expect(secondDate).not.toBe(initialDate)\n          |                              ^\n      698 |     })\n      699 |\n      700 |     describe('useSearchParams', () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:697:30)\n\n  ● app-dir static/dynamic handling › should show a message to leave feedback for `appDir`\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Thank you for testing `appDir` please leave your feedback at https://nextjs.link/app-feedback\"\n    Received string:    \"yarn run v1.22.19\n    $ /tmp/next-install-3311b0b188b695b13061315fe3324d7c6f8c9cd7effd2566b3599d114b5d7621/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Error: You are using configuration and/or tools that are not yet\n    supported by Next.js v13 with Turbopack:··\n    - Unsupported Next.js configuration option(s) (next.config.js)\n      The only configurations options supported are:\n        - configFileName\n        - env\n        - experimental.appDir\n        - experimental.resolveAlias\n        - experimental.serverComponentsExternalPackages\n        - experimental.turbopackLoaders\n        - images\n        - pageExtensions\n        - onDemandEntries\n        - rewrites\n        - redirects\n        - headers\n        - reactStrictMode\n        - swcMinify\n        - transpilePackages\n      To use Turbopack, remove other configuration options.····\n    If you cannot make the changes above, but still want to try out\n    Next.js v13 with Turbopack, create the Next.js v13 playground app\n    by running the following commands:·\n      pnpm create next-app --example with-turbopack with-turbopack-app\n      cd with-turbopack-app\n      pnpm run dev·········\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback··\n    Warning: Unsupported config found; but continuing with custom Turbopack binary.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-3311b0b188b695b13061315fe3324d7c6f8c9cd7effd2566b3599d114b5d7621 --is-next-dev-command --root /tmp/next-install-3311b0b188b695b13061315fe3324d7c6f8c9cd7effd2566b3599d114b5d7621 --no-open]\n    \u001b[32mready\u001b[39m - started server on 0.0.0.0:35035, url: http://localhost:35035\n    \u001b[35mevent\u001b[39m - initial compilation 7.223ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 2475ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 162ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 886ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 2997ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1013ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 461ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 540ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 721ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 148ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 113ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 580ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 631ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 629ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 151ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 109ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 108ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 582ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1134ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 491ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 51ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 254ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 402ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 100ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 98ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 0.846ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1637ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 116ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 528ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1089ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 435ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 237ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 451ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1.078ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 551ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 420ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 50ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 435ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 70ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 472ms\n    \"\n\n      844 |     if (!(global as any).isNextDeploy) {\n      845 |       it('should show a message to leave feedback for `appDir`', async () => {\n    > 846 |         expect(next.cliOutput).toContain(\n          |                                ^\n      847 |           `Thank you for testing \\`appDir\\` please leave your feedback at https://nextjs.link/app-feedback`\n      848 |         )\n      849 |       })\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:846:32)\n",
+            "name": "/work/test/e2e/app-dir/app-static/app-static.test.ts",
+            "startTime": 1675884916053,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675885076578,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Custom _error",
+                  "dev mode 1"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Unexpected eof\"\nReceived string:    \"<!DOCTYPE html>\n<html>\n<head>·\n</head>\n<body>\n<script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n    <div id=\\\"__next\\\">\n        <h1>Error rendering page</h1>\n        <h2>Message</h2>\n        <pre>Error: Could not parse module '[project-with-next]/test/integration/custom-error/pages/404.js'\n  at &lt;unknown&gt; (/.next/server/pages/404/chunks/pages_404.js:5:11)\n  at Object.[project-with-next]/test/integration/custom-error/pages/404.js (ecmascript) (/.next/server/pages/404/chunks/pages_404.js:8:3)\n  at &lt;unknown&gt; (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:457:19)\n  at runModuleExecutionHooks (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:497:3)\n  at instantiateModule (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:456:3)\n  at getOrInstantiateModuleFromParent (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:539:10)\n  at esmImport (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:282:18)\n  at &lt;unknown&gt; (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:37:134)\n  at Object.[project-with-next]/test/integration/custom-error/pages/404.js/server-renderer.tsx (ecmascript) (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:55:3)\n  at &lt;unknown&gt; (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:457:19)\n  at runModuleExecutionHooks (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:497:3)\n  at instantiateModule (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:456:3)\n  at instantiateRuntimeModule (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:1061:10)\n  at &lt;unknown&gt; (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:77:1)\n  at &lt;unknown&gt; (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:1112:37)\n  at &lt;anonymous&gt;\n  at Object.registerChunk [as push] (/.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:1112:23)\n  at Object.&lt;anonymous&gt; (/.next/server/pages/404/chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js:1:41)\n  at Module._compile (node:internal/modules/cjs/loader:1165:14)\n  at Object.Module._extensions..js (node:internal/modules/cjs/loader:1219:10)\n  at Module.load (node:internal/modules/cjs/loader:1043:32)\n  at Function.Module._load (node:internal/modules/cjs/loader:878:12)\n  at Module.require (node:internal/modules/cjs/loader:1067:19)\n  at require (node:internal/modules/cjs/helpers:103:18)\n  at Object.&lt;anonymous&gt; (/.next/server/pages/404/index.js:7:1)\n  at Module._compile (node:internal/modules/cjs/loader:1165:14)\n  at Object.Module._extensions..js (node:internal/modules/cjs/loader:1219:10)\n  at Module.load (node:internal/modules/cjs/loader:1043:32)\n  at Function.Module._load (node:internal/modules/cjs/loader:878:12)\n  at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:81:12)\n  at &lt;unknown&gt; (node:internal/main/run_main_module:22:47)\n</pre>\n        <h2>Exit status</h2><pre>exit status: 1</pre>\n    </div>\n<script src=\\\"/_chunks/[project-with-next]__5d2a04._.js\\\"></script>\n<script src=\\\"/_chunks/[project-with-next]_packages_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n<script src=\\\"/_chunks/49f66_react_60336f._.js\\\"></script>\n<script src=\\\"/_chunks/aaab9_react-dom_814789._.js\\\"></script>\n<script src=\\\"/_chunks/f2a84_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/6c183_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_4bcba1._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n</body>\n</html>\"\n    at Object.<anonymous> (/work/test/integration/custom-error/test/index.test.js:48:20)"
+                ],
+                "fullName": "Custom _error dev mode 1 should not warn with /_error and /404 when rendering error first",
+                "location": null,
+                "status": "failed",
+                "title": "should not warn with /_error and /404 when rendering error first"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom _error",
+                  "dev mode 2"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom _error dev mode 2 should not warn with /_error and /404",
+                "location": null,
+                "status": "passed",
+                "title": "should not warn with /_error and /404"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom _error",
+                  "dev mode 2"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /You have added a custom \\/_error page without a custom \\/404 page/\nReceived string:  \"\"\n    at Object.<anonymous> (/work/test/integration/custom-error/test/index.test.js:79:22)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Custom _error dev mode 2 should warn on custom /_error without custom /404",
+                "location": null,
+                "status": "failed",
+                "title": "should warn on custom /_error without custom /404"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom _error",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom _error production mode should not contain /_error in build output",
+                "location": null,
+                "status": "passed",
+                "title": "should not contain /_error in build output"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom _error",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom _error production mode renders custom _error successfully",
+                "location": null,
+                "status": "passed",
+                "title": "renders custom _error successfully"
+              }
+            ],
+            "endTime": 1675885090138,
+            "message": "  ● Custom _error › dev mode 1 › should not warn with /_error and /404 when rendering error first\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Unexpected eof\"\n    Received string:    \"<!DOCTYPE html>\n    <html>\n    <head>·\n    </head>\n    <body>\n    <script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n        <div id=\\\"__next\\\">\n            <h1>Error rendering page</h1>\n            <h2>Message</h2>\n            <pre>Error: Could not parse module '[project-with-next]/test/integration/custom-error/pages/404.js'\n\n      at &lt;unknown&gt; (../../.next/server/pages/404/chunks/pages_404.js:5:11)\n      at Object.[project-with-next]/test/integration/custom-error/pages/404.js (ecmascript) (../../.next/server/pages/404/chunks/pages_404.js:8:3)\n      at &lt;unknown&gt; (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:457:19)\n      at runModuleExecutionHooks (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:497:3)\n      at instantiateModule (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:456:3)\n      at getOrInstantiateModuleFromParent (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:539:10)\n      at esmImport (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:282:18)\n      at &lt;unknown&gt; (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:37:134)\n      at Object.[project-with-next]/test/integration/custom-error/pages/404.js/server-renderer.tsx (ecmascript) (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:55:3)\n      at &lt;unknown&gt; (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:457:19)\n      at runModuleExecutionHooks (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:497:3)\n      at instantiateModule (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:456:3)\n      at instantiateRuntimeModule (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:1061:10)\n      at &lt;unknown&gt; (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:77:1)\n      at &lt;unknown&gt; (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:1112:37)\n        at &lt;anonymous&gt;\n      at Object.registerChunk [as push] (../../.next/server/pages/404/chunks/[project-with-next]_test_integration_custom-error_2f7c58._.js:1112:23)\n      at Object.&lt;anonymous&gt; (../../.next/server/pages/404/chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js:1:41)\n      at Object.&lt;anonymous&gt; (../../.next/server/pages/404/index.js:7:1)\n      </pre>\n              <h2>Exit status</h2><pre>exit status: 1</pre>\n          </div>\n      <script src=\\\"/_chunks/[project-with-next]__5d2a04._.js\\\"></script>\n      <script src=\\\"/_chunks/[project-with-next]_packages_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n      <script src=\\\"/_chunks/49f66_react_60336f._.js\\\"></script>\n      <script src=\\\"/_chunks/aaab9_react-dom_814789._.js\\\"></script>\n      <script src=\\\"/_chunks/f2a84_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/6c183_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_4bcba1._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n      </body>\n      </html>\"\n      at Object.<anonymous> (integration/custom-error/test/index.test.js:48:20)\n\n  ● Custom _error › dev mode 2 › should warn on custom /_error without custom /404\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /You have added a custom \\/_error page without a custom \\/404 page/\n    Received string:  \"\"\n\n      77 |       const html = await renderViaHTTP(appPort, '/404')\n      78 |       expect(html).toContain('An error 404 occurred on server')\n    > 79 |       expect(stderr).toMatch(customErrNo404Match)\n         |                      ^\n      80 |     })\n      81 |   })\n      82 |\n\n      at Object.<anonymous> (integration/custom-error/test/index.test.js:79:22)\n",
+            "name": "/work/test/integration/custom-error/test/index.test.js",
+            "startTime": 1675885076670,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
