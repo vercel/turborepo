@@ -3,7 +3,7 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
 
 # The add-keys-task in the root turbo.json has no config. This test:
-# [x] Tests dependsOn works by asserting that another task first
+# [x] Tests dependsOn works by asserting that another task runs first
 # [x] Tests outputs works by asserting that the right directory is cached
 # [x] Tests outputMode by asserting output logs on a second run
 # [x] Tests inputs works by changing a file and testing there was a cache miss
