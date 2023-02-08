@@ -1,0 +1,2473 @@
+{
+  "ref": "33cbfb8742d53f1572f40d764390dd187dae3ec8",
+  "nextjsVersion": "Next.js v13.1.7-canary.7",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675891277965,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675891343406,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675891278066,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/edge-configurable-runtime/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 6,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675891425764,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode runs with no warning API route on the edge runtime",
+                "location": null,
+                "status": "passed",
+                "title": "runs with no warning API route on the edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.\"\nReceived:\n  \"yarn run v1.22.19\n$ /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209 --is-next-dev-command --root /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209 --no-open]\nready - started server on 0.0.0.0:43455, url: http://localhost:43455\nevent - initial compilation 6.485ms\n\"\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:56:43)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode warns about API route using experimental-edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about API route using experimental-edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"warn  - You are using an experimental edge runtime, the API might change.\"\nReceived:\n  \"yarn run v1.22.19\n$ /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209 --is-next-dev-command --root /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209 --no-open]\nready - started server on 0.0.0.0:43251, url: http://localhost:43251\nevent - initial compilation 5.401ms\n\"\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:72:43)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode warns about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.\"\nReceived:\n  \"yarn run v1.22.19\n$ /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209 --is-next-dev-command --root /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209 --no-open]\nready - started server on 0.0.0.0:40741, url: http://localhost:40741\nevent - initial compilation 5.228ms\n\"\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:88:43)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode errors about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "errors about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Configurable runtime for pages and API routes In dev mode runs with no warning API route on the edge runtime",
+                "location": null,
+                "status": "passed",
+                "title": "runs with no warning API route on the edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.\"\nReceived:\n  \"yarn run v1.22.19\n$ /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948 --is-next-dev-command --root /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948 --no-open]\nready - started server on 0.0.0.0:37205, url: http://localhost:37205\nevent - initial compilation 5.115ms\n\"\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:56:43)\n    at runMicrotasks (<anonymous>)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode warns about API route using experimental-edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about API route using experimental-edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"warn  - You are using an experimental edge runtime, the API might change.\"\nReceived:\n  \"yarn run v1.22.19\n$ /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948 --is-next-dev-command --root /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948 --no-open]\nready - started server on 0.0.0.0:41695, url: http://localhost:41695\nevent - initial compilation 6.496ms\n\"\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:72:43)\n    at runMicrotasks (<anonymous>)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode warns about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.\"\nReceived:\n  \"yarn run v1.22.19\n$ /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948 --is-next-dev-command --root /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948 --no-open]\nready - started server on 0.0.0.0:42865, url: http://localhost:42865\nevent - initial compilation 6.315ms\n\"\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:88:43)\n    at runMicrotasks (<anonymous>)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode errors about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "errors about page using edge runtime"
+              }
+            ],
+            "endTime": 1675891479914,
+            "message": "  ● Configurable runtime for src/pages and API routes › In dev mode › warns about API route using experimental-edge runtime\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.\"\n    Received:\n      \"yarn run v1.22.19\n    $ /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209 --is-next-dev-command --root /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209 --no-open]\n    ready - started server on 0.0.0.0:43455, url: http://localhost:43455\n    event - initial compilation 6.485ms\n    \"\n\n      54 |         expect(res.status).toEqual(200)\n      55 |         expect(next.cliOutput).not.toInclude('error')\n    > 56 |         expect(stripAnsi(next.cliOutput)).toInclude(\n         |                                           ^\n      57 |           `warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.`\n      58 |         )\n      59 |       })\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:56:43)\n\n  ● Configurable runtime for src/pages and API routes › In dev mode › warns about page using edge runtime\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"warn  - You are using an experimental edge runtime, the API might change.\"\n    Received:\n      \"yarn run v1.22.19\n    $ /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209 --is-next-dev-command --root /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209 --no-open]\n    ready - started server on 0.0.0.0:43251, url: http://localhost:43251\n    event - initial compilation 5.401ms\n    \"\n\n      70 |         expect(res.status).toEqual(200)\n      71 |         expect(next.cliOutput).not.toInclude('error')\n    > 72 |         expect(stripAnsi(next.cliOutput)).toInclude(\n         |                                           ^\n      73 |           `warn  - You are using an experimental edge runtime, the API might change.`\n      74 |         )\n      75 |       })\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:72:43)\n\n  ● Configurable runtime for src/pages and API routes › In dev mode › errors about page using edge runtime\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.\"\n    Received:\n      \"yarn run v1.22.19\n    $ /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209 --is-next-dev-command --root /tmp/next-install-ff9d1d8788fc2f5c8ef6ad5494bb3258f46be3e2d65b58a7e1b4a94ca9b88209 --no-open]\n    ready - started server on 0.0.0.0:40741, url: http://localhost:40741\n    event - initial compilation 5.228ms\n    \"\n\n      86 |         const res = await fetchViaHTTP(next.url, `/`)\n      87 |         expect(res.status).toEqual(200)\n    > 88 |         expect(stripAnsi(next.cliOutput)).toInclude(\n         |                                           ^\n      89 |           `error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.`\n      90 |         )\n      91 |         expect(next.cliOutput).not.toInclude('warn')\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:88:43)\n\n  ● Configurable runtime for pages and API routes › In dev mode › warns about API route using experimental-edge runtime\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.\"\n    Received:\n      \"yarn run v1.22.19\n    $ /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948 --is-next-dev-command --root /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948 --no-open]\n    ready - started server on 0.0.0.0:37205, url: http://localhost:37205\n    event - initial compilation 5.115ms\n    \"\n\n      54 |         expect(res.status).toEqual(200)\n      55 |         expect(next.cliOutput).not.toInclude('error')\n    > 56 |         expect(stripAnsi(next.cliOutput)).toInclude(\n         |                                           ^\n      57 |           `warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.`\n      58 |         )\n      59 |       })\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:56:43)\n          at runMicrotasks (<anonymous>)\n\n  ● Configurable runtime for pages and API routes › In dev mode › warns about page using edge runtime\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"warn  - You are using an experimental edge runtime, the API might change.\"\n    Received:\n      \"yarn run v1.22.19\n    $ /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948 --is-next-dev-command --root /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948 --no-open]\n    ready - started server on 0.0.0.0:41695, url: http://localhost:41695\n    event - initial compilation 6.496ms\n    \"\n\n      70 |         expect(res.status).toEqual(200)\n      71 |         expect(next.cliOutput).not.toInclude('error')\n    > 72 |         expect(stripAnsi(next.cliOutput)).toInclude(\n         |                                           ^\n      73 |           `warn  - You are using an experimental edge runtime, the API might change.`\n      74 |         )\n      75 |       })\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:72:43)\n          at runMicrotasks (<anonymous>)\n\n  ● Configurable runtime for pages and API routes › In dev mode › errors about page using edge runtime\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.\"\n    Received:\n      \"yarn run v1.22.19\n    $ /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948 --is-next-dev-command --root /tmp/next-install-e3fdc08377baa0a226970acde3a13f7f6388a280b34daf33a5ee133bd3fc1948 --no-open]\n    ready - started server on 0.0.0.0:42865, url: http://localhost:42865\n    event - initial compilation 6.315ms\n    \"\n\n      86 |         const res = await fetchViaHTTP(next.url, `/`)\n      87 |         expect(res.status).toEqual(200)\n    > 88 |         expect(stripAnsi(next.cliOutput)).toInclude(\n         |                                           ^\n      89 |           `error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.`\n      90 |         )\n      91 |         expect(next.cliOutput).not.toInclude('warn')\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:88:43)\n          at runMicrotasks (<anonymous>)\n",
+            "name": "/work/test/e2e/edge-configurable-runtime/index.test.ts",
+            "startTime": 1675891425860,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/cli/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 54,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 55,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675891620363,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command --version",
+                "location": null,
+                "status": "passed",
+                "title": "--version"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command -v",
+                "location": null,
+                "status": "passed",
+                "title": "-v"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command detects command typos",
+                "location": null,
+                "status": "passed",
+                "title": "detects command typos"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should exit when SIGINT is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGINT is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should exit when SIGTERM is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGTERM is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev custom directory",
+                "location": null,
+                "status": "passed",
+                "title": "custom directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --port",
+                "location": null,
+                "status": "passed",
+                "title": "--port"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --port 0",
+                "location": null,
+                "status": "passed",
+                "title": "--port 0"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev PORT=0",
+                "location": null,
+                "status": "passed",
+                "title": "PORT=0"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev NODE_OPTIONS='--inspect'",
+                "location": null,
+                "status": "passed",
+                "title": "NODE_OPTIONS='--inspect'"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev -p",
+                "location": null,
+                "status": "passed",
+                "title": "-p"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [
+                  "Error: thrown: \"Exceeded timeout of 90000 ms for a test.\nUse jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n    at /work/test/integration/cli/test/index.test.js:227:5\n    at _dispatchDescribe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:98:26)\n    at describe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:60:5)\n    at /work/test/integration/cli/test/index.test.js:153:3\n    at _dispatchDescribe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:98:26)\n    at describe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:60:5)\n    at Object.<anonymous> (/work/test/integration/cli/test/index.test.js:18:1)\n    at Runtime._execModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1646:24)\n    at Runtime._loadModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1185:12)\n    at Runtime.requireModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1009:12)"
+                ],
+                "fullName": "CLI Usage dev -p conflict",
+                "location": null,
+                "status": "failed",
+                "title": "-p conflict"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --hostname",
+                "location": null,
+                "status": "passed",
+                "title": "--hostname"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev -H",
+                "location": null,
+                "status": "passed",
+                "title": "-H"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should format IPv6 addresses correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should format IPv6 addresses correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should exit when SIGINT is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGINT is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should exit when SIGTERM is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGTERM is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should format IPv6 addresses correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should format IPv6 addresses correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start duplicate sass deps",
+                "location": null,
+                "status": "passed",
+                "title": "duplicate sass deps"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should exit when SIGINT is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGINT is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should exit when SIGTERM is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGTERM is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout string arg",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout string arg"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout negative number",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout negative number"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout Infinity",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout Infinity"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout happy path",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout happy path"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "info"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage info --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "info"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage info -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "info"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage info should print output",
+                "location": null,
+                "status": "passed",
+                "title": "should print output"
+              }
+            ],
+            "endTime": 1675891738160,
+            "message": "  ● CLI Usage › dev › -p conflict\n\n    thrown: \"Exceeded timeout of 90000 ms for a test.\n    Use jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n\n      225 |     })\n      226 |\n    > 227 |     test('-p conflict', async () => {\n          |     ^\n      228 |       const port = await findPort()\n      229 |\n      230 |       let app = http.createServer((_, res) => {\n\n      at integration/cli/test/index.test.js:227:5\n      at integration/cli/test/index.test.js:153:3\n      at Object.<anonymous> (integration/cli/test/index.test.js:18:1)\n",
+            "name": "/work/test/integration/cli/test/index.test.js",
+            "startTime": 1675891620460,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/basic/legacy-decorators.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675891301201,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675891462230,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675891301290,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675891623004,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675891672626,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675891623095,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675891686848,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675891691745,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675891686989,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 4,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 2,
+          "didUpdate": false,
+          "failure": true,
+          "filesAdded": 1,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 1,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 4,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 2,
+          "updated": 0
+        },
+        "startTime": 1675891356012,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default empty _app shows logbox",
+                "location": null,
+                "status": "pending",
+                "title": "empty _app shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default empty _document shows logbox",
+                "location": null,
+                "status": "pending",
+                "title": "empty _document shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default _app syntax error shows logbox",
+                "location": null,
+                "status": "pending",
+                "title": "_app syntax error shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default _document syntax error shows logbox",
+                "location": null,
+                "status": "pending",
+                "title": "_document syntax error shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchInlineSnapshot(snapshot)\n\nSnapshot name: `ReactRefreshLogBox turbo empty _app shows logbox 1`\n\nSnapshot: \"Error: The default export is not a React Component in page: \\\"/_app\\\"\"\nReceived: \"Error during SSR Rendering\"\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts:31:52)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo empty _app shows logbox",
+                "location": null,
+                "status": "failed",
+                "title": "empty _app shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchInlineSnapshot(snapshot)\n\nSnapshot name: `ReactRefreshLogBox turbo empty _document shows logbox 1`\n\nSnapshot: \"Error: The default export is not a React Component in page: \\\"/_document\\\"\"\nReceived: \"Error during SSR Rendering\"\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts:61:52)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo empty _document shows logbox",
+                "location": null,
+                "status": "failed",
+                "title": "empty _document shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox turbo _app syntax error shows logbox",
+                "location": null,
+                "status": "passed",
+                "title": "_app syntax error shows logbox"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox turbo _document syntax error shows logbox",
+                "location": null,
+                "status": "passed",
+                "title": "_document syntax error shows logbox"
+              }
+            ],
+            "endTime": 1675891469046,
+            "message": "  ● ReactRefreshLogBox turbo › empty _app shows logbox\n\n    expect(received).toMatchInlineSnapshot(snapshot)\n\n    Snapshot name: `ReactRefreshLogBox turbo empty _app shows logbox 1`\n\n    Snapshot: \"Error: The default export is not a React Component in page: \\\"/_app\\\"\"\n    Received: \"Error during SSR Rendering\"\n\n      29 |       )\n      30 |       expect(await session.hasRedbox(true)).toBe(true)\n    > 31 |       expect(await session.getRedboxDescription()).toMatchInlineSnapshot(\n         |                                                    ^\n      32 |         `\"Error: The default export is not a React Component in page: \\\\\"/_app\\\\\"\"`\n      33 |       )\n      34 |\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-app-doc.test.ts:31:52)\n\n  ● ReactRefreshLogBox turbo › empty _document shows logbox\n\n    expect(received).toMatchInlineSnapshot(snapshot)\n\n    Snapshot name: `ReactRefreshLogBox turbo empty _document shows logbox 1`\n\n    Snapshot: \"Error: The default export is not a React Component in page: \\\"/_document\\\"\"\n    Received: \"Error during SSR Rendering\"\n\n      59 |       )\n      60 |       expect(await session.hasRedbox(true)).toBe(true)\n    > 61 |       expect(await session.getRedboxDescription()).toMatchInlineSnapshot(\n         |                                                    ^\n      62 |         `\"Error: The default export is not a React Component in page: \\\\\"/_document\\\\\"\"`\n      63 |       )\n      64 |\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-app-doc.test.ts:61:52)\n",
+            "name": "/work/test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts",
+            "startTime": 1675891356102,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/edge-configurable-runtime/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 6,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675891565102,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode runs with no warning API route on the edge runtime",
+                "location": null,
+                "status": "passed",
+                "title": "runs with no warning API route on the edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.\"\nReceived:\n  \"yarn run v1.22.19\n$ /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2 --is-next-dev-command --root /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2 --no-open]\nready - started server on 0.0.0.0:37689, url: http://localhost:37689\nevent - initial compilation 5.05ms\n\"\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:56:43)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode warns about API route using experimental-edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about API route using experimental-edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"warn  - You are using an experimental edge runtime, the API might change.\"\nReceived:\n  \"yarn run v1.22.19\n$ /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2 --is-next-dev-command --root /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2 --no-open]\nready - started server on 0.0.0.0:40307, url: http://localhost:40307\nevent - initial compilation 5.048ms\n\"\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:72:43)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode warns about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for src/pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.\"\nReceived:\n  \"yarn run v1.22.19\n$ /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2 --is-next-dev-command --root /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2 --no-open]\nready - started server on 0.0.0.0:36381, url: http://localhost:36381\nevent - initial compilation 5.07ms\n\"\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:88:43)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for src/pages and API routes In dev mode errors about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "errors about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Configurable runtime for pages and API routes In dev mode runs with no warning API route on the edge runtime",
+                "location": null,
+                "status": "passed",
+                "title": "runs with no warning API route on the edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.\"\nReceived:\n  \"yarn run v1.22.19\n$ /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6 --is-next-dev-command --root /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6 --no-open]\nready - started server on 0.0.0.0:34551, url: http://localhost:34551\nevent - initial compilation 5.305ms\n\"\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:56:43)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode warns about API route using experimental-edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about API route using experimental-edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"warn  - You are using an experimental edge runtime, the API might change.\"\nReceived:\n  \"yarn run v1.22.19\n$ /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6 --is-next-dev-command --root /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6 --no-open]\nready - started server on 0.0.0.0:34895, url: http://localhost:34895\nevent - initial compilation 5.073ms\n\"\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:72:43)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode warns about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "warns about page using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Configurable runtime for pages and API routes",
+                  "In dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toInclude(expected)\n\nExpected string to include:\n  \"error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.\"\nReceived:\n  \"yarn run v1.22.19\n$ /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6 --is-next-dev-command --root /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6 --no-open]\nready - started server on 0.0.0.0:41761, url: http://localhost:41761\nevent - initial compilation 5.664ms\n\"\n    at Object.<anonymous> (/work/test/e2e/edge-configurable-runtime/index.test.ts:88:43)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Configurable runtime for pages and API routes In dev mode errors about page using edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "errors about page using edge runtime"
+              }
+            ],
+            "endTime": 1675891612978,
+            "message": "  ● Configurable runtime for src/pages and API routes › In dev mode › warns about API route using experimental-edge runtime\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.\"\n    Received:\n      \"yarn run v1.22.19\n    $ /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2 --is-next-dev-command --root /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2 --no-open]\n    ready - started server on 0.0.0.0:37689, url: http://localhost:37689\n    event - initial compilation 5.05ms\n    \"\n\n      54 |         expect(res.status).toEqual(200)\n      55 |         expect(next.cliOutput).not.toInclude('error')\n    > 56 |         expect(stripAnsi(next.cliOutput)).toInclude(\n         |                                           ^\n      57 |           `warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.`\n      58 |         )\n      59 |       })\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:56:43)\n\n  ● Configurable runtime for src/pages and API routes › In dev mode › warns about page using edge runtime\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"warn  - You are using an experimental edge runtime, the API might change.\"\n    Received:\n      \"yarn run v1.22.19\n    $ /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2 --is-next-dev-command --root /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2 --no-open]\n    ready - started server on 0.0.0.0:40307, url: http://localhost:40307\n    event - initial compilation 5.048ms\n    \"\n\n      70 |         expect(res.status).toEqual(200)\n      71 |         expect(next.cliOutput).not.toInclude('error')\n    > 72 |         expect(stripAnsi(next.cliOutput)).toInclude(\n         |                                           ^\n      73 |           `warn  - You are using an experimental edge runtime, the API might change.`\n      74 |         )\n      75 |       })\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:72:43)\n\n  ● Configurable runtime for src/pages and API routes › In dev mode › errors about page using edge runtime\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.\"\n    Received:\n      \"yarn run v1.22.19\n    $ /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2 --is-next-dev-command --root /tmp/next-install-2e7dfa7b2c535f38392d9eccb0b2eec8009f73ed02930ad07dc70aeb83cdf1b2 --no-open]\n    ready - started server on 0.0.0.0:36381, url: http://localhost:36381\n    event - initial compilation 5.07ms\n    \"\n\n      86 |         const res = await fetchViaHTTP(next.url, `/`)\n      87 |         expect(res.status).toEqual(200)\n    > 88 |         expect(stripAnsi(next.cliOutput)).toInclude(\n         |                                           ^\n      89 |           `error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.`\n      90 |         )\n      91 |         expect(next.cliOutput).not.toInclude('warn')\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:88:43)\n\n  ● Configurable runtime for pages and API routes › In dev mode › warns about API route using experimental-edge runtime\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.\"\n    Received:\n      \"yarn run v1.22.19\n    $ /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6 --is-next-dev-command --root /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6 --no-open]\n    ready - started server on 0.0.0.0:34551, url: http://localhost:34551\n    event - initial compilation 5.305ms\n    \"\n\n      54 |         expect(res.status).toEqual(200)\n      55 |         expect(next.cliOutput).not.toInclude('error')\n    > 56 |         expect(stripAnsi(next.cliOutput)).toInclude(\n         |                                           ^\n      57 |           `warn  - /pages/api/edge provided runtime 'experimental-edge'. It can be updated to 'edge' instead.`\n      58 |         )\n      59 |       })\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:56:43)\n\n  ● Configurable runtime for pages and API routes › In dev mode › warns about page using edge runtime\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"warn  - You are using an experimental edge runtime, the API might change.\"\n    Received:\n      \"yarn run v1.22.19\n    $ /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6 --is-next-dev-command --root /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6 --no-open]\n    ready - started server on 0.0.0.0:34895, url: http://localhost:34895\n    event - initial compilation 5.073ms\n    \"\n\n      70 |         expect(res.status).toEqual(200)\n      71 |         expect(next.cliOutput).not.toInclude('error')\n    > 72 |         expect(stripAnsi(next.cliOutput)).toInclude(\n         |                                           ^\n      73 |           `warn  - You are using an experimental edge runtime, the API might change.`\n      74 |         )\n      75 |       })\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:72:43)\n\n  ● Configurable runtime for pages and API routes › In dev mode › errors about page using edge runtime\n\n    expect(received).toInclude(expected)\n\n    Expected string to include:\n      \"error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.\"\n    Received:\n      \"yarn run v1.22.19\n    $ /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6 --is-next-dev-command --root /tmp/next-install-cd903284a6374611cb7c048051c607f7da2051937c9a09c486dfee1f2f55dbe6 --no-open]\n    ready - started server on 0.0.0.0:41761, url: http://localhost:41761\n    event - initial compilation 5.664ms\n    \"\n\n      86 |         const res = await fetchViaHTTP(next.url, `/`)\n      87 |         expect(res.status).toEqual(200)\n    > 88 |         expect(stripAnsi(next.cliOutput)).toInclude(\n         |                                           ^\n      89 |           `error - Page /pages provided runtime 'edge', the edge runtime for rendering is currently experimental. Use runtime 'experimental-edge' instead.`\n      90 |         )\n      91 |         expect(next.cliOutput).not.toInclude('warn')\n\n      at Object.<anonymous> (e2e/edge-configurable-runtime/index.test.ts:88:43)\n",
+            "name": "/work/test/e2e/edge-configurable-runtime/index.test.ts",
+            "startTime": 1675891565195,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/cli/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 54,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 55,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675891749695,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command --version",
+                "location": null,
+                "status": "passed",
+                "title": "--version"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command -v",
+                "location": null,
+                "status": "passed",
+                "title": "-v"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "no command"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage no command detects command typos",
+                "location": null,
+                "status": "passed",
+                "title": "detects command typos"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should exit when SIGINT is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGINT is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build should exit when SIGTERM is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGTERM is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage build invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev custom directory",
+                "location": null,
+                "status": "passed",
+                "title": "custom directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --port",
+                "location": null,
+                "status": "passed",
+                "title": "--port"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --port 0",
+                "location": null,
+                "status": "passed",
+                "title": "--port 0"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev PORT=0",
+                "location": null,
+                "status": "passed",
+                "title": "PORT=0"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev NODE_OPTIONS='--inspect'",
+                "location": null,
+                "status": "passed",
+                "title": "NODE_OPTIONS='--inspect'"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev -p",
+                "location": null,
+                "status": "passed",
+                "title": "-p"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [
+                  "Error: thrown: \"Exceeded timeout of 90000 ms for a test.\nUse jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n    at /work/test/integration/cli/test/index.test.js:227:5\n    at _dispatchDescribe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:98:26)\n    at describe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:60:5)\n    at /work/test/integration/cli/test/index.test.js:153:3\n    at _dispatchDescribe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:98:26)\n    at describe (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/index.js:60:5)\n    at Object.<anonymous> (/work/test/integration/cli/test/index.test.js:18:1)\n    at Runtime._execModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1646:24)\n    at Runtime._loadModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1185:12)\n    at Runtime.requireModule (/work/node_modules/.pnpm/jest-runtime@27.5.1/node_modules/jest-runtime/build/index.js:1009:12)"
+                ],
+                "fullName": "CLI Usage dev -p conflict",
+                "location": null,
+                "status": "failed",
+                "title": "-p conflict"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev --hostname",
+                "location": null,
+                "status": "passed",
+                "title": "--hostname"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev -H",
+                "location": null,
+                "status": "passed",
+                "title": "-H"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should format IPv6 addresses correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should format IPv6 addresses correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should exit when SIGINT is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGINT is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev should exit when SIGTERM is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGTERM is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "dev"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage dev invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should format IPv6 addresses correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should format IPv6 addresses correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start duplicate sass deps",
+                "location": null,
+                "status": "passed",
+                "title": "duplicate sass deps"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should exit when SIGINT is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGINT is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start should exit when SIGTERM is signalled",
+                "location": null,
+                "status": "passed",
+                "title": "should exit when SIGTERM is signalled"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout string arg",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout string arg"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout negative number",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout negative number"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout Infinity",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout Infinity"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "start"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage start --keepAliveTimeout happy path",
+                "location": null,
+                "status": "passed",
+                "title": "--keepAliveTimeout happy path"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "export"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage export invalid directory",
+                "location": null,
+                "status": "passed",
+                "title": "invalid directory"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry should warn when unknown argument provided",
+                "location": null,
+                "status": "passed",
+                "title": "should warn when unknown argument provided"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "telemetry"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage telemetry should not throw UnhandledPromiseRejectionWarning",
+                "location": null,
+                "status": "passed",
+                "title": "should not throw UnhandledPromiseRejectionWarning"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "info"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage info --help",
+                "location": null,
+                "status": "passed",
+                "title": "--help"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "info"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage info -h",
+                "location": null,
+                "status": "passed",
+                "title": "-h"
+              },
+              {
+                "ancestorTitles": [
+                  "CLI Usage",
+                  "info"
+                ],
+                "failureMessages": [],
+                "fullName": "CLI Usage info should print output",
+                "location": null,
+                "status": "passed",
+                "title": "should print output"
+              }
+            ],
+            "endTime": 1675891866204,
+            "message": "  ● CLI Usage › dev › -p conflict\n\n    thrown: \"Exceeded timeout of 90000 ms for a test.\n    Use jest.setTimeout(newTimeout) to increase the timeout value, if this is a long-running test.\"\n\n      225 |     })\n      226 |\n    > 227 |     test('-p conflict', async () => {\n          |     ^\n      228 |       const port = await findPort()\n      229 |\n      230 |       let app = http.createServer((_, res) => {\n\n      at integration/cli/test/index.test.js:227:5\n      at integration/cli/test/index.test.js:153:3\n      at Object.<anonymous> (integration/cli/test/index.test.js:18:1)\n",
+            "name": "/work/test/integration/cli/test/index.test.js",
+            "startTime": 1675891749790,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/basic/legacy-decorators.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675891361261,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675891522805,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675891361354,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 14,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 5,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 24,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675891629233,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should bypass fetch cache with cache-control: no-cache",
+                "location": null,
+                "status": "passed",
+                "title": "should bypass fetch cache with cache-control: no-cache"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor fetch cache correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should honor fetch cache correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling Should not throw Dynamic Server Usage error when using generateStaticParams with previewData",
+                "location": null,
+                "status": "passed",
+                "title": "Should not throw Dynamic Server Usage error when using generateStaticParams with previewData"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should force SSR correctly for headers usage",
+                "location": null,
+                "status": "passed",
+                "title": "should force SSR correctly for headers usage"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor dynamic = \"force-static\" correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should honor dynamic = \"force-static\" correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor dynamic = \"force-static\" correctly (lazy)",
+                "location": null,
+                "status": "passed",
+                "title": "should honor dynamic = \"force-static\" correctly (lazy)"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 200\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:510:35)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should handle dynamicParams: false correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle dynamicParams: false correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should work with forced dynamic path",
+                "location": null,
+                "status": "passed",
+                "title": "should work with forced dynamic path"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should work with dynamic path no generateStaticParams",
+                "location": null,
+                "status": "passed",
+                "title": "should work with dynamic path no generateStaticParams"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should handle dynamicParams: true correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle dynamicParams: true correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should navigate to static path correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should navigate to static path correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).not.toBe(expected) // Object.is equality\n\nExpected: not \"1675891685344\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:630:30)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when detected automatically with fetch cache option",
+                "location": null,
+                "status": "failed",
+                "title": "should ssr dynamically when detected automatically with fetch cache option"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 200\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:637:26)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should render not found pages correctly and fallback to the default one",
+                "location": null,
+                "status": "failed",
+                "title": "should render not found pages correctly and fallback to the default one"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when detected automatically with fetch revalidate option",
+                "location": null,
+                "status": "pending",
+                "title": "should ssr dynamically when detected automatically with fetch revalidate option"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).not.toBe(expected) // Object.is equality\n\nExpected: not \"1675891686158\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:697:30)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when forced via config",
+                "location": null,
+                "status": "failed",
+                "title": "should ssr dynamically when forced via config"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should bailout to client rendering - without suspense boundary",
+                "location": null,
+                "status": "passed",
+                "title": "should bailout to client rendering - without suspense boundary"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should bailout to client rendering - with suspense boundary",
+                "location": null,
+                "status": "passed",
+                "title": "should bailout to client rendering - with suspense boundary"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should have empty search params on force-static",
+                "location": null,
+                "status": "pending",
+                "title": "should have empty search params on force-static"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should have values from canonical url on rewrite",
+                "location": null,
+                "status": "passed",
+                "title": "should have values from canonical url on rewrite"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should bail out to client rendering during SSG",
+                "location": null,
+                "status": "pending",
+                "title": "should bail out to client rendering during SSG"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should have the correct values",
+                "location": null,
+                "status": "pending",
+                "title": "should have the correct values"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should have values from canonical url on rewrite",
+                "location": null,
+                "status": "pending",
+                "title": "should have values from canonical url on rewrite"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Thank you for testing `appDir` please leave your feedback at https://nextjs.link/app-feedback\"\nReceived string:    \"yarn run v1.22.19\n$ /tmp/next-install-da204cd92610a1a4a6dc6f9ffb4ca6526b14f39739d0d639372b526d1174984a/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nError: You are using configuration and/or tools that are not yet\nsupported by Next.js v13 with Turbopack:··\n- Unsupported Next.js configuration option(s) (next.config.js)\n  The only configurations options supported are:\n    - configFileName\n    - env\n    - experimental.appDir\n    - experimental.resolveAlias\n    - experimental.serverComponentsExternalPackages\n    - experimental.turbopackLoaders\n    - images\n    - pageExtensions\n    - onDemandEntries\n    - rewrites\n    - redirects\n    - headers\n    - reactStrictMode\n    - swcMinify\n    - transpilePackages\n  To use Turbopack, remove other configuration options.····\nIf you cannot make the changes above, but still want to try out\nNext.js v13 with Turbopack, create the Next.js v13 playground app\nby running the following commands:·\n  pnpm create next-app --example with-turbopack with-turbopack-app\n  cd with-turbopack-app\n  pnpm run dev·········\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback··\nWarning: Unsupported config found; but continuing with custom Turbopack binary.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-da204cd92610a1a4a6dc6f9ffb4ca6526b14f39739d0d639372b526d1174984a --is-next-dev-command --root /tmp/next-install-da204cd92610a1a4a6dc6f9ffb4ca6526b14f39739d0d639372b526d1174984a --no-open]\n\u001b[32mready\u001b[39m - started server on 0.0.0.0:36059, url: http://localhost:36059\n\u001b[35mevent\u001b[39m - initial compilation 5.389ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 2597ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 132ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 898ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 984ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1999ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1043ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 481ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 558ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 736ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 112ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 110ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 583ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 638ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 627ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 158ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 105ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 104ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 604ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1117ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 494ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 57ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 168ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 243ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 508ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 94ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 0.999ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1622ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 120ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 707ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 778ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 434ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 233ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 450ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1.074ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 537ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 416ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 53ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 472ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 71ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 478ms\n\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:846:32)\n    at Promise.then.completed (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/utils.js:391:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/utils.js:316:10)\n    at _callCircusTest (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:218:40)\n    at _runTest (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:155:3)\n    at _runTestsForDescribeBlock (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:66:9)\n    at _runTestsForDescribeBlock (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:60:9)\n    at run (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:25:3)\n    at runAndTransformResultsToJestFormat (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:170:21)"
+                ],
+                "fullName": "app-dir static/dynamic handling should show a message to leave feedback for `appDir`",
+                "location": null,
+                "status": "failed",
+                "title": "should show a message to leave feedback for `appDir`"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should keep querystring on static page",
+                "location": null,
+                "status": "passed",
+                "title": "should keep querystring on static page"
+              }
+            ],
+            "endTime": 1675891732268,
+            "message": "  ● app-dir static/dynamic handling › should handle dynamicParams: false correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 200\n\n      508 |           redirect: 'manual',\n      509 |         })\n    > 510 |         expect(invalidRes.status).toBe(404)\n          |                                   ^\n      511 |         expect(await invalidRes.text()).toContain('page could not be found')\n      512 |       }\n      513 |     })\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:510:35)\n\n  ● app-dir static/dynamic handling › should ssr dynamically when detected automatically with fetch cache option\n\n    expect(received).not.toBe(expected) // Object.is equality\n\n    Expected: not \"1675891685344\"\n\n      628 |\n      629 |       expect(secondHtml).toContain('Example Domain')\n    > 630 |       expect(secondDate).not.toBe(initialDate)\n          |                              ^\n      631 |     })\n      632 |\n      633 |     it('should render not found pages correctly and fallback to the default one', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:630:30)\n\n  ● app-dir static/dynamic handling › should render not found pages correctly and fallback to the default one\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 200\n\n      635 |         redirect: 'manual',\n      636 |       })\n    > 637 |       expect(res.status).toBe(404)\n          |                          ^\n      638 |       const html = await res.text()\n      639 |       expect(html).toInclude('\"noindex\"')\n      640 |       expect(html).toInclude('This page could not be found.')\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:637:26)\n\n  ● app-dir static/dynamic handling › should ssr dynamically when forced via config\n\n    expect(received).not.toBe(expected) // Object.is equality\n\n    Expected: not \"1675891686158\"\n\n      695 |       const secondDate = second$('#date').text()\n      696 |\n    > 697 |       expect(secondDate).not.toBe(initialDate)\n          |                              ^\n      698 |     })\n      699 |\n      700 |     describe('useSearchParams', () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:697:30)\n\n  ● app-dir static/dynamic handling › should show a message to leave feedback for `appDir`\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Thank you for testing `appDir` please leave your feedback at https://nextjs.link/app-feedback\"\n    Received string:    \"yarn run v1.22.19\n    $ /tmp/next-install-da204cd92610a1a4a6dc6f9ffb4ca6526b14f39739d0d639372b526d1174984a/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Error: You are using configuration and/or tools that are not yet\n    supported by Next.js v13 with Turbopack:··\n    - Unsupported Next.js configuration option(s) (next.config.js)\n      The only configurations options supported are:\n        - configFileName\n        - env\n        - experimental.appDir\n        - experimental.resolveAlias\n        - experimental.serverComponentsExternalPackages\n        - experimental.turbopackLoaders\n        - images\n        - pageExtensions\n        - onDemandEntries\n        - rewrites\n        - redirects\n        - headers\n        - reactStrictMode\n        - swcMinify\n        - transpilePackages\n      To use Turbopack, remove other configuration options.····\n    If you cannot make the changes above, but still want to try out\n    Next.js v13 with Turbopack, create the Next.js v13 playground app\n    by running the following commands:·\n      pnpm create next-app --example with-turbopack with-turbopack-app\n      cd with-turbopack-app\n      pnpm run dev·········\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback··\n    Warning: Unsupported config found; but continuing with custom Turbopack binary.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-da204cd92610a1a4a6dc6f9ffb4ca6526b14f39739d0d639372b526d1174984a --is-next-dev-command --root /tmp/next-install-da204cd92610a1a4a6dc6f9ffb4ca6526b14f39739d0d639372b526d1174984a --no-open]\n    \u001b[32mready\u001b[39m - started server on 0.0.0.0:36059, url: http://localhost:36059\n    \u001b[35mevent\u001b[39m - initial compilation 5.389ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 2597ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 132ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 898ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 984ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1999ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1043ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 481ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 558ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 736ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 112ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 110ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 583ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 638ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 627ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 158ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 105ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 104ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 604ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1117ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 494ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 57ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 168ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 243ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 508ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 94ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 0.999ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1622ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 120ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 707ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 778ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 434ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 233ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 450ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1.074ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 537ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 416ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 53ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 472ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 71ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 478ms\n    \"\n\n      844 |     if (!(global as any).isNextDeploy) {\n      845 |       it('should show a message to leave feedback for `appDir`', async () => {\n    > 846 |         expect(next.cliOutput).toContain(\n          |                                ^\n      847 |           `Thank you for testing \\`appDir\\` please leave your feedback at https://nextjs.link/app-feedback`\n      848 |         )\n      849 |       })\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:846:32)\n",
+            "name": "/work/test/e2e/app-dir/app-static/app-static.test.ts",
+            "startTime": 1675891629328,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675891747739,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675891752698,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675891747839,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
