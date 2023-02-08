@@ -1,0 +1,1078 @@
+{
+  "ref": "f8f6ae2527a19513ee1abd81eaf5b4ea9b8a6716",
+  "nextjsVersion": "Next.js v13.1.7-canary.7",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675899299643,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675899363582,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675899299743,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/404-page-router/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675899802061,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              }
+            ],
+            "endTime": 1675900211746,
+            "message": "  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n",
+            "name": "/work/test/e2e/404-page-router/index.test.ts",
+            "startTime": 1675899802158,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675900223145,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675900228209,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675900223250,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 4,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 1,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 1,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 1,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675899224598,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Node.js builtins",
+                "location": null,
+                "status": "pending",
+                "title": "Node.js builtins"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Module not found",
+                "location": null,
+                "status": "pending",
+                "title": "Module not found"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Module not found (empty import trace)",
+                "location": null,
+                "status": "pending",
+                "title": "Module not found (empty import trace)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Module not found (missing global CSS)",
+                "location": null,
+                "status": "pending",
+                "title": "Module not found (missing global CSS)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts:42:7)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo Node.js builtins",
+                "location": null,
+                "status": "failed",
+                "title": "Node.js builtins"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts:61:7)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo Module not found",
+                "location": null,
+                "status": "failed",
+                "title": "Module not found"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts:85:7)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo Module not found (empty import trace)",
+                "location": null,
+                "status": "failed",
+                "title": "Module not found (empty import trace)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox turbo Module not found (missing global CSS)",
+                "location": null,
+                "status": "passed",
+                "title": "Module not found (missing global CSS)"
+              }
+            ],
+            "endTime": 1675899392397,
+            "message": "  ● ReactRefreshLogBox turbo › Node.js builtins\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-builtins.test.ts:42:7)\n\n  ● ReactRefreshLogBox turbo › Module not found\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-builtins.test.ts:61:7)\n\n  ● ReactRefreshLogBox turbo › Module not found (empty import trace)\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-builtins.test.ts:85:7)\n",
+            "name": "/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts",
+            "startTime": 1675899224697,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 2,
+          "total": 2,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675899566038,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "dynamic-href"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#link')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "dynamic-href should error when using dynamic href.pathname in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should error when using dynamic href.pathname in app dir"
+              },
+              {
+                "ancestorTitles": [
+                  "dynamic-href"
+                ],
+                "failureMessages": [],
+                "fullName": "dynamic-href should error when using dynamic href in app dir",
+                "location": null,
+                "status": "passed",
+                "title": "should error when using dynamic href in app dir"
+              }
+            ],
+            "endTime": 1675899643109,
+            "message": "  ● dynamic-href › should error when using dynamic href.pathname in app dir\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#link')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/dynamic-href/dynamic-href.test.ts",
+            "startTime": 1675899566144,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/no-duplicate-compile-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675899719526,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "no duplicate compile error output"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBeGreaterThanOrEqual(expected)\n\nExpected: >= 1\nReceived:    0\n    at Object.<anonymous> (/work/test/integration/no-duplicate-compile-error/test/index.test.js:63:29)"
+                ],
+                "fullName": "no duplicate compile error output should not show compile error on page refresh",
+                "location": null,
+                "status": "failed",
+                "title": "should not show compile error on page refresh"
+              }
+            ],
+            "endTime": 1675899740815,
+            "message": "  ● no duplicate compile error output › should not show compile error on page refresh\n\n    expect(received).toBeGreaterThanOrEqual(expected)\n\n    Expected: >= 1\n    Received:    0\n\n      61 |     const totalMessages = getRegexCount(stderr, totalMessagesRegex)\n      62 |\n    > 63 |     expect(correctMessages).toBeGreaterThanOrEqual(1)\n         |                             ^\n      64 |     expect(correctMessages).toBe(totalMessages)\n      65 |\n      66 |     await killApp(app)\n\n      at Object.<anonymous> (integration/no-duplicate-compile-error/test/index.test.js:63:29)\n",
+            "name": "/work/test/integration/no-duplicate-compile-error/test/index.test.js",
+            "startTime": 1675899719680,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675899293148,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675899356385,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675899293238,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/404-page-router/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675899791316,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of true and i18n of true and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of true and i18n of true and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page?with=query"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page?with=query should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              },
+              {
+                "ancestorTitles": [
+                  "404-page-router with basePath of false and i18n of false and middleware false",
+                  "for /not/a/real/page"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: yes\n\nnull\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/e2e/404-page-router/index.test.ts:108:11)"
+                ],
+                "fullName": "404-page-router with basePath of false and i18n of false and middleware false for /not/a/real/page should have the correct router parameters after it is ready",
+                "location": null,
+                "status": "failed",
+                "title": "should have the correct router parameters after it is ready"
+              }
+            ],
+            "endTime": 1675900199223,
+            "message": "  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of true and i18n of true and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page?with=query › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n\n  ● 404-page-router with basePath of false and i18n of false and middleware false › for /not/a/real/page › should have the correct router parameters after it is ready\n\n    TIMED OUT: yes\n\n    null\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (e2e/404-page-router/index.test.ts:108:11)\n",
+            "name": "/work/test/e2e/404-page-router/index.test.ts",
+            "startTime": 1675899791411,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675900212641,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675900217767,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675900212747,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 4,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 1,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 1,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 1,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675899222473,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Node.js builtins",
+                "location": null,
+                "status": "pending",
+                "title": "Node.js builtins"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Module not found",
+                "location": null,
+                "status": "pending",
+                "title": "Module not found"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Module not found (empty import trace)",
+                "location": null,
+                "status": "pending",
+                "title": "Module not found (empty import trace)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox default"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox default Module not found (missing global CSS)",
+                "location": null,
+                "status": "pending",
+                "title": "Module not found (missing global CSS)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts:42:7)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo Node.js builtins",
+                "location": null,
+                "status": "failed",
+                "title": "Node.js builtins"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts:61:7)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo Module not found",
+                "location": null,
+                "status": "failed",
+                "title": "Module not found"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance/helpers.ts:84:19)\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts:85:7)"
+                ],
+                "fullName": "ReactRefreshLogBox turbo Module not found (empty import trace)",
+                "location": null,
+                "status": "failed",
+                "title": "Module not found (empty import trace)"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshLogBox turbo"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshLogBox turbo Module not found (missing global CSS)",
+                "location": null,
+                "status": "passed",
+                "title": "Module not found (missing global CSS)"
+              }
+            ],
+            "endTime": 1675899390094,
+            "message": "  ● ReactRefreshLogBox turbo › Node.js builtins\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-builtins.test.ts:42:7)\n\n  ● ReactRefreshLogBox turbo › Module not found\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-builtins.test.ts:61:7)\n\n  ● ReactRefreshLogBox turbo › Module not found (empty import trace)\n\n    Application is in inconsistent state: timeout.\n\n      82 |           }\n      83 |           if (status !== 'pending') {\n    > 84 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      85 |           }\n      86 |\n      87 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance/helpers.ts:84:19)\n      at Object.<anonymous> (development/acceptance/ReactRefreshLogBox-builtins.test.ts:85:7)\n",
+            "name": "/work/test/development/acceptance/ReactRefreshLogBox-builtins.test.ts",
+            "startTime": 1675899222563,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 2,
+          "total": 2,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675899565907,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "dynamic-href"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#link')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "dynamic-href should error when using dynamic href.pathname in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should error when using dynamic href.pathname in app dir"
+              },
+              {
+                "ancestorTitles": [
+                  "dynamic-href"
+                ],
+                "failureMessages": [],
+                "fullName": "dynamic-href should error when using dynamic href in app dir",
+                "location": null,
+                "status": "passed",
+                "title": "should error when using dynamic href in app dir"
+              }
+            ],
+            "endTime": 1675899642776,
+            "message": "  ● dynamic-href › should error when using dynamic href.pathname in app dir\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#link')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/dynamic-href/dynamic-href.test.ts",
+            "startTime": 1675899566008,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/no-duplicate-compile-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675899718559,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "no duplicate compile error output"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBeGreaterThanOrEqual(expected)\n\nExpected: >= 1\nReceived:    0\n    at Object.<anonymous> (/work/test/integration/no-duplicate-compile-error/test/index.test.js:63:29)"
+                ],
+                "fullName": "no duplicate compile error output should not show compile error on page refresh",
+                "location": null,
+                "status": "failed",
+                "title": "should not show compile error on page refresh"
+              }
+            ],
+            "endTime": 1675899738989,
+            "message": "  ● no duplicate compile error output › should not show compile error on page refresh\n\n    expect(received).toBeGreaterThanOrEqual(expected)\n\n    Expected: >= 1\n    Received:    0\n\n      61 |     const totalMessages = getRegexCount(stderr, totalMessagesRegex)\n      62 |\n    > 63 |     expect(correctMessages).toBeGreaterThanOrEqual(1)\n         |                             ^\n      64 |     expect(correctMessages).toBe(totalMessages)\n      65 |\n      66 |     await killApp(app)\n\n      at Object.<anonymous> (integration/no-duplicate-compile-error/test/index.test.js:63:29)\n",
+            "name": "/work/test/integration/no-duplicate-compile-error/test/index.test.js",
+            "startTime": 1675899718660,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
