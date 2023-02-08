@@ -302,14 +302,54 @@ func (pc Pipeline) Pristine() PristinePipeline {
 	return pristine
 }
 
-// HasField checks the internal bookkeeping fieldsMeta field to
+// hasField checks the internal bookkeeping fieldsMeta field to
 // see whether a field was actually in the underlying turbo.json
 // or whether it was initialized with its 0-value.
-func (btd BookkeepingTaskDefinition) HasField(fieldName string) bool {
+func (btd BookkeepingTaskDefinition) hasField(fieldName string) bool {
 	if _, ok := btd.fieldsMeta[fieldName]; ok {
 		return true
 	}
 	return false
+}
+
+// MergeTaskDefinitions accepts an array of BookkeepingTaskDefinitions and merges them into
+// a single TaskDefinition. It uses the bookkeeping fieldsMeta to determine which fields should
+// be overwritten and when 0-values should be respected.
+func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDefinition, error) {
+	// Start with an empty definition
+	mergedTaskDefinition := &TaskDefinition{}
+
+	// For each of the TaskDefinitions we know of, merge them in
+	for _, bookkeepingTaskDef := range taskDefinitions {
+		taskDef := bookkeepingTaskDef.TaskDefinition
+		if bookkeepingTaskDef.hasField("Outputs") {
+			mergedTaskDefinition.Outputs = taskDef.Outputs
+		}
+
+		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
+		if bookkeepingTaskDef.hasField("EnvVarDependencies") {
+			mergedTaskDefinition.EnvVarDependencies = taskDef.EnvVarDependencies
+		}
+
+		if bookkeepingTaskDef.hasField("TopologicalDependencies") {
+			mergedTaskDefinition.TopologicalDependencies = taskDef.TopologicalDependencies
+		}
+
+		if bookkeepingTaskDef.hasField("TaskDependencies") {
+			mergedTaskDefinition.TaskDependencies = taskDef.TaskDependencies
+		}
+
+		if bookkeepingTaskDef.hasField("Inputs") {
+			mergedTaskDefinition.Inputs = taskDef.Inputs
+		}
+
+		if bookkeepingTaskDef.hasField("OutputMode") {
+			mergedTaskDefinition.OutputMode = taskDef.OutputMode
+		}
+		mergedTaskDefinition.Persistent = taskDef.Persistent
+	}
+
+	return mergedTaskDefinition, nil
 }
 
 // UnmarshalJSON deserializes a single task definition from

@@ -188,13 +188,12 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 			pkgDefinition = pkgJSON
 		}
 
-		taskDefinition, err := e.getResolvedTaskDefinition(
-			pkgDefinition,
-			&e.completeGraph.Pipeline,
-			taskName,
-			taskID,
-		)
+		taskDefinitions, err := e.getTaskDefinitionChain(&e.completeGraph.Pipeline, pkgDefinition, taskID, taskName)
+		if err != nil {
+			return err
+		}
 
+		taskDefinition, err := fs.MergeTaskDefinitions(taskDefinitions)
 		if err != nil {
 			return err
 		}
@@ -409,51 +408,6 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 
 	// May or may not be set (could be nil)
 	return validationError
-}
-
-// getResolvedTaskDefinition returns a "resolved" TaskDefinition composed of one
-// turbo.json in the workspace and following any `extends` keys up. If there is
-// no turbo.json in the workspace, returns the taskDefinition from the root Pipeline.
-func (e *Engine) getResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs.Pipeline, taskName string, taskID string) (*fs.TaskDefinition, error) {
-	taskDefinitions, err := e.getTaskDefinitionChain(rootPipeline, pkg, taskID, taskName)
-	if err != nil {
-		return nil, err
-	}
-
-	// Start with an empty definition
-	mergedTaskDefinition := &fs.TaskDefinition{}
-
-	// For each of the TaskDefinitions we know of, merge them in
-	for _, bookkeepingTaskDef := range taskDefinitions {
-		taskDef := bookkeepingTaskDef.TaskDefinition
-		if bookkeepingTaskDef.HasField("Outputs") {
-			mergedTaskDefinition.Outputs = taskDef.Outputs
-		}
-
-		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
-		if bookkeepingTaskDef.HasField("EnvVarDependencies") {
-			mergedTaskDefinition.EnvVarDependencies = taskDef.EnvVarDependencies
-		}
-
-		if bookkeepingTaskDef.HasField("TopologicalDependencies") {
-			mergedTaskDefinition.TopologicalDependencies = taskDef.TopologicalDependencies
-		}
-
-		if bookkeepingTaskDef.HasField("TaskDependencies") {
-			mergedTaskDefinition.TaskDependencies = taskDef.TaskDependencies
-		}
-
-		if bookkeepingTaskDef.HasField("Inputs") {
-			mergedTaskDefinition.Inputs = taskDef.Inputs
-		}
-
-		if bookkeepingTaskDef.HasField("OutputMode") {
-			mergedTaskDefinition.OutputMode = taskDef.OutputMode
-		}
-		mergedTaskDefinition.Persistent = taskDef.Persistent
-	}
-
-	return mergedTaskDefinition, nil
 }
 
 func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.PackageJSON, taskID string, taskName string) ([]fs.BookkeepingTaskDefinition, error) {
