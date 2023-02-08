@@ -457,7 +457,6 @@ func (e *Engine) getResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 }
 
 func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.PackageJSON, taskID string, taskName string) ([]fs.BookkeepingTaskDefinition, error) {
-
 	// Start a list of TaskDefinitions we've found for this TaskID
 	taskDefinitions := []fs.BookkeepingTaskDefinition{}
 
