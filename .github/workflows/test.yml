@@ -566,7 +566,7 @@ jobs:
         timeout-minutes: 120
         # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
-          cargo test -p turborepo-lib
+          cargo test -p turborepo-lib --features rustls-tls
 
   turbopack_rust_test1:
     needs: [determine_jobs, rust_prepare]
@@ -699,7 +699,7 @@ jobs:
       - name: Build benchmarks for tests
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --no-run
+          cargo test --benches --release --no-run --exclude turborepo-lib --exclude turborepo-ffi --exclude turbo
 
       - name: Run cargo test on benchmarks
         timeout-minutes: 120
@@ -952,7 +952,7 @@ jobs:
       - name: Compile cargo benches
         env:
           TURBOPACK_BENCH_COUNTS: ${{ matrix.bench.TURBOPACK_BENCH_COUNTS }}
-        run: cargo bench --no-run ${{ matrix.bench.args }}
+        run: cargo bench --no-run ${{ matrix.bench.args }} --exclude turborepo-lib --exclude turborepo-ffi --exclude turbo
 
       - name: Run cargo bench
         timeout-minutes: 180
