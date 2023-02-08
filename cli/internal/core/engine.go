@@ -189,7 +189,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 			pkgDefinition = pkgJSON
 		}
 
-		taskDefinition, err := e.GetResolvedTaskDefinition(
+		taskDefinition, err := e.getResolvedTaskDefinition(
 			pkgDefinition,
 			&e.completeGraph.Pipeline,
 			taskName,
@@ -412,10 +412,10 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 	return validationError
 }
 
-// GetResolvedTaskDefinition returns a "resolved" TaskDefinition composed of one
+// getResolvedTaskDefinition returns a "resolved" TaskDefinition composed of one
 // turbo.json in the workspace and following any `extends` keys up. If there is
 // no turbo.json in the workspace, returns the taskDefinition from the root Pipeline.
-func (e *Engine) GetResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs.Pipeline, taskName string, taskID string) (*fs.ResolvedTaskDefinition, error) {
+func (e *Engine) getResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs.Pipeline, taskName string, taskID string) (*fs.ResolvedTaskDefinition, error) {
 	taskDefinitions, err := e.getTaskDefinitionChain(rootPipeline, pkg, taskID, taskName)
 	if err != nil {
 		return nil, err
