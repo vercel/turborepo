@@ -49,7 +49,7 @@ impl Asset for TsConfigModuleAsset {
     async fn references(&self) -> Result<AssetReferencesVc> {
         let mut references = Vec::new();
         let configs = read_tsconfigs(
-            self.source.content().parse_json_with_comments(),
+            self.source.content().file_content(),
             self.source,
             apply_cjs_specific_options(self.origin.resolve_options(Value::new(
                 ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined),
@@ -210,7 +210,7 @@ impl TsExtendsReferenceVc {
 impl AssetReference for TsExtendsReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::Single(self.config, Vec::new()).into()
+        ResolveResult::asset(self.config).into()
     }
 }
 

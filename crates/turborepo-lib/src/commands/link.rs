@@ -268,7 +268,7 @@ mod test {
         )
         .unwrap();
 
-        tokio::spawn(start_test_server());
+        let handle = tokio::spawn(start_test_server());
         let mut base = CommandBase {
             repo_root: Default::default(),
             ui: UI::new(false),
@@ -290,8 +290,9 @@ mod test {
 
         link::link(&mut base, false).await.unwrap();
 
+        handle.abort();
         let team_id = base.repo_config().unwrap().team_id();
-        assert!(team_id == Some(TEAM_ID) || team_id == Some(USER_ID))
+        assert!(team_id == Some(TEAM_ID) || team_id == Some(USER_ID));
     }
 
     async fn start_test_server() -> Result<()> {
