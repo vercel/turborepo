@@ -39,12 +39,14 @@ impl NextClientChunksTransitionVc {
         execution_context: ExecutionContextVc,
         ty: Value<ClientContextType>,
         server_root: FileSystemPathVc,
+        assets_root: FileSystemPathVc,
         client_compile_time_info: CompileTimeInfoVc,
         next_config: NextConfigVc,
     ) -> NextClientChunksTransitionVc {
         let client_chunking_context = get_client_chunking_context(
             project_path,
             server_root,
+            assets_root,
             client_compile_time_info.environment(),
             ty,
         );

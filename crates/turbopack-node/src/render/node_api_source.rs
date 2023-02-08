@@ -9,6 +9,7 @@ use turbopack_dev_server::source::{
     specificity::SpecificityVc, ContentSource, ContentSourceContent, ContentSourceContentVc,
     ContentSourceData, ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceResult,
     ContentSourceResultVc, ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc,
+    NeededData, ParamsVc,
 };
 use turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
 
@@ -16,7 +17,7 @@ use super::{render_proxy::render_proxy, RenderData};
 use crate::{
     get_intermediate_asset,
     node_entry::{NodeEntry, NodeEntryVc},
-    route_matcher::{RouteMatcher, RouteMatcherVc},
+    route_matcher::{MatchResult, RouteMatcher, RouteMatcherVc},
 };
 
 /// Creates a [NodeApiContentSource].
@@ -74,22 +75,32 @@ impl ContentSource for NodeApiContentSource {
     async fn get(
         self_vc: NodeApiContentSourceVc,
         path: &str,
-        _data: turbo_tasks::Value<ContentSourceData>,
+        data: turbo_tasks::Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
         let this = self_vc.await?;
-        if *this.route_match.matches(path).await? {
-            return Ok(ContentSourceResult::Result {
-                specificity: this.specificity,
-                get_content: NodeApiGetContentResult {
-                    source: self_vc,
+        match &*this.route_match.match_params(path, data).await? {
+            MatchResult::NotFound => Ok(ContentSourceResultVc::not_found()),
+            MatchResult::NeedData(vary) => {
+                Ok(ContentSourceResultVc::need_data(Value::new(NeededData {
+                    source: self_vc.into(),
                     path: path.to_string(),
-                }
-                .cell()
-                .into(),
+                    vary: vary.clone(),
+                })))
             }
-            .cell());
+            MatchResult::MatchParams(params) => {
+                return Ok(ContentSourceResult::Result {
+                    specificity: this.specificity,
+                    params: *params,
+                    get_content: NodeApiGetContentResult {
+                        source: self_vc,
+                        path: path.to_string(),
+                    }
+                    .cell()
+                    .into(),
+                }
+                .cell());
+            }
         }
-        Ok(ContentSourceResultVc::not_found())
     }
 }
 
@@ -115,11 +126,12 @@ impl GetContentSourceContent for NodeApiGetContentResult {
         .cell()
     }
     #[turbo_tasks::function]
-    async fn get(&self, data: Value<ContentSourceData>) -> Result<ContentSourceContentVc> {
+    async fn get(
+        &self,
+        params: ParamsVc,
+        data: Value<ContentSourceData>,
+    ) -> Result<ContentSourceContentVc> {
         let source = self.source.await?;
-        let Some(params) = &*source.route_match.params(&self.path).await? else {
-            return Err(anyhow!("Non matching path provided"));
-        };
         let ContentSourceData {
             method: Some(method),
             url: Some(url),
@@ -140,7 +152,7 @@ impl GetContentSourceContent for NodeApiGetContentResult {
             entry.intermediate_output_path,
             entry.output_root,
             RenderData {
-                params: params.clone(),
+                params: params.await?.clone_value(),
                 method: method.clone(),
                 url: url.clone(),
                 raw_query: raw_query.clone(),

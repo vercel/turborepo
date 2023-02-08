@@ -32,9 +32,12 @@ import "next/dist/server/node-polyfill-web-streams";
 import "@vercel/turbopack-next/polyfill/async-local-storage";
 import { RenderOpts, renderToHTMLOrFlight } from "next/dist/server/app-render";
 import { PassThrough } from "stream";
+import type { IpcOutgoingMessage } from "@vercel/turbopack-next/internal/types";
 import { ServerResponseShim } from "@vercel/turbopack-next/internal/http";
 import { headersFromEntries } from "@vercel/turbopack-next/internal/headers";
 import { parse, ParsedUrlQuery } from "node:querystring";
+import { MIME_TEXT_HTML_UTF8 } from "@vercel/turbopack-next/internal/mime";
+import { removePathPrefix } from "next/dist/shared/lib/router/utils/remove-path-prefix";
 
 globalThis.__next_require__ = (data) => {
   const [, , ssr_id] = JSON.parse(data);
@@ -50,15 +53,6 @@ type IpcIncomingMessage = {
   type: "headers";
   data: RenderData;
 };
-
-type IpcOutgoingMessage = {
-  type: "response";
-  statusCode: number;
-  headers: Array<[string, string]>;
-  body: string;
-};
-
-const MIME_TEXT_HTML_UTF8 = "text/html; charset=utf-8";
 
 (async () => {
   while (true) {
@@ -113,7 +107,10 @@ type ServerComponentsManifestModule = {
   [exportName: string]: { id: string; chunks: string[]; name: string };
 };
 
-async function runOperation(renderData: RenderData) {
+async function runOperation(renderData: RenderData): Promise<{
+  headers: Array<[string, string]>;
+  body: string;
+}> {
   const layoutInfoChunks: Record<string, string[]> = {};
   const pageItem = LAYOUT_INFO[LAYOUT_INFO.length - 1];
   const pageModule = pageItem.page!.module;
@@ -214,14 +211,23 @@ async function runOperation(renderData: RenderData) {
     serverCSSManifest,
     runtime: "nodejs",
     serverComponents: true,
-    assetPrefix: "",
+    // This is currently passed in from next.config.js through `ProcessEnvAsset`.
+    assetPrefix: process.env.__TURBOPACK_NEXT_ASSET_PREFIX ?? "",
     pageConfig: pageModule.config,
     reactLoadableManifest: {},
   };
+
+  const basePath = process.env.__NEXT_ROUTER_BASEPATH;
+
+  const path =
+    basePath != null
+      ? removePathPrefix(renderData.path, basePath)
+      : renderData.path;
+
   const result = await renderToHTMLOrFlight(
     req,
     res,
-    renderData.path,
+    path,
     query,
     renderOpt as any as RenderOpts
   );

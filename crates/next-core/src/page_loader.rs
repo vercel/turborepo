@@ -22,13 +22,14 @@ use crate::{embed_js::next_js_file, util::get_asset_path_from_route};
 #[turbo_tasks::function]
 pub async fn create_page_loader(
     server_root: FileSystemPathVc,
+    assets_root: FileSystemPathVc,
     client_context: AssetContextVc,
     client_chunking_context: ChunkingContextVc,
     entry_asset: AssetVc,
     pathname: StringVc,
 ) -> Result<ContentSourceVc> {
     let asset = PageLoaderAsset {
-        server_root,
+        assets_root,
         client_context,
         client_chunking_context,
         entry_asset,
@@ -41,7 +42,7 @@ pub async fn create_page_loader(
 
 #[turbo_tasks::value(shared)]
 pub struct PageLoaderAsset {
-    pub server_root: FileSystemPathVc,
+    pub assets_root: FileSystemPathVc,
     pub client_context: AssetContextVc,
     pub client_chunking_context: ChunkingContextVc,
     pub entry_asset: AssetVc,
@@ -99,7 +100,7 @@ impl Asset for PageLoaderAsset {
     #[turbo_tasks::function]
     async fn path(&self) -> Result<FileSystemPathVc> {
         Ok(self
-            .server_root
+            .assets_root
             .join("_next/static/chunks/pages")
             .join(&get_asset_path_from_route(&self.pathname.await?, ".js")))
     }

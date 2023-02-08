@@ -5,16 +5,18 @@ use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::ChunkingContextVc,
 };
-use turbopack_dev_server::{
-    html::DevHtmlAssetVc,
-    source::{HeaderListVc, RewriteVc},
-};
+use turbopack_dev_server::source::{HeaderListVc, RewriteVc};
 use turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
 
 use super::{
     issue::RenderingIssue, RenderDataVc, RenderStaticIncomingMessage, RenderStaticOutgoingMessage,
 };
-use crate::{get_intermediate_asset, get_renderer_pool, pool::NodeJsOperation, trace_stack};
+use crate::{
+    get_intermediate_asset, get_renderer_pool,
+    html_error::{FallbackPageAsset, FallbackPageAssetVc},
+    pool::NodeJsOperation,
+    trace_stack,
+};
 
 #[turbo_tasks::value]
 pub enum StaticResult {
@@ -51,7 +53,7 @@ pub async fn render_static(
     path: FileSystemPathVc,
     module: EcmascriptModuleAssetVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
@@ -142,7 +144,7 @@ async fn static_error(
     path: FileSystemPathVc,
     error: anyhow::Error,
     operation: Option<NodeJsOperation>,
-    fallback_page: DevHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
 ) -> Result<AssetContentVc> {
     let message = format!("{error:?}")
         // TODO this is pretty inefficient
@@ -154,30 +156,17 @@ async fn static_error(
         None => None,
     };
 
-    let html_status = match status {
-        Some(status) => format!("<h2>Exit status</h2><pre>{status}</pre>"),
-        None => "<h3>No exit status</pre>".to_owned(),
-    };
-
-    let body = format!(
-        "<script id=\"__NEXT_DATA__\" type=\"application/json\">{{ \"props\": {{}} }}</script>
-    <div id=\"__next\">
-        <h1>Error rendering page</h1>
-        <h2>Message</h2>
-        <pre>{message}</pre>
-        {html_status}
-    </div>",
-    );
+    let message = StringVc::cell(message);
 
     let issue = RenderingIssue {
         context: path,
-        message: StringVc::cell(format!("{error:?}")),
+        message,
         status: status.and_then(|status| status.code()),
     };
 
     issue.cell().as_issue().emit();
 
-    let html = fallback_page.with_body(body);
+    let html = fallback_page.with_error(status.and_then(|status| status.code()), message);
 
     Ok(html.content())
 }

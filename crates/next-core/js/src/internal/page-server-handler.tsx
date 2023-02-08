@@ -20,6 +20,8 @@ import type { Ipc } from "@vercel/turbopack-next/ipc/index";
 import type { RenderData } from "types/turbopack";
 import type { ChunkGroup } from "types/next";
 import { parse } from "node:querystring";
+import type { IpcOutgoingMessage } from "./types";
+import { MIME_APPLICATION_JSON, MIME_TEXT_HTML_UTF8 } from "./mime";
 
 const ipc = IPC as Ipc<IpcIncomingMessage, IpcOutgoingMessage>;
 
@@ -27,18 +29,6 @@ type IpcIncomingMessage = {
   type: "headers";
   data: RenderData;
 };
-
-type IpcOutgoingMessage =
-  | {
-      type: "response";
-      statusCode: number;
-      headers: Array<[string, string]>;
-      body: string;
-    }
-  | { type: "rewrite"; path: string };
-
-const MIME_APPLICATION_JAVASCRIPT = "application/javascript";
-const MIME_TEXT_HTML_UTF8 = "text/html; charset=utf-8";
 
 export default function startHandler({
   isDataReq,
@@ -82,13 +72,18 @@ export default function startHandler({
   async function runOperation(
     renderData: RenderData
   ): Promise<IpcOutgoingMessage> {
+    const basePath = process.env.__NEXT_ROUTER_BASEPATH;
+
+    // The basePath has already been stripped from the path by the Next.js router.
+    const path = renderData.path;
+
     if ("getStaticPaths" in otherExports) {
       const {
         paths: prerenderRoutes,
         fallback: prerenderFallback,
         encodedPaths: _encodedPrerenderRoutes,
       } = await buildStaticPaths({
-        page: renderData.path,
+        page: path,
         getStaticPaths: otherExports.getStaticPaths,
         // TODO(alexkirsz) Provide the correct next.config.js path.
         configFileName: "next.config.js",
@@ -97,9 +92,9 @@ export default function startHandler({
       // We provide a dummy base URL to the URL constructor so that it doesn't
       // throw when we pass a relative URL.
       const resolvedPath = new URL(renderData.url, "next://").pathname;
+
       if (
         prerenderFallback === false &&
-        // TODO(alexkirsz) Strip basePath.
         !prerenderRoutes.includes(resolvedPath)
       ) {
         return createNotFoundResponse(isDataReq);
@@ -115,7 +110,7 @@ export default function startHandler({
         // computing the chunk items of `next-hydrate.js`, so they contain both
         // _app and page chunks.
         "/_app": [],
-        [renderData.path]: chunkGroup || [],
+        [path]: chunkGroup || [],
       },
 
       devFiles: [],
@@ -147,13 +142,17 @@ export default function startHandler({
         default: comp,
         ...otherExports,
       },
-      pathname: renderData.path,
+      pathname: path,
       buildId: "development",
 
       /* RenderOptsPartial */
       isDataReq,
       runtimeConfig: {},
-      assetPrefix: "",
+
+      // Passed in from next.config.js through `ProcessEnvAsset`.
+      assetPrefix: process.env.__TURBOPACK_NEXT_ASSET_PREFIX ?? "",
+      basePath: basePath ?? "",
+
       canonicalBase: "",
       previewProps: {
         previewModeId: "",
@@ -161,7 +160,6 @@ export default function startHandler({
         previewModeSigningKey: "",
       },
       params: renderData.params,
-      basePath: "",
       // TODO(WEB-583) this isn't correct, instead it should set `dev: true`
       nextExport: true,
       resolvedUrl: renderData.url,
@@ -203,12 +201,7 @@ export default function startHandler({
     const res: ServerResponse = new ServerResponseShim(req) as any;
 
     // Both _error and 404 should receive a 404 status code.
-    const statusCode =
-      renderData.path === "/404"
-        ? 404
-        : renderData.path === "/_error"
-        ? 404
-        : 200;
+    const statusCode = path === "/404" ? 404 : path === "/_error" ? 404 : 200;
 
     // Setting the status code on the response object is necessary for
     // `Error.getInitialProps` to detect the status code.
@@ -223,7 +216,7 @@ export default function startHandler({
       /* res: ServerResponse */
       res,
       /* pathname: string */
-      renderData.path,
+      path,
       /* query: ParsedUrlQuery */
       query,
       /* renderOpts: RenderOpts */
@@ -279,7 +272,7 @@ export default function startHandler({
       return {
         type: "response",
         statusCode,
-        headers: [["Content-Type", MIME_APPLICATION_JAVASCRIPT]],
+        headers: [["Content-Type", MIME_APPLICATION_JSON]],
         // Page data is only returned if the page had getXxyProps.
         body: JSON.stringify(pageData === undefined ? {} : pageData),
       };
@@ -313,7 +306,7 @@ function createNotFoundResponse(isDataReq: boolean): IpcOutgoingMessage {
       // to redirect to the error page.
       statusCode: 404,
       body: '{"notFound":true}',
-      headers: [["Content-Type", MIME_APPLICATION_JAVASCRIPT]],
+      headers: [["Content-Type", MIME_APPLICATION_JSON]],
     };
   }
 

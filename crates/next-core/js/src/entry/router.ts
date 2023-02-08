@@ -1,5 +1,5 @@
 import type { Ipc } from "@vercel/turbopack-next/ipc/index";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { ClientRequest, IncomingMessage, ServerResponse } from "node:http";
 import { Buffer } from "node:buffer";
 import { join } from "node:path";
 import { createServer, makeRequest } from "@vercel/turbopack-next/ipc/server";
@@ -19,10 +19,12 @@ type RouterRequest = {
   rawQuery: string;
 };
 
+// Keep in sync with packages/next/src/server/lib/route-resolver.ts
 type RouteResult =
   | {
       type: "rewrite";
       url: string;
+      // TODO(alexkirsz) This is Record<string, undefined | number | string | string[]> on the Next.js side
       headers: Record<string, string>;
     }
   | {
@@ -204,4 +206,26 @@ async function handleClientResponse(
       body: Buffer.concat(buffers).toJSON().data,
     },
   };
+}
+
+/**
+ * Transforms an array of elements into an array of pairs of elements.
+ *
+ * ## Example
+ *
+ * ```ts
+ * toPairs(["a", "b", "c", "d"]) // => [["a", "b"], ["c", "d"]]
+ * ```
+ */
+function toPairs<T>(arr: T[]): Array<[T, T]> {
+  if (arr.length % 2 !== 0) {
+    throw new Error("toPairs: expected an even number of elements");
+  }
+
+  const pairs: Array<[T, T]> = [];
+  for (let i = 0; i < arr.length; i += 2) {
+    pairs.push([arr[i], arr[i + 1]]);
+  }
+
+  return pairs;
 }

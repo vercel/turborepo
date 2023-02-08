@@ -1,20 +1,27 @@
 use std::collections::HashMap;
 
 use anyhow::{bail, Result};
-use turbo_tasks::Value;
+use indoc::formatdoc;
+use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::{
     ecmascript::EcmascriptModuleAssetVc, transition::TransitionsByNameVc, ModuleAssetContextVc,
 };
 use turbopack_core::{
+    asset::{Asset, AssetContentVc, AssetVc},
     chunk::ChunkGroupVc,
     compile_time_info::CompileTimeInfoVc,
     context::AssetContextVc,
+    environment::EnvironmentVc,
+    reference::AssetReferencesVc,
     resolve::{options::ImportMap, origin::PlainResolveOriginVc},
 };
 use turbopack_dev_server::html::DevHtmlAssetVc;
-use turbopack_node::execution_context::ExecutionContextVc;
+use turbopack_node::{
+    execution_context::ExecutionContextVc,
+    html_error::{FallbackPageAsset, FallbackPageAssetVc},
+};
 
 use crate::{
     next_client::context::{
@@ -31,10 +38,11 @@ pub async fn get_fallback_page(
     project_path: FileSystemPathVc,
     execution_context: ExecutionContextVc,
     dev_server_root: FileSystemPathVc,
+    assets_root: FileSystemPathVc,
     env: ProcessEnvVc,
     client_compile_time_info: CompileTimeInfoVc,
     next_config: NextConfigVc,
-) -> Result<DevHtmlAssetVc> {
+) -> Result<FallbackPageAssetVc> {
     let ty = Value::new(ClientContextType::Fallback);
     let resolve_options_context = get_client_resolve_options_context(project_path, ty, next_config);
     let module_options_context = get_client_module_options_context(
@@ -47,6 +55,7 @@ pub async fn get_fallback_page(
     let chunking_context = get_client_chunking_context(
         project_path,
         dev_server_root,
+        assets_root,
         client_compile_time_info.environment(),
         ty,
     );
@@ -87,8 +96,68 @@ pub async fn get_fallback_page(
 
     let chunk = module.as_evaluated_chunk(chunking_context, Some(runtime_entries));
 
-    Ok(DevHtmlAssetVc::new(
-        dev_server_root.join("fallback.html"),
-        vec![ChunkGroupVc::from_chunk(chunk)],
-    ))
+    Ok(FallbackAsset {
+        html_asset: DevHtmlAssetVc::new(
+            dev_server_root,
+            assets_root.join("fallback.html"),
+            vec![ChunkGroupVc::from_chunk(chunk)],
+        ),
+        config: next_config,
+    }
+    .cell()
+    .into())
+}
+
+#[turbo_tasks::value]
+struct FallbackAsset {
+    html_asset: DevHtmlAssetVc,
+    config: NextConfigVc,
+}
+
+#[turbo_tasks::value_impl]
+impl FallbackPageAsset for FallbackAsset {
+    #[turbo_tasks::function]
+    async fn with_error(&self, exit_code: Option<i32>, error: StringVc) -> Result<AssetVc> {
+        let error = error.await?;
+
+        let html_status = match exit_code {
+            Some(exit_code) => format!("<h2>Exit status</h2><pre>{exit_code}</pre>"),
+            None => "<h3>No exit status</pre>".to_owned(),
+        };
+
+        let body = formatdoc! {r#"
+            <script id="__NEXT_DATA__" type="application/json">
+                {{
+                    "props": {{}},
+                    "assetPrefix": {assetPrefix}
+                }}
+            </script>
+            <div id="__next">
+                <h1>Error rendering page</h1>
+                <h2>Message</h2>
+                <pre>{error}</pre>
+                {html_status}
+            </div>
+        "#, assetPrefix = serde_json::to_string(&self.config.asset_prefix().await?.as_deref())? };
+
+        Ok(self.html_asset.with_body(body).into())
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl Asset for FallbackAsset {
+    #[turbo_tasks::function]
+    fn path(&self) -> FileSystemPathVc {
+        self.html_asset.path()
+    }
+
+    #[turbo_tasks::function]
+    fn content(&self) -> AssetContentVc {
+        unreachable!("fallback asset has no content")
+    }
+
+    #[turbo_tasks::function]
+    fn references(&self) -> AssetReferencesVc {
+        self.html_asset.references()
+    }
 }

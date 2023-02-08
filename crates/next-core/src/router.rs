@@ -99,7 +99,7 @@ pub struct FullMiddlewareResponse {
     pub body: Vec<u8>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 enum RouterIncomingMessage {
     Rewrite {

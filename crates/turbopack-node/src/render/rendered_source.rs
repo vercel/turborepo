@@ -10,17 +10,14 @@ use turbopack_core::{
     reference::AssetReference,
     resolve::PrimaryResolveResult,
 };
-use turbopack_dev_server::{
-    html::DevHtmlAssetVc,
-    source::{
-        asset_graph::AssetGraphContentSourceVc,
-        conditional::ConditionalContentSourceVc,
-        lazy_instantiated::{GetContentSource, GetContentSourceVc, LazyInstantiatedContentSource},
-        specificity::SpecificityVc,
-        ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
-        ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceResult, ContentSourceResultVc,
-        ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc,
-    },
+use turbopack_dev_server::source::{
+    asset_graph::AssetGraphContentSourceVc,
+    conditional::ConditionalContentSourceVc,
+    lazy_instantiated::{GetContentSource, GetContentSourceVc, LazyInstantiatedContentSource},
+    specificity::SpecificityVc,
+    ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
+    ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceResult, ContentSourceResultVc,
+    ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc, NeededData, ParamsVc,
 };
 use turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
 
@@ -30,8 +27,9 @@ use super::{
 };
 use crate::{
     external_asset_entrypoints, get_intermediate_asset,
+    html_error::FallbackPageAssetVc,
     node_entry::{NodeEntry, NodeEntryVc},
-    route_matcher::{RouteMatcher, RouteMatcherVc},
+    route_matcher::{MatchResult, RouteMatcher, RouteMatcherVc},
 };
 
 /// Creates a content source that renders something in Node.js with the passed
@@ -49,7 +47,7 @@ pub fn create_node_rendered_source(
     pathname: StringVc,
     entry: NodeEntryVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
 ) -> ContentSourceVc {
     let source = NodeRenderContentSource {
         cwd,
@@ -83,7 +81,7 @@ pub struct NodeRenderContentSource {
     pathname: StringVc,
     entry: NodeEntryVc,
     runtime_entries: EcmascriptChunkPlaceablesVc,
-    fallback_page: DevHtmlAssetVc,
+    fallback_page: FallbackPageAssetVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -145,12 +143,21 @@ impl ContentSource for NodeRenderContentSource {
     async fn get(
         self_vc: NodeRenderContentSourceVc,
         path: &str,
-        _data: turbo_tasks::Value<ContentSourceData>,
+        data: turbo_tasks::Value<ContentSourceData>,
     ) -> Result<ContentSourceResultVc> {
         let this = self_vc.await?;
-        if *this.route_match.matches(path).await? {
-            return Ok(ContentSourceResult::Result {
+        match &*this.route_match.match_params(path, data).await? {
+            MatchResult::NotFound => Ok(ContentSourceResultVc::not_found()),
+            MatchResult::NeedData(vary) => {
+                Ok(ContentSourceResultVc::need_data(Value::new(NeededData {
+                    source: self_vc.into(),
+                    path: path.to_string(),
+                    vary: vary.clone(),
+                })))
+            }
+            MatchResult::MatchParams(params) => Ok(ContentSourceResult::Result {
                 specificity: this.specificity,
+                params: *params,
                 get_content: NodeRenderGetContentResult {
                     source: self_vc,
                     path: path.to_string(),
@@ -158,9 +165,8 @@ impl ContentSource for NodeRenderContentSource {
                 .cell()
                 .into(),
             }
-            .cell());
+            .cell()),
         }
-        Ok(ContentSourceResultVc::not_found())
     }
 }
 
@@ -185,11 +191,12 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
     }
 
     #[turbo_tasks::function]
-    async fn get(&self, data: Value<ContentSourceData>) -> Result<ContentSourceContentVc> {
+    async fn get(
+        &self,
+        params: ParamsVc,
+        data: Value<ContentSourceData>,
+    ) -> Result<ContentSourceContentVc> {
         let source = self.source.await?;
-        let Some(params) = &*source.route_match.params(&self.path).await? else {
-            return Err(anyhow!("Non matching path provided"));
-        };
         let ContentSourceData {
             method: Some(method),
             url: Some(url),
@@ -210,7 +217,7 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
             entry.intermediate_output_path,
             entry.output_root,
             RenderData {
-                params: params.clone(),
+                params: params.await?.clone_value(),
                 method: method.clone(),
                 url: url.clone(),
                 raw_query: raw_query.clone(),
