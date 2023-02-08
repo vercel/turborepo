@@ -107,20 +107,7 @@ impl Rope {
 
     /// Returns a String instance of all bytes.
     pub fn to_str(&self) -> Result<Cow<'_, str>> {
-        if self.data.len() == 1 {
-            if let Local(bytes) = &self.data[0] {
-                let utf8 = std::str::from_utf8(bytes);
-                return utf8
-                    .context("failed to convert rope into string")
-                    .map(Cow::Borrowed);
-            }
-        }
-
-        let mut read = self.read();
-        let mut string = String::with_capacity(self.len());
-        let res = read.read_to_string(&mut string);
-        res.context("failed to convert rope into string")?;
-        Ok(Cow::Owned(string))
+        self.data.to_str()
     }
 }
 
@@ -353,6 +340,28 @@ impl From<Vec<u8>> for Uncommitted {
             Uncommitted::None
         } else {
             Uncommitted::Owned(bytes)
+        }
+    }
+}
+
+impl InnerRope {
+    /// Returns a String instance of all bytes.
+    pub fn to_str(&self) -> Result<Cow<'_, str>> {
+        match &self[..] {
+            [] => Ok(Cow::Borrowed("")),
+            [Shared(inner)] => inner.to_str(),
+            [Local(bytes)] => {
+                let utf8 = std::str::from_utf8(bytes);
+                utf8.context("failed to convert rope into string")
+                    .map(Cow::Borrowed)
+            }
+            _ => {
+                let mut read = RopeReader::new(self);
+                let mut string = String::with_capacity(self.len());
+                let res = read.read_to_string(&mut string);
+                res.context("failed to convert rope into string")?;
+                Ok(Cow::Owned(string))
+            }
         }
     }
 }
