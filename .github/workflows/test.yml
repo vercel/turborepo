@@ -707,7 +707,7 @@ jobs:
           TURBOPACK_BENCH_COUNTS: "100"
           TURBOPACK_BENCH_PROGRESS: "1"
         run: |
-          cargo test --benches --release
+          cargo test --benches --release --exclude turborepo-lib --exclude turborepo-ffi --exclude turbo
 
       - name: Run cargo test on benchmarks for other bundlers
         if: needs.determine_jobs.outputs.rust_bench == 'true'
@@ -717,7 +717,7 @@ jobs:
           TURBOPACK_BENCH_PROGRESS: "1"
           TURBOPACK_BENCH_BUNDLERS: "others"
         run: |
-          cargo test --benches --release
+          cargo test --benches --release --exclude turborepo-lib --exclude turborepo-ffi --exclude turbo
 
   turbopack_rust_test_bench2:
     needs: [determine_jobs, rust_prepare]
@@ -762,7 +762,7 @@ jobs:
       - name: Build benchmarks for tests
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --no-run
+          cargo test --benches --release --no-run --exclude turborepo-lib --exclude turborepo-ffi --exclude turbo
 
       - name: Run cargo test on benchmarks
         timeout-minutes: 120
@@ -770,7 +770,7 @@ jobs:
           TURBOPACK_BENCH_COUNTS: "100"
           TURBOPACK_BENCH_PROGRESS: "1"
         run: |
-          cargo test --benches --release
+          cargo test --benches --release --exclude turborepo-lib --exclude turborepo-ffi --exclude turbo
 
       - name: Run cargo test on benchmarks for other bundlers
         if: needs.determine_jobs.outputs.rust_bench == 'true'
@@ -780,7 +780,7 @@ jobs:
           TURBOPACK_BENCH_PROGRESS: "1"
           TURBOPACK_BENCH_BUNDLERS: "others"
         run: |
-          cargo test --benches --release
+          cargo test --benches --release --exclude turborepo-lib --exclude turborepo-ffi --exclude turbo
 
   rust_build_release:
     needs: [determine_jobs, rust_prepare]
@@ -959,7 +959,7 @@ jobs:
         env:
           TURBOPACK_BENCH_COUNTS: ${{ matrix.bench.TURBOPACK_BENCH_COUNTS }}
           TURBOPACK_BENCH_PROGRESS: 1
-        run: cargo bench ${{ matrix.bench.args }}
+        run: cargo bench ${{ matrix.bench.args }} --exclude turborepo-lib --exclude turborepo-ffi --exclude turbo
 
       - name: Install critcmp
         if: always()
