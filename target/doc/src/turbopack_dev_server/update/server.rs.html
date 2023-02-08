@@ -267,6 +267,7 @@
 <span class="kw">use </span>tokio::select;
 <span class="kw">use </span>tokio_stream::StreamMap;
 <span class="kw">use </span>turbo_tasks::{TransientInstance, TurboTasksApi};
+<span class="kw">use </span>turbo_tasks_fs::json::parse_json_with_source_context;
 <span class="kw">use </span>turbopack_cli_utils::issue::ConsoleUiVc;
 <span class="kw">use </span>turbopack_core::version::Update;
 
@@ -441,12 +442,11 @@
             }
         };
 
-        <span class="kw">match </span>serde_json::from_str(<span class="kw-2">&amp;</span>msg) {
+        <span class="kw">match </span>parse_json_with_source_context(<span class="kw-2">&amp;</span>msg).context(<span class="string">&quot;deserializing websocket message&quot;</span>) {
             <span class="prelude-val">Ok</span>(msg) =&gt; Poll::Ready(<span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(msg))),
             <span class="prelude-val">Err</span>(err) =&gt; {
                 <span class="kw-2">*</span>this.ended = <span class="bool-val">true</span>;
 
-                <span class="kw">let </span>err = Error::new(err).context(<span class="string">&quot;deserializing websocket message&quot;</span>);
                 Poll::Ready(<span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(err)))
             }
         }

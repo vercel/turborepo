@@ -1638,24 +1638,64 @@
 <span id="1638">1638</span>
 <span id="1639">1639</span>
 <span id="1640">1640</span>
+<span id="1641">1641</span>
+<span id="1642">1642</span>
+<span id="1643">1643</span>
+<span id="1644">1644</span>
+<span id="1645">1645</span>
+<span id="1646">1646</span>
+<span id="1647">1647</span>
+<span id="1648">1648</span>
+<span id="1649">1649</span>
+<span id="1650">1650</span>
+<span id="1651">1651</span>
+<span id="1652">1652</span>
+<span id="1653">1653</span>
+<span id="1654">1654</span>
+<span id="1655">1655</span>
+<span id="1656">1656</span>
+<span id="1657">1657</span>
+<span id="1658">1658</span>
+<span id="1659">1659</span>
+<span id="1660">1660</span>
+<span id="1661">1661</span>
+<span id="1662">1662</span>
+<span id="1663">1663</span>
+<span id="1664">1664</span>
+<span id="1665">1665</span>
+<span id="1666">1666</span>
+<span id="1667">1667</span>
+<span id="1668">1668</span>
+<span id="1669">1669</span>
+<span id="1670">1670</span>
+<span id="1671">1671</span>
+<span id="1672">1672</span>
+<span id="1673">1673</span>
+<span id="1674">1674</span>
+<span id="1675">1675</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
 #![feature(iter_advance_by)]
 #![feature(io_error_more)]
 #![feature(main_separator_str)]
+#![feature(box_syntax)]
+#![feature(round_char_boundary)]
 
 </span><span class="kw">pub mod </span>attach;
 <span class="kw">pub mod </span>embed;
 <span class="kw">pub mod </span>glob;
 <span class="kw">mod </span>invalidator_map;
+<span class="kw">pub mod </span>json;
 <span class="kw">mod </span>mutex_map;
 <span class="kw">mod </span>read_glob;
 <span class="kw">mod </span>retry;
 <span class="kw">pub mod </span>rope;
+<span class="kw">pub mod </span>source_context;
 <span class="kw">pub mod </span>util;
 
 <span class="kw">use </span>std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::{<span class="self">self</span>, Debug, Display, Formatter},
     fs::FileType,
@@ -1692,7 +1732,7 @@
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 <span class="kw">use </span>util::{join_path, normalize_path, sys_to_unix, unix_to_sys};
 
-<span class="kw">use </span><span class="self">self</span>::mutex_map::MutexMap;
+<span class="kw">use </span><span class="self">self</span>::{json::UnparseableJson, mutex_map::MutexMap};
 <span class="attr">#[cfg(target_family = <span class="string">&quot;windows&quot;</span>)]
 </span><span class="kw">use </span><span class="kw">crate</span>::util::is_windows_raw_path;
 <span class="kw">use crate</span>::{
@@ -3043,10 +3083,15 @@
 
     <span class="kw">pub fn </span>parse_json(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileJsonContent {
         <span class="kw">match </span><span class="self">self </span>{
-            FileContent::Content(file) =&gt; <span class="kw">match </span>serde_json::from_reader(file.read()) {
-                <span class="prelude-val">Ok</span>(data) =&gt; FileJsonContent::Content(data),
-                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; FileJsonContent::Unparseable,
-            },
+            FileContent::Content(file) =&gt; {
+                <span class="kw">let </span>de = <span class="kw-2">&amp;mut </span>serde_json::Deserializer::from_reader(file.read());
+                <span class="kw">match </span>serde_path_to_error::deserialize(de) {
+                    <span class="prelude-val">Ok</span>(data) =&gt; FileJsonContent::Content(data),
+                    <span class="prelude-val">Err</span>(e) =&gt; FileJsonContent::Unparseable(
+                        <span class="kw">box </span>UnparseableJson::from_serde_path_to_error(e),
+                    ),
+                }
+            }
             FileContent::NotFound =&gt; FileJsonContent::NotFound,
         }
     }
@@ -3064,11 +3109,16 @@
                 ) {
                     <span class="prelude-val">Ok</span>(data) =&gt; <span class="kw">match </span>data {
                         <span class="prelude-val">Some</span>(value) =&gt; FileJsonContent::Content(value),
-                        <span class="prelude-val">None </span>=&gt; FileJsonContent::Unparseable,
+                        <span class="prelude-val">None </span>=&gt; FileJsonContent::unparseable(
+                            <span class="string">&quot;text content doesn&#39;t contain any json data&quot;</span>,
+                        ),
                     },
-                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; FileJsonContent::Unparseable,
+                    <span class="prelude-val">Err</span>(e) =&gt; FileJsonContent::Unparseable(<span class="kw">box </span>UnparseableJson::from_jsonc_error(
+                        e,
+                        string.as_ref(),
+                    )),
                 },
-                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; FileJsonContent::Unparseable,
+                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; FileJsonContent::unparseable(<span class="string">&quot;binary is not valid utf-8 text&quot;</span>),
             },
             FileContent::NotFound =&gt; FileJsonContent::NotFound,
         }
@@ -3123,7 +3173,7 @@
 </span><span class="attr">#[turbo_tasks::value(shared, serialization = <span class="string">&quot;none&quot;</span>)]
 </span><span class="kw">pub enum </span>FileJsonContent {
     Content(Value),
-    Unparseable,
+    Unparseable(Box&lt;UnparseableJson&gt;),
     NotFound,
 }
 
@@ -3137,9 +3187,29 @@
     </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
         <span class="kw">match </span><span class="self">self </span>{
             FileJsonContent::Content(json) =&gt; <span class="prelude-val">Ok</span>(StringVc::cell(json.to_string())),
-            FileJsonContent::Unparseable =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;File is not valid JSON&quot;</span>)),
+            FileJsonContent::Unparseable(e) =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;File is not valid JSON: {}&quot;</span>, e)),
             FileJsonContent::NotFound =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;File not found&quot;</span>)),
         }
+    }
+}
+
+<span class="kw">impl </span>FileJsonContent {
+    <span class="kw">pub fn </span>unparseable(message: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) -&gt; <span class="self">Self </span>{
+        FileJsonContent::Unparseable(Box::new(UnparseableJson {
+            message: Cow::Borrowed(message),
+            path: <span class="prelude-val">None</span>,
+            start_location: <span class="prelude-val">None</span>,
+            end_location: <span class="prelude-val">None</span>,
+        }))
+    }
+
+    <span class="kw">pub fn </span>unparseable_with_message(message: Cow&lt;<span class="lifetime">&#39;static</span>, str&gt;) -&gt; <span class="self">Self </span>{
+        FileJsonContent::Unparseable(Box::new(UnparseableJson {
+            message,
+            path: <span class="prelude-val">None</span>,
+            start_location: <span class="prelude-val">None</span>,
+            end_location: <span class="prelude-val">None</span>,
+        }))
     }
 }
 

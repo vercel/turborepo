@@ -157,7 +157,7 @@
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt};
-<span class="kw">use </span>turbo_tasks_fs::{File, FileContent};
+<span class="kw">use </span>turbo_tasks_fs::{json::parse_json_with_source_context, File, FileContent};
 <span class="kw">use </span>turbopack_core::{
     asset::AssetContent,
     introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
@@ -242,7 +242,7 @@
                 self_vc.as_introspectable()
             }
         } <span class="kw">else </span>{
-            serde_json::from_str(path)<span class="question-mark">?
+            parse_json_with_source_context(path)<span class="question-mark">?
         </span>};
         <span class="kw">let </span>ty = introspectable.ty().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>title = introspectable.title().<span class="kw">await</span><span class="question-mark">?</span>;

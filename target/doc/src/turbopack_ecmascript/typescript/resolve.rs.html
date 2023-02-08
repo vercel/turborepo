@@ -385,7 +385,17 @@
 <span id="385">385</span>
 <span id="386">386</span>
 <span id="387">387</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, fmt::Write};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde_json::Value <span class="kw">as </span>JsonValue;
@@ -393,7 +403,9 @@
     primitives::{StringVc, StringsVc},
     Value, ValueToString, ValueToStringVc,
 };
-<span class="kw">use </span>turbo_tasks_fs::{FileJsonContent, FileJsonContentVc, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_fs::{
+    FileContent, FileContentVc, FileJsonContent, FileJsonContentVc, FileSystemPathVc,
+};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
     context::AssetContext,
@@ -422,18 +434,26 @@
 }
 
 <span class="kw">pub async fn </span>read_tsconfigs(
-    <span class="kw-2">mut </span>data: FileJsonContentVc,
+    <span class="kw-2">mut </span>data: FileContentVc,
     <span class="kw-2">mut </span>tsconfig: AssetVc,
     resolve_options: ResolveOptionsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(FileJsonContentVc, AssetVc)&gt;&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>configs = Vec::new();
     <span class="kw">loop </span>{
-        <span class="kw">match </span><span class="kw-2">&amp;*</span>data.<span class="kw">await</span><span class="question-mark">? </span>{
-            FileJsonContent::Unparseable =&gt; {
+        <span class="kw">let </span>parsed_data = data.parse_json_with_comments();
+        <span class="kw">match </span><span class="kw-2">&amp;*</span>parsed_data.<span class="kw">await</span><span class="question-mark">? </span>{
+            FileJsonContent::Unparseable(e) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>message = <span class="string">&quot;tsconfig is not parseable: invalid JSON: &quot;</span>.to_string();
+                <span class="kw">if let </span>FileContent::Content(content) = <span class="kw-2">&amp;*</span>data.<span class="kw">await</span><span class="question-mark">? </span>{
+                    <span class="kw">let </span>text = content.content().to_str()<span class="question-mark">?</span>;
+                    e.write_with_content(<span class="kw-2">&amp;mut </span>message, text.as_ref())<span class="question-mark">?</span>;
+                } <span class="kw">else </span>{
+                    <span class="macro">write!</span>(message, <span class="string">&quot;{}&quot;</span>, e)<span class="question-mark">?</span>;
+                }
                 TsConfigIssue {
                     severity: IssueSeverity::Error.into(),
                     path: tsconfig.path(),
-                    message: StringVc::cell(<span class="string">&quot;tsconfig is not parseable: invalid JSON&quot;</span>.into()),
+                    message: StringVc::cell(message),
                 }
                 .cell()
                 .as_issue()
@@ -452,7 +472,7 @@
                 <span class="kw">break</span>;
             }
             FileJsonContent::Content(json) =&gt; {
-                configs.push((data, tsconfig));
+                configs.push((parsed_data, tsconfig));
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(extends) = json[<span class="string">&quot;extends&quot;</span>].as_str() {
                     <span class="kw">let </span>context = tsconfig.path().parent();
                     <span class="kw">let </span>result = resolve(
@@ -466,7 +486,7 @@
                     // &quot;some/path/node_modules/xyz/abc.json&quot; and &quot;some/node_modules/xyz/abc.json&quot;.
                     // We only want to use the first one.
                     </span><span class="kw">if let </span><span class="prelude-val">Some</span>(asset) = <span class="kw-2">*</span>result {
-                        data = asset.content().parse_json_with_comments();
+                        data = asset.content().file_content();
                         tsconfig = asset;
                     } <span class="kw">else </span>{
                         TsConfigIssue {
@@ -523,7 +543,7 @@
     resolve_in_tsconfig_options: ResolveOptionsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;TsConfigResolveOptionsVc&gt; {
     <span class="kw">let </span>configs = read_tsconfigs(
-        tsconfig.read().parse_json_with_comments(),
+        tsconfig.read(),
         SourceAssetVc::new(tsconfig).into(),
         resolve_in_tsconfig_options,
     )

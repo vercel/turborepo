@@ -511,6 +511,7 @@
 <span id="511">511</span>
 <span id="512">512</span>
 <span id="513">513</span>
+<span id="514">514</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
@@ -727,6 +728,7 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>anyhow::Result;
     <span class="kw">use </span>indexmap::indexset;
+    <span class="kw">use </span>turbo_tasks_fs::json::parse_json_with_source_context;
 
     <span class="kw">use </span><span class="kw">super</span>::get_font_axes;
     <span class="kw">use </span><span class="kw">crate</span>::next_font_google::{
@@ -737,7 +739,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_errors_on_unknown_font() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: FontData = serde_json::from_str(
+        <span class="kw">let </span>data: FontData = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;ABeeZee&quot;: {
@@ -765,7 +767,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_errors_on_missing_axes() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: FontData = serde_json::from_str(
+        <span class="kw">let </span>data: FontData = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;ABeeZee&quot;: {
@@ -793,7 +795,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_selecting_axes() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: FontData = serde_json::from_str(
+        <span class="kw">let </span>data: FontData = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;Inter&quot;: {
@@ -840,7 +842,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_no_wght_axis() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: FontData = serde_json::from_str(
+        <span class="kw">let </span>data: FontData = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;Inter&quot;: {
@@ -881,7 +883,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_no_variable() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: FontData = serde_json::from_str(
+        <span class="kw">let </span>data: FontData = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;Hind&quot;: {

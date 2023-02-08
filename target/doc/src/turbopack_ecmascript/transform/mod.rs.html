@@ -301,7 +301,7 @@
     primitives::{StringVc, StringsVc},
     trace::TraceRawVcs,
 };
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span class="kw">use </span>turbo_tasks_fs::{json::parse_json_with_source_context, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::environment::EnvironmentVc;
 
 <span class="kw">use </span><span class="self">self</span>::server_to_client_proxy::{create_proxy_module, is_client_module};
@@ -463,7 +463,7 @@
                 program.visit_mut_with(<span class="kw-2">&amp;mut </span>styled_components::styled_components(
                     FileName::Anon,
                     file_name_hash,
-                    serde_json::from_str(<span class="string">&quot;{}&quot;</span>)<span class="question-mark">?</span>,
+                    parse_json_with_source_context(<span class="string">&quot;{}&quot;</span>)<span class="question-mark">?</span>,
                 ));
             }
             EcmascriptInputTransform::StyledJsx =&gt; {

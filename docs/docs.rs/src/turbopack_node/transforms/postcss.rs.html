@@ -244,6 +244,9 @@
 <span id="244">244</span>
 <span id="245">245</span>
 <span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
@@ -252,7 +255,10 @@
     primitives::{JsonValueVc, StringsVc},
     TryJoinIterExt, Value,
 };
-<span class="kw">use </span>turbo_tasks_fs::{File, FileContent, FileSystemEntryType, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_fs::{
+    json::parse_json_rope_with_source_context, File, FileContent, FileSystemEntryType,
+    FileSystemPathVc,
+};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     context::{AssetContext, AssetContextVc},
@@ -481,7 +487,7 @@
                 assets: Vec::new()
             }.cell());
         };
-        <span class="kw">let </span>processed_css: PostCssProcessingResult = serde_json::from_reader(val.read())
+        <span class="kw">let </span>processed_css: PostCssProcessingResult = parse_json_rope_with_source_context(val)
             .context(<span class="string">&quot;Unable to deserializate response from PostCSS transform operation&quot;</span>)<span class="question-mark">?</span>;
         <span class="comment">// TODO handle SourceMap
         </span><span class="kw">let </span>file = File::from(processed_css.css);

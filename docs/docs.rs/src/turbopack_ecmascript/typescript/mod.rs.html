@@ -343,7 +343,7 @@
     </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
         <span class="kw">let </span>configs = read_tsconfigs(
-            <span class="self">self</span>.source.content().parse_json_with_comments(),
+            <span class="self">self</span>.source.content().file_content(),
             <span class="self">self</span>.source,
             apply_cjs_specific_options(<span class="self">self</span>.origin.resolve_options(Value::new(
                 ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined),

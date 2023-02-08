@@ -374,13 +374,14 @@
 <span id="374">374</span>
 <span id="375">375</span>
 <span id="376">376</span>
+<span id="377">377</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>indoc::formatdoc;
 <span class="kw">use </span>once_cell::sync::Lazy;
 <span class="kw">use </span>turbo_tasks::primitives::{OptionStringVc, OptionU16Vc, StringVc, U32Vc};
 <span class="kw">use </span>turbo_tasks_fetch::fetch;
-<span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_fs::{json::parse_json_with_source_context, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 <span class="kw">use </span>turbopack_core::{
     issue::IssueSeverity,
@@ -410,8 +411,9 @@
 <span class="kw">mod </span>util;
 
 <span class="kw">pub const </span>GOOGLE_FONTS_STYLESHEET_URL: <span class="kw-2">&amp;</span>str = <span class="string">&quot;https://fonts.googleapis.com/css2&quot;</span>;
-<span class="kw">static </span>FONT_DATA: Lazy&lt;FontData&gt; =
-    Lazy::new(|| serde_json::from_str(<span class="macro">include_str!</span>(<span class="string">&quot;__generated__/font-data.json&quot;</span>)).unwrap());
+<span class="kw">static </span>FONT_DATA: Lazy&lt;FontData&gt; = Lazy::new(|| {
+    parse_json_with_source_context(<span class="macro">include_str!</span>(<span class="string">&quot;__generated__/font-data.json&quot;</span>)).unwrap()
+});
 
 <span class="kw">type </span>FontData = IndexMap&lt;String, FontDataEntry&gt;;
 
@@ -747,7 +749,7 @@
             <span class="macro">bail!</span>(<span class="string">&quot;Expected one entry&quot;</span>);
         };
 
-    <span class="self">self</span>::options::options_from_request(<span class="kw-2">&amp;</span>serde_json::from_str(json)<span class="question-mark">?</span>, <span class="kw-2">&amp;</span>FONT_DATA)
+    <span class="self">self</span>::options::options_from_request(<span class="kw-2">&amp;</span>parse_json_with_source_context(json)<span class="question-mark">?</span>, <span class="kw-2">&amp;</span>FONT_DATA)
         .map(NextFontGoogleOptionsVc::cell)
 }
 </code></pre></div>

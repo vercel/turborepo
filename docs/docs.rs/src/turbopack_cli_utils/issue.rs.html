@@ -657,9 +657,15 @@
 <span id="657">657</span>
 <span id="658">658</span>
 <span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
-    borrow::Cow,
-    cmp::{min, Ordering},
+    cmp::min,
     collections::{hash_map::Entry, HashMap, HashSet},
     fmt::Write <span class="kw">as _</span>,
     path::PathBuf,
@@ -672,7 +678,9 @@
 <span class="kw">use </span>owo_colors::{OwoColorize <span class="kw">as _</span>, Style};
 <span class="kw">use </span>turbo_tasks::{RawVc, TransientValue, TryJoinIterExt, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::{
-    attach::AttachedFileSystemVc, to_sys_path, FileLinesContent, FileSystemPathVc,
+    attach::AttachedFileSystemVc,
+    source_context::{get_source_context, SourceContextLine},
+    to_sys_path, FileLinesContent, FileSystemPathVc,
 };
 <span class="kw">use </span>turbopack_core::issue::{
     Issue, IssueProcessingPathItem, IssueSeverity, IssueVc, OptionIssueProcessingPathItemsVc,
@@ -738,84 +746,90 @@
 
 <span class="kw">fn </span>format_source_content(source: <span class="kw-2">&amp;</span>PlainIssueSource, formatted_issue: <span class="kw-2">&amp;mut </span>String) {
     <span class="kw">if let </span>FileLinesContent::Lines(lines) = source.asset.content.lines() {
-        <span class="kw">let </span>context_start = source.start.line.saturating_sub(<span class="number">4</span>);
-        <span class="kw">let </span>context_end = source.end.line + <span class="number">4</span>;
-        <span class="kw">for </span>(i, l) <span class="kw">in </span>lines
-            .iter()
-            .map(|l| <span class="kw-2">&amp;</span>l.content)
-            .enumerate()
-            .take(context_end + <span class="number">1</span>)
-            .skip(context_start)
-        {
-            <span class="kw">let </span>n = i + <span class="number">1</span>;
-            <span class="kw">fn </span>safe_split_at(s: <span class="kw-2">&amp;</span>str, i: usize) -&gt; (<span class="kw-2">&amp;</span>str, <span class="kw-2">&amp;</span>str) {
-                <span class="kw">if </span>i &lt; s.len() {
-                    s.split_at(s.floor_char_boundary(i))
-                } <span class="kw">else </span>{
-                    (s, <span class="string">&quot;&quot;</span>)
+        <span class="kw">let </span>start_line = source.start.line;
+        <span class="kw">let </span>end_line = source.end.line;
+        <span class="kw">let </span>start_column = source.start.column;
+        <span class="kw">let </span>end_column = source.end.column;
+        <span class="kw">let </span>lines = lines.iter().map(|l| l.content.as_str());
+        <span class="kw">let </span>ctx = get_source_context(lines, start_line, start_column, end_line, end_column);
+        <span class="kw">let </span>f = formatted_issue;
+        <span class="kw">for </span>line <span class="kw">in </span>ctx.<span class="number">0 </span>{
+            <span class="kw">match </span>line {
+                SourceContextLine::Context { line, outside } =&gt; {
+                    <span class="macro">writeln!</span>(f, <span class="string">&quot;{}&quot;</span>, <span class="macro">format_args!</span>(<span class="string">&quot;{line:&gt;6} | {outside}&quot;</span>).dimmed()).unwrap();
                 }
-            }
-            <span class="kw">fn </span>limit_len(s: <span class="kw-2">&amp;</span>str) -&gt; Cow&lt;<span class="lifetime">&#39;_</span>, str&gt; {
-                <span class="kw">if </span>s.len() &lt; <span class="number">200 </span>{
-                    <span class="kw">return </span>Cow::Borrowed(s);
-                }
-                <span class="kw">let </span>(a, b) = s.split_at(s.floor_char_boundary(<span class="number">98</span>));
-                <span class="kw">let </span>(<span class="kw">_</span>, c) = b.split_at(b.ceil_char_boundary(b.len() - <span class="number">99</span>));
-                Cow::Owned(<span class="macro">format!</span>(<span class="string">&quot;{}...{}&quot;</span>, a, c))
-            }
-            <span class="kw">match </span>(i.cmp(<span class="kw-2">&amp;</span>source.start.line), i.cmp(<span class="kw-2">&amp;</span>source.end.line)) {
-                <span class="comment">// outside
-                </span>(Ordering::Less, <span class="kw">_</span>) | (<span class="kw">_</span>, Ordering::Greater) =&gt; {
+                SourceContextLine::Start {
+                    line,
+                    before,
+                    inside,
+                } =&gt; {
                     <span class="macro">writeln!</span>(
-                        formatted_issue,
-                        <span class="string">&quot;{:&gt;6}   {}&quot;</span>,
-                        n.dimmed(),
-                        limit_len(l).dimmed()
+                        f,
+                        <span class="string">&quot;       | {}{}{}&quot;</span>,
+                        <span class="string">&quot; &quot;</span>.repeat(before.len()),
+                        <span class="string">&quot;v&quot;</span>.bold(),
+                        <span class="string">&quot;-&quot;</span>.repeat(inside.len()).bold(),
+                    )
+                    .unwrap();
+                    <span class="macro">writeln!</span>(f, <span class="string">&quot;{line:&gt;6} + {}{}&quot;</span>, before.dimmed(), inside.bold()).unwrap();
+                }
+                SourceContextLine::End {
+                    line,
+                    inside,
+                    after,
+                } =&gt; {
+                    <span class="macro">writeln!</span>(f, <span class="string">&quot;{line:&gt;6} + {}{}&quot;</span>, inside.bold(), after.dimmed()).unwrap();
+                    <span class="macro">writeln!</span>(
+                        f,
+                        <span class="string">&quot;       +{}{}&quot;</span>,
+                        <span class="string">&quot;-&quot;</span>.repeat(inside.len()).bold(),
+                        <span class="string">&quot;^&quot;</span>.bold()
                     )
                     .unwrap();
                 }
-                <span class="comment">// start line
-                </span>(Ordering::Equal, Ordering::Less) =&gt; {
-                    <span class="kw">let </span>(before, marked) = safe_split_at(l, source.start.column);
+                SourceContextLine::StartAndEnd {
+                    line,
+                    before,
+                    inside,
+                    after,
+                } =&gt; {
+                    <span class="kw">if </span>inside.len() &gt;= <span class="number">2 </span>{
+                        <span class="macro">writeln!</span>(
+                            f,
+                            <span class="string">&quot;       + {}{}{}{}&quot;</span>,
+                            <span class="string">&quot; &quot;</span>.repeat(before.len()),
+                            <span class="string">&quot;v&quot;</span>.bold(),
+                            <span class="string">&quot;-&quot;</span>.repeat(inside.len() - <span class="number">2</span>).bold(),
+                            <span class="string">&quot;v&quot;</span>.bold(),
+                        )
+                        .unwrap();
+                    } <span class="kw">else </span>{
+                        <span class="macro">writeln!</span>(f, <span class="string">&quot;       | {}{}&quot;</span>, <span class="string">&quot; &quot;</span>.repeat(before.len()), <span class="string">&quot;v&quot;</span>.bold()).unwrap();
+                    }
                     <span class="macro">writeln!</span>(
-                        formatted_issue,
-                        <span class="string">&quot;{:&gt;6} + {}{}&quot;</span>,
-                        n,
-                        limit_len(before).dimmed(),
-                        limit_len(marked).bold()
+                        f,
+                        <span class="string">&quot;{line:&gt;6} + {}{}{}&quot;</span>,
+                        before.dimmed(),
+                        inside.bold(),
+                        after.dimmed()
                     )
                     .unwrap();
+                    <span class="kw">if </span>inside.len() &gt;= <span class="number">2 </span>{
+                        <span class="macro">writeln!</span>(
+                            f,
+                            <span class="string">&quot;       + {}{}{}{}&quot;</span>,
+                            <span class="string">&quot; &quot;</span>.repeat(before.len()),
+                            <span class="string">&quot;^&quot;</span>.bold(),
+                            <span class="string">&quot;-&quot;</span>.repeat(inside.len() - <span class="number">2</span>).bold(),
+                            <span class="string">&quot;^&quot;</span>.bold(),
+                        )
+                        .unwrap();
+                    } <span class="kw">else </span>{
+                        <span class="macro">writeln!</span>(f, <span class="string">&quot;       | {}{}&quot;</span>, <span class="string">&quot; &quot;</span>.repeat(before.len()), <span class="string">&quot;^&quot;</span>.bold()).unwrap();
+                    }
                 }
-                <span class="comment">// start and end line
-                </span>(Ordering::Equal, Ordering::Equal) =&gt; {
-                    <span class="kw">let </span>real_start = l.floor_char_boundary(source.start.column);
-                    <span class="kw">let </span>(before, temp) = safe_split_at(l, real_start);
-                    <span class="kw">let </span>(middle, after) = safe_split_at(temp, source.end.column - real_start);
-                    <span class="macro">writeln!</span>(
-                        formatted_issue,
-                        <span class="string">&quot;{:&gt;6} &gt; {}{}{}&quot;</span>,
-                        n,
-                        limit_len(before).dimmed(),
-                        limit_len(middle).bold(),
-                        limit_len(after).dimmed()
-                    )
-                    .unwrap();
-                }
-                <span class="comment">// end line
-                </span>(Ordering::Greater, Ordering::Equal) =&gt; {
-                    <span class="kw">let </span>(marked, after) = safe_split_at(l, source.end.column);
-                    <span class="macro">writeln!</span>(
-                        formatted_issue,
-                        <span class="string">&quot;{:&gt;6} + {}{}&quot;</span>,
-                        n,
-                        limit_len(marked).bold(),
-                        limit_len(after).dimmed()
-                    )
-                    .unwrap();
-                }
-                <span class="comment">// middle line
-                </span>(Ordering::Greater, Ordering::Less) =&gt; {
-                    <span class="macro">writeln!</span>(formatted_issue, <span class="string">&quot;{:&gt;6} | {}&quot;</span>, n, limit_len(l).bold()).unwrap()
+                SourceContextLine::Inside { line, inside } =&gt; {
+                    <span class="macro">writeln!</span>(f, <span class="string">&quot;{:&gt;6} + {}&quot;</span>, line.bold(), inside.bold()).unwrap();
                 }
             }
         }

@@ -374,13 +374,19 @@
 <span id="374">374</span>
 <span id="375">375</span>
 <span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>regex::Regex;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-<span class="kw">use </span>turbo_tasks_fs::{glob::GlobVc, DirectoryEntry, FileContent, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_fs::{
+    glob::GlobVc, json::parse_json_rope_with_source_context, DirectoryEntry, FileContent,
+    FileSystemPathVc,
+};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
     reference::{AssetReference, AssetReferenceVc},
@@ -479,7 +485,7 @@
                 <span class="kw">let </span>config_file_path = config_asset.path();
                 <span class="kw">let </span>config_file_dir = config_file_path.parent();
                 <span class="kw">let </span>node_pre_gyp_config: NodePreGypConfigJson =
-                    serde_json::from_reader(config_file.read())<span class="question-mark">?</span>;
+                    parse_json_rope_with_source_context(config_file.content())<span class="question-mark">?</span>;
                 <span class="kw">let </span><span class="kw-2">mut </span>assets: IndexSet&lt;AssetVc&gt; = IndexSet::new();
                 <span class="kw">for </span>version <span class="kw">in </span>node_pre_gyp_config.binary.napi_versions.iter() {
                     <span class="kw">let </span>native_binding_path = NAPI_VERSION_TEMPLATE.replace(

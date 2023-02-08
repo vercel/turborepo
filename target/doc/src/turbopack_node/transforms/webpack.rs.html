@@ -187,11 +187,15 @@
 <span id="187">187</span>
 <span id="188">188</span>
 <span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>turbo_tasks::{primitives::JsonValueVc, trace::TraceRawVcs, Value};
-<span class="kw">use </span>turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_fs::{
+    json::parse_json_rope_with_source_context, File, FileContent, FileSystemPathVc,
+};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     context::{AssetContext, AssetContextVc},
@@ -367,7 +371,7 @@
                 assets: Vec::new()
             }.cell());
         };
-        <span class="kw">let </span>processed: WebpackLoadersProcessingResult = serde_json::from_reader(val.read())
+        <span class="kw">let </span>processed: WebpackLoadersProcessingResult = parse_json_rope_with_source_context(val)
             .context(<span class="string">&quot;Unable to deserializate response from webpack loaders transform operation&quot;</span>)<span class="question-mark">?</span>;
         <span class="comment">// TODO handle SourceMap
         </span><span class="kw">let </span>file = File::from(processed.source);

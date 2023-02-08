@@ -557,6 +557,7 @@
 <span id="557">557</span>
 <span id="558">558</span>
 <span id="559">559</span>
+<span id="560">560</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::{indexset, IndexMap, IndexSet};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -738,13 +739,14 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>anyhow::Result;
     <span class="kw">use </span>indexmap::{indexset, IndexMap};
+    <span class="kw">use </span>turbo_tasks_fs::json::parse_json_with_source_context;
 
     <span class="kw">use super</span>::{options_from_request, FontDataEntry, NextFontGoogleOptions};
     <span class="kw">use </span><span class="kw">crate</span>::next_font_google::{options::FontWeights, request::NextFontRequest};
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_errors_on_unknown_font() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = serde_json::from_str(
+        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;ABeeZee&quot;: {
@@ -755,7 +757,7 @@
   &quot;#</span>,
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>request: NextFontRequest = serde_json::from_str(
+        <span class="kw">let </span>request: NextFontRequest = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;import&quot;: &quot;Inter&quot;,
@@ -777,7 +779,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_default_values_when_no_arguments() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = serde_json::from_str(
+        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;ABeeZee&quot;: {
@@ -788,7 +790,7 @@
   &quot;#</span>,
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>request: NextFontRequest = serde_json::from_str(
+        <span class="kw">let </span>request: NextFontRequest = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;import&quot;: &quot;ABeeZee&quot;,
@@ -820,7 +822,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_errors_when_no_weights_chosen_no_variable() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = serde_json::from_str(
+        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;ABeeZee&quot;: {
@@ -831,7 +833,7 @@
   &quot;#</span>,
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>request: NextFontRequest = serde_json::from_str(
+        <span class="kw">let </span>request: NextFontRequest = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;import&quot;: &quot;ABeeZee&quot;,
@@ -856,7 +858,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_errors_on_unnecessary_weights() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = serde_json::from_str(
+        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;ABeeZee&quot;: {
@@ -867,7 +869,7 @@
   &quot;#</span>,
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>request: NextFontRequest = serde_json::from_str(
+        <span class="kw">let </span>request: NextFontRequest = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;import&quot;: &quot;ABeeZee&quot;,
@@ -895,7 +897,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_errors_on_unvavailable_weights() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = serde_json::from_str(
+        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;ABeeZee&quot;: {
@@ -906,7 +908,7 @@
   &quot;#</span>,
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>request: NextFontRequest = serde_json::from_str(
+        <span class="kw">let </span>request: NextFontRequest = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;import&quot;: &quot;ABeeZee&quot;,
@@ -933,7 +935,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_defaults_to_only_style_when_one_available() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = serde_json::from_str(
+        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;ABeeZee&quot;: {
@@ -944,7 +946,7 @@
   &quot;#</span>,
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>request: NextFontRequest = serde_json::from_str(
+        <span class="kw">let </span>request: NextFontRequest = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;import&quot;: &quot;ABeeZee&quot;,
@@ -965,7 +967,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_defaults_to_normal_style_when_multiple() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = serde_json::from_str(
+        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;ABeeZee&quot;: {
@@ -976,7 +978,7 @@
   &quot;#</span>,
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>request: NextFontRequest = serde_json::from_str(
+        <span class="kw">let </span>request: NextFontRequest = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;import&quot;: &quot;ABeeZee&quot;,
@@ -997,7 +999,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_errors_on_unknown_styles() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = serde_json::from_str(
+        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;ABeeZee&quot;: {
@@ -1008,7 +1010,7 @@
   &quot;#</span>,
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>request: NextFontRequest = serde_json::from_str(
+        <span class="kw">let </span>request: NextFontRequest = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;import&quot;: &quot;ABeeZee&quot;,
@@ -1037,7 +1039,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_errors_on_unknown_display() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = serde_json::from_str(
+        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;ABeeZee&quot;: {
@@ -1048,7 +1050,7 @@
   &quot;#</span>,
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>request: NextFontRequest = serde_json::from_str(
+        <span class="kw">let </span>request: NextFontRequest = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;import&quot;: &quot;ABeeZee&quot;,
@@ -1078,7 +1080,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_errors_on_axes_without_variable() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = serde_json::from_str(
+        <span class="kw">let </span>data: IndexMap&lt;String, FontDataEntry&gt; = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;ABeeZee&quot;: {
@@ -1089,7 +1091,7 @@
   &quot;#</span>,
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>request: NextFontRequest = serde_json::from_str(
+        <span class="kw">let </span>request: NextFontRequest = parse_json_with_source_context(
             <span class="string">r#&quot;
             {
                 &quot;import&quot;: &quot;ABeeZee&quot;,

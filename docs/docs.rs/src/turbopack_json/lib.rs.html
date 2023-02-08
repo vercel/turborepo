@@ -140,6 +140,24 @@
 <span id="140">140</span>
 <span id="141">141</span>
 <span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
 </pre><pre class="rust"><code><span class="doccomment">//! JSON asset support for turbopack.
 //!
 //! JSON assets are parsed to ensure they contain valid JSON.
@@ -149,9 +167,11 @@
 
 </span><span class="attr">#![feature(min_specialization)]
 
-</span><span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
+</span><span class="kw">use </span>std::fmt::Write;
+
+<span class="kw">use </span>anyhow::{bail, Error, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span class="kw">use </span>turbo_tasks_fs::{FileContent, FileJsonContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
@@ -258,20 +278,36 @@
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemContentVc&gt; {
         <span class="comment">// We parse to JSON and then stringify again to ensure that the
         // JSON is valid.
-        </span><span class="kw">let </span>content = <span class="self">self
-            </span>.module
-            .path()
-            .read_json()
-            .to_string()
-            .<span class="kw">await
-            </span>.context(<span class="string">&quot;Unable to make a module from invalid JSON&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>js_str_content = serde_json::to_string(content.as_str())<span class="question-mark">?</span>;
-        <span class="kw">let </span>inner_code = <span class="macro">format!</span>(<span class="string">&quot;__turbopack_export_value__(JSON.parse({js_str_content}));&quot;</span>);
-        <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
-            inner_code: inner_code.into(),
-            ..Default::default()
+        </span><span class="kw">let </span>content = <span class="self">self</span>.module.path().read();
+        <span class="kw">let </span>data = content.parse_json().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">match </span><span class="kw-2">&amp;*</span>data {
+            FileJsonContent::Content(data) =&gt; {
+                <span class="kw">let </span>js_str_content = serde_json::to_string(data)<span class="question-mark">?</span>;
+                <span class="kw">let </span>inner_code =
+                    <span class="macro">format!</span>(<span class="string">&quot;__turbopack_export_value__(JSON.parse({js_str_content}));&quot;</span>);
+                <span class="prelude-val">Ok</span>(EcmascriptChunkItemContent {
+                    inner_code: inner_code.into(),
+                    ..Default::default()
+                }
+                .into())
+            }
+            FileJsonContent::Unparseable(e) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>message = <span class="string">&quot;Unable to make a module from invalid JSON: &quot;</span>.to_string();
+                <span class="kw">if let </span>FileContent::Content(content) = <span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
+                    <span class="kw">let </span>text = content.content().to_str()<span class="question-mark">?</span>;
+                    e.write_with_content(<span class="kw-2">&amp;mut </span>message, text.as_ref())<span class="question-mark">?</span>;
+                } <span class="kw">else </span>{
+                    <span class="macro">write!</span>(message, <span class="string">&quot;{}&quot;</span>, e)<span class="question-mark">?</span>;
+                }
+                <span class="prelude-val">Err</span>(Error::msg(message))
+            }
+            FileJsonContent::NotFound =&gt; {
+                <span class="macro">bail!</span>(
+                    <span class="string">&quot;JSON file not found: {}&quot;</span>,
+                    <span class="self">self</span>.module.path().to_string().<span class="kw">await</span><span class="question-mark">?
+                </span>);
+            }
         }
-        .into())
     }
 }
 
