@@ -469,9 +469,15 @@ func (e *Engine) getResolvedTaskDefinition(pkg *fs.PackageJSON, rootPipeline *fs
 }
 
 func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.PackageJSON, taskID string, taskName string) ([]fs.BookkeepingTaskDefinition, error) {
-	// Look for the taskDefinition in the root pipeline. We'll wait to throw errors until the end
-	rootTaskDefinition, _ := rootPipeline.GetTask(taskID, taskName)
-	var workspaceDefinition *fs.BookkeepingTaskDefinition
+
+	// Start a list of TaskDefinitions we've found for this TaskID
+	taskDefinitions := []fs.BookkeepingTaskDefinition{}
+
+	// Look for the taskDefinition in the root pipeline.
+	// We'll wait to throw errors until the end
+	if rootTaskDefinition, err := rootPipeline.GetTask(taskID, taskName); err == nil {
+		taskDefinitions = append(taskDefinitions, *rootTaskDefinition)
+	}
 
 	// If the taskID is a root task (e.g. //#build), we don't need to look
 	// for a workspace task, since these can only be defined in the root turbo.json.
@@ -479,9 +485,9 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 	if taskIDPackage != util.RootPkgName && taskIDPackage != ROOT_NODE_NAME {
 		// Look up task definition in turbo.json in the workspace directory
 		workspaceConfigPath := turbopath.AbsoluteSystemPath(pkg.Dir).UntypedJoin("turbo.json")
-		workspaceTurboJSON, _ := fs.ReadTurboConfig(workspaceConfigPath)
 
-		if workspaceTurboJSON != nil {
+		// If there is an error, we can ignore it, since turbo.json config is not required in the workspace.
+		if workspaceTurboJSON, err := fs.ReadTurboConfig(workspaceConfigPath); err == nil {
 			// TODO(mehulkar): Enable extending from more than one workspace.
 			if len(workspaceTurboJSON.Extends) > 1 {
 				return nil, fmt.Errorf(
@@ -494,7 +500,11 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 			// TODO(mehulkar):
 			// 		Pipeline.GetTask allows searching with a taskID (e.g. `package#task`).
 			// 		But we do not want to allow this, except if we're in the root workspace.
-			workspaceDefinition, _ = workspaceTurboJSON.Pipeline.GetTask(taskID, taskName)
+			workspaceDefinition, err := workspaceTurboJSON.Pipeline.GetTask(taskID, taskName)
+
+			if err == nil {
+				taskDefinitions = append(taskDefinitions, *workspaceDefinition)
+			}
 
 			// If there is no Extends key, we are either in a workspace that didn't
 			// extend from anything, or in a single package repo, where the workspace is the root.
@@ -521,19 +531,8 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 		}
 	}
 
-	if workspaceDefinition == nil && rootTaskDefinition == nil {
+	if len(taskDefinitions) == 0 {
 		return nil, fmt.Errorf("Could not find \"%s\" in root turbo.json or \"%s\" workspace", taskID, pkg.Dir)
-	}
-
-	// Start a list of TaskDefinitions we've found for this TaskID
-	taskDefinitions := []fs.BookkeepingTaskDefinition{}
-
-	if rootTaskDefinition != nil {
-		taskDefinitions = append(taskDefinitions, *rootTaskDefinition)
-	}
-
-	if workspaceDefinition != nil {
-		taskDefinitions = append(taskDefinitions, *workspaceDefinition)
 	}
 
 	return taskDefinitions, nil
