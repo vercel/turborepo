@@ -321,7 +321,6 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	}
 
 	btd.fieldsMeta = map[string]bool{}
-	c := &btd.TaskDefinition
 
 	if task.Outputs != nil {
 		var inclusions []string
@@ -338,25 +337,25 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 			}
 		}
 
-		c.Outputs = TaskOutputs{
+		btd.TaskDefinition.Outputs = TaskOutputs{
 			Inclusions: inclusions,
 			Exclusions: exclusions,
 		}
 
-		sort.Strings(c.Outputs.Inclusions)
-		sort.Strings(c.Outputs.Exclusions)
+		sort.Strings(btd.TaskDefinition.Outputs.Inclusions)
+		sort.Strings(btd.TaskDefinition.Outputs.Exclusions)
 	}
 
 	if task.Cache == nil {
-		c.ShouldCache = true
+		btd.TaskDefinition.ShouldCache = true
 	} else {
-		c.ShouldCache = *task.Cache
+		btd.TaskDefinition.ShouldCache = *task.Cache
 	}
 
 	envVarDependencies := make(util.Set)
 
-	c.TopologicalDependencies = []string{} // TODO @mehulkar: this should be a set
-	c.TaskDependencies = []string{}        // TODO @mehulkar: this should be a set
+	btd.TaskDefinition.TopologicalDependencies = []string{} // TODO @mehulkar: this should be a set
+	btd.TaskDefinition.TaskDependencies = []string{}        // TODO @mehulkar: this should be a set
 
 	for _, dependency := range task.DependsOn {
 		if strings.HasPrefix(dependency, envPipelineDelimiter) {
@@ -367,18 +366,18 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 			if _, ok := btd.fieldsMeta["TopologicalDependencies"]; !ok {
 				btd.fieldsMeta["TopologicalDependencies"] = true
 			}
-			c.TopologicalDependencies = append(c.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
+			btd.TaskDefinition.TopologicalDependencies = append(btd.TaskDefinition.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
 		} else {
 			// Assign bookkeeping, but only once, since we are in a loop
 			if _, ok := btd.fieldsMeta["TaskDependencies"]; !ok {
 				btd.fieldsMeta["TaskDependencies"] = true
 			}
-			c.TaskDependencies = append(c.TaskDependencies, dependency)
+			btd.TaskDefinition.TaskDependencies = append(btd.TaskDefinition.TaskDependencies, dependency)
 		}
 	}
 
-	sort.Strings(c.TaskDependencies)
-	sort.Strings(c.TopologicalDependencies)
+	sort.Strings(btd.TaskDefinition.TaskDependencies)
+	sort.Strings(btd.TaskDefinition.TopologicalDependencies)
 
 	// Append env key into EnvVarDependencies
 	if task.Env != nil {
@@ -394,22 +393,22 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	c.EnvVarDependencies = envVarDependencies.UnsafeListOfStrings()
+	btd.TaskDefinition.EnvVarDependencies = envVarDependencies.UnsafeListOfStrings()
 
-	sort.Strings(c.EnvVarDependencies)
+	sort.Strings(btd.TaskDefinition.EnvVarDependencies)
 
 	if task.Inputs != nil {
 		// Note that we don't require Inputs to be sorted, we're going to
 		// hash the resulting files and sort that instead
 		btd.fieldsMeta["Inputs"] = true
-		c.Inputs = task.Inputs
+		btd.TaskDefinition.Inputs = task.Inputs
 	}
 
 	if task.OutputMode != nil {
 		btd.fieldsMeta["OutputMode"] = true
-		c.OutputMode = *task.OutputMode
+		btd.TaskDefinition.OutputMode = *task.OutputMode
 	}
-	c.Persistent = task.Persistent
+	btd.TaskDefinition.Persistent = task.Persistent
 	return nil
 }
 
