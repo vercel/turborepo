@@ -29,7 +29,7 @@ At the moment, configuring webpack loaders is possible for Next.js apps through 
 ```js filename="next.config.js"
 module.exports = {
   experimental: {
-    turbopack: {
+    turbo: {
       loaders: {
         // Option format
         '.md': [
@@ -55,7 +55,7 @@ Turbopack can be configured to modify module resolution through aliases, similar
 ```js filename="next.config.js"
 module.exports = {
   experimental: {
-    turbopack: {
+    turbo: {
       resolveAlias: {
         underscore: 'lodash',
         mocha: { browser: 'mocha/browser-entry.js' },

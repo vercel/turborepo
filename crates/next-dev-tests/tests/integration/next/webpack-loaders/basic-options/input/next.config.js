@@ -1,6 +1,6 @@
 module.exports = {
   experimental: {
-    turbopack: {
+    turbo: {
       loaders: {
         ".replace": [
           { loader: "replace-loader", options: { defaultExport: 3 } },
