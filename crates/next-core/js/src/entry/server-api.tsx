@@ -6,12 +6,24 @@ import "next/dist/server/node-polyfill-fetch.js";
 
 import * as allExports from ".";
 import { apiResolver } from "next/dist/server/api-utils/node";
+import { IncomingMessage, ServerResponse } from "node:http";
+import {
+  NodeNextRequest,
+  NodeNextResponse,
+} from "next/dist/server/base-http/node";
+import { parse } from "node:querystring";
 
 startHandler(({ request, response, query, params, path }) => {
-  const mergedQuery = { ...query, ...params };
+  const parsedQuery = parse(query);
+
+  const mergedQuery = { ...parsedQuery, ...params };
+
+  const req = new NodeNextRequest(request);
+  const res = new NodeNextResponse(response);
+
   return apiResolver(
-    request,
-    response,
+    req.originalRequest,
+    res.originalResponse,
     mergedQuery,
     allExports,
     {
