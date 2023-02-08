@@ -1,7 +1,9 @@
 module.exports = {
   experimental: {
-    turbopackLoaders: {
-      ".raw": ["raw-loader"],
+    turbopack: {
+      loaders: {
+        ".raw": ["raw-loader"],
+      },
     },
   },
 };
