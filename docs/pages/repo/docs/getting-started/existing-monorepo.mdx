@@ -8,12 +8,6 @@ import { Tabs, Tab } from "../../../../components/Tabs";
 
 # Add Turborepo to your existing monorepo
 
-`turbo` works with [Yarn](https://classic.yarnpkg.com/lang/en/), [npm](https://www.npmjs.com/), and [pnpm](https://pnpm.io/) on the following operating systems:
-
-- macOS darwin 64-bit (Intel), ARM 64-bit (Apple Silicon)
-- Linux 64-bit, ARM 64-bit
-- Windows 64-bit, ARM 64-bit
-
 ## Configure workspaces
 
 `turbo` is built on top of Workspaces, a way of managing multiple packages from within a single monorepo package. Turborepo is compatible with the workspace implementations from all package managers. For more information on managing your Turborepo workspaces, see the [Workspaces](/repo/docs/handbook/workspaces) documentation.
@@ -81,9 +75,7 @@ Install `turbo` globally.
   </Tab>
 </Tabs>
 
-<Callout>
-  Note: Linux builds of `turbo` link against `glibc`. For Alpine Docker environments, you will need to ensure libc6-compat is installed as well, via `RUN apk add --no-cache libc6-compat`
-</Callout>
+For more details about installation, see [Installing Turborepo](../installing)
 
 ## Create `turbo.json`
 
