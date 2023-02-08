@@ -136,7 +136,9 @@ jobs:
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
+            cli/**
             crates/turborepo*
+            crates/turborepo*/**
             crates/turbo-updater
             Cargo.lock
 
