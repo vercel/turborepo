@@ -116,7 +116,14 @@ impl APIClient {
             })
             .await?;
 
-        Ok(response.json().await?)
+        response.json().await.map_err(|err| {
+            anyhow!(
+                "Error getting user: {}",
+                err.status()
+                    .and_then(|status| status.canonical_reason())
+                    .unwrap_or(&err.to_string())
+            )
+        })
     }
 
     pub async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
@@ -133,7 +140,14 @@ impl APIClient {
             })
             .await?;
 
-        Ok(response.json().await?)
+        response.json().await.map_err(|err| {
+            anyhow!(
+                "Error getting teams: {}",
+                err.status()
+                    .and_then(|status| status.canonical_reason())
+                    .unwrap_or(&err.to_string())
+            )
+        })
     }
 
     pub async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
@@ -148,7 +162,15 @@ impl APIClient {
             request_builder.send()
         }
         .await?;
-        Ok(response.json().await?)
+
+        response.json().await.map_err(|err| {
+            anyhow!(
+                "Error getting team: {}",
+                err.status()
+                    .and_then(|status| status.canonical_reason())
+                    .unwrap_or(&err.to_string())
+            )
+        })
     }
 
     pub async fn get_caching_status(
@@ -177,7 +199,14 @@ impl APIClient {
             })
             .await?;
 
-        Ok(response.json().await?)
+        response.json().await.map_err(|err| {
+            anyhow!(
+                "Error getting caching status: {}",
+                err.status()
+                    .and_then(|status| status.canonical_reason())
+                    .unwrap_or(&err.to_string())
+            )
+        })
     }
 
     pub async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
@@ -193,7 +222,14 @@ impl APIClient {
             })
             .await?;
 
-        let verification_response: VerificationResponse = response.json().await?;
+        let verification_response: VerificationResponse = response.json().await.map_err(|err| {
+            anyhow!(
+                "Error verifying token: {}",
+                err.status()
+                    .and_then(|status| status.canonical_reason())
+                    .unwrap_or(&err.to_string())
+            )
+        })?;
         Ok(VerifiedSsoUser {
             token: verification_response.token,
             team_id: verification_response.team_id,
