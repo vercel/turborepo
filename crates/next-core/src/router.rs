@@ -222,7 +222,7 @@ pub async fn route(
     let configs = config_assets(context, project_path, next_config.page_extensions());
     let router_asset = route_executor(context, project_path, configs);
 
-    // TODO this is a hack to get this files watched.
+    // TODO this is a hack to get these files watched.
     let next_config = watch_files_hack(context, project_path);
 
     let request = serde_json::value::to_value(&*request.await?)?;
