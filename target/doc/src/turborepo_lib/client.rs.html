@@ -238,6 +238,7 @@
 <span id="238">238</span>
 <span id="239">239</span>
 <span id="240">240</span>
+<span id="241">241</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{env, future::Future};
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -346,9 +347,10 @@
     <span class="kw">async fn </span>get_user(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;UserResponse&gt; {
         <span class="kw">let </span>response = <span class="self">self
             </span>.make_retryable_request(|| {
+                <span class="kw">let </span>url = <span class="self">self</span>.make_url(<span class="string">&quot;/v2/user&quot;</span>);
                 <span class="kw">let </span>request_builder = <span class="self">self
                     </span>.client
-                    .get(<span class="self">self</span>.make_url(<span class="string">&quot;/v2/user&quot;</span>))
+                    .get(url)
                     .header(<span class="string">&quot;User-Agent&quot;</span>, USER_AGENT.clone())
                     .header(<span class="string">&quot;Authorization&quot;</span>, <span class="macro">format!</span>(<span class="string">&quot;Bearer {}&quot;</span>, <span class="self">self</span>.token))
                     .header(<span class="string">&quot;Content-Type&quot;</span>, <span class="string">&quot;application/json&quot;</span>);

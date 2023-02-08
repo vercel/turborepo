@@ -341,6 +341,7 @@
 <span id="341">341</span>
 <span id="342">342</span>
 <span id="343">343</span>
+<span id="344">344</span>
 </pre><pre class="rust"><code><span class="attr">#[cfg(unix)]
 </span><span class="kw">use </span>std::os::unix::fs::PermissionsExt;
 <span class="kw">use </span>std::{
@@ -611,7 +612,7 @@
         )
         .unwrap();
 
-        tokio::spawn(start_test_server());
+        <span class="kw">let </span>handle = tokio::spawn(start_test_server());
         <span class="kw">let </span><span class="kw-2">mut </span>base = CommandBase {
             repo_root: Default::default(),
             ui: UI::new(<span class="bool-val">false</span>),
@@ -633,8 +634,9 @@
 
         link::link(<span class="kw-2">&amp;mut </span>base, <span class="bool-val">false</span>).<span class="kw">await</span>.unwrap();
 
+        handle.abort();
         <span class="kw">let </span>team_id = base.repo_config().unwrap().team_id();
-        <span class="macro">assert!</span>(team_id == <span class="prelude-val">Some</span>(TEAM_ID) || team_id == <span class="prelude-val">Some</span>(USER_ID))
+        <span class="macro">assert!</span>(team_id == <span class="prelude-val">Some</span>(TEAM_ID) || team_id == <span class="prelude-val">Some</span>(USER_ID));
     }
 
     <span class="kw">async fn </span>start_test_server() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {

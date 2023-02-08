@@ -1693,9 +1693,9 @@
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(Payload::Go(Box::new(clap_args)));
             }
 
-            <span class="kw">let </span>base = CommandBase::new(clap_args, repo_root)<span class="question-mark">?</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>base = CommandBase::new(clap_args, repo_root)<span class="question-mark">?</span>;
 
-            login::login(base).<span class="kw">await</span><span class="question-mark">?</span>;
+            login::login(<span class="kw-2">&amp;mut </span>base).<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="prelude-val">Ok</span>(Payload::Rust(<span class="prelude-val">Ok</span>(<span class="number">0</span>)))
         }
