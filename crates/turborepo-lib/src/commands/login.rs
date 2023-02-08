@@ -169,12 +169,12 @@ mod test {
 
         login::login(&mut base).await.unwrap();
 
+        handle.abort();
+
         assert_eq!(
             base.user_config().unwrap().token().unwrap(),
             EXPECTED_TOKEN_TEST
         );
-
-        handle.abort();
     }
 
     #[derive(Debug, Clone, Deserialize)]

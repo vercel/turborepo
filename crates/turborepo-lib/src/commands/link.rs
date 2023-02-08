@@ -290,10 +290,9 @@ mod test {
 
         link::link(&mut base, false).await.unwrap();
 
+        handle.abort();
         let team_id = base.repo_config().unwrap().team_id();
         assert!(team_id == Some(TEAM_ID) || team_id == Some(USER_ID));
-
-        handle.abort();
     }
 
     async fn start_test_server() -> Result<()> {
