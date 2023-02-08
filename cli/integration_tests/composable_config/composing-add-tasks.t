@@ -2,7 +2,7 @@ Setup
   $ . ${TESTDIR}/../setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
 
-  $ ${TURBO} run added-task --skip-infer --filter=add-tasks
+  $ ${TURBO} run added-task --filter=add-tasks
   \xe2\x80\xa2 Packages in scope: add-tasks (esc)
   \xe2\x80\xa2 Running added-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

@@ -7,7 +7,7 @@ Setup
 # - `outputs`, `inputs`, `env`, and `outputMode` are overriden from the root config.
 
 # 1. First run, assert that the right `outputs` are cached.
-  $ ${TURBO} run override-values-task --skip-infer --filter=override-values > tmp.log
+  $ ${TURBO} run override-values-task --filter=override-values > tmp.log
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
@@ -30,7 +30,7 @@ Setup
   apps/override-values/lib/bar.min.txt
 
 2. Run again and assert cache hit, and that full output is displayed
-  $ ${TURBO} run override-values-task --skip-infer --filter=override-values
+  $ ${TURBO} run override-values-task --filter=override-values
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -46,7 +46,7 @@ Setup
   
 3. Change input file and assert cache miss
   $ echo "more text" >> $TARGET_DIR/apps/override-values/src/bar.txt
-  $ ${TURBO} run override-values-task --skip-infer --filter=override-values
+  $ ${TURBO} run override-values-task --filter=override-values
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -62,7 +62,7 @@ Setup
   
 3a. Change a file that is declared as input in root config, and assert cache hit and FULL TURBO
   $ echo "more text" >> $TARGET_DIR/apps/override-values/src/foo.txt
-  $ ${TURBO} run override-values-task --skip-infer --filter=override-values
+  $ ${TURBO} run override-values-task --filter=override-values
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -77,7 +77,7 @@ Setup
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 4. Set env var and assert cache miss, and that hash is different from above
-  $ OTHER_VAR=somevalue ${TURBO} run override-values-task --skip-infer --filter=override-values
+  $ OTHER_VAR=somevalue ${TURBO} run override-values-task --filter=override-values
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -92,7 +92,7 @@ Setup
     Time:\s*[\.0-9]+m?s  (re)
   
 4a. Set env var that is declared in root config, and assert cache hit and FULL TURBO
-  $ OTHER_VAR=somevalue ${TURBO} run override-values-task --skip-infer --filter=override-values
+  $ OTHER_VAR=somevalue ${TURBO} run override-values-task --filter=override-values
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

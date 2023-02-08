@@ -7,7 +7,7 @@ Setup
 # - `outputs`, `inputs`, `env` are retained from the root.
 
 # 1. First run, assert for `outputs`
-  $ ${TURBO} run missing-workspace-config-task --skip-infer --filter=missing-workspace-config > tmp.log
+  $ ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config > tmp.log
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
@@ -30,7 +30,7 @@ Setup
   apps/missing-workspace-config/out/foo.min.txt
 
 2. Run again and assert cache hit, and that output is suppressed
-  $ ${TURBO} run missing-workspace-config-task --skip-infer --filter=missing-workspace-config
+  $ ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -42,7 +42,7 @@ Setup
   
 3. Change input file and assert cache miss, and not FULL TURBO
   $ echo "more text" >> $TARGET_DIR/apps/missing-workspace-config/src/foo.txt
-  $ ${TURBO} run missing-workspace-config-task --skip-infer --filter=missing-workspace-config
+  $ ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -59,7 +59,7 @@ Setup
 
 3a. Changing a different file (that is not in `inputs` config) gets cache hit and FULL TURBO
   $ echo "more text" >> $TARGET_DIR/apps/missing-workspace-config/src/bar.txt
-  $ ${TURBO} run missing-workspace-config-task --skip-infer --filter=missing-workspace-config
+  $ ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -70,7 +70,7 @@ Setup
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 4. Set env var and assert cache miss, and that hash is different from above
-  $ SOME_VAR=somevalue ${TURBO} run missing-workspace-config-task --skip-infer --filter=missing-workspace-config
+  $ SOME_VAR=somevalue ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

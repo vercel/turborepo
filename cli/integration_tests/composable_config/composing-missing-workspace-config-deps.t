@@ -7,7 +7,7 @@ Setup
 # and Topological dependencies are retained from the root config.
 
 # 1. First run, assert that dependet tasks run `dependsOn`
-  $ ${TURBO} run missing-workspace-config-task-with-deps --skip-infer --filter=missing-workspace-config > tmp.log
+  $ ${TURBO} run missing-workspace-config-task-with-deps --filter=missing-workspace-config > tmp.log
 # Validate in pieces. `omit-key` task has two dependsOn values, and those tasks
 # can run in non-deterministic order. So we need to validate the logs in the pieces.
   $ cat tmp.log | grep "in scope" -A 2
