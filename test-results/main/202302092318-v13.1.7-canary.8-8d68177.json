@@ -1,0 +1,1740 @@
+{
+  "ref": "dfca4e098f7b64232f7f7ba6f99eceb772ede551",
+  "nextjsVersion": "Next.js v13.1.7-canary.8",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675982110942,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay unsupported app features"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'includes')\n    at _default (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n    at Object.toInclude (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/index.js:19:39)\n    at __EXTERNAL_MATCHER_TRAP__ (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n    at Object.toInclude (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n    at Object.<anonymous> (/work/test/development/acceptance-app/unsupported-app-features.test.ts:34:52)"
+                ],
+                "fullName": "Error Overlay unsupported app features should show error exporting AMP config in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should show error exporting AMP config in app dir"
+              }
+            ],
+            "endTime": 1675982208277,
+            "message": "  ● Error Overlay unsupported app features › should show error exporting AMP config in app dir\n\n    TypeError: Cannot read properties of null (reading 'includes')\n\n      32 |\n      33 |       await session.hasRedbox(true)\n    > 34 |       expect(await session.getRedboxDescription()).toInclude(\n         |                                                    ^\n      35 |         'AMP is not supported in the app directory. If you need to use AMP it will continue to be supported in the pages directory.'\n      36 |       )\n      37 |\n\n      at _default (../node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n      at Object.toInclude (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n      at Object.<anonymous> (development/acceptance-app/unsupported-app-features.test.ts:34:52)\n",
+            "name": "/work/test/development/acceptance-app/unsupported-app-features.test.ts",
+            "startTime": 1675982111037,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/browserslist/legacybrowsers-true.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675982637131,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "@next/font/google without-preloaded-fonts without _app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/next-font/without-preloaded-fonts.test.ts:47:48)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "@next/font/google without-preloaded-fonts without _app without preload",
+                "location": null,
+                "status": "failed",
+                "title": "without preload"
+              },
+              {
+                "ancestorTitles": [
+                  "@next/font/google without-preloaded-fonts without _app"
+                ],
+                "failureMessages": [],
+                "fullName": "@next/font/google without-preloaded-fonts without _app without fonts",
+                "location": null,
+                "status": "passed",
+                "title": "without fonts"
+              },
+              {
+                "ancestorTitles": [
+                  "@next/font/google no preloads with _app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/next-font/without-preloaded-fonts.test.ts:107:48)\n    at runMicrotasks (<anonymous>)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "@next/font/google no preloads with _app without preload",
+                "location": null,
+                "status": "failed",
+                "title": "without preload"
+              },
+              {
+                "ancestorTitles": [
+                  "@next/font/google no preloads with _app"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (/work/test/e2e/next-font/without-preloaded-fonts.test.ts:124:48)\n    at runMicrotasks (<anonymous>)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "@next/font/google no preloads with _app without fonts",
+                "location": null,
+                "status": "failed",
+                "title": "without fonts"
+              }
+            ],
+            "endTime": 1675982680481,
+            "message": "  ● @next/font/google without-preloaded-fonts without _app › without preload\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n      45 |\n      46 |     // Preconnect\n    > 47 |     expect($('link[rel=\"preconnect\"]').length).toBe(1)\n         |                                                ^\n      48 |     expect($('link[rel=\"preconnect\"]').get(0).attribs).toEqual({\n      49 |       crossorigin: 'anonymous',\n      50 |       href: '/',\n\n      at Object.<anonymous> (e2e/next-font/without-preloaded-fonts.test.ts:47:48)\n\n  ● @next/font/google no preloads with _app › without preload\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n      105 |\n      106 |     // Preconnect\n    > 107 |     expect($('link[rel=\"preconnect\"]').length).toBe(1)\n          |                                                ^\n      108 |     expect($('link[rel=\"preconnect\"]').get(0).attribs).toEqual({\n      109 |       crossorigin: 'anonymous',\n      110 |       href: '/',\n\n      at Object.<anonymous> (e2e/next-font/without-preloaded-fonts.test.ts:107:48)\n          at runMicrotasks (<anonymous>)\n\n  ● @next/font/google no preloads with _app › without fonts\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n      122 |\n      123 |     // Preconnect\n    > 124 |     expect($('link[rel=\"preconnect\"]').length).toBe(1)\n          |                                                ^\n      125 |     expect($('link[rel=\"preconnect\"]').get(0).attribs).toEqual({\n      126 |       crossorigin: 'anonymous',\n      127 |       href: '/',\n\n      at Object.<anonymous> (e2e/next-font/without-preloaded-fonts.test.ts:124:48)\n          at runMicrotasks (<anonymous>)\n",
+            "name": "/work/test/e2e/next-font/without-preloaded-fonts.test.ts",
+            "startTime": 1675982637228,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/compression/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675983018541,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles Webpack Require Hook",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handles Webpack Require Hook build Does not error during build",
+                "location": null,
+                "status": "passed",
+                "title": "Does not error during build"
+              },
+              {
+                "ancestorTitles": [
+                  "Handles Webpack Require Hook",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Initialized config/\nReceived string:  \"undefined>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nError: You are using configuration and/or tools that are not yet\nsupported by Next.js v13 with Turbopack:··\n- Unsupported Next.js configuration option(s) (next.config.js)\n  The only configurations options supported are:\n    - configFileName\n    - env\n    - experimental.appDir\n    - experimental.serverComponentsExternalPackages\n    - experimental.turbo\n    - images\n    - pageExtensions\n    - onDemandEntries\n    - rewrites\n    - redirects\n    - headers\n    - reactStrictMode\n    - swcMinify\n    - transpilePackages\n  To use Turbopack, remove other configuration options.····\nIf you cannot make the changes above, but still want to try out\nNext.js v13 with Turbopack, create the Next.js v13 playground app\nby running the following commands:·\n  yarn create next-app --example with-turbopack with-turbopack-app\n  cd with-turbopack-app\n  yarn run dev·········\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback··\nWarning: Unsupported config found; but continuing with custom Turbopack binary.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/webpack-require-hook --is-next-dev-command --port 38139 --root /work --no-open]\n\u001b[32mready\u001b[39m - started server on 0.0.0.0:38139, url: http://localhost:38139\n\u001b[35mevent\u001b[39m - initial compilation 7.507ms\n\u001b[91;4mbug\u001b[0m - [code generation] \u001b[1m... [1 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n\u001b[91merror\u001b[0m - [resolve]\n  \u001b[1m... [18 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n\u001b[93mwarning\u001b[0m - [parse]\n  \u001b[1m... [12 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n\u001b[91;4mbug\u001b[0m - [code generation] \u001b[1m... [1 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n\u001b[91merror\u001b[0m - [resolve]\n  \u001b[1m... [18 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n\u001b[93mwarning\u001b[0m - [parse]\n  \u001b[1m... [12 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n\"\n    at Object.<anonymous> (/work/test/integration/webpack-require-hook/test/index.test.js:41:22)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles Webpack Require Hook dev mode Applies and does not error during development",
+                "location": null,
+                "status": "failed",
+                "title": "Applies and does not error during development"
+              }
+            ],
+            "endTime": 1675983044104,
+            "message": "  ● Handles Webpack Require Hook › dev mode › Applies and does not error during development\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Initialized config/\n    Received string:  \"undefined>>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Error: You are using configuration and/or tools that are not yet\n    supported by Next.js v13 with Turbopack:··\n    - Unsupported Next.js configuration option(s) (next.config.js)\n      The only configurations options supported are:\n        - configFileName\n        - env\n        - experimental.appDir\n        - experimental.serverComponentsExternalPackages\n        - experimental.turbo\n        - images\n        - pageExtensions\n        - onDemandEntries\n        - rewrites\n        - redirects\n        - headers\n        - reactStrictMode\n        - swcMinify\n        - transpilePackages\n      To use Turbopack, remove other configuration options.····\n    If you cannot make the changes above, but still want to try out\n    Next.js v13 with Turbopack, create the Next.js v13 playground app\n    by running the following commands:·\n      yarn create next-app --example with-turbopack with-turbopack-app\n      cd with-turbopack-app\n      yarn run dev·········\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback··\n    Warning: Unsupported config found; but continuing with custom Turbopack binary.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/webpack-require-hook --is-next-dev-command --port 38139 --root /work --no-open]\n    \u001b[32mready\u001b[39m - started server on 0.0.0.0:38139, url: http://localhost:38139\n    \u001b[35mevent\u001b[39m - initial compilation 7.507ms\n    \u001b[91;4mbug\u001b[0m - [code generation] \u001b[1m... [1 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n    \u001b[91merror\u001b[0m - [resolve]\n      \u001b[1m... [18 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n    \u001b[93mwarning\u001b[0m - [parse]\n      \u001b[1m... [12 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n    \u001b[91;4mbug\u001b[0m - [code generation] \u001b[1m... [1 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n    \u001b[91merror\u001b[0m - [resolve]\n      \u001b[1m... [18 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n    \u001b[93mwarning\u001b[0m - [parse]\n      \u001b[1m... [12 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n    \"\n\n      39 |       await renderViaHTTP(appPort, '/')\n      40 |       await killApp(app)\n    > 41 |       expect(output).toMatch(/Initialized config/)\n         |                      ^\n      42 |     })\n      43 |   })\n      44 | })\n\n      at Object.<anonymous> (integration/webpack-require-hook/test/index.test.js:41:22)\n",
+            "name": "/work/test/integration/webpack-require-hook/test/index.test.js",
+            "startTime": 1675983018636,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/basic/define-class-fields.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 6,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 8,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 14,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675982627413,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "createContext called in Server Component"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\nundefined\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance-app/server-components.test.ts:41:9)"
+                ],
+                "fullName": "Error Overlay for server components createContext called in Server Component should show error when React.createContext is called",
+                "location": null,
+                "status": "failed",
+                "title": "should show error when React.createContext is called"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "createContext called in Server Component"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\nundefined\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance-app/server-components.test.ts:96:9)"
+                ],
+                "fullName": "Error Overlay for server components createContext called in Server Component should show error when React.createContext is called in external package",
+                "location": null,
+                "status": "failed",
+                "title": "should show error when React.createContext is called in external package"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "createContext called in Server Component"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\nundefined\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance-app/server-components.test.ts:150:9)"
+                ],
+                "fullName": "Error Overlay for server components createContext called in Server Component should show error when createContext is called in external package",
+                "location": null,
+                "status": "failed",
+                "title": "should show error when createContext is called in external package"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "React component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components React component hooks called in Server Component should show error when React.<client-hook> is called",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when React.<client-hook> is called"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "React component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components React component hooks called in Server Component should show error when React.<client-hook> is called in external package",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when React.<client-hook> is called in external package"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "React component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components React component hooks called in Server Component should show error when React client hook is called in external package",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when React client hook is called in external package"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Class component used in Server Component"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\nundefined\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance-app/server-components.test.ts:328:9)"
+                ],
+                "fullName": "Error Overlay for server components Class component used in Server Component should show error when Class Component is used",
+                "location": null,
+                "status": "failed",
+                "title": "should show error when Class Component is used"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Class component used in Server Component"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\nundefined\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance-app/server-components.test.ts:381:9)"
+                ],
+                "fullName": "Error Overlay for server components Class component used in Server Component should show error when React.PureComponent is rendered in external package",
+                "location": null,
+                "status": "failed",
+                "title": "should show error when React.PureComponent is rendered in external package"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Class component used in Server Component"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\nundefined\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance-app/server-components.test.ts:434:9)"
+                ],
+                "fullName": "Error Overlay for server components Class component used in Server Component should show error when Component is rendered in external package",
+                "location": null,
+                "status": "failed",
+                "title": "should show error when Component is rendered in external package"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Next.js component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components Next.js component hooks called in Server Component should show error when useRouter is called",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when useRouter is called"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Next.js component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components Next.js component hooks called in Server Component should show error when useSearchParams is called",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when useSearchParams is called"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Next.js component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components Next.js component hooks called in Server Component should show error when useSelectedLayoutSegment is called",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when useSelectedLayoutSegment is called"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Next.js component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components Next.js component hooks called in Server Component should show error when useSelectedLayoutSegments is called",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when useSelectedLayoutSegments is called"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Next.js component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components Next.js component hooks called in Server Component should show error when usePathname is called",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when usePathname is called"
+              }
+            ],
+            "endTime": 1675983035814,
+            "message": "  ● Error Overlay for server components › createContext called in Server Component › should show error when React.createContext is called\n\n    TIMED OUT: success\n\n    undefined\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance-app/server-components.test.ts:41:9)\n\n  ● Error Overlay for server components › createContext called in Server Component › should show error when React.createContext is called in external package\n\n    TIMED OUT: success\n\n    undefined\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance-app/server-components.test.ts:96:9)\n\n  ● Error Overlay for server components › createContext called in Server Component › should show error when createContext is called in external package\n\n    TIMED OUT: success\n\n    undefined\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance-app/server-components.test.ts:150:9)\n\n  ● Error Overlay for server components › Class component used in Server Component › should show error when Class Component is used\n\n    TIMED OUT: success\n\n    undefined\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance-app/server-components.test.ts:328:9)\n\n  ● Error Overlay for server components › Class component used in Server Component › should show error when React.PureComponent is rendered in external package\n\n    TIMED OUT: success\n\n    undefined\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance-app/server-components.test.ts:381:9)\n\n  ● Error Overlay for server components › Class component used in Server Component › should show error when Component is rendered in external package\n\n    TIMED OUT: success\n\n    undefined\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance-app/server-components.test.ts:434:9)\n",
+            "name": "/work/test/development/acceptance-app/server-components.test.ts",
+            "startTime": 1675982627510,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 7,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 14,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675983725352,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not include edge api routes and edge ssr routes into dev middleware manifest",
+                "location": null,
+                "status": "passed",
+                "title": "should not include edge api routes and edge ssr routes into dev middleware manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should sort edge SSR routes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should sort edge SSR routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be able to navigate between edge SSR routes without any errors",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to navigate between edge SSR routes without any errors"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to ssr rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to ssr rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to ssg rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to ssg rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to static rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to static rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not consume server.js file extension",
+                "location": null,
+                "status": "passed",
+                "title": "should not consume server.js file extension"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/tmp/next-install-3e7ae4b3b0cd45ef86b77b21c055a1f85229f12fffc237f70fbeff7415e737a3/.next/server/middleware-manifest.json'"
+                ],
+                "fullName": "Switchable runtime Switchable runtime (dev) should build /api/hello and /api/edge as an api route with edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "should build /api/hello and /api/edge as an api route with edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes in API routes",
+                "location": null,
+                "status": "passed",
+                "title": "should be possible to switch between runtimes in API routes"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes in pages",
+                "location": null,
+                "status": "passed",
+                "title": "should be possible to switch between runtimes in pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes with same content",
+                "location": null,
+                "status": "pending",
+                "title": "should be possible to switch between runtimes with same content"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should recover from syntax error when using edge runtime",
+                "location": null,
+                "status": "pending",
+                "title": "should recover from syntax error when using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not crash the dev server when invalid runtime is configured",
+                "location": null,
+                "status": "pending",
+                "title": "should not crash the dev server when invalid runtime is configured"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should give proper errors for invalid runtime in app dir",
+                "location": null,
+                "status": "pending",
+                "title": "should give proper errors for invalid runtime in app dir"
+              }
+            ],
+            "endTime": 1675983762962,
+            "message": "  ● Switchable runtime › Switchable runtime (dev) › should build /api/hello and /api/edge as an api route with edge runtime\n\n    ENOENT: no such file or directory, open '/tmp/next-install-3e7ae4b3b0cd45ef86b77b21c055a1f85229f12fffc237f70fbeff7415e737a3/.next/server/middleware-manifest.json'\n\n\n",
+            "name": "/work/test/e2e/switchable-runtime/index.test.ts",
+            "startTime": 1675983725449,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/config-devtool-dev/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 8,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 16,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675984224635,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should render the /static page",
+                "location": null,
+                "status": "passed",
+                "title": "should render the /static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should client-render the /static page",
+                "location": null,
+                "status": "passed",
+                "title": "should client-render the /static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should render the /ssr page",
+                "location": null,
+                "status": "passed",
+                "title": "should render the /ssr page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should client-render the /ssr page",
+                "location": null,
+                "status": "passed",
+                "title": "should client-render the /ssr page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should render the /ssg page",
+                "location": null,
+                "status": "passed",
+                "title": "should render the /ssg page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should client-render the /ssg page",
+                "location": null,
+                "status": "passed",
+                "title": "should client-render the /ssg page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should respond on size api",
+                "location": null,
+                "status": "passed",
+                "title": "should respond on size api"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should respond on basename api",
+                "location": null,
+                "status": "passed",
+                "title": "should respond on basename api"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\nReceived string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_c8a385._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__f7b682._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/static\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:50:22)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should render the /static page",
+                "location": null,
+                "status": "failed",
+                "title": "should render the /static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\nHello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:57:11)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should client-render the /static page",
+                "location": null,
+                "status": "failed",
+                "title": "should client-render the /static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\nReceived string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_5e0742._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__cbb415._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"url\\\":\\\"/_next/static/assets/7d4cde3a64338232.png\\\"},\\\"__N_SSP\\\":true},\\\"page\\\":\\\"/ssr\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gssp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:50:22)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should render the /ssr page",
+                "location": null,
+                "status": "failed",
+                "title": "should render the /ssr page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\nHello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:57:11)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should client-render the /ssr page",
+                "location": null,
+                "status": "failed",
+                "title": "should client-render the /ssr page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\nReceived string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_e60ec6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__9adab4._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"url\\\":\\\"/_next/static/assets/7d4cde3a64338232.png\\\"},\\\"__N_SSG\\\":true},\\\"page\\\":\\\"/ssg\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gsp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:50:22)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should render the /ssg page",
+                "location": null,
+                "status": "failed",
+                "title": "should render the /ssg page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\nHello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:57:11)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should client-render the /ssg page",
+                "location": null,
+                "status": "failed",
+                "title": "should client-render the /ssg page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: {\"size\": 30079}\nReceived: false\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:69:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should respond on size api",
+                "location": null,
+                "status": "failed",
+                "title": "should respond on size api"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n-   \"basename\": StringMatching /^vercel\\.[0-9a-f]{8}\\.png$/,\n+   \"basename\": \"7d4cde3a64338232.png\",\n  }\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:77:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should respond on basename api",
+                "location": null,
+                "status": "failed",
+                "title": "should respond on basename api"
+              }
+            ],
+            "endTime": 1675984371449,
+            "message": "  ● Handle new URL asset references in next dev › should render the /static page\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n    Received string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_c8a385._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__f7b682._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/static\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      48 |       it(`should render the ${page} page`, async () => {\n      49 |         const html = await renderViaHTTP(appPort, page)\n    > 50 |         expect(html).toMatch(expectedServer)\n         |                      ^\n      51 |       })\n      52 |\n      53 |       it(`should client-render the ${page} page`, async () => {\n\n      at Object.<anonymous> (integration/url/test/index.test.js:50:22)\n\n  ● Handle new URL asset references in next dev › should client-render the /static page\n\n    TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\n    Hello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/url/test/index.test.js:57:11)\n\n  ● Handle new URL asset references in next dev › should render the /ssr page\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n    Received string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_5e0742._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__cbb415._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"url\\\":\\\"/_next/static/assets/7d4cde3a64338232.png\\\"},\\\"__N_SSP\\\":true},\\\"page\\\":\\\"/ssr\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gssp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      48 |       it(`should render the ${page} page`, async () => {\n      49 |         const html = await renderViaHTTP(appPort, page)\n    > 50 |         expect(html).toMatch(expectedServer)\n         |                      ^\n      51 |       })\n      52 |\n      53 |       it(`should client-render the ${page} page`, async () => {\n\n      at Object.<anonymous> (integration/url/test/index.test.js:50:22)\n\n  ● Handle new URL asset references in next dev › should client-render the /ssr page\n\n    TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\n    Hello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/url/test/index.test.js:57:11)\n\n  ● Handle new URL asset references in next dev › should render the /ssg page\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n    Received string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_e60ec6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__9adab4._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"url\\\":\\\"/_next/static/assets/7d4cde3a64338232.png\\\"},\\\"__N_SSG\\\":true},\\\"page\\\":\\\"/ssg\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gsp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      48 |       it(`should render the ${page} page`, async () => {\n      49 |         const html = await renderViaHTTP(appPort, page)\n    > 50 |         expect(html).toMatch(expectedServer)\n         |                      ^\n      51 |       })\n      52 |\n      53 |       it(`should client-render the ${page} page`, async () => {\n\n      at Object.<anonymous> (integration/url/test/index.test.js:50:22)\n\n  ● Handle new URL asset references in next dev › should client-render the /ssg page\n\n    TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\n    Hello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/url/test/index.test.js:57:11)\n\n  ● Handle new URL asset references in next dev › should respond on size api\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: {\"size\": 30079}\n    Received: false\n\n      67 |       )\n      68 |\n    > 69 |       expect(data).toEqual({ size: 30079 })\n         |                    ^\n      70 |     })\n      71 |\n      72 |     it('should respond on basename api', async () => {\n\n      at Object.<anonymous> (integration/url/test/index.test.js:69:20)\n\n  ● Handle new URL asset references in next dev › should respond on basename api\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 1\n    + Received  + 1\n\n      Object {\n    -   \"basename\": StringMatching /^vercel\\.[0-9a-f]{8}\\.png$/,\n    +   \"basename\": \"7d4cde3a64338232.png\",\n      }\n\n      75 |       )\n      76 |\n    > 77 |       expect(data).toEqual({\n         |                    ^\n      78 |         basename: expect.stringMatching(/^vercel\\.[0-9a-f]{8}\\.png$/),\n      79 |       })\n      80 |     })\n\n      at Object.<anonymous> (integration/url/test/index.test.js:77:20)\n",
+            "name": "/work/test/integration/url/test/index.test.js",
+            "startTime": 1675984224733,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675982212973,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay unsupported app features"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'includes')\n    at _default (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n    at Object.toInclude (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/index.js:19:39)\n    at __EXTERNAL_MATCHER_TRAP__ (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n    at Object.toInclude (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n    at Object.<anonymous> (/work/test/development/acceptance-app/unsupported-app-features.test.ts:34:52)"
+                ],
+                "fullName": "Error Overlay unsupported app features should show error exporting AMP config in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should show error exporting AMP config in app dir"
+              }
+            ],
+            "endTime": 1675982309998,
+            "message": "  ● Error Overlay unsupported app features › should show error exporting AMP config in app dir\n\n    TypeError: Cannot read properties of null (reading 'includes')\n\n      32 |\n      33 |       await session.hasRedbox(true)\n    > 34 |       expect(await session.getRedboxDescription()).toInclude(\n         |                                                    ^\n      35 |         'AMP is not supported in the app directory. If you need to use AMP it will continue to be supported in the pages directory.'\n      36 |       )\n      37 |\n\n      at _default (../node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n      at Object.toInclude (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n      at Object.<anonymous> (development/acceptance-app/unsupported-app-features.test.ts:34:52)\n",
+            "name": "/work/test/development/acceptance-app/unsupported-app-features.test.ts",
+            "startTime": 1675982213070,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/app-dir/trailingslash/trailingslash.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675983226282,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello world\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/type-module-interop/index.test.ts:88:18)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Type module interop should render server-side",
+                "location": null,
+                "status": "failed",
+                "title": "should render server-side"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [],
+                "fullName": "Type module interop should render client-side",
+                "location": null,
+                "status": "passed",
+                "title": "should render client-side"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"link to home\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/type-module-interop/index.test.ts:105:39)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Type module interop should render server-side with modules",
+                "location": null,
+                "status": "failed",
+                "title": "should render server-side with modules"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [],
+                "fullName": "Type module interop should render client-side with modules",
+                "location": null,
+                "status": "passed",
+                "title": "should render client-side with modules"
+              }
+            ],
+            "endTime": 1675983247112,
+            "message": "  ● Type module interop › should render server-side\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello world\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      86 |   it('should render server-side', async () => {\n      87 |     const html = await renderViaHTTP(next.url, '/')\n    > 88 |     expect(html).toContain('hello world')\n         |                  ^\n      89 |     // component load via next/dynamic should rendered on the server side\n      90 |     expect(html).toContain('An example components load via next/dynamic')\n      91 |     // imported next/amp should work on the server side\n\n      at Object.<anonymous> (e2e/type-module-interop/index.test.ts:88:18)\n\n  ● Type module interop › should render server-side with modules\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"link to home\"\n    Received: \"\"\n\n      103 |     const html = await renderViaHTTP(next.url, '/modules')\n      104 |     const $ = cheerio.load(html)\n    > 105 |     expect($('#link-to-home').text()).toBe('link to home')\n          |                                       ^\n      106 |   })\n      107 |\n      108 |   it('should render client-side with modules', async () => {\n\n      at Object.<anonymous> (e2e/type-module-interop/index.test.ts:105:39)\n",
+            "name": "/work/test/e2e/type-module-interop/index.test.ts",
+            "startTime": 1675983226378,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/compression/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675983586334,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles Webpack Require Hook",
+                  "build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handles Webpack Require Hook build Does not error during build",
+                "location": null,
+                "status": "passed",
+                "title": "Does not error during build"
+              },
+              {
+                "ancestorTitles": [
+                  "Handles Webpack Require Hook",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Initialized config/\nReceived string:  \"undefined>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nError: You are using configuration and/or tools that are not yet\nsupported by Next.js v13 with Turbopack:··\n- Unsupported Next.js configuration option(s) (next.config.js)\n  The only configurations options supported are:\n    - configFileName\n    - env\n    - experimental.appDir\n    - experimental.serverComponentsExternalPackages\n    - experimental.turbo\n    - images\n    - pageExtensions\n    - onDemandEntries\n    - rewrites\n    - redirects\n    - headers\n    - reactStrictMode\n    - swcMinify\n    - transpilePackages\n  To use Turbopack, remove other configuration options.····\nIf you cannot make the changes above, but still want to try out\nNext.js v13 with Turbopack, create the Next.js v13 playground app\nby running the following commands:·\n  yarn create next-app --example with-turbopack with-turbopack-app\n  cd with-turbopack-app\n  yarn run dev·········\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback··\nWarning: Unsupported config found; but continuing with custom Turbopack binary.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/webpack-require-hook --is-next-dev-command --port 44299 --root /work --no-open]\n\u001b[32mready\u001b[39m - started server on 0.0.0.0:44299, url: http://localhost:44299\n\u001b[35mevent\u001b[39m - initial compilation 8.209ms\n\u001b[91;4mbug\u001b[0m - [code generation] \u001b[1m... [1 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n\u001b[91merror\u001b[0m - [resolve]\n  \u001b[1m... [18 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n\u001b[93mwarning\u001b[0m - [parse]\n  \u001b[1m... [12 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n\u001b[91;4mbug\u001b[0m - [code generation] \u001b[1m... [1 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n\u001b[91merror\u001b[0m - [resolve]\n  \u001b[1m... [18 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n\u001b[93mwarning\u001b[0m - [parse]\n  \u001b[1m... [12 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n\"\n    at Object.<anonymous> (/work/test/integration/webpack-require-hook/test/index.test.js:41:22)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles Webpack Require Hook dev mode Applies and does not error during development",
+                "location": null,
+                "status": "failed",
+                "title": "Applies and does not error during development"
+              }
+            ],
+            "endTime": 1675983612273,
+            "message": "  ● Handles Webpack Require Hook › dev mode › Applies and does not error during development\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Initialized config/\n    Received string:  \"undefined>>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Error: You are using configuration and/or tools that are not yet\n    supported by Next.js v13 with Turbopack:··\n    - Unsupported Next.js configuration option(s) (next.config.js)\n      The only configurations options supported are:\n        - configFileName\n        - env\n        - experimental.appDir\n        - experimental.serverComponentsExternalPackages\n        - experimental.turbo\n        - images\n        - pageExtensions\n        - onDemandEntries\n        - rewrites\n        - redirects\n        - headers\n        - reactStrictMode\n        - swcMinify\n        - transpilePackages\n      To use Turbopack, remove other configuration options.····\n    If you cannot make the changes above, but still want to try out\n    Next.js v13 with Turbopack, create the Next.js v13 playground app\n    by running the following commands:·\n      yarn create next-app --example with-turbopack with-turbopack-app\n      cd with-turbopack-app\n      yarn run dev·········\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback··\n    Warning: Unsupported config found; but continuing with custom Turbopack binary.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/webpack-require-hook --is-next-dev-command --port 44299 --root /work --no-open]\n    \u001b[32mready\u001b[39m - started server on 0.0.0.0:44299, url: http://localhost:44299\n    \u001b[35mevent\u001b[39m - initial compilation 8.209ms\n    \u001b[91;4mbug\u001b[0m - [code generation] \u001b[1m... [1 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n    \u001b[91merror\u001b[0m - [resolve]\n      \u001b[1m... [18 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n    \u001b[93mwarning\u001b[0m - [parse]\n      \u001b[1m... [12 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n    \u001b[91;4mbug\u001b[0m - [code generation] \u001b[1m... [1 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n    \u001b[91merror\u001b[0m - [resolve]\n      \u001b[1m... [18 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n    \u001b[93mwarning\u001b[0m - [parse]\n      \u001b[1m... [12 paths] are hidden, run with \u001b[92m--show-all\u001b[39m to show them\u001b[0m\n    \"\n\n      39 |       await renderViaHTTP(appPort, '/')\n      40 |       await killApp(app)\n    > 41 |       expect(output).toMatch(/Initialized config/)\n         |                      ^\n      42 |     })\n      43 |   })\n      44 | })\n\n      at Object.<anonymous> (integration/webpack-require-hook/test/index.test.js:41:22)\n",
+            "name": "/work/test/integration/webpack-require-hook/test/index.test.js",
+            "startTime": 1675983586426,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/basic/define-class-fields.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 6,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 8,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 14,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675982637372,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "createContext called in Server Component"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\nundefined\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance-app/server-components.test.ts:41:9)"
+                ],
+                "fullName": "Error Overlay for server components createContext called in Server Component should show error when React.createContext is called",
+                "location": null,
+                "status": "failed",
+                "title": "should show error when React.createContext is called"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "createContext called in Server Component"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\nundefined\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance-app/server-components.test.ts:96:9)"
+                ],
+                "fullName": "Error Overlay for server components createContext called in Server Component should show error when React.createContext is called in external package",
+                "location": null,
+                "status": "failed",
+                "title": "should show error when React.createContext is called in external package"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "createContext called in Server Component"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\nundefined\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance-app/server-components.test.ts:150:9)"
+                ],
+                "fullName": "Error Overlay for server components createContext called in Server Component should show error when createContext is called in external package",
+                "location": null,
+                "status": "failed",
+                "title": "should show error when createContext is called in external package"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "React component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components React component hooks called in Server Component should show error when React.<client-hook> is called",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when React.<client-hook> is called"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "React component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components React component hooks called in Server Component should show error when React.<client-hook> is called in external package",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when React.<client-hook> is called in external package"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "React component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components React component hooks called in Server Component should show error when React client hook is called in external package",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when React client hook is called in external package"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Class component used in Server Component"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\nundefined\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance-app/server-components.test.ts:328:9)"
+                ],
+                "fullName": "Error Overlay for server components Class component used in Server Component should show error when Class Component is used",
+                "location": null,
+                "status": "failed",
+                "title": "should show error when Class Component is used"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Class component used in Server Component"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\nundefined\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance-app/server-components.test.ts:381:9)"
+                ],
+                "fullName": "Error Overlay for server components Class component used in Server Component should show error when React.PureComponent is rendered in external package",
+                "location": null,
+                "status": "failed",
+                "title": "should show error when React.PureComponent is rendered in external package"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Class component used in Server Component"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: success\n\nundefined\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance-app/server-components.test.ts:434:9)"
+                ],
+                "fullName": "Error Overlay for server components Class component used in Server Component should show error when Component is rendered in external package",
+                "location": null,
+                "status": "failed",
+                "title": "should show error when Component is rendered in external package"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Next.js component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components Next.js component hooks called in Server Component should show error when useRouter is called",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when useRouter is called"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Next.js component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components Next.js component hooks called in Server Component should show error when useSearchParams is called",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when useSearchParams is called"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Next.js component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components Next.js component hooks called in Server Component should show error when useSelectedLayoutSegment is called",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when useSelectedLayoutSegment is called"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Next.js component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components Next.js component hooks called in Server Component should show error when useSelectedLayoutSegments is called",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when useSelectedLayoutSegments is called"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components",
+                  "Next.js component hooks called in Server Component"
+                ],
+                "failureMessages": [],
+                "fullName": "Error Overlay for server components Next.js component hooks called in Server Component should show error when usePathname is called",
+                "location": null,
+                "status": "passed",
+                "title": "should show error when usePathname is called"
+              }
+            ],
+            "endTime": 1675983047413,
+            "message": "  ● Error Overlay for server components › createContext called in Server Component › should show error when React.createContext is called\n\n    TIMED OUT: success\n\n    undefined\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance-app/server-components.test.ts:41:9)\n\n  ● Error Overlay for server components › createContext called in Server Component › should show error when React.createContext is called in external package\n\n    TIMED OUT: success\n\n    undefined\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance-app/server-components.test.ts:96:9)\n\n  ● Error Overlay for server components › createContext called in Server Component › should show error when createContext is called in external package\n\n    TIMED OUT: success\n\n    undefined\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance-app/server-components.test.ts:150:9)\n\n  ● Error Overlay for server components › Class component used in Server Component › should show error when Class Component is used\n\n    TIMED OUT: success\n\n    undefined\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance-app/server-components.test.ts:328:9)\n\n  ● Error Overlay for server components › Class component used in Server Component › should show error when React.PureComponent is rendered in external package\n\n    TIMED OUT: success\n\n    undefined\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance-app/server-components.test.ts:381:9)\n\n  ● Error Overlay for server components › Class component used in Server Component › should show error when Component is rendered in external package\n\n    TIMED OUT: success\n\n    undefined\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance-app/server-components.test.ts:434:9)\n",
+            "name": "/work/test/development/acceptance-app/server-components.test.ts",
+            "startTime": 1675982637474,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 7,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 14,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675983747652,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not include edge api routes and edge ssr routes into dev middleware manifest",
+                "location": null,
+                "status": "passed",
+                "title": "should not include edge api routes and edge ssr routes into dev middleware manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should sort edge SSR routes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should sort edge SSR routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be able to navigate between edge SSR routes without any errors",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to navigate between edge SSR routes without any errors"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to ssr rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to ssr rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to ssg rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to ssg rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to static rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to static rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not consume server.js file extension",
+                "location": null,
+                "status": "passed",
+                "title": "should not consume server.js file extension"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/tmp/next-install-42e605efa36c52913c8fed358fc47a4356c5f9af3f2a29cf8ad5dcee0ccc3ee6/.next/server/middleware-manifest.json'"
+                ],
+                "fullName": "Switchable runtime Switchable runtime (dev) should build /api/hello and /api/edge as an api route with edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "should build /api/hello and /api/edge as an api route with edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes in API routes",
+                "location": null,
+                "status": "passed",
+                "title": "should be possible to switch between runtimes in API routes"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes in pages",
+                "location": null,
+                "status": "passed",
+                "title": "should be possible to switch between runtimes in pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes with same content",
+                "location": null,
+                "status": "pending",
+                "title": "should be possible to switch between runtimes with same content"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should recover from syntax error when using edge runtime",
+                "location": null,
+                "status": "pending",
+                "title": "should recover from syntax error when using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not crash the dev server when invalid runtime is configured",
+                "location": null,
+                "status": "pending",
+                "title": "should not crash the dev server when invalid runtime is configured"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should give proper errors for invalid runtime in app dir",
+                "location": null,
+                "status": "pending",
+                "title": "should give proper errors for invalid runtime in app dir"
+              }
+            ],
+            "endTime": 1675983786229,
+            "message": "  ● Switchable runtime › Switchable runtime (dev) › should build /api/hello and /api/edge as an api route with edge runtime\n\n    ENOENT: no such file or directory, open '/tmp/next-install-42e605efa36c52913c8fed358fc47a4356c5f9af3f2a29cf8ad5dcee0ccc3ee6/.next/server/middleware-manifest.json'\n\n\n",
+            "name": "/work/test/e2e/switchable-runtime/index.test.ts",
+            "startTime": 1675983747756,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/config-devtool-dev/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 8,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 8,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 16,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675984256673,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should render the /static page",
+                "location": null,
+                "status": "passed",
+                "title": "should render the /static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should client-render the /static page",
+                "location": null,
+                "status": "passed",
+                "title": "should client-render the /static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should render the /ssr page",
+                "location": null,
+                "status": "passed",
+                "title": "should render the /ssr page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should client-render the /ssr page",
+                "location": null,
+                "status": "passed",
+                "title": "should client-render the /ssr page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should render the /ssg page",
+                "location": null,
+                "status": "passed",
+                "title": "should render the /ssg page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should client-render the /ssg page",
+                "location": null,
+                "status": "passed",
+                "title": "should client-render the /ssg page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should respond on size api",
+                "location": null,
+                "status": "passed",
+                "title": "should respond on size api"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next build"
+                ],
+                "failureMessages": [],
+                "fullName": "Handle new URL asset references in next build should respond on basename api",
+                "location": null,
+                "status": "passed",
+                "title": "should respond on basename api"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\nReceived string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_c8a385._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__f7b682._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/static\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:50:22)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should render the /static page",
+                "location": null,
+                "status": "failed",
+                "title": "should render the /static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\nHello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:57:11)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should client-render the /static page",
+                "location": null,
+                "status": "failed",
+                "title": "should client-render the /static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\nReceived string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_5e0742._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__cbb415._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"url\\\":\\\"/_next/static/assets/7d4cde3a64338232.png\\\"},\\\"__N_SSP\\\":true},\\\"page\\\":\\\"/ssr\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gssp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:50:22)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should render the /ssr page",
+                "location": null,
+                "status": "failed",
+                "title": "should render the /ssr page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\nHello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:57:11)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should client-render the /ssr page",
+                "location": null,
+                "status": "failed",
+                "title": "should client-render the /ssr page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatch(expected)\n\nExpected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\nReceived string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_e60ec6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__9adab4._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"url\\\":\\\"/_next/static/assets/7d4cde3a64338232.png\\\"},\\\"__N_SSG\\\":true},\\\"page\\\":\\\"/ssg\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gsp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:50:22)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should render the /ssg page",
+                "location": null,
+                "status": "failed",
+                "title": "should render the /ssg page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\nHello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:57:11)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should client-render the /ssg page",
+                "location": null,
+                "status": "failed",
+                "title": "should client-render the /ssg page"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\nExpected: {\"size\": 30079}\nReceived: false\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:69:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should respond on size api",
+                "location": null,
+                "status": "failed",
+                "title": "should respond on size api"
+              },
+              {
+                "ancestorTitles": [
+                  "Handle new URL asset references in next dev"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n-   \"basename\": StringMatching /^vercel\\.[0-9a-f]{8}\\.png$/,\n+   \"basename\": \"7d4cde3a64338232.png\",\n  }\n    at Object.<anonymous> (/work/test/integration/url/test/index.test.js:77:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handle new URL asset references in next dev should respond on basename api",
+                "location": null,
+                "status": "failed",
+                "title": "should respond on basename api"
+              }
+            ],
+            "endTime": 1675984403518,
+            "message": "  ● Handle new URL asset references in next dev › should render the /static page\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n    Received string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_c8a385._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__f7b682._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/static\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      48 |       it(`should render the ${page} page`, async () => {\n      49 |         const html = await renderViaHTTP(appPort, page)\n    > 50 |         expect(html).toMatch(expectedServer)\n         |                      ^\n      51 |       })\n      52 |\n      53 |       it(`should client-render the ${page} page`, async () => {\n\n      at Object.<anonymous> (integration/url/test/index.test.js:50:22)\n\n  ● Handle new URL asset references in next dev › should client-render the /static page\n\n    TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\n    Hello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/url/test/index.test.js:57:11)\n\n  ● Handle new URL asset references in next dev › should render the /ssr page\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n    Received string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_5e0742._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__cbb415._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"url\\\":\\\"/_next/static/assets/7d4cde3a64338232.png\\\"},\\\"__N_SSP\\\":true},\\\"page\\\":\\\"/ssr\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gssp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      48 |       it(`should render the ${page} page`, async () => {\n      49 |         const html = await renderViaHTTP(appPort, page)\n    > 50 |         expect(html).toMatch(expectedServer)\n         |                      ^\n      51 |       })\n      52 |\n      53 |       it(`should client-render the ${page} page`, async () => {\n\n      at Object.<anonymous> (integration/url/test/index.test.js:50:22)\n\n  ● Handle new URL asset references in next dev › should client-render the /ssr page\n\n    TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\n    Hello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/url/test/index.test.js:57:11)\n\n  ● Handle new URL asset references in next dev › should render the /ssg page\n\n    expect(received).toMatch(expected)\n\n    Expected pattern: /Hello <!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png<!-- -->\\+<!-- -->\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n    Received string:  \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_test_integration_url_e60ec6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/49f66_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/aaab9_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/f2a84_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6c183_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/bf6da_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__9adab4._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/development/_buildManifest.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div>Hello <!-- -->/_next/static/assets/7d4cde3a64338232.png<!-- -->+<!-- -->/_next/static/assets/7d4cde3a64338232.png</div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"url\\\":\\\"/_next/static/assets/7d4cde3a64338232.png\\\"},\\\"__N_SSG\\\":true},\\\"page\\\":\\\"/ssg\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gsp\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      48 |       it(`should render the ${page} page`, async () => {\n      49 |         const html = await renderViaHTTP(appPort, page)\n    > 50 |         expect(html).toMatch(expectedServer)\n         |                      ^\n      51 |       })\n      52 |\n      53 |       it(`should client-render the ${page} page`, async () => {\n\n      at Object.<anonymous> (integration/url/test/index.test.js:50:22)\n\n  ● Handle new URL asset references in next dev › should client-render the /ssg page\n\n    TIMED OUT: /Hello \\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png\\+\\/_next\\/static\\/media\\/vercel\\.[0-9a-f]{8}\\.png/\n\n    Hello /_next/static/assets/7d4cde3a64338232.png+/_next/static/assets/7d4cde3a64338232.png\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/url/test/index.test.js:57:11)\n\n  ● Handle new URL asset references in next dev › should respond on size api\n\n    expect(received).toEqual(expected) // deep equality\n\n    Expected: {\"size\": 30079}\n    Received: false\n\n      67 |       )\n      68 |\n    > 69 |       expect(data).toEqual({ size: 30079 })\n         |                    ^\n      70 |     })\n      71 |\n      72 |     it('should respond on basename api', async () => {\n\n      at Object.<anonymous> (integration/url/test/index.test.js:69:20)\n\n  ● Handle new URL asset references in next dev › should respond on basename api\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 1\n    + Received  + 1\n\n      Object {\n    -   \"basename\": StringMatching /^vercel\\.[0-9a-f]{8}\\.png$/,\n    +   \"basename\": \"7d4cde3a64338232.png\",\n      }\n\n      75 |       )\n      76 |\n    > 77 |       expect(data).toEqual({\n         |                    ^\n      78 |         basename: expect.stringMatching(/^vercel\\.[0-9a-f]{8}\\.png$/),\n      79 |       })\n      80 |     })\n\n      at Object.<anonymous> (integration/url/test/index.test.js:77:20)\n",
+            "name": "/work/test/integration/url/test/index.test.js",
+            "startTime": 1675984256775,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
