@@ -230,7 +230,6 @@ impl DepGraph {
                 .g
                 .inner
                 .neighbors_directed(ix, petgraph::Direction::Incoming)
-                .filter(|&dependant_ix| !done.contains(&dependant_ix))
                 .count()
                 >= 2
             {
