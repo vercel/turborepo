@@ -16,6 +16,7 @@ pub struct Analyzer<'a> {
     items: &'a mut FxHashMap<ItemId, ItemData>,
 
     last_side_effect: Option<ItemId>,
+    last_side_effects: Vec<ItemId>,
 
     vars: FxHashMap<Id, VarState>,
 }
@@ -40,6 +41,7 @@ impl Analyzer<'_> {
             item_ids: &item_ids,
             items: &mut items,
             last_side_effect: Default::default(),
+            last_side_effects: Default::default(),
             vars: Default::default(),
         };
 
@@ -72,6 +74,7 @@ impl Analyzer<'_> {
                     }
 
                     self.last_side_effect = Some(item_id.clone());
+                    self.last_side_effects.push(item_id.clone());
                 }
 
                 for id in item.var_decls.iter() {
@@ -188,6 +191,7 @@ impl Analyzer<'_> {
 
                 if item.side_effects {
                     self.last_side_effect = Some(item_id.clone());
+                    self.last_side_effects.push(item_id.clone());
                 }
             }
         }
@@ -236,7 +240,7 @@ impl Analyzer<'_> {
                     ItemIdKind::ModuleEvaluation => {
                         // Create a strong dependency to LAST_SIDE_EFFECTS
 
-                        if let Some(last) = &self.last_side_effect {
+                        for last in self.last_side_effects.iter() {
                             self.g.add_strong_dep(item_id, last);
                         }
 
