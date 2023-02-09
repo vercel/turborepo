@@ -362,6 +362,19 @@ impl CapturedIssuesVc {
     pub async fn is_empty(self) -> Result<BoolVc> {
         Ok(BoolVc::cell(self.await?.is_empty()))
     }
+
+    #[turbo_tasks::function]
+    pub async fn has_fatal(self) -> Result<BoolVc> {
+        let mut has_fatal = false;
+        for issue in self.await?.iter() {
+            let severity = *issue.severity().await?;
+            if severity == IssueSeverity::Fatal {
+                has_fatal = true;
+                break;
+            }
+        }
+        Ok(BoolVc::cell(has_fatal))
+    }
 }
 
 impl CapturedIssues {
