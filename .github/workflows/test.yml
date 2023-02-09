@@ -606,7 +606,7 @@ jobs:
       - name: Run nextest
         timeout-minutes: 120
         run: |
-          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi -exclude turborepo-lib
+          cargo nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib
 
   turbopack_rust_test2:
     needs: [determine_jobs, rust_prepare]
