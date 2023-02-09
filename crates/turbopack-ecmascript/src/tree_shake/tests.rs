@@ -148,6 +148,8 @@ fn run(input: PathBuf) {
         )
         .unwrap();
 
+        analyzer.g.remove_weak_edges();
+
         let mut condensed = analyzer.g.finalize();
 
         writeln!(s, "# Final").unwrap();

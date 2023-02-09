@@ -151,6 +151,18 @@ pub struct DepGraph {
 }
 
 impl DepGraph {
+    pub(super) fn remove_weak_edges(&mut self) {
+        for from in 0..self.g.graph_ix.len() {
+            for to in 0..self.g.graph_ix.len() {
+                if let Some(strong) = self.g.inner.edge_weight(from as _, to as _) {
+                    if !strong {
+                        self.g.inner.remove_edge(from as _, to as _);
+                    }
+                }
+            }
+        }
+    }
+
     pub(super) fn finalize(&self) -> InternedGraph<Vec<ItemId>> {
         fn add_to_group(
             graph: &InternedGraph<ItemId>,
