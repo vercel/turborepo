@@ -1,8 +1,8 @@
 use std::hash::Hash;
 
-use fxhash::{FxBuildHasher, FxHashMap};
+use fxhash::{FxBuildHasher, FxHashMap, FxHashSet};
 use indexmap::IndexSet;
-use petgraph::prelude::DiGraphMap;
+use petgraph::{algo::kosaraju_scc, prelude::DiGraphMap};
 use swc_core::ecma::{
     ast::{
         op, ClassDecl, Decl, ExportDecl, ExportSpecifier, Expr, ExprStmt, FnDecl, Id,
@@ -83,7 +83,7 @@ pub(super) struct ItemData {
 #[derive(Debug)]
 pub(super) struct VarInfo {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InternedGraph<T>
 where
     T: Eq + Hash + Clone,
@@ -136,30 +136,65 @@ pub struct DepGraph {
 }
 
 impl DepGraph {
-    pub(super) fn finalize(&self) -> InternedGraph<Vec<u32>> {
-        let graph = self.g.inner.clone().into_graph();
+    pub(super) fn finalize(&mut self) -> InternedGraph<Vec<ItemId>> {
+        fn add_to_group(
+            graph: &InternedGraph<ItemId>,
+            group: &mut Vec<ItemId>,
+            start_ix: u32,
+            done: &mut FxHashSet<u32>,
+        ) {
+            if !done.insert(start_ix.clone()) {
+                return;
+            }
 
-        let condensed: petgraph::Graph<_, _, _, u32> =
-            super::condensation::condensation(graph, |strong1, strong2| strong1 || strong2);
+            // TODO: Consider cycles
+            //
 
-        let mut g = InternedGraph::default();
+            // Check deps of `start`.
+            for dep in graph
+                .inner
+                .neighbors_directed(start_ix, petgraph::Direction::Outgoing)
+            {
+                // Check if the the only dependant of dep is start
 
-        for node in condensed.node_weights() {
-            let node = g.node(node);
-
-            g.inner.add_node(node);
+                if graph
+                    .inner
+                    .neighbors_directed(dep, petgraph::Direction::Incoming)
+                    .count()
+                    == 1
+                {
+                    let dep_id = graph.graph_ix.get_index(dep as _).unwrap().clone();
+                    group.push(dep_id);
+                    add_to_group(graph, group, dep, done)
+                }
+            }
         }
 
-        for edge in condensed.edge_indices() {
-            let (from, to) = condensed.edge_endpoints(edge).unwrap();
+        let mut cycles = kosaraju_scc(&self.g.inner);
+        cycles.retain(|v| v.len() > 1);
 
-            let from = g.node(&condensed[from]);
-            let to = g.node(&condensed[to]);
+        // If a node have two or more dependants, it should be in a separate
+        // group.
 
-            g.inner.add_edge(from, to, condensed[edge]);
+        let mut groups = vec![];
+        let mut done = FxHashSet::default();
+
+        for id in self.g.graph_ix.iter() {
+            if id.index == usize::MAX {
+                groups.push(vec![id.clone()]);
+                continue;
+            }
         }
 
-        g
+        for group in &mut groups {
+            let start = group[0].clone();
+            let start_ix = self.g.node(&start);
+            add_to_group(&mut self.g, group, start_ix, &mut done);
+        }
+
+        self.g
+            .clone()
+            .map(|v| groups.iter().find(|g| g.contains(&v)).unwrap().clone())
     }
 
     /// Fills information per module items

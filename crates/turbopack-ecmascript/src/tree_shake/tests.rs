@@ -154,7 +154,7 @@ fn run(input: PathBuf) {
         writeln!(
             s,
             "```mermaid\n{}```",
-            render_mermaid(&mut condensed, &|buf: &Vec<u32>| format!(
+            render_mermaid(&mut condensed, &|buf: &Vec<ItemId>| format!(
                 "Items: {:?}",
                 buf
             ))

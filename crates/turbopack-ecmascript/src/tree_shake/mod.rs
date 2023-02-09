@@ -2,7 +2,7 @@ use fxhash::FxHashMap;
 use indexmap::IndexSet;
 use swc_core::ecma::ast::{Id, Module};
 
-use self::graph::{DepGraph, ItemData, ItemId, ItemIdKind};
+use self::graph::{DepGraph, InternedGraph, ItemData, ItemId, ItemIdKind};
 
 mod condensation;
 mod graph;
