@@ -192,9 +192,13 @@ impl DepGraph {
             add_to_group(&mut self.g, group, start_ix, &mut done);
         }
 
-        self.g
-            .clone()
-            .map(|v| groups.iter().find(|g| g.contains(&v)).unwrap().clone())
+        self.g.clone().map(|v| {
+            groups
+                .iter()
+                .find(|g| g.contains(&v))
+                .cloned()
+                .unwrap_or_default()
+        })
     }
 
     /// Fills information per module items
