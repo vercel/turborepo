@@ -74,11 +74,7 @@ impl DevManifestContentSourceVc {
             .flatten()
             .collect::<Vec<_>>();
 
-        routes.sort_by_cached_key(|s| {
-            s.split("/")
-                .map(|e| PageSortKey::from(e))
-                .collect::<Vec<_>>()
-        });
+        routes.sort_by_cached_key(|s| s.split('/').map(PageSortKey::from).collect::<Vec<_>>());
 
         Ok(StringsVc::cell(routes))
     }
@@ -198,7 +194,7 @@ impl From<&str> for PageSortKey {
     fn from(value: &str) -> Self {
         if value.starts_with("[[") && value.ends_with("]]") {
             PageSortKey::CatchAll
-        } else if value.starts_with("[") && value.ends_with("]") {
+        } else if value.starts_with('[') && value.ends_with(']') {
             PageSortKey::Slug
         } else {
             PageSortKey::Static(value.to_string())
