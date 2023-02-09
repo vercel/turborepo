@@ -205,6 +205,14 @@ impl DepGraph {
                 done.insert(ix);
                 continue;
             }
+        }
+
+        for id in self.g.graph_ix.iter() {
+            let ix = self.g.get_node(id);
+
+            if done.contains(&ix) {
+                continue;
+            }
 
             if self
                 .g
