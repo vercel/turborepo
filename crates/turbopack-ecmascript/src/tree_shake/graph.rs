@@ -1,4 +1,4 @@
-use std::hash::Hash;
+use std::{fmt, hash::Hash};
 
 use fxhash::{FxBuildHasher, FxHashMap, FxHashSet};
 use indexmap::IndexSet;
@@ -15,11 +15,21 @@ use swc_core::ecma::{
 use super::util::{ids_captured_by, ids_used_by, ids_used_by_ignoring_nested};
 
 /// The id of an item
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(super) struct ItemId {
     /// The index of the module item in the module.
     pub index: usize,
     pub kind: ItemIdKind,
+}
+
+impl fmt::Debug for ItemId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.index == usize::MAX {
+            return write!(f, "ItemId({:?})", self.kind);
+        }
+
+        write!(f, "ItemId({}, {:?})", self.index, self.kind)
+    }
 }
 
 /// ## Import
