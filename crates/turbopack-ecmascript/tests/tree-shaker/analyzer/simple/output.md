@@ -123,9 +123,9 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Items: [ItemId { index: 18446744073709551615, kind: ModuleEvaluation }]"];
-    N1["Items: [ItemId { index: 18446744073709551615, kind: Export((Atom('DOG' type=inline), #0)) }, ItemId { index: 2, kind: VarDeclarator(0) }]"];
-    N2["Items: [ItemId { index: 18446744073709551615, kind: Export((Atom('CHIMERA' type=inline), #0)) }, ItemId { index: 3, kind: VarDeclarator(0) }, ItemId { index: 1, kind: VarDeclarator(0) }, ItemId { index: 0, kind: VarDeclarator(0) }]"];
+    N0["Items: [ItemId(ModuleEvaluation)]"];
+    N1["Items: [ItemId(Export((Atom('DOG' type=inline), #0))), ItemId(2, VarDeclarator(0))]"];
+    N2["Items: [ItemId(Export((Atom('CHIMERA' type=inline), #0))), ItemId(3, VarDeclarator(0)), ItemId(1, VarDeclarator(0)), ItemId(0, VarDeclarator(0))]"];
     N0 --> N2;
     N0 --> N1;
     N1 --> N1;
