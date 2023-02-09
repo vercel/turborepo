@@ -422,6 +422,15 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 		taskDefinitions = append(taskDefinitions, *rootTaskDefinition)
 	}
 
+	// If we're in a single package repo, we can just exit with the TaskDefinition in the root pipeline
+	// since there are now workspaces, and we don't need to follow any extends keys.
+	if e.isSinglePackage {
+		if len(taskDefinitions) == 0 {
+			return nil, fmt.Errorf("Could not find \"%s\" in root turbo.json", taskID)
+		}
+		return taskDefinitions, nil
+	}
+
 	// If the taskID is a root task (e.g. //#build), we don't need to look
 	// for a workspace task, since these can only be defined in the root turbo.json.
 	taskIDPackage, _ := util.GetPackageTaskFromId(taskID)
@@ -449,15 +458,8 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 				taskDefinitions = append(taskDefinitions, *workspaceDefinition)
 			}
 
-			// If there is no Extends key, we are either in a workspace that didn't
-			// extend from anything, or in a single package repo, where the workspace is the root.
+			// If there is no Extends key, we are in a workspace that didn't extend from anything.
 			if len(workspaceTurboJSON.Extends) == 0 {
-				// For the single package case, we can just return the workspaceDefinition
-				// (It should be the same as the rootTaskDefinition)
-				if pkg.PackageJSONPath == "package.json" {
-					return []fs.BookkeepingTaskDefinition{*workspaceDefinition}, nil
-				}
-
 				// For turbo.jsons in workspaces that don't have an extends key, throw an error
 				// We don't support this right now.
 				return nil, fmt.Errorf("No \"extends\" key found in %s", workspaceConfigPath)
