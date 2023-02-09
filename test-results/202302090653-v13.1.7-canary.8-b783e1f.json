@@ -1,0 +1,1382 @@
+{
+  "ref": "774d0ddc82db97fd65191c5085d1f6abd10db6b3",
+  "nextjsVersion": "Next.js v13.1.7-canary.8",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675924498459,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675924562276,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675924498578,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/edge-can-read-request-body/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675924612057,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Edge can read request body"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge can read request body renders the static page",
+                "location": null,
+                "status": "passed",
+                "title": "renders the static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge can read request body",
+                  "middleware"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchObject(expected)\n\n- Expected  - 2\n+ Received  + 4\n\n  Object {\n    \"headers\": Object {\n-     \"x-req-type\": \"json\",\n-     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n+     \"connection\": \"close\",\n+     \"content-length\": \"2\",\n+     \"date\": \"Thu, 09 Feb 2023 06:37:12 GMT\",\n+     \"etag\": \"\\\"109abcqmas2\\\"\",\n    },\n    \"status\": 200,\n    \"text\": StringContaining \"ok\",\n  }\n    at Object.<anonymous> (/work/test/e2e/edge-can-read-request-body/index.test.ts:42:41)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Edge can read request body middleware reads a JSON body",
+                "location": null,
+                "status": "failed",
+                "title": "reads a JSON body"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge can read request body",
+                  "middleware"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge can read request body middleware reads a text body",
+                "location": null,
+                "status": "passed",
+                "title": "reads a text body"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge can read request body",
+                  "middleware"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchObject(expected)\n\n- Expected  - 2\n+ Received  + 4\n\n  Object {\n    \"headers\": Object {\n-     \"x-req-type\": \"formData\",\n-     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n+     \"connection\": \"close\",\n+     \"content-length\": \"2\",\n+     \"date\": \"Thu, 09 Feb 2023 06:37:12 GMT\",\n+     \"etag\": \"\\\"109abcqmas2\\\"\",\n    },\n    \"status\": 200,\n    \"text\": StringContaining \"ok\",\n  }\n    at Object.<anonymous> (/work/test/e2e/edge-can-read-request-body/index.test.ts:90:41)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Edge can read request body middleware reads an URL encoded form data",
+                "location": null,
+                "status": "failed",
+                "title": "reads an URL encoded form data"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge can read request body",
+                  "middleware"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchObject(expected)\n\n- Expected  - 2\n+ Received  + 4\n\n  Object {\n    \"headers\": Object {\n-     \"x-req-type\": \"formData\",\n-     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n+     \"connection\": \"close\",\n+     \"content-length\": \"2\",\n+     \"date\": \"Thu, 09 Feb 2023 06:37:12 GMT\",\n+     \"etag\": \"\\\"109abcqmas2\\\"\",\n    },\n    \"status\": 200,\n    \"text\": StringContaining \"ok\",\n  }\n    at Object.<anonymous> (/work/test/e2e/edge-can-read-request-body/index.test.ts:114:41)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Edge can read request body middleware reads a multipart form data",
+                "location": null,
+                "status": "failed",
+                "title": "reads a multipart form data"
+              }
+            ],
+            "endTime": 1675924633078,
+            "message": "  ● Edge can read request body › middleware › reads a JSON body\n\n    expect(received).toMatchObject(expected)\n\n    - Expected  - 2\n    + Received  + 4\n\n      Object {\n        \"headers\": Object {\n    -     \"x-req-type\": \"json\",\n    -     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n    +     \"connection\": \"close\",\n    +     \"content-length\": \"2\",\n    +     \"date\": \"Thu, 09 Feb 2023 06:37:12 GMT\",\n    +     \"etag\": \"\\\"109abcqmas2\\\"\",\n        },\n        \"status\": 200,\n        \"text\": StringContaining \"ok\",\n      }\n\n      40 |         }\n      41 |       )\n    > 42 |       expect(await serialize(response)).toMatchObject({\n         |                                         ^\n      43 |         text: expect.stringContaining('ok'),\n      44 |         status: 200,\n      45 |         headers: {\n\n      at Object.<anonymous> (e2e/edge-can-read-request-body/index.test.ts:42:41)\n\n  ● Edge can read request body › middleware › reads an URL encoded form data\n\n    expect(received).toMatchObject(expected)\n\n    - Expected  - 2\n    + Received  + 4\n\n      Object {\n        \"headers\": Object {\n    -     \"x-req-type\": \"formData\",\n    -     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n    +     \"connection\": \"close\",\n    +     \"content-length\": \"2\",\n    +     \"date\": \"Thu, 09 Feb 2023 06:37:12 GMT\",\n    +     \"etag\": \"\\\"109abcqmas2\\\"\",\n        },\n        \"status\": 200,\n        \"text\": StringContaining \"ok\",\n      }\n\n      88 |         }\n      89 |       )\n    > 90 |       expect(await serialize(response)).toMatchObject({\n         |                                         ^\n      91 |         text: expect.stringContaining('ok'),\n      92 |         status: 200,\n      93 |         headers: {\n\n      at Object.<anonymous> (e2e/edge-can-read-request-body/index.test.ts:90:41)\n\n  ● Edge can read request body › middleware › reads a multipart form data\n\n    expect(received).toMatchObject(expected)\n\n    - Expected  - 2\n    + Received  + 4\n\n      Object {\n        \"headers\": Object {\n    -     \"x-req-type\": \"formData\",\n    -     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n    +     \"connection\": \"close\",\n    +     \"content-length\": \"2\",\n    +     \"date\": \"Thu, 09 Feb 2023 06:37:12 GMT\",\n    +     \"etag\": \"\\\"109abcqmas2\\\"\",\n        },\n        \"status\": 200,\n        \"text\": StringContaining \"ok\",\n      }\n\n      112 |       )\n      113 |\n    > 114 |       expect(await serialize(response)).toMatchObject({\n          |                                         ^\n      115 |         text: expect.stringContaining('ok'),\n      116 |         status: 200,\n      117 |         headers: {\n\n      at Object.<anonymous> (e2e/edge-can-read-request-body/index.test.ts:114:41)\n",
+            "name": "/work/test/e2e/edge-can-read-request-body/index.test.ts",
+            "startTime": 1675924612149,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/config-mjs/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 6,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675924709612,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [],
+                "fullName": "Configuration should disable X-Powered-By header support",
+                "location": null,
+                "status": "passed",
+                "title": "should disable X-Powered-By header support"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"secret\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:53:38)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration renders server config on the server only",
+                "location": null,
+                "status": "failed",
+                "title": "renders server config on the server only"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/static\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:58:44)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration renders public config on the server only",
+                "location": null,
+                "status": "failed",
+                "title": "renders public config on the server only"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"development\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:63:34)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration renders the build id in development mode",
+                "location": null,
+                "status": "failed",
+                "title": "renders the build id in development mode"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"OK\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:68:44)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration correctly imports a package that defines `module` but no `main` in package.json",
+                "location": null,
+                "status": "failed",
+                "title": "correctly imports a package that defines `module` but no `main` in package.json"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#server-only')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Configuration should have config available on the client",
+                "location": null,
+                "status": "failed",
+                "title": "should have config available on the client"
+              }
+            ],
+            "endTime": 1675924757509,
+            "message": "  ● Configuration › renders server config on the server only\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"secret\"\n    Received: \"\"\n\n      51 |   test('renders server config on the server only', async () => {\n      52 |     const $ = await get$('/next-config')\n    > 53 |     expect($('#server-only').text()).toBe('secret')\n         |                                      ^\n      54 |   })\n      55 |\n      56 |   test('renders public config on the server only', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:53:38)\n\n  ● Configuration › renders public config on the server only\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/static\"\n    Received: \"\"\n\n      56 |   test('renders public config on the server only', async () => {\n      57 |     const $ = await get$('/next-config')\n    > 58 |     expect($('#server-and-client').text()).toBe('/static')\n         |                                            ^\n      59 |   })\n      60 |\n      61 |   test('renders the build id in development mode', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:58:44)\n\n  ● Configuration › renders the build id in development mode\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"development\"\n    Received: \"\"\n\n      61 |   test('renders the build id in development mode', async () => {\n      62 |     const $ = await get$('/build-id')\n    > 63 |     expect($('#buildId').text()).toBe('development')\n         |                                  ^\n      64 |   })\n      65 |\n      66 |   test('correctly imports a package that defines `module` but no `main` in package.json', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:63:34)\n\n  ● Configuration › correctly imports a package that defines `module` but no `main` in package.json\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"OK\"\n    Received: \"\"\n\n      66 |   test('correctly imports a package that defines `module` but no `main` in package.json', async () => {\n      67 |     const $ = await get$('/module-only-content')\n    > 68 |     expect($('#messageInAPackage').text()).toBe('OK')\n         |                                            ^\n      69 |   })\n      70 |\n      71 |   it('should have config available on the client', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:68:44)\n\n  ● Configuration › should have config available on the client\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#server-only')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/config-mjs/test/index.test.js",
+            "startTime": 1675924709705,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 15,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 16,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675924660696,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire re-runs accepted modules",
+                "location": null,
+                "status": "passed",
+                "title": "re-runs accepted modules"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire propagates a hot update to closest accepted module",
+                "location": null,
+                "status": "passed",
+                "title": "propagates a hot update to closest accepted module"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire propagates hot update to all inverse dependencies",
+                "location": null,
+                "status": "passed",
+                "title": "propagates hot update to all inverse dependencies"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire runs dependencies before dependents",
+                "location": null,
+                "status": "passed",
+                "title": "runs dependencies before dependents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire provides fresh value for module.exports in parents",
+                "location": null,
+                "status": "passed",
+                "title": "provides fresh value for module.exports in parents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire provides fresh value for exports.* in parents",
+                "location": null,
+                "status": "passed",
+                "title": "provides fresh value for exports.* in parents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire provides fresh value for ES6 named import in parents",
+                "location": null,
+                "status": "passed",
+                "title": "provides fresh value for ES6 named import in parents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire provides fresh value for ES6 default import in parents",
+                "location": null,
+                "status": "passed",
+                "title": "provides fresh value for ES6 default import in parents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire stops update propagation after module-level errors",
+                "location": null,
+                "status": "passed",
+                "title": "stops update propagation after module-level errors"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire can continue hot updates after module-level errors with module.exports",
+                "location": null,
+                "status": "passed",
+                "title": "can continue hot updates after module-level errors with module.exports"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire can continue hot updates after module-level errors with ES6 exports",
+                "location": null,
+                "status": "passed",
+                "title": "can continue hot updates after module-level errors with ES6 exports"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire does not accumulate stale exports over time",
+                "location": null,
+                "status": "passed",
+                "title": "does not accumulate stale exports over time"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire bails out if update bubbles to the root via the only path",
+                "location": null,
+                "status": "passed",
+                "title": "bails out if update bubbles to the root via the only path"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire bails out if the update bubbles to the root via one of the paths",
+                "location": null,
+                "status": "passed",
+                "title": "bails out if the update bubbles to the root via one of the paths"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 2\n+ Received  + 0\n\n  Array [\n    \"init BarV2\",\n-   \"init BarV2\",\n-   \"init FooV1\",\n  ]\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshRequire.test.ts:430:63)"
+                ],
+                "fullName": "ReactRefreshRequire propagates a module that stops accepting in next version",
+                "location": null,
+                "status": "failed",
+                "title": "propagates a module that stops accepting in next version"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire can replace a module before it is loaded",
+                "location": null,
+                "status": "passed",
+                "title": "can replace a module before it is loaded"
+              }
+            ],
+            "endTime": 1675924884675,
+            "message": "  ● ReactRefreshRequire › propagates a module that stops accepting in next version\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 2\n    + Received  + 0\n\n      Array [\n        \"init BarV2\",\n    -   \"init BarV2\",\n    -   \"init FooV1\",\n      ]\n\n      428 |     // it didn't export a component, so we go higher.\n      429 |     // We stop at Foo which currently _does_ export a component.\n    > 430 |     expect(await session.evaluate(() => (window as any).log)).toEqual([\n          |                                                               ^\n      431 |       // Bar evaluates twice:\n      432 |       // 1. To invalidate itself once it realizes it's no longer acceptable.\n      433 |       // 2. As a child of Foo re-evaluating.\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshRequire.test.ts:430:63)\n",
+            "name": "/work/test/development/acceptance/ReactRefreshRequire.test.ts",
+            "startTime": 1675924660800,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675925069356,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675925121036,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675925069460,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/i18n-support-custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675925339433,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#props')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Custom routes i18n dev mode should localized [slug] routes render correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should localized [slug] routes render correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#error-props')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Custom routes i18n dev mode handle custom http status maintaining locale props in custom _error page",
+                "location": null,
+                "status": "failed",
+                "title": "handle custom http status maintaining locale props in custom _error page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 2\n+ Received  + 1\n\n- ObjectContaining {\n-   \"locale\": \"en\",\n+ Object {\n    \"statusCode\": 404,\n  }\n    at Object.<anonymous> (/work/test/integration/i18n-support-custom-error/test/index.test.js:63:9)"
+                ],
+                "fullName": "Custom routes i18n dev mode handle default http status maintaining locale props in custom _error page",
+                "location": null,
+                "status": "failed",
+                "title": "handle default http status maintaining locale props in custom _error page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#props')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Custom routes i18n dev mode should work also on client side routing",
+                "location": null,
+                "status": "failed",
+                "title": "should work also on client side routing"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes i18n production mode should localized [slug] routes render correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should localized [slug] routes render correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes i18n production mode handle custom http status maintaining locale props in custom _error page",
+                "location": null,
+                "status": "passed",
+                "title": "handle custom http status maintaining locale props in custom _error page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes i18n production mode handle default http status maintaining locale props in custom _error page",
+                "location": null,
+                "status": "passed",
+                "title": "handle default http status maintaining locale props in custom _error page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes i18n production mode should work also on client side routing",
+                "location": null,
+                "status": "passed",
+                "title": "should work also on client side routing"
+              }
+            ],
+            "endTime": 1675925487599,
+            "message": "  ● Custom routes i18n › dev mode › should localized [slug] routes render correctly\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#props')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● Custom routes i18n › dev mode › handle custom http status maintaining locale props in custom _error page\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#error-props')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● Custom routes i18n › dev mode › handle default http status maintaining locale props in custom _error page\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 2\n    + Received  + 1\n\n    - ObjectContaining {\n    -   \"locale\": \"en\",\n    + Object {\n        \"statusCode\": 404,\n      }\n\n      61 |       expect(\n      62 |         JSON.parse(await browser.elementByCss('#error-props').text())\n    > 63 |       ).toEqual(\n         |         ^\n      64 |         expect.objectContaining({\n      65 |           locale,\n      66 |           statusCode: 404,\n\n      at Object.<anonymous> (integration/i18n-support-custom-error/test/index.test.js:63:9)\n\n  ● Custom routes i18n › dev mode › should work also on client side routing\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#props')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/i18n-support-custom-error/test/index.test.js",
+            "startTime": 1675925339530,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675924683045,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675924748008,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675924683137,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/handle-non-hoisted-swc-helpers/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675924845136,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "handle-non-hoisted-swc-helpers"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello world\"\nReceived string:    \"<!DOCTYPE html>\n<html>\n<head>·\n</head>\n<body>\n<script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n    <div id=\\\"__next\\\">\n        <h1>Error rendering page</h1>\n        <h2>Message</h2>\n        <pre>Error: Cannot find module '@swc/helpers/lib/_object_spread.js'\n  at &lt;unknown&gt; (/.next/server/pages/chunks/pages_index.js:23:19)\n  at getServerSideProps (/.next/server/pages/chunks/pages_index.js:26:7)\n  at Object.renderToHTML (/node_modules/next/dist/server/render.js:506:26)\n  at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n  at async runOperation (/.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_internal_page-server-handler.tsx._.js:140:30)\n  at async (/.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_internal_page-server-handler.tsx._.js:45:25)\n</pre>\n        <h2>Exit status</h2><pre>exit status: 1</pre>\n    </div>\n<script src=\\\"/_chunks/_312914._.js\\\"></script>\n<script src=\\\"/_chunks/node_modules_react_680ebc._.js\\\"></script>\n<script src=\\\"/_chunks/node_modules_react-dom_a9e04f._.js\\\"></script>\n<script src=\\\"/_chunks/node_modules_scheduler_index.js\\\"></script>\n<script src=\\\"/_chunks/node_modules_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_9f69cd._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts._.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n<script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n</body>\n</html>\"\n    at Object.<anonymous> (/work/test/e2e/handle-non-hoisted-swc-helpers/index.test.ts:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "handle-non-hoisted-swc-helpers should work",
+                "location": null,
+                "status": "failed",
+                "title": "should work"
+              }
+            ],
+            "endTime": 1675924866188,
+            "message": "  ● handle-non-hoisted-swc-helpers › should work\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello world\"\n    Received string:    \"<!DOCTYPE html>\n    <html>\n    <head>·\n    </head>\n    <body>\n    <script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{ \\\"props\\\": {} }</script>\n        <div id=\\\"__next\\\">\n            <h1>Error rendering page</h1>\n            <h2>Message</h2>\n            <pre>Error: Cannot find module '@swc/helpers/lib/_object_spread.js'\n\n      at &lt;unknown&gt; (../../.next/server/pages/chunks/pages_index.js:23:19)\n      at getServerSideProps (../../.next/server/pages/chunks/pages_index.js:26:7)\n      at Object.renderToHTML (../../node_modules/next/dist/server/render.js:506:26)\n      at async runOperation (../../.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_internal_page-server-handler.tsx._.js:140:30)\n      at async (../../.next/server/pages/chunks/[embedded_modules]_@vercel_turbopack-next_internal_page-server-handler.tsx._.js:45:25)\n      </pre>\n              <h2>Exit status</h2><pre>exit status: 1</pre>\n          </div>\n      <script src=\\\"/_chunks/_312914._.js\\\"></script>\n      <script src=\\\"/_chunks/node_modules_react_680ebc._.js\\\"></script>\n      <script src=\\\"/_chunks/node_modules_react-dom_a9e04f._.js\\\"></script>\n      <script src=\\\"/_chunks/node_modules_scheduler_index.js\\\"></script>\n      <script src=\\\"/_chunks/node_modules_next_dist_compiled_react-refresh_runtime.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_internal_shims-client.ts._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_dev_9f69cd._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_overlay_client.ts._.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_anser_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_platform_index.js\\\"></script>\n      <script src=\\\"/_chunks/[embedded_modules]_@vercel_turbopack-next_compiled_css.escape_index.js\\\"></script>\n      </body>\n      </html>\"\n      at Object.<anonymous> (e2e/handle-non-hoisted-swc-helpers/index.test.ts:36:18)\n",
+            "name": "/work/test/e2e/handle-non-hoisted-swc-helpers/index.test.ts",
+            "startTime": 1675924845231,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/config-mjs/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 6,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675924944922,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [],
+                "fullName": "Configuration should disable X-Powered-By header support",
+                "location": null,
+                "status": "passed",
+                "title": "should disable X-Powered-By header support"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"secret\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:53:38)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration renders server config on the server only",
+                "location": null,
+                "status": "failed",
+                "title": "renders server config on the server only"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/static\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:58:44)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration renders public config on the server only",
+                "location": null,
+                "status": "failed",
+                "title": "renders public config on the server only"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"development\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:63:34)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration renders the build id in development mode",
+                "location": null,
+                "status": "failed",
+                "title": "renders the build id in development mode"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"OK\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:68:44)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration correctly imports a package that defines `module` but no `main` in package.json",
+                "location": null,
+                "status": "failed",
+                "title": "correctly imports a package that defines `module` but no `main` in package.json"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#server-only')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Configuration should have config available on the client",
+                "location": null,
+                "status": "failed",
+                "title": "should have config available on the client"
+              }
+            ],
+            "endTime": 1675924992850,
+            "message": "  ● Configuration › renders server config on the server only\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"secret\"\n    Received: \"\"\n\n      51 |   test('renders server config on the server only', async () => {\n      52 |     const $ = await get$('/next-config')\n    > 53 |     expect($('#server-only').text()).toBe('secret')\n         |                                      ^\n      54 |   })\n      55 |\n      56 |   test('renders public config on the server only', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:53:38)\n\n  ● Configuration › renders public config on the server only\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/static\"\n    Received: \"\"\n\n      56 |   test('renders public config on the server only', async () => {\n      57 |     const $ = await get$('/next-config')\n    > 58 |     expect($('#server-and-client').text()).toBe('/static')\n         |                                            ^\n      59 |   })\n      60 |\n      61 |   test('renders the build id in development mode', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:58:44)\n\n  ● Configuration › renders the build id in development mode\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"development\"\n    Received: \"\"\n\n      61 |   test('renders the build id in development mode', async () => {\n      62 |     const $ = await get$('/build-id')\n    > 63 |     expect($('#buildId').text()).toBe('development')\n         |                                  ^\n      64 |   })\n      65 |\n      66 |   test('correctly imports a package that defines `module` but no `main` in package.json', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:63:34)\n\n  ● Configuration › correctly imports a package that defines `module` but no `main` in package.json\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"OK\"\n    Received: \"\"\n\n      66 |   test('correctly imports a package that defines `module` but no `main` in package.json', async () => {\n      67 |     const $ = await get$('/module-only-content')\n    > 68 |     expect($('#messageInAPackage').text()).toBe('OK')\n         |                                            ^\n      69 |   })\n      70 |\n      71 |   it('should have config available on the client', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:68:44)\n\n  ● Configuration › should have config available on the client\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#server-only')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/config-mjs/test/index.test.js",
+            "startTime": 1675924945016,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 15,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 16,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675924740775,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire re-runs accepted modules",
+                "location": null,
+                "status": "passed",
+                "title": "re-runs accepted modules"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire propagates a hot update to closest accepted module",
+                "location": null,
+                "status": "passed",
+                "title": "propagates a hot update to closest accepted module"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire propagates hot update to all inverse dependencies",
+                "location": null,
+                "status": "passed",
+                "title": "propagates hot update to all inverse dependencies"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire runs dependencies before dependents",
+                "location": null,
+                "status": "passed",
+                "title": "runs dependencies before dependents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire provides fresh value for module.exports in parents",
+                "location": null,
+                "status": "passed",
+                "title": "provides fresh value for module.exports in parents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire provides fresh value for exports.* in parents",
+                "location": null,
+                "status": "passed",
+                "title": "provides fresh value for exports.* in parents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire provides fresh value for ES6 named import in parents",
+                "location": null,
+                "status": "passed",
+                "title": "provides fresh value for ES6 named import in parents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire provides fresh value for ES6 default import in parents",
+                "location": null,
+                "status": "passed",
+                "title": "provides fresh value for ES6 default import in parents"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire stops update propagation after module-level errors",
+                "location": null,
+                "status": "passed",
+                "title": "stops update propagation after module-level errors"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire can continue hot updates after module-level errors with module.exports",
+                "location": null,
+                "status": "passed",
+                "title": "can continue hot updates after module-level errors with module.exports"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire can continue hot updates after module-level errors with ES6 exports",
+                "location": null,
+                "status": "passed",
+                "title": "can continue hot updates after module-level errors with ES6 exports"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire does not accumulate stale exports over time",
+                "location": null,
+                "status": "passed",
+                "title": "does not accumulate stale exports over time"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire bails out if update bubbles to the root via the only path",
+                "location": null,
+                "status": "passed",
+                "title": "bails out if update bubbles to the root via the only path"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire bails out if the update bubbles to the root via one of the paths",
+                "location": null,
+                "status": "passed",
+                "title": "bails out if the update bubbles to the root via one of the paths"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 2\n+ Received  + 0\n\n  Array [\n    \"init BarV2\",\n-   \"init BarV2\",\n-   \"init FooV1\",\n  ]\n    at Object.<anonymous> (/work/test/development/acceptance/ReactRefreshRequire.test.ts:430:63)"
+                ],
+                "fullName": "ReactRefreshRequire propagates a module that stops accepting in next version",
+                "location": null,
+                "status": "failed",
+                "title": "propagates a module that stops accepting in next version"
+              },
+              {
+                "ancestorTitles": [
+                  "ReactRefreshRequire"
+                ],
+                "failureMessages": [],
+                "fullName": "ReactRefreshRequire can replace a module before it is loaded",
+                "location": null,
+                "status": "passed",
+                "title": "can replace a module before it is loaded"
+              }
+            ],
+            "endTime": 1675924962534,
+            "message": "  ● ReactRefreshRequire › propagates a module that stops accepting in next version\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 2\n    + Received  + 0\n\n      Array [\n        \"init BarV2\",\n    -   \"init BarV2\",\n    -   \"init FooV1\",\n      ]\n\n      428 |     // it didn't export a component, so we go higher.\n      429 |     // We stop at Foo which currently _does_ export a component.\n    > 430 |     expect(await session.evaluate(() => (window as any).log)).toEqual([\n          |                                                               ^\n      431 |       // Bar evaluates twice:\n      432 |       // 1. To invalidate itself once it realizes it's no longer acceptable.\n      433 |       // 2. As a child of Foo re-evaluating.\n\n      at Object.<anonymous> (development/acceptance/ReactRefreshRequire.test.ts:430:63)\n",
+            "name": "/work/test/development/acceptance/ReactRefreshRequire.test.ts",
+            "startTime": 1675924740865,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675925143511,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675925194118,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675925143605,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/i18n-support-custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675925406666,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#props')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Custom routes i18n dev mode should localized [slug] routes render correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should localized [slug] routes render correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#error-props')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Custom routes i18n dev mode handle custom http status maintaining locale props in custom _error page",
+                "location": null,
+                "status": "failed",
+                "title": "handle custom http status maintaining locale props in custom _error page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 2\n+ Received  + 1\n\n- ObjectContaining {\n-   \"locale\": \"en\",\n+ Object {\n    \"statusCode\": 404,\n  }\n    at Object.<anonymous> (/work/test/integration/i18n-support-custom-error/test/index.test.js:63:9)"
+                ],
+                "fullName": "Custom routes i18n dev mode handle default http status maintaining locale props in custom _error page",
+                "location": null,
+                "status": "failed",
+                "title": "handle default http status maintaining locale props in custom _error page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#props')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Custom routes i18n dev mode should work also on client side routing",
+                "location": null,
+                "status": "failed",
+                "title": "should work also on client side routing"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes i18n production mode should localized [slug] routes render correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should localized [slug] routes render correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes i18n production mode handle custom http status maintaining locale props in custom _error page",
+                "location": null,
+                "status": "passed",
+                "title": "handle custom http status maintaining locale props in custom _error page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes i18n production mode handle default http status maintaining locale props in custom _error page",
+                "location": null,
+                "status": "passed",
+                "title": "handle default http status maintaining locale props in custom _error page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes i18n production mode should work also on client side routing",
+                "location": null,
+                "status": "passed",
+                "title": "should work also on client side routing"
+              }
+            ],
+            "endTime": 1675925553825,
+            "message": "  ● Custom routes i18n › dev mode › should localized [slug] routes render correctly\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#props')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● Custom routes i18n › dev mode › handle custom http status maintaining locale props in custom _error page\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#error-props')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● Custom routes i18n › dev mode › handle default http status maintaining locale props in custom _error page\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 2\n    + Received  + 1\n\n    - ObjectContaining {\n    -   \"locale\": \"en\",\n    + Object {\n        \"statusCode\": 404,\n      }\n\n      61 |       expect(\n      62 |         JSON.parse(await browser.elementByCss('#error-props').text())\n    > 63 |       ).toEqual(\n         |         ^\n      64 |         expect.objectContaining({\n      65 |           locale,\n      66 |           statusCode: 404,\n\n      at Object.<anonymous> (integration/i18n-support-custom-error/test/index.test.js:63:9)\n\n  ● Custom routes i18n › dev mode › should work also on client side routing\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#props')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/i18n-support-custom-error/test/index.test.js",
+            "startTime": 1675925406760,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
