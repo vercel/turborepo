@@ -37,8 +37,8 @@ type rawTurboJSON struct {
 }
 
 // pristineTurboJSON is used when marshaling a TurboJSON object into a turbo.json string
-// Notably, it includes a PristinePipeline instead of the regular Pipeline. (i.e. TaskDefinition)
-// instead of BookkeepingTaskDefinition.
+// Notably, it includes a PristinePipeline instead of the regular Pipeline. (i.e. TaskDefinition
+// instead of BookkeepingTaskDefinition.)
 type pristineTurboJSON struct {
 	GlobalDependencies []string           `json:"globalDependencies,omitempty"`
 	GlobalEnv          []string           `json:"globalEnv,omitempty"`
