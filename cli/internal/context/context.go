@@ -146,6 +146,7 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
 	workspaceInfos := graph.WorkspaceInfos{
 		PackageJSONs: map[string]*fs.PackageJSON{util.RootPkgName: rootPackageJSON},
+		TurboConfigs: map[string]*fs.TurboJSON{},
 	}
 	c := &Context{
 		WorkspaceInfos: workspaceInfos,
