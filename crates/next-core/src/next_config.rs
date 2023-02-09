@@ -527,7 +527,7 @@ impl NextConfigVc {
     }
 }
 
-fn next_configs() -> StringsVc {
+pub fn next_configs() -> StringsVc {
     StringsVc::cell(
         ["next.config.mjs", "next.config.js"]
             .into_iter()
