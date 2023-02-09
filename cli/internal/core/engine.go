@@ -407,7 +407,9 @@ func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.Bo
 
 	rootPipeline, err := e.completeGraph.GetPipelineFromWorkspace(util.RootPkgName, e.isSinglePackage)
 	if err != nil {
-		return nil, fmt.Errorf("OOPS")
+		// It should be very unlikely that we can't find a root pipeline. Even for single package repos
+		// the pipeline is synthesized from package.json, so there should be _something_ here.
+		return nil, err
 	}
 
 	// Look for the taskDefinition in the root pipeline.
