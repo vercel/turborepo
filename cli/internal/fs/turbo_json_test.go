@@ -37,11 +37,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 
 	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
-			fieldsMeta: map[string]bool{
-				"Outputs":                 true,
-				"OutputMode":              true,
-				"TopologicalDependencies": true,
-			},
+			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "TopologicalDependencies"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				TopologicalDependencies: []string{"build"},
@@ -52,10 +48,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			},
 		},
 		"lint": {
-			fieldsMeta: map[string]bool{
-				"Outputs":    true,
-				"OutputMode": true,
-			},
+			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{},
 				TopologicalDependencies: []string{},
@@ -66,9 +59,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			},
 		},
 		"dev": {
-			fieldsMeta: map[string]bool{
-				"OutputMode": true,
-			},
+			definedFields: util.SetFromStrings([]string{"OutputMode"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{},
 				TopologicalDependencies: []string{},
@@ -79,12 +70,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			},
 		},
 		"publish": {
-			fieldsMeta: map[string]bool{
-				"Inputs":                  true,
-				"Outputs":                 true,
-				"TaskDependencies":        true,
-				"TopologicalDependencies": true,
-			},
+			definedFields: util.SetFromStrings([]string{"Inputs", "Outputs", "TaskDependencies", "TopologicalDependencies"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
 				TopologicalDependencies: []string{"build", "publish"},
@@ -134,11 +120,7 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 
 	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
-			fieldsMeta: map[string]bool{
-				"Outputs":                 true,
-				"OutputMode":              true,
-				"TopologicalDependencies": true,
-			},
+			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "TopologicalDependencies"}),
 			TaskDefinition: TaskDefinition{
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				TopologicalDependencies: []string{"build"},
