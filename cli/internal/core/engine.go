@@ -167,22 +167,16 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 			return fmt.Errorf("%v needs an entry in turbo.json before it can be depended on because it is a task run from the root package", taskID)
 		}
 
-		var pkgDefinition *fs.PackageJSON
-		if pkg == ROOT_NODE_NAME {
-			pkgDefinition = &fs.PackageJSON{}
-		} else {
-			pkgJSON, ok := e.completeGraph.WorkspaceInfos.PackageJSONs[pkg]
-			if !ok {
+		if pkg != ROOT_NODE_NAME {
+			if _, ok := e.completeGraph.WorkspaceInfos.PackageJSONs[pkg]; !ok {
 				// If we have a pkg it should be in WorkspaceInfos.
 				// If we're hitting this error something has gone wrong earlier when building WorkspaceInfos
 				// or the workspace really doesn't exist and turbo.json is misconfigured.
 				return fmt.Errorf("Could not find workspace \"%s\" from task \"%s\" in project", pkg, taskID)
 			}
-
-			pkgDefinition = pkgJSON
 		}
 
-		taskDefinitions, err := e.getTaskDefinitionChain(&e.completeGraph.Pipeline, pkgDefinition, taskID, taskName)
+		taskDefinitions, err := e.getTaskDefinitionChain(taskID, taskName)
 		if err != nil {
 			return err
 		}
@@ -407,7 +401,7 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 // getTaskDefinitionChain gets a set of TaskDefinitions that apply to the taskID.
 // These definitions should be merged by the consumer.
 // TODO(mehulkar): Can we use getPipelineFromWorkspace() here instead of reading configs again and passing around rootPipeline as an arg?
-func (e *Engine) getTaskDefinitionChain(rootPipelineIncoming *fs.Pipeline, pkg *fs.PackageJSON, taskID string, taskName string) ([]fs.BookkeepingTaskDefinition, error) {
+func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.BookkeepingTaskDefinition, error) {
 	// Start a list of TaskDefinitions we've found for this TaskID
 	taskDefinitions := []fs.BookkeepingTaskDefinition{}
 
@@ -439,8 +433,8 @@ func (e *Engine) getTaskDefinitionChain(rootPipelineIncoming *fs.Pipeline, pkg *
 			// TODO(mehulkar): Enable extending from more than one workspace.
 			if len(workspaceTurboJSON.Extends) > 1 {
 				return nil, fmt.Errorf(
-					"You can only extend from the root workspace. \"%s\" extends from %v",
-					pkg.Name,
+					"You can only extend from the root workspace. \"%s\" extends from \"%s\"",
+					taskIDPackage,
 					workspaceTurboJSON.Extends,
 				)
 			}
@@ -464,8 +458,8 @@ func (e *Engine) getTaskDefinitionChain(rootPipelineIncoming *fs.Pipeline, pkg *
 			// TODO(mehulkar): Enable extending from non-root workspace.
 			if workspaceTurboJSON.Extends[0] != util.RootPkgName {
 				return nil, fmt.Errorf(
-					"You can only extend from the root workspace. \"%s\" extends from %v",
-					pkg.Name,
+					"You can only extend from the root workspace. \"%s\" extends from \"%s\"",
+					taskIDPackage,
 					workspaceTurboJSON.Extends,
 				)
 			}
@@ -473,7 +467,7 @@ func (e *Engine) getTaskDefinitionChain(rootPipelineIncoming *fs.Pipeline, pkg *
 	}
 
 	if len(taskDefinitions) == 0 {
-		return nil, fmt.Errorf("Could not find \"%s\" in root turbo.json or \"%s\" workspace", taskID, pkg.Dir)
+		return nil, fmt.Errorf("Could not find \"%s\" in root turbo.json or \"%s\" workspace", taskID, taskIDPackage)
 	}
 
 	return taskDefinitions, nil
