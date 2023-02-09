@@ -20,7 +20,7 @@ jobs:
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.1
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           commit_sha: ${{ steps.green_commit.outputs.result }}
           tag_prefix: "turbopack-"
           # Override the default conventional commit messages
