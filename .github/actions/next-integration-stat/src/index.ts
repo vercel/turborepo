@@ -214,6 +214,14 @@ async function getInputs(): Promise<{
     info("No PR number found in context, will not try to post comment.");
   }
 
+  console.log("getInputs: these inputs will be used to collect test results", {
+    token: !!token,
+    shouldDiffWithMain,
+    prNumber,
+    sha,
+    diff_base: getInput("diff_base"),
+  });
+
   return {
     token,
     shouldDiffWithMain,
