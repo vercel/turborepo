@@ -359,6 +359,8 @@ graph TD
     Item13 --> Item2;
     Item13 --> Item5;
     Item13 --> Item8;
+    Item14 --> Item3;
+    Item14 --> Item6;
     Item14 --> Item9;
     Item15 --> Item10;
     Item16 --> Item11;
@@ -382,6 +384,8 @@ graph TD
     N9["Items: [ItemId(5, Normal)]"];
     N10["Items: [ItemId(7, Normal)]"];
     N11["Items: [ItemId(10, VarDeclarator(0))]"];
+    N0 --> N7;
+    N0 --> N9;
     N2 --> N11;
     N3 --> N11;
     N4 --> N11;
