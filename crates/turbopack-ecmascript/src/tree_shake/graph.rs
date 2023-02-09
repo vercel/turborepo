@@ -162,6 +162,7 @@ impl DepGraph {
                 if graph
                     .inner
                     .neighbors_directed(dep_ix, petgraph::Direction::Incoming)
+                    .filter(|&dependant_ix| !done.contains(&dependant_ix))
                     .count()
                     == 1
                 {
