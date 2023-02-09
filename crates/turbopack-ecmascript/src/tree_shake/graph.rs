@@ -127,6 +127,11 @@ where
         }) as _
     }
 
+    /// Panics if `id` is not found.
+    pub(super) fn get_node(&self, id: &T) -> u32 {
+        self.graph_ix.get_index_of(id).unwrap() as _
+    }
+
     pub(super) fn map<N, F>(self, mut map: F) -> InternedGraph<N>
     where
         N: Clone + Eq + Hash,
@@ -196,6 +201,18 @@ impl DepGraph {
             if id.index == usize::MAX {
                 groups.push(vec![id.clone()]);
                 continue;
+            }
+
+            let ix = self.g.get_node(id);
+
+            if self
+                .g
+                .inner
+                .neighbors_directed(ix, petgraph::Direction::Incoming)
+                .count()
+                >= 2
+            {
+                groups.push(vec![id.clone()]);
             }
         }
 
