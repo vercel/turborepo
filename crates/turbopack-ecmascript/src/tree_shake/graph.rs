@@ -143,7 +143,6 @@ impl DepGraph {
             start_ix: u32,
             done: &mut FxHashSet<u32>,
         ) {
-            dbg!(start_ix);
             if !done.insert(start_ix) {
                 return;
             }
@@ -156,7 +155,6 @@ impl DepGraph {
                 .inner
                 .neighbors_directed(start_ix, petgraph::Direction::Outgoing)
             {
-                dbg!(dep_ix);
                 // Check if the the only dependant of dep is start
 
                 if graph
