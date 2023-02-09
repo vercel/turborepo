@@ -179,7 +179,7 @@ enum ResolvedElement {
 /// ```
 fn transform_amd_factory(
     call_expr: &mut CallExpr,
-    resolved_elements: &Vec<ResolvedElement>,
+    resolved_elements: &[ResolvedElement],
     factory_type: AmdDefineFactoryType,
 ) {
     let CallExpr { args, callee, .. } = call_expr;
