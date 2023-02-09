@@ -74,7 +74,11 @@ impl DevManifestContentSourceVc {
             .flatten()
             .collect::<Vec<_>>();
 
-        routes.sort();
+        routes.sort_by_cached_key(|s| {
+            s.split("/")
+                .map(|e| PageSortKey::from(e))
+                .collect::<Vec<_>>()
+        });
 
         Ok(StringsVc::cell(routes))
     }
@@ -176,5 +180,28 @@ impl ContentSource for DevManifestContentSource {
             ContentSourceContentVc::static_content(AssetContentVc::from(manifest_file).into())
                 .into(),
         ))
+    }
+}
+
+/// PageSortKey is necessary because the next.js client code looks for matches
+/// in the order the pages are sent in the manifest,if they're sorted
+/// alphabetically this means \[slug] and \[\[catchall]] routes are prioritized
+/// over fixed paths, so we have to override the ordering with this.
+#[derive(Ord, PartialOrd, Eq, PartialEq)]
+enum PageSortKey {
+    Static(String),
+    Slug,
+    CatchAll,
+}
+
+impl From<&str> for PageSortKey {
+    fn from(value: &str) -> Self {
+        if value.starts_with("[[") && value.ends_with("]]") {
+            PageSortKey::CatchAll
+        } else if value.starts_with("[") && value.ends_with("]") {
+            PageSortKey::Slug
+        } else {
+            PageSortKey::Static(value.to_string())
+        }
     }
 }
