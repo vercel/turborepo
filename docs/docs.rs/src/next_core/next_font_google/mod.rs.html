@@ -375,6 +375,11 @@
 <span id="375">375</span>
 <span id="376">376</span>
 <span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>indoc::formatdoc;
@@ -459,14 +464,19 @@
                     <span class="macro">formatdoc!</span>(
                         <span class="string">r#&quot;
                             import cssModule from &quot;@vercel/turbopack-next/internal/font/google/cssmodule.module.css?{}&quot;;
-                            export default {{
+                            const fontData = {{
                                 className: cssModule.className,
                                 style: {{
                                     fontFamily: &quot;{}&quot;,
                                     {}{}
                                 }},
-                                variable: cssModule.variable
                             }};
+
+                            if (cssModule.variable != null) {{
+                                fontData.variable = cssModule.variable;
+                            }}
+
+                            export default fontData;
                         &quot;#</span>,
                         <span class="comment">// Pass along whichever options we received to the css handler
                         </span>qstring::QString::new(query.as_ref().unwrap().iter().collect()),
@@ -739,10 +749,10 @@
     // of Issues should be okay.
     </span><span class="kw">let </span>query_map = query_map
         .as_ref()
-        .context(<span class="string">&quot;@next/font/google queries must exist&quot;</span>)<span class="question-mark">?</span>;
+        .context(<span class="string">&quot;next/font/google queries must exist&quot;</span>)<span class="question-mark">?</span>;
 
     <span class="kw">if </span>query_map.len() != <span class="number">1 </span>{
-        <span class="macro">bail!</span>(<span class="string">&quot;@next/font/google queries must only have one entry&quot;</span>);
+        <span class="macro">bail!</span>(<span class="string">&quot;next/font/google queries must only have one entry&quot;</span>);
     }
 
     <span class="kw">let </span><span class="prelude-val">Some</span>((json, <span class="kw">_</span>)) = query_map.iter().next() <span class="kw">else </span>{
