@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use indexmap::IndexMap;
-use mime::{APPLICATION_JAVASCRIPT, APPLICATION_JSON};
+use mime::{APPLICATION_JAVASCRIPT, APPLICATION_JAVASCRIPT_UTF_8, APPLICATION_JSON};
 use serde::Serialize;
 use turbo_tasks::{
     primitives::{StringVc, StringsVc},
@@ -162,7 +162,7 @@ impl ContentSource for DevManifestContentSource {
             "_next/static/development/_buildManifest.js" => {
                 let build_manifest = &*self_vc.create_build_manifest().await?;
 
-                File::from(build_manifest.as_str()).with_content_type(APPLICATION_JAVASCRIPT)
+                File::from(build_manifest.as_str()).with_content_type(APPLICATION_JAVASCRIPT_UTF_8)
             }
             "_next/static/development/_devMiddlewareManifest.json" => {
                 // empty middleware manifest
