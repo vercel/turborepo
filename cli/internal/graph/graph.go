@@ -14,7 +14,9 @@ import (
 )
 
 // WorkspaceInfos holds information about each workspace in the monorepo.
-type WorkspaceInfos map[string]*fs.PackageJSON
+type WorkspaceInfos struct {
+	PackageJSONs map[string]*fs.PackageJSON
+}
 
 // CompleteGraph represents the common state inferred from the filesystem and pipeline.
 // It is not intended to include information specific to a particular run.
@@ -44,7 +46,7 @@ type CompleteGraph struct {
 func (g *CompleteGraph) GetPackageTaskVisitor(ctx gocontext.Context, visitor func(ctx gocontext.Context, packageTask *nodes.PackageTask) error) func(taskID string) error {
 	return func(taskID string) error {
 		packageName, taskName := util.GetPackageTaskFromId(taskID)
-		pkg, ok := g.WorkspaceInfos[packageName]
+		pkg, ok := g.WorkspaceInfos.PackageJSONs[packageName]
 		if !ok {
 			return fmt.Errorf("cannot find package %v for task %v", packageName, taskID)
 		}

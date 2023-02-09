@@ -269,7 +269,7 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 					} else if matches {
 						entryPackages.Add(pkgName)
 					}
-				} else if pkg, ok := r.WorkspaceInfos[pkgNameStr]; !ok {
+				} else if pkg, ok := r.WorkspaceInfos.PackageJSONs[pkgNameStr]; !ok {
 					return nil, fmt.Errorf("missing info for package %v", pkgName)
 				} else if matches, err := doublestar.PathMatch(r.Cwd.Join(parentDir).ToString(), pkg.Dir.RestoreAnchor(r.Cwd).ToString()); err != nil {
 					return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
@@ -287,7 +287,7 @@ func (r *Resolver) filterNodesWithSelector(selector *TargetSelector) (util.Set, 
 		if parentDir == "." {
 			entryPackages.Add(util.RootPkgName)
 		} else {
-			for name, pkg := range r.WorkspaceInfos {
+			for name, pkg := range r.WorkspaceInfos.PackageJSONs {
 				if matches, err := doublestar.PathMatch(r.Cwd.Join(parentDir).ToString(), pkg.Dir.RestoreAnchor(r.Cwd).ToString()); err != nil {
 					return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
 				} else if matches {
@@ -332,7 +332,7 @@ func (r *Resolver) filterSubtreesWithSelector(selector *TargetSelector) (util.Se
 
 	parentDir := selector.parentDir
 	entryPackages := make(util.Set)
-	for name, pkg := range r.WorkspaceInfos {
+	for name, pkg := range r.WorkspaceInfos.PackageJSONs {
 		if parentDir == "" {
 			entryPackages.Add(name)
 		} else if matches, err := doublestar.PathMatch(parentDir.ToString(), pkg.Dir.RestoreAnchor(r.Cwd).ToString()); err != nil {

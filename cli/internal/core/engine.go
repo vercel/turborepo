@@ -176,7 +176,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 		if pkg == ROOT_NODE_NAME {
 			pkgDefinition = &fs.PackageJSON{}
 		} else {
-			pkgJSON, ok := e.completeGraph.WorkspaceInfos[pkg]
+			pkgJSON, ok := e.completeGraph.WorkspaceInfos.PackageJSONs[pkg]
 			if !ok {
 				// If we have a pkg it should be in WorkspaceInfos.
 				// If we're hitting this error something has gone wrong earlier when building WorkspaceInfos
@@ -380,7 +380,7 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 			}
 
 			// Get information about the package
-			pkg, pkgExists := graph.WorkspaceInfos[packageName]
+			pkg, pkgExists := graph.WorkspaceInfos.PackageJSONs[packageName]
 			if !pkgExists {
 				return fmt.Errorf("Cannot find package %v", packageName)
 			}
@@ -542,7 +542,7 @@ func (e *Engine) getTurboConfigFromWorkspace(workspaceName string) (*fs.TurboJSO
 
 	// Note: dir for the root workspace will be an empty string, and for
 	// other workspaces, it will be a relative path.
-	dir := e.completeGraph.WorkspaceInfos[workspaceName].Dir
+	dir := e.completeGraph.WorkspaceInfos.PackageJSONs[workspaceName].Dir
 	repoRoot := e.completeGraph.RepoRoot
 	dirAbsolutePath := dir.RestoreAnchor(repoRoot)
 
@@ -572,7 +572,7 @@ func (e *Engine) getPackageJSONFromWorkspace(workspaceName string) (*fs.PackageJ
 
 	// Note: dir for the root workspace will be an empty string, and for
 	// other workspaces, it will be a relative path.
-	dir := e.completeGraph.WorkspaceInfos[workspaceName].Dir
+	dir := e.completeGraph.WorkspaceInfos.PackageJSONs[workspaceName].Dir
 	repoRoot := e.completeGraph.RepoRoot
 	dirAbsolutePath := dir.RestoreAnchor(repoRoot)
 

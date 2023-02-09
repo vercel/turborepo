@@ -200,7 +200,7 @@ func (th *Tracker) CalculateFileHashes(
 	for i := 0; i < workerCount; i++ {
 		hashErrs.Go(func() error {
 			for packageFileSpec := range hashQueue {
-				pkg, ok := th.workspaceInfos[packageFileSpec.pkg]
+				pkg, ok := th.workspaceInfos.PackageJSONs[packageFileSpec.pkg]
 				if !ok {
 					return fmt.Errorf("cannot find package %v", packageFileSpec.pkg)
 				}
