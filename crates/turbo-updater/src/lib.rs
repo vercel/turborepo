@@ -72,6 +72,31 @@ impl Registry for NPMRegistry {
     }
 }
 
+// Source https://github.com/mgrachev/update-informer/blob/main/src/http_client/reqwest.rs
+// Vendored here until update-informer allows us to control tls implementation
+pub struct ReqwestHttpClient;
+
+impl SendRequest for ReqwestHttpClient {
+    fn get<T: serde::de::DeserializeOwned>(
+        url: &str,
+        timeout: Duration,
+        headers: Option<(&str, &str)>,
+    ) -> Result<T, Box<dyn std::error::Error>> {
+        let mut req = reqwest::blocking::Client::builder()
+            .timeout(timeout)
+            .build()?
+            .get(url);
+
+        if let Some((key, val)) = headers {
+            req = req.header(key, val)
+        }
+
+        let json = req.send()?.json()?;
+
+        Ok(json)
+    }
+}
+
 fn get_tag_from_version(pre: &semver::Prerelease) -> VersionTag {
     match pre {
         t if t.contains("canary") => VersionTag::Canary,
@@ -114,6 +139,7 @@ pub fn check_for_updates(
     let timeout = timeout.unwrap_or(DEFAULT_TIMEOUT);
     let interval = interval.unwrap_or(DEFAULT_INTERVAL);
     let informer = update_informer::new(NPMRegistry, package_name, current_version)
+        .http_client(ReqwestHttpClient)
         .timeout(timeout)
         .interval(interval);
     if let Ok(Some(version)) = informer.check_version() {
