@@ -251,6 +251,15 @@
 <span id="251">251</span>
 <span id="252">252</span>
 <span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem::take;
 
 <span class="kw">use </span>anyhow::Result;
@@ -258,10 +267,10 @@
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
     ecma::{
-        ast::{CallExpr, Callee, Expr, ExprOrSpread, Ident},
+        ast::{CallExpr, Callee, Expr, ExprOrSpread},
         utils::private_ident,
     },
-    quote,
+    quote, quote_expr,
 };
 <span class="kw">use </span>turbo_tasks::{
     debug::ValueDebugFormat, primitives::StringVc, trace::TraceRawVcs, TryJoinIterExt, Value,
@@ -371,11 +380,6 @@
     </span><span class="kw">async fn </span>code_generation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: ChunkingContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;CodeGenerationVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>visitors = Vec::new();
 
-        <span class="kw">enum </span>ResolvedElement {
-            PatternMapping(PatternMappingReadRef),
-            Expr(Expr),
-        }
-
         <span class="kw">let </span>resolved_elements = <span class="self">self
             </span>.dependencies_requests
             .iter()
@@ -391,6 +395,7 @@
                                 Value::new(Cjs),
                             )
                             .<span class="kw">await</span><span class="question-mark">?</span>,
+                            request.<span class="kw">await</span><span class="question-mark">?</span>.request(),
                         )
                     }
                     AmdDefineDependencyElement::Exports =&gt; {
@@ -411,97 +416,110 @@
 
         <span class="kw">let </span>path = <span class="self">self</span>.path.<span class="kw">await</span><span class="question-mark">?</span>;
         visitors.push(
-            <span class="comment">// Transforms `define([dep1, dep2], factory)` into:
-            // ```js
-            // __turbopack_export_value__(
-            //   factory(
-            //     __turbopack_require__(dep1),
-            //     __turbopack_require__(dep2),
-            //   ),
-            // );
-            // ```
-            </span><span class="macro">create_visitor!</span>(exact path, visit_mut_call_expr(call_expr: <span class="kw-2">&amp;mut </span>CallExpr) {
-                <span class="kw">let </span>CallExpr { args, callee, .. } = call_expr;
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(factory) = take(args).pop().map(|e| e.expr) {
-                    <span class="kw">let </span>deps = resolved_elements.iter().map(|element| {
-                        <span class="kw">match </span>element {
-                            ResolvedElement::PatternMapping(pm) =&gt; {
-                                <span class="kw">match </span><span class="kw-2">&amp;**</span>pm {
-                                    PatternMapping::Invalid =&gt; Expr::Ident(Ident::new(<span class="string">&quot;undefined&quot;</span>.into(), DUMMY_SP)),
-                                    pm =&gt; Expr::Call(CallExpr {
-                                        span: DUMMY_SP,
-                                        callee: Callee::Expr(
-                                            <span class="kw">box </span>Expr::Ident(Ident::new(
-                                                <span class="kw">if </span>pm.is_internal_import() {
-                                                    <span class="string">&quot;__turbopack_require__&quot;
-                                                </span>} <span class="kw">else </span>{
-                                                    <span class="string">&quot;__turbopack_external_require__&quot;
-                                                </span>}.into(), DUMMY_SP
-                                            ))
-                                        ),
-                                        args: <span class="macro">vec!</span>[
-                                            pm.create().into(),
-                                        ],
-                                        type_args: <span class="prelude-val">None
-                                    </span>}),
-                                }
-                            }
-                            ResolvedElement::Expr(expr) =&gt; {
-                                expr.clone()
-                            }
-                        }
-                    }).map(|expr| ExprOrSpread {
-                        expr: <span class="kw">box </span>expr,
-                        spread: <span class="prelude-val">None</span>,
-                    }).collect();
-                    <span class="kw">match </span>factory_type {
-                        AmdDefineFactoryType::Unknown =&gt; {
-                            <span class="comment">// ((f, r = typeof f !== &quot;function&quot; ? f : f([...])) =&gt; r !== undefined &amp;&amp; __turbopack_export_value__(r))(...)
-                            </span><span class="kw">let </span>f = <span class="macro">private_ident!</span>(<span class="string">&quot;f&quot;</span>);
-                            <span class="kw">let </span>call_f = Expr::Call(CallExpr {
-                                args: deps,
-                                callee: Callee::Expr(<span class="kw">box </span>Expr::Ident(f.clone())),
-                                span: DUMMY_SP,
-                                type_args: <span class="prelude-val">None
-                            </span>});
-                            <span class="kw-2">*</span>callee = Callee::Expr(<span class="kw">box </span><span class="macro">quote!</span>(<span class="string">&quot;($f1, r = typeof $f2 !== \&quot;function\&quot; ? $f3 : $call_f) =&gt; r !== undefined &amp;&amp; __turbopack_export_value(r)&quot; </span><span class="kw">as </span>Expr,
-                                f1 = f.clone(),
-                                f2 = f.clone(),
-                                f3 = f,
-                                call_f: Expr = call_f
-                            ));
-                            args.push(ExprOrSpread {
-                                expr: factory,
-                                spread: <span class="prelude-val">None
-                            </span>});
-                        },
-                        AmdDefineFactoryType::Function =&gt; {
-                            <span class="comment">// (r =&gt; r !== undefined &amp;&amp; __turbopack_export_value__(r))(...([...]))
-                            </span><span class="kw-2">*</span>callee = Callee::Expr(<span class="kw">box </span><span class="macro">quote!</span>(<span class="string">&quot;r =&gt; r !== undefined &amp;&amp; __turbopack_export_value__(r)&quot; </span><span class="kw">as </span>Expr));
-                            args.push(ExprOrSpread {
-                                expr: <span class="kw">box </span>Expr::Call(CallExpr {
-                                    args: deps,
-                                    callee: Callee::Expr(factory),
-                                    span: DUMMY_SP,
-                                    type_args: <span class="prelude-val">None
-                                </span>}),
-                                spread: <span class="prelude-val">None
-                            </span>});
-                        },
-                        AmdDefineFactoryType::Value =&gt; {
-                            <span class="comment">// __turbopack_export_value__(...)
-                            </span><span class="kw-2">*</span>callee = Callee::Expr(<span class="kw">box </span><span class="macro">quote!</span>(<span class="string">&quot;__turbopack_export_value__&quot; </span><span class="kw">as </span>Expr));
-                            args.push(ExprOrSpread {
-                                expr: factory,
-                                spread: <span class="prelude-val">None
-                            </span>});
-                        },
-                    }
-                }
+            <span class="macro">create_visitor!</span>(exact path, visit_mut_call_expr(call_expr: <span class="kw-2">&amp;mut </span>CallExpr) {
+                transform_amd_factory(call_expr, <span class="kw-2">&amp;</span>resolved_elements, factory_type)
             }),
         );
 
         <span class="prelude-val">Ok</span>(CodeGeneration { visitors }.into())
+    }
+}
+
+<span class="kw">enum </span>ResolvedElement {
+    PatternMapping(PatternMappingReadRef, <span class="prelude-ty">Option</span>&lt;String&gt;),
+    Expr(Expr),
+}
+
+<span class="doccomment">/// Transforms `define([dep1, dep2], factory)` into:
+/// ```js
+/// __turbopack_export_value__(
+///   factory(
+///     __turbopack_require__(dep1),
+///     __turbopack_require__(dep2),
+///   ),
+/// );
+/// ```
+</span><span class="kw">fn </span>transform_amd_factory(
+    call_expr: <span class="kw-2">&amp;mut </span>CallExpr,
+    resolved_elements: <span class="kw-2">&amp;</span>[ResolvedElement],
+    factory_type: AmdDefineFactoryType,
+) {
+    <span class="kw">let </span>CallExpr { args, callee, .. } = call_expr;
+    <span class="kw">let </span><span class="prelude-val">Some</span>(factory) = take(args).pop().map(|e| e.expr) <span class="kw">else </span>{
+        <span class="kw">return</span>;
+    };
+
+    <span class="kw">let </span>deps = resolved_elements
+        .iter()
+        .map(|element| <span class="kw">match </span>element {
+            ResolvedElement::PatternMapping(pm, req) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>pm {
+                PatternMapping::Invalid =&gt; <span class="macro">quote_expr!</span>(<span class="string">&quot;undefined&quot;</span>),
+                pm =&gt; {
+                    <span class="kw">let </span>arg = <span class="kw">if let </span><span class="prelude-val">Some</span>(req) = req {
+                        pm.apply(req.as_str().into())
+                    } <span class="kw">else </span>{
+                        pm.create()
+                    };
+
+                    <span class="kw">if </span>pm.is_internal_import() {
+                        <span class="macro">quote_expr!</span>(<span class="string">&quot;__turbopack_require__($arg)&quot;</span>, arg: Expr = arg)
+                    } <span class="kw">else </span>{
+                        <span class="macro">quote_expr!</span>(<span class="string">&quot;__turbopack_external_require__($arg)&quot;</span>, arg: Expr = arg)
+                    }
+                }
+            },
+            ResolvedElement::Expr(expr) =&gt; Box::new(expr.clone()),
+        })
+        .map(ExprOrSpread::from)
+        .collect();
+
+    <span class="kw">match </span>factory_type {
+        AmdDefineFactoryType::Unknown =&gt; {
+            <span class="comment">// ((f, r = typeof f !== &quot;function&quot; ? f : f([...])) =&gt; r !== undefined &amp;&amp;
+            // __turbopack_export_value__(r))(...)
+            </span><span class="kw">let </span>f = <span class="macro">private_ident!</span>(<span class="string">&quot;f&quot;</span>);
+            <span class="kw">let </span>call_f = Expr::Call(CallExpr {
+                args: deps,
+                callee: Callee::Expr(<span class="kw">box </span>Expr::Ident(f.clone())),
+                span: DUMMY_SP,
+                type_args: <span class="prelude-val">None</span>,
+            });
+            <span class="kw-2">*</span>callee = Callee::Expr(<span class="macro">quote_expr!</span>(
+                <span class="string">&quot;($f1, r = typeof $f2 !== \&quot;function\&quot; ? $f3 : $call_f) =&gt; r !== undefined &amp;&amp; \
+                 __turbopack_export_value(r)&quot;</span>,
+                f1 = f.clone(),
+                f2 = f.clone(),
+                f3 = f,
+                call_f: Expr = call_f
+            ));
+            args.push(ExprOrSpread {
+                expr: factory,
+                spread: <span class="prelude-val">None</span>,
+            });
+        }
+        AmdDefineFactoryType::Function =&gt; {
+            <span class="comment">// (r =&gt; r !== undefined &amp;&amp; __turbopack_export_value__(r))(...([...]))
+            </span><span class="kw-2">*</span>callee = Callee::Expr(<span class="macro">quote_expr!</span>(
+                <span class="string">&quot;r =&gt; r !== undefined &amp;&amp; __turbopack_export_value__(r)&quot;
+            </span>));
+            args.push(ExprOrSpread {
+                expr: <span class="kw">box </span>Expr::Call(CallExpr {
+                    args: deps,
+                    callee: Callee::Expr(factory),
+                    span: DUMMY_SP,
+                    type_args: <span class="prelude-val">None</span>,
+                }),
+                spread: <span class="prelude-val">None</span>,
+            });
+        }
+        AmdDefineFactoryType::Value =&gt; {
+            <span class="comment">// __turbopack_export_value__(...)
+            </span><span class="kw-2">*</span>callee = Callee::Expr(<span class="macro">quote_expr!</span>(<span class="string">&quot;__turbopack_export_value__&quot;</span>));
+            args.push(ExprOrSpread {
+                expr: factory,
+                spread: <span class="prelude-val">None</span>,
+            });
+        }
     }
 }
 </code></pre></div>
