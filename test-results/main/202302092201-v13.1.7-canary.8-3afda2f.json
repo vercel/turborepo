@@ -1,0 +1,1383 @@
+{
+  "ref": "a6f84de4c97b8edb1bb5a81971dec4d67e7d35db",
+  "nextjsVersion": "Next.js v13.1.7-canary.8",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675977804545,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:46:45)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages importing 'next/headers' in pages",
+                "location": null,
+                "status": "failed",
+                "title": "importing 'next/headers' in pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /That only works in a Server Component/\n\nerror - [resolve] [project-with-next]/components/Comp.js  Error resolving EcmaScript Modules request\n  unable to resolve module \"server-only\"\n  \n  | It was not possible to find the requested file.\n  | Parsed request as written in source code: module \"server-only\"\n  | Path where resolving has started: [project-with-next]/components/Comp.js\n  | Type of request: EcmaScript Modules request\n  | Import map: No import map entry\n  | \n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:89:7)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages importing 'server-only' in pages",
+                "location": null,
+                "status": "failed",
+                "title": "importing 'server-only' in pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:129:45)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages \"use client\" at the bottom of the page",
+                "location": null,
+                "status": "failed",
+                "title": "\"use client\" at the bottom of the page"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:170:45)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages \"use client\" with parentheses",
+                "location": null,
+                "status": "failed",
+                "title": "\"use client\" with parentheses"
+              }
+            ],
+            "endTime": 1675978007269,
+            "message": "  ● Error Overlay for server components compiler errors in pages › importing 'next/headers' in pages\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      44 |       )\n      45 |\n    > 46 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      47 |       await check(\n      48 |         () => session.getRedboxSource(),\n      49 |         /That only works in a Server Component/\n\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:46:45)\n\n  ● Error Overlay for server components compiler errors in pages › importing 'server-only' in pages\n\n    TIMED OUT: /That only works in a Server Component/\n\n    error - [resolve] [project-with-next]/components/Comp.js  Error resolving EcmaScript Modules request\n      unable to resolve module \"server-only\"\n      \n      | It was not possible to find the requested file.\n      | Parsed request as written in source code: module \"server-only\"\n      | Path where resolving has started: [project-with-next]/components/Comp.js\n      | Type of request: EcmaScript Modules request\n      | Import map: No import map entry\n      |\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:89:7)\n\n  ● Error Overlay for server components compiler errors in pages › \"use client\" at the bottom of the page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      127 |       )\n      128 |\n    > 129 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      130 |       await check(\n      131 |         () => session.getRedboxSource(),\n      132 |         /which is not supported in the pages/\n\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:129:45)\n\n  ● Error Overlay for server components compiler errors in pages › \"use client\" with parentheses\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      168 |       )\n      169 |\n    > 170 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      171 |       await check(\n      172 |         () => session.getRedboxSource(),\n      173 |         /which is not supported in the pages/\n\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:170:45)\n",
+            "name": "/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts",
+            "startTime": 1675977804641,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/i18n-api-support/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 6,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675978888387,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "streaming SSR with custom next configs"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"login\"\nReceived: \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_d85af6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_next_23ae26._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react_8b8ade._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react-dom_a9e04f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49px\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49px;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/e2e/streaming-ssr/index.test.ts:37:31)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "streaming SSR with custom next configs should match more specific route along with dynamic routes",
+                "location": null,
+                "status": "failed",
+                "title": "should match more specific route along with dynamic routes"
+              },
+              {
+                "ancestorTitles": [
+                  "streaming SSR with custom next configs"
+                ],
+                "failureMessages": [],
+                "fullName": "streaming SSR with custom next configs should render styled-jsx styles in streaming",
+                "location": null,
+                "status": "passed",
+                "title": "should render styled-jsx styles in streaming"
+              },
+              {
+                "ancestorTitles": [
+                  "streaming SSR with custom next configs"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/streaming-ssr/index.test.ts:58:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "streaming SSR with custom next configs should redirect paths without trailing-slash and render when slash is appended",
+                "location": null,
+                "status": "failed",
+                "title": "should redirect paths without trailing-slash and render when slash is appended"
+              },
+              {
+                "ancestorTitles": [
+                  "streaming SSR with custom next configs"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"link\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_d85af6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_next_23ae26._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react_8b8ade._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react-dom_a9e04f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49px\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49px;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/e2e/streaming-ssr/index.test.ts:65:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "streaming SSR with custom next configs should render next/router correctly in edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "should render next/router correctly in edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "streaming SSR with custom next configs"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"マルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイト\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_d85af6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_next_23ae26._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react_8b8ade._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react-dom_a9e04f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49px\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49px;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/e2e/streaming-ssr/index.test.ts:70:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "streaming SSR with custom next configs should render multi-byte characters correctly in streaming",
+                "location": null,
+                "status": "failed",
+                "title": "should render multi-byte characters correctly in streaming"
+              },
+              {
+                "ancestorTitles": [
+                  "streaming SSR with custom next configs"
+                ],
+                "failureMessages": [],
+                "fullName": "streaming SSR with custom next configs should work with custom document",
+                "location": null,
+                "status": "passed",
+                "title": "should work with custom document"
+              }
+            ],
+            "endTime": 1675978912429,
+            "message": "  ● streaming SSR with custom next configs › should match more specific route along with dynamic routes\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"login\"\n    Received: \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_d85af6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_next_23ae26._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react_8b8ade._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react-dom_a9e04f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49px\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49px;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      35 |     const res1 = await fetchViaHTTP(next.url, '/api/user/login')\n      36 |     const res2 = await fetchViaHTTP(next.url, '/api/user/any')\n    > 37 |     expect(await res1.text()).toBe('login')\n         |                               ^\n      38 |     expect(await res2.text()).toBe('[id]')\n      39 |   })\n      40 |\n\n      at Object.<anonymous> (e2e/streaming-ssr/index.test.ts:37:31)\n\n  ● streaming SSR with custom next configs › should redirect paths without trailing-slash and render when slash is appended\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      56 |\n      57 |     expect(redirectRes.status).toBe(308)\n    > 58 |     expect(res.status).toBe(200)\n         |                        ^\n      59 |     expect(html).toContain('hello nextjs')\n      60 |     expect(html).toContain('home')\n      61 |   })\n\n      at Object.<anonymous> (e2e/streaming-ssr/index.test.ts:58:24)\n\n  ● streaming SSR with custom next configs › should render next/router correctly in edge runtime\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"link\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_d85af6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_next_23ae26._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react_8b8ade._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react-dom_a9e04f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49px\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49px;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      63 |   it('should render next/router correctly in edge runtime', async () => {\n      64 |     const html = await renderViaHTTP(next.url, '/router')\n    > 65 |     expect(html).toContain('link')\n         |                  ^\n      66 |   })\n      67 |\n      68 |   it('should render multi-byte characters correctly in streaming', async () => {\n\n      at Object.<anonymous> (e2e/streaming-ssr/index.test.ts:65:18)\n\n  ● streaming SSR with custom next configs › should render multi-byte characters correctly in streaming\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"マルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイト\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_d85af6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_next_23ae26._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react_8b8ade._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react-dom_a9e04f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49px\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49px;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      68 |   it('should render multi-byte characters correctly in streaming', async () => {\n      69 |     const html = await renderViaHTTP(next.url, '/multi-byte')\n    > 70 |     expect(html).toContain('マルチバイト'.repeat(28))\n         |                  ^\n      71 |   })\n      72 |\n      73 |   if ((global as any).isNextDev) {\n\n      at Object.<anonymous> (e2e/streaming-ssr/index.test.ts:70:18)\n",
+            "name": "/work/test/e2e/streaming-ssr/index.test.ts",
+            "startTime": 1675978888484,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/client-shallow-routing/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675979319588,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Web Workers with webpack 5",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /PASS/i\n\nWorker: FAIL\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/worker-webpack5/test/index.test.js:26:7)"
+                ],
+                "fullName": "Web Workers with webpack 5 dev mode should pass on both client and worker",
+                "location": null,
+                "status": "failed",
+                "title": "should pass on both client and worker"
+              },
+              {
+                "ancestorTitles": [
+                  "Web Workers with webpack 5",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Web Workers with webpack 5 server mode should pass on both client and worker",
+                "location": null,
+                "status": "passed",
+                "title": "should pass on both client and worker"
+              }
+            ],
+            "endTime": 1675979374255,
+            "message": "  ● Web Workers with webpack 5 › dev mode › should pass on both client and worker\n\n    TIMED OUT: /PASS/i\n\n    Worker: FAIL\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/worker-webpack5/test/index.test.js:26:7)\n",
+            "name": "/work/test/integration/worker-webpack5/test/index.test.js",
+            "startTime": 1675979319703,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675977855232,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay unsupported app features"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'includes')\n    at _default (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n    at Object.toInclude (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/index.js:19:39)\n    at __EXTERNAL_MATCHER_TRAP__ (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n    at Object.toInclude (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n    at Object.<anonymous> (/work/test/development/acceptance-app/unsupported-app-features.test.ts:34:52)"
+                ],
+                "fullName": "Error Overlay unsupported app features should show error exporting AMP config in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should show error exporting AMP config in app dir"
+              }
+            ],
+            "endTime": 1675977952173,
+            "message": "  ● Error Overlay unsupported app features › should show error exporting AMP config in app dir\n\n    TypeError: Cannot read properties of null (reading 'includes')\n\n      32 |\n      33 |       await session.hasRedbox(true)\n    > 34 |       expect(await session.getRedboxDescription()).toInclude(\n         |                                                    ^\n      35 |         'AMP is not supported in the app directory. If you need to use AMP it will continue to be supported in the pages directory.'\n      36 |       )\n      37 |\n\n      at _default (../node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n      at Object.toInclude (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n      at Object.<anonymous> (development/acceptance-app/unsupported-app-features.test.ts:34:52)\n",
+            "name": "/work/test/development/acceptance-app/unsupported-app-features.test.ts",
+            "startTime": 1675977855328,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675978765307,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"hello world\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/type-module-interop/index.test.ts:88:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Type module interop should render server-side",
+                "location": null,
+                "status": "failed",
+                "title": "should render server-side"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [],
+                "fullName": "Type module interop should render client-side",
+                "location": null,
+                "status": "passed",
+                "title": "should render client-side"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"link to home\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/e2e/type-module-interop/index.test.ts:105:39)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Type module interop should render server-side with modules",
+                "location": null,
+                "status": "failed",
+                "title": "should render server-side with modules"
+              },
+              {
+                "ancestorTitles": [
+                  "Type module interop"
+                ],
+                "failureMessages": [],
+                "fullName": "Type module interop should render client-side with modules",
+                "location": null,
+                "status": "passed",
+                "title": "should render client-side with modules"
+              }
+            ],
+            "endTime": 1675978785845,
+            "message": "  ● Type module interop › should render server-side\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"hello world\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      86 |   it('should render server-side', async () => {\n      87 |     const html = await renderViaHTTP(next.url, '/')\n    > 88 |     expect(html).toContain('hello world')\n         |                  ^\n      89 |     // component load via next/dynamic should rendered on the server side\n      90 |     expect(html).toContain('An example components load via next/dynamic')\n      91 |     // imported next/amp should work on the server side\n\n      at Object.<anonymous> (e2e/type-module-interop/index.test.ts:88:18)\n\n  ● Type module interop › should render server-side with modules\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"link to home\"\n    Received: \"\"\n\n      103 |     const html = await renderViaHTTP(next.url, '/modules')\n      104 |     const $ = cheerio.load(html)\n    > 105 |     expect($('#link-to-home').text()).toBe('link to home')\n          |                                       ^\n      106 |   })\n      107 |\n      108 |   it('should render client-side with modules', async () => {\n\n      at Object.<anonymous> (e2e/type-module-interop/index.test.ts:105:39)\n",
+            "name": "/work/test/e2e/type-module-interop/index.test.ts",
+            "startTime": 1675978765401,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675979797680,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Trailing slash in distDir",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/work/test/integration/trailing-slash-dist/.next/build-manifest.json'\n    at Object.openSync (node:fs:590:3)\n    at readFileSync (node:fs:458:35)\n    at readJson (/work/test/lib/next-test-utils.js:738:33)\n    at getBuildManifest (/work/test/lib/next-test-utils.js:742:10)\n    at getPageFileFromBuildManifest (/work/test/lib/next-test-utils.js:746:25)\n    at Object.<anonymous> (/work/test/integration/trailing-slash-dist/test/index.test.js:22:46)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Trailing slash in distDir dev mode supports trailing slash",
+                "location": null,
+                "status": "failed",
+                "title": "supports trailing slash"
+              }
+            ],
+            "endTime": 1675979802570,
+            "message": "  ● Trailing slash in distDir › dev mode › supports trailing slash\n\n    ENOENT: no such file or directory, open '/work/test/integration/trailing-slash-dist/.next/build-manifest.json'\n\n      736 |\n      737 | function readJson(path) {\n    > 738 |   return JSON.parse(readFileSync(path))\n          |                                 ^\n      739 | }\n      740 |\n      741 | export function getBuildManifest(dir) {\n\n      at readJson (lib/next-test-utils.js:738:33)\n      at getBuildManifest (lib/next-test-utils.js:742:10)\n      at getPageFileFromBuildManifest (lib/next-test-utils.js:746:25)\n      at Object.<anonymous> (integration/trailing-slash-dist/test/index.test.js:22:46)\n",
+            "name": "/work/test/integration/trailing-slash-dist/test/index.test.js",
+            "startTime": 1675979797772,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675977800429,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:46:45)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages importing 'next/headers' in pages",
+                "location": null,
+                "status": "failed",
+                "title": "importing 'next/headers' in pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /That only works in a Server Component/\n\nerror - [resolve] [project-with-next]/components/Comp.js  Error resolving EcmaScript Modules request\n  unable to resolve module \"server-only\"\n  \n  | It was not possible to find the requested file.\n  | Parsed request as written in source code: module \"server-only\"\n  | Path where resolving has started: [project-with-next]/components/Comp.js\n  | Type of request: EcmaScript Modules request\n  | Import map: No import map entry\n  | \n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:89:7)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages importing 'server-only' in pages",
+                "location": null,
+                "status": "failed",
+                "title": "importing 'server-only' in pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:129:45)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages \"use client\" at the bottom of the page",
+                "location": null,
+                "status": "failed",
+                "title": "\"use client\" at the bottom of the page"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:170:45)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages \"use client\" with parentheses",
+                "location": null,
+                "status": "failed",
+                "title": "\"use client\" with parentheses"
+              }
+            ],
+            "endTime": 1675978001881,
+            "message": "  ● Error Overlay for server components compiler errors in pages › importing 'next/headers' in pages\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      44 |       )\n      45 |\n    > 46 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      47 |       await check(\n      48 |         () => session.getRedboxSource(),\n      49 |         /That only works in a Server Component/\n\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:46:45)\n\n  ● Error Overlay for server components compiler errors in pages › importing 'server-only' in pages\n\n    TIMED OUT: /That only works in a Server Component/\n\n    error - [resolve] [project-with-next]/components/Comp.js  Error resolving EcmaScript Modules request\n      unable to resolve module \"server-only\"\n      \n      | It was not possible to find the requested file.\n      | Parsed request as written in source code: module \"server-only\"\n      | Path where resolving has started: [project-with-next]/components/Comp.js\n      | Type of request: EcmaScript Modules request\n      | Import map: No import map entry\n      |\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:89:7)\n\n  ● Error Overlay for server components compiler errors in pages › \"use client\" at the bottom of the page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      127 |       )\n      128 |\n    > 129 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      130 |       await check(\n      131 |         () => session.getRedboxSource(),\n      132 |         /which is not supported in the pages/\n\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:129:45)\n\n  ● Error Overlay for server components compiler errors in pages › \"use client\" with parentheses\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      168 |       )\n      169 |\n    > 170 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      171 |       await check(\n      172 |         () => session.getRedboxSource(),\n      173 |         /which is not supported in the pages/\n\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:170:45)\n",
+            "name": "/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts",
+            "startTime": 1675977800524,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/i18n-api-support/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 6,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675978872192,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "streaming SSR with custom next configs"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"login\"\nReceived: \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_d85af6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_next_23ae26._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react_8b8ade._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react-dom_a9e04f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49px\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49px;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/e2e/streaming-ssr/index.test.ts:37:31)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "streaming SSR with custom next configs should match more specific route along with dynamic routes",
+                "location": null,
+                "status": "failed",
+                "title": "should match more specific route along with dynamic routes"
+              },
+              {
+                "ancestorTitles": [
+                  "streaming SSR with custom next configs"
+                ],
+                "failureMessages": [],
+                "fullName": "streaming SSR with custom next configs should render styled-jsx styles in streaming",
+                "location": null,
+                "status": "passed",
+                "title": "should render styled-jsx styles in streaming"
+              },
+              {
+                "ancestorTitles": [
+                  "streaming SSR with custom next configs"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 404\n    at Object.<anonymous> (/work/test/e2e/streaming-ssr/index.test.ts:58:24)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "streaming SSR with custom next configs should redirect paths without trailing-slash and render when slash is appended",
+                "location": null,
+                "status": "failed",
+                "title": "should redirect paths without trailing-slash and render when slash is appended"
+              },
+              {
+                "ancestorTitles": [
+                  "streaming SSR with custom next configs"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"link\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_d85af6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_next_23ae26._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react_8b8ade._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react-dom_a9e04f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49px\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49px;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/e2e/streaming-ssr/index.test.ts:65:18)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "streaming SSR with custom next configs should render next/router correctly in edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "should render next/router correctly in edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "streaming SSR with custom next configs"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"マルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイト\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_d85af6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_next_23ae26._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react_8b8ade._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react-dom_a9e04f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49px\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49px;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/e2e/streaming-ssr/index.test.ts:70:18)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "streaming SSR with custom next configs should render multi-byte characters correctly in streaming",
+                "location": null,
+                "status": "failed",
+                "title": "should render multi-byte characters correctly in streaming"
+              },
+              {
+                "ancestorTitles": [
+                  "streaming SSR with custom next configs"
+                ],
+                "failureMessages": [],
+                "fullName": "streaming SSR with custom next configs should work with custom document",
+                "location": null,
+                "status": "passed",
+                "title": "should work with custom document"
+              }
+            ],
+            "endTime": 1675978894883,
+            "message": "  ● streaming SSR with custom next configs › should match more specific route along with dynamic routes\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"login\"\n    Received: \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_d85af6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_next_23ae26._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react_8b8ade._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react-dom_a9e04f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49px\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49px;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      35 |     const res1 = await fetchViaHTTP(next.url, '/api/user/login')\n      36 |     const res2 = await fetchViaHTTP(next.url, '/api/user/any')\n    > 37 |     expect(await res1.text()).toBe('login')\n         |                               ^\n      38 |     expect(await res2.text()).toBe('[id]')\n      39 |   })\n      40 |\n\n      at Object.<anonymous> (e2e/streaming-ssr/index.test.ts:37:31)\n\n  ● streaming SSR with custom next configs › should redirect paths without trailing-slash and render when slash is appended\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 404\n\n      56 |\n      57 |     expect(redirectRes.status).toBe(308)\n    > 58 |     expect(res.status).toBe(200)\n         |                        ^\n      59 |     expect(html).toContain('hello nextjs')\n      60 |     expect(html).toContain('home')\n      61 |   })\n\n      at Object.<anonymous> (e2e/streaming-ssr/index.test.ts:58:24)\n\n  ● streaming SSR with custom next configs › should render next/router correctly in edge runtime\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"link\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_d85af6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_next_23ae26._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react_8b8ade._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react-dom_a9e04f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49px\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49px;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      63 |   it('should render next/router correctly in edge runtime', async () => {\n      64 |     const html = await renderViaHTTP(next.url, '/router')\n    > 65 |     expect(html).toContain('link')\n         |                  ^\n      66 |   })\n      67 |\n      68 |   it('should render multi-byte characters correctly in streaming', async () => {\n\n      at Object.<anonymous> (e2e/streaming-ssr/index.test.ts:65:18)\n\n  ● streaming SSR with custom next configs › should render multi-byte characters correctly in streaming\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"マルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイトマルチバイト\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_d85af6._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_next_23ae26._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react_8b8ade._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_react-dom_a9e04f._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/node_modules_scheduler_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49px\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49px;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"nextExport\\\":true,\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      68 |   it('should render multi-byte characters correctly in streaming', async () => {\n      69 |     const html = await renderViaHTTP(next.url, '/multi-byte')\n    > 70 |     expect(html).toContain('マルチバイト'.repeat(28))\n         |                  ^\n      71 |   })\n      72 |\n      73 |   if ((global as any).isNextDev) {\n\n      at Object.<anonymous> (e2e/streaming-ssr/index.test.ts:70:18)\n",
+            "name": "/work/test/e2e/streaming-ssr/index.test.ts",
+            "startTime": 1675978872287,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/client-shallow-routing/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675979290858,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Web Workers with webpack 5",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /PASS/i\n\nWorker: FAIL\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/worker-webpack5/test/index.test.js:26:7)"
+                ],
+                "fullName": "Web Workers with webpack 5 dev mode should pass on both client and worker",
+                "location": null,
+                "status": "failed",
+                "title": "should pass on both client and worker"
+              },
+              {
+                "ancestorTitles": [
+                  "Web Workers with webpack 5",
+                  "server mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Web Workers with webpack 5 server mode should pass on both client and worker",
+                "location": null,
+                "status": "passed",
+                "title": "should pass on both client and worker"
+              }
+            ],
+            "endTime": 1675979344884,
+            "message": "  ● Web Workers with webpack 5 › dev mode › should pass on both client and worker\n\n    TIMED OUT: /PASS/i\n\n    Worker: FAIL\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/worker-webpack5/test/index.test.js:26:7)\n",
+            "name": "/work/test/integration/worker-webpack5/test/index.test.js",
+            "startTime": 1675979290951,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675978070276,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay unsupported app features"
+                ],
+                "failureMessages": [
+                  "TypeError: Cannot read properties of null (reading 'includes')\n    at _default (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n    at Object.toInclude (/work/node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/index.js:19:39)\n    at __EXTERNAL_MATCHER_TRAP__ (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n    at Object.toInclude (/work/node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n    at Object.<anonymous> (/work/test/development/acceptance-app/unsupported-app-features.test.ts:34:52)"
+                ],
+                "fullName": "Error Overlay unsupported app features should show error exporting AMP config in app dir",
+                "location": null,
+                "status": "failed",
+                "title": "should show error exporting AMP config in app dir"
+              }
+            ],
+            "endTime": 1675978167640,
+            "message": "  ● Error Overlay unsupported app features › should show error exporting AMP config in app dir\n\n    TypeError: Cannot read properties of null (reading 'includes')\n\n      32 |\n      33 |       await session.hasRedbox(true)\n    > 34 |       expect(await session.getRedboxDescription()).toInclude(\n         |                                                    ^\n      35 |         'AMP is not supported in the app directory. If you need to use AMP it will continue to be supported in the pages directory.'\n      36 |       )\n      37 |\n\n      at _default (../node_modules/.pnpm/jest-extended@1.2.1/node_modules/jest-extended/dist/matchers/toInclude/predicate.js:8:46)\n      at __EXTERNAL_MATCHER_TRAP__ (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:386:30)\n      at Object.toInclude (../node_modules/.pnpm/expect@27.5.1/node_modules/expect/build/index.js:387:15)\n      at Object.<anonymous> (development/acceptance-app/unsupported-app-features.test.ts:34:52)\n",
+            "name": "/work/test/development/acceptance-app/unsupported-app-features.test.ts",
+            "startTime": 1675978070369,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 6,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 7,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 14,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675978870393,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not include edge api routes and edge ssr routes into dev middleware manifest",
+                "location": null,
+                "status": "passed",
+                "title": "should not include edge api routes and edge ssr routes into dev middleware manifest"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should sort edge SSR routes correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should sort edge SSR routes correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be able to navigate between edge SSR routes without any errors",
+                "location": null,
+                "status": "passed",
+                "title": "should be able to navigate between edge SSR routes without any errors"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to ssr rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to ssr rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to ssg rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to ssg rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should support client side navigation to static rsc pages",
+                "location": null,
+                "status": "pending",
+                "title": "should support client side navigation to static rsc pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not consume server.js file extension",
+                "location": null,
+                "status": "passed",
+                "title": "should not consume server.js file extension"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/tmp/next-install-728f27acadab0b2f695b107a9862d5e2a5fab7eec36a18ef71efcca7cf49936e/.next/server/middleware-manifest.json'"
+                ],
+                "fullName": "Switchable runtime Switchable runtime (dev) should build /api/hello and /api/edge as an api route with edge runtime",
+                "location": null,
+                "status": "failed",
+                "title": "should build /api/hello and /api/edge as an api route with edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes in API routes",
+                "location": null,
+                "status": "passed",
+                "title": "should be possible to switch between runtimes in API routes"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes in pages",
+                "location": null,
+                "status": "passed",
+                "title": "should be possible to switch between runtimes in pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should be possible to switch between runtimes with same content",
+                "location": null,
+                "status": "pending",
+                "title": "should be possible to switch between runtimes with same content"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should recover from syntax error when using edge runtime",
+                "location": null,
+                "status": "pending",
+                "title": "should recover from syntax error when using edge runtime"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should not crash the dev server when invalid runtime is configured",
+                "location": null,
+                "status": "pending",
+                "title": "should not crash the dev server when invalid runtime is configured"
+              },
+              {
+                "ancestorTitles": [
+                  "Switchable runtime",
+                  "Switchable runtime (dev)"
+                ],
+                "failureMessages": [],
+                "fullName": "Switchable runtime Switchable runtime (dev) should give proper errors for invalid runtime in app dir",
+                "location": null,
+                "status": "pending",
+                "title": "should give proper errors for invalid runtime in app dir"
+              }
+            ],
+            "endTime": 1675978911807,
+            "message": "  ● Switchable runtime › Switchable runtime (dev) › should build /api/hello and /api/edge as an api route with edge runtime\n\n    ENOENT: no such file or directory, open '/tmp/next-install-728f27acadab0b2f695b107a9862d5e2a5fab7eec36a18ef71efcca7cf49936e/.next/server/middleware-manifest.json'\n\n\n",
+            "name": "/work/test/e2e/switchable-runtime/index.test.ts",
+            "startTime": 1675978870490,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 24,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 2,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 28,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": true,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 1,
+          "filesUpdated": 0,
+          "matched": 13,
+          "total": 14,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 1,
+          "updated": 0
+        },
+        "startTime": 1675979415752,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Basic SCSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "Basic SCSS Module Support should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Basic SCSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "Basic SCSS Module Support should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "Basic SCSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "Basic SCSS Module Support should've injected the CSS on server render",
+                "location": null,
+                "status": "passed",
+                "title": "should've injected the CSS on server render"
+              },
+              {
+                "ancestorTitles": [
+                  "3rd Party CSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "3rd Party CSS Module Support should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "3rd Party CSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "3rd Party CSS Module Support should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "3rd Party CSS Module Support"
+                ],
+                "failureMessages": [],
+                "fullName": "3rd Party CSS Module Support should've injected the CSS on server render",
+                "location": null,
+                "status": "passed",
+                "title": "should've injected the CSS on server render"
+              },
+              {
+                "ancestorTitles": [
+                  "Has CSS Module in computed styles in Development"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchInlineSnapshot(snapshot)\n\nSnapshot name: `Has CSS Module in computed styles in Development should have CSS for page 1`\n\nSnapshot: \"rgb(255, 0, 0)\"\nReceived: null\n    at Object.<anonymous> (/work/test/integration/scss-modules/test/index.test.js:152:26)"
+                ],
+                "fullName": "Has CSS Module in computed styles in Development should have CSS for page",
+                "location": null,
+                "status": "failed",
+                "title": "should have CSS for page"
+              },
+              {
+                "ancestorTitles": [
+                  "Has CSS Module in computed styles in Production"
+                ],
+                "failureMessages": [],
+                "fullName": "Has CSS Module in computed styles in Production should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Has CSS Module in computed styles in Production"
+                ],
+                "failureMessages": [],
+                "fullName": "Has CSS Module in computed styles in Production should have CSS for page",
+                "location": null,
+                "status": "passed",
+                "title": "should have CSS for page"
+              },
+              {
+                "ancestorTitles": [
+                  "Can hot reload CSS Module without losing state"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#text-input')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Can hot reload CSS Module without losing state should update CSS color without remounting <input>",
+                "location": null,
+                "status": "failed",
+                "title": "should update CSS color without remounting <input>"
+              },
+              {
+                "ancestorTitles": [
+                  "Invalid CSS Module Usage in node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Invalid CSS Module Usage in node_modules should fail to build",
+                "location": null,
+                "status": "pending",
+                "title": "should fail to build"
+              },
+              {
+                "ancestorTitles": [
+                  "Invalid CSS Global Module Usage in node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Invalid CSS Global Module Usage in node_modules should fail to build",
+                "location": null,
+                "status": "pending",
+                "title": "should fail to build"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid CSS Module Usage from within node_modules should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid CSS Module Usage from within node_modules should've prerendered with relevant data",
+                "location": null,
+                "status": "passed",
+                "title": "should've prerendered with relevant data"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid CSS Module Usage from within node_modules should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid Nested CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid Nested CSS Module Usage from within node_modules should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid Nested CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid Nested CSS Module Usage from within node_modules should've prerendered with relevant data",
+                "location": null,
+                "status": "passed",
+                "title": "should've prerendered with relevant data"
+              },
+              {
+                "ancestorTitles": [
+                  "Valid Nested CSS Module Usage from within node_modules"
+                ],
+                "failureMessages": [],
+                "fullName": "Valid Nested CSS Module Usage from within node_modules should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Module Composes Usage (Basic)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Module Composes Usage (Basic) should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Module Composes Usage (Basic)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Module Composes Usage (Basic) should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Module Composes Usage (External)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Module Composes Usage (External) should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "CSS Module Composes Usage (External)"
+                ],
+                "failureMessages": [],
+                "fullName": "CSS Module Composes Usage (External) should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "Dynamic Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Dynamic Route CSS Module Usage should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Dynamic Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Dynamic Route CSS Module Usage should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              },
+              {
+                "ancestorTitles": [
+                  "Dynamic Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Dynamic Route CSS Module Usage should apply styles correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should apply styles correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Catch-all Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Catch-all Route CSS Module Usage should have compiled successfully",
+                "location": null,
+                "status": "passed",
+                "title": "should have compiled successfully"
+              },
+              {
+                "ancestorTitles": [
+                  "Catch-all Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Catch-all Route CSS Module Usage should apply styles correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should apply styles correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Catch-all Route CSS Module Usage"
+                ],
+                "failureMessages": [],
+                "fullName": "Catch-all Route CSS Module Usage should've emitted a single CSS file",
+                "location": null,
+                "status": "passed",
+                "title": "should've emitted a single CSS file"
+              }
+            ],
+            "endTime": 1675979628829,
+            "message": "  ● Has CSS Module in computed styles in Development › should have CSS for page\n\n    expect(received).toMatchInlineSnapshot(snapshot)\n\n    Snapshot name: `Has CSS Module in computed styles in Development should have CSS for page 1`\n\n    Snapshot: \"rgb(255, 0, 0)\"\n    Received: null\n\n      150 |       `window.getComputedStyle(document.querySelector('#verify-red')).color`\n      151 |     )\n    > 152 |     expect(currentColor).toMatchInlineSnapshot(`\"rgb(255, 0, 0)\"`)\n          |                          ^\n      153 |   })\n      154 | })\n      155 |\n\n      at Object.<anonymous> (integration/scss-modules/test/index.test.js:152:26)\n\n  ● Can hot reload CSS Module without losing state › should update CSS color without remounting <input>\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#text-input')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/scss-modules/test/index.test.js",
+            "startTime": 1675979415848,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
