@@ -376,19 +376,13 @@ graph TD
     N6["Items: [ItemId(5, Normal), ItemId(4, VarDeclarator(0))]"];
     N7["Items: [ItemId(6, VarDeclarator(0)), ItemId(2, VarDeclarator(0)), ItemId(5, Normal)]"];
     N8["Items: [ItemId(7, Normal)]"];
-    N0 --> N0;
     N0 --> N7;
-    N1 --> N1;
     N1 --> N7;
     N1 --> N8;
     N2 --> N7;
     N2 --> N8;
-    N3 --> N3;
     N3 --> N7;
-    N4 --> N4;
-    N6 --> N6;
     N6 --> N7;
-    N7 --> N7;
     N7 --> N6;
     N8 --> N7;
 ```
