@@ -56,3 +56,7 @@ Check
       }
     ]
   }
+
+  $ ${TURBO} run build --dry --single-package -vv > logs 2>&1 
+  $ cat logs | grep "taskHashInputs"
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: taskhash.taskHashInputs{packageDir:"", hashOfFiles:"c3513037e56ad478", externalDepsHash:"", task:"build", outputs:fs.TaskOutputs{Inclusions:\[]string(nil), Exclusions:\[]string(nil)}, passThruArgs:\[]string{}, hashableEnvPairs:[]string{}, globalHash:"0d2c84a1b8ca6878", taskDependencyHashes:\[]string{}} (re)
