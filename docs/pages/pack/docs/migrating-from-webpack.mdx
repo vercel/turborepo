@@ -24,23 +24,25 @@ If you need loader support beyond what's built in, some webpack loaders, includi
 - At the moment, only a core subset of the webpack loader API is implemented. This is enough for some popular loaders, and we'll expand our support for this API in the future.
 - Options passed to webpack loaders must be plain JavaScript primitives, objects, and arrays. For example, it's not possible to pass `require()`d plugin modules as option values.
 
-At the moment, configuring webpack loaders is possible for Next.js apps through an experimental option in `next.config.js`. `turbopackLoaders` can be set to a mapping of file extensions to a list of package names or `{loader, options}` pairs:
+At the moment, configuring webpack loaders is possible for Next.js apps through an experimental option in `next.config.js`. `turbopack.loaders` can be set to a mapping of file extensions to a list of package names or `{loader, options}` pairs:
 
 ```js filename="next.config.js"
 module.exports = {
   experimental: {
-    turbopackLoaders: {
-      // Option format
-      '.md': [
-        {
-          loader: '@mdx-js/loader',
-          options: {
-            format: 'md',
+    turbo: {
+      loaders: {
+        // Option format
+        '.md': [
+          {
+            loader: '@mdx-js/loader',
+            options: {
+              format: 'md',
+            },
           },
-        },
-      ],
-      // Option-less format
-      '.mdx': '@mdx-js/loader',
+        ],
+        // Option-less format
+        '.mdx': '@mdx-js/loader',
+      },
     },
   },
 }
@@ -53,9 +55,11 @@ Turbopack can be configured to modify module resolution through aliases, similar
 ```js filename="next.config.js"
 module.exports = {
   experimental: {
-    turbopackResolveAlias: {
-      underscore: 'lodash',
-      mocha: { browser: 'mocha/browser-entry.js' },
+    turbo: {
+      resolveAlias: {
+        underscore: 'lodash',
+        mocha: { browser: 'mocha/browser-entry.js' },
+      },
     },
   },
 }
