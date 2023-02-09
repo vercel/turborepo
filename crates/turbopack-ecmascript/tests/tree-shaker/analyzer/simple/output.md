@@ -123,20 +123,12 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Statements: [1]"];
-    N1["Statements: [0]"];
-    N2["Statements: [3]"];
-    N3["Statements: [6]"];
-    N4["Statements: [2]"];
-    N5["Statements: [5]"];
-    N6["Statements: [4]"];
-    N4 --> N1;
-    N2 --> N0;
-    N2 --> N1;
-    N6 -.-> N1;
-    N6 -.-> N4;
-    N6 -.-> N2;
-    N6 -.-> N0;
-    N5 --> N4;
-    N3 --> N2;
+    N0["Items: [ItemId { index: 18446744073709551615, kind: ModuleEvaluation ]"];
+    N1["Items: [ItemId { index: 18446744073709551615, kind: Export((Atom('DOG' type=inline), #0)) , ItemId { index: 2, kind: VarDeclarator(0) ]"];
+    N2["Items: [ItemId { index: 18446744073709551615, kind: Export((Atom('CHIMERA' type=inline), #0)) , ItemId { index: 3, kind: VarDeclarator(0) , ItemId { index: 1, kind: VarDeclarator(0) , ItemId { index: 0, kind: VarDeclarator(0) ]"];
+    N0 --> N2;
+    N0 --> N1;
+    N1 --> N1;
+    N1 --> N2;
+    N2 --> N2;
 ```
