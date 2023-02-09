@@ -182,7 +182,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 				// If we have a pkg it should be in WorkspaceInfos.
 				// If we're hitting this error something has gone wrong earlier when building WorkspaceInfos
 				// or the workspace really doesn't exist and turbo.json is misconfigured.
-				return fmt.Errorf("Could not find task \"%s\" in project", taskID)
+				return fmt.Errorf("Could not find workspace \"%s\" from task \"%s\" in project", pkg, taskID)
 			}
 
 			pkgDefinition = pkgJSON

@@ -39,8 +39,8 @@ Can't depend on unknown tasks
 
 Can't depend on tasks from unknown packages
   $ ${TURBO} run build3
-   ERROR  run failed: error preparing engine: Could not find task "unknown#custom" in project
-  Turbo error: error preparing engine: Could not find task "unknown#custom" in project
+   ERROR  run failed: error preparing engine: Could not find workspace "unknown" from task "unknown#custom" in project
+  Turbo error: error preparing engine: Could not find workspace "unknown" from task "unknown#custom" in project
   [1]
 
 
