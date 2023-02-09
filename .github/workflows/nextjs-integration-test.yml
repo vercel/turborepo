@@ -14,7 +14,7 @@ on:
         type: string
       # The base of the test results to compare against. If not specified, will try to compare with latest main branch's test results.
       diff_base:
-        typg: string
+        type: string
         default: "main"
       force_post_to_slack:
         type: boolean
