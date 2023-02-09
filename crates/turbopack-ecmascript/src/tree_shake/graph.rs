@@ -270,13 +270,11 @@ impl DepGraph {
                     .inner
                     .neighbors_directed(item_ix, petgraph::Direction::Outgoing)
                 {
-                    let dep_group_ix = group_ix_by_item_ix.get(&item_dep_ix);
-                    if let Some(&dep_group_ix) = dep_group_ix {
-                        if group_ix == dep_group_ix {
-                            continue;
-                        }
-                        new_graph.inner.add_edge(group_ix, dep_group_ix, true);
+                    let dep_group_ix = group_ix_by_item_ix[&item_dep_ix];
+                    if group_ix == dep_group_ix {
+                        continue;
                     }
+                    new_graph.inner.add_edge(group_ix, dep_group_ix, true);
                 }
             }
         }
