@@ -1,0 +1,1118 @@
+{
+  "ref": "fa2ff9ac2766a85280e8b1889c57338fcc374db7",
+  "nextjsVersion": "Next.js v13.1.7-canary.8",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675947494934,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675947559767,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675947495029,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/edge-can-read-request-body/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675947632426,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Edge can read request body"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge can read request body renders the static page",
+                "location": null,
+                "status": "passed",
+                "title": "renders the static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge can read request body",
+                  "middleware"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchObject(expected)\n\n- Expected  - 2\n+ Received  + 4\n\n  Object {\n    \"headers\": Object {\n-     \"x-req-type\": \"json\",\n-     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n+     \"connection\": \"close\",\n+     \"content-length\": \"2\",\n+     \"date\": \"Thu, 09 Feb 2023 13:00:52 GMT\",\n+     \"etag\": \"\\\"109abcqmas2\\\"\",\n    },\n    \"status\": 200,\n    \"text\": StringContaining \"ok\",\n  }\n    at Object.<anonymous> (/work/test/e2e/edge-can-read-request-body/index.test.ts:42:41)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Edge can read request body middleware reads a JSON body",
+                "location": null,
+                "status": "failed",
+                "title": "reads a JSON body"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge can read request body",
+                  "middleware"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge can read request body middleware reads a text body",
+                "location": null,
+                "status": "passed",
+                "title": "reads a text body"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge can read request body",
+                  "middleware"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchObject(expected)\n\n- Expected  - 2\n+ Received  + 4\n\n  Object {\n    \"headers\": Object {\n-     \"x-req-type\": \"formData\",\n-     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n+     \"connection\": \"close\",\n+     \"content-length\": \"2\",\n+     \"date\": \"Thu, 09 Feb 2023 13:00:53 GMT\",\n+     \"etag\": \"\\\"109abcqmas2\\\"\",\n    },\n    \"status\": 200,\n    \"text\": StringContaining \"ok\",\n  }\n    at Object.<anonymous> (/work/test/e2e/edge-can-read-request-body/index.test.ts:90:41)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Edge can read request body middleware reads an URL encoded form data",
+                "location": null,
+                "status": "failed",
+                "title": "reads an URL encoded form data"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge can read request body",
+                  "middleware"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchObject(expected)\n\n- Expected  - 2\n+ Received  + 4\n\n  Object {\n    \"headers\": Object {\n-     \"x-req-type\": \"formData\",\n-     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n+     \"connection\": \"close\",\n+     \"content-length\": \"2\",\n+     \"date\": \"Thu, 09 Feb 2023 13:00:53 GMT\",\n+     \"etag\": \"\\\"109abcqmas2\\\"\",\n    },\n    \"status\": 200,\n    \"text\": StringContaining \"ok\",\n  }\n    at Object.<anonymous> (/work/test/e2e/edge-can-read-request-body/index.test.ts:114:41)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Edge can read request body middleware reads a multipart form data",
+                "location": null,
+                "status": "failed",
+                "title": "reads a multipart form data"
+              }
+            ],
+            "endTime": 1675947653322,
+            "message": "  ● Edge can read request body › middleware › reads a JSON body\n\n    expect(received).toMatchObject(expected)\n\n    - Expected  - 2\n    + Received  + 4\n\n      Object {\n        \"headers\": Object {\n    -     \"x-req-type\": \"json\",\n    -     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n    +     \"connection\": \"close\",\n    +     \"content-length\": \"2\",\n    +     \"date\": \"Thu, 09 Feb 2023 13:00:52 GMT\",\n    +     \"etag\": \"\\\"109abcqmas2\\\"\",\n        },\n        \"status\": 200,\n        \"text\": StringContaining \"ok\",\n      }\n\n      40 |         }\n      41 |       )\n    > 42 |       expect(await serialize(response)).toMatchObject({\n         |                                         ^\n      43 |         text: expect.stringContaining('ok'),\n      44 |         status: 200,\n      45 |         headers: {\n\n      at Object.<anonymous> (e2e/edge-can-read-request-body/index.test.ts:42:41)\n\n  ● Edge can read request body › middleware › reads an URL encoded form data\n\n    expect(received).toMatchObject(expected)\n\n    - Expected  - 2\n    + Received  + 4\n\n      Object {\n        \"headers\": Object {\n    -     \"x-req-type\": \"formData\",\n    -     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n    +     \"connection\": \"close\",\n    +     \"content-length\": \"2\",\n    +     \"date\": \"Thu, 09 Feb 2023 13:00:53 GMT\",\n    +     \"etag\": \"\\\"109abcqmas2\\\"\",\n        },\n        \"status\": 200,\n        \"text\": StringContaining \"ok\",\n      }\n\n      88 |         }\n      89 |       )\n    > 90 |       expect(await serialize(response)).toMatchObject({\n         |                                         ^\n      91 |         text: expect.stringContaining('ok'),\n      92 |         status: 200,\n      93 |         headers: {\n\n      at Object.<anonymous> (e2e/edge-can-read-request-body/index.test.ts:90:41)\n\n  ● Edge can read request body › middleware › reads a multipart form data\n\n    expect(received).toMatchObject(expected)\n\n    - Expected  - 2\n    + Received  + 4\n\n      Object {\n        \"headers\": Object {\n    -     \"x-req-type\": \"formData\",\n    -     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n    +     \"connection\": \"close\",\n    +     \"content-length\": \"2\",\n    +     \"date\": \"Thu, 09 Feb 2023 13:00:53 GMT\",\n    +     \"etag\": \"\\\"109abcqmas2\\\"\",\n        },\n        \"status\": 200,\n        \"text\": StringContaining \"ok\",\n      }\n\n      112 |       )\n      113 |\n    > 114 |       expect(await serialize(response)).toMatchObject({\n          |                                         ^\n      115 |         text: expect.stringContaining('ok'),\n      116 |         status: 200,\n      117 |         headers: {\n\n      at Object.<anonymous> (e2e/edge-can-read-request-body/index.test.ts:114:41)\n",
+            "name": "/work/test/e2e/edge-can-read-request-body/index.test.ts",
+            "startTime": 1675947632523,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/config-mjs/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 6,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675947731690,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [],
+                "fullName": "Configuration should disable X-Powered-By header support",
+                "location": null,
+                "status": "passed",
+                "title": "should disable X-Powered-By header support"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"secret\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:53:38)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration renders server config on the server only",
+                "location": null,
+                "status": "failed",
+                "title": "renders server config on the server only"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/static\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:58:44)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration renders public config on the server only",
+                "location": null,
+                "status": "failed",
+                "title": "renders public config on the server only"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"development\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:63:34)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration renders the build id in development mode",
+                "location": null,
+                "status": "failed",
+                "title": "renders the build id in development mode"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"OK\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:68:44)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration correctly imports a package that defines `module` but no `main` in package.json",
+                "location": null,
+                "status": "failed",
+                "title": "correctly imports a package that defines `module` but no `main` in package.json"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#server-only')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Configuration should have config available on the client",
+                "location": null,
+                "status": "failed",
+                "title": "should have config available on the client"
+              }
+            ],
+            "endTime": 1675947780342,
+            "message": "  ● Configuration › renders server config on the server only\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"secret\"\n    Received: \"\"\n\n      51 |   test('renders server config on the server only', async () => {\n      52 |     const $ = await get$('/next-config')\n    > 53 |     expect($('#server-only').text()).toBe('secret')\n         |                                      ^\n      54 |   })\n      55 |\n      56 |   test('renders public config on the server only', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:53:38)\n\n  ● Configuration › renders public config on the server only\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/static\"\n    Received: \"\"\n\n      56 |   test('renders public config on the server only', async () => {\n      57 |     const $ = await get$('/next-config')\n    > 58 |     expect($('#server-and-client').text()).toBe('/static')\n         |                                            ^\n      59 |   })\n      60 |\n      61 |   test('renders the build id in development mode', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:58:44)\n\n  ● Configuration › renders the build id in development mode\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"development\"\n    Received: \"\"\n\n      61 |   test('renders the build id in development mode', async () => {\n      62 |     const $ = await get$('/build-id')\n    > 63 |     expect($('#buildId').text()).toBe('development')\n         |                                  ^\n      64 |   })\n      65 |\n      66 |   test('correctly imports a package that defines `module` but no `main` in package.json', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:63:34)\n\n  ● Configuration › correctly imports a package that defines `module` but no `main` in package.json\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"OK\"\n    Received: \"\"\n\n      66 |   test('correctly imports a package that defines `module` but no `main` in package.json', async () => {\n      67 |     const $ = await get$('/module-only-content')\n    > 68 |     expect($('#messageInAPackage').text()).toBe('OK')\n         |                                            ^\n      69 |   })\n      70 |\n      71 |   it('should have config available on the client', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:68:44)\n\n  ● Configuration › should have config available on the client\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#server-only')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/config-mjs/test/index.test.js",
+            "startTime": 1675947731795,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675947226558,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:46:45)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages importing 'next/headers' in pages",
+                "location": null,
+                "status": "failed",
+                "title": "importing 'next/headers' in pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /That only works in a Server Component/\n\nerror - [resolve] [project-with-next]/components/Comp.js  Error resolving EcmaScript Modules request\n  unable to resolve module \"server-only\"\n  \n  | It was not possible to find the requested file.\n  | Parsed request as written in source code: module \"server-only\"\n  | Path where resolving has started: [project-with-next]/components/Comp.js\n  | Type of request: EcmaScript Modules request\n  | Import map: No import map entry\n  | \n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:89:7)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages importing 'server-only' in pages",
+                "location": null,
+                "status": "failed",
+                "title": "importing 'server-only' in pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:129:45)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages \"use client\" at the bottom of the page",
+                "location": null,
+                "status": "failed",
+                "title": "\"use client\" at the bottom of the page"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:170:45)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages \"use client\" with parentheses",
+                "location": null,
+                "status": "failed",
+                "title": "\"use client\" with parentheses"
+              }
+            ],
+            "endTime": 1675947433940,
+            "message": "  ● Error Overlay for server components compiler errors in pages › importing 'next/headers' in pages\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      44 |       )\n      45 |\n    > 46 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      47 |       await check(\n      48 |         () => session.getRedboxSource(),\n      49 |         /That only works in a Server Component/\n\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:46:45)\n\n  ● Error Overlay for server components compiler errors in pages › importing 'server-only' in pages\n\n    TIMED OUT: /That only works in a Server Component/\n\n    error - [resolve] [project-with-next]/components/Comp.js  Error resolving EcmaScript Modules request\n      unable to resolve module \"server-only\"\n      \n      | It was not possible to find the requested file.\n      | Parsed request as written in source code: module \"server-only\"\n      | Path where resolving has started: [project-with-next]/components/Comp.js\n      | Type of request: EcmaScript Modules request\n      | Import map: No import map entry\n      |\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:89:7)\n\n  ● Error Overlay for server components compiler errors in pages › \"use client\" at the bottom of the page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      127 |       )\n      128 |\n    > 129 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      130 |       await check(\n      131 |         () => session.getRedboxSource(),\n      132 |         /which is not supported in the pages/\n\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:129:45)\n\n  ● Error Overlay for server components compiler errors in pages › \"use client\" with parentheses\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      168 |       )\n      169 |\n    > 170 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      171 |       await check(\n      172 |         () => session.getRedboxSource(),\n      173 |         /which is not supported in the pages/\n\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:170:45)\n",
+            "name": "/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts",
+            "startTime": 1675947226651,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675947630833,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675947681440,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675947630929,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/i18n-support-custom-error/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 4,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 8,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675947894379,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#props')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Custom routes i18n dev mode should localized [slug] routes render correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should localized [slug] routes render correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#error-props')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Custom routes i18n dev mode handle custom http status maintaining locale props in custom _error page",
+                "location": null,
+                "status": "failed",
+                "title": "handle custom http status maintaining locale props in custom _error page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 2\n+ Received  + 1\n\n- ObjectContaining {\n-   \"locale\": \"en\",\n+ Object {\n    \"statusCode\": 404,\n  }\n    at Object.<anonymous> (/work/test/integration/i18n-support-custom-error/test/index.test.js:63:9)"
+                ],
+                "fullName": "Custom routes i18n dev mode handle default http status maintaining locale props in custom _error page",
+                "location": null,
+                "status": "failed",
+                "title": "handle default http status maintaining locale props in custom _error page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#props')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Custom routes i18n dev mode should work also on client side routing",
+                "location": null,
+                "status": "failed",
+                "title": "should work also on client side routing"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes i18n production mode should localized [slug] routes render correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should localized [slug] routes render correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes i18n production mode handle custom http status maintaining locale props in custom _error page",
+                "location": null,
+                "status": "passed",
+                "title": "handle custom http status maintaining locale props in custom _error page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes i18n production mode handle default http status maintaining locale props in custom _error page",
+                "location": null,
+                "status": "passed",
+                "title": "handle default http status maintaining locale props in custom _error page"
+              },
+              {
+                "ancestorTitles": [
+                  "Custom routes i18n",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Custom routes i18n production mode should work also on client side routing",
+                "location": null,
+                "status": "passed",
+                "title": "should work also on client side routing"
+              }
+            ],
+            "endTime": 1675948041540,
+            "message": "  ● Custom routes i18n › dev mode › should localized [slug] routes render correctly\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#props')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● Custom routes i18n › dev mode › handle custom http status maintaining locale props in custom _error page\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#error-props')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● Custom routes i18n › dev mode › handle default http status maintaining locale props in custom _error page\n\n    expect(received).toEqual(expected) // deep equality\n\n    - Expected  - 2\n    + Received  + 1\n\n    - ObjectContaining {\n    -   \"locale\": \"en\",\n    + Object {\n        \"statusCode\": 404,\n      }\n\n      61 |       expect(\n      62 |         JSON.parse(await browser.elementByCss('#error-props').text())\n    > 63 |       ).toEqual(\n         |         ^\n      64 |         expect.objectContaining({\n      65 |           locale,\n      66 |           statusCode: 404,\n\n      at Object.<anonymous> (integration/i18n-support-custom-error/test/index.test.js:63:9)\n\n  ● Custom routes i18n › dev mode › should work also on client side routing\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#props')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/i18n-support-custom-error/test/index.test.js",
+            "startTime": 1675947894477,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675947493459,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Component Stack in error overlay"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('[data-nextjs-toast]')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Component Stack in error overlay should show a component stack on hydration error",
+                "location": null,
+                "status": "failed",
+                "title": "should show a component stack on hydration error"
+              }
+            ],
+            "endTime": 1675947558222,
+            "message": "  ● Component Stack in error overlay › should show a component stack on hydration error\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('[data-nextjs-toast]')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/acceptance-app/component-stack.test.ts",
+            "startTime": 1675947493553,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/edge-can-read-request-body/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 5,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675947628877,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Edge can read request body"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge can read request body renders the static page",
+                "location": null,
+                "status": "passed",
+                "title": "renders the static page"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge can read request body",
+                  "middleware"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchObject(expected)\n\n- Expected  - 2\n+ Received  + 4\n\n  Object {\n    \"headers\": Object {\n-     \"x-req-type\": \"json\",\n-     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n+     \"connection\": \"close\",\n+     \"content-length\": \"2\",\n+     \"date\": \"Thu, 09 Feb 2023 13:00:48 GMT\",\n+     \"etag\": \"\\\"109abcqmas2\\\"\",\n    },\n    \"status\": 200,\n    \"text\": StringContaining \"ok\",\n  }\n    at Object.<anonymous> (/work/test/e2e/edge-can-read-request-body/index.test.ts:42:41)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Edge can read request body middleware reads a JSON body",
+                "location": null,
+                "status": "failed",
+                "title": "reads a JSON body"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge can read request body",
+                  "middleware"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge can read request body middleware reads a text body",
+                "location": null,
+                "status": "passed",
+                "title": "reads a text body"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge can read request body",
+                  "middleware"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchObject(expected)\n\n- Expected  - 2\n+ Received  + 4\n\n  Object {\n    \"headers\": Object {\n-     \"x-req-type\": \"formData\",\n-     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n+     \"connection\": \"close\",\n+     \"content-length\": \"2\",\n+     \"date\": \"Thu, 09 Feb 2023 13:00:49 GMT\",\n+     \"etag\": \"\\\"109abcqmas2\\\"\",\n    },\n    \"status\": 200,\n    \"text\": StringContaining \"ok\",\n  }\n    at Object.<anonymous> (/work/test/e2e/edge-can-read-request-body/index.test.ts:90:41)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Edge can read request body middleware reads an URL encoded form data",
+                "location": null,
+                "status": "failed",
+                "title": "reads an URL encoded form data"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge can read request body",
+                  "middleware"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toMatchObject(expected)\n\n- Expected  - 2\n+ Received  + 4\n\n  Object {\n    \"headers\": Object {\n-     \"x-req-type\": \"formData\",\n-     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n+     \"connection\": \"close\",\n+     \"content-length\": \"2\",\n+     \"date\": \"Thu, 09 Feb 2023 13:00:49 GMT\",\n+     \"etag\": \"\\\"109abcqmas2\\\"\",\n    },\n    \"status\": 200,\n    \"text\": StringContaining \"ok\",\n  }\n    at Object.<anonymous> (/work/test/e2e/edge-can-read-request-body/index.test.ts:114:41)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Edge can read request body middleware reads a multipart form data",
+                "location": null,
+                "status": "failed",
+                "title": "reads a multipart form data"
+              }
+            ],
+            "endTime": 1675947649548,
+            "message": "  ● Edge can read request body › middleware › reads a JSON body\n\n    expect(received).toMatchObject(expected)\n\n    - Expected  - 2\n    + Received  + 4\n\n      Object {\n        \"headers\": Object {\n    -     \"x-req-type\": \"json\",\n    -     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n    +     \"connection\": \"close\",\n    +     \"content-length\": \"2\",\n    +     \"date\": \"Thu, 09 Feb 2023 13:00:48 GMT\",\n    +     \"etag\": \"\\\"109abcqmas2\\\"\",\n        },\n        \"status\": 200,\n        \"text\": StringContaining \"ok\",\n      }\n\n      40 |         }\n      41 |       )\n    > 42 |       expect(await serialize(response)).toMatchObject({\n         |                                         ^\n      43 |         text: expect.stringContaining('ok'),\n      44 |         status: 200,\n      45 |         headers: {\n\n      at Object.<anonymous> (e2e/edge-can-read-request-body/index.test.ts:42:41)\n\n  ● Edge can read request body › middleware › reads an URL encoded form data\n\n    expect(received).toMatchObject(expected)\n\n    - Expected  - 2\n    + Received  + 4\n\n      Object {\n        \"headers\": Object {\n    -     \"x-req-type\": \"formData\",\n    -     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n    +     \"connection\": \"close\",\n    +     \"content-length\": \"2\",\n    +     \"date\": \"Thu, 09 Feb 2023 13:00:49 GMT\",\n    +     \"etag\": \"\\\"109abcqmas2\\\"\",\n        },\n        \"status\": 200,\n        \"text\": StringContaining \"ok\",\n      }\n\n      88 |         }\n      89 |       )\n    > 90 |       expect(await serialize(response)).toMatchObject({\n         |                                         ^\n      91 |         text: expect.stringContaining('ok'),\n      92 |         status: 200,\n      93 |         headers: {\n\n      at Object.<anonymous> (e2e/edge-can-read-request-body/index.test.ts:90:41)\n\n  ● Edge can read request body › middleware › reads a multipart form data\n\n    expect(received).toMatchObject(expected)\n\n    - Expected  - 2\n    + Received  + 4\n\n      Object {\n        \"headers\": Object {\n    -     \"x-req-type\": \"formData\",\n    -     \"x-serialized\": \"{\\\"hello\\\":\\\"world\\\"}\",\n    +     \"connection\": \"close\",\n    +     \"content-length\": \"2\",\n    +     \"date\": \"Thu, 09 Feb 2023 13:00:49 GMT\",\n    +     \"etag\": \"\\\"109abcqmas2\\\"\",\n        },\n        \"status\": 200,\n        \"text\": StringContaining \"ok\",\n      }\n\n      112 |       )\n      113 |\n    > 114 |       expect(await serialize(response)).toMatchObject({\n          |                                         ^\n      115 |         text: expect.stringContaining('ok'),\n      116 |         status: 200,\n      117 |         headers: {\n\n      at Object.<anonymous> (e2e/edge-can-read-request-body/index.test.ts:114:41)\n",
+            "name": "/work/test/e2e/edge-can-read-request-body/index.test.ts",
+            "startTime": 1675947628973,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/config-mjs/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 6,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675947729484,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [],
+                "fullName": "Configuration should disable X-Powered-By header support",
+                "location": null,
+                "status": "passed",
+                "title": "should disable X-Powered-By header support"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"secret\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:53:38)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration renders server config on the server only",
+                "location": null,
+                "status": "failed",
+                "title": "renders server config on the server only"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/static\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:58:44)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration renders public config on the server only",
+                "location": null,
+                "status": "failed",
+                "title": "renders public config on the server only"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"development\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:63:34)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration renders the build id in development mode",
+                "location": null,
+                "status": "failed",
+                "title": "renders the build id in development mode"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"OK\"\nReceived: \"\"\n    at Object.<anonymous> (/work/test/integration/config-mjs/test/index.test.js:68:44)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Configuration correctly imports a package that defines `module` but no `main` in package.json",
+                "location": null,
+                "status": "failed",
+                "title": "correctly imports a package that defines `module` but no `main` in package.json"
+              },
+              {
+                "ancestorTitles": [
+                  "Configuration"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#server-only')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Configuration should have config available on the client",
+                "location": null,
+                "status": "failed",
+                "title": "should have config available on the client"
+              }
+            ],
+            "endTime": 1675947777302,
+            "message": "  ● Configuration › renders server config on the server only\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"secret\"\n    Received: \"\"\n\n      51 |   test('renders server config on the server only', async () => {\n      52 |     const $ = await get$('/next-config')\n    > 53 |     expect($('#server-only').text()).toBe('secret')\n         |                                      ^\n      54 |   })\n      55 |\n      56 |   test('renders public config on the server only', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:53:38)\n\n  ● Configuration › renders public config on the server only\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/static\"\n    Received: \"\"\n\n      56 |   test('renders public config on the server only', async () => {\n      57 |     const $ = await get$('/next-config')\n    > 58 |     expect($('#server-and-client').text()).toBe('/static')\n         |                                            ^\n      59 |   })\n      60 |\n      61 |   test('renders the build id in development mode', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:58:44)\n\n  ● Configuration › renders the build id in development mode\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"development\"\n    Received: \"\"\n\n      61 |   test('renders the build id in development mode', async () => {\n      62 |     const $ = await get$('/build-id')\n    > 63 |     expect($('#buildId').text()).toBe('development')\n         |                                  ^\n      64 |   })\n      65 |\n      66 |   test('correctly imports a package that defines `module` but no `main` in package.json', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:63:34)\n\n  ● Configuration › correctly imports a package that defines `module` but no `main` in package.json\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"OK\"\n    Received: \"\"\n\n      66 |   test('correctly imports a package that defines `module` but no `main` in package.json', async () => {\n      67 |     const $ = await get$('/module-only-content')\n    > 68 |     expect($('#messageInAPackage').text()).toBe('OK')\n         |                                            ^\n      69 |   })\n      70 |\n      71 |   it('should have config available on the client', async () => {\n\n      at Object.<anonymous> (integration/config-mjs/test/index.test.js:68:44)\n\n  ● Configuration › should have config available on the client\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#server-only')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/config-mjs/test/index.test.js",
+            "startTime": 1675947729587,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance-app/editor-links.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 4,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675947420552,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:46:45)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages importing 'next/headers' in pages",
+                "location": null,
+                "status": "failed",
+                "title": "importing 'next/headers' in pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: /That only works in a Server Component/\n\nerror - [resolve] [project-with-next]/components/Comp.js  Error resolving EcmaScript Modules request\n  unable to resolve module \"server-only\"\n  \n  | It was not possible to find the requested file.\n  | Parsed request as written in source code: module \"server-only\"\n  | Path where resolving has started: [project-with-next]/components/Comp.js\n  | Type of request: EcmaScript Modules request\n  | Import map: No import map entry\n  | \n\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:89:7)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages importing 'server-only' in pages",
+                "location": null,
+                "status": "failed",
+                "title": "importing 'server-only' in pages"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:129:45)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages \"use client\" at the bottom of the page",
+                "location": null,
+                "status": "failed",
+                "title": "\"use client\" at the bottom of the page"
+              },
+              {
+                "ancestorTitles": [
+                  "Error Overlay for server components compiler errors in pages"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts:170:45)"
+                ],
+                "fullName": "Error Overlay for server components compiler errors in pages \"use client\" with parentheses",
+                "location": null,
+                "status": "failed",
+                "title": "\"use client\" with parentheses"
+              }
+            ],
+            "endTime": 1675947627576,
+            "message": "  ● Error Overlay for server components compiler errors in pages › importing 'next/headers' in pages\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      44 |       )\n      45 |\n    > 46 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      47 |       await check(\n      48 |         () => session.getRedboxSource(),\n      49 |         /That only works in a Server Component/\n\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:46:45)\n\n  ● Error Overlay for server components compiler errors in pages › importing 'server-only' in pages\n\n    TIMED OUT: /That only works in a Server Component/\n\n    error - [resolve] [project-with-next]/components/Comp.js  Error resolving EcmaScript Modules request\n      unable to resolve module \"server-only\"\n      \n      | It was not possible to find the requested file.\n      | Parsed request as written in source code: module \"server-only\"\n      | Path where resolving has started: [project-with-next]/components/Comp.js\n      | Type of request: EcmaScript Modules request\n      | Import map: No import map entry\n      |\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:89:7)\n\n  ● Error Overlay for server components compiler errors in pages › \"use client\" at the bottom of the page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      127 |       )\n      128 |\n    > 129 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      130 |       await check(\n      131 |         () => session.getRedboxSource(),\n      132 |         /which is not supported in the pages/\n\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:129:45)\n\n  ● Error Overlay for server components compiler errors in pages › \"use client\" with parentheses\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      168 |       )\n      169 |\n    > 170 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      171 |       await check(\n      172 |         () => session.getRedboxSource(),\n      173 |         /which is not supported in the pages/\n\n      at Object.<anonymous> (development/acceptance/server-component-compiler-errors-in-pages.test.ts:170:45)\n",
+            "name": "/work/test/development/acceptance/server-component-compiler-errors-in-pages.test.ts",
+            "startTime": 1675947420652,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675947822543,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675947873019,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675947822638,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/broken-webpack-plugin/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675947885661,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Handles a broken webpack plugin (precompile)"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Internal Server Error\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/integration/broken-webpack-plugin/test/index.test.js:36:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Handles a broken webpack plugin (precompile) should render error correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should render error correctly"
+              }
+            ],
+            "endTime": 1675947890732,
+            "message": "  ● Handles a broken webpack plugin (precompile) › should render error correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Internal Server Error\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><meta name=\\\"next-head-count\\\" content=\\\"2\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D_packages_next_e2d7c0._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/pages_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_68150c._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/ef3fd_.pnpm_376be9._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bproject-with-next%5D__b96501._.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><p>hello from index</p></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{}},\\\"page\\\":\\\"/\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"autoExport\\\":true,\\\"isFallback\\\":false,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      34 |   it('should render error correctly', async () => {\n      35 |     const text = await renderViaHTTP(appPort, '/')\n    > 36 |     expect(text).toContain('Internal Server Error')\n         |                  ^\n      37 |\n      38 |     expect(stderr).toMatch('Error: oops')\n      39 |   })\n\n      at Object.<anonymous> (integration/broken-webpack-plugin/test/index.test.js:36:18)\n",
+            "name": "/work/test/integration/broken-webpack-plugin/test/index.test.js",
+            "startTime": 1675947885806,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
