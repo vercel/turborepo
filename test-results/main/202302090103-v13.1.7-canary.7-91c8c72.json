@@ -1,0 +1,1956 @@
+{
+  "ref": "774d0ddc82db97fd65191c5085d1f6abd10db6b3",
+  "nextjsVersion": "Next.js v13.1.7-canary.7",
+  "result": [
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675902817548,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "useDefineForClassFields SWC option"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#action')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "useDefineForClassFields SWC option tsx should compile with useDefineForClassFields enabled",
+                "location": null,
+                "status": "failed",
+                "title": "tsx should compile with useDefineForClassFields enabled"
+              },
+              {
+                "ancestorTitles": [
+                  "useDefineForClassFields SWC option"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#dog')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "useDefineForClassFields SWC option Initializes resident to undefined after the call to 'super()' when with useDefineForClassFields enabled",
+                "location": null,
+                "status": "failed",
+                "title": "Initializes resident to undefined after the call to 'super()' when with useDefineForClassFields enabled"
+              },
+              {
+                "ancestorTitles": [
+                  "useDefineForClassFields SWC option"
+                ],
+                "failureMessages": [],
+                "fullName": "useDefineForClassFields SWC option set accessors from base classes won’t get triggered with useDefineForClassFields enabled",
+                "location": null,
+                "status": "passed",
+                "title": "set accessors from base classes won’t get triggered with useDefineForClassFields enabled"
+              }
+            ],
+            "endTime": 1675902934583,
+            "message": "  ● useDefineForClassFields SWC option › tsx should compile with useDefineForClassFields enabled\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#action')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● useDefineForClassFields SWC option › Initializes resident to undefined after the call to 'super()' when with useDefineForClassFields enabled\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#dog')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/basic/define-class-fields.test.ts",
+            "startTime": 1675902817644,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/e2e/edge-compiler-can-import-blob-assets/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 6,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675903079135,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge Compiler can import asset assets allows to fetch a remote URL",
+                "location": null,
+                "status": "passed",
+                "title": "allows to fetch a remote URL"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge Compiler can import asset assets allows to fetch a remote URL with a path and basename",
+                "location": null,
+                "status": "passed",
+                "title": "allows to fetch a remote URL with a path and basename"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Hello, from text-file.txt!\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_5d2a1a._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/56054_next_adeb29._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:50:18)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to fetch text assets",
+                "location": null,
+                "status": "failed",
+                "title": "allows to fetch text assets"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBeTrue()\n\nExpected value to be true:\n  true\nReceived:\n  false\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:61:34)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to fetch image assets",
+                "location": null,
+                "status": "failed",
+                "title": "allows to fetch image assets"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "FetchError: invalid json response body at http://localhost:36405/api/edge?handler=from-node-module reason: Unexpected token < in JSON at position 0\n    at /work/node_modules/.pnpm/node-fetch@2.6.7/node_modules/node-fetch/lib/index.js:273:32\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:68:18)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to assets from node_modules",
+                "location": null,
+                "status": "failed",
+                "title": "allows to assets from node_modules"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/tmp/next-install-b9e98cee1fe5abac627fb31905f21a6e2bbfef1f2250d15f820521bdc809ec97/.next/server/middleware-manifest.json'"
+                ],
+                "fullName": "Edge Compiler can import asset assets extracts all the assets from the bundle",
+                "location": null,
+                "status": "failed",
+                "title": "extracts all the assets from the bundle"
+              }
+            ],
+            "endTime": 1675903102495,
+            "message": "  ● Edge Compiler can import asset assets › allows to fetch text assets\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Hello, from text-file.txt!\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_5d2a1a._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/56054_next_adeb29._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      48 |       handler: 'text-file',\n      49 |     })\n    > 50 |     expect(html).toContain('Hello, from text-file.txt!')\n         |                  ^\n      51 |   })\n      52 |\n      53 |   it('allows to fetch image assets', async () => {\n\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:50:18)\n\n  ● Edge Compiler can import asset assets › allows to fetch image assets\n\n    expect(received).toBeTrue()\n\n    Expected value to be true:\n      true\n    Received:\n      false\n\n      59 |       path.join(__dirname, './app/src/vercel.png')\n      60 |     )\n    > 61 |     expect(buffer.equals(image)).toBeTrue()\n         |                                  ^\n      62 |   })\n      63 |\n      64 |   it('allows to assets from node_modules', async () => {\n\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:61:34)\n\n  ● Edge Compiler can import asset assets › allows to assets from node_modules\n\n    FetchError: invalid json response body at http://localhost:36405/api/edge?handler=from-node-module reason: Unexpected token < in JSON at position 0\n\n      66 |       handler: 'from-node-module',\n      67 |     })\n    > 68 |     const json = await response.json()\n         |                  ^\n      69 |     expect(json).toEqual({\n      70 |       'i am': 'a node dependency',\n      71 |     })\n\n      at ../node_modules/.pnpm/node-fetch@2.6.7/node_modules/node-fetch/lib/index.js:273:32\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:68:18)\n\n  ● Edge Compiler can import asset assets › extracts all the assets from the bundle\n\n    ENOENT: no such file or directory, open '/tmp/next-install-b9e98cee1fe5abac627fb31905f21a6e2bbfef1f2250d15f820521bdc809ec97/.next/server/middleware-manifest.json'\n\n\n",
+            "name": "/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts",
+            "startTime": 1675903079227,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 1)",
+      "name": "test/integration/middleware-overrides-node.js-api/test/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 1,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 1,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675903208710,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Middleware overriding a Node.js API",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"fixed-value\"\nReceived string:    \">>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/middleware-overrides-node.js-api --is-next-dev-command --port 45741 --root /work --no-open]\n\u001b[32mready\u001b[39m - started server on 0.0.0.0:45741, url: http://localhost:45741\n\u001b[35mevent\u001b[39m - initial compilation 5.675ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 3940ms\n\"\n    at Object.<anonymous> (/work/test/integration/middleware-overrides-node.js-api/test/index.test.ts:39:22)"
+                ],
+                "fullName": "Middleware overriding a Node.js API dev mode does not show a warning and allows overriding",
+                "location": null,
+                "status": "failed",
+                "title": "does not show a warning and allows overriding"
+              }
+            ],
+            "endTime": 1675903214214,
+            "message": "  ● Middleware overriding a Node.js API › dev mode › does not show a warning and allows overriding\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"fixed-value\"\n    Received string:    \">>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/middleware-overrides-node.js-api --is-next-dev-command --port 45741 --root /work --no-open]\n    \u001b[32mready\u001b[39m - started server on 0.0.0.0:45741, url: http://localhost:45741\n    \u001b[35mevent\u001b[39m - initial compilation 5.675ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 3940ms\n    \"\n\n      37 |       await waitFor(500)\n      38 |       expect(res.status).toBe(200)\n    > 39 |       expect(output).toContain('fixed-value')\n         |                      ^\n      40 |       expect(output).not.toContain('TypeError')\n      41 |       expect(output).not.toContain('A Node.js API is used (process.env')\n      42 |       expect(output).not.toContain('A Node.js API is used (process.cwd')\n\n      at Object.<anonymous> (integration/middleware-overrides-node.js-api/test/index.test.ts:39:22)\n",
+            "name": "/work/test/integration/middleware-overrides-node.js-api/test/index.test.ts",
+            "startTime": 1675903208804,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675902807579,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675902968694,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675902807670,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/e2e/app-dir/app-rendering/rendering.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 2,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675903113823,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"click</button>\"\nReceived string:    \"Execution of get_from_source failed·\nCaused by:\n    0: Execution of resolve_source_request failed\n    1: Execution of CombinedContentSource::get failed\n    2: Execution of create_app_source failed\n    3: Execution of load_next_config failed\n    4: Execution of evaluate failed\n    5: node process exited before we could connect to it with exit status: 1\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "app-dir alias handling should handle typescript paths alias correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle typescript paths alias correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir alias handling"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "app-dir alias handling should resolve css imports from outside with src folder presented",
+                "location": null,
+                "status": "failed",
+                "title": "should resolve css imports from outside with src folder presented"
+              }
+            ],
+            "endTime": 1675903166739,
+            "message": "  ● app-dir alias handling › should handle typescript paths alias correctly\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"click</button>\"\n    Received string:    \"Execution of get_from_source failed·\n    Caused by:\n        0: Execution of resolve_source_request failed\n        1: Execution of CombinedContentSource::get failed\n        2: Execution of create_app_source failed\n        3: Execution of load_next_config failed\n        4: Execution of evaluate failed\n        5: node process exited before we could connect to it with exit status: 1\"\n\n      14 |     it('should handle typescript paths alias correctly', async () => {\n      15 |       const html = await next.render('/button')\n    > 16 |       expect(html).toContain('click</button>')\n         |                    ^\n      17 |     })\n      18 |\n      19 |     it('should resolve css imports from outside with src folder presented', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-alias/app-alias.test.ts:16:20)\n\n  ● app-dir alias handling › should resolve css imports from outside with src folder presented\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('button')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/e2e/app-dir/app-alias/app-alias.test.ts",
+            "startTime": 1675903113915,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (16, 2)",
+      "name": "test/integration/dynamic-optional-routing-root-fallback/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 3,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 6,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675903418287,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Dynamic Optional Routing Root Fallback",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#success')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Dynamic Optional Routing Root Fallback dev mode should render optional catch-all top-level route with no segments",
+                "location": null,
+                "status": "failed",
+                "title": "should render optional catch-all top-level route with no segments"
+              },
+              {
+                "ancestorTitles": [
+                  "Dynamic Optional Routing Root Fallback",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#success')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Dynamic Optional Routing Root Fallback dev mode should render optional catch-all top-level route with one segment",
+                "location": null,
+                "status": "failed",
+                "title": "should render optional catch-all top-level route with one segment"
+              },
+              {
+                "ancestorTitles": [
+                  "Dynamic Optional Routing Root Fallback",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#success')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "Dynamic Optional Routing Root Fallback dev mode should render optional catch-all top-level route with two segments",
+                "location": null,
+                "status": "failed",
+                "title": "should render optional catch-all top-level route with two segments"
+              },
+              {
+                "ancestorTitles": [
+                  "Dynamic Optional Routing Root Fallback",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Dynamic Optional Routing Root Fallback production mode should render optional catch-all top-level route with no segments",
+                "location": null,
+                "status": "passed",
+                "title": "should render optional catch-all top-level route with no segments"
+              },
+              {
+                "ancestorTitles": [
+                  "Dynamic Optional Routing Root Fallback",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Dynamic Optional Routing Root Fallback production mode should render optional catch-all top-level route with one segment",
+                "location": null,
+                "status": "passed",
+                "title": "should render optional catch-all top-level route with one segment"
+              },
+              {
+                "ancestorTitles": [
+                  "Dynamic Optional Routing Root Fallback",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Dynamic Optional Routing Root Fallback production mode should render optional catch-all top-level route with two segments",
+                "location": null,
+                "status": "passed",
+                "title": "should render optional catch-all top-level route with two segments"
+              }
+            ],
+            "endTime": 1675903554369,
+            "message": "  ● Dynamic Optional Routing Root Fallback › dev mode › should render optional catch-all top-level route with no segments\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#success')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● Dynamic Optional Routing Root Fallback › dev mode › should render optional catch-all top-level route with one segment\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#success')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● Dynamic Optional Routing Root Fallback › dev mode › should render optional catch-all top-level route with two segments\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#success')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/integration/dynamic-optional-routing-root-fallback/test/index.test.js",
+            "startTime": 1675903418392,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/development/acceptance-app/component-stack.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 2,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 1,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675902849706,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "useDefineForClassFields SWC option"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#action')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "useDefineForClassFields SWC option tsx should compile with useDefineForClassFields enabled",
+                "location": null,
+                "status": "failed",
+                "title": "tsx should compile with useDefineForClassFields enabled"
+              },
+              {
+                "ancestorTitles": [
+                  "useDefineForClassFields SWC option"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#dog')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "useDefineForClassFields SWC option Initializes resident to undefined after the call to 'super()' when with useDefineForClassFields enabled",
+                "location": null,
+                "status": "failed",
+                "title": "Initializes resident to undefined after the call to 'super()' when with useDefineForClassFields enabled"
+              },
+              {
+                "ancestorTitles": [
+                  "useDefineForClassFields SWC option"
+                ],
+                "failureMessages": [],
+                "fullName": "useDefineForClassFields SWC option set accessors from base classes won’t get triggered with useDefineForClassFields enabled",
+                "location": null,
+                "status": "passed",
+                "title": "set accessors from base classes won’t get triggered with useDefineForClassFields enabled"
+              }
+            ],
+            "endTime": 1675902968615,
+            "message": "  ● useDefineForClassFields SWC option › tsx should compile with useDefineForClassFields enabled\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#action')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● useDefineForClassFields SWC option › Initializes resident to undefined after the call to 'super()' when with useDefineForClassFields enabled\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#dog')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n",
+            "name": "/work/test/development/basic/define-class-fields.test.ts",
+            "startTime": 1675902849808,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/e2e/edge-compiler-can-import-blob-assets/index.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 4,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 2,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 6,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675903125980,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge Compiler can import asset assets allows to fetch a remote URL",
+                "location": null,
+                "status": "passed",
+                "title": "allows to fetch a remote URL"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [],
+                "fullName": "Edge Compiler can import asset assets allows to fetch a remote URL with a path and basename",
+                "location": null,
+                "status": "passed",
+                "title": "allows to fetch a remote URL with a path and basename"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Hello, from text-file.txt!\"\nReceived string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_0d97c5._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6588e_next_33d2e8._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:50:18)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to fetch text assets",
+                "location": null,
+                "status": "failed",
+                "title": "allows to fetch text assets"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBeTrue()\n\nExpected value to be true:\n  true\nReceived:\n  false\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:61:34)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to fetch image assets",
+                "location": null,
+                "status": "failed",
+                "title": "allows to fetch image assets"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "FetchError: invalid json response body at http://localhost:41933/api/edge?handler=from-node-module reason: Unexpected token < in JSON at position 0\n    at /work/node_modules/.pnpm/node-fetch@2.6.7/node_modules/node-fetch/lib/index.js:273:32\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at Object.<anonymous> (/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts:68:18)"
+                ],
+                "fullName": "Edge Compiler can import asset assets allows to assets from node_modules",
+                "location": null,
+                "status": "failed",
+                "title": "allows to assets from node_modules"
+              },
+              {
+                "ancestorTitles": [
+                  "Edge Compiler can import asset assets"
+                ],
+                "failureMessages": [
+                  "Error: ENOENT: no such file or directory, open '/tmp/next-install-90cf9151ea16632abc7222d22ea16045dcdc2ead21ac4c761d10f4c2f71afa30/.next/server/middleware-manifest.json'"
+                ],
+                "fullName": "Edge Compiler can import asset assets extracts all the assets from the bundle",
+                "location": null,
+                "status": "failed",
+                "title": "extracts all the assets from the bundle"
+              }
+            ],
+            "endTime": 1675903150154,
+            "message": "  ● Edge Compiler can import asset assets › allows to fetch text assets\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Hello, from text-file.txt!\"\n    Received string:    \"<!DOCTYPE html><html><head><meta charSet=\\\"utf-8\\\"/><meta name=\\\"viewport\\\" content=\\\"width=device-width\\\"/><title>404: This page could not be found</title><meta name=\\\"next-head-count\\\" content=\\\"3\\\"/><noscript data-n-css=\\\"\\\"></noscript><script src=\\\"/_next/static/chunks/_0d97c5._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_internal_shims-client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_dev_9f69cd._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_entry_error.tsx._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_overlay_client.ts._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_strip-ansi_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_stacktrace-parser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_anser_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_platform_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/%5Bembedded_modules%5D_@vercel_turbopack-next_compiled_css.escape_index.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/6588e_next_33d2e8._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__async_to_generator.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__extends.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_default.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__interop_require_wildcard.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/1a66c_@swc_helpers_lib__object_without_properties_loose.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/cbe97_react_f07796._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/05f93_react-dom_814789._.js\\\" defer=\\\"\\\"></script><script src=\\\"/_next/static/chunks/c9627_scheduler_index.js\\\" defer=\\\"\\\"></script></head><body><div id=\\\"__next\\\"><div style=\\\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\\\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\\\"next-error-h1\\\" style=\\\"display:inline-block;margin:0 20px 0 0;padding-right:23px;font-size:24px;font-weight:500;vertical-align:top;line-height:49\\\">404</h1><div style=\\\"display:inline-block;text-align:left\\\"><h2 style=\\\"font-size:14px;font-weight:400;line-height:49;margin:0\\\">This page could not be found<!-- -->.</h2></div></div></div></div><script id=\\\"__NEXT_DATA__\\\" type=\\\"application/json\\\">{\\\"props\\\":{\\\"pageProps\\\":{\\\"statusCode\\\":404}},\\\"page\\\":\\\"/_error\\\",\\\"query\\\":{},\\\"buildId\\\":\\\"development\\\",\\\"runtimeConfig\\\":{},\\\"isFallback\\\":false,\\\"gip\\\":true,\\\"scriptLoader\\\":[]}</script></body></html>\"\n\n      48 |       handler: 'text-file',\n      49 |     })\n    > 50 |     expect(html).toContain('Hello, from text-file.txt!')\n         |                  ^\n      51 |   })\n      52 |\n      53 |   it('allows to fetch image assets', async () => {\n\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:50:18)\n\n  ● Edge Compiler can import asset assets › allows to fetch image assets\n\n    expect(received).toBeTrue()\n\n    Expected value to be true:\n      true\n    Received:\n      false\n\n      59 |       path.join(__dirname, './app/src/vercel.png')\n      60 |     )\n    > 61 |     expect(buffer.equals(image)).toBeTrue()\n         |                                  ^\n      62 |   })\n      63 |\n      64 |   it('allows to assets from node_modules', async () => {\n\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:61:34)\n\n  ● Edge Compiler can import asset assets › allows to assets from node_modules\n\n    FetchError: invalid json response body at http://localhost:41933/api/edge?handler=from-node-module reason: Unexpected token < in JSON at position 0\n\n      66 |       handler: 'from-node-module',\n      67 |     })\n    > 68 |     const json = await response.json()\n         |                  ^\n      69 |     expect(json).toEqual({\n      70 |       'i am': 'a node dependency',\n      71 |     })\n\n      at ../node_modules/.pnpm/node-fetch@2.6.7/node_modules/node-fetch/lib/index.js:273:32\n      at Object.<anonymous> (e2e/edge-compiler-can-import-blob-assets/index.test.ts:68:18)\n\n  ● Edge Compiler can import asset assets › extracts all the assets from the bundle\n\n    ENOENT: no such file or directory, open '/tmp/next-install-90cf9151ea16632abc7222d22ea16045dcdc2ead21ac4c761d10f4c2f71afa30/.next/server/middleware-manifest.json'\n\n\n",
+            "name": "/work/test/e2e/edge-compiler-can-import-blob-assets/index.test.ts",
+            "startTime": 1675903126083,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 1)",
+      "name": "test/integration/invalid-custom-routes/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 10,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 10,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 20,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675903259354,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"`headers` field cannot be empty for route {\\\"source\\\":\\\"/:path*\\\"\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 45741 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:38:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should error when empty headers array is present on header item",
+                "location": null,
+                "status": "failed",
+                "title": "should error when empty headers array is present on header item"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"`source` exceeds max built length of 4096 for route {\\\"source\\\":\\\"/aaaaaaaaaaaaaaaaaa\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 37683 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:61:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should error when source and destination length is exceeded",
+                "location": null,
+                "status": "failed",
+                "title": "should error when source and destination length is exceeded"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"`destination` is missing for route {\\\"source\\\":\\\"/hello\\\",\\\"permanent\\\":false}\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 36525 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:142:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should error during next build for invalid redirects",
+                "location": null,
+                "status": "failed",
+                "title": "should error during next build for invalid redirects"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"`destination` is missing for route {\\\"source\\\":\\\"/hello\\\"}\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 41657 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:273:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should error during next build for invalid rewrites",
+                "location": null,
+                "status": "failed",
+                "title": "should error during next build for invalid rewrites"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"`source` is missing, `key` in header item must be string for route {\\\"headers\\\":[{\\\"x-first\\\":\\\"first\\\"}]}\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 41523 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:447:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should error during next build for invalid headers",
+                "location": null,
+                "status": "failed",
+                "title": "should error during next build for invalid headers"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Error parsing `/feedback/(?!general)` https://nextjs.org/docs/messages/invalid-route-source\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 41671 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:517:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should show formatted error for redirect source parse fail",
+                "location": null,
+                "status": "failed",
+                "title": "should show formatted error for redirect source parse fail"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"rewrites must return an array, received object\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 38361 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:541:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should show valid error when non-array is returned from rewrites",
+                "location": null,
+                "status": "failed",
+                "title": "should show valid error when non-array is returned from rewrites"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"redirects must return an array, received boolean\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 33429 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:549:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should show valid error when non-array is returned from redirects",
+                "location": null,
+                "status": "failed",
+                "title": "should show valid error when non-array is returned from redirects"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"headers must return an array, received undefined\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 45289 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:557:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should show valid error when non-array is returned from headers",
+                "location": null,
+                "status": "failed",
+                "title": "should show valid error when non-array is returned from headers"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"`destination` has segments not in `source` or `has` (id) for route {\\\"source\\\":\\\"/feedback/:type\\\",\\\"destination\\\":\\\"/feedback/:id\\\"}\"\nReceived string:    \"Loading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 45977 --root /work --no-open]\n\"\n    at Object.<anonymous> (/work/test/integration/invalid-custom-routes/test/index.test.js:573:20)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "Errors on invalid custom routes dev mode should show valid error when segments not in source are used in destination",
+                "location": null,
+                "status": "failed",
+                "title": "should show valid error when segments not in source are used in destination"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should error when empty headers array is present on header item",
+                "location": null,
+                "status": "passed",
+                "title": "should error when empty headers array is present on header item"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should error when source and destination length is exceeded",
+                "location": null,
+                "status": "passed",
+                "title": "should error when source and destination length is exceeded"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should error during next build for invalid redirects",
+                "location": null,
+                "status": "passed",
+                "title": "should error during next build for invalid redirects"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should error during next build for invalid rewrites",
+                "location": null,
+                "status": "passed",
+                "title": "should error during next build for invalid rewrites"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should error during next build for invalid headers",
+                "location": null,
+                "status": "passed",
+                "title": "should error during next build for invalid headers"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should show formatted error for redirect source parse fail",
+                "location": null,
+                "status": "passed",
+                "title": "should show formatted error for redirect source parse fail"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should show valid error when non-array is returned from rewrites",
+                "location": null,
+                "status": "passed",
+                "title": "should show valid error when non-array is returned from rewrites"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should show valid error when non-array is returned from redirects",
+                "location": null,
+                "status": "passed",
+                "title": "should show valid error when non-array is returned from redirects"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should show valid error when non-array is returned from headers",
+                "location": null,
+                "status": "passed",
+                "title": "should show valid error when non-array is returned from headers"
+              },
+              {
+                "ancestorTitles": [
+                  "Errors on invalid custom routes",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "Errors on invalid custom routes production mode should show valid error when segments not in source are used in destination",
+                "location": null,
+                "status": "passed",
+                "title": "should show valid error when segments not in source are used in destination"
+              }
+            ],
+            "endTime": 1675903268724,
+            "message": "  ● Errors on invalid custom routes › dev mode › should error when empty headers array is present on header item\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"`headers` field cannot be empty for route {\\\"source\\\":\\\"/:path*\\\"\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 45741 --root /work --no-open]\n    \"\n\n      36 |     const stderr = await getStderr()\n      37 |\n    > 38 |     expect(stderr).toContain(\n         |                    ^\n      39 |       '`headers` field cannot be empty for route {\"source\":\"/:path*\"'\n      40 |     )\n      41 |   })\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:38:20)\n\n  ● Errors on invalid custom routes › dev mode › should error when source and destination length is exceeded\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"`source` exceeds max built length of 4096 for route {\\\"source\\\":\\\"/aaaaaaaaaaaaaaaaaa\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 37683 --root /work --no-open]\n    \"\n\n      59 |     const stderr = await getStderr()\n      60 |\n    > 61 |     expect(stderr).toContain(\n         |                    ^\n      62 |       '`source` exceeds max built length of 4096 for route {\"source\":\"/aaaaaaaaaaaaaaaaaa'\n      63 |     )\n      64 |     expect(stderr).toContain(\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:61:20)\n\n  ● Errors on invalid custom routes › dev mode › should error during next build for invalid redirects\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"`destination` is missing for route {\\\"source\\\":\\\"/hello\\\",\\\"permanent\\\":false}\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 36525 --root /work --no-open]\n    \"\n\n      140 |     const stderr = await getStderr()\n      141 |\n    > 142 |     expect(stderr).toContain(\n          |                    ^\n      143 |       `\\`destination\\` is missing for route {\"source\":\"/hello\",\"permanent\":false}`\n      144 |     )\n      145 |\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:142:20)\n\n  ● Errors on invalid custom routes › dev mode › should error during next build for invalid rewrites\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"`destination` is missing for route {\\\"source\\\":\\\"/hello\\\"}\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 41657 --root /work --no-open]\n    \"\n\n      271 |     const stderr = await getStderr()\n      272 |\n    > 273 |     expect(stderr).toContain(\n          |                    ^\n      274 |       `\\`destination\\` is missing for route {\"source\":\"/hello\"}`\n      275 |     )\n      276 |\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:273:20)\n\n  ● Errors on invalid custom routes › dev mode › should error during next build for invalid headers\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"`source` is missing, `key` in header item must be string for route {\\\"headers\\\":[{\\\"x-first\\\":\\\"first\\\"}]}\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 41523 --root /work --no-open]\n    \"\n\n      445 |     const stderr = await getStderr()\n      446 |\n    > 447 |     expect(stderr).toContain(\n          |                    ^\n      448 |       '`source` is missing, `key` in header item must be string for route {\"headers\":[{\"x-first\":\"first\"}]}'\n      449 |     )\n      450 |\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:447:20)\n\n  ● Errors on invalid custom routes › dev mode › should show formatted error for redirect source parse fail\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Error parsing `/feedback/(?!general)` https://nextjs.org/docs/messages/invalid-route-source\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 41671 --root /work --no-open]\n    \"\n\n      515 |     const stderr = await getStderr()\n      516 |\n    > 517 |     expect(stderr).toContain(\n          |                    ^\n      518 |       `Error parsing \\`/feedback/(?!general)\\` https://nextjs.org/docs/messages/invalid-route-source`\n      519 |     )\n      520 |     expect(stderr).toContain(`Reason: Pattern cannot start with \"?\" at 11`)\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:517:20)\n\n  ● Errors on invalid custom routes › dev mode › should show valid error when non-array is returned from rewrites\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"rewrites must return an array, received object\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 38361 --root /work --no-open]\n    \"\n\n      539 |     const stderr = await getStderr()\n      540 |\n    > 541 |     expect(stderr).toContain(`rewrites must return an array, received object`)\n          |                    ^\n      542 |   })\n      543 |\n      544 |   it('should show valid error when non-array is returned from redirects', async () => {\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:541:20)\n\n  ● Errors on invalid custom routes › dev mode › should show valid error when non-array is returned from redirects\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"redirects must return an array, received boolean\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 33429 --root /work --no-open]\n    \"\n\n      547 |     const stderr = await getStderr()\n      548 |\n    > 549 |     expect(stderr).toContain(`redirects must return an array, received boolean`)\n          |                    ^\n      550 |   })\n      551 |\n      552 |   it('should show valid error when non-array is returned from headers', async () => {\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:549:20)\n\n  ● Errors on invalid custom routes › dev mode › should show valid error when non-array is returned from headers\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"headers must return an array, received undefined\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 45289 --root /work --no-open]\n    \"\n\n      555 |     const stderr = await getStderr()\n      556 |\n    > 557 |     expect(stderr).toContain(`headers must return an array, received undefined`)\n          |                    ^\n      558 |   })\n      559 |\n      560 |   it('should show valid error when segments not in source are used in destination', async () => {\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:557:20)\n\n  ● Errors on invalid custom routes › dev mode › should show valid error when segments not in source are used in destination\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"`destination` has segments not in `source` or `has` (id) for route {\\\"source\\\":\\\"/feedback/:type\\\",\\\"destination\\\":\\\"/feedback/:id\\\"}\"\n    Received string:    \"Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /work/test/integration/invalid-custom-routes --is-next-dev-command --port 45977 --root /work --no-open]\n    \"\n\n      571 |     const stderr = await getStderr()\n      572 |\n    > 573 |     expect(stderr).toContain(\n          |                    ^\n      574 |       `\\`destination\\` has segments not in \\`source\\` or \\`has\\` (id) for route {\"source\":\"/feedback/:type\",\"destination\":\"/feedback/:id\"}`\n      575 |     )\n      576 |   })\n\n      at Object.<anonymous> (integration/invalid-custom-routes/test/index.test.js:573:20)\n",
+            "name": "/work/test/integration/invalid-custom-routes/test/index.test.js",
+            "startTime": 1675903259482,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/development/acceptance/ReactRefreshLogBox-app-doc.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 3,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 0,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 3,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675902944882,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:59:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC build error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC build error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:100:45)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on RSC parse error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on RSC parse error"
+              },
+              {
+                "ancestorTitles": [
+                  "Error overlay - editor links"
+                ],
+                "failureMessages": [
+                  "Error: Application is in inconsistent state: timeout.\n    at Object.patch (/work/test/development/acceptance-app/helpers.ts:78:19)\n    at Object.<anonymous> (/work/test/development/acceptance-app/editor-links.test.ts:135:7)"
+                ],
+                "fullName": "Error overlay - editor links should be possible to open files on module not found error",
+                "location": null,
+                "status": "failed",
+                "title": "should be possible to open files on module not found error"
+              }
+            ],
+            "endTime": 1675903106663,
+            "message": "  ● Error overlay - editor links › should be possible to open files on RSC build error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n      57 |       )\n      58 |\n    > 59 |       expect(await session.hasRedbox(true)).toBe(true)\n         |                                             ^\n      60 |       await clickEditorLinks(browser)\n      61 |       await check(() => editorRequestsCount, /2/)\n      62 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:59:45)\n\n  ● Error overlay - editor links › should be possible to open files on RSC parse error\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: true\n    Received: false\n\n       98 |       )\n       99 |\n    > 100 |       expect(await session.hasRedbox(true)).toBe(true)\n          |                                             ^\n      101 |       await clickEditorLinks(browser)\n      102 |       await check(() => editorRequestsCount, /4/)\n      103 |\n\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:100:45)\n\n  ● Error overlay - editor links › should be possible to open files on module not found error\n\n    Application is in inconsistent state: timeout.\n\n      76 |           }\n      77 |           if (status !== 'pending') {\n    > 78 |             throw new Error(`Application is in inconsistent state: ${status}.`)\n         |                   ^\n      79 |           }\n      80 |\n      81 |           await new Promise((resolve) => setTimeout(resolve, 30))\n\n      at Object.patch (development/acceptance-app/helpers.ts:78:19)\n      at Object.<anonymous> (development/acceptance-app/editor-links.test.ts:135:7)\n",
+            "name": "/work/test/development/acceptance-app/editor-links.test.ts",
+            "startTime": 1675902944973,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/e2e/app-dir/app-alias/app-alias.test.ts",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 5,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 14,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 5,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 24,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675903254025,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should bypass fetch cache with cache-control: no-cache",
+                "location": null,
+                "status": "passed",
+                "title": "should bypass fetch cache with cache-control: no-cache"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor fetch cache correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should honor fetch cache correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling Should not throw Dynamic Server Usage error when using generateStaticParams with previewData",
+                "location": null,
+                "status": "passed",
+                "title": "Should not throw Dynamic Server Usage error when using generateStaticParams with previewData"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should force SSR correctly for headers usage",
+                "location": null,
+                "status": "passed",
+                "title": "should force SSR correctly for headers usage"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor dynamic = \"force-static\" correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should honor dynamic = \"force-static\" correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should honor dynamic = \"force-static\" correctly (lazy)",
+                "location": null,
+                "status": "passed",
+                "title": "should honor dynamic = \"force-static\" correctly (lazy)"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 200\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:510:35)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should handle dynamicParams: false correctly",
+                "location": null,
+                "status": "failed",
+                "title": "should handle dynamicParams: false correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should work with forced dynamic path",
+                "location": null,
+                "status": "passed",
+                "title": "should work with forced dynamic path"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should work with dynamic path no generateStaticParams",
+                "location": null,
+                "status": "passed",
+                "title": "should work with dynamic path no generateStaticParams"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should handle dynamicParams: true correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should handle dynamicParams: true correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should navigate to static path correctly",
+                "location": null,
+                "status": "passed",
+                "title": "should navigate to static path correctly"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).not.toBe(expected) // Object.is equality\n\nExpected: not \"1675903310934\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:630:30)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when detected automatically with fetch cache option",
+                "location": null,
+                "status": "failed",
+                "title": "should ssr dynamically when detected automatically with fetch cache option"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 404\nReceived: 200\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:637:26)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should render not found pages correctly and fallback to the default one",
+                "location": null,
+                "status": "failed",
+                "title": "should render not found pages correctly and fallback to the default one"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when detected automatically with fetch revalidate option",
+                "location": null,
+                "status": "pending",
+                "title": "should ssr dynamically when detected automatically with fetch revalidate option"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).not.toBe(expected) // Object.is equality\n\nExpected: not \"1675903311876\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:697:30)\n    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
+                ],
+                "fullName": "app-dir static/dynamic handling should ssr dynamically when forced via config",
+                "location": null,
+                "status": "failed",
+                "title": "should ssr dynamically when forced via config"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should bailout to client rendering - without suspense boundary",
+                "location": null,
+                "status": "passed",
+                "title": "should bailout to client rendering - without suspense boundary"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should bailout to client rendering - with suspense boundary",
+                "location": null,
+                "status": "passed",
+                "title": "should bailout to client rendering - with suspense boundary"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should have empty search params on force-static",
+                "location": null,
+                "status": "pending",
+                "title": "should have empty search params on force-static"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "useSearchParams",
+                  "client"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling useSearchParams client should have values from canonical url on rewrite",
+                "location": null,
+                "status": "passed",
+                "title": "should have values from canonical url on rewrite"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should bail out to client rendering during SSG",
+                "location": null,
+                "status": "pending",
+                "title": "should bail out to client rendering during SSG"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should have the correct values",
+                "location": null,
+                "status": "pending",
+                "title": "should have the correct values"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling",
+                  "usePathname"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling usePathname should have values from canonical url on rewrite",
+                "location": null,
+                "status": "pending",
+                "title": "should have values from canonical url on rewrite"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"Thank you for testing `appDir` please leave your feedback at https://nextjs.link/app-feedback\"\nReceived string:    \"yarn run v1.22.19\n$ /tmp/next-install-606ed1cce37f6f51f5b3059469c070f1642959abc2a4e96487cf1f6cc9016ef5/node_modules/.bin/next --turbo\n>>> TURBOPACK (alpha)·\nThank you for trying Next.js v13 with Turbopack! As a reminder,\nTurbopack is currently in alpha and not yet ready for production.\nWe appreciate your ongoing support as we work to make it ready\nfor everyone.·\nError: You are using configuration and/or tools that are not yet\nsupported by Next.js v13 with Turbopack:··\n- Unsupported Next.js configuration option(s) (next.config.js)\n  The only configurations options supported are:\n    - configFileName\n    - env\n    - experimental.appDir\n    - experimental.resolveAlias\n    - experimental.serverComponentsExternalPackages\n    - experimental.turbopackLoaders\n    - images\n    - pageExtensions\n    - onDemandEntries\n    - rewrites\n    - redirects\n    - headers\n    - reactStrictMode\n    - swcMinify\n    - transpilePackages\n  To use Turbopack, remove other configuration options.····\nIf you cannot make the changes above, but still want to try out\nNext.js v13 with Turbopack, create the Next.js v13 playground app\nby running the following commands:·\n  pnpm create next-app --example with-turbopack with-turbopack-app\n  cd with-turbopack-app\n  pnpm run dev·········\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback··\nWarning: Unsupported config found; but continuing with custom Turbopack binary.·\nLearn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\nPlease direct feedback to: https://nextjs.link/turbopack-feedback·\ninfo  - Using locally built binary of @next/swc\nLoading custom turbopack binary from /work/next-dev\nRunning turbopack with args: [--dev /tmp/next-install-606ed1cce37f6f51f5b3059469c070f1642959abc2a4e96487cf1f6cc9016ef5 --is-next-dev-command --root /tmp/next-install-606ed1cce37f6f51f5b3059469c070f1642959abc2a4e96487cf1f6cc9016ef5 --no-open]\n\u001b[32mready\u001b[39m - started server on 0.0.0.0:39785, url: http://localhost:39785\n\u001b[35mevent\u001b[39m - initial compilation 5.975ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 2401ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 478ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 918ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 3027ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1037ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 491ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 567ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 658ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 138ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 204ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 647ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 678ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 659ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 153ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 109ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 101ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 591ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1120ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 509ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 54ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 260ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 606ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 0.962ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1693ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 123ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 842ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 677ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 428ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 236ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 476ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 1.077ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 542ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 422ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 53ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 501ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 69ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 412ms\n\u001b[2K\u001b[35mevent\u001b[39m - updated in 59ms\n\"\n    at Object.<anonymous> (/work/test/e2e/app-dir/app-static/app-static.test.ts:846:32)\n    at Promise.then.completed (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/utils.js:391:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/utils.js:316:10)\n    at _callCircusTest (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:218:40)\n    at _runTest (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:155:3)\n    at _runTestsForDescribeBlock (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:66:9)\n    at _runTestsForDescribeBlock (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:60:9)\n    at run (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/run.js:25:3)\n    at runAndTransformResultsToJestFormat (/work/node_modules/.pnpm/jest-circus@27.5.1/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:170:21)"
+                ],
+                "fullName": "app-dir static/dynamic handling should show a message to leave feedback for `appDir`",
+                "location": null,
+                "status": "failed",
+                "title": "should show a message to leave feedback for `appDir`"
+              },
+              {
+                "ancestorTitles": [
+                  "app-dir static/dynamic handling"
+                ],
+                "failureMessages": [],
+                "fullName": "app-dir static/dynamic handling should keep querystring on static page",
+                "location": null,
+                "status": "passed",
+                "title": "should keep querystring on static page"
+              }
+            ],
+            "endTime": 1675903357974,
+            "message": "  ● app-dir static/dynamic handling › should handle dynamicParams: false correctly\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 200\n\n      508 |           redirect: 'manual',\n      509 |         })\n    > 510 |         expect(invalidRes.status).toBe(404)\n          |                                   ^\n      511 |         expect(await invalidRes.text()).toContain('page could not be found')\n      512 |       }\n      513 |     })\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:510:35)\n\n  ● app-dir static/dynamic handling › should ssr dynamically when detected automatically with fetch cache option\n\n    expect(received).not.toBe(expected) // Object.is equality\n\n    Expected: not \"1675903310934\"\n\n      628 |\n      629 |       expect(secondHtml).toContain('Example Domain')\n    > 630 |       expect(secondDate).not.toBe(initialDate)\n          |                              ^\n      631 |     })\n      632 |\n      633 |     it('should render not found pages correctly and fallback to the default one', async () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:630:30)\n\n  ● app-dir static/dynamic handling › should render not found pages correctly and fallback to the default one\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 404\n    Received: 200\n\n      635 |         redirect: 'manual',\n      636 |       })\n    > 637 |       expect(res.status).toBe(404)\n          |                          ^\n      638 |       const html = await res.text()\n      639 |       expect(html).toInclude('\"noindex\"')\n      640 |       expect(html).toInclude('This page could not be found.')\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:637:26)\n\n  ● app-dir static/dynamic handling › should ssr dynamically when forced via config\n\n    expect(received).not.toBe(expected) // Object.is equality\n\n    Expected: not \"1675903311876\"\n\n      695 |       const secondDate = second$('#date').text()\n      696 |\n    > 697 |       expect(secondDate).not.toBe(initialDate)\n          |                              ^\n      698 |     })\n      699 |\n      700 |     describe('useSearchParams', () => {\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:697:30)\n\n  ● app-dir static/dynamic handling › should show a message to leave feedback for `appDir`\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected substring: \"Thank you for testing `appDir` please leave your feedback at https://nextjs.link/app-feedback\"\n    Received string:    \"yarn run v1.22.19\n    $ /tmp/next-install-606ed1cce37f6f51f5b3059469c070f1642959abc2a4e96487cf1f6cc9016ef5/node_modules/.bin/next --turbo\n    >>> TURBOPACK (alpha)·\n    Thank you for trying Next.js v13 with Turbopack! As a reminder,\n    Turbopack is currently in alpha and not yet ready for production.\n    We appreciate your ongoing support as we work to make it ready\n    for everyone.·\n    Error: You are using configuration and/or tools that are not yet\n    supported by Next.js v13 with Turbopack:··\n    - Unsupported Next.js configuration option(s) (next.config.js)\n      The only configurations options supported are:\n        - configFileName\n        - env\n        - experimental.appDir\n        - experimental.resolveAlias\n        - experimental.serverComponentsExternalPackages\n        - experimental.turbopackLoaders\n        - images\n        - pageExtensions\n        - onDemandEntries\n        - rewrites\n        - redirects\n        - headers\n        - reactStrictMode\n        - swcMinify\n        - transpilePackages\n      To use Turbopack, remove other configuration options.····\n    If you cannot make the changes above, but still want to try out\n    Next.js v13 with Turbopack, create the Next.js v13 playground app\n    by running the following commands:·\n      pnpm create next-app --example with-turbopack with-turbopack-app\n      cd with-turbopack-app\n      pnpm run dev·········\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback··\n    Warning: Unsupported config found; but continuing with custom Turbopack binary.·\n    Learn more about Next.js v13 and Turbopack: https://nextjs.link/with-turbopack\n    Please direct feedback to: https://nextjs.link/turbopack-feedback·\n    info  - Using locally built binary of @next/swc\n    Loading custom turbopack binary from /work/next-dev\n    Running turbopack with args: [--dev /tmp/next-install-606ed1cce37f6f51f5b3059469c070f1642959abc2a4e96487cf1f6cc9016ef5 --is-next-dev-command --root /tmp/next-install-606ed1cce37f6f51f5b3059469c070f1642959abc2a4e96487cf1f6cc9016ef5 --no-open]\n    \u001b[32mready\u001b[39m - started server on 0.0.0.0:39785, url: http://localhost:39785\n    \u001b[35mevent\u001b[39m - initial compilation 5.975ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 2401ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 478ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 918ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 3027ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1037ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 491ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 567ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 658ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 138ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 204ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 647ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 678ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 659ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 153ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 109ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 101ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 591ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1120ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 509ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 54ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 260ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 606ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 0.962ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1693ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 123ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 842ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 677ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 428ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 236ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 476ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 1.077ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 542ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 422ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 53ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 501ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 69ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 412ms\n    \u001b[2K\u001b[35mevent\u001b[39m - updated in 59ms\n    \"\n\n      844 |     if (!(global as any).isNextDeploy) {\n      845 |       it('should show a message to leave feedback for `appDir`', async () => {\n    > 846 |         expect(next.cliOutput).toContain(\n          |                                ^\n      847 |           `Thank you for testing \\`appDir\\` please leave your feedback at https://nextjs.link/app-feedback`\n      848 |         )\n      849 |       })\n\n      at Object.<anonymous> (e2e/app-dir/app-static/app-static.test.ts:846:32)\n",
+            "name": "/work/test/e2e/app-dir/app-static/app-static.test.ts",
+            "startTime": 1675903254116,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    },
+    {
+      "job": "Execute Next.js integration workflow / Next.js integration test (18, 2)",
+      "name": "test/integration/gssp-redirect-base-path/test/index.test.js",
+      "data": {
+        "numFailedTestSuites": 1,
+        "numFailedTests": 19,
+        "numPassedTestSuites": 0,
+        "numPassedTests": 22,
+        "numPendingTestSuites": 0,
+        "numPendingTests": 0,
+        "numRuntimeErrorTestSuites": 0,
+        "numTodoTests": 0,
+        "numTotalTestSuites": 1,
+        "numTotalTests": 41,
+        "openHandles": [],
+        "snapshot": {
+          "added": 0,
+          "didUpdate": false,
+          "failure": false,
+          "filesAdded": 0,
+          "filesRemoved": 0,
+          "filesRemovedList": [],
+          "filesUnmatched": 0,
+          "filesUpdated": 0,
+          "matched": 0,
+          "total": 0,
+          "unchecked": 0,
+          "uncheckedKeysByFile": [],
+          "unmatched": 0,
+          "updated": 0
+        },
+        "startTime": 1675904009590,
+        "success": false,
+        "testResults": [
+          {
+            "assertionResults": [
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 307\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:33:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply temporary redirect when visited directly for GSSP page",
+                "location": null,
+                "status": "failed",
+                "title": "should apply temporary redirect when visited directly for GSSP page"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 307\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:49:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply temporary redirect when visited directly basePath false for GSSP page",
+                "location": null,
+                "status": "failed",
+                "title": "should apply temporary redirect when visited directly basePath false for GSSP page"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 308\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:77:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply permanent redirect when visited directly for GSSP page",
+                "location": null,
+                "status": "failed",
+                "title": "should apply permanent redirect when visited directly for GSSP page"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 301\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:97:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply statusCode 301 redirect when visited directly for GSSP page",
+                "location": null,
+                "status": "failed",
+                "title": "should apply statusCode 301 redirect when visited directly for GSSP page"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 303\nReceived: 404\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:117:24)\n    at processTicksAndRejections (node:internal/process/task_queues:96:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply statusCode 303 redirect when visited directly for GSSP page",
+                "location": null,
+                "status": "failed",
+                "title": "should apply statusCode 303 redirect when visited directly for GSSP page"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#gsp')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply redirect when fallback GSP page is visited directly (internal dynamic)",
+                "location": null,
+                "status": "failed",
+                "title": "should apply redirect when fallback GSP page is visited directly (internal dynamic)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#index')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply redirect when fallback GSP page is visited directly (internal normal)",
+                "location": null,
+                "status": "failed",
+                "title": "should apply redirect when fallback GSP page is visited directly (internal normal)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"/docs/missing\"\nReceived: \"/docs/gsp-blog/redirect-dest-_missing\"\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:229:22)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply redirect when fallback GSP page is visited directly (external)",
+                "location": null,
+                "status": "failed",
+                "title": "should apply redirect when fallback GSP page is visited directly (external)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: example.vercel.sh\n\nlocalhost\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:241:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply redirect when fallback GSP page is visited directly (external domain)",
+                "location": null,
+                "status": "failed",
+                "title": "should apply redirect when fallback GSP page is visited directly (external domain)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "Error: TIMED OUT: example.vercel.sh\n\nlocalhost\n    at check (/work/test/lib/next-test-utils.js:561:11)\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:259:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply redirect when fallback GSSP page is visited directly (external domain)",
+                "location": null,
+                "status": "failed",
+                "title": "should apply redirect when fallback GSSP page is visited directly (external domain)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#gssp')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply redirect when GSSP page is navigated to client-side (internal dynamic)",
+                "location": null,
+                "status": "failed",
+                "title": "should apply redirect when GSSP page is navigated to client-side (internal dynamic)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#another')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:309:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply redirect when GSSP page is navigated to client-side (internal normal)",
+                "location": null,
+                "status": "failed",
+                "title": "should apply redirect when GSSP page is navigated to client-side (internal normal)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#gssp')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:324:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply redirect when GSSP page is navigated to client-side (external)",
+                "location": null,
+                "status": "failed",
+                "title": "should apply redirect when GSSP page is navigated to client-side (external)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#another')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:343:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply redirect when GSP page is navigated to client-side (internal)",
+                "location": null,
+                "status": "failed",
+                "title": "should apply redirect when GSP page is navigated to client-side (internal)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#gsp')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:358:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should apply redirect when GSP page is navigated to client-side (external)",
+                "location": null,
+                "status": "failed",
+                "title": "should apply redirect when GSP page is navigated to client-side (external)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#index')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:381:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should not replace history of the origin page when GSSP page is navigated to client-side (internal normal)",
+                "location": null,
+                "status": "failed",
+                "title": "should not replace history of the origin page when GSSP page is navigated to client-side (internal normal)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#index')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:409:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should not replace history of the origin page when GSSP page is navigated to client-side (external)",
+                "location": null,
+                "status": "failed",
+                "title": "should not replace history of the origin page when GSSP page is navigated to client-side (external)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#index')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:437:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should not replace history of the origin page when GSP page is navigated to client-side (internal)",
+                "location": null,
+                "status": "failed",
+                "title": "should not replace history of the origin page when GSP page is navigated to client-side (internal)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "dev mode"
+                ],
+                "failureMessages": [
+                  "page.waitForSelector: Timeout 30000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('#index')\n============================================================\n    at /work/test/lib/browsers/playwright.ts:331:10\n    at Object.<anonymous> (/work/test/integration/gssp-redirect-base-path/test/index.test.js:465:5)"
+                ],
+                "fullName": "GS(S)P Redirect Support dev mode should not replace history of the origin page when GSP page is navigated to client-side (external)",
+                "location": null,
+                "status": "failed",
+                "title": "should not replace history of the origin page when GSP page is navigated to client-side (external)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply temporary redirect when visited directly for GSSP page",
+                "location": null,
+                "status": "passed",
+                "title": "should apply temporary redirect when visited directly for GSSP page"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply temporary redirect when visited directly basePath false for GSSP page",
+                "location": null,
+                "status": "passed",
+                "title": "should apply temporary redirect when visited directly basePath false for GSSP page"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply permanent redirect when visited directly for GSSP page",
+                "location": null,
+                "status": "passed",
+                "title": "should apply permanent redirect when visited directly for GSSP page"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply statusCode 301 redirect when visited directly for GSSP page",
+                "location": null,
+                "status": "passed",
+                "title": "should apply statusCode 301 redirect when visited directly for GSSP page"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply statusCode 303 redirect when visited directly for GSSP page",
+                "location": null,
+                "status": "passed",
+                "title": "should apply statusCode 303 redirect when visited directly for GSSP page"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply redirect when fallback GSP page is visited directly (internal dynamic)",
+                "location": null,
+                "status": "passed",
+                "title": "should apply redirect when fallback GSP page is visited directly (internal dynamic)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply redirect when fallback GSP page is visited directly (internal dynamic) 2nd visit",
+                "location": null,
+                "status": "passed",
+                "title": "should apply redirect when fallback GSP page is visited directly (internal dynamic) 2nd visit"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply redirect when fallback GSP page is visited directly (internal normal)",
+                "location": null,
+                "status": "passed",
+                "title": "should apply redirect when fallback GSP page is visited directly (internal normal)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply redirect when fallback GSP page is visited directly (internal normal) 2nd visit",
+                "location": null,
+                "status": "passed",
+                "title": "should apply redirect when fallback GSP page is visited directly (internal normal) 2nd visit"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply redirect when fallback GSP page is visited directly (external)",
+                "location": null,
+                "status": "passed",
+                "title": "should apply redirect when fallback GSP page is visited directly (external)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply redirect when fallback GSP page is visited directly (external domain)",
+                "location": null,
+                "status": "passed",
+                "title": "should apply redirect when fallback GSP page is visited directly (external domain)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply redirect when fallback GSSP page is visited directly (external domain)",
+                "location": null,
+                "status": "passed",
+                "title": "should apply redirect when fallback GSSP page is visited directly (external domain)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply redirect when GSSP page is navigated to client-side (internal dynamic)",
+                "location": null,
+                "status": "passed",
+                "title": "should apply redirect when GSSP page is navigated to client-side (internal dynamic)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply redirect when GSSP page is navigated to client-side (internal normal)",
+                "location": null,
+                "status": "passed",
+                "title": "should apply redirect when GSSP page is navigated to client-side (internal normal)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply redirect when GSSP page is navigated to client-side (external)",
+                "location": null,
+                "status": "passed",
+                "title": "should apply redirect when GSSP page is navigated to client-side (external)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply redirect when GSP page is navigated to client-side (internal)",
+                "location": null,
+                "status": "passed",
+                "title": "should apply redirect when GSP page is navigated to client-side (internal)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should apply redirect when GSP page is navigated to client-side (external)",
+                "location": null,
+                "status": "passed",
+                "title": "should apply redirect when GSP page is navigated to client-side (external)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should not replace history of the origin page when GSSP page is navigated to client-side (internal normal)",
+                "location": null,
+                "status": "passed",
+                "title": "should not replace history of the origin page when GSSP page is navigated to client-side (internal normal)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should not replace history of the origin page when GSSP page is navigated to client-side (external)",
+                "location": null,
+                "status": "passed",
+                "title": "should not replace history of the origin page when GSSP page is navigated to client-side (external)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should not replace history of the origin page when GSP page is navigated to client-side (internal)",
+                "location": null,
+                "status": "passed",
+                "title": "should not replace history of the origin page when GSP page is navigated to client-side (internal)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support",
+                  "production mode"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support production mode should not replace history of the origin page when GSP page is navigated to client-side (external)",
+                "location": null,
+                "status": "passed",
+                "title": "should not replace history of the origin page when GSP page is navigated to client-side (external)"
+              },
+              {
+                "ancestorTitles": [
+                  "GS(S)P Redirect Support"
+                ],
+                "failureMessages": [],
+                "fullName": "GS(S)P Redirect Support should error for redirect during prerendering",
+                "location": null,
+                "status": "passed",
+                "title": "should error for redirect during prerendering"
+              }
+            ],
+            "endTime": 1675904581546,
+            "message": "  ● GS(S)P Redirect Support › dev mode › should apply temporary redirect when visited directly for GSSP page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 307\n    Received: 404\n\n      31 |       }\n      32 |     )\n    > 33 |     expect(res.status).toBe(307)\n         |                        ^\n      34 |\n      35 |     const { pathname } = url.parse(res.headers.get('location'))\n      36 |\n\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:33:24)\n\n  ● GS(S)P Redirect Support › dev mode › should apply temporary redirect when visited directly basePath false for GSSP page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 307\n    Received: 404\n\n      47 |       }\n      48 |     )\n    > 49 |     expect(res.status).toBe(307)\n         |                        ^\n      50 |\n      51 |     const text = await res.text()\n      52 |     expect(text).toEqual(`/404`)\n\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:49:24)\n\n  ● GS(S)P Redirect Support › dev mode › should apply permanent redirect when visited directly for GSSP page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 308\n    Received: 404\n\n      75 |       }\n      76 |     )\n    > 77 |     expect(res.status).toBe(308)\n         |                        ^\n      78 |\n      79 |     const text = await res.text()\n      80 |     expect(text).toEqual(`${basePath}/404`)\n\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:77:24)\n\n  ● GS(S)P Redirect Support › dev mode › should apply statusCode 301 redirect when visited directly for GSSP page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 301\n    Received: 404\n\n       95 |       }\n       96 |     )\n    >  97 |     expect(res.status).toBe(301)\n          |                        ^\n       98 |\n       99 |     const text = await res.text()\n      100 |     expect(text).toEqual(`${basePath}/404`)\n\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:97:24)\n\n  ● GS(S)P Redirect Support › dev mode › should apply statusCode 303 redirect when visited directly for GSSP page\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 303\n    Received: 404\n\n      115 |       }\n      116 |     )\n    > 117 |     expect(res.status).toBe(303)\n          |                        ^\n      118 |\n      119 |     const text = await res.text()\n      120 |     expect(text).toEqual(`${basePath}/404`)\n\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:117:24)\n\n  ● GS(S)P Redirect Support › dev mode › should apply redirect when fallback GSP page is visited directly (internal dynamic)\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#gsp')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● GS(S)P Redirect Support › dev mode › should apply redirect when fallback GSP page is visited directly (internal normal)\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#index')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● GS(S)P Redirect Support › dev mode › should apply redirect when fallback GSP page is visited directly (external)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"/docs/missing\"\n    Received: \"/docs/gsp-blog/redirect-dest-_missing\"\n\n      227 |     const curUrl = await browser.url()\n      228 |     const { pathname } = url.parse(curUrl)\n    > 229 |     expect(pathname).toBe('/docs/missing')\n          |                      ^\n      230 |   })\n      231 |\n      232 |   it('should apply redirect when fallback GSP page is visited directly (external domain)', async () => {\n\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:229:22)\n\n  ● GS(S)P Redirect Support › dev mode › should apply redirect when fallback GSP page is visited directly (external domain)\n\n    TIMED OUT: example.vercel.sh\n\n    localhost\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:241:5)\n\n  ● GS(S)P Redirect Support › dev mode › should apply redirect when fallback GSSP page is visited directly (external domain)\n\n    TIMED OUT: example.vercel.sh\n\n    localhost\n\n      559 |\n      560 |   if (hardError) {\n    > 561 |     throw new Error('TIMED OUT: ' + regex + '\\n\\n' + content)\n          |           ^\n      562 |   }\n      563 |   return false\n      564 | }\n\n      at check (lib/next-test-utils.js:561:11)\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:259:5)\n\n  ● GS(S)P Redirect Support › dev mode › should apply redirect when GSSP page is navigated to client-side (internal dynamic)\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#gssp')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n\n  ● GS(S)P Redirect Support › dev mode › should apply redirect when GSSP page is navigated to client-side (internal normal)\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#another')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:309:5)\n\n  ● GS(S)P Redirect Support › dev mode › should apply redirect when GSSP page is navigated to client-side (external)\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#gssp')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:324:5)\n\n  ● GS(S)P Redirect Support › dev mode › should apply redirect when GSP page is navigated to client-side (internal)\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#another')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:343:5)\n\n  ● GS(S)P Redirect Support › dev mode › should apply redirect when GSP page is navigated to client-side (external)\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#gsp')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:358:5)\n\n  ● GS(S)P Redirect Support › dev mode › should not replace history of the origin page when GSSP page is navigated to client-side (internal normal)\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#index')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:381:5)\n\n  ● GS(S)P Redirect Support › dev mode › should not replace history of the origin page when GSSP page is navigated to client-side (external)\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#index')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:409:5)\n\n  ● GS(S)P Redirect Support › dev mode › should not replace history of the origin page when GSP page is navigated to client-side (internal)\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#index')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:437:5)\n\n  ● GS(S)P Redirect Support › dev mode › should not replace history of the origin page when GSP page is navigated to client-side (external)\n\n    page.waitForSelector: Timeout 30000ms exceeded.\n    =========================== logs ===========================\n    waiting for locator('#index')\n    ============================================================\n\n      329 |     return this.chain(() => {\n      330 |       return page\n    > 331 |         .waitForSelector(selector, { timeout, state: 'attached' })\n          |          ^\n      332 |         .then(async (el) => {\n      333 |           // it seems selenium waits longer and tests rely on this behavior\n      334 |           // so we wait for the load event fire before returning\n\n      at lib/browsers/playwright.ts:331:10\n      at Object.<anonymous> (integration/gssp-redirect-base-path/test/index.test.js:465:5)\n",
+            "name": "/work/test/integration/gssp-redirect-base-path/test/index.test.js",
+            "startTime": 1675904009684,
+            "status": "failed",
+            "summary": ""
+          }
+        ],
+        "wasInterrupted": false
+      }
+    }
+  ]
+}
