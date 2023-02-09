@@ -156,7 +156,6 @@ func (pc Pipeline) GetTask(taskID string, taskName string) (*BookkeepingTaskDefi
 
 // LoadTurboConfig loads, or optionally, synthesizes a TurboJSON instance
 func LoadTurboConfig(dir turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJSON, includeSynthesizedFromRootPackageJSON bool) (*TurboJSON, error) {
-	// fmt.Printf("[debug] LoadturboConfig() from %#v\n", dir)
 	// If the root package.json stil has a `turbo` key, log a warning and remove it.
 	if rootPackageJSON.LegacyTurboConfig != nil {
 		log.Printf("[WARNING] \"turbo\" in package.json is no longer supported. Migrate to %s by running \"npx @turbo/codemod create-turbo-config\"\n", configFile)

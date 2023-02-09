@@ -104,11 +104,10 @@ func (g *CompleteGraph) GetTurboConfigFromWorkspace(workspaceName string, isSing
 		return &fs.TurboJSON{}, nil
 	}
 
-	dir := pkgJSON.Dir
-	repoRoot := g.RepoRoot
-	dirAbsolutePath := dir.RestoreAnchor(repoRoot)
+	workspaceAbsolutePath := pkgJSON.Dir.RestoreAnchor(g.RepoRoot)
+	turboConfig, err := fs.LoadTurboConfig(workspaceAbsolutePath, pkgJSON, isSinglePackage)
 
-	turboConfig, err := fs.LoadTurboConfig(dirAbsolutePath, pkgJSON, isSinglePackage)
+	// If we failed to load a TurboConfig, return the error
 	if err != nil {
 		return nil, err
 	}
