@@ -198,23 +198,28 @@ impl DepGraph {
         let mut done = FxHashSet::default();
 
         for id in self.g.graph_ix.iter() {
+            let ix = self.g.get_node(id);
+
             if id.index == usize::MAX {
                 groups.push(vec![id.clone()]);
+                done.insert(ix);
                 continue;
             }
-
-            let ix = self.g.get_node(id);
 
             if self
                 .g
                 .inner
                 .neighbors_directed(ix, petgraph::Direction::Incoming)
+                .filter(|&dependant_ix| !done.contains(&dependant_ix))
                 .count()
                 >= 2
             {
                 groups.push(vec![id.clone()]);
+                done.insert(ix);
             }
         }
+
+        done.clear();
 
         for group in &mut groups {
             let start = group[0].clone();
