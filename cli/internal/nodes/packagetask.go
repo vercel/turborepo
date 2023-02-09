@@ -33,13 +33,10 @@ func (pt *PackageTask) OutputPrefix(isSinglePackage bool) string {
 // of this task
 func (pt *PackageTask) HashableOutputs() fs.TaskOutputs {
 	inclusionOutputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.Task)}
-
-	var tdOutputs []string
 	inclusionOutputs = append(inclusionOutputs, pt.TaskDefinition.Outputs.Inclusions...)
-	tdOutputs = pt.TaskDefinition.Outputs.Exclusions
 
 	return fs.TaskOutputs{
 		Inclusions: inclusionOutputs,
-		Exclusions: tdOutputs,
+		Exclusions: pt.TaskDefinition.Outputs.Exclusions,
 	}
 }
