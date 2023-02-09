@@ -18,7 +18,6 @@ var sourcesIndex = JSON.parse('{\
 "turbo_tasks_macros_shared":["",[],["expand.rs","ident.rs","lib.rs","value_trait_arguments.rs"]],\
 "turbo_tasks_memory":["",[["task",[],["meta_state.rs","stats.rs"]],["viz",[],["graph.rs","mod.rs","table.rs"]]],["cell.rs","concurrent_priority_queue.rs","count_hash_set.rs","gc.rs","lib.rs","map_guard.rs","memory_backend.rs","memory_backend_with_pg.rs","output.rs","priority_pair.rs","scope.rs","stats.rs","task.rs"]],\
 "turbo_tasks_testing":["",[],["lib.rs","macros.rs","retry.rs"]],\
-"turbo_updater":["",[["ui",[],["mod.rs","utils.rs"]]],["lib.rs"]],\
 "turbopack":["",[["graph",[],["mod.rs"]],["module_options",[],["mod.rs","module_options_context.rs","module_rule.rs","rule_condition.rs"]],["rebase",[],["mod.rs"]],["transition",[],["mod.rs"]]],["condition.rs","evaluate_context.rs","lib.rs","resolve.rs","resolve_options_context.rs"]],\
 "turbopack_cli_utils":["",[],["issue.rs","lib.rs"]],\
 "turbopack_core":["",[["chunk",[],["dev.rs","mod.rs","optimize.rs"]],["introspect",[],["asset.rs","mod.rs"]],["issue",[],["analyze.rs","code_gen.rs","mod.rs","package_json.rs","resolve.rs","unsupported_module.rs"]],["reference",[],["mod.rs","source_map.rs"]],["resolve",[],["alias_map.rs","exports.rs","mod.rs","options.rs","origin.rs","parse.rs","pattern.rs","plugin.rs"]]],["asset.rs","code_builder.rs","context.rs","environment.rs","lib.rs","reference_type.rs","server_fs.rs","source_asset.rs","source_map.rs","source_pos.rs","source_transform.rs","target.rs","utils.rs","version.rs","virtual_asset.rs"]],\
@@ -32,7 +31,6 @@ var sourcesIndex = JSON.parse('{\
 "turbopack_node":["",[["render",[],["issue.rs","mod.rs","node_api_source.rs","render_proxy.rs","render_static.rs","rendered_source.rs"]],["source_map",[],["content_source.rs","mod.rs","trace.rs"]],["transforms",[],["mod.rs","postcss.rs","util.rs","webpack.rs"]]],["bootstrap.rs","embed_js.rs","evaluate.rs","execution_context.rs","lib.rs","node_entry.rs","pool.rs","route_matcher.rs"]],\
 "turbopack_static":["",[],["lib.rs"]],\
 "turbopack_swc_utils":["",[],["emitter.rs","lib.rs"]],\
-"turborepo_lib":["",[["commands",[],["bin.rs","link.rs","login.rs","logout.rs","mod.rs"]],["config",[],["env.rs","mod.rs","repo.rs","user.rs"]],["ui",[],["mod.rs"]]],["cli.rs","client.rs","lib.rs","package_manager.rs","retry.rs","shim.rs"]],\
 "xtask":["",[["summarize_bench",[],["data.rs","mod.rs"]]],["command.rs","main.rs","nft_bench.rs","publish.rs","visualize_bundler_bench.rs"]]\
 }');
 createSourceSidebar();
