@@ -197,13 +197,36 @@ impl DepGraph {
             add_to_group(&mut self.g, group, start_ix, &mut done);
         }
 
-        self.g.clone().map(|v| {
-            groups
-                .iter()
-                .find(|g| g.contains(&v))
-                .cloned()
-                .unwrap_or_default()
-        })
+        let mut new_graph = InternedGraph::default();
+        let mut group_ix_by_item_ix = FxHashMap::default();
+
+        for group in &groups {
+            let group_ix = new_graph.node(group);
+
+            for item in group {
+                let item_ix = self.g.node(item);
+                group_ix_by_item_ix.insert(item_ix, group_ix);
+            }
+        }
+
+        for group in &groups {
+            let group_ix = new_graph.node(group);
+
+            for item in group {
+                let item_ix = self.g.node(item);
+
+                for item_dep_ix in self
+                    .g
+                    .inner
+                    .neighbors_directed(item_ix, petgraph::Direction::Outgoing)
+                {
+                    let dep_group_ix = group_ix_by_item_ix[&item_dep_ix];
+                    new_graph.inner.add_edge(group_ix, dep_group_ix, true);
+                }
+            }
+        }
+
+        new_graph
     }
 
     /// Fills information per module items
