@@ -550,6 +550,7 @@
 <span id="550">550</span>
 <span id="551">551</span>
 <span id="552">552</span>
+<span id="553">553</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(future_join)]
 #![feature(min_specialization)]
 
@@ -883,6 +884,7 @@
         StaticAssetsContentSourceVc::new(String::new(), project_path.join(<span class="string">&quot;public&quot;</span>)).into();
     <span class="kw">let </span>manifest_source = DevManifestContentSource {
         page_roots: <span class="macro">vec!</span>[app_source, page_source],
+        next_config,
     }
     .cell()
     .into();

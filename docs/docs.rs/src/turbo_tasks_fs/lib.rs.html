@@ -1673,6 +1673,13 @@
 <span id="1673">1673</span>
 <span id="1674">1674</span>
 <span id="1675">1675</span>
+<span id="1676">1676</span>
+<span id="1677">1677</span>
+<span id="1678">1678</span>
+<span id="1679">1679</span>
+<span id="1680">1680</span>
+<span id="1681">1681</span>
+<span id="1682">1682</span>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -3079,6 +3086,13 @@
 
     <span class="kw">pub fn </span>is_content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="macro">matches!</span>(<span class="self">self</span>, FileContent::Content(<span class="kw">_</span>))
+    }
+
+    <span class="kw">pub fn </span>as_content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>File&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            FileContent::Content(file) =&gt; <span class="prelude-val">Some</span>(file),
+            FileContent::NotFound =&gt; <span class="prelude-val">None</span>,
+        }
     }
 
     <span class="kw">pub fn </span>parse_json(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileJsonContent {
