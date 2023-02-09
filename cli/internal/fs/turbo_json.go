@@ -399,16 +399,12 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 			log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
 			envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
 		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
-			// Assign bookkeeping, but only once, since we are in a loop
-			if _, ok := btd.fieldsMeta["TopologicalDependencies"]; !ok {
-				btd.fieldsMeta["TopologicalDependencies"] = true
-			}
+			// Note: This will get assigned multiple times in the loop, but we only care that it's true
+			btd.fieldsMeta["TopologicalDependencies"] = true
 			btd.TaskDefinition.TopologicalDependencies = append(btd.TaskDefinition.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
 		} else {
-			// Assign bookkeeping, but only once, since we are in a loop
-			if _, ok := btd.fieldsMeta["TaskDependencies"]; !ok {
-				btd.fieldsMeta["TaskDependencies"] = true
-			}
+			// Note: This will get assigned multiple times in the loop, but we only care that it's true
+			btd.fieldsMeta["TaskDependencies"] = true
 			btd.TaskDefinition.TaskDependencies = append(btd.TaskDefinition.TaskDependencies, dependency)
 		}
 	}
