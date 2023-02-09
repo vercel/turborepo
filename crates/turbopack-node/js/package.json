@@ -5,13 +5,21 @@
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "build:compiled": "vendor-dependencies"
   },
   "dependencies": {
-    "loader-runner": "^4.3.0"
+    "loader-runner": "^4.3.0",
+    "stacktrace-parser": "^0.1.10"
   },
   "devDependencies": {
     "@types/loader-runner": "^2.2.4",
-    "@types/node": "^18.11.11"
+    "@types/node": "^18.11.11",
+    "@vercel/vendor-turbopack-js-deps": "0.0.0"
+  },
+  "vendoredDependencies": {
+    "stacktrace-parser": {
+      "type": "module"
+    }
   }
 }

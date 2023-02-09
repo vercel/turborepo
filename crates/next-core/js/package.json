@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "check": "tsc --noEmit",
-    "build:compiled": "node build.mjs"
+    "build:compiled": "vendor-dependencies"
   },
   "dependencies": {
     "@vercel/turbopack-runtime": "latest",
@@ -26,6 +26,28 @@
     "@types/react": "^18.0.26",
     "@types/react-dom": "^18.0.9",
     "@vercel/ncc": "^0.36.0",
+    "@vercel/vendor-turbopack-js-deps": "0.0.0",
     "find-up": "^6.3.0"
+  },
+  "vendoredDependencies": {
+    "anser": {
+      "type": "cjs"
+    },
+    "css.escape": {
+      "type": "cjs",
+      "types": "export = CSS.escape;"
+    },
+    "platform": {
+      "type": "cjs"
+    },
+    "source-map": {
+      "type": "module"
+    },
+    "stacktrace-parser": {
+      "type": "module"
+    },
+    "strip-ansi": {
+      "type": "module-default"
+    }
   }
 }

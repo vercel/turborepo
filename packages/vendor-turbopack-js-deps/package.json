@@ -1,0 +1,14 @@
+{
+  "name": "@vercel/vendor-turbopack-js-deps",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "vendor-dependencies": "./src/index.mjs"
+  },
+  "dependencies": {
+    "@types/node": "^18.13.0",
+    "@vercel/ncc": "^0.36.1",
+    "find-up": "^6.3.0"
+  }
+}
