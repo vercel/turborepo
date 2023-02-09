@@ -4,7 +4,10 @@ use console::style;
 use semver::Version as SemVerVersion;
 use serde::Deserialize;
 use thiserror::Error as ThisError;
-use update_informer::{Check, Package, Registry, Result as UpdateResult, Version};
+use update_informer::{
+    http_client::{HttpClient, SendRequest},
+    Check, Package, Registry, Result as UpdateResult,
+};
 
 mod ui;
 
@@ -48,13 +51,12 @@ struct NPMRegistry;
 
 impl Registry for NPMRegistry {
     const NAME: &'static str = "npm-registry";
-    fn get_latest_version(
+    fn get_latest_version<T: SendRequest>(
+        http: HttpClient<T>,
         pkg: &Package,
-        version: &Version,
-        timeout: Duration,
     ) -> UpdateResult<Option<String>> {
         // determine tag to request
-        let tag = get_tag_from_version(&version.get().pre);
+        let tag = get_tag_from_version(&pkg.version().semver().pre);
         // since we're overloading tag within name, we need to split it back out
         let full_name = pkg.to_string();
         let split_name: Vec<&str> = full_name.split('/').collect();
@@ -64,8 +66,8 @@ impl Registry for NPMRegistry {
             name = name,
             tag = tag
         );
-        let resp = ureq::get(&url).timeout(timeout).call()?;
-        let result = resp.into_json::<NpmVersionData>().unwrap();
+
+        let result: NpmVersionData = http.get(&url)?;
         Ok(Some(result.version))
     }
 }
