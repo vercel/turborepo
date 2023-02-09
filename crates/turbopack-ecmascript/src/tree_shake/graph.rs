@@ -151,7 +151,7 @@ pub struct DepGraph {
 }
 
 impl DepGraph {
-    pub(super) fn finalize(&mut self) -> InternedGraph<Vec<ItemId>> {
+    pub(super) fn finalize(&self) -> InternedGraph<Vec<ItemId>> {
         fn add_to_group(
             graph: &InternedGraph<ItemId>,
             group: &mut Vec<ItemId>,
@@ -231,8 +231,8 @@ impl DepGraph {
 
         for group in &mut groups {
             let start = group[0].clone();
-            let start_ix = self.g.node(&start);
-            add_to_group(&mut self.g, group, start_ix, &mut done);
+            let start_ix = self.g.get_node(&start);
+            add_to_group(&self.g, group, start_ix, &mut done);
         }
 
         let mut new_graph = InternedGraph::default();
@@ -242,7 +242,7 @@ impl DepGraph {
             let group_ix = new_graph.node(group);
 
             for item in group {
-                let item_ix = self.g.node(item);
+                let item_ix = self.g.get_node(item);
                 group_ix_by_item_ix.insert(item_ix, group_ix);
             }
         }
@@ -251,7 +251,7 @@ impl DepGraph {
             let group_ix = new_graph.node(group);
 
             for item in group {
-                let item_ix = self.g.node(item);
+                let item_ix = self.g.get_node(item);
 
                 for item_dep_ix in self
                     .g
