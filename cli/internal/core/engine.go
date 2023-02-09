@@ -33,9 +33,6 @@ type Engine struct {
 
 	// completeGraph is the CompleteGraph. We need this to look up the Pipeline, etc.
 	completeGraph *graph.CompleteGraph
-	turboConfigs  map[string]*fs.TurboJSON   // cached reads of turbo.json by workspace
-	packageJSONs  map[string]*fs.PackageJSON // cached reads of package.json by workspace
-
 	// isSinglePackage is used to load turbo.json correctly
 	isSinglePackage bool
 }
@@ -50,8 +47,6 @@ func NewEngine(
 		TaskGraph:        &dag.AcyclicGraph{},
 		PackageTaskDeps:  map[string][]string{},
 		rootEnabledTasks: make(util.Set),
-		turboConfigs:     map[string]*fs.TurboJSON{},
-		packageJSONs:     map[string]*fs.PackageJSON{},
 		isSinglePackage:  isSinglePackage,
 	}
 }
@@ -535,21 +530,22 @@ func (e *Engine) getPipelineFromWorkspace(workspaceName string) (fs.Pipeline, er
 
 // getTurboConfigFromWorkspace returns the Unmarshaled fs.TurboJSON from turbo.json in the given workspace.
 func (e *Engine) getTurboConfigFromWorkspace(workspaceName string) (*fs.TurboJSON, error) {
-	cachedTurboConfig, ok := e.turboConfigs[workspaceName]
+	cachedTurboConfig, ok := e.completeGraph.WorkspaceInfos.TurboConfigs[workspaceName]
+
 	if ok {
 		return cachedTurboConfig, nil
 	}
 
 	// Note: dir for the root workspace will be an empty string, and for
 	// other workspaces, it will be a relative path.
-	dir := e.completeGraph.WorkspaceInfos.PackageJSONs[workspaceName].Dir
-	repoRoot := e.completeGraph.RepoRoot
-	dirAbsolutePath := dir.RestoreAnchor(repoRoot)
-
 	pkgJSON, err := e.getPackageJSONFromWorkspace(workspaceName)
 	if err != nil {
-		return nil, err
+		return &fs.TurboJSON{}, nil
 	}
+
+	dir := pkgJSON.Dir
+	repoRoot := e.completeGraph.RepoRoot
+	dirAbsolutePath := dir.RestoreAnchor(repoRoot)
 
 	turboConfig, err := fs.LoadTurboConfig(dirAbsolutePath, pkgJSON, e.isSinglePackage)
 	if err != nil {
@@ -557,43 +553,18 @@ func (e *Engine) getTurboConfigFromWorkspace(workspaceName string) (*fs.TurboJSO
 	}
 
 	// add to cache
-	e.turboConfigs[workspaceName] = turboConfig
+	e.completeGraph.WorkspaceInfos.TurboConfigs[workspaceName] = turboConfig
 
-	return e.turboConfigs[workspaceName], nil
+	return e.completeGraph.WorkspaceInfos.TurboConfigs[workspaceName], nil
 }
 
-// getPackageJSONFromWorkspace returns an Unmarshaled struct from the package.json in the given workspace
-// Note: at this time, it only returns the root package.json and returns an empty struct for every other workspace
+// getPackageJSONFromWorkspace returns an Unmarshaled struct of the package.json in the given workspace
 func (e *Engine) getPackageJSONFromWorkspace(workspaceName string) (*fs.PackageJSON, error) {
-	cachePackageJSON, ok := e.packageJSONs[workspaceName]
-	if ok {
-		return cachePackageJSON, nil
+	pkgJSON, ok := e.completeGraph.WorkspaceInfos.PackageJSONs[workspaceName]
+
+	if !ok {
+		return &fs.PackageJSON{}, nil
 	}
 
-	// Note: dir for the root workspace will be an empty string, and for
-	// other workspaces, it will be a relative path.
-	dir := e.completeGraph.WorkspaceInfos.PackageJSONs[workspaceName].Dir
-	repoRoot := e.completeGraph.RepoRoot
-	dirAbsolutePath := dir.RestoreAnchor(repoRoot)
-
-	// We need to a PackageJSON, because LoadTurboConfig requires it as an argument
-	// so it can synthesize tasks for single-package repos.
-	// In the root workspace, actually get and use the root package.json.
-	// For all other workspaces, we don't need the synthesis feature, so we can proceed
-	// with a default/blank PackageJSON
-	pkgJSON := &fs.PackageJSON{}
-
-	if workspaceName == util.RootPkgName {
-		rootPkgJSONPath := dirAbsolutePath.Join("package.json")
-		rootPkgJSON, err := fs.ReadPackageJSON(rootPkgJSONPath)
-		if err != nil {
-			return nil, err
-		}
-		pkgJSON = rootPkgJSON
-	}
-
-	// add to cache
-	e.packageJSONs[workspaceName] = pkgJSON
-
-	return e.packageJSONs[workspaceName], nil
+	return pkgJSON, nil
 }

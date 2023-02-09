@@ -16,6 +16,7 @@ import (
 // WorkspaceInfos holds information about each workspace in the monorepo.
 type WorkspaceInfos struct {
 	PackageJSONs map[string]*fs.PackageJSON
+	TurboConfigs map[string]*fs.TurboJSON
 }
 
 // CompleteGraph represents the common state inferred from the filesystem and pipeline.
