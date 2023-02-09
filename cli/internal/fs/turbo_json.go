@@ -98,7 +98,7 @@ type Pipeline map[string]BookkeepingTaskDefinition
 // BookkeepingTaskDefinition holds the underlying TaskDefinition and some bookkeeping data
 // about the TaskDefinition. This wrapper struct allows us to leave TaskDefinition untouched.
 type BookkeepingTaskDefinition struct {
-	fieldsMeta     map[string]bool
+	definedFields  map[string]bool
 	TaskDefinition TaskDefinition
 }
 
@@ -299,18 +299,18 @@ func (pc Pipeline) Pristine() PristinePipeline {
 	return pristine
 }
 
-// hasField checks the internal bookkeeping fieldsMeta field to
+// hasField checks the internal bookkeeping definedFields field to
 // see whether a field was actually in the underlying turbo.json
 // or whether it was initialized with its 0-value.
 func (btd BookkeepingTaskDefinition) hasField(fieldName string) bool {
-	if _, ok := btd.fieldsMeta[fieldName]; ok {
+	if _, ok := btd.definedFields[fieldName]; ok {
 		return true
 	}
 	return false
 }
 
 // MergeTaskDefinitions accepts an array of BookkeepingTaskDefinitions and merges them into
-// a single TaskDefinition. It uses the bookkeeping fieldsMeta to determine which fields should
+// a single TaskDefinition. It uses the bookkeeping definedFields to determine which fields should
 // be overwritten and when 0-values should be respected.
 func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDefinition, error) {
 	// Start with an empty definition
@@ -357,14 +357,14 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	btd.fieldsMeta = map[string]bool{}
+	btd.definedFields = map[string]bool{}
 
 	if task.Outputs != nil {
 		var inclusions []string
 		var exclusions []string
 		// Assign a bookkeeping field so we know that there really were
 		// outputs configured in the underlying config file.
-		btd.fieldsMeta["Outputs"] = true
+		btd.definedFields["Outputs"] = true
 
 		for _, glob := range task.Outputs {
 			if strings.HasPrefix(glob, "!") {
@@ -400,11 +400,11 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 			envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
 		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
 			// Note: This will get assigned multiple times in the loop, but we only care that it's true
-			btd.fieldsMeta["TopologicalDependencies"] = true
+			btd.definedFields["TopologicalDependencies"] = true
 			btd.TaskDefinition.TopologicalDependencies = append(btd.TaskDefinition.TopologicalDependencies, strings.TrimPrefix(dependency, topologicalPipelineDelimiter))
 		} else {
 			// Note: This will get assigned multiple times in the loop, but we only care that it's true
-			btd.fieldsMeta["TaskDependencies"] = true
+			btd.definedFields["TaskDependencies"] = true
 			btd.TaskDefinition.TaskDependencies = append(btd.TaskDefinition.TaskDependencies, dependency)
 		}
 	}
@@ -414,7 +414,7 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 
 	// Append env key into EnvVarDependencies
 	if task.Env != nil {
-		btd.fieldsMeta["EnvVarDependencies"] = true
+		btd.definedFields["EnvVarDependencies"] = true
 		for _, value := range task.Env {
 			if strings.HasPrefix(value, envPipelineDelimiter) {
 				// Hard error to help people specify this correctly during migration.
@@ -433,12 +433,12 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	if task.Inputs != nil {
 		// Note that we don't require Inputs to be sorted, we're going to
 		// hash the resulting files and sort that instead
-		btd.fieldsMeta["Inputs"] = true
+		btd.definedFields["Inputs"] = true
 		btd.TaskDefinition.Inputs = task.Inputs
 	}
 
 	if task.OutputMode != nil {
-		btd.fieldsMeta["OutputMode"] = true
+		btd.definedFields["OutputMode"] = true
 		btd.TaskDefinition.OutputMode = *task.OutputMode
 	}
 	btd.TaskDefinition.Persistent = task.Persistent
