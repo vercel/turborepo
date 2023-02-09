@@ -418,7 +418,6 @@ func (e *Engine) getTaskDefinitionChain(rootPipeline *fs.Pipeline, pkg *fs.Packa
 	taskDefinitions := []fs.BookkeepingTaskDefinition{}
 
 	// Look for the taskDefinition in the root pipeline.
-	// We'll wait to throw errors until the end
 	if rootTaskDefinition, err := rootPipeline.GetTask(taskID, taskName); err == nil {
 		taskDefinitions = append(taskDefinitions, *rootTaskDefinition)
 	}
