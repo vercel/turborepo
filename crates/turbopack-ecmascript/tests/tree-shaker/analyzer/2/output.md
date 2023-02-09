@@ -367,11 +367,11 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Items: [ItemId { index: 18446744073709551615, kind: ModuleEvaluation , ItemId { index: 9, kind: Normal , ItemId { index: 8, kind: Normal , ItemId { index: 12, kind: ImportOfModule , ItemId { index: 1, kind: ImportOfModule ]"];
-    N1["Items: [ItemId { index: 18446744073709551615, kind: Export((Atom('external1' type=dynamic), #0)) , ItemId { index: 0, kind: Normal , ItemId { index: 10, kind: Normal , ItemId { index: 1, kind: ImportBinding(0) ]"];
-    N2["Items: [ItemId { index: 18446744073709551615, kind: Export((Atom('foobar' type=inline), #0)) ]"];
-    N3["Items: [ItemId { index: 18446744073709551615, kind: Export((Atom('foo' type=inline), #0)) ]"];
-    N4["Items: [ItemId { index: 18446744073709551615, kind: Export((Atom('external2' type=dynamic), #0)) , ItemId { index: 11, kind: Normal , ItemId { index: 7, kind: Normal , ItemId { index: 6, kind: VarDeclarator(0) , ItemId { index: 5, kind: Normal , ItemId { index: 4, kind: VarDeclarator(0) , ItemId { index: 3, kind: VarDeclarator(0) , ItemId { index: 2, kind: VarDeclarator(0) ]"];
+    N0["Items: [ItemId { index: 18446744073709551615, kind: ModuleEvaluation }, ItemId { index: 9, kind: Normal }, ItemId { index: 8, kind: Normal }, ItemId { index: 12, kind: ImportOfModule }, ItemId { index: 1, kind: ImportOfModule }]"];
+    N1["Items: [ItemId { index: 18446744073709551615, kind: Export((Atom('external1' type=dynamic), #0)) }, ItemId { index: 0, kind: Normal }, ItemId { index: 10, kind: Normal }, ItemId { index: 1, kind: ImportBinding(0) }]"];
+    N2["Items: [ItemId { index: 18446744073709551615, kind: Export((Atom('foobar' type=inline), #0)) }]"];
+    N3["Items: [ItemId { index: 18446744073709551615, kind: Export((Atom('foo' type=inline), #0)) }]"];
+    N4["Items: [ItemId { index: 18446744073709551615, kind: Export((Atom('external2' type=dynamic), #0)) }, ItemId { index: 11, kind: Normal }, ItemId { index: 7, kind: Normal }, ItemId { index: 6, kind: VarDeclarator(0) }, ItemId { index: 5, kind: Normal }, ItemId { index: 4, kind: VarDeclarator(0) }, ItemId { index: 3, kind: VarDeclarator(0) }, ItemId { index: 2, kind: VarDeclarator(0) }]"];
     N0 --> N0;
     N0 --> N1;
     N0 --> N4;
