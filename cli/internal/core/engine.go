@@ -124,7 +124,7 @@ func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (
 		}, nil
 	}
 
-	return nil, fmt.Errorf("Could not find \"%s\" or \"%s\" in root config", taskName, taskID)
+	return nil, fmt.Errorf("Could not find \"%s\" or \"%s\" in workspace \"%s\"", taskName, taskID, pkg)
 }
 
 // Prepare constructs the Task Graph for a list of packages and tasks
