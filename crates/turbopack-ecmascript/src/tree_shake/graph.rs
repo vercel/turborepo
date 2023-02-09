@@ -143,7 +143,8 @@ impl DepGraph {
             start_ix: u32,
             done: &mut FxHashSet<u32>,
         ) {
-            if !done.insert(start_ix.clone()) {
+            dbg!(start_ix);
+            if !done.insert(start_ix) {
                 return;
             }
 
@@ -151,21 +152,22 @@ impl DepGraph {
             //
 
             // Check deps of `start`.
-            for dep in graph
+            for dep_ix in graph
                 .inner
                 .neighbors_directed(start_ix, petgraph::Direction::Outgoing)
             {
+                dbg!(dep_ix);
                 // Check if the the only dependant of dep is start
 
                 if graph
                     .inner
-                    .neighbors_directed(dep, petgraph::Direction::Incoming)
+                    .neighbors_directed(dep_ix, petgraph::Direction::Incoming)
                     .count()
                     == 1
                 {
-                    let dep_id = graph.graph_ix.get_index(dep as _).unwrap().clone();
+                    let dep_id = graph.graph_ix.get_index(dep_ix as _).unwrap().clone();
                     group.push(dep_id);
-                    add_to_group(graph, group, dep, done)
+                    add_to_group(graph, group, dep_ix, done)
                 }
             }
         }
