@@ -123,12 +123,20 @@ graph TD
 
 ```mermaid
 graph TD
-    N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((Atom('DOG' type=inline), #0))), ItemId(2, VarDeclarator(0))]"];
-    N2["Items: [ItemId(Export((Atom('CHIMERA' type=inline), #0))), ItemId(3, VarDeclarator(0)), ItemId(1, VarDeclarator(0)), ItemId(0, VarDeclarator(0))]"];
-    N0 --> N2;
-    N0 --> N1;
-    N1 --> N1;
-    N1 --> N2;
-    N2 --> N2;
+    N0["Items: [ItemId(0, VarDeclarator(0))]"];
+    N1["Items: [ItemId(1, VarDeclarator(0))]"];
+    N2["Items: [ItemId(2, VarDeclarator(0))]"];
+    N3["Items: [ItemId(3, VarDeclarator(0))]"];
+    N4["Items: [ItemId(ModuleEvaluation), ItemId(0, VarDeclarator(0)), ItemId(1, VarDeclarator(0))]"];
+    N5["Items: [ItemId(Export((Atom('DOG' type=inline), #0))), ItemId(2, VarDeclarator(0))]"];
+    N6["Items: [ItemId(Export((Atom('CHIMERA' type=inline), #0))), ItemId(3, VarDeclarator(0))]"];
+    N2 --> N4;
+    N3 --> N4;
+    N4 --> N4;
+    N4 --> N5;
+    N4 --> N6;
+    N5 --> N5;
+    N5 --> N4;
+    N6 --> N6;
+    N6 --> N4;
 ```
