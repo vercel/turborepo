@@ -115,12 +115,12 @@ impl DevManifestContentSourceVc {
             .collect();
 
         let manifest = BuildManifest {
-            __rewrites: this.next_config.rewrites().await?,
+            rewrites: this.next_config.rewrites().await?,
             sorted_pages,
             routes,
         };
 
-        let manifest = next_js_file("entry/buildManifest.js")
+        let manifest = next_js_file("entry/manifest/buildManifest.js")
             .await?
             .as_content()
             .context("embedded buildManifest file missing")?
@@ -135,7 +135,8 @@ impl DevManifestContentSourceVc {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BuildManifest<'a> {
-    __rewrites: RewritesReadRef,
+    #[serde(rename = "__rewrites")]
+    rewrites: RewritesReadRef,
     sorted_pages: &'a Vec<String>,
 
     #[serde(flatten)]
