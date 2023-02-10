@@ -23,13 +23,13 @@ This test covers:
   \xe2\x80\xa2 Packages in scope: persistent (esc)
   \xe2\x80\xa2 Running persistent-task-2-parent in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  persistent:persistent-task-2: cache miss, executing 43fe107dc1444542
+  persistent:persistent-task-2: cache miss, executing 23dbaa659bf45d29
   persistent:persistent-task-2: 
   persistent:persistent-task-2: > persistent-task-2
   persistent:persistent-task-2: > echo 'persistent-task-2'
   persistent:persistent-task-2: 
   persistent:persistent-task-2: persistent-task-2
-  persistent:persistent-task-2-parent: cache miss, executing a605b528bde36771
+  persistent:persistent-task-2-parent: cache miss, executing db90399020f2bdd3
   persistent:persistent-task-2-parent: 
   persistent:persistent-task-2-parent: > persistent-task-2-parent
   persistent:persistent-task-2-parent: > echo 'persistent-task-2-parent'

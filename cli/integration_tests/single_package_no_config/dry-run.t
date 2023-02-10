@@ -7,16 +7,16 @@ Check
   
   Tasks to Run
   build
-    Task                   = build                                                                                                   
-    Hash                   = c7223f212c321d3b                                                                                        
-    Cached (Local)         = false                                                                                                   
-    Cached (Remote)        = false                                                                                                   
-    Command                = echo 'building'                                                                                         
-    Outputs                =                                                                                                         
-    Log File               = .turbo/turbo-build.log                                                                                  
-    Dependencies           =                                                                                                         
-    Dependendents          =                                                                                                         
-    ResolvedTaskDefinition = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
+    Task                   = build                                                                                                  
+    Hash                   = c7223f212c321d3b                                                                                       
+    Cached (Local)         = false                                                                                                  
+    Cached (Remote)        = false                                                                                                  
+    Command                = echo 'building'                                                                                        
+    Outputs                =                                                                                                        
+    Log File               = .turbo/turbo-build.log                                                                                 
+    Dependencies           =                                                                                                        
+    Dependendents          =                                                                                                        
+    ResolvedTaskDefinition = {"outputs":[],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
 
   $ ${TURBO} run build --dry=json --single-package
   {
@@ -36,7 +36,7 @@ Check
         "dependents": [],
         "resolvedTaskDefinition": {
           "outputs": [],
-          "cache": false,
+          "cache": true,
           "dependsOn": [],
           "inputs": [],
           "outputMode": "full",
