@@ -203,7 +203,15 @@ func LoadTurboConfig(dir turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJ
 	for scriptName := range rootPackageJSON.Scripts {
 		if !turboJSON.Pipeline.HasTask(scriptName) {
 			taskName := util.RootTaskID(scriptName)
-			turboJSON.Pipeline[taskName] = BookkeepingTaskDefinition{}
+			// Explicitly set ShouldCache to false in this definition and add the bookkeeping fields
+			// so downstream we can pretend that it was set on purpose (as if read from a config file)
+			// rather than defaulting to the 0-value of a boolean field.
+			turboJSON.Pipeline[taskName] = BookkeepingTaskDefinition{
+				definedFields: util.SetFromStrings([]string{"ShouldCache"}),
+				TaskDefinition: TaskDefinition{
+					ShouldCache: false,
+				},
+			}
 		}
 	}
 	return turboJSON, nil
@@ -313,6 +321,10 @@ func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDef
 	// Start with an empty definition
 	mergedTaskDefinition := &TaskDefinition{}
 
+	// Set the default, because the 0-value will be false, and if no turbo.jsons had
+	// this field set for this task, we want it to be true.
+	mergedTaskDefinition.ShouldCache = true
+
 	// For each of the TaskDefinitions we know of, merge them in
 	for _, bookkeepingTaskDef := range taskDefinitions {
 		taskDef := bookkeepingTaskDef.TaskDefinition
@@ -320,7 +332,10 @@ func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDef
 			mergedTaskDefinition.Outputs = taskDef.Outputs
 		}
 
-		mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
+		if bookkeepingTaskDef.hasField("ShouldCache") {
+			mergedTaskDefinition.ShouldCache = taskDef.ShouldCache
+		}
+
 		if bookkeepingTaskDef.hasField("EnvVarDependencies") {
 			mergedTaskDefinition.EnvVarDependencies = taskDef.EnvVarDependencies
 		}
@@ -385,6 +400,7 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	if task.Cache == nil {
 		btd.TaskDefinition.ShouldCache = true
 	} else {
+		btd.definedFields.Add("ShouldCache")
 		btd.TaskDefinition.ShouldCache = *task.Cache
 	}
 
