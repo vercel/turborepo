@@ -119,7 +119,7 @@ export default function startHandler({
       devFiles: [],
       ampDevFiles: [],
       polyfillFiles: [],
-      lowPriorityFiles: [],
+      lowPriorityFiles: ["static/development/_buildManifest.js"],
       rootMainFiles: [],
       ampFirstPages: [],
     };
@@ -159,6 +159,8 @@ export default function startHandler({
         previewModeSigningKey: "",
       },
       basePath: "",
+      // TODO(WEB-583) this isn't correct, instead it should set `dev: true`
+      nextExport: true,
       resolvedUrl: renderData.url,
       optimizeFonts: false,
       optimizeCss: false,
