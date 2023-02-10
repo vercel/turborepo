@@ -3,12 +3,11 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{Error, Package};
+use super::{Error, Lockfile, Package};
 
 // we change graph traversal now
 // resolve_package should only be used now for converting initial contents
 // of workspace package.json into a set of node ids
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NpmLockfile {
     #[serde(rename = "lockfileVersion")]
@@ -42,24 +41,8 @@ struct NpmPackage {
     other: HashMap<String, Value>,
 }
 
-impl NpmLockfile {
-    pub fn load(content: &[u8]) -> Result<Self, Error> {
-        let lockfile: NpmLockfile = serde_json::from_slice(content)?;
-
-        // We don't support lockfiles without 'packages' as older versions
-        // required reading through the contents of node_modules in order
-        // to resolve dependencies.
-        // See https://github.com/npm/cli/blob/9609e9eed87c735f0319ac0af265f4d406cbf800/workspaces/arborist/lib/shrinkwrap.js#L674
-        if lockfile.lockfile_version <= 1
-            || (lockfile.packages.is_empty() && !lockfile.dependencies.is_empty())
-        {
-            Err(Error::UnsupportedNpmVersion)
-        } else {
-            Ok(lockfile)
-        }
-    }
-
-    pub fn resolve_package(
+impl Lockfile for NpmLockfile {
+    fn resolve_package(
         &self,
         workspace_path: &str,
         name: &str,
@@ -96,7 +79,7 @@ impl NpmLockfile {
             .transpose()
     }
 
-    pub fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, &str>>, Error> {
+    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, &str>>, Error> {
         self.packages
             .get(key)
             .map(|pkg| {
@@ -116,6 +99,24 @@ impl NpmLockfile {
                     .collect()
             })
             .transpose()
+    }
+}
+
+impl NpmLockfile {
+    pub fn load(content: &[u8]) -> Result<Self, Error> {
+        let lockfile: NpmLockfile = serde_json::from_slice(content)?;
+
+        // We don't support lockfiles without 'packages' as older versions
+        // required reading through the contents of node_modules in order
+        // to resolve dependencies.
+        // See https://github.com/npm/cli/blob/9609e9eed87c735f0319ac0af265f4d406cbf800/workspaces/arborist/lib/shrinkwrap.js#L674
+        if lockfile.lockfile_version <= 1
+            || (lockfile.packages.is_empty() && !lockfile.dependencies.is_empty())
+        {
+            Err(Error::UnsupportedNpmVersion)
+        } else {
+            Ok(lockfile)
+        }
     }
 
     fn get_package(&self, package: impl AsRef<str>) -> Result<&NpmPackage, Error> {

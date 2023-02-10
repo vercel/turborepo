@@ -52,22 +52,18 @@ fn npm_transitive_closure_inner(buf: Buffer) -> Result<proto::LockfilePackageLis
 
 #[no_mangle]
 pub extern "C" fn npm_subgraph(buf: Buffer) -> Buffer {
-    let request: proto::SubgraphRequest = match buf.into_proto() {
-        Ok(r) => r,
-        Err(err) => return make_subgraph_error(err),
-    };
-    match real_npm_subgraph(&request.contents, &request.workspaces, &request.packages) {
-        Ok(new_contents) => proto::SubgraphResponse {
-            response: Some(proto::subgraph_response::Response::Contents(new_contents)),
-        }
-        .into(),
-        Err(err) => make_subgraph_error(err),
-    }
-}
-
-fn make_subgraph_error(err: impl ToString) -> Buffer {
+    use proto::subgraph_response::Response;
     proto::SubgraphResponse {
-        response: Some(proto::subgraph_response::Response::Error(err.to_string())),
+        response: Some(match npm_subgraph_inner(buf) {
+            Ok(contents) => Response::Contents(contents),
+            Err(err) => Response::Error(err.to_string()),
+        }),
     }
     .into()
+}
+
+fn npm_subgraph_inner(buf: Buffer) -> Result<Vec<u8>, Error> {
+    let request: proto::SubgraphRequest = buf.into_proto()?;
+    let contents = real_npm_subgraph(&request.contents, &request.workspaces, &request.packages)?;
+    Ok(contents)
 }
