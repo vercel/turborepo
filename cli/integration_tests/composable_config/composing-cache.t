@@ -52,8 +52,7 @@ This test covers:
   $ HASH=$(cat tmp.log | grep -E "cached:cached-task-2.* executing .*" | awk '{print $6}')
   $ echo $HASH
   [a-z0-9]{16} (re)
-  $ ls $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
-  ls: .*.tar.zst: No such file or directory (re)
+  $ test -f $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
   [1]
 
 no `cache` config in root, cache:false in workspace
@@ -75,8 +74,7 @@ no `cache` config in root, cache:false in workspace
   $ HASH=$(cat tmp.log | grep -E "cached:cached-task-3.* executing .*" | awk '{print $6}')
   $ echo $HASH
   [a-z0-9]{16} (re)
-  $ ls $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
-  ls: .*.tar.zst: No such file or directory (re)
+  $ test -f $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
   [1]
 
 cache:false in root, no turbo.json in workspace.
@@ -100,6 +98,5 @@ we already have a workspace that doesn't have a config
   $ HASH=$(cat tmp.log | grep -E "missing-workspace-config:cached-task-4.* executing .*" | awk '{print $6}')
   $ echo $HASH
   [a-z0-9]{16} (re)
-  $ ls $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
-  ls: .*.tar.zst: No such file or directory (re)
+  $ test -f $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
   [1]

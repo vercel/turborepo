@@ -103,6 +103,5 @@ Setup
   $ HASH=$(cat tmp.log | grep -E "missing-workspace-config:cached-task-4.* executing .*" | awk '{print $6}')
   $ echo $HASH
   [a-z0-9]{16} (re)
-  $ ls $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
-  ls: .*.tar.zst: No such file or directory (re)
+  $ test -f $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
   [1]
