@@ -16065,6 +16065,10 @@
         const token = (0, _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput)(
           "token"
         );
+        const shouldExpandResultMessages =
+          (0, _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput)(
+            "expand_result_messages"
+          ) === "true";
         const shouldDiffWithMain =
           (0, _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput)(
             "diff_base"
@@ -16079,6 +16083,9 @@
         ) {
           console.error('Invalid diff_base, must be "main" or "release"');
           process.exit(1);
+        }
+        if (!shouldExpandResultMessages) {
+          console.log("Test report comment will not include result messages.");
         }
         const octokit = (0,
         _actions_github__WEBPACK_IMPORTED_MODULE_0__.getOctokit)(token);
@@ -16100,20 +16107,26 @@
             ? void 0
             : _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.sha;
         let comments = null;
-        let existingComment;
         if (prNumber) {
           console.log("Trying to collect integration stats for PR", {
             prNumber,
             sha: sha,
           });
-          comments = yield octokit.rest.issues.listComments(
+          comments = yield octokit.paginate(
+            octokit.rest.issues.listComments,
             Object.assign(
               Object.assign(
                 {},
                 _actions_github__WEBPACK_IMPORTED_MODULE_0__.context.repo
               ),
-              { issue_number: prNumber }
+              { issue_number: prNumber, per_page: 200 }
             )
+          );
+          console.log(
+            "Found total comments for PR",
+            (comments === null || comments === void 0
+              ? void 0
+              : comments.length) || 0
           );
           // Get a comment from the bot if it exists, delete all of them.
           // Due to test report can exceed single comment size limit, it can be multiple comments and sync those is not trivial.
@@ -16121,7 +16134,7 @@
           const existingComments =
             comments === null || comments === void 0
               ? void 0
-              : comments.data.filter((comment) => {
+              : comments.filter((comment) => {
                   var _a, _b;
                   return (
                     ((_a =
@@ -16179,6 +16192,7 @@
           octokit,
           prNumber,
           sha,
+          shouldExpandResultMessages,
         };
       });
     }
@@ -16433,7 +16447,9 @@
           acc.currentTestFailedCaseCount += data.numFailedTests;
           acc.currentTestPassedCaseCount += data.numPassedTests;
           acc.currentTestTotalCaseCount += data.numTotalTests;
-          acc.currentTestFailedNames.push(name);
+          if (name.length > 2) {
+            acc.currentTestFailedNames.push(name);
+          }
           return acc;
         },
         {
@@ -16476,7 +16492,9 @@
           acc.baseTestFailedCaseCount += data.numFailedTests;
           acc.baseTestPassedCaseCount += data.numPassedTests;
           acc.baseTestTotalCaseCount += data.numTotalTests;
-          acc.baseTestFailedNames.push(name);
+          if (name.length > 2) {
+            acc.baseTestFailedNames.push(name);
+          }
           return acc;
         },
         {
@@ -16533,12 +16551,12 @@
       );
       if (fixedTests.length > 0) {
         ret += `\n:white_check_mark: **Fixed tests:**\n\n${fixedTests
-          .map((t) => `\t- ${t}`)
+          .map((t) => (t.length > 5 ? `\t- ${t}` : t))
           .join(" \n")}`;
       }
       if (newFailedTests.length > 0) {
         ret += `\n:x: **Newly failed tests:**\n\n${newFailedTests
-          .map((t) => `\t- ${t}`)
+          .map((t) => (t.length > 5 ? `\t- ${t}` : t))
           .join(" \n")}`;
       }
       // Store a json payload to share via slackapi/slack-github-action into Slack channel
@@ -16622,8 +16640,14 @@
     // An action report failed next.js integration test with --turbo
     function run() {
       return __awaiter(this, void 0, void 0, function* () {
-        const { token, octokit, shouldDiffWithMain, prNumber, sha } =
-          yield getInputs();
+        const {
+          token,
+          octokit,
+          shouldDiffWithMain,
+          prNumber,
+          sha,
+          shouldExpandResultMessages,
+        } = yield getInputs();
         // determine if we want to report summary into slack channel.
         // As a first step, we'll only report summary when the test is run against release-to-release. (no main branch regressions yet)
         const shouldReportSlack =
@@ -16692,16 +16716,17 @@
               : resultMessage;
           if (resultMessage.length >= 50000) {
             console.log(
-              "Test result messages are too long, comment will post stripped. Here is the full message:\n",
-              resultMessage
+              "Test result messages are too long, comment will post stripped."
             );
           }
           commentValues.push(`\n`);
-          commentValues.push(`<details>`);
-          commentValues.push(`<summary>Expand output</summary>`);
-          commentValues.push(strippedResultMessage);
-          commentValues.push(`</details>`);
-          commentValues.push(`\n`);
+          if (shouldExpandResultMessages) {
+            commentValues.push(`<details>`);
+            commentValues.push(`<summary>Expand output</summary>`);
+            commentValues.push(strippedResultMessage);
+            commentValues.push(`</details>`);
+            commentValues.push(`\n`);
+          }
           // Check last comment body's length, append or either create new comment depends on the length of the text.
           const commentIdxToUpdate = acc.length - 1;
           if (

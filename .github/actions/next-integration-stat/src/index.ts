@@ -226,12 +226,19 @@ async function getInputs(): Promise<{
   octokit: Octokit;
   prNumber: number | undefined;
   sha: string;
+  shouldExpandResultMessages: boolean;
 }> {
   const token = getInput("token");
+  const shouldExpandResultMessages =
+    getInput("expand_result_messages") === "true";
   const shouldDiffWithMain = getInput("diff_base") === "main";
   if (getInput("diff_base") !== "main" && getInput("diff_base") !== "release") {
     console.error('Invalid diff_base, must be "main" or "release"');
     process.exit(1);
+  }
+
+  if (!shouldExpandResultMessages) {
+    console.log("Test report comment will not include result messages.");
   }
 
   const octokit = getOctokit(token);
@@ -239,10 +246,9 @@ async function getInputs(): Promise<{
   const prNumber = context?.payload?.pull_request?.number;
   const sha = context?.sha;
 
-  let comments: Awaited<
-    ReturnType<typeof octokit.rest.issues.listComments>
-  > | null = null;
-  let existingComment: ExistingComment;
+  let comments:
+    | Awaited<ReturnType<typeof octokit.rest.issues.listComments>>["data"]
+    | null = null;
 
   if (prNumber) {
     console.log("Trying to collect integration stats for PR", {
@@ -250,15 +256,18 @@ async function getInputs(): Promise<{
       sha: sha,
     });
 
-    comments = await octokit.rest.issues.listComments({
+    comments = await octokit.paginate(octokit.rest.issues.listComments, {
       ...context.repo,
       issue_number: prNumber,
+      per_page: 200,
     });
+
+    console.log("Found total comments for PR", comments?.length || 0);
 
     // Get a comment from the bot if it exists, delete all of them.
     // Due to test report can exceed single comment size limit, it can be multiple comments and sync those is not trivial.
     // Instead, we just delete all of them and post a new one.
-    const existingComments = comments?.data.filter(
+    const existingComments = comments?.filter(
       (comment) =>
         comment?.user?.login === "github-actions[bot]" &&
         comment?.body?.includes(BOT_COMMENT_MARKER)
@@ -291,6 +300,7 @@ async function getInputs(): Promise<{
     octokit,
     prNumber,
     sha,
+    shouldExpandResultMessages,
   };
 }
 
@@ -530,7 +540,9 @@ function getTestSummary(
       acc.currentTestFailedCaseCount += data.numFailedTests;
       acc.currentTestPassedCaseCount += data.numPassedTests;
       acc.currentTestTotalCaseCount += data.numTotalTests;
-      acc.currentTestFailedNames.push(name);
+      if (name.length > 2) {
+        acc.currentTestFailedNames.push(name);
+      }
 
       return acc;
     },
@@ -578,7 +590,10 @@ function getTestSummary(
       acc.baseTestFailedCaseCount += data.numFailedTests;
       acc.baseTestPassedCaseCount += data.numPassedTests;
       acc.baseTestTotalCaseCount += data.numTotalTests;
-      acc.baseTestFailedNames.push(name);
+
+      if (name.length > 2) {
+        acc.baseTestFailedNames.push(name);
+      }
       return acc;
     },
     {
@@ -639,13 +654,13 @@ function getTestSummary(
 
   if (fixedTests.length > 0) {
     ret += `\n:white_check_mark: **Fixed tests:**\n\n${fixedTests
-      .map((t) => `\t- ${t}`)
+      .map((t) => (t.length > 5 ? `\t- ${t}` : t))
       .join(" \n")}`;
   }
 
   if (newFailedTests.length > 0) {
     ret += `\n:x: **Newly failed tests:**\n\n${newFailedTests
-      .map((t) => `\t- ${t}`)
+      .map((t) => (t.length > 5 ? `\t- ${t}` : t))
       .join(" \n")}`;
   }
 
@@ -735,8 +750,14 @@ const createCommentPostAsync =
 
 // An action report failed next.js integration test with --turbo
 async function run() {
-  const { token, octokit, shouldDiffWithMain, prNumber, sha } =
-    await getInputs();
+  const {
+    token,
+    octokit,
+    shouldDiffWithMain,
+    prNumber,
+    sha,
+    shouldExpandResultMessages,
+  } = await getInputs();
 
   // determine if we want to report summary into slack channel.
   // As a first step, we'll only report summary when the test is run against release-to-release. (no main branch regressions yet)
@@ -792,17 +813,19 @@ async function run() {
         : resultMessage;
     if (resultMessage.length >= 50000) {
       console.log(
-        "Test result messages are too long, comment will post stripped. Here is the full message:\n",
-        resultMessage
+        "Test result messages are too long, comment will post stripped."
       );
     }
 
     commentValues.push(`\n`);
-    commentValues.push(`<details>`);
-    commentValues.push(`<summary>Expand output</summary>`);
-    commentValues.push(strippedResultMessage);
-    commentValues.push(`</details>`);
-    commentValues.push(`\n`);
+
+    if (shouldExpandResultMessages) {
+      commentValues.push(`<details>`);
+      commentValues.push(`<summary>Expand output</summary>`);
+      commentValues.push(strippedResultMessage);
+      commentValues.push(`</details>`);
+      commentValues.push(`\n`);
+    }
 
     // Check last comment body's length, append or either create new comment depends on the length of the text.
     const commentIdxToUpdate = acc.length - 1;
