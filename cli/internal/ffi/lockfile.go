@@ -44,6 +44,7 @@ func transitiveDeps(cFunc func(C.Buffer) C.Buffer, content []byte, pkgDir string
 	return list.GetList(), nil
 }
 
+// NpmSubgraph returns the contents of a npm lockfile subgraph
 func NpmSubgraph(content []byte, workspaces []string, packages []string) ([]byte, error) {
 	req := ffi_proto.SubgraphRequest{
 		Contents:   content,
