@@ -25,7 +25,7 @@ message GlobRespList {
 
 message ChangedFilesReq {
   string repo_root = 1;
-  string from_commit = 2;
+  optional string from_commit = 2;
   string to_commit = 3;
   bool include_untracked = 4;
   optional string relative_to = 5;
