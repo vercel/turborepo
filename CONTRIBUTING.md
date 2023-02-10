@@ -40,6 +40,11 @@ Building
 - Building `turbo` CLI: In `cli` run `make turbo`
 - Using `turbo` to build `turbo` CLI: `./turbow.js`
 
+### TLS Implementation
+
+Turborepo uses `reqwest`, a Rust HTTP client, to make requests to the Turbo API. `reqwest` supports two TLS implementations: `rustls` and `native-tls`. `rustls` is a pure Rust implementation of TLS, while `native-tls` is a wrapper around OpenSSL. Turborepo requires users to select
+one of them by building with the `rustls-tls` or `native-tls` feature, respectively. To do so, pass either `--features rustls-tls` or `--features native-tls` to `cargo build` or `cargo test`. The Makefile already passes `rustls-tls` by default.
+
 ### Running Turborepo Tests
 
 #### Go Tests
@@ -54,7 +59,7 @@ To run a single Go test, you can run `go test ./[path/to/package/]`. See more [i
 
 #### Rust Tests
 
-The recommended way to run tests is: `cargo nextest run -p turborepo-lib`.
+The recommended way to run tests is: `cargo nextest run -p turborepo-lib --features rustls-tls`.
 You'll have to [install it first](https://nexte.st/book/pre-built-binaries.html).
 
 You can also use the built in [`cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html) directly `cargo test -p turborepo-lib`.
@@ -88,6 +93,34 @@ TURBO_BINARY_PATH=~/repos/vercel/turbo/cli/turbo.exe npm link turbo
 ```
 
 If you're using a different package manager replace npm accordingly.
+
+## Manually testing `turbo`
+
+Before releasing, it's recommended to test the `turbo` binary manually.
+Here's a checklist of testing strategies to cover:
+
+- Test `login`, `logout`, `login --sso-team`, `link`, `unlink`
+- Test `prune` (Note `turbo` here is the unreleased turbo binary)
+  - `npx create-turbo --use-pnpm prune-test && cd prune-test`
+  - `turbo --skip-infer prune --scope=docs && cd out && pnpm install --frozen-lockfile`
+  - `turbo --skip-infer build`
+- Test `--dry-run` and `--graph`.
+- Test with and without daemon.
+
+There are also multiple installation scenarios worth testing:
+
+- Global-only. `turbo` is installed as global binary, no local `turbo` in repository.
+- Local-only. `turbo` is installed as local binary, no global `turbo` in PATH. turbo` is invoked via a root package script.
+- Global + local. `turbo` is installed as global binary, and local `turbo` in repository. Global `turbo` delegates to local `turbo`
+
+Here are a few repositories that you can test on:
+
+- [next.js](https://github.com/vercel/next.js)
+- [tldraw](https://github.com/tldraw/tldraw)
+- [tailwindcss](https://github.com/tailwindlabs/tailwindcss)
+- [vercel](https://github.com/vercel/vercel)
+
+These lists are by no means exhaustive. Feel free to add to them with other strategies.
 
 ## Publishing `turbo` to the npm registry
 
