@@ -86,7 +86,7 @@ type rawTask struct {
 	Inputs     []string             `json:"inputs,omitempty"`
 	OutputMode *util.TaskOutputMode `json:"outputMode,omitempty"`
 	Env        []string             `json:"env,omitempty"`
-	Persistent bool                 `json:"persistent,omitempty"`
+	Persistent *bool                `json:"persistent,omitempty"`
 }
 
 // PristinePipeline contains original TaskDefinitions without the bookkeeping
@@ -340,7 +340,9 @@ func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDef
 		if bookkeepingTaskDef.hasField("OutputMode") {
 			mergedTaskDefinition.OutputMode = taskDef.OutputMode
 		}
-		mergedTaskDefinition.Persistent = taskDef.Persistent
+		if bookkeepingTaskDef.hasField("Persistent") {
+			mergedTaskDefinition.Persistent = taskDef.Persistent
+		}
 	}
 
 	return mergedTaskDefinition, nil
@@ -438,7 +440,13 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 		btd.definedFields.Add("OutputMode")
 		btd.TaskDefinition.OutputMode = *task.OutputMode
 	}
-	btd.TaskDefinition.Persistent = task.Persistent
+
+	if task.Persistent != nil {
+		btd.definedFields.Add("Persistent")
+		btd.TaskDefinition.Persistent = *task.Persistent
+	} else {
+		btd.TaskDefinition.Persistent = false
+	}
 	return nil
 }
 
