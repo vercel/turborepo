@@ -441,33 +441,22 @@ func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.Bo
 	if taskIDPackage != util.RootPkgName && taskIDPackage != ROOT_NODE_NAME {
 		// If there is an error, we can ignore it, since turbo.json config is not required in the workspace.
 		if workspaceTurboJSON, err := e.completeGraph.GetTurboConfigFromWorkspace(taskIDPackage, e.isSinglePackage); err == nil {
-			// TODO(mehulkar): Enable extending from more than one workspace.
-			if len(workspaceTurboJSON.Extends) > 1 {
-				return nil, fmt.Errorf(
-					"You can only extend from the root workspace. \"%s\" extends from \"%s\"",
-					taskIDPackage,
-					workspaceTurboJSON.Extends,
-				)
+
+			// Run some validations on a workspace turbo.json. Note that these validations are on
+			// the whole struct, and not relevant to the taskID we're looking at right now.
+			errors := workspaceTurboJSON.Validate([]fs.TurboJSONValidation{
+				validateNoPackageTaskSyntax,
+				validateExtends,
+			})
+
+			// TODO: can we print all the error messages instead of just the first one?
+			for _, err := range errors {
+				return nil, fmt.Errorf("turbo.json in \"%s\" workspace is invalid. Error: %s", taskIDPackage, err)
 			}
 
+			// If there are no errors, we can (try to) add the TaskDefinition to our list.
 			if workspaceDefinition, ok := workspaceTurboJSON.Pipeline[taskName]; ok {
 				taskDefinitions = append(taskDefinitions, workspaceDefinition)
-			}
-
-			// If there is no Extends key, we are in a workspace that didn't extend from anything.
-			if len(workspaceTurboJSON.Extends) == 0 {
-				// For turbo.jsons in workspaces that don't have an extends key, throw an error
-				// We don't support this right now.
-				return nil, fmt.Errorf("No \"extends\" key found in %s", taskIDPackage)
-			}
-
-			// TODO(mehulkar): Enable extending from non-root workspace.
-			if workspaceTurboJSON.Extends[0] != util.RootPkgName {
-				return nil, fmt.Errorf(
-					"You can only extend from the root workspace. \"%s\" extends from \"%s\"",
-					taskIDPackage,
-					workspaceTurboJSON.Extends,
-				)
 			}
 		}
 	}
@@ -477,6 +466,35 @@ func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.Bo
 	}
 
 	return taskDefinitions, nil
+}
+
+func validateNoPackageTaskSyntax(turboJSON *fs.TurboJSON) error {
+	for taskIdOrName, _ := range turboJSON.Pipeline {
+		if util.IsPackageTask(taskIdOrName) {
+			taskName := util.StripPackageName(taskIdOrName)
+			return fmt.Errorf("Detected \"%s\", use \"%s\" instead", taskIdOrName, taskName)
+		}
+	}
+	return nil
+}
+
+func validateExtends(turboJSON *fs.TurboJSON) error {
+	// TODO(mehulkar): Enable extending from more than one workspace.
+	if len(turboJSON.Extends) > 1 {
+		return fmt.Errorf("You can only extend from the root workspace")
+	}
+
+	// We don't support this right now
+	if len(turboJSON.Extends) == 0 {
+		return fmt.Errorf("No \"extends\" key found")
+	}
+
+	// TODO(mehulkar): Enable extending from non-root workspace.
+	if turboJSON.Extends[0] != util.RootPkgName {
+		return fmt.Errorf("You can only extend from the root workspace")
+	}
+
+	return nil
 }
 
 // GetTaskGraphAncestors gets all the ancestors for a given task in the graph.
