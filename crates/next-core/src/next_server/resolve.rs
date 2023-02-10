@@ -90,10 +90,6 @@ impl ResolvePlugin for ExternalCjsModulesResolvePlugin {
         // always bundle transpiled modules
         let transpiled_glob = packages_glob(self.transpiled_packages).await?;
         if transpiled_glob.execute(&raw_fs_path.path) {
-            // println!(
-            //     "{} is bundled, transpile module",
-            //     fs_path.to_string().await?
-            // );
             return Ok(ResolveResultOptionVc::none());
         }
 
@@ -103,26 +99,22 @@ impl ResolvePlugin for ExternalCjsModulesResolvePlugin {
             raw_fs_path.extension(),
             Some("cjs" | "js" | "node" | "json")
         ) {
-            // println!("{} is bundled, extension", fs_path.to_string().await?);
             return Ok(ResolveResultOptionVc::none());
         }
 
         let FindContextFileResult::Found(package_json, _) =
             *find_context_file(fs_path.parent(), package_json()).await?
         else {
-            // println!("{} is bundled, no package.json", fs_path.to_string().await?);
             // can't find package.json
             return Ok(ResolveResultOptionVc::none());
         };
         let FileJsonContent::Content(package) = &*package_json.read_json().await? else {
-            // println!("{} is bundled, unparsable package.json", fs_path.to_string().await?);
             // can't parse package.json
             return Ok(ResolveResultOptionVc::none());
         };
 
         // always bundle esm modules
         if let Some("module") = package["type"].as_str() {
-            // println!("{} is bundled, type module", fs_path.to_string().await?);
             return Ok(ResolveResultOptionVc::none());
         }
 
