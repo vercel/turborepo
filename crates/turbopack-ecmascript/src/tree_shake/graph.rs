@@ -156,7 +156,24 @@ impl DepGraph {
 
         let mut modules = vec![];
 
-        for group in groups.graph_ix {}
+        for group in groups.graph_ix {
+            let mut module = Module {
+                span: module.span,
+                body: vec![],
+                shebang: None,
+            };
+
+            for g in group {
+                if g.index == usize::MAX {
+                    // TODO: Special modules
+                } else {
+                    // TODO: Kind
+                    module.body.push(module.body[g.index].clone());
+                }
+            }
+
+            modules.push(module);
+        }
 
         modules
     }
