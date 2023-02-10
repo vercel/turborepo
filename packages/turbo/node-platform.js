@@ -11,14 +11,17 @@ const path = require("path");
 // external code relies on this.
 const TURBO_BINARY_PATH = process.env.TURBO_BINARY_PATH;
 
+const packageDarwin_arm64 = "turbo-darwin-arm64";
+const packageDarwin_x64 = "turbo-darwin-64";
+
 const knownWindowsPackages = {
   "win32 arm64 LE": "turbo-windows-arm64",
   "win32 x64 LE": "turbo-windows-64",
 };
 
 const knownUnixlikePackages = {
-  "darwin arm64 LE": "turbo-darwin-arm64",
-  "darwin x64 LE": "turbo-darwin-64",
+  "darwin arm64 LE": packageDarwin_arm64,
+  "darwin x64 LE": packageDarwin_x64,
   "linux arm64 LE": "turbo-linux-arm64",
   "linux x64 LE": "turbo-linux-64",
 };
