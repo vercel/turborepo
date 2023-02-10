@@ -446,13 +446,16 @@ func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.Bo
 				)
 			}
 
-			// TODO(mehulkar):
-			// 		Pipeline.GetTask allows searching with a taskID (e.g. `package#task`).
-			// 		But we do not want to allow this, except if we're in the root workspace.
-			workspaceDefinition, err := workspaceTurboJSON.Pipeline.GetTask(taskID, taskName)
-
-			if err == nil {
-				taskDefinitions = append(taskDefinitions, *workspaceDefinition)
+			if workspaceDefinition, ok := workspaceTurboJSON.Pipeline[taskName]; ok {
+				taskDefinitions = append(taskDefinitions, workspaceDefinition)
+			} else {
+				// If the workspace doesn't have the taskName defined, but we detect that
+				// it defines the package#task syntax, throw an error. This is a misconfiguration
+				// and we actively want to prevent it.
+				// TODO(mehulkar): Should we validate this upfront when reading a worksapce turbo.jsoN?
+				if _, ok := workspaceTurboJSON.Pipeline[taskID]; ok {
+					return nil, fmt.Errorf("Detected \"%s\" in \"%s\". Declare \"%s\" instead", taskID, taskIDPackage, taskName)
+				}
 			}
 
 			// If there is no Extends key, we are in a workspace that didn't extend from anything.
