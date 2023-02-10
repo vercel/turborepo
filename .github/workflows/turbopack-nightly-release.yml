@@ -18,21 +18,11 @@ jobs:
 
       - name: Tag nightly
         id: tag_version
-        uses: mathieudutour/github-tag-action@v6.1
+        uses: ./.github/actions/turbopack-bump
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           commit_sha: ${{ steps.green_commit.outputs.result }}
-          tag_prefix: "turbopack-"
-          # Override the default conventional commit messages
-          # so that we always generate patch releases.
-          # This would be easier if we could filter Turbopack
-          # commits from Turborepo, but that'd require a custom
-          # action.
-          custom_release_rules: ""
-          # Ensure we generate prerelease versions, not stables.
-          release_branches: ""
-          pre_release_branches: "main"
-          append_to_pre_release_tag: "nightly"
+          prefix: "turbopack-"
 
       - name: Create GitHub release
         uses: ncipollo/release-action@v1
