@@ -84,6 +84,9 @@ async function getTags(
 
   const tags = resp.data.filter((tag) => filter.test(tag.name));
 
+  core.info("filtered tags:");
+  core.info(JSON.stringify(tags, null, 2));
+
   // If we had tags on this page, but none passed the filter, then continue on
   // to the next page.
   if (tags.length === 0) return getTags(octokit, filter, page + 1);
