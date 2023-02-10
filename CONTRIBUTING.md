@@ -95,6 +95,10 @@ Before releasing, it's recommended to test the `turbo` binary manually.
 Here's a checklist of testing strategies to cover:
 
 - Test `login`, `logout`, `login --sso-team`, `link`, `unlink`
+- Test `prune` (Note `turbo` here is the unreleased turbo binary)
+  - `npx create-turbo --use-pnpm prune-test && cd prune-test`
+  - `turbo --skip-infer prune --scope=docs && cd out && pnpm install --frozen-lockfile`
+  - `turbo --skip-infer build`
 - Test every command with `--skip-infer`.
 - Test `--dry-run` and `--graph`.
 - Test with and without daemon.
