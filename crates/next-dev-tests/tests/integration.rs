@@ -27,7 +27,7 @@ use next_dev::{register, EntryRequest, NextDevServerBuilder};
 use owo_colors::OwoColorize;
 use serde::Deserialize;
 use test_generator::test_resources;
-use tokio::{net::TcpSocket, task::JoinHandle};
+use tokio::{net::TcpSocket, task::JoinSet};
 use tungstenite::{error::ProtocolError::ResetWithoutClosingHandshake, Error::Protocol};
 use turbo_tasks::TurboTasks;
 use turbo_tasks_fs::util::sys_to_unix;
@@ -178,7 +178,7 @@ async fn run_test(resource: &str) -> JestRunResult {
     result
 }
 
-async fn create_browser(is_debugging: bool) -> Result<(Browser, JoinHandle<()>)> {
+async fn create_browser(is_debugging: bool) -> Result<(Browser, JoinSet<()>)> {
     let mut config_builder = BrowserConfig::builder();
     if is_debugging {
         config_builder = config_builder
@@ -197,8 +197,14 @@ async fn create_browser(is_debugging: bool) -> Result<(Browser, JoinHandle<()>)>
     )
     .await
     .context("Launching browser failed")?;
+
+    // For windows it's important that the browser is dropped so that the test can
+    // complete. To do that we need to cancel the spawned task below (which will
+    // drop the browser). For this we are using a JoinSet which cancels all tasks
+    // when dropped.
+    let mut set = JoinSet::new();
     // See https://crates.io/crates/chromiumoxide
-    let thread_handle = tokio::task::spawn(async move {
+    set.spawn(async move {
         loop {
             if let Err(Ws(Protocol(ResetWithoutClosingHandshake))) = handler.next().await.unwrap() {
                 // The user has most likely closed the browser. End gracefully.
@@ -207,7 +213,7 @@ async fn create_browser(is_debugging: bool) -> Result<(Browser, JoinHandle<()>)>
         }
     });
 
-    Ok((browser, thread_handle))
+    Ok((browser, set))
 }
 
 async fn run_browser(addr: SocketAddr) -> Result<JestRunResult> {
@@ -346,9 +352,12 @@ async fn run_test_browser(addr: SocketAddr, is_debugging: bool) -> Result<JestRu
                 }
                 network_next = network_response_events.next();
             }
-            result = &mut handle => {
-                result?;
-                return Err(anyhow!("Browser closed"));
+            result = handle.join_next() => {
+                if let Some(result) = result {
+                    result?;
+                } else {
+                    return Err(anyhow!("Browser closed"));
+                }
             }
             () = tokio::time::sleep(Duration::from_secs(60)) => {
                 if !is_debugging {
