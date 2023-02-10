@@ -95,7 +95,9 @@ pub async fn create_page_source(
         src_pages
     } else {
         return Ok(NoContentSourceVc::new().into());
-    };
+    }
+    .resolve()
+    .await?;
 
     let client_ty = Value::new(ClientContextType::Pages { pages_dir });
     let server_ty = Value::new(ServerContextType::Pages { pages_dir });
@@ -181,7 +183,7 @@ pub async fn create_page_source(
                     execution_context,
                     client_ty,
                     server_root,
-                    browserslist_query,
+                    client_environment,
                     next_config,
                 )
                 .into(),
@@ -224,7 +226,7 @@ pub async fn create_page_source(
         execution_context,
         server_root,
         env,
-        browserslist_query,
+        client_environment,
         next_config,
     );
 
